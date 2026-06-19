@@ -1,0 +1,13 @@
+name = "nuvo-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+account_id = "d618e374fb4ffb44dbc770dd07431f79"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nuvo_db"
+database_id = "c46cb25d-f2b1-47cb-9e50-d8d1324e640e"
+migrations_dir = "migrations"
+
+[vars]
+RESEND_FROM_EMAIL = "no-reply@getnuvo.net"

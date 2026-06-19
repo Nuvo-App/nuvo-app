@@ -1,168 +1,188 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../auth/presentation/auth_controller.dart';
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with TickerProviderStateMixin {
-  late final AnimationController _pulse;
-  late final AnimationController _fadeInCtrl;
-  late final Animation<double> _fadeIn;
+class _SplashScreenState extends ConsumerState<SplashScreen> {
+  // Signed-in users see a brief logo flash then continue immediately.
+  bool _shortDelayDone = false;
+  // Signed-out users wait for the full animation before reaching auth.
+  bool _longDelayDone = false;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
-
-    // Light icons on the dark gradient background.
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-    ));
-
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-
-    _fadeInCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..forward();
-
-    _fadeIn = CurvedAnimation(parent: _fadeInCtrl, curve: Curves.easeOut);
-
-    Future.delayed(const Duration(milliseconds: 2000), () {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+    );
+    Future.delayed(const Duration(milliseconds: 420), () {
       if (!mounted) return;
-      context.go('/auth/phone');
+      _shortDelayDone = true;
+      _tryNavigate();
+    });
+    Future.delayed(const Duration(milliseconds: 1900), () {
+      if (!mounted) return;
+      _longDelayDone = true;
+      _tryNavigate();
     });
   }
 
-  @override
-  void dispose() {
-    _pulse.dispose();
-    _fadeInCtrl.dispose();
-    super.dispose();
+  void _tryNavigate() {
+    if (_navigated || !_shortDelayDone) return;
+    final authState = ref.read(authControllerProvider);
+    if (authState.status == AuthStatus.loading) return;
+
+    final isAuthenticated = authState.user != null;
+    // Force signed-out users through the full animation.
+    if (!isAuthenticated && !_longDelayDone) return;
+
+    _navigated = true;
+    final user = authState.user;
+    if (user != null) {
+      context.go(
+          user.onboardingComplete ? '/arena' : '/onboarding/create-identity');
+    } else {
+      context.go('/welcome');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Scaffold background is the darkest gradient stop so iOS sees dark even
-    // before the gradient Container paints (avoids white flash at launch).
+    ref.listen<AuthState>(authControllerProvider, (_, next) {
+      if (next.status != AuthStatus.loading) _tryNavigate();
+    });
+
     return Scaffold(
-      backgroundColor: const Color(0xFF06142B),
+      backgroundColor: NuvoColors.navy,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF06142B),
-              Color(0xFF0A2A66),
-              Color(0xFF2F73EA),
+              NuvoColors.navy,
+              NuvoColors.navy2,
+              Color(0xFF0D3F99),
             ],
           ),
         ),
-        child: Center(
-          child: FadeTransition(
-            // Only the content fades in — the dark background is always visible.
-            opacity: _fadeIn,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedBuilder(
-                  animation: _pulse,
-                  builder: (context, child) {
-                    final t = Curves.easeInOut.transform(_pulse.value);
-                    return Transform.scale(
-                      scale: 0.97 + 0.06 * t,
-                      child: _LogoMark(glowOpacity: 0.15 + 0.20 * t),
-                    );
-                  },
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  'nuvo',
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: Colors.white,
-                    letterSpacing: -1.0,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Compete on anything. With anyone.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
+        child: Stack(
+          children: [
+            const _DotField(),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Logo with royal-blue glow
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: NuvoColors.blue.withValues(alpha: 0.50),
+                          blurRadius: 76,
+                          spreadRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(AssetPaths.nuvoLogo),
+                  )
+                      .animate()
+                      .fadeIn(duration: 620.ms, curve: Curves.easeOut)
+                      .scale(
+                        begin: const Offset(0.80, 0.80),
+                        end: const Offset(1.0, 1.0),
+                        duration: 700.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
+
+                  const SizedBox(height: 26),
+
+                  Text(
+                    'NUVO',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: NuvoColors.white,
+                      letterSpacing: 5,
+                    ),
+                  )
+                      .animate(delay: 380.ms)
+                      .fadeIn(duration: 360.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.14,
+                        end: 0,
+                        duration: 400.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    'Compete on anything. With anyone.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.white.withValues(alpha: 0.50),
+                    ),
+                    textAlign: TextAlign.center,
+                  )
+                      .animate(delay: 540.ms)
+                      .fadeIn(duration: 360.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.14,
+                        end: 0,
+                        duration: 400.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _LogoMark extends StatelessWidget {
-  const _LogoMark({required this.glowOpacity});
-  final double glowOpacity;
+class _DotField extends StatelessWidget {
+  const _DotField();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 120,
-      height: 120,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.white.withValues(alpha: glowOpacity),
-            blurRadius: 50,
-            spreadRadius: 10,
-          ),
-          BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: glowOpacity * 0.7),
-            blurRadius: 80,
-            spreadRadius: 20,
-          ),
-        ],
-      ),
-      child: Image.asset(
-        AssetPaths.nuvoLogo,
-        width: 120,
-        height: 120,
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => Container(
-          width: 120,
-          height: 120,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.15),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
-              width: 1.5,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.bolt_rounded,
-            size: 60,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
+    return CustomPaint(painter: _DotPainter(), child: const SizedBox.expand());
   }
+}
+
+class _DotPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = NuvoColors.white.withValues(alpha: 0.08);
+    for (var i = 0; i < 42; i++) {
+      final x = (i * 73) % size.width;
+      final y = (i * 131) % size.height;
+      canvas.drawCircle(Offset(x, y), i.isEven ? 1.6 : 1.1, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

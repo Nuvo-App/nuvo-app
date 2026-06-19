@@ -62,12 +62,7 @@ class NuvoTopBar extends StatelessWidget {
     final top = MediaQuery.paddingOf(context).top;
     return Container(
       color: backgroundColor ?? NuvoColors.white,
-      padding: EdgeInsets.only(
-        top: top,
-        left: 20,
-        right: 20,
-        bottom: 12,
-      ),
+      padding: EdgeInsets.only(top: top, left: 20, right: 20, bottom: 12),
       child: Row(
         children: [
           if (leading case final l?)
@@ -100,11 +95,7 @@ class NuvoTopBar extends StatelessWidget {
 
 /// Section header with optional "See all" link.
 class NuvoSectionHeader extends StatelessWidget {
-  const NuvoSectionHeader({
-    super.key,
-    required this.title,
-    this.onSeeAll,
-  });
+  const NuvoSectionHeader({super.key, required this.title, this.onSeeAll});
 
   final String title;
   final VoidCallback? onSeeAll;

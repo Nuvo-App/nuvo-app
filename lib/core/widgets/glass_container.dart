@@ -52,19 +52,12 @@ class GlassContainer extends StatelessWidget {
             borderRadius: borderRadius,
             border: Border.all(color: borderColor, width: borderWidth),
           ),
-          child: Padding(
-            padding: padding ?? EdgeInsets.zero,
-            child: child,
-          ),
+          child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
         ),
       ),
     );
 
-    Widget result = SizedBox(
-      width: width,
-      height: height,
-      child: glass,
-    );
+    Widget result = SizedBox(width: width, height: height, child: glass);
 
     if (boxShadow != null) {
       result = DecoratedBox(
@@ -79,11 +72,7 @@ class GlassContainer extends StatelessWidget {
     if (onTap != null) {
       result = Material(
         color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: borderRadius,
-          child: result,
-        ),
+        child: InkWell(onTap: onTap, borderRadius: borderRadius, child: result),
       );
     }
 

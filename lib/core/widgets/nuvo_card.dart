@@ -26,10 +26,7 @@ class NuvoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: borderColor ?? NuvoColors.border,
-          width: 1,
-        ),
+        border: Border.all(color: borderColor ?? NuvoColors.border, width: 1),
         boxShadow: elevated
             ? const [
                 BoxShadow(
@@ -67,11 +64,7 @@ class NuvoCard extends StatelessWidget {
 
 /// Compact bento-style card — tighter padding, used for stat tiles.
 class NuvoBentoCard extends StatelessWidget {
-  const NuvoBentoCard({
-    super.key,
-    required this.child,
-    this.onTap,
-  });
+  const NuvoBentoCard({super.key, required this.child, this.onTap});
 
   final Widget child;
   final VoidCallback? onTap;

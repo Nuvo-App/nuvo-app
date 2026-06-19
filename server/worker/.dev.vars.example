@@ -1,0 +1,5 @@
+GOOGLE_IOS_CLIENT_ID=<paste_google_ios_client_id>
+RESEND_API_KEY=<paste_resend_api_key>
+RESEND_FROM_EMAIL=no-reply@getnuvo.net
+JWT_SECRET=<generate_secure_secret_min_32_chars>
+API_BASE_URL=http://localhost:8787

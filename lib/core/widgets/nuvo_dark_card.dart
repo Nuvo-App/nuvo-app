@@ -46,12 +46,7 @@ class NuvoDarkCard extends StatelessWidget {
 
 /// Pill badge on dark surfaces — white text on semi-transparent background.
 class NuvoDarkBadge extends StatelessWidget {
-  const NuvoDarkBadge({
-    super.key,
-    required this.label,
-    this.icon,
-    this.color,
-  });
+  const NuvoDarkBadge({super.key, required this.label, this.icon, this.color});
 
   final String label;
   final IconData? icon;

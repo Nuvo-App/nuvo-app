@@ -18,22 +18,25 @@ class LightPageBackground extends StatelessWidget {
           top: -80,
           right: -60,
           child: _Orb(
-              size: 280,
-              color: NuvoColors.blue.withValues(alpha: 0.055)),
+            size: 280,
+            color: NuvoColors.blue.withValues(alpha: 0.055),
+          ),
         ),
         Positioned(
           top: 320,
           left: -80,
           child: _Orb(
-              size: 240,
-              color: NuvoColors.blueSoft.withValues(alpha: 0.04)),
+            size: 240,
+            color: NuvoColors.blueSoft.withValues(alpha: 0.04),
+          ),
         ),
         Positioned(
           bottom: 80,
           right: 20,
           child: _Orb(
-              size: 200,
-              color: NuvoColors.mint.withValues(alpha: 0.035)),
+            size: 200,
+            color: NuvoColors.mint.withValues(alpha: 0.035),
+          ),
         ),
         ?child,
       ],
@@ -63,9 +66,7 @@ class _Orb extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color,
-        boxShadow: [
-          BoxShadow(color: color, blurRadius: 60, spreadRadius: 10),
-        ],
+        boxShadow: [BoxShadow(color: color, blurRadius: 60, spreadRadius: 10)],
       ),
     );
   }

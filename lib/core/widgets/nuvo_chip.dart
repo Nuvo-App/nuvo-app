@@ -21,12 +21,11 @@ class NuvoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = accentColor ?? NuvoColors.blue;
-    final bgColor =
-        selected ? NuvoColors.bluePale : NuvoColors.sectionBlue;
-    final borderColor =
-        selected ? accent.withValues(alpha: 0.35) : NuvoColors.border;
-    final textColor =
-        selected ? accent : NuvoColors.muted;
+    final bgColor = selected ? NuvoColors.bluePale : NuvoColors.sectionBlue;
+    final borderColor = selected
+        ? accent.withValues(alpha: 0.35)
+        : NuvoColors.border;
+    final textColor = selected ? accent : NuvoColors.muted;
 
     return GestureDetector(
       onTap: onTap,

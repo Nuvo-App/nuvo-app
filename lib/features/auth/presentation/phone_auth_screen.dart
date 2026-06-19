@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/gradient_button.dart';
+import '../../../core/widgets/nuvo_button.dart';
 
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
@@ -13,107 +13,68 @@ class PhoneAuthScreen extends StatefulWidget {
 }
 
 class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
-  final _controller = TextEditingController();
-  String _countryCode = '+1';
+  final _phoneController = TextEditingController();
 
   @override
   void dispose() {
-    _controller.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 64),
-              Text('Enter your\nphone number.',
-                  style: AppTextStyles.displayMedium),
-              const SizedBox(height: 12),
-              Text(
-                'We\'ll send you a one-time code to verify.',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 48),
-              _PhoneField(
-                controller: _controller,
-                countryCode: _countryCode,
-                onCountryChanged: (c) => setState(() => _countryCode = c),
-              ),
-              const SizedBox(height: 32),
-              GradientButton(
-                label: 'Send Code',
-                expand: true,
-                onPressed: () => context.go('/auth/otp'),
-              ),
-              const Spacer(),
-              Center(
-                child: Text(
-                  'By continuing, you agree to our Terms & Privacy Policy.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.labelSmall,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 44, 20, 28),
+          children: [
+            Text(
+              'Create your Nuvo account',
+              style: AppTextStyles.headlineLarge,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'We will send a code to verify your number.',
+              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+            ),
+            const SizedBox(height: 34),
+            Text('PHONE NUMBER', style: AppTextStyles.brandLabel),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Container(
+                  height: 58,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: NuvoColors.border),
+                  ),
+                  child: Text('+1', style: AppTextStyles.titleMedium),
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: AppTextStyles.titleMedium,
+                    decoration: const InputDecoration(hintText: '555 014 2048'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            NuvoPrimaryButton(
+              label: 'Send code',
+              icon: Icons.arrow_forward_rounded,
+              expand: true,
+              onPressed: () => context.go('/auth/otp'),
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _PhoneField extends StatelessWidget {
-  const _PhoneField({
-    required this.controller,
-    required this.countryCode,
-    required this.onCountryChanged,
-  });
-
-  final TextEditingController controller;
-  final String countryCode;
-  final ValueChanged<String> onCountryChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: () {},
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              countryCode,
-              style: AppTextStyles.bodyLarge,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.phone,
-            style: AppTextStyles.bodyLarge,
-            decoration: const InputDecoration(
-              hintText: '(555) 000-0000',
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

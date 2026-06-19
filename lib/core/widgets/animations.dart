@@ -28,11 +28,7 @@ class FadeSlideIn extends StatelessWidget {
 /// Adds a tactile press-to-scale effect using [Listener] so inner tap handlers
 /// still fire normally through the gesture arena.
 class PressableScale extends StatefulWidget {
-  const PressableScale({
-    super.key,
-    required this.child,
-    this.scale = 0.97,
-  });
+  const PressableScale({super.key, required this.child, this.scale = 0.97});
 
   final Widget child;
   final double scale;

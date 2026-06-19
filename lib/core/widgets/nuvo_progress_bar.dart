@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Thin progress bar — blue fill on light-blue track.
 class NuvoProgressBar extends StatelessWidget {
   const NuvoProgressBar({
     super.key,
@@ -11,12 +10,8 @@ class NuvoProgressBar extends StatelessWidget {
     this.height = 5,
   });
 
-  /// Progress fraction — clamped to [0, 1].
   final double value;
-
-  /// Fill color. Defaults to [NuvoColors.blue].
   final Color? color;
-
   final double height;
 
   @override
@@ -24,22 +19,29 @@ class NuvoProgressBar extends StatelessWidget {
     final fill = color ?? NuvoColors.blue;
     final clamped = value.clamp(0.0, 1.0);
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(height),
-      child: Container(
-        height: height,
-        color: NuvoColors.sectionBlue,
-        alignment: Alignment.centerLeft,
-        child: FractionallySizedBox(
-          widthFactor: clamped,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: clamped),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutCubic,
+      builder: (context, animated, _) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(height),
           child: Container(
-            decoration: BoxDecoration(
-              color: fill,
-              borderRadius: BorderRadius.circular(height),
+            height: height,
+            color: NuvoColors.softBlue,
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: animated,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(height),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

@@ -1,125 +1,222 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/auth/presentation/otp_screen.dart';
-import '../features/auth/presentation/phone_auth_screen.dart';
-import '../features/challenges/presentation/arena_screen.dart';
-import '../features/challenges/presentation/challenge_detail_screen.dart';
-import '../features/challenges/presentation/challenge_ideas_screen.dart';
-import '../features/challenges/presentation/create_challenge_screen.dart';
-import '../features/crew/presentation/crew_screen.dart';
-import '../features/devices/presentation/devices_screen.dart';
-import '../features/founders/presentation/founders_screen.dart';
-import '../features/invite/presentation/invite_screen.dart';
-import '../features/investor/presentation/investor_screen.dart';
+import '../features/arena/presentation/arena_screen.dart';
+import '../features/auth/presentation/auth_gate.dart';
+import '../features/auth/presentation/email_start_screen.dart';
+import '../features/auth/presentation/email_verify_screen.dart';
+import '../features/auth/presentation/welcome_auth_screen.dart';
+import '../features/compete/presentation/compete_screen.dart';
+import '../features/onboarding/presentation/add_crew_screen.dart';
+import '../features/onboarding/presentation/create_identity_screen.dart';
+import '../features/onboarding/presentation/first_race_screen.dart';
+import '../features/onboarding/presentation/member_pass_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
+import '../features/onboarding/presentation/secure_account_screen.dart';
+import '../features/pass/presentation/pass_screen.dart';
+import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/proof/presentation/proof_screen.dart';
+import '../features/race_detail/presentation/race_detail_screen.dart';
+import '../features/races/presentation/create_race_screen.dart';
+import '../features/races/presentation/ai_motion_proof_screen.dart';
+import '../features/races/presentation/invite_crew_screen.dart';
+import '../features/races/presentation/join_race_screen.dart';
+import '../features/races/presentation/proof_review_screen.dart';
+import '../features/races/presentation/race_settings_screen.dart';
+import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
-import '../features/verification/presentation/verification_screen.dart';
 
-final appRouter = GoRouter(
-  initialLocation: '/splash',
-  routes: [
-    GoRoute(
-      path: '/splash',
-      pageBuilder: (_, state) => NoTransitionPage(
-        key: state.pageKey,
-        child: const SplashScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/auth/phone',
-      pageBuilder: (_, state) => NoTransitionPage(
-        key: state.pageKey,
-        child: const PhoneAuthScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/auth/otp',
-      pageBuilder: (_, state) => NoTransitionPage(
-        key: state.pageKey,
-        child: const OtpScreen(),
-      ),
-    ),
-    GoRoute(
-      path: '/onboarding',
-      pageBuilder: (_, state) => NoTransitionPage(
-        key: state.pageKey,
-        child: const OnboardingScreen(),
-      ),
-    ),
+// Soft horizontal-slide + fade transition used on all auth/onboarding routes.
+Page<void> _authPage(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 300),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: CurveTween(curve: Curves.easeOut).animate(animation),
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0.05, 0),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(animation),
+            child: child,
+          ),
+        );
+      },
+    );
 
-    // Bottom-nav shell — Home · Crew · Create · Profile
-    // NoTransitionPage on tab routes prevents slide-over collisions during tab switches.
-    ShellRoute(
-      builder: (context, _, child) => MainShell(child: child),
-      routes: [
-        GoRoute(
-          path: '/arena',
-          pageBuilder: (_, state) => NoTransitionPage(
-            key: state.pageKey,
-            child: const ArenaScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/crew',
-          pageBuilder: (_, state) => NoTransitionPage(
-            key: state.pageKey,
-            child: const CrewScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/create',
-          pageBuilder: (_, state) => NoTransitionPage(
-            key: state.pageKey,
-            child: const CreateChallengeScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/profile',
-          pageBuilder: (_, state) => NoTransitionPage(
-            key: state.pageKey,
-            child: const ProfileScreen(),
-          ),
-        ),
-      ],
-    ),
+final routerProvider = Provider<GoRouter>((ref) {
+  final notifier = ref.read(routerNotifierProvider);
+  final router = GoRouter(
+    initialLocation: '/splash',
+    refreshListenable: notifier,
+    redirect: notifier.redirect,
+    routes: [
+      // ── Launch ────────────────────────────────────────────────────────────
+      GoRoute(
+        path: '/splash',
+        pageBuilder: (_, state) =>
+            NoTransitionPage(key: state.pageKey, child: const SplashScreen()),
+      ),
+      GoRoute(
+        path: '/welcome',
+        pageBuilder: (_, state) => _authPage(state, const WelcomeAuthScreen()),
+      ),
 
-    // Standalone screens — simple fade transition (no slide-over)
-    GoRoute(
-      path: '/verification',
-      pageBuilder: (_, state) => NoTransitionPage(
-        key: state.pageKey,
-        child: const VerificationScreen(),
+      // ── Auth ──────────────────────────────────────────────────────────────
+      GoRoute(
+        path: '/auth/email',
+        pageBuilder: (_, state) => _authPage(state, const EmailStartScreen()),
       ),
-    ),
-    GoRoute(
-      path: '/challenge/:id',
-      builder: (_, state) =>
-          ChallengeDetailScreen(id: state.pathParameters['id']!),
-    ),
-    GoRoute(
-      path: '/challenge-ideas',
-      pageBuilder: (_, state) => NoTransitionPage(
-        key: state.pageKey,
-        child: const ChallengeIdeasScreen(),
+      GoRoute(
+        path: '/auth/verify',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          EmailVerifyScreen(email: state.extra as String? ?? ''),
+        ),
       ),
-    ),
-    GoRoute(
-      path: '/invite',
-      builder: (_, _) => const InviteScreen(),
-    ),
-    GoRoute(
-      path: '/founders',
-      builder: (_, _) => const FoundersScreen(),
-    ),
-    GoRoute(
-      path: '/devices',
-      builder: (_, _) => const DevicesScreen(),
-    ),
-    GoRoute(
-      path: '/investor',
-      builder: (_, _) => const InvestorScreen(),
-    ),
-  ],
-);
+
+      // ── Onboarding ────────────────────────────────────────────────────────
+      GoRoute(
+        path: '/onboarding/create-identity',
+        pageBuilder: (_, state) =>
+            _authPage(state, const CreateIdentityScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/secure-account',
+        pageBuilder: (_, state) =>
+            _authPage(state, const SecureAccountScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/profile',
+        pageBuilder: (_, state) => _authPage(state, const OnboardingScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/member-pass',
+        pageBuilder: (_, state) =>
+            _authPage(state, const OnboardingMemberPassScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/add-crew',
+        pageBuilder: (_, state) => _authPage(state, const AddCrewScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/first-race',
+        pageBuilder: (_, state) => _authPage(state, const FirstRaceScreen()),
+      ),
+
+      // ── Main shell (bottom nav) ────────────────────────────────────────────
+      ShellRoute(
+        builder: (context, _, child) => MainShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/arena',
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const ArenaScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/pass',
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: const PassScreen()),
+          ),
+          GoRoute(
+            path: '/compete',
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const CompeteScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/profile',
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const ProfileScreen(),
+            ),
+          ),
+        ],
+      ),
+
+      // ── Detail / standalone ───────────────────────────────────────────────
+      GoRoute(
+        path: '/races/new',
+        pageBuilder: (_, state) => _authPage(state, const CreateRaceScreen()),
+      ),
+      GoRoute(
+        path: '/races/join',
+        pageBuilder: (_, state) => _authPage(state, const JoinRaceScreen()),
+      ),
+      GoRoute(
+        path: '/race/:id',
+        pageBuilder: (_, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: RaceDetailScreen(id: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/settings',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          RaceSettingsScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/edit',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          RaceSettingsScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/invite',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          InviteCrewScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/proof',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          SubmitProofScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/proof/ai-motion',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          AiMotionProofScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/proofs/:proofId',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          ProofReviewScreen(
+            raceId: state.pathParameters['id']!,
+            proofId: state.pathParameters['proofId']!,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/proof/:id',
+        pageBuilder: (_, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: ProofScreen(id: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        pageBuilder: (_, state) => _authPage(state, const EditProfileScreen()),
+      ),
+    ],
+  );
+  ref.onDispose(router.dispose);
+  return router;
+});

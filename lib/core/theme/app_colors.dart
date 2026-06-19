@@ -1,66 +1,57 @@
 import 'package:flutter/material.dart';
 
-/// Brand color palette — matches nuvothrive.netlify.app
-/// White-first, navy text, royal-blue CTAs.
 final class NuvoColors {
   NuvoColors._();
 
-  static const Color white = Color(0xFFFFFFFF);
-  static const Color page = Color(0xFFF6FAFF); // app canvas
-  static const Color sectionBlue = Color(0xFFEAF3FF); // hero / alt sections
-  static const Color card = Color(0xFFFFFFFF);
-  static const Color navy = Color(0xFF07152B); // primary text
-  static const Color navySoft = Color(0xFF10233F);
-  static const Color text = Color(0xFF081225);
-  static const Color muted = Color(0xFF5B6B84);
-  static const Color border = Color(0xFFDDE8F5);
-  static const Color blue = Color(0xFF2F73EA); // CTA / primary
-  static const Color blueSoft = Color(0xFF4D8DFF);
-  static const Color bluePale = Color(0xFFDDEBFF);
-  static const Color mint = Color(0xFF16C784); // success / verified
+  static const Color page = Color(0xFFF6F8FF);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color icyBlue = Color(0xFFEEF5FF);
+  static const Color softBlue = Color(0xFFDDEBFF);
+  static const Color lavenderRow = Color(0xFFE7EAFF);
+
+  static const Color navy = Color(0xFF07152B);
+  static const Color navy2 = Color(0xFF0B1E3A);
+
+  static const Color blue = Color(0xFF075BFF);
+  static const Color blue2 = Color(0xFF2F73EA);
+
+  static const Color muted = Color(0xFF66728A);
+  static const Color border = Color(0xFFDCE5F2);
+  static const Color success = Color(0xFF16C784);
+
+  static const Color white = surface;
+  static const Color card = surface;
+  static const Color sectionBlue = icyBlue;
+  static const Color bluePale = softBlue;
+  static const Color blueSoft = blue2;
+  static const Color navySoft = navy2;
+  static const Color mint = success;
 }
 
-/// AppColors — aliases into NuvoColors so all existing screens
-/// automatically inherit the light theme without code changes.
 abstract final class AppColors {
-  // Backgrounds
   static const Color background = NuvoColors.page;
-  static const Color backgroundSoft = NuvoColors.sectionBlue;
-  static const Color surface = NuvoColors.card;
-  static const Color surfaceElevated = Color(0xFFF0F5FF);
-
-  // Borders
+  static const Color backgroundSoft = NuvoColors.icyBlue;
+  static const Color surface = NuvoColors.surface;
+  static const Color surfaceElevated = NuvoColors.icyBlue;
   static const Color border = NuvoColors.border;
-  static const Color borderStrong = Color(0xFFBDD3EE);
-
-  // Brand / primary
+  static const Color borderStrong = Color(0xFFB7C9E2);
   static const Color primary = NuvoColors.blue;
-  static const Color primarySoft = NuvoColors.blueSoft;
-  static const Color primaryDeep = Color(0xFF1E5FD4);
-
-  // Accent palette
-  static const Color dreamPurple = Color(0xFF7C6FF7);
-  static const Color dreamPink = Color(0xFFF0ABFC);
-  static const Color mint = NuvoColors.mint;
-
-  // Semantic
-  static const Color success = NuvoColors.mint;
+  static const Color primarySoft = NuvoColors.softBlue;
+  static const Color primaryDeep = NuvoColors.navy2;
+  static const Color dreamPurple = NuvoColors.softBlue;
+  static const Color dreamPink = Color(0xFFE7EAFF);
+  static const Color mint = NuvoColors.success;
+  static const Color success = NuvoColors.success;
   static const Color warning = Color(0xFFFFB86B);
   static const Color danger = Color(0xFFE8304A);
-
-  // Text
   static const Color textPrimary = NuvoColors.navy;
   static const Color textSecondary = NuvoColors.muted;
-  static const Color textMuted = Color(0xFF8899B0);
+  static const Color textMuted = Color(0xFF8B96A8);
   static const Color textInverse = NuvoColors.white;
-
-  // Legacy glass compat (used by GlassContainer)
-  static const Color glassTint = Color(0x08000000);
+  static const Color glassTint = Color(0x08FFFFFF);
   static const Color glassBorder = NuvoColors.border;
-
-  // Legacy name aliases
   static const Color electricBlue = NuvoColors.blue;
-  static const Color deepBlue = Color(0xFF1E5FD4);
-  static const Color neonMint = NuvoColors.mint;
+  static const Color deepBlue = NuvoColors.navy2;
+  static const Color neonMint = NuvoColors.success;
   static const Color hotAmber = Color(0xFFFFB86B);
 }

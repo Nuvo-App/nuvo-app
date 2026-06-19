@@ -16,19 +16,20 @@ abstract final class AppTheme {
 
   /// Light theme — matches the nuvothrive.netlify.app aesthetic.
   static ThemeData light() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: NuvoColors.blue,
-      brightness: Brightness.light,
-    ).copyWith(
-      primary: NuvoColors.blue,
-      onPrimary: NuvoColors.white,
-      secondary: NuvoColors.navySoft,
-      tertiary: NuvoColors.mint,
-      error: AppColors.danger,
-      surface: NuvoColors.card,
-      onSurface: NuvoColors.navy,
-      surfaceContainerHighest: NuvoColors.sectionBlue,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: NuvoColors.blue,
+          brightness: Brightness.light,
+        ).copyWith(
+          primary: NuvoColors.blue,
+          onPrimary: NuvoColors.white,
+          secondary: NuvoColors.navySoft,
+          tertiary: NuvoColors.mint,
+          error: AppColors.danger,
+          surface: NuvoColors.card,
+          onSurface: NuvoColors.navy,
+          surfaceContainerHighest: NuvoColors.sectionBlue,
+        );
 
     return ThemeData(
       useMaterial3: true,
@@ -73,8 +74,9 @@ abstract final class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         systemOverlayStyle: overlay,
-        titleTextStyle: AppTextStyles.titleLarge
-            .copyWith(color: NuvoColors.navy),
+        titleTextStyle: AppTextStyles.titleLarge.copyWith(
+          color: NuvoColors.navy,
+        ),
         iconTheme: const IconThemeData(color: NuvoColors.navy),
         surfaceTintColor: Colors.transparent,
       ),
@@ -83,12 +85,16 @@ abstract final class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: NuvoColors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        hintStyle:
-            AppTextStyles.bodyMedium.copyWith(color: AppColors.textMuted),
-        labelStyle: AppTextStyles.labelLarge
-            .copyWith(color: AppColors.textSecondary),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(
+          color: AppColors.textMuted,
+        ),
+        labelStyle: AppTextStyles.labelLarge.copyWith(
+          color: AppColors.textSecondary,
+        ),
         border: _inputBorder(NuvoColors.border),
         enabledBorder: _inputBorder(NuvoColors.border),
         focusedBorder: _inputBorder(NuvoColors.blue, width: 1.5),
@@ -101,8 +107,7 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: NuvoColors.blue,
           foregroundColor: NuvoColors.white,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -114,8 +119,7 @@ abstract final class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: NuvoColors.blue,
           side: const BorderSide(color: NuvoColors.blue, width: 1.5),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -133,8 +137,7 @@ abstract final class AppTheme {
           backgroundColor: NuvoColors.blue,
           foregroundColor: NuvoColors.white,
           elevation: 0,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -147,14 +150,12 @@ abstract final class AppTheme {
         backgroundColor: NuvoColors.sectionBlue,
         selectedColor: NuvoColors.bluePale,
         disabledColor: const Color(0xFFF0F0F0),
-        labelStyle:
-            AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
-        secondaryLabelStyle:
-            AppTextStyles.labelMedium.copyWith(color: NuvoColors.blue),
-        side: const BorderSide(color: NuvoColors.border),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(100),
+        labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
+        secondaryLabelStyle: AppTextStyles.labelMedium.copyWith(
+          color: NuvoColors.blue,
         ),
+        side: const BorderSide(color: NuvoColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),
 
@@ -170,8 +171,9 @@ abstract final class AppTheme {
         thumbColor: NuvoColors.blue,
         overlayColor: NuvoColors.blue.withValues(alpha: 0.1),
         valueIndicatorColor: NuvoColors.navySoft,
-        valueIndicatorTextStyle:
-            AppTextStyles.labelMedium.copyWith(color: NuvoColors.white),
+        valueIndicatorTextStyle: AppTextStyles.labelMedium.copyWith(
+          color: NuvoColors.white,
+        ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: NuvoColors.blue,
@@ -179,12 +181,11 @@ abstract final class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: NuvoColors.navySoft,
-        contentTextStyle:
-            AppTextStyles.bodyMedium.copyWith(color: NuvoColors.white),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+        contentTextStyle: AppTextStyles.bodyMedium.copyWith(
+          color: NuvoColors.white,
         ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
