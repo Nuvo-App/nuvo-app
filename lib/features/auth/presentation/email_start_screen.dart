@@ -60,57 +60,116 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 44, 20, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GestureDetector(
-              onTap: () => safePopOrGo(context, '/welcome'),
-              child: const Icon(Icons.arrow_back_rounded, size: 24),
+            // ── Scrollable content ───────────────────────────────────────────
+            Expanded(
+              child:
+                  SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            NuvoBackButton(
+                              onPressed: () => safePopOrGo(context, '/welcome'),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Enter your email',
+                              style: AppTextStyles.headlineLarge,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              "We'll send a sign-in code for your Nuvo race pass.",
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: NuvoColors.muted,
+                              ),
+                            ),
+                            const SizedBox(height: 30),
+                            Text(
+                              'EMAIL',
+                              style: AppTextStyles.brandLabel.copyWith(
+                                color: NuvoColors.muted,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.done,
+                              autocorrect: false,
+                              onChanged: (_) => setState(() => _error = null),
+                              onSubmitted: (_) {
+                                if (_canSubmit) _submit();
+                              },
+                              decoration: InputDecoration(
+                                hintText: 'your@email.com',
+                                hintStyle: AppTextStyles.bodyMedium.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
+                                filled: true,
+                                fillColor: NuvoColors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: NuvoColors.border,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: NuvoColors.border,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: NuvoColors.blue,
+                                    width: 1.6,
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                              ),
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                _error!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: const Color(0xFFE8304A),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.04,
+                        end: 0,
+                        duration: 320.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
             ),
-            const SizedBox(height: 28),
-            Text('Sign in with email', style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 10),
-            Text(
-              "We'll send a 6-digit code to verify your address.",
-              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-            ),
-            const SizedBox(height: 34),
-            Text(
-              'EMAIL',
-              style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.muted),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              autocorrect: false,
-              onChanged: (_) => setState(() => _error = null),
-              onSubmitted: (_) {
-                if (_canSubmit) _submit();
-              },
-              decoration: const InputDecoration(hintText: 'your@email.com'),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
+
+            // ── Pinned CTA ───────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: NuvoPrimaryButton(
+                label: 'Send code',
+                icon: Icons.arrow_forward_rounded,
+                expand: true,
+                loading: _loading,
+                onPressed: _canSubmit ? _submit : null,
               ),
-            ],
-            const SizedBox(height: 28),
-            NuvoPrimaryButton(
-              label: 'Send code',
-              icon: Icons.arrow_forward_rounded,
-              expand: true,
-              loading: _loading,
-              onPressed: _canSubmit ? _submit : null,
             ),
           ],
-        )
-            .animate()
-            .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-            .slideY(begin: 0.04, end: 0, duration: 320.ms, curve: Curves.easeOutCubic),
+        ),
       ),
     );
   }

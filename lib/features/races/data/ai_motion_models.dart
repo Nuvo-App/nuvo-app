@@ -1,15 +1,35 @@
 enum AiMotionActivity {
   jumpingJacks,
+  squats,
+  highKnees,
+  armRaises,
+  plankHold,
   pushUps;
 
   String get backendValue => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping_jacks',
+    AiMotionActivity.squats => 'squats',
+    AiMotionActivity.highKnees => 'high_knees',
+    AiMotionActivity.armRaises => 'arm_raises',
+    AiMotionActivity.plankHold => 'plank_hold',
     AiMotionActivity.pushUps => 'push_ups',
   };
 
   String get label => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping jacks',
+    AiMotionActivity.squats => 'squats',
+    AiMotionActivity.highKnees => 'high knees',
+    AiMotionActivity.armRaises => 'arm raises',
+    AiMotionActivity.plankHold => 'seconds of plank',
     AiMotionActivity.pushUps => 'push-ups',
+  };
+
+  static AiMotionActivity fromBackendValue(String value) => switch (value) {
+    'squats' => AiMotionActivity.squats,
+    'high_knees' => AiMotionActivity.highKnees,
+    'arm_raises' => AiMotionActivity.armRaises,
+    'plank_hold' => AiMotionActivity.plankHold,
+    _ => AiMotionActivity.jumpingJacks,
   };
 }
 
@@ -53,6 +73,7 @@ class AiMotionResult {
   final String validatorVersion;
 
   bool get isVerified => verificationStatus == 'ai_verified';
+  bool get isHold => activity == AiMotionActivity.plankHold;
 
   Map<String, dynamic> toProofPayload() => {
     'proofType': 'ai_motion',

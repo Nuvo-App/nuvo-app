@@ -33,6 +33,9 @@ interface RaceRow {
   goal_type: string;
   target_value: number | null;
   unit: string | null;
+  ai_activity_type: string | null;
+  target_unit: string | null;
+  proof_mode: string | null;
   status: string;
   start_line_at: string | null;
   finish_line_at: string | null;
@@ -234,6 +237,9 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
     goalType: race.goal_type,
     targetValue: race.target_value,
     unit: race.unit,
+    aiActivityType: race.ai_activity_type,
+    targetUnit: race.target_unit,
+    proofMode: race.proof_mode,
     status: race.status,
     startLineAt: race.start_line_at,
     finishLineAt: race.finish_line_at,
@@ -342,6 +348,8 @@ racesRouter.post('/', async (c) => {
   const goalType = typeof body.goalType === 'string' ? body.goalType : 'manual';
   const targetValue = positiveIntOrNull(body.targetValue) ?? null;
   const unit = stringOrNull(body.unit) ?? null;
+  const aiActivityType = stringOrNull(body.aiActivityType) ?? null;
+  const targetUnit = stringOrNull(body.targetUnit) ?? unit;
   const startLineAt = stringOrNull(body.startLineAt) ?? null;
   const finishLineAt = stringOrNull(body.finishLineAt) ?? null;
   const rules = stringOrNull(body.rules) ?? null;
@@ -349,6 +357,7 @@ racesRouter.post('/', async (c) => {
     typeof body.proofRequirement === 'string' && PROOF_REQUIREMENTS.has(body.proofRequirement)
       ? body.proofRequirement
       : 'manual';
+  const proofMode = stringOrNull(body.proofMode) ?? proofRequirement;
   const proofReviewMode =
     typeof body.proofReviewMode === 'string' && PROOF_REVIEW_MODES.has(body.proofReviewMode)
       ? body.proofReviewMode
@@ -364,9 +373,9 @@ racesRouter.post('/', async (c) => {
     c.env.DB.prepare(
       `INSERT INTO races
          (id, creator_id, title, description, category, goal_type, target_value, unit,
-          status, start_line_at, finish_line_at, rules, proof_requirement,
+          ai_activity_type, target_unit, proof_mode, status, start_line_at, finish_line_at, rules, proof_requirement,
           proof_review_mode, visibility, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     ).bind(
       raceId,
       userId,
@@ -376,6 +385,9 @@ racesRouter.post('/', async (c) => {
       goalType,
       targetValue,
       unit,
+      aiActivityType,
+      targetUnit,
+      proofMode,
       startLineAt,
       finishLineAt,
       rules,
@@ -424,6 +436,9 @@ racesRouter.patch('/:id', async (c) => {
     ['category', 'category'],
     ['goalType', 'goal_type'],
     ['unit', 'unit'],
+    ['aiActivityType', 'ai_activity_type'],
+    ['targetUnit', 'target_unit'],
+    ['proofMode', 'proof_mode'],
     ['startLineAt', 'start_line_at'],
     ['finishLineAt', 'finish_line_at'],
     ['rules', 'rules'],
@@ -536,6 +551,41 @@ racesRouter.post('/:id/join', async (c) => {
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, race) });
 });
 
+// POST /races/:id/participants - add a user directly to a race.
+racesRouter.post('/:id/participants', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json({ ok: false, error: 'Race not found' }, 404);
+  if (race.status !== 'active') return c.json({ ok: false, error: 'Race is not active' }, 400);
+
+  const currentParticipant = await c.env.DB.prepare(
+    'SELECT id FROM race_participants WHERE race_id = ? AND user_id = ?',
+  )
+    .bind(race.id, userId)
+    .first<{ id: string }>();
+  if (race.creator_id !== userId && !currentParticipant) {
+    return c.json({ ok: false, error: 'Only race crew can add participants' }, 403);
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.json<Record<string, unknown>>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
+  }
+
+  const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  if (!targetUserId) return c.json({ ok: false, error: 'userId is required' }, 400);
+
+  const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'")
+    .bind(targetUserId)
+    .first<{ id: string }>();
+  if (!target) return c.json({ ok: false, error: 'User not found' }, 404);
+
+  await ensureParticipant(c.env.DB, race, targetUserId);
+  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, race) });
+});
+
 // POST /races/:id/invite-code - create or return active invite code.
 racesRouter.post('/:id/invite-code', async (c) => {
   const userId = c.get('userId');
@@ -617,6 +667,7 @@ racesRouter.post('/:id/proof', async (c) => {
   }
 
   const activityType = isAiMotion ? stringOrNull(body.activityType) ?? 'jumping_jacks' : null;
+  const activityLabel = activityType?.replaceAll('_', ' ') ?? 'motion';
   const detectedValue = isAiMotion ? nonNegativeIntOrNull(body.detectedValue) ?? increment : null;
   const targetValue = isAiMotion ? positiveIntOrNull(body.targetValue) ?? null : null;
   const confidence = isAiMotion ? confidenceOrNull(body.confidence) ?? null : null;
@@ -628,7 +679,7 @@ racesRouter.post('/:id/proof', async (c) => {
     stringOrNull(body.verificationSummary) ??
     (isAiMotion
       ? status === 'ai_verified'
-        ? `Detected ${detectedValue ?? increment} jumping jacks from live pose tracking.`
+        ? `Detected ${detectedValue ?? increment} ${activityLabel} from live pose tracking.`
         : `Nuvo detected ${detectedValue ?? increment} clean reps out of ${targetValue ?? 'the target'}.`
       : status === 'accepted'
         ? 'Manual proof accepted. AI validation coming soon.'

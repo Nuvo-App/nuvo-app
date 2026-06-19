@@ -31,6 +31,17 @@ class RaceRepository {
 
   Future<List<Race>> getRaces() => _withRefresh(_api.getRaces);
 
+  Future<List<PublicUser>> searchUsers(String query) =>
+      _withRefresh((token) => _api.searchUsers(token, query));
+
+  Future<List<PublicUser>> getCrew() => _withRefresh(_api.getCrew);
+
+  Future<PublicUser?> addCrewUser(String userId) =>
+      _withRefresh((token) => _api.addCrewUser(token, userId));
+
+  Future<void> removeCrewUser(String userId) =>
+      _withRefresh((token) => _api.removeCrewUser(token, userId));
+
   Future<Race> createRace({
     required String title,
     String? description,
@@ -44,6 +55,9 @@ class RaceRepository {
     String? proofRequirement,
     String? proofReviewMode,
     String? visibility,
+    String? aiActivityType,
+    String? targetUnit,
+    String? proofMode,
   }) => _withRefresh(
     (token) => _api.createRace(
       token,
@@ -59,6 +73,9 @@ class RaceRepository {
       proofRequirement: proofRequirement,
       proofReviewMode: proofReviewMode,
       visibility: visibility,
+      aiActivityType: aiActivityType,
+      targetUnit: targetUnit,
+      proofMode: proofMode,
     ),
   );
 
@@ -77,6 +94,9 @@ class RaceRepository {
     String? proofRequirement,
     String? proofReviewMode,
     String? visibility,
+    String? aiActivityType,
+    String? targetUnit,
+    String? proofMode,
   }) => _withRefresh(
     (token) => _api.updateRace(
       token,
@@ -94,6 +114,9 @@ class RaceRepository {
       proofRequirement: proofRequirement,
       proofReviewMode: proofReviewMode,
       visibility: visibility,
+      aiActivityType: aiActivityType,
+      targetUnit: targetUnit,
+      proofMode: proofMode,
     ),
   );
 
@@ -136,6 +159,9 @@ class RaceRepository {
 
   Future<Race> joinRace(String id) =>
       _withRefresh((token) => _api.joinRace(token, id));
+
+  Future<Race> addRaceParticipant(String raceId, String userId) =>
+      _withRefresh((token) => _api.addRaceParticipant(token, raceId, userId));
 
   Future<String> createInviteCode(String id) =>
       _withRefresh((token) => _api.createInviteCode(token, id));

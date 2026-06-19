@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,9 +13,10 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/data/auth_api.dart';
 import '../ai/camera_image_converter.dart';
-import '../ai/jumping_jack_counter.dart';
+import '../ai/motion_validators.dart';
 import '../ai/pose_detector_service.dart';
 import '../data/ai_motion_models.dart';
+import '../domain/motion_activity_catalog.dart';
 import 'race_controller.dart';
 
 class AiMotionProofScreen extends ConsumerStatefulWidget {
@@ -31,11 +31,13 @@ class AiMotionProofScreen extends ConsumerStatefulWidget {
 
 class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     with WidgetsBindingObserver {
-  static const _targetReps = 10;
-
   final _poseDetector = PoseDetectorService();
-  final _counter = JumpingJackCounter(targetReps: _targetReps);
+  MotionValidator _validator = createMotionValidator(
+    AiMotionActivity.jumpingJacks,
+    10,
+  );
 
+  AiMotionActivity _activity = AiMotionActivity.jumpingJacks;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = const [];
   CameraDescription? _selectedCamera;
@@ -50,6 +52,29 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadRace();
+  }
+
+  Future<void> _loadRace() async {
+    try {
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .getRaceDetail(widget.raceId);
+      if (!mounted) return;
+      final activity = AiMotionActivity.fromBackendValue(
+        race.effectiveAiActivityType,
+      );
+      final target = race.targetValue ?? 10;
+      setState(() {
+        _activity = activity;
+        _validator = createMotionValidator(activity, target);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _message = 'Race details could not load. Jumping jacks proof is ready.';
+      });
+    }
   }
 
   @override
@@ -131,7 +156,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   CameraDescription _preferredCamera(List<CameraDescription> cameras) {
     return cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
+      (camera) => camera.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
     );
   }
@@ -157,7 +182,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
-    _counter.start();
+    _validator.start();
     _elapsed = Duration.zero;
     setState(() {
       _status = AiMotionProofStatus.recording;
@@ -199,7 +224,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       );
       if (_disposed || _status != AiMotionProofStatus.recording) return;
       if (frame == null) return;
-      _counter.analyze(frame);
+      _validator.update(frame);
       if (mounted) setState(() {});
     } on CameraImageConversionException catch (e) {
       if (!mounted) return;
@@ -225,16 +250,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await _stopImageStream();
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
-    final result = _counter.finish();
+    final result = _validator.finish();
     if (!mounted) return;
     setState(() {
       _result = result;
       _status = result.isVerified
           ? AiMotionProofStatus.aiVerified
           : AiMotionProofStatus.aiFailed;
-      _message = result.isVerified
-          ? '$_targetReps jumping jacks detected.'
-          : 'Nuvo detected ${result.detectedReps} clean reps out of $_targetReps.';
+      _message = null;
     });
   }
 
@@ -301,38 +324,178 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       e.code == 'CameraAccessDeniedWithoutPrompt' ||
       e.code == 'CameraAccessRestricted';
 
+  // Show premium result panels instead of camera for terminal states.
+  bool get _isResultState =>
+      _status == AiMotionProofStatus.aiVerified ||
+      _status == AiMotionProofStatus.aiFailed;
+
+  int get _targetValue => _validator.targetValue;
+
+  int get _currentValue => _validator.currentValue;
+
+  String get _targetLabel {
+    final definition = motionActivityForBackendValue(_activity.backendValue);
+    return definition?.targetLabel(_targetValue) ??
+        '$_targetValue ${_activity.label}';
+  }
+
+  String get _counterLabel {
+    final definition = motionActivityForBackendValue(_activity.backendValue);
+    return definition?.counterLabel(_currentValue, _targetValue) ??
+        '$_currentValue / $_targetValue';
+  }
+
+  String get _cameraInstruction =>
+      motionActivityForBackendValue(
+        _activity.backendValue,
+      )?.cameraInstruction ??
+      'Full body front view';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: NuvoColors.page,
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+          child: Column(mainAxisSize: MainAxisSize.min, children: _actions()),
+        ),
+      ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton.filledTonal(
-                onPressed: () =>
-                    safePopOrGo(context, '/race/${widget.raceId}/proof'),
-                icon: const Icon(Icons.arrow_back_rounded),
+            // ── Compact inline header: back button left, title right ──────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  NuvoBackButton(
+                    onPressed: () =>
+                        safePopOrGo(context, '/race/${widget.raceId}/proof'),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI Motion Proof',
+                          style: AppTextStyles.titleLarge,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _activity == AiMotionActivity.plankHold
+                              ? 'Hold plank for $_targetValue seconds.'
+                              : 'Verify $_targetLabel live.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: NuvoColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text('AI Motion Proof', style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 6),
-            Text(
-              'Do $_targetReps jumping jacks. Place your iPhone 6-8 feet away and keep your full body in frame.',
-              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+            const SizedBox(height: 14),
+
+            // ── Setup card (setup state only) ────────────────────────────
+            if (_status == AiMotionProofStatus.setup) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _setupCard(),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // ── Camera / result stage — Expanded fills remaining space ───
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _isResultState ? _resultPanel() : _cameraPanel(),
+              ),
             ),
-            const SizedBox(height: 20),
-            _cameraPanel(),
-            const SizedBox(height: 18),
-            _statusPanel(),
-            if (kDebugMode) ...[const SizedBox(height: 12), _debugPanel()],
-            const SizedBox(height: 20),
-            ..._actions(),
+
+            // ── Compact status hint (camera-ready / error / processing) ──
+            if (!_isResultState &&
+                _status != AiMotionProofStatus.setup &&
+                _status != AiMotionProofStatus.recording) ...[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _statusHint(),
+              ),
+            ],
+
+            // ── Submission error message (result states only) ─────────────
+            if (_message != null && _isResultState) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _errorMessage(_message!),
+              ),
+            ],
+
+            const SizedBox(height: 10),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _setupCard() {
+    final items = [
+      'Place your iPhone 6–8 feet away.',
+      _cameraInstruction,
+      _activity == AiMotionActivity.plankHold
+          ? 'Only valid plank posture time counts.'
+          : 'Keep the movement clear and controlled.',
+      'Use good lighting.',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1207152B),
+            blurRadius: 0,
+            offset: Offset(3, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Set up your shot', style: AppTextStyles.titleMedium),
+          const SizedBox(height: 8),
+          for (final item in items) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: NuvoColors.blue,
+                  size: 14,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    item,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (item != items.last) const SizedBox(height: 6),
+          ],
+        ],
       ),
     );
   }
@@ -354,70 +517,234 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         ],
       ),
       clipBehavior: Clip.antiAlias,
-      child: AspectRatio(
-        aspectRatio: 3 / 4,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (showPreview)
-              CameraPreview(controller)
-            else
-              Container(
-                color: NuvoColors.navy,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.all(28),
-                child: Text(
-                  _cameraPlaceholderText,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: NuvoColors.white,
-                  ),
-                  textAlign: TextAlign.center,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (showPreview)
+            _cameraPreview(controller)
+          else
+            Container(
+              color: NuvoColors.navy,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(28),
+              child: Text(
+                _cameraPlaceholderText,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: NuvoColors.white,
                 ),
-              ),
-            Positioned(
-              left: 14,
-              right: 14,
-              top: 14,
-              child: Row(
-                children: [
-                  _pill(
-                    _status == AiMotionProofStatus.recording
-                        ? 'Recording'
-                        : 'Target: $_targetReps reps',
-                    color: _status == AiMotionProofStatus.recording
-                        ? const Color(0xFFE8304A)
-                        : NuvoColors.blue,
-                  ),
-                  const Spacer(),
-                  if (_cameras.length > 1 &&
-                      _status != AiMotionProofStatus.recording)
-                    IconButton.filled(
-                      onPressed: _toggleCamera,
-                      style: IconButton.styleFrom(
-                        backgroundColor: NuvoColors.white.withValues(
-                          alpha: 0.9,
-                        ),
-                        foregroundColor: NuvoColors.navy,
-                      ),
-                      icon: const Icon(Icons.cameraswitch_rounded),
-                    ),
-                ],
+                textAlign: TextAlign.center,
               ),
             ),
-            if (_status == AiMotionProofStatus.recording)
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 14,
-                child: _recordingHud(),
+          Positioned(
+            left: 14,
+            right: 14,
+            top: 14,
+            child: Row(
+              children: [
+                _pill(
+                  _status == AiMotionProofStatus.recording
+                      ? (_currentValue >= _targetValue
+                            ? _counterLabel
+                            : 'Recording')
+                      : 'Target: $_targetLabel',
+                  color: _status == AiMotionProofStatus.recording
+                      ? (_currentValue >= _targetValue
+                            ? NuvoColors.success
+                            : const Color(0xFFE8304A))
+                      : NuvoColors.blue,
+                ),
+                const Spacer(),
+                _visibilityPill(),
+                const SizedBox(width: 8),
+                if (_cameras.length > 1 &&
+                    _status != AiMotionProofStatus.recording)
+                  IconButton.filled(
+                    onPressed: _toggleCamera,
+                    style: IconButton.styleFrom(
+                      backgroundColor: NuvoColors.white.withValues(alpha: 0.9),
+                      foregroundColor: NuvoColors.navy,
+                    ),
+                    icon: const Icon(Icons.cameraswitch_rounded),
+                  ),
+              ],
+            ),
+          ),
+          Positioned.fill(child: IgnorePointer(child: _bodyGuideOverlay())),
+          if (_status == AiMotionProofStatus.recording)
+            Positioned(left: 14, right: 14, bottom: 14, child: _recordingHud()),
+        ],
+      ),
+    );
+  }
+
+  Widget _cameraPreview(CameraController controller) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) return CameraPreview(controller);
+
+    // Camera preview size is landscape even while the app is locked portrait.
+    // Swap dimensions and let BoxFit.cover crop naturally without distortion.
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: previewSize.height,
+        height: previewSize.width,
+        child: CameraPreview(controller),
+      ),
+    );
+  }
+
+  Widget _bodyGuideOverlay() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(34, 76, 34, 72),
+      child: CustomPaint(
+        painter: _BodyGuidePainter(),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: NuvoColors.navy.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: NuvoColors.white.withValues(alpha: 0.18),
               ),
+            ),
+            child: Text(
+              'Keep full body inside',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Premium verified result panel.
+  Widget _resultPanel() {
+    final result = _result;
+    final isVerified = _status == AiMotionProofStatus.aiVerified;
+
+    if (isVerified) {
+      return Container(
+        decoration: BoxDecoration(
+          color: NuvoColors.navy,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0xB007152B),
+              blurRadius: 0,
+              offset: Offset(5, 6),
+            ),
           ],
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.verified_rounded,
+                  color: NuvoColors.blue,
+                  size: 68,
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Verified',
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: NuvoColors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$_targetLabel detected',
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: NuvoColors.white.withValues(alpha: 0.78),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'AI Motion Proof accepted',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.white.withValues(alpha: 0.50),
+                  ),
+                ),
+                if (result != null) ...[
+                  const SizedBox(height: 22),
+                  _metric(
+                    'Confidence',
+                    '${(result.confidence * 100).round()}%',
+                    dark: true,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Failed / coaching state.
+    final detected = result?.detectedReps ?? 0;
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.icyBlue,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: NuvoColors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: NuvoColors.border, width: 2),
+                ),
+                child: const Icon(
+                  Icons.refresh_rounded,
+                  color: NuvoColors.muted,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text('Try again', style: AppTextStyles.headlineLarge),
+              const SizedBox(height: 10),
+              Text(
+                _activity == AiMotionActivity.plankHold
+                    ? 'Nuvo counted $detected valid seconds out of $_targetValue.'
+                    : 'Nuvo detected $detected clean ${_activity.label} out of $_targetValue.',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: NuvoColors.muted,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Keep the camera view clear and try again.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: NuvoColors.muted,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _recordingHud() {
+    final targetReached = _currentValue >= _targetValue;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -429,7 +756,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         children: [
           Expanded(
             child: Text(
-              'Detected: ${_counter.detectedReps} / $_targetReps',
+              targetReached ? 'Target reached — tap Done' : _counterLabel,
               style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.white),
             ),
           ),
@@ -442,84 +769,78 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _statusPanel() {
-    final result = _result;
+  Widget _statusHint() {
     final title = switch (_status) {
-      AiMotionProofStatus.setup => 'Set up your shot',
-      AiMotionProofStatus.cameraReady => 'Camera ready',
-      AiMotionProofStatus.recording =>
-        _counter.fullBodyVisible
-            ? 'Full body visible'
-            : 'Nuvo cannot see your full body yet.',
-      AiMotionProofStatus.processing => 'Processing proof...',
-      AiMotionProofStatus.aiVerified => 'Verified',
-      AiMotionProofStatus.aiFailed => 'Try again',
+      AiMotionProofStatus.cameraReady => 'Frame your body',
+      AiMotionProofStatus.processing => 'Checking proof...',
       AiMotionProofStatus.permissionDenied => 'Camera permission needed',
       AiMotionProofStatus.cameraError => 'Camera issue',
       AiMotionProofStatus.submitting => 'Submitting proof...',
       AiMotionProofStatus.submitted => 'Proof submitted',
       AiMotionProofStatus.needsReview => 'Needs review',
+      _ => '',
     };
     final body =
         _message ??
         switch (_status) {
-          AiMotionProofStatus.setup =>
-            'Stand facing the camera. Use good lighting and keep arms and feet in frame.',
           AiMotionProofStatus.cameraReady =>
-            'Tap Record when your full body is visible.',
-          AiMotionProofStatus.recording =>
-            'Step back and keep your arms and feet in frame.',
-          AiMotionProofStatus.processing =>
-            'The local pose detector is checking your reps.',
-          AiMotionProofStatus.aiVerified =>
-            '${result?.detectedReps ?? _targetReps} jumping jacks detected.',
-          AiMotionProofStatus.aiFailed =>
-            'Keep your full body in frame and try again.',
+            'Nuvo will check body visibility while recording.',
+          AiMotionProofStatus.processing => 'Nuvo is checking your proof.',
           AiMotionProofStatus.permissionDenied =>
-            'You can still use manual proof.',
+            'Camera permission is needed. You can still use manual proof.',
           AiMotionProofStatus.cameraError => 'Try again or use manual proof.',
           AiMotionProofStatus.submitting =>
             'Saving verified proof to the race.',
           AiMotionProofStatus.submitted =>
             'Leaderboard progress is refreshing.',
           AiMotionProofStatus.needsReview => 'This proof needs manual review.',
+          _ => '',
         };
 
+    if (title.isEmpty) return const SizedBox.shrink();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C07152B),
+            blurRadius: 0,
+            offset: Offset(2, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: AppTextStyles.titleLarge),
-          const SizedBox(height: 6),
+          Text(title, style: AppTextStyles.titleMedium),
+          const SizedBox(height: 2),
           Text(
             body,
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
           ),
-          if (result != null) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _metric(
-                  'Detected',
-                  '${result.detectedReps}/${result.targetReps}',
-                ),
-                _metric('Confidence', '${(result.confidence * 100).round()}%'),
-                _metric(
-                  'Frames',
-                  '${result.validPoseFrames}/${result.framesAnalyzed}',
-                ),
-              ],
-            ),
-          ],
         ],
+      ),
+    );
+  }
+
+  Widget _errorMessage(String message) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFEEF1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFE5484D).withValues(alpha: 0.4),
+        ),
+      ),
+      child: Text(
+        message,
+        style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFFE5484D)),
       ),
     );
   }
@@ -547,8 +868,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ],
       AiMotionProofStatus.cameraReady => [
         NuvoPrimaryButton(
-          label: 'Record',
-          icon: Icons.fiber_manual_record_rounded,
+          label: 'Record proof',
+          icon: Icons.videocam_rounded,
           expand: true,
           onPressed: _startRecording,
         ),
@@ -559,6 +880,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           icon: Icons.check_rounded,
           expand: true,
           onPressed: _finishRecording,
+        ),
+        const SizedBox(height: 12),
+        NuvoOutlineButton(
+          label: 'Cancel',
+          expand: true,
+          onPressed: _recordAgain,
         ),
       ],
       AiMotionProofStatus.aiVerified => [
@@ -595,28 +922,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ],
       _ => [
         NuvoPrimaryButton(
-          label: loading ? 'Working' : 'Start camera',
+          label: loading ? 'Checking proof' : 'Start camera',
           expand: true,
           loading: loading,
           onPressed: null,
         ),
       ],
     };
-  }
-
-  Widget _debugPanel() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.border),
-      ),
-      child: Text(
-        'frames: ${_counter.framesAnalyzed}  valid: ${_counter.validPoseFrames}  state: ${_counter.currentState.name}  reps: ${_counter.detectedReps}  confidence: ${(_counter.confidence * 100).round()}%',
-        style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.navy),
-      ),
-    );
   }
 
   Widget _pill(String label, {required Color color}) {
@@ -636,23 +948,63 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _metric(String label, String value) {
+  Widget _visibilityPill() {
+    final recording = _status == AiMotionProofStatus.recording;
+    final visible = _validator.fullBodyVisible;
+    final targetReached = _currentValue >= _targetValue;
+
+    final label = recording && targetReached
+        ? 'Target reached'
+        : recording && visible
+        ? 'Tracking'
+        : recording
+        ? 'Full body needed'
+        : 'Frame body';
+    final color = recording && targetReached
+        ? NuvoColors.success
+        : recording && visible
+        ? NuvoColors.blue
+        : NuvoColors.navy;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
+        color: color.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: NuvoColors.white.withValues(alpha: 0.14)),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: NuvoColors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _metric(String label, String value, {bool dark = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: dark
+            ? NuvoColors.white.withValues(alpha: 0.12)
+            : NuvoColors.icyBlue,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         '$label: $value',
-        style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.navy),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: dark ? NuvoColors.white : NuvoColors.navy,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
 
   String get _cameraPlaceholderText {
     if (_status == AiMotionProofStatus.processing) return 'Starting camera...';
-    return 'Place your iPhone 6-8 feet away. Keep your full body in frame.';
+    return 'Place your iPhone 6–8 feet away.\n$_cameraInstruction.';
   }
 
   String _formatElapsed(Duration duration) {
@@ -660,4 +1012,68 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
+}
+
+class _BodyGuidePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cornerPaint = Paint()
+      ..color = NuvoColors.white.withValues(alpha: 0.9)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final guidePaint = Paint()
+      ..color = NuvoColors.white.withValues(alpha: 0.24)
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke;
+
+    const corner = 34.0;
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      const Radius.circular(28),
+    );
+    canvas.drawRRect(rect, guidePaint);
+
+    final centerX = size.width / 2;
+    final headCenter = Offset(centerX, size.height * 0.18);
+    canvas.drawCircle(headCenter, size.width * 0.075, guidePaint);
+    canvas.drawLine(
+      Offset(centerX, size.height * 0.26),
+      Offset(centerX, size.height * 0.58),
+      guidePaint,
+    );
+    canvas.drawLine(
+      Offset(centerX - size.width * 0.22, size.height * 0.36),
+      Offset(centerX + size.width * 0.22, size.height * 0.36),
+      guidePaint,
+    );
+    canvas.drawLine(
+      Offset(centerX, size.height * 0.58),
+      Offset(centerX - size.width * 0.18, size.height * 0.84),
+      guidePaint,
+    );
+    canvas.drawLine(
+      Offset(centerX, size.height * 0.58),
+      Offset(centerX + size.width * 0.18, size.height * 0.84),
+      guidePaint,
+    );
+
+    final path = Path()
+      ..moveTo(0, corner)
+      ..lineTo(0, 0)
+      ..lineTo(corner, 0)
+      ..moveTo(size.width - corner, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, corner)
+      ..moveTo(size.width, size.height - corner)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width - corner, size.height)
+      ..moveTo(corner, size.height)
+      ..lineTo(0, size.height)
+      ..lineTo(0, size.height - corner);
+    canvas.drawPath(path, cornerPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

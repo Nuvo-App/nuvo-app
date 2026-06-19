@@ -7,7 +7,10 @@ import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
 import '../../auth/data/auth_api.dart';
+import '../data/race_models.dart';
+import '../domain/motion_activity_catalog.dart';
 import 'race_controller.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
@@ -22,15 +25,49 @@ class SubmitProofScreen extends ConsumerStatefulWidget {
 class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   final _valueController = TextEditingController();
   final _noteController = TextEditingController();
+  Race? _race;
+  bool _raceLoading = true;
+  String? _raceError;
   bool _loading = false;
   String? _error;
   bool _submitted = false;
+  bool _showManualFallback = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRace();
+  }
 
   @override
   void dispose() {
     _valueController.dispose();
     _noteController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadRace() async {
+    setState(() {
+      _raceLoading = true;
+      _raceError = null;
+    });
+    try {
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .getRaceDetail(widget.raceId);
+      if (!mounted) return;
+      setState(() {
+        _race = race;
+        _raceLoading = false;
+        _showManualFallback = !race.isSupportedAiMotionRace;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _raceError = 'Could not load proof options.';
+        _raceLoading = false;
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -79,6 +116,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final race = _race;
+    final showManualSubmit =
+        !_submitted &&
+        !_raceLoading &&
+        _raceError == null &&
+        _showManualFallback;
+
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
@@ -88,9 +132,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
               child:
                   ListView(
                         padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-                        children: _submitted
+                        children: _raceLoading
+                            ? _loadingContent()
+                            : _raceError != null
+                            ? _errorContent()
+                            : _submitted
                             ? _successContent()
-                            : _formContent(),
+                            : _formContent(race!),
                       )
                       .animate()
                       .fadeIn(duration: 280.ms, curve: Curves.easeOut)
@@ -110,6 +158,8 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
                       onPressed: () =>
                           safePopOrGo(context, '/race/${widget.raceId}'),
                     )
+                  : !showManualSubmit
+                  ? const SizedBox.shrink()
                   : NuvoPrimaryButton(
                       label: 'Submit proof',
                       icon: Icons.check_rounded,
@@ -124,12 +174,33 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     );
   }
 
+  List<Widget> _loadingContent() => [
+    Align(
+      alignment: Alignment.centerLeft,
+      child: NuvoBackButton(
+        onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+      ),
+    ),
+    const SizedBox(height: 120),
+    const Center(child: CircularProgressIndicator()),
+  ];
+
+  List<Widget> _errorContent() => [
+    Align(
+      alignment: Alignment.centerLeft,
+      child: NuvoBackButton(
+        onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+      ),
+    ),
+    const SizedBox(height: 80),
+    NuvoErrorState(message: _raceError!, onRetry: _loadRace),
+  ];
+
   List<Widget> _successContent() => [
     Align(
       alignment: Alignment.centerLeft,
-      child: IconButton.filledTonal(
+      child: NuvoBackButton(
         onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
-        icon: const Icon(Icons.arrow_back_rounded),
       ),
     ),
     const SizedBox(height: 60),
@@ -150,28 +221,101 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     ),
   ];
 
-  List<Widget> _formContent() => [
-    Align(
-      alignment: Alignment.centerLeft,
-      child: IconButton.filledTonal(
-        onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
-        icon: const Icon(Icons.arrow_back_rounded),
+  List<Widget> _formContent(Race race) {
+    final isAiRace = race.isSupportedAiMotionRace;
+    final showingAiDirect = isAiRace && !_showManualFallback;
+    final definition = motionActivityForBackendValue(race.aiActivityType);
+    final target = race.targetValue ?? definition?.defaultTarget ?? 10;
+    final targetLabel =
+        definition?.targetLabel(target) ?? '$target ${race.unit ?? 'reps'}';
+
+    if (showingAiDirect) {
+      return [
+        Row(
+          children: [
+            NuvoBackButton(
+              onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('AI Motion Proof', style: AppTextStyles.titleLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Nuvo verifies $targetLabel with your iPhone camera.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        _AiMotionProofCard(race: race),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: () => setState(() => _showManualFallback = true),
+          behavior: HitTestBehavior.opaque,
+          child: Center(
+            child: Text(
+              'Use manual proof instead',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.muted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: NuvoBackButton(
+          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+        ),
       ),
-    ),
-    const SizedBox(height: 12),
-    Text('Submit proof', style: AppTextStyles.headlineLarge),
-    const SizedBox(height: 6),
-    Text(
-      'Log your progress. Some races move the leaderboard after owner review.',
-      style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-    ),
-    const SizedBox(height: 24),
-    _AiMotionProofCard(raceId: widget.raceId),
-    const SizedBox(height: 18),
+      const SizedBox(height: 12),
+      Text('Submit proof', style: AppTextStyles.headlineLarge),
+      const SizedBox(height: 6),
+      Text(
+        isAiRace
+            ? 'Log progress manually. Camera proof is recommended for this race.'
+            : 'Log your progress with proof and move the leaderboard.',
+        style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+      ),
+      const SizedBox(height: 24),
+      if (isAiRace) ...[
+        _AiMotionProofCard(race: race),
+        const SizedBox(height: 16),
+        Text('Manual fallback', style: AppTextStyles.titleLarge),
+        const SizedBox(height: 6),
+        Text(
+          'Use this only if camera proof is not available. Progress may still need review.',
+          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+        ),
+        const SizedBox(height: 16),
+        ..._manualFields(),
+      ] else ...[
+        _ManualProofIntro(race: race),
+        const SizedBox(height: 14),
+        const _DisabledAiCard(),
+        const SizedBox(height: 18),
+        ..._manualFields(),
+      ],
+    ];
+  }
+
+  List<Widget> _manualFields() => [
     Text('Manual proof', style: AppTextStyles.titleLarge),
     const SizedBox(height: 6),
     Text(
-      'Enter your own progress amount and note.',
+      'Log your progress with a note.',
       style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
     ),
     const SizedBox(height: 16),
@@ -219,12 +363,17 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 }
 
 class _AiMotionProofCard extends StatelessWidget {
-  const _AiMotionProofCard({required this.raceId});
+  const _AiMotionProofCard({required this.race});
 
-  final String raceId;
+  final Race race;
 
   @override
   Widget build(BuildContext context) {
+    final definition = motionActivityForBackendValue(race.aiActivityType);
+    final target = race.targetValue ?? definition?.defaultTarget ?? 10;
+    final targetLabel =
+        definition?.targetLabel(target) ?? '$target ${race.unit ?? 'reps'}';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -269,7 +418,7 @@ class _AiMotionProofCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '10 jumping jacks',
+                      targetLabel,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: NuvoColors.white.withValues(alpha: 0.72),
                       ),
@@ -291,7 +440,105 @@ class _AiMotionProofCard extends StatelessWidget {
             label: 'Start AI proof',
             icon: Icons.arrow_forward_rounded,
             expand: true,
-            onPressed: () => context.push('/race/$raceId/proof/ai-motion'),
+            onPressed: () => context.push('/race/${race.id}/proof/ai-motion'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManualProofIntro extends StatelessWidget {
+  const _ManualProofIntro({required this.race});
+
+  final Race race;
+
+  @override
+  Widget build(BuildContext context) {
+    final goal = race.targetValue == null
+        ? 'Track progress toward the finish line.'
+        : 'Finish line: ${race.targetValue} ${race.unit ?? 'units'}.';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: NuvoColors.icyBlue,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.edit_note_rounded, color: NuvoColors.blue),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Manual proof', style: AppTextStyles.titleLarge),
+                const SizedBox(height: 4),
+                Text(
+                  '$goal Add a note so your crew can follow your progress.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DisabledAiCard extends StatelessWidget {
+  const _DisabledAiCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: NuvoColors.icyBlue,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: NuvoColors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.directions_run_rounded,
+              color: NuvoColors.muted,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('AI Motion Proof', style: AppTextStyles.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                  'AI Motion Proof is coming soon for this movement.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

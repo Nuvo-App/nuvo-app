@@ -28,11 +28,7 @@ class NuvoEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 44,
-              color: NuvoColors.blue,
-            ),
+            Icon(icon, size: 44, color: NuvoColors.blue),
             const SizedBox(height: 16),
             Text(
               title,

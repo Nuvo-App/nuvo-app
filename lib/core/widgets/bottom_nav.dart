@@ -15,7 +15,7 @@ class NuvoBottomNav extends StatelessWidget {
 
   static const items = [
     (Icons.grid_view_rounded, 'Arena'),
-    (Icons.badge_rounded, 'Pass'),
+    (Icons.group_rounded, 'Crew'),
     (Icons.add_circle_rounded, 'Compete'),
     (Icons.person_rounded, 'Profile'),
   ];

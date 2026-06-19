@@ -32,8 +32,7 @@ class ApplePlaceholderButton extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: NuvoColors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),

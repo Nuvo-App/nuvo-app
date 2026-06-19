@@ -71,19 +71,14 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
             ListView(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: NuvoIconAction(
-                        icon: Icons.arrow_back_rounded,
-                        tooltip: 'Back',
-                        onPressed: () => safePopOrGo(context, '/compete'),
-                      ),
+                    NuvoBackButton(
+                      onPressed: () => safePopOrGo(context, '/compete'),
                     ),
                     const SizedBox(height: 18),
                     Text('Join a race', style: AppTextStyles.headlineLarge),
                     const SizedBox(height: 8),
                     Text(
-                      'Enter the invite code from your crew. Race preview is coming later; for now Nuvo joins directly after confirmation.',
+                      'Have a crew invite code? Enter it below to join the race.',
                       style: AppTextStyles.bodyLarge.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -92,11 +87,37 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                     TextField(
                       controller: _codeController,
                       textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                        labelText: 'Invite code',
+                      style: AppTextStyles.bodyMedium,
+                      decoration: InputDecoration(
                         hintText: 'NUV-XXXXXX',
+                        hintStyle: AppTextStyles.bodyMedium.copyWith(
+                          color: NuvoColors.muted,
+                        ),
                         filled: true,
                         fillColor: NuvoColors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: NuvoColors.border,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: NuvoColors.border,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: NuvoColors.blue,
+                            width: 1.6,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
                       ),
                     ),
                     if (_error != null) ...[

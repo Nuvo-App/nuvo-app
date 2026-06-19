@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,12 +9,36 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+String _raceContextLine(Race race) {
+  final parts = <String>[];
+  if (race.isSupportedAiMotionRace) {
+    parts.add('AI Motion Proof');
+  } else {
+    final method = switch (race.proofRequirement) {
+      'photo_video' => 'Photo/video proof',
+      'ai_check' => 'AI Motion Proof coming soon',
+      _ => 'Manual proof',
+    };
+    parts.add(method);
+  }
+  if (race.targetValue != null) {
+    final unit = race.unit ?? 'reps';
+    parts.add('${race.targetValue} $unit');
+  }
+  return parts.join(' · ');
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 class RaceDetailScreen extends ConsumerStatefulWidget {
   const RaceDetailScreen({super.key, required this.id});
@@ -28,11 +54,32 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
   bool _loading = true;
   bool _busy = false;
   String? _error;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _silentRefresh(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _silentRefresh() async {
+    if (_loading) return;
+    try {
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .getRaceDetail(widget.id);
+      if (mounted) setState(() => _race = race);
+    } catch (_) {}
   }
 
   Future<void> _load() async {
@@ -165,54 +212,6 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     }
   }
 
-  Future<void> _ownerLifecycle(
-    String action, {
-    required String title,
-    required String message,
-    required String confirmLabel,
-  }) async {
-    final race = _race;
-    if (race == null) return;
-    final confirmed = await _confirm(
-      title: title,
-      message: message,
-      confirmLabel: confirmLabel,
-    );
-    if (!confirmed) return;
-    setState(() => _busy = true);
-    try {
-      if (action == 'archive') {
-        final updated = await ref
-            .read(raceControllerProvider.notifier)
-            .archiveRace(race.id);
-        if (mounted) setState(() => _race = updated);
-      } else if (action == 'cancel') {
-        final updated = await ref
-            .read(raceControllerProvider.notifier)
-            .cancelRace(race.id);
-        if (mounted) setState(() => _race = updated);
-      } else if (action == 'delete') {
-        await ref.read(raceControllerProvider.notifier).deleteRace(race.id);
-        if (mounted) context.go('/arena');
-        return;
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update this race.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<bool> _confirm({
     required String title,
     required String message,
@@ -256,9 +255,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                child: IconButton.filledTonal(
+                child: NuvoBackButton(
                   onPressed: () => safePopOrGo(context, '/arena'),
-                  icon: const Icon(Icons.arrow_back_rounded),
                 ),
               ),
               Expanded(
@@ -277,158 +275,321 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final user = ref.watch(authControllerProvider).user;
     final isOwner = user != null && race.isCreator(user.id);
     final isParticipant = user != null && race.isParticipant(user.id);
-    final proofLabel = race.goalType == 'photo' ? 'Photo proof' : 'Self report';
+    final canSubmit = race.status == 'active' && (isOwner || isParticipant);
+    final canJoin = race.status == 'active' && !isOwner && !isParticipant;
+    final myParticipant = isParticipant ? race.participantFor(user.id) : null;
+    final myRaceComplete =
+        myParticipant != null && myParticipant.progressPercent >= 100;
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton.filledTonal(
-                onPressed: () => safePopOrGo(context, '/arena'),
-                icon: const Icon(Icons.arrow_back_rounded),
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
+            children: [
+              // ── Header row ─────────────────────────────────────────────────
+              Row(
+                children: [
+                  NuvoBackButton(
+                    onPressed: () => safePopOrGo(context, '/arena'),
+                  ),
+                  const Spacer(),
+                  _StatusPill(status: race.status),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(race.title, style: AppTextStyles.headlineLarge),
-            if (race.description != null) ...[
-              const SizedBox(height: 8),
+
+              const SizedBox(height: 14),
+
+              // ── Race title + context ────────────────────────────────────────
+              Text(race.displayTitle, style: AppTextStyles.headlineLarge),
+              const SizedBox(height: 4),
               Text(
-                race.description!,
-                style: AppTextStyles.bodyLarge.copyWith(
+                _raceContextLine(race),
+                style: AppTextStyles.bodyMedium.copyWith(
                   color: NuvoColors.muted,
                 ),
               ),
-            ],
+              if (race.description != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  race.description!,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ],
 
-            const SizedBox(height: 18),
-            _ActionPanel(
-              race: race,
-              isOwner: isOwner,
-              isParticipant: isParticipant,
-              busy: _busy,
-              onSubmitProof: () async {
-                await context.push('/race/${race.id}/proof');
-                _load();
-              },
-              onEdit: () => context.push('/race/${race.id}/edit'),
-              onSettings: () => context.push('/race/${race.id}/settings'),
-              onInvite: () => context.push('/race/${race.id}/invite'),
-              onCopyInviteCode: _copyInviteCode,
-              onJoinRace: _joinRace,
-              onLeaveRace: _leaveRace,
-              onShareRace: () => Share.share(
-                'Racing "${race.title}" on Nuvo. Open Nuvo and join the start line.',
-              ),
-              onArchive: () => _ownerLifecycle(
-                'archive',
-                title: 'Archive race?',
-                message:
-                    'Archived races leave active competition but stay in race history.',
-                confirmLabel: 'Archive',
-              ),
-              onCancel: () => _ownerLifecycle(
-                'cancel',
-                title: 'Cancel race?',
-                message:
-                    'Cancel this race only if the start line or rules no longer apply.',
-                confirmLabel: 'Cancel race',
-              ),
-              onDelete: () => _ownerLifecycle(
-                'delete',
-                title: 'Delete race?',
-                message:
-                    'This hides the race from your arena. Proof history is preserved.',
-                confirmLabel: 'Delete',
-              ),
-            ),
+              const SizedBox(height: 18),
 
-            const SizedBox(height: 24),
+              // ── My progress card ────────────────────────────────────────────
+              if (myParticipant != null && race.targetValue != null) ...[
+                _MyProgressCard(participant: myParticipant, race: race),
+                const SizedBox(height: 12),
+              ],
 
-            // ── Leaderboard ─────────────────────────────────────────────────
-            _Section(
-              title: 'Leaderboard',
-              child: race.participants.isEmpty
-                  ? const _InfoRow(
-                      icon: Icons.people_outline_rounded,
-                      text:
-                          'Your crew is waiting at the start line. Invite friends to turn this into a race.',
-                    )
-                  : Column(
-                      children: [
-                        for (var i = 0; i < race.participants.length; i++)
-                          _ParticipantRow(
-                            participant: race.participants[i],
-                            rank: i + 1,
-                            showTarget: race.targetValue != null,
-                            targetValue: race.targetValue,
-                            unit: race.unit,
-                          ),
-                      ],
-                    ),
-            ),
+              // ── Primary CTAs ────────────────────────────────────────────────
+              if (canJoin)
+                NuvoPrimaryButton(
+                  label: 'Join race',
+                  icon: Icons.group_add_rounded,
+                  expand: true,
+                  loading: _busy,
+                  onPressed: _busy ? null : _joinRace,
+                ),
+              if (canSubmit) ...[
+                if (myRaceComplete) ...[
+                  _RaceCompleteCard(participant: myParticipant),
+                  const SizedBox(height: 10),
+                  NuvoPrimaryButton(
+                    label: 'Start another race',
+                    icon: Icons.add_rounded,
+                    expand: true,
+                    onPressed: () => context.push('/races/new'),
+                  ),
+                  const SizedBox(height: 8),
+                  NuvoGhostButton(
+                    label: 'Submit more proof',
+                    icon: Icons.check_rounded,
+                    expand: true,
+                    onPressed: () async {
+                      await context.push('/race/${race.id}/proof');
+                      _load();
+                    },
+                  ),
+                ] else ...[
+                  NuvoPrimaryButton(
+                    label: 'Submit proof',
+                    icon: Icons.arrow_forward_rounded,
+                    expand: true,
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            await context.push('/race/${race.id}/proof');
+                            _load();
+                          },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ],
+              if (isOwner)
+                NuvoOutlineButton(
+                  label: 'Invite crew',
+                  icon: Icons.group_add_rounded,
+                  expand: true,
+                  onPressed: _busy
+                      ? null
+                      : () => context.push('/race/${race.id}/invite'),
+                ),
 
-            // ── Goal ────────────────────────────────────────────────────────
-            if (race.targetValue != null)
+              const SizedBox(height: 22),
+
+              // ── Leaderboard ─────────────────────────────────────────────────
               _Section(
-                title: 'Goal',
-                child: _InfoRow(
-                  icon: Icons.flag_rounded,
-                  text: race.unit != null
-                      ? '${race.targetValue} ${race.unit}'
-                      : '${race.targetValue}',
+                title: 'Leaderboard',
+                child: race.participants.isEmpty
+                    ? const _CompactInfoRow(
+                        icon: Icons.people_outline_rounded,
+                        text:
+                            'Your crew is waiting at the start line. Invite people with a code until direct race links are ready.',
+                      )
+                    : Column(
+                        children: [
+                          for (var i = 0; i < race.participants.length; i++)
+                            _ParticipantRow(
+                              participant: race.participants[i],
+                              rank: i + 1,
+                              showTarget: race.targetValue != null,
+                              targetValue: race.targetValue,
+                              unit: race.unit,
+                            ),
+                        ],
+                      ),
+              ),
+
+              // ── Proof method ────────────────────────────────────────────────
+              _Section(
+                title: 'Proof method',
+                child: _ProofMethodCard(race: race),
+              ),
+
+              // ── Recent proofs ───────────────────────────────────────────────
+              _Section(
+                title: 'Recent proofs',
+                child: race.recentProofs.isEmpty
+                    ? const _CompactInfoRow(
+                        icon: Icons.fact_check_outlined,
+                        text:
+                            'No proof submitted yet. Submit proof to move the leaderboard.',
+                      )
+                    : Column(
+                        children: [
+                          for (final proof in race.recentProofs.take(5))
+                            _ProofRow(
+                              proof: proof,
+                              unit: race.unit,
+                              onTap: isOwner
+                                  ? () => context.push(
+                                      '/race/${race.id}/proofs/${proof.id}',
+                                    )
+                                  : null,
+                            ),
+                        ],
+                      ),
+              ),
+
+              // ── Rules ───────────────────────────────────────────────────────
+              _Section(
+                title: 'Rules',
+                child: _CompactInfoRow(
+                  icon: Icons.rule_rounded,
+                  text: race.rules?.isNotEmpty == true
+                      ? race.rules!
+                      : 'Submit proof before the finish line. Highest verified progress wins.',
                 ),
               ),
 
-            // ── Proof method ────────────────────────────────────────────────
-            _Section(
-              title: 'Proof method',
-              child: _InfoRow(
-                icon: Icons.verified_rounded,
-                text:
-                    '$proofLabel · ${race.proofRequirement.replaceAll('_', ' ')} · ${race.proofReviewMode.replaceAll('_', ' ')}',
-              ),
-            ),
+              // ── Manage race (owner only) ────────────────────────────────────
+              if (isOwner) ...[
+                _ManageRaceSection(
+                  race: race,
+                  busy: _busy,
+                  onEdit: () => context.push('/race/${race.id}/edit'),
+                  onSettings: () => context.push('/race/${race.id}/settings'),
+                  onShareRace: () => Share.share(
+                    'Racing "${race.title}" on Nuvo. Open Nuvo and join the start line.',
+                  ),
+                  onCopyCode: _copyInviteCode,
+                ),
+              ],
 
-            // ── Recent proofs ───────────────────────────────────────────────
-            _Section(
-              title: 'Recent proofs',
-              child: race.recentProofs.isEmpty
-                  ? const _InfoRow(
-                      icon: Icons.fact_check_outlined,
-                      text:
-                          'No proof submitted yet. Submit your first proof to move the leaderboard.',
-                    )
-                  : Column(
-                      children: [
-                        for (final proof in race.recentProofs.take(5))
-                          _ProofRow(
-                            proof: proof,
-                            unit: race.unit,
-                            onTap: isOwner
-                                ? () => context.push(
-                                    '/race/${race.id}/proofs/${proof.id}',
-                                  )
-                                : null,
-                          ),
-                      ],
-                    ),
-            ),
-
-            _Section(
-              title: 'Rules',
-              child: _InfoRow(
-                icon: Icons.rule_rounded,
-                text: race.rules?.isNotEmpty == true
-                    ? race.rules!
-                    : 'Submit proof before the finish line. Highest verified progress wins.',
-              ),
-            ),
-          ],
+              // ── Leave race (non-owner participant) ──────────────────────────
+              if (isParticipant && !isOwner) ...[
+                const SizedBox(height: 8),
+                NuvoGhostButton(
+                  label: 'Leave race',
+                  icon: Icons.logout_rounded,
+                  expand: true,
+                  onPressed: _busy ? null : _leaveRace,
+                ),
+              ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Status pill ───────────────────────────────────────────────────────────────
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (status) {
+      'active' => 'Active',
+      'archived' => 'Archived',
+      'cancelled' => 'Cancelled',
+      'completed' => 'Completed',
+      _ => status,
+    };
+    final bgColor = switch (status) {
+      'active' => NuvoColors.blue,
+      'archived' => NuvoColors.muted,
+      'cancelled' => const Color(0xFFE5484D),
+      _ => NuvoColors.muted,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: NuvoColors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+// ── My progress card ──────────────────────────────────────────────────────────
+
+class _MyProgressCard extends StatelessWidget {
+  const _MyProgressCard({required this.participant, required this.race});
+
+  final RaceParticipant participant;
+  final Race race;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = race.targetValue!;
+    final unit = race.unit ?? 'reps';
+    final progress = (participant.progressPercent / 100).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.all(Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x1A07152B),
+            blurRadius: 0,
+            offset: Offset(3, 4),
+          ),
+          BoxShadow(
+            color: Color(0x0C07152B),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Your progress',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${participant.progressValue} / $target $unit',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.blue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: NuvoColors.border,
+              valueColor: const AlwaysStoppedAnimation<Color>(NuvoColors.blue),
+              minHeight: 7,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${participant.progressPercent}% complete',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          ),
+        ],
       ),
     );
   }
@@ -451,66 +612,138 @@ class _ParticipantRow extends StatelessWidget {
   final int? targetValue;
   final String? unit;
 
+  String _initials(String name) {
+    final parts = name.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final progress = participant.progressPercent / 100;
-    final valueLabel = unit != null
-        ? '${participant.progressValue} $unit'
+    final progress = (participant.progressPercent / 100).clamp(0.0, 1.0);
+    final isLeader = rank == 1;
+    final initials = _initials(participant.displayName);
+
+    final bg = isLeader ? NuvoColors.navy : NuvoColors.white;
+    final textColor = isLeader ? NuvoColors.white : NuvoColors.navy;
+    final mutedColor = isLeader
+        ? NuvoColors.white.withValues(alpha: 0.60)
+        : NuvoColors.muted;
+
+    final valueText = showTarget && targetValue != null
+        ? unit != null
+              ? '${participant.progressValue} / $targetValue $unit'
+              : '${participant.progressValue} / $targetValue'
         : '${participant.progressValue}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.border),
+        color: bg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isLeader ? NuvoColors.navy : NuvoColors.border,
+        ),
+        boxShadow: isLeader
+            ? const [
+                BoxShadow(
+                  color: Color(0x3307152B),
+                  blurRadius: 0,
+                  offset: Offset(3, 4),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              // Rank badge
               Container(
-                width: 24,
-                height: 24,
+                width: 22,
+                height: 22,
                 decoration: BoxDecoration(
-                  color: rank == 1 ? NuvoColors.blue : NuvoColors.icyBlue,
+                  color: isLeader ? NuvoColors.blue : NuvoColors.icyBlue,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   '$rank',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: rank == 1 ? NuvoColors.white : NuvoColors.navy,
+                    color: isLeader ? NuvoColors.white : NuvoColors.navy,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 9,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Avatar initials
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isLeader
+                      ? NuvoColors.blue.withValues(alpha: 0.25)
+                      : NuvoColors.icyBlue,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  initials,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: textColor,
                     fontWeight: FontWeight.w800,
+                    fontSize: 11,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
+              // Name + progress label
               Expanded(
-                child: Text(
-                  participant.displayName,
-                  style: AppTextStyles.titleMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      participant.displayName,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: textColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (showTarget && targetValue != null)
+                      Text(
+                        valueText,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: mutedColor,
+                        ),
+                      ),
+                  ],
                 ),
               ),
+              // Percentage
               Text(
-                showTarget ? valueLabel : '${participant.progressPercent}%',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
+                '${participant.progressPercent}%',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: isLeader ? NuvoColors.white : NuvoColors.blue,
                 ),
               ),
             ],
           ),
           if (showTarget && targetValue != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 9),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                backgroundColor: NuvoColors.border,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  rank == 1 ? NuvoColors.blue : NuvoColors.navy,
+                value: progress,
+                backgroundColor: isLeader
+                    ? NuvoColors.white.withValues(alpha: 0.15)
+                    : NuvoColors.border,
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  NuvoColors.blue,
                 ),
                 minHeight: 5,
               ),
@@ -518,6 +751,41 @@ class _ParticipantRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+// ── Proof method card ─────────────────────────────────────────────────────────
+
+class _ProofMethodCard extends StatelessWidget {
+  const _ProofMethodCard({required this.race});
+
+  final Race race;
+
+  @override
+  Widget build(BuildContext context) {
+    if (race.isSupportedAiMotionRace) {
+      return const _CompactInfoRow(
+        icon: Icons.directions_run_rounded,
+        text:
+            'AI Motion Proof · Live camera · Auto verified\nNuvo checks movement using your iPhone camera.',
+      );
+    }
+
+    final method = switch (race.proofRequirement) {
+      'photo_video' => 'Photo or video',
+      'ai_check' => 'AI Motion Proof',
+      _ => 'Manual proof',
+    };
+    final mode = switch (race.proofReviewMode) {
+      'owner_review' => 'Owner review',
+      'ai_review' => 'AI review',
+      _ => 'Auto-accepted',
+    };
+
+    return _CompactInfoRow(
+      icon: Icons.verified_rounded,
+      text: '$method · $mode',
     );
   }
 }
@@ -542,28 +810,48 @@ class _ProofRow extends StatelessWidget {
     final title = isAiMotion ? 'AI Motion Proof' : proof.displayName;
     final subtitle = isAiMotion ? _aiProofSubtitle(proof) : proof.note;
     final statusLabel = _proofStatusLabel(proof.verificationStatus);
+    final isSuccess =
+        proof.verificationStatus == 'ai_verified' ||
+        proof.verificationStatus == 'accepted';
+    final isDanger =
+        proof.verificationStatus == 'ai_failed' ||
+        proof.verificationStatus == 'rejected';
 
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
           color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: NuvoColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0C07152B),
+              blurRadius: 0,
+              offset: Offset(2, 3),
+            ),
+          ],
         ),
         child: Row(
           children: [
-            Icon(
-              isAiMotion
-                  ? Icons.directions_run_rounded
-                  : Icons.check_circle_outline_rounded,
-              color: proof.verificationStatus == 'ai_failed'
-                  ? const Color(0xFFE8304A)
-                  : NuvoColors.blue,
-              size: 21,
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: isDanger ? const Color(0xFFFFEEF1) : NuvoColors.icyBlue,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                isAiMotion
+                    ? Icons.directions_run_rounded
+                    : Icons.check_circle_outline_rounded,
+                color: isDanger ? const Color(0xFFE8304A) : NuvoColors.blue,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -583,6 +871,7 @@ class _ProofRow extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -593,15 +882,30 @@ class _ProofRow extends StatelessWidget {
                       color: NuvoColors.blue,
                     ),
                   ),
-                const SizedBox(height: 4),
-                Text(
-                  statusLabel,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color:
-                        proof.verificationStatus == 'ai_failed' ||
-                            proof.verificationStatus == 'rejected'
-                        ? const Color(0xFFE8304A)
-                        : NuvoColors.muted,
+                const SizedBox(height: 3),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSuccess
+                        ? NuvoColors.success.withValues(alpha: 0.12)
+                        : isDanger
+                        ? const Color(0xFFE8304A).withValues(alpha: 0.10)
+                        : NuvoColors.icyBlue,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: isSuccess
+                          ? NuvoColors.success
+                          : isDanger
+                          ? const Color(0xFFE8304A)
+                          : NuvoColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -623,7 +927,7 @@ class _ProofRow extends StatelessWidget {
         ? '$detected / $target ${activity ?? 'reps'} detected'
         : proof.verificationSummary;
     if (confidence == null) return count;
-    return '$count · Confidence: ${(confidence * 100).round()}%';
+    return '$count · ${(confidence * 100).round()}% confidence';
   }
 
   String _proofStatusLabel(String status) => switch (status) {
@@ -637,180 +941,73 @@ class _ProofRow extends StatelessWidget {
   };
 }
 
-class _ActionPanel extends StatelessWidget {
-  const _ActionPanel({
+// ── Manage race section (owner only, bottom) ──────────────────────────────────
+
+class _ManageRaceSection extends StatelessWidget {
+  const _ManageRaceSection({
     required this.race,
-    required this.isOwner,
-    required this.isParticipant,
     required this.busy,
-    required this.onSubmitProof,
     required this.onEdit,
     required this.onSettings,
-    required this.onInvite,
-    required this.onCopyInviteCode,
-    required this.onJoinRace,
-    required this.onLeaveRace,
     required this.onShareRace,
-    required this.onArchive,
-    required this.onCancel,
-    required this.onDelete,
+    required this.onCopyCode,
   });
 
   final Race race;
-  final bool isOwner;
-  final bool isParticipant;
   final bool busy;
-  final VoidCallback onSubmitProof;
   final VoidCallback onEdit;
   final VoidCallback onSettings;
-  final VoidCallback onInvite;
-  final VoidCallback onCopyInviteCode;
-  final VoidCallback onJoinRace;
-  final VoidCallback onLeaveRace;
   final VoidCallback onShareRace;
-  final VoidCallback onArchive;
-  final VoidCallback onCancel;
-  final VoidCallback onDelete;
+  final VoidCallback onCopyCode;
 
   @override
   Widget build(BuildContext context) {
-    final canSubmit = race.status == 'active' && (isOwner || isParticipant);
-    final canJoin = race.status == 'active' && !isOwner && !isParticipant;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: NuvoColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Race actions', style: AppTextStyles.titleLarge),
-          const SizedBox(height: 12),
-          if (canJoin)
-            NuvoPrimaryButton(
-              label: 'Join race',
-              icon: Icons.group_add_rounded,
-              expand: true,
-              loading: busy,
-              onPressed: busy ? null : onJoinRace,
-            ),
-          if (canSubmit) ...[
-            NuvoPrimaryButton(
-              label: 'Submit proof',
-              icon: Icons.arrow_forward_rounded,
-              expand: true,
-              onPressed: busy ? null : onSubmitProof,
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (isOwner) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: NuvoOutlineButton(
-                    label: 'Edit race',
-                    icon: Icons.edit_rounded,
-                    onPressed: busy ? null : onEdit,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: NuvoOutlineButton(
-                    label: 'Race settings',
-                    icon: Icons.tune_rounded,
-                    onPressed: busy ? null : onSettings,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            NuvoPrimaryButton(
-              label: 'Invite crew',
-              icon: Icons.group_add_rounded,
-              expand: true,
-              onPressed: busy ? null : onInvite,
-            ),
-            const SizedBox(height: 10),
-          ],
-          Row(
-            children: [
-              Expanded(
-                child: NuvoOutlineButton(
-                  label: 'Share race',
-                  icon: Icons.ios_share_rounded,
-                  onPressed: busy ? null : onShareRace,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: NuvoOutlineButton(
-                  label: 'Copy invite code',
-                  icon: Icons.copy_rounded,
-                  onPressed: busy ? null : onCopyInviteCode,
-                ),
-              ),
-            ],
-          ),
-          if (isParticipant && !isOwner) ...[
-            const SizedBox(height: 10),
-            NuvoGhostButton(
-              label: 'Leave race',
-              icon: Icons.logout_rounded,
-              expand: true,
-              onPressed: busy ? null : onLeaveRace,
-            ),
-          ],
-          if (isOwner) ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _LifecycleChip(
-                  label: 'Archive',
-                  onTap: busy ? null : onArchive,
-                ),
-                _LifecycleChip(label: 'Cancel', onTap: busy ? null : onCancel),
-                _LifecycleChip(
-                  label: 'Delete',
-                  danger: true,
-                  onTap: busy ? null : onDelete,
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _LifecycleChip extends StatelessWidget {
-  const _LifecycleChip({
-    required this.label,
-    required this.onTap,
-    this.danger = false,
-  });
-
-  final String label;
-  final VoidCallback? onTap;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: onTap,
-      labelStyle: AppTextStyles.labelSmall.copyWith(
-        color: danger ? const Color(0xFFE5484D) : NuvoColors.navy,
-      ),
-      backgroundColor: danger ? const Color(0xFFFFEEF1) : NuvoColors.icyBlue,
-      side: BorderSide(
-        color: danger ? const Color(0xFFE5484D) : NuvoColors.border,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Manage race',
+          style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.muted),
+        ),
+        const SizedBox(height: 10),
+        NuvoActionTile(
+          icon: Icons.edit_rounded,
+          title: 'Edit race',
+          iconColor: NuvoColors.blue,
+          iconBg: NuvoColors.icyBlue,
+          onTap: busy ? null : onEdit,
+        ),
+        const SizedBox(height: 8),
+        NuvoActionTile(
+          icon: Icons.tune_rounded,
+          title: 'Race settings',
+          iconColor: NuvoColors.blue,
+          iconBg: NuvoColors.icyBlue,
+          onTap: busy ? null : onSettings,
+        ),
+        const SizedBox(height: 8),
+        NuvoActionTile(
+          icon: Icons.ios_share_rounded,
+          title: 'Share race',
+          iconColor: NuvoColors.navy,
+          iconBg: NuvoColors.icyBlue,
+          onTap: busy ? null : onShareRace,
+        ),
+        const SizedBox(height: 8),
+        NuvoActionTile(
+          icon: Icons.copy_rounded,
+          title: 'Copy invite code',
+          iconColor: NuvoColors.navy,
+          iconBg: NuvoColors.icyBlue,
+          onTap: busy ? null : onCopyCode,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Lifecycle and danger actions are in Race settings.',
+          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }
@@ -826,12 +1023,12 @@ class _Section extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: AppTextStyles.titleLarge),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           child,
         ],
       ),
@@ -839,8 +1036,70 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.icon, required this.text});
+// ── Race complete card ────────────────────────────────────────────────────────
+
+class _RaceCompleteCard extends StatelessWidget {
+  const _RaceCompleteCard({required this.participant});
+
+  final RaceParticipant participant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FBF5),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x5916C784)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1816C784),
+            blurRadius: 0,
+            offset: Offset(3, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8FAF2),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: NuvoColors.success,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Race complete', style: AppTextStyles.titleMedium),
+                const SizedBox(height: 2),
+                Text(
+                  '${participant.progressPercent}% — you crossed the finish line.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact single-surface info row — tighter than the old _InfoRow.
+class _CompactInfoRow extends StatelessWidget {
+  const _CompactInfoRow({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -848,17 +1107,32 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C07152B),
+            blurRadius: 0,
+            offset: Offset(2, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          Icon(icon, color: NuvoColors.blue),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: AppTextStyles.bodyMedium)),
+          Icon(icon, color: NuvoColors.blue, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.navy,
+                fontSize: 13,
+              ),
+            ),
+          ),
         ],
       ),
     );

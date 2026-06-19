@@ -24,9 +24,9 @@ class AuthApi {
   final http.Client _client;
 
   Map<String, String> _headers({String? accessToken}) => {
-        'Content-Type': 'application/json',
-        if (accessToken != null) 'Authorization': 'Bearer $accessToken',
-      };
+    'Content-Type': 'application/json',
+    if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+  };
 
   Future<Map<String, dynamic>> _post(
     String path,
@@ -40,7 +40,10 @@ class AuthApi {
     );
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, json['error'] as String? ?? 'Request failed');
+      throw ApiException(
+        res.statusCode,
+        json['error'] as String? ?? 'Request failed',
+      );
     }
     return json;
   }
@@ -52,19 +55,28 @@ class AuthApi {
     );
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, json['error'] as String? ?? 'Request failed');
+      throw ApiException(
+        res.statusCode,
+        json['error'] as String? ?? 'Request failed',
+      );
     }
     return json;
   }
 
-  Future<Map<String, dynamic>> _delete(String path, {String? accessToken}) async {
+  Future<Map<String, dynamic>> _delete(
+    String path, {
+    String? accessToken,
+  }) async {
     final res = await _client.delete(
       Uri.parse('$_kApiBase$path'),
       headers: _headers(accessToken: accessToken),
     );
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, json['error'] as String? ?? 'Request failed');
+      throw ApiException(
+        res.statusCode,
+        json['error'] as String? ?? 'Request failed',
+      );
     }
     return json;
   }
@@ -75,7 +87,10 @@ class AuthApi {
       _post('/auth/email/start', {'email': email});
 
   Future<AuthResponse> verifyEmailCode(String email, String code) async {
-    final json = await _post('/auth/email/verify', {'email': email, 'code': code});
+    final json = await _post('/auth/email/verify', {
+      'email': email,
+      'code': code,
+    });
     return AuthResponse.fromJson(json);
   }
 
@@ -116,11 +131,9 @@ class AuthApi {
   }
 
   Future<bool> checkUsername(String accessToken, String username) async {
-    final json = await _post(
-      '/profile/username/check',
-      {'username': username},
-      accessToken: accessToken,
-    );
+    final json = await _post('/profile/username/check', {
+      'username': username,
+    }, accessToken: accessToken);
     return json['available'] as bool? ?? false;
   }
 

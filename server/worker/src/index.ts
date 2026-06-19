@@ -5,6 +5,8 @@ import { authRouter } from './routes/auth';
 import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
+import { usersRouter } from './routes/users';
+import { crewRouter } from './routes/crew';
 import { requireAuth } from './lib/jwt';
 import { ALLOWED_WEB_ORIGINS } from './lib/response';
 
@@ -43,6 +45,10 @@ app.route('/profile', profileRouter);
 
 // ── Pass routes ───────────────────────────────────────────────────────────────
 app.route('/pass', passRouter);
+
+// ── Social routes ─────────────────────────────────────────────────────────────
+app.route('/users', usersRouter);
+app.route('/crew', crewRouter);
 
 // ── Race routes ───────────────────────────────────────────────────────────────
 app.route('/races', racesRouter);

@@ -13,6 +13,7 @@ abstract final class AppTheme {
     systemNavigationBarColor: NuvoColors.white,
     systemNavigationBarIconBrightness: Brightness.dark,
   );
+  
 
   /// Light theme — matches the nuvothrive.netlify.app aesthetic.
   static ThemeData light() {

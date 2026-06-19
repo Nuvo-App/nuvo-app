@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/presentation/race_controller.dart';
 
@@ -45,11 +46,17 @@ class ProfileScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
+          // ── Profile header ────────────────────────────────────────────────
           Row(
             children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: NuvoColors.navy,
+              Container(
+                width: 60,
+                height: 60,
+                decoration: const BoxDecoration(
+                  color: NuvoColors.navy,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
                 child: Text(
                   initials,
                   style: AppTextStyles.titleLarge.copyWith(
@@ -74,11 +81,14 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 20),
+
+          // ── Stats 2×2 grid ────────────────────────────────────────────────
           if (raceState.loading && raceState.races.isEmpty)
             const Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+                padding: EdgeInsets.symmetric(vertical: 20),
                 child: CircularProgressIndicator(),
               ),
             )
@@ -91,24 +101,29 @@ class ProfileScreen extends ConsumerWidget {
           else
             GridView.count(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.55,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 2.1,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _StatTile(value: '$activeRaceCount', label: 'Active races'),
-                _StatTile(value: '$finishedRaceCount', label: 'Finished races'),
-                _StatTile(value: '$proofCount', label: 'Proofs submitted'),
-                _StatTile(
+                NuvoStatTile(value: '$activeRaceCount', label: 'Active races'),
+                NuvoStatTile(
+                  value: '$finishedRaceCount',
+                  label: 'Finished races',
+                ),
+                NuvoStatTile(value: '$proofCount', label: 'Proofs submitted'),
+                NuvoStatTile(
                   value: '$averageProgress%',
                   label: 'Average progress',
                 ),
               ],
             ),
-          const SizedBox(height: 26),
-          Text('Race history', style: AppTextStyles.titleLarge),
-          const SizedBox(height: 12),
+
+          const SizedBox(height: 22),
+
+          // ── Race history ──────────────────────────────────────────────────
+          const NuvoSectionHeader(title: 'Race history', bottomPadding: 10),
           if (raceLoadFailed)
             const _RaceHistoryLoadError()
           else if (raceState.races.isEmpty)
@@ -121,39 +136,50 @@ class ProfileScreen extends ConsumerWidget {
           else
             for (final race in raceState.races.take(3)) ...[
               _RaceHistoryRow(title: race.title, status: race.status),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
             ],
-          const SizedBox(height: 26),
-          Text('Settings', style: AppTextStyles.titleLarge),
-          const SizedBox(height: 12),
-          _SettingsRow(
+
+          const SizedBox(height: 22),
+
+          // ── Settings ──────────────────────────────────────────────────────
+          const NuvoSectionHeader(title: 'Settings', bottomPadding: 10),
+          NuvoActionTile(
             icon: Icons.edit_rounded,
-            label: 'Edit profile',
+            title: 'Edit profile',
+            iconColor: NuvoColors.blue,
+            iconBg: NuvoColors.icyBlue,
             onTap: () => context.push('/profile/edit'),
           ),
-          _SettingsRow(
+          const SizedBox(height: 8),
+          NuvoActionTile(
             icon: Icons.notifications_rounded,
-            label: 'Notifications',
+            title: 'Notifications',
+            iconColor: NuvoColors.blue,
+            iconBg: NuvoColors.icyBlue,
             onTap: () => _showNotificationsSheet(context),
           ),
-          _SettingsRow(
+          const SizedBox(height: 8),
+          NuvoActionTile(
             icon: Icons.lock_rounded,
-            label: 'Privacy',
+            title: 'Privacy',
+            iconColor: NuvoColors.navy,
+            iconBg: NuvoColors.icyBlue,
             onTap: () => _showComingSoonSheet(
               context,
               'Privacy settings are coming soon.',
               'Your profile details are controlled by the backend profile settings already active in Nuvo.',
             ),
           ),
-          _SettingsRow(
+          const SizedBox(height: 8),
+          NuvoActionTile(
             icon: Icons.logout_rounded,
-            label: 'Sign out',
+            title: 'Sign out',
+            iconColor: const Color(0xFFE5484D),
+            iconBg: const Color(0xFFFFEEF1),
             onTap: () async {
               await ref.read(authControllerProvider.notifier).logout();
-              // Router guard redirects to /welcome after state updates.
             },
           ),
-          const SizedBox(height: 28),
         ],
       ),
     );
@@ -166,51 +192,15 @@ class _RaceHistoryLoadError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: NuvoColors.border),
       ),
       child: Text(
         'Race history could not load. Use Try again above to refresh your real stats.',
-        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-      ),
-    );
-  }
-}
-
-class _StatTile extends StatelessWidget {
-  const _StatTile({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: NuvoColors.blue,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-          ),
-        ],
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
       ),
     );
   }
@@ -224,56 +214,52 @@ class _RaceHistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isActive = status == 'active';
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: NuvoColors.border),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.flag_rounded, color: NuvoColors.blue),
-          const SizedBox(width: 12),
-          Expanded(child: Text(title, style: AppTextStyles.titleMedium)),
-          Text(
-            status,
-            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C07152B),
+            blurRadius: 0,
+            offset: Offset(2, 3),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({required this.icon, required this.label, this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: NuvoColors.blue),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
-            if (onTap != null)
-              const Icon(Icons.chevron_right_rounded, color: NuvoColors.muted),
-          ],
-        ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: isActive ? NuvoColors.icyBlue : NuvoColors.softBlue,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.flag_rounded,
+              color: NuvoColors.blue,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: AppTextStyles.titleMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          NuvoPill(
+            label: status,
+            color: isActive ? NuvoColors.blue : NuvoColors.muted,
+          ),
+        ],
       ),
     );
   }

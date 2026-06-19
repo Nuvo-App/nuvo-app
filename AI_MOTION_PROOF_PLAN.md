@@ -57,3 +57,46 @@
 - No server-side AI verification yet.
 - Jumping jack detection requires full body visible.
 - Push-up detection is scaffolded only and is not part of the primary v1 demo flow.
+
+## Live Demo UX Update - 2026-06-19
+- AI Motion Proof is treated as production-ready only for 10 jumping jacks in the UI.
+- Compete and onboarding now route users toward a real 10 Jumping Jacks AI Motion Proof race.
+- Submit Proof gates the working AI path to supported AI races and keeps manual proof primary for unsupported activities.
+- The camera screen now includes a setup card, target/detected status, full-body guide overlay, body visibility copy, and bottom SafeArea CTAs.
+- The camera preview is fitted with natural aspect-ratio handling instead of fill-style stretching.
+- The screen no longer says `Ready` before body visibility is actually observed during recording.
+- Raw debug metrics are removed from the user-facing AI Motion Proof UI.
+- Physical iPhone release QA is still required for camera crop, CTA clipping, and actual demo-room setup distance.
+
+## Camera UI Polish Update - 2026-06-19
+
+- Replaced ListView body with SafeArea Column + Expanded — camera stage now fills available vertical space dynamically instead of being fixed at 268dp.
+- Back button moved to top-left inline with title in a compact Row header — no longer floats centered above a stacked title block.
+- Header is now compact: back button left | "AI Motion Proof" titleLarge + "Verify 10 jumping jacks live." bodySmall subtitle right — saves ~24dp of vertical space.
+- Camera stage height is now responsive (Expanded fills remaining space after header and optional setup card), eliminating the dead blank gap between camera and CTA on all iPhone sizes.
+- Recording HUD updated: shows "Target reached — tap Done" when `_counter.detectedReps >= 10`, otherwise "Detected: X / 10".
+- Top-left camera pill updated: shows green "10 / 10" at target, red "Recording" during recording, blue "Target: 10 reps" in setup/ready.
+- Visibility pill (top-right) updated: "Frame body" (ready), "Tracking" (recording + body visible), "Full body needed" (recording + not visible), "Target reached" (recording + target hit).
+- _statusPanel() removed. Replaced by compact _statusHint() — smaller card (10dp vertical padding), shown only for cameraReady / error / processing states. Hidden during recording (in-camera HUD covers it) and setup (setup card covers it).
+- Result panels (Verified / Try again) now use Center + mainAxisSize.min Column — fill the Expanded stage gracefully on all screen sizes instead of being a small top-aligned card.
+- AI detection logic, counter thresholds, pose detector, frame handler, and all backend submit logic are unchanged.
+## Demo Social + AI Update - 2026-06-19
+
+- Typed race parsing now detects Jumping Jacks, Squats, High Knees, Arm Raises, and Plank Hold.
+- AI Motion Proof now uses a validator registry instead of a hardcoded jumping-jack-only screen.
+- Push-ups remain unsupported/manual.
+- Proof payloads include activity type and validator metadata.
+
+## Demo Social + AI Checklist
+- [x] User can type "10 squats"
+- [x] User can type "20 high knees"
+- [x] User can type "10 arm raises"
+- [x] User can type "20 second plank"
+- [x] Supported movements show AI Motion Proof available
+- [x] Unsupported movements stay manual
+- [x] Quick starts use the same parser
+- [x] Jumping jacks still routes through AI Motion Proof
+- [x] No fake AI for unsupported movements
+- [x] AI proof screen labels match selected movement
+- [x] Proof submits with correct activity type
+- [ ] Physical movement detection validated on device

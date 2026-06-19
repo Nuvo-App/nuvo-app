@@ -56,6 +56,9 @@ class RaceController extends StateNotifier<RaceState> {
     String? proofRequirement,
     String? proofReviewMode,
     String? visibility,
+    String? aiActivityType,
+    String? targetUnit,
+    String? proofMode,
   }) async {
     final race = await _repo.createRace(
       title: title,
@@ -70,6 +73,9 @@ class RaceController extends StateNotifier<RaceState> {
       proofRequirement: proofRequirement,
       proofReviewMode: proofReviewMode,
       visibility: visibility,
+      aiActivityType: aiActivityType,
+      targetUnit: targetUnit,
+      proofMode: proofMode,
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
@@ -94,6 +100,9 @@ class RaceController extends StateNotifier<RaceState> {
     String? proofRequirement,
     String? proofReviewMode,
     String? visibility,
+    String? aiActivityType,
+    String? targetUnit,
+    String? proofMode,
   }) async {
     final race = await _repo.updateRace(
       id,
@@ -110,6 +119,9 @@ class RaceController extends StateNotifier<RaceState> {
       proofRequirement: proofRequirement,
       proofReviewMode: proofReviewMode,
       visibility: visibility,
+      aiActivityType: aiActivityType,
+      targetUnit: targetUnit,
+      proofMode: proofMode,
     );
     _upsertRace(race);
     return race;
@@ -184,6 +196,21 @@ class RaceController extends StateNotifier<RaceState> {
 
   Future<Race> joinRace(String id) async {
     final race = await _repo.joinRace(id);
+    _upsertRace(race);
+    return race;
+  }
+
+  Future<List<PublicUser>> searchUsers(String query) =>
+      _repo.searchUsers(query);
+
+  Future<List<PublicUser>> getCrew() => _repo.getCrew();
+
+  Future<PublicUser?> addCrewUser(String userId) => _repo.addCrewUser(userId);
+
+  Future<void> removeCrewUser(String userId) => _repo.removeCrewUser(userId);
+
+  Future<Race> addRaceParticipant(String raceId, String userId) async {
+    final race = await _repo.addRaceParticipant(raceId, userId);
     _upsertRace(race);
     return race;
   }

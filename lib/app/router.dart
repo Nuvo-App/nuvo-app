@@ -146,7 +146,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       // ── Detail / standalone ───────────────────────────────────────────────
       GoRoute(
         path: '/races/new',
-        pageBuilder: (_, state) => _authPage(state, const CreateRaceScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          CreateRaceScreen(
+            prefill: state.extra is RaceCreatePrefill
+                ? state.extra! as RaceCreatePrefill
+                : null,
+          ),
+        ),
       ),
       GoRoute(
         path: '/races/join',

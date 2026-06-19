@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
@@ -28,139 +30,198 @@ class ArenaScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
-        children: [
-          // ── Header ────────────────────────────────────────────────────────
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$greeting, $firstName',
-                      style: AppTextStyles.headlineLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Ready to make a move?',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(raceControllerProvider.notifier).loadRaces(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+          children: [
+            // ── Header ────────────────────────────────────────────────────────
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$greeting, $firstName',
+                        style: AppTextStyles.headlineLarge,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton.filledTonal(
-                onPressed: () => _showNotificationsSheet(context),
-                icon: const Icon(Icons.notifications_none_rounded),
-              ),
-              const SizedBox(width: 8),
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: NuvoColors.navy,
-                child: Text(
-                  initials,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: NuvoColors.white,
-                    fontWeight: FontWeight.w900,
+                      const SizedBox(height: 4),
+                      Text(
+                        'Ready to make a move?',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: NuvoColors.muted,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // ── Featured race or empty state ─────────────────────────────────
-          if (raceState.loading && raceState.races.isEmpty)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (raceState.error != null && raceState.races.isEmpty)
-            NuvoErrorState(
-              message: raceState.error!,
-              onRetry: () =>
-                  ref.read(raceControllerProvider.notifier).loadRaces(),
-            )
-          else if (raceState.races.isNotEmpty)
-            _FeaturedRaceCard(race: raceState.races.first)
-          else
-            _EmptyState(onStart: () => context.push('/races/new')),
-
-          const SizedBox(height: 26),
-
-          // ── Quick actions ────────────────────────────────────────────────
-          Text('Quick actions', style: AppTextStyles.titleLarge),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.add_rounded,
-                  title: 'Start race',
-                  onTap: () => context.push('/races/new'),
+                PressableScale(
+                  onTap: () => _showNotificationsSheet(context),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: NuvoColors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: NuvoColors.border),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1207152B),
+                          blurRadius: 0,
+                          offset: Offset(2, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.notifications_none_rounded,
+                      color: NuvoColors.navy,
+                      size: 20,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.group_add_rounded,
-                  title: 'Pull crew',
-                  onTap: () => context.go('/pass'),
+                const SizedBox(width: 10),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: NuvoColors.navy,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initials,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: NuvoColors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
 
-          const SizedBox(height: 26),
+            const SizedBox(height: 22),
 
-          // ── Active races ─────────────────────────────────────────────────
-          if (raceState.races.isNotEmpty) ...[
-            Text('Active races', style: AppTextStyles.titleLarge),
-            const SizedBox(height: 12),
-            for (final race in raceState.races) ...[
-              _CompactRaceCard(race: race),
-              const SizedBox(height: 12),
+            // ── Featured race or empty state ─────────────────────────────────
+            if (raceState.loading && raceState.races.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (raceState.error != null && raceState.races.isEmpty)
+              NuvoErrorState(
+                message: raceState.error!,
+                onRetry: () =>
+                    ref.read(raceControllerProvider.notifier).loadRaces(),
+              )
+            else if (raceState.races.isNotEmpty)
+              _FeaturedRaceCard(race: raceState.races.first, userId: user?.id)
+            else
+              _EmptyState(onStart: () => context.push('/races/new')),
+
+            const SizedBox(height: 20),
+
+            // ── Quick actions ────────────────────────────────────────────────
+            const NuvoSectionHeader(title: 'Quick actions', bottomPadding: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionCard(
+                    icon: Icons.add_rounded,
+                    title: 'Start a race',
+                    onTap: () => context.push('/races/new'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ActionCard(
+                    icon: Icons.group_add_rounded,
+                    title: 'Invite crew',
+                    onTap: () => context.go('/pass'),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // ── Active races ─────────────────────────────────────────────────
+            if (raceState.races.isNotEmpty) ...[
+              const NuvoSectionHeader(title: 'Active races', bottomPadding: 10),
+              for (final race in raceState.races) ...[
+                _buildRaceRow(context, race),
+                const SizedBox(height: 10),
+              ],
             ],
           ],
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildRaceRow(BuildContext context, Race race) {
+    final topParticipant = race.participants.isNotEmpty
+        ? race.participants.first
+        : null;
+    final progress = topParticipant?.progressPercent ?? 0;
+    final isComplete = progress >= 100;
+    final isAi = race.isSupportedAiMotionRace;
+    final participantLabel =
+        '${race.participantCount} ${race.participantCount == 1 ? 'participant' : 'participants'}';
+
+    return NuvoDenseRaceRow(
+      title: race.title,
+      subtitle: participantLabel,
+      progressPercent: progress,
+      isComplete: isComplete,
+      isAiMotion: isAi,
+      onTap: () => context.push('/race/${race.id}'),
     );
   }
 }
 
-// ── Featured race (prominent card at top) ────────────────────────────────────
+// ── Featured race (prominent hero card at top) ────────────────────────────────
 
 class _FeaturedRaceCard extends StatelessWidget {
-  const _FeaturedRaceCard({required this.race});
+  const _FeaturedRaceCard({required this.race, this.userId});
 
   final Race race;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
-    final progressPercent = race.participants.isNotEmpty
+    final leaderProgress = race.participants.isNotEmpty
         ? race.participants.first.progressPercent
         : 0;
+    final myProgress = userId != null
+        ? (race.participantFor(userId!)?.progressPercent ?? leaderProgress)
+        : leaderProgress;
+    final progressPercent = myProgress;
+    final isComplete = myProgress >= 100;
     final participantCount = race.participantCount;
 
-    return GestureDetector(
+    return PressableScale(
       onTap: () => context.push('/race/${race.id}'),
       child: Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0xC007152B),
+              blurRadius: 0,
+              offset: Offset(5, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Your next move',
+              isComplete ? 'Finished' : 'Your next move',
               style: AppTextStyles.labelMedium.copyWith(
                 color: NuvoColors.white.withValues(alpha: 0.55),
                 letterSpacing: 0.5,
@@ -184,7 +245,7 @@ class _FeaturedRaceCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             if (race.targetValue != null) ...[
               Row(
                 children: [
@@ -196,10 +257,10 @@ class _FeaturedRaceCard extends StatelessWidget {
                         backgroundColor: NuvoColors.white.withValues(
                           alpha: 0.15,
                         ),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          NuvoColors.blue,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          isComplete ? NuvoColors.success : NuvoColors.blue,
                         ),
-                        minHeight: 6,
+                        minHeight: 5,
                       ),
                     ),
                   ),
@@ -223,25 +284,53 @@ class _FeaturedRaceCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                GestureDetector(
-                  onTap: () => context.push('/race/${race.id}/proof'),
-                  child: Container(
+                if (isComplete)
+                  Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
+                      horizontal: 12,
+                      vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: NuvoColors.blue,
-                      borderRadius: BorderRadius.circular(12),
+                      color: NuvoColors.success.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: NuvoColors.success.withValues(alpha: 0.4),
+                      ),
                     ),
                     child: Text(
-                      'Log progress',
+                      'Complete',
                       style: AppTextStyles.labelMedium.copyWith(
-                        color: NuvoColors.white,
+                        color: NuvoColors.success,
+                      ),
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () => context.push('/race/${race.id}/proof'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: NuvoColors.blue,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x4007152B),
+                            blurRadius: 0,
+                            offset: Offset(2, 3),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'Submit proof',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: NuvoColors.white,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ],
@@ -266,6 +355,13 @@ class _EmptyState extends StatelessWidget {
         color: NuvoColors.icyBlue,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1007152B),
+            blurRadius: 0,
+            offset: Offset(3, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -279,13 +375,20 @@ class _EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          GestureDetector(
+          PressableScale(
             onTap: onStart,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
                 color: NuvoColors.blue,
                 borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x5007152B),
+                    blurRadius: 0,
+                    offset: Offset(3, 4),
+                  ),
+                ],
               ),
               child: Text(
                 'Start a race',
@@ -296,60 +399,6 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Compact race card ─────────────────────────────────────────────────────────
-
-class _CompactRaceCard extends StatelessWidget {
-  const _CompactRaceCard({required this.race});
-
-  final Race race;
-
-  @override
-  Widget build(BuildContext context) {
-    final topParticipant = race.participants.isNotEmpty
-        ? race.participants.first
-        : null;
-    final progressPercent = topParticipant?.progressPercent ?? 0;
-
-    return GestureDetector(
-      onTap: () => context.push('/race/${race.id}'),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(race.title, style: AppTextStyles.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${race.participantCount} ${race.participantCount == 1 ? 'participant' : 'participants'}'
-                    '${race.targetValue != null ? ' · $progressPercent% done' : ''}',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: NuvoColors.muted,
-              size: 14,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -415,15 +464,21 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
+    return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: NuvoColors.icyBlue,
+          color: NuvoColors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: NuvoColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x2007152B),
+              blurRadius: 0,
+              offset: Offset(3, 4),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -434,7 +489,8 @@ class _ActionCard extends StatelessWidget {
                 color: NuvoColors.blue,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: NuvoColors.white, size: 20),
+              alignment: Alignment.center,
+              child: Icon(icon, color: NuvoColors.white, size: 19),
             ),
             const SizedBox(width: 10),
             Expanded(child: Text(title, style: AppTextStyles.labelLarge)),

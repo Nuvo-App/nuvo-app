@@ -238,9 +238,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: NuvoIconAction(
-                icon: Icons.arrow_back_rounded,
-                tooltip: 'Back to race',
+              child: NuvoBackButton(
                 onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
               ),
             ),
@@ -321,7 +319,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                   values: const {
                     'manual': 'manual proof',
                     'photo_video': 'photo/video proof coming soon',
-                    'ai_check': 'AI proof check coming soon',
+                    'ai_check': 'AI Motion Proof - 10 jumping jacks',
                   },
                   onChanged: (value) =>
                       setState(() => _proofRequirement = value),

@@ -47,7 +47,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       return;
     }
     if (username.length < 3) {
-      setState(() => _usernameError = 'Username must be at least 3 characters.');
+      setState(
+        () => _usernameError = 'Username must be at least 3 characters.',
+      );
       return;
     }
 
@@ -60,8 +62,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     try {
       final currentUsername = ref.read(authControllerProvider).user?.username;
       if (username != currentUsername) {
-        final available =
-            await ref.read(authControllerProvider.notifier).checkUsername(username);
+        final available = await ref
+            .read(authControllerProvider.notifier)
+            .checkUsername(username);
         if (!available && mounted) {
           setState(() {
             _usernameError = 'That username is already taken.';
@@ -71,10 +74,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
       }
 
-      await ref.read(authControllerProvider.notifier).saveProfile(
-            fullName: name,
-            username: username,
-          );
+      await ref
+          .read(authControllerProvider.notifier)
+          .saveProfile(fullName: name, username: username);
 
       if (mounted) safePopOrGo(context, '/profile');
     } on ApiException catch (e) {
@@ -102,59 +104,74 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         child: Column(
           children: [
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton.filledTonal(
-                      onPressed: () => safePopOrGo(context, '/profile'),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Edit profile', style: AppTextStyles.headlineLarge),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Update your name and username.',
-                    style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-                  ),
-                  const SizedBox(height: 24),
-                  Text('Full name', style: AppTextStyles.titleMedium),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _nameController,
-                    onChanged: (_) => setState(() => _nameError = null),
-                    decoration: _inputDecoration('Your full name'),
-                  ),
-                  if (_nameError != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _nameError!,
-                      style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  Text('Username', style: AppTextStyles.titleMedium),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _usernameController,
-                    autocorrect: false,
-                    onChanged: (_) => setState(() => _usernameError = null),
-                    decoration: _inputDecoration('e.g. akshay'),
-                  ),
-                  if (_usernameError != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      _usernameError!,
-                      style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
-                    ),
-                  ],
-                ],
-              )
-                  .animate()
-                  .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                  .slideY(begin: 0.04, end: 0, duration: 320.ms, curve: Curves.easeOutCubic),
+              child:
+                  ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: NuvoBackButton(
+                              onPressed: () => safePopOrGo(context, '/profile'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Edit profile',
+                            style: AppTextStyles.headlineLarge,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Update your name and username.',
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              color: NuvoColors.muted,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text('Full name', style: AppTextStyles.titleMedium),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _nameController,
+                            onChanged: (_) => setState(() => _nameError = null),
+                            decoration: _inputDecoration('Your full name'),
+                          ),
+                          if (_nameError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _nameError!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          Text('Username', style: AppTextStyles.titleMedium),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _usernameController,
+                            autocorrect: false,
+                            onChanged: (_) =>
+                                setState(() => _usernameError = null),
+                            decoration: _inputDecoration('e.g. akshay'),
+                          ),
+                          if (_usernameError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _usernameError!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: Colors.red,
+                              ),
+                            ),
+                          ],
+                        ],
+                      )
+                      .animate()
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.04,
+                        end: 0,
+                        duration: 320.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -173,22 +190,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   InputDecoration _inputDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-        filled: true,
-        fillColor: NuvoColors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      );
+    hintText: hint,
+    hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+    filled: true,
+    fillColor: NuvoColors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: NuvoColors.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: NuvoColors.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  );
 }

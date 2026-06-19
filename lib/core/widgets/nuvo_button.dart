@@ -346,3 +346,39 @@ class NuvoIconAction extends StatelessWidget {
 }
 
 typedef NuvoBackplateButton = NuvoPrimaryButton;
+
+/// Round pale-lavender back button — Nuvo's standard back navigation affordance.
+/// Pass the navigation callback explicitly; use [safePopOrGo] at the call site.
+class NuvoBackButton extends StatelessWidget {
+  const NuvoBackButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onPressed,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: NuvoColors.icyBlue,
+          shape: BoxShape.circle,
+          border: Border.all(color: NuvoColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x1207152B),
+              blurRadius: 0,
+              offset: Offset(2, 3),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.arrow_back_rounded,
+          color: NuvoColors.navy,
+          size: 20,
+        ),
+      ),
+    );
+  }
+}

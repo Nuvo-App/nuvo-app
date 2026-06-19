@@ -16,7 +16,7 @@ class AuthState {
 
 class AuthController extends StateNotifier<AuthState> {
   AuthController(this._repo)
-      : super(const AuthState(status: AuthStatus.loading)) {
+    : super(const AuthState(status: AuthStatus.loading)) {
     _init();
   }
 
@@ -39,12 +39,14 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> verifyEmailCode(String email, String code) async {
     final user = await _repo.verifyEmailCode(email, code);
-    if (mounted) state = AuthState(status: AuthStatus.authenticated, user: user);
+    if (mounted)
+      state = AuthState(status: AuthStatus.authenticated, user: user);
   }
 
   Future<void> signInWithGoogle(String idToken) async {
     final user = await _repo.signInWithGoogle(idToken);
-    if (mounted) state = AuthState(status: AuthStatus.authenticated, user: user);
+    if (mounted)
+      state = AuthState(status: AuthStatus.authenticated, user: user);
   }
 
   Future<void> saveProfile({
@@ -58,7 +60,8 @@ class AuthController extends StateNotifier<AuthState> {
       privateProfile: privateProfile,
     );
     final user = await _repo.getMe();
-    if (mounted) state = AuthState(status: AuthStatus.authenticated, user: user);
+    if (mounted)
+      state = AuthState(status: AuthStatus.authenticated, user: user);
   }
 
   Future<bool> checkUsername(String username) => _repo.checkUsername(username);
@@ -66,7 +69,8 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> completeOnboarding() async {
     await _repo.completeOnboarding();
     final user = await _repo.getMe();
-    if (mounted) state = AuthState(status: AuthStatus.authenticated, user: user);
+    if (mounted)
+      state = AuthState(status: AuthStatus.authenticated, user: user);
   }
 
   Future<PassInfo> getMemberPass() => _repo.getMemberPass();
@@ -84,7 +88,9 @@ class AuthController extends StateNotifier<AuthState> {
 
 // ── Providers ─────────────────────────────────────────────────────────────────
 
-final secureTokenStoreProvider = Provider<SecureTokenStore>((_) => SecureTokenStore());
+final secureTokenStoreProvider = Provider<SecureTokenStore>(
+  (_) => SecureTokenStore(),
+);
 
 final authApiProvider = Provider<AuthApi>((_) => AuthApi());
 
@@ -95,7 +101,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   );
 });
 
-final authControllerProvider =
-    StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController(ref.watch(authRepositoryProvider));
-});
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) {
+    return AuthController(ref.watch(authRepositoryProvider));
+  },
+);

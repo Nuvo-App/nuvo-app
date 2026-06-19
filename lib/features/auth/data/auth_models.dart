@@ -16,28 +16,27 @@ class AuthUser {
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
-        id: json['id'] as String,
-        email: json['email'] as String,
-        fullName: json['fullName'] as String?,
-        username: json['username'] as String?,
-        onboardingComplete: json['onboardingComplete'] as bool? ?? false,
-        hasMemberPass: json['hasMemberPass'] as bool? ?? false,
-      );
+    id: json['id'] as String,
+    email: json['email'] as String,
+    fullName: json['fullName'] as String?,
+    username: json['username'] as String?,
+    onboardingComplete: json['onboardingComplete'] as bool? ?? false,
+    hasMemberPass: json['hasMemberPass'] as bool? ?? false,
+  );
 
   AuthUser copyWith({
     String? fullName,
     String? username,
     bool? onboardingComplete,
     bool? hasMemberPass,
-  }) =>
-      AuthUser(
-        id: id,
-        email: email,
-        fullName: fullName ?? this.fullName,
-        username: username ?? this.username,
-        onboardingComplete: onboardingComplete ?? this.onboardingComplete,
-        hasMemberPass: hasMemberPass ?? this.hasMemberPass,
-      );
+  }) => AuthUser(
+    id: id,
+    email: email,
+    fullName: fullName ?? this.fullName,
+    username: username ?? this.username,
+    onboardingComplete: onboardingComplete ?? this.onboardingComplete,
+    hasMemberPass: hasMemberPass ?? this.hasMemberPass,
+  );
 
   String get avatarInitials {
     final src = fullName?.trim().isNotEmpty == true ? fullName! : email;
@@ -62,10 +61,10 @@ class PassInfo {
   });
 
   factory PassInfo.fromJson(Map<String, dynamic> json) => PassInfo(
-        memberId: json['memberId'] as String,
-        passSlug: json['passSlug'] as String,
-        shareUrl: json['shareUrl'] as String,
-      );
+    memberId: json['memberId'] as String,
+    passSlug: json['passSlug'] as String,
+    shareUrl: json['shareUrl'] as String,
+  );
 }
 
 class AuthResponse {
@@ -80,8 +79,8 @@ class AuthResponse {
   });
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) => AuthResponse(
-        accessToken: json['accessToken'] as String,
-        refreshToken: json['refreshToken'] as String,
-        user: AuthUser.fromJson(json['user'] as Map<String, dynamic>),
-      );
+    accessToken: json['accessToken'] as String,
+    refreshToken: json['refreshToken'] as String,
+    user: AuthUser.fromJson(json['user'] as Map<String, dynamic>),
+  );
 }

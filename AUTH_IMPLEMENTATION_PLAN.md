@@ -171,3 +171,26 @@ No other packages needed. All auth UI is already built with existing widgets.
 4. User data storage backend — Cloudflare KV (simple) vs D1 (relational, better for races/crew). Recommend D1 given the relational nature of races + crew.
 
 5. Should `SecureAccountScreen` be removed or repurposed? (Recommendation: remove it, as noted in section 5.)
+
+---
+
+## Google Sign-In Status — 2026-06-19
+
+**Current status: Code restored, gated by `const _kGoogleEnabled = false` in `welcome_auth_screen.dart`.**
+**UI: Non-interactive "needs setup" row shown on welcome screen.**
+
+All Flutter code layers are in place:
+- `WelcomeAuthScreen` is `ConsumerStatefulWidget` with `GoogleSignIn()`, `_signInWithGoogle()`, loading/error states
+- `AuthController.signInWithGoogle()` ✅
+- `AuthRepository.signInWithGoogle()` ✅
+- `AuthApi.signInWithGoogle()` ✅
+- Server `POST /auth/google` ✅
+
+To re-enable Google sign-in (two external steps + one line of code):
+1. **Google Cloud Console** — Verify or create an iOS OAuth client for bundle ID `com.example.nuvo` (see `GOOGLE_OAUTH_FIX_PLAN.md`)
+2. **Cloudflare Worker secret** — `wrangler secret put GOOGLE_IOS_CLIENT_ID` with value `626823797899-smfp1r0s99h2gaa9ov72cjchu0kesuq4.apps.googleusercontent.com`
+3. **Flutter** — Change `const _kGoogleEnabled = false;` → `const _kGoogleEnabled = true;` in `welcome_auth_screen.dart`
+
+The `ios/Runner/Info.plist` `GIDClientID` and `CFBundleURLSchemes` are already correct and do not need changes.
+
+See `GOOGLE_OAUTH_FIX_PLAN.md` for full diagnosis, test plan, and exact setup instructions.

@@ -40,10 +40,7 @@ class NuvoErrorState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            NuvoOutlineButton(
-              label: 'Try again',
-              onPressed: onRetry,
-            ),
+            NuvoOutlineButton(label: 'Try again', onPressed: onRetry),
           ],
         ),
       ),

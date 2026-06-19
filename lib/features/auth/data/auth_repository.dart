@@ -75,21 +75,19 @@ class AuthRepository {
     String? fullName,
     String? username,
     bool? privateProfile,
-  }) =>
-      _withRefresh(
-        (token) => _api.saveProfile(
-          token,
-          fullName: fullName,
-          username: username,
-          privateProfile: privateProfile,
-        ),
-      );
+  }) => _withRefresh(
+    (token) => _api.saveProfile(
+      token,
+      fullName: fullName,
+      username: username,
+      privateProfile: privateProfile,
+    ),
+  );
 
   Future<bool> checkUsername(String username) =>
       _withRefresh((token) => _api.checkUsername(token, username));
 
-  Future<void> completeOnboarding() =>
-      _withRefresh(_api.completeOnboarding);
+  Future<void> completeOnboarding() => _withRefresh(_api.completeOnboarding);
 
   // ── Pass ──────────────────────────────────────────────────────────────────
 

@@ -11,8 +11,6 @@ class SecureAccountScreen extends StatelessWidget {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (context.mounted) context.go('/onboarding/profile');
     });
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

@@ -97,6 +97,40 @@ class RaceApi {
         .toList();
   }
 
+  Future<List<PublicUser>> searchUsers(String token, String query) async {
+    final uri = Uri.parse(
+      '$_kApiBase/users/search',
+    ).replace(queryParameters: {'q': query});
+    final res = await _client.get(uri, headers: _headers(token));
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode >= 400) {
+      throw ApiException(
+        res.statusCode,
+        json['error'] as String? ?? 'Request failed',
+      );
+    }
+    return (json['users'] as List<dynamic>)
+        .map((u) => PublicUser.fromJson(u as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<PublicUser>> getCrew(String token) async {
+    final json = await _get('/crew', token);
+    return (json['crew'] as List<dynamic>)
+        .map((u) => PublicUser.fromJson(u as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<PublicUser?> addCrewUser(String token, String userId) async {
+    final json = await _post('/crew/add', token, {'userId': userId});
+    final user = json['user'];
+    return user is Map<String, dynamic> ? PublicUser.fromJson(user) : null;
+  }
+
+  Future<void> removeCrewUser(String token, String userId) async {
+    await _delete('/crew/$userId', token);
+  }
+
   Future<Race> createRace(
     String token, {
     required String title,
@@ -111,6 +145,9 @@ class RaceApi {
     String? proofRequirement,
     String? proofReviewMode,
     String? visibility,
+    String? aiActivityType,
+    String? targetUnit,
+    String? proofMode,
   }) async {
     final body = <String, dynamic>{'title': title, 'goalType': goalType};
     if (description != null) body['description'] = description;
@@ -123,6 +160,9 @@ class RaceApi {
     if (proofRequirement != null) body['proofRequirement'] = proofRequirement;
     if (proofReviewMode != null) body['proofReviewMode'] = proofReviewMode;
     if (visibility != null) body['visibility'] = visibility;
+    if (aiActivityType != null) body['aiActivityType'] = aiActivityType;
+    if (targetUnit != null) body['targetUnit'] = targetUnit;
+    if (proofMode != null) body['proofMode'] = proofMode;
     final json = await _post('/races', token, body);
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
@@ -143,6 +183,9 @@ class RaceApi {
     String? proofRequirement,
     String? proofReviewMode,
     String? visibility,
+    String? aiActivityType,
+    String? targetUnit,
+    String? proofMode,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
@@ -158,6 +201,9 @@ class RaceApi {
     if (proofRequirement != null) body['proofRequirement'] = proofRequirement;
     if (proofReviewMode != null) body['proofReviewMode'] = proofReviewMode;
     if (visibility != null) body['visibility'] = visibility;
+    if (aiActivityType != null) body['aiActivityType'] = aiActivityType;
+    if (targetUnit != null) body['targetUnit'] = targetUnit;
+    if (proofMode != null) body['proofMode'] = proofMode;
     final json = await _patch('/races/$id', token, body);
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
@@ -213,6 +259,17 @@ class RaceApi {
 
   Future<Race> joinRace(String token, String id) async {
     final json = await _post('/races/$id/join', token, {});
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  Future<Race> addRaceParticipant(
+    String token,
+    String raceId,
+    String userId,
+  ) async {
+    final json = await _post('/races/$raceId/participants', token, {
+      'userId': userId,
+    });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 

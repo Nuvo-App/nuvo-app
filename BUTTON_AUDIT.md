@@ -1,6 +1,6 @@
 # Button Audit
 
-_Last updated: 2026-06-19 — AI Motion Proof v1_
+_Last updated: 2026-06-19 — UX simplification pass_
 
 ## Summary
 
@@ -10,22 +10,34 @@ _Last updated: 2026-06-19 — AI Motion Proof v1_
 - Disabled by design: 2
 - Fake-data actions remaining in active screens: 0
 
+## Live Demo UX Update - 2026-06-19
+
+- `10 Jumping Jacks` quick start now opens Create Race with AI Motion Proof metadata instead of a blank manual race.
+- Create Race uses `Start AI race` for the supported 10 Jumping Jacks AI template and `Start a race` otherwise.
+- Submit Proof shows `Start AI proof` as the primary path only for supported AI Motion races.
+- Manual races show manual proof as the primary action and an unavailable AI card for non-supported activities.
+- AI Motion Proof actions are in a SafeArea-respecting bottom CTA area: `Start camera`, `Record proof`, `Done`, `Cancel`, `Submit verified proof`, `Record again`, and `Use manual proof`.
+- Race Detail no longer shows Archive/Cancel/Delete action chips; destructive actions remain in Race Settings/Danger Zone with confirmation.
+- Create Race, Submit Proof, AI Motion Proof, Race Detail, Edit Profile, and Race Settings use the standard `NuvoBackButton`.
+
 ## Working With Real Backend Data
 
 | Button / action | File | Behavior |
 |---|---|---|
-| Continue with Google | `lib/features/auth/presentation/welcome_auth_screen.dart` | Calls Google Sign-In and backend auth. |
-| Continue with Email | `lib/features/auth/presentation/welcome_auth_screen.dart` | Opens email auth flow. |
+| Continue with Google | `lib/features/auth/presentation/welcome_auth_screen.dart` | **Disabled** — `_kGoogleEnabled = false`. Non-interactive "needs setup" row shown. Code fully restored and ready; flip flag to `true` after completing GOOGLE_OAUTH_FIX_PLAN.md external steps. |
+| Continue with Email | `lib/features/auth/presentation/welcome_auth_screen.dart` | Opens email auth flow (primary CTA, always active). |
 | Send code | `lib/features/auth/presentation/email_start_screen.dart` | Calls `/auth/email/start`. |
-| Verify | `lib/features/auth/presentation/email_verify_screen.dart` | Calls `/auth/email/verify`. |
-| Resend code | `lib/features/auth/presentation/email_verify_screen.dart` | Calls `/auth/email/start` again. |
+| Verify code | `lib/features/auth/presentation/email_verify_screen.dart` | Calls `/auth/email/verify`. |
+| Resend code | `lib/features/auth/presentation/email_verify_screen.dart` | Calls `/auth/email/start` again (styled as tappable blue text). |
 | Continue / save profile | `lib/features/onboarding/presentation/create_identity_screen.dart` | Saves profile through backend auth/profile controller. |
 | Continue / profile onboarding | `lib/features/onboarding/presentation/onboarding_screen.dart` | Saves profile/privacy state through backend. |
 | Share pass | `lib/features/onboarding/presentation/member_pass_screen.dart` | Shares real pass URL from `/pass/me`. |
 | Copy link | `lib/features/onboarding/presentation/member_pass_screen.dart` | Copies real pass URL from `/pass/me`. |
 | Start this race | `lib/features/onboarding/presentation/first_race_screen.dart` | Creates a real race from the selected template, then completes onboarding. |
 | Explore app | `lib/features/onboarding/presentation/first_race_screen.dart` | Completes onboarding through backend. |
-| Start race / Start a race | `arena_screen.dart`, `compete_screen.dart` | Navigates to real create-race flow. |
+| Start a race / Start AI race | `arena_screen.dart`, `compete_screen.dart`, `create_race_screen.dart` | Navigates to or creates a real race; AI CTA preserves 10 Jumping Jacks metadata. |
+| Start another race | `race_detail_screen.dart` | Navigates to Create Race when user's own progress ≥ 100% on an active race. |
+| Submit more proof | `race_detail_screen.dart` | Ghost secondary CTA when user progress ≥ 100%; still submits to proof endpoint. |
 | Create race submit | `lib/features/races/presentation/create_race_screen.dart` | Calls `POST /races`. |
 | Race card tap | `arena_screen.dart`, `compete_screen.dart` | Opens real race detail. |
 | Submit proof | `race_detail_screen.dart`, `proof_screen.dart`, `submit_proof_screen.dart` | Opens or submits through real proof route; form calls `POST /races/:id/proof`. |
@@ -37,14 +49,14 @@ _Last updated: 2026-06-19 — AI Motion Proof v1_
 | Save profile | `lib/features/profile/presentation/edit_profile_screen.dart` | Saves profile through backend. |
 | Sign out | `lib/features/profile/presentation/profile_screen.dart` | Logs out through auth controller and clears protected state. |
 | Save changes | `lib/features/races/presentation/race_settings_screen.dart` | Calls `PATCH /races/:id`. |
-| Archive race | `race_detail_screen.dart`, `race_settings_screen.dart` | Calls `POST /races/:id/archive` after confirmation. |
-| Cancel race | `race_detail_screen.dart`, `race_settings_screen.dart` | Calls `POST /races/:id/cancel` after confirmation. |
-| Delete race | `race_detail_screen.dart`, `race_settings_screen.dart` | Calls `DELETE /races/:id` after confirmation. |
+| Archive race | `race_settings_screen.dart` | Calls `POST /races/:id/archive` after confirmation. |
+| Cancel race | `race_settings_screen.dart` | Calls `POST /races/:id/cancel` after confirmation. |
+| Delete race | `race_settings_screen.dart` | Calls `DELETE /races/:id` after confirmation. |
 | Leave race | `lib/features/race_detail/presentation/race_detail_screen.dart` | Calls `POST /races/:id/leave` after confirmation. |
 | Join race | `race_detail_screen.dart`, `join_race_screen.dart` | Calls direct join or `POST /races/join-code`. |
 | Invite crew | `race_detail_screen.dart` | Opens invite screen. |
 | Create invite code | `lib/features/races/presentation/invite_crew_screen.dart` | Calls `POST /races/:id/invite-code`. |
-| Copy invite code | `race_detail_screen.dart`, `invite_crew_screen.dart` | Uses backend invite code; creator can create one first. |
+| Copy code | `race_detail_screen.dart`, `invite_crew_screen.dart` | Uses backend invite code; creator can create one first. |
 | Review proof | `proof_review_screen.dart`, `race_detail_screen.dart` | Opens proof review and calls `PATCH /races/:id/proofs/:proofId`. |
 
 ## Working Local UI Only
@@ -75,16 +87,29 @@ _Last updated: 2026-06-19 — AI Motion Proof v1_
 | Privacy settings row | `lib/features/profile/presentation/profile_screen.dart` | Coming soon sheet; no fake privacy state. |
 | Push-up AI proof | `lib/features/races/ai/push_up_counter.dart` | Experimental scaffold only; not visible as a primary v1 flow. |
 
-## Button System Added
+## Button System
 
 | Variant | File | Use |
 |---|---|---|
-| `NuvoPrimaryButton` | `lib/core/widgets/nuvo_button.dart` | Royal-blue CTA with navy backplate. |
-| `NuvoSecondaryButton` | `lib/core/widgets/nuvo_button.dart` | Alias for outline secondary actions. |
-| `NuvoGhostButton` | `lib/core/widgets/nuvo_button.dart` | Lower-emphasis lifecycle/local actions. |
-| `NuvoDangerButton` | `lib/core/widgets/nuvo_button.dart` | Destructive actions with confirmation. |
-| `NuvoIconAction` | `lib/core/widgets/nuvo_button.dart` | Polished icon-only actions. |
-| `NuvoBackplateButton` | `lib/core/widgets/nuvo_button.dart` | Alias for primary backplate treatment. |
+| `NuvoPrimaryButton` | `lib/core/widgets/nuvo_button.dart` | Royal-blue CTA with navy offset backplate. |
+| `NuvoOutlineButton` / `NuvoSecondaryButton` | `lib/core/widgets/nuvo_button.dart` | White fill, navy border. Secondary actions. |
+| `NuvoGhostButton` | `lib/core/widgets/nuvo_button.dart` | Icy-blue fill, border. Lower-emphasis lifecycle actions. |
+| `NuvoDangerButton` | `lib/core/widgets/nuvo_button.dart` | Soft-red fill, red border. Destructive with confirmation. |
+| `NuvoIconAction` | `lib/core/widgets/nuvo_button.dart` | White fill, 44×44 icon-only button. |
+| `NuvoBackButton` | `lib/core/widgets/nuvo_button.dart` | Round pale-lavender circle, navy arrow. Back navigation. |
+| `NuvoBackplateButton` | `lib/core/widgets/nuvo_button.dart` | Alias for `NuvoPrimaryButton`. |
+
+### NuvoBackButton (added UI Polish pass)
+
+Applied consistently across all detail/flow screens:
+- `lib/features/race_detail/presentation/race_detail_screen.dart`
+- `lib/features/races/presentation/ai_motion_proof_screen.dart`
+- `lib/features/races/presentation/submit_proof_screen.dart`
+- `lib/features/races/presentation/create_race_screen.dart`
+- `lib/features/races/presentation/race_settings_screen.dart`
+- `lib/features/profile/presentation/edit_profile_screen.dart`
+
+Style: `NuvoColors.icyBlue` fill, `NuvoColors.border` stroke, `BoxShape.circle`, 44×44, `Icons.arrow_back_rounded` navy icon, subtle 2-3px navy shadow.
 
 ## Disabled By Design
 
@@ -105,3 +130,10 @@ _Last updated: 2026-06-19 — AI Motion Proof v1_
 | Fake proof scanner metrics and local verified state | `lib/features/proof/presentation/proof_screen.dart`, `lib/core/widgets/proof_scanner_card.dart` |
 | Fake achievements / personal profile stats | `lib/features/profile/presentation/profile_screen.dart` |
 | Mock data source file | `lib/data/mock_data.dart` |
+## Demo Social + AI Button Update - 2026-06-19
+
+- Crew search uses compact Add/Added actions.
+- Invite Crew uses Add to race/Added actions for search results and existing crew.
+- Invite code fallback keeps Copy code and Share race CTAs.
+- Create Race keeps a single primary CTA that changes between Start AI race and Start race.
+- No QR scanning CTA was added.

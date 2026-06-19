@@ -72,9 +72,9 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
           .read(authControllerProvider.notifier)
           .startEmailAuth(widget.email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Code sent!')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Code sent!')));
       }
     } catch (_) {}
   }
@@ -84,47 +84,84 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 44, 20, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GestureDetector(
-              onTap: () => safePopOrGo(context, '/auth/email'),
-              child: const Icon(Icons.arrow_back_rounded, size: 24),
+            // ── Scrollable content ───────────────────────────────────────────
+            Expanded(
+              child:
+                  SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            NuvoBackButton(
+                              onPressed: () =>
+                                  safePopOrGo(context, '/auth/email'),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Check your email',
+                              style: AppTextStyles.headlineLarge,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Enter the 6-digit code we sent to ${widget.email}.',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: NuvoColors.muted,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            OtpInput(controllers: _controllers),
+                            if (_error != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                _error!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: const Color(0xFFE8304A),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 22),
+                            GestureDetector(
+                              onTap: _resend,
+                              behavior: HitTestBehavior.opaque,
+                              child: Center(
+                                child: Text(
+                                  'Resend code',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.blue,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.04,
+                        end: 0,
+                        duration: 320.ms,
+                        curve: Curves.easeOutCubic,
+                      ),
             ),
-            const SizedBox(height: 28),
-            Text('Enter your code', style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 10),
-            Text(
-              'We sent a 6-digit code to ${widget.email}.',
-              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-            ),
-            const SizedBox(height: 34),
-            OtpInput(controllers: _controllers),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
+
+            // ── Pinned CTA ───────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: NuvoPrimaryButton(
+                label: 'Verify code',
+                icon: Icons.arrow_forward_rounded,
+                expand: true,
+                loading: _loading,
+                onPressed: _canVerify ? _verify : null,
               ),
-            ],
-            const SizedBox(height: 28),
-            NuvoPrimaryButton(
-              label: 'Verify',
-              icon: Icons.arrow_forward_rounded,
-              expand: true,
-              loading: _loading,
-              onPressed: _canVerify ? _verify : null,
-            ),
-            const SizedBox(height: 14),
-            TextButton(
-              onPressed: _resend,
-              child: const Text('Resend code'),
             ),
           ],
-        )
-            .animate()
-            .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-            .slideY(begin: 0.04, end: 0, duration: 320.ms, curve: Curves.easeOutCubic),
+        ),
       ),
     );
   }

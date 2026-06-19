@@ -60,7 +60,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     final user = authState.user;
     if (user != null) {
       context.go(
-          user.onboardingComplete ? '/arena' : '/onboarding/create-identity');
+        user.onboardingComplete ? '/arena' : '/onboarding/create-identity',
+      );
     } else {
       context.go('/welcome');
     }
@@ -79,11 +80,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              NuvoColors.navy,
-              NuvoColors.navy2,
-              Color(0xFF0D3F99),
-            ],
+            colors: [NuvoColors.navy, NuvoColors.navy2, Color(0xFF0D3F99)],
           ),
         ),
         child: Stack(
@@ -95,20 +92,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 children: [
                   // Logo with royal-blue glow
                   Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: NuvoColors.blue.withValues(alpha: 0.50),
-                          blurRadius: 76,
-                          spreadRadius: 8,
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: NuvoColors.blue.withValues(alpha: 0.50),
+                              blurRadius: 76,
+                              spreadRadius: 8,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Image.asset(AssetPaths.nuvoLogo),
-                  )
+                        child: Image.asset(AssetPaths.nuvoLogo),
+                      )
                       .animate()
                       .fadeIn(duration: 620.ms, curve: Curves.easeOut)
                       .scale(
@@ -121,12 +118,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   const SizedBox(height: 26),
 
                   Text(
-                    'NUVO',
-                    style: AppTextStyles.labelLarge.copyWith(
-                      color: NuvoColors.white,
-                      letterSpacing: 5,
-                    ),
-                  )
+                        'NUVO',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: NuvoColors.white,
+                          letterSpacing: 5,
+                        ),
+                      )
                       .animate(delay: 380.ms)
                       .fadeIn(duration: 360.ms, curve: Curves.easeOut)
                       .slideY(
@@ -139,12 +136,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   const SizedBox(height: 8),
 
                   Text(
-                    'Compete on anything. With anyone.',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.50),
-                    ),
-                    textAlign: TextAlign.center,
-                  )
+                        'Compete on anything. With anyone.',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.white.withValues(alpha: 0.50),
+                        ),
+                        textAlign: TextAlign.center,
+                      )
                       .animate(delay: 540.ms)
                       .fadeIn(duration: 360.ms, curve: Curves.easeOut)
                       .slideY(

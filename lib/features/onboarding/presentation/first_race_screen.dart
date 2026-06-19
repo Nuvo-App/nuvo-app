@@ -17,6 +17,7 @@ class _StarterRace {
     required this.category,
     required this.unit,
     required this.targetValue,
+    this.proofRequirement = 'manual',
   });
 
   final String title;
@@ -24,9 +25,20 @@ class _StarterRace {
   final String category;
   final String unit;
   final int targetValue;
+  final String proofRequirement;
+
+  bool get isAiMotion => proofRequirement == 'ai_check';
 }
 
 const _starterRaces = [
+  _StarterRace(
+    title: '10 Jumping Jacks',
+    description: 'AI Motion Proof verifies 10 reps with your iPhone camera.',
+    category: 'fitness',
+    unit: 'jumping jacks',
+    targetValue: 10,
+    proofRequirement: 'ai_check',
+  ),
   _StarterRace(
     title: 'Race to a 6-pack',
     description: 'Log training sessions with manual proof.',
@@ -65,7 +77,7 @@ class FirstRaceScreen extends ConsumerStatefulWidget {
 }
 
 class _FirstRaceScreenState extends ConsumerState<FirstRaceScreen> {
-  int _selected = 1;
+  int _selected = 0;
   bool _loading = false;
   String? _error;
 
@@ -104,6 +116,8 @@ class _FirstRaceScreenState extends ConsumerState<FirstRaceScreen> {
             goalType: 'manual',
             targetValue: starter.targetValue,
             unit: starter.unit,
+            proofRequirement: starter.proofRequirement,
+            proofReviewMode: 'auto_accept',
           );
       await ref.read(authControllerProvider.notifier).completeOnboarding();
       if (mounted) context.go('/race/${race.id}');
@@ -183,7 +197,9 @@ class _FirstRaceScreenState extends ConsumerState<FirstRaceScreen> {
                     ],
                     const SizedBox(height: 22),
                     NuvoPrimaryButton(
-                      label: 'Start this race',
+                      label: selectedRace.isAiMotion
+                          ? 'Start AI race'
+                          : 'Start this race',
                       icon: Icons.flag_rounded,
                       expand: true,
                       loading: _loading,
@@ -258,6 +274,22 @@ class _TemplateCard extends StatelessWidget {
               style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
             ),
           ),
+          if (starter.isAiMotion) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: NuvoColors.navy,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'AI Motion Proof · 10 reps',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.white,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

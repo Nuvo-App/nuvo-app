@@ -8,6 +8,9 @@ class Race {
     required this.goalType,
     this.targetValue,
     this.unit,
+    this.aiActivityType,
+    this.targetUnit,
+    this.proofMode,
     required this.status,
     this.startLineAt,
     this.finishLineAt,
@@ -30,6 +33,9 @@ class Race {
   final String goalType;
   final int? targetValue;
   final String? unit;
+  final String? aiActivityType;
+  final String? targetUnit;
+  final String? proofMode;
   final String status;
   final String? startLineAt;
   final String? finishLineAt;
@@ -52,6 +58,9 @@ class Race {
     goalType: json['goalType'] as String? ?? 'manual',
     targetValue: json['targetValue'] as int?,
     unit: json['unit'] as String?,
+    aiActivityType: json['aiActivityType'] as String?,
+    targetUnit: json['targetUnit'] as String?,
+    proofMode: json['proofMode'] as String?,
     status: json['status'] as String? ?? 'active',
     startLineAt: json['startLineAt'] as String?,
     finishLineAt: json['finishLineAt'] as String?,
@@ -76,6 +85,43 @@ class Race {
 
   int get participantCount => participants.length;
 
+  bool get isAiMotionRace =>
+      proofRequirement == 'ai_check' || proofMode == 'ai_check';
+
+  bool get isSupportedAiMotionRace {
+    const supported = {
+      'jumping_jacks',
+      'squats',
+      'high_knees',
+      'arm_raises',
+      'plank_hold',
+    };
+    final activity = aiActivityType;
+    if (activity != null) return isAiMotionRace && supported.contains(activity);
+
+    final normalizedTitle = title.toLowerCase();
+    final normalizedUnit = unit?.toLowerCase() ?? '';
+    return isAiMotionRace &&
+        (normalizedTitle.contains('jumping jack') ||
+            normalizedUnit.contains('jumping jack'));
+  }
+
+  String get effectiveAiActivityType {
+    if (aiActivityType != null && aiActivityType!.isNotEmpty) {
+      return aiActivityType!;
+    }
+    return 'jumping_jacks';
+  }
+
+  String get displayTitle => title
+      .trim()
+      .split(RegExp(r'\s+'))
+      .map((word) {
+        if (word.isEmpty) return word;
+        return '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}';
+      })
+      .join(' ');
+
   RaceParticipant? participantFor(String userId) =>
       participants.where((p) => p.userId == userId).firstOrNull;
 
@@ -83,6 +129,44 @@ class Race {
 
   bool isParticipant(String userId) =>
       participants.any((participant) => participant.userId == userId);
+}
+
+class PublicUser {
+  const PublicUser({
+    required this.id,
+    required this.displayName,
+    this.username,
+    this.memberId,
+    required this.initials,
+    this.addedAt,
+  });
+
+  final String id;
+  final String displayName;
+  final String? username;
+  final String? memberId;
+  final String initials;
+  final String? addedAt;
+
+  factory PublicUser.fromJson(Map<String, dynamic> json) => PublicUser(
+    id: json['id'] as String,
+    displayName: json['displayName'] as String? ?? 'Nuvo member',
+    username: json['username'] as String?,
+    memberId: json['memberId'] as String?,
+    initials: json['initials'] as String? ?? 'N',
+    addedAt: json['addedAt'] as String?,
+  );
+
+  String get handleLine {
+    final parts = <String>[];
+    if (username != null && username!.isNotEmpty) {
+      parts.add('@$username');
+    }
+    if (memberId != null && memberId!.isNotEmpty) {
+      parts.add(memberId!);
+    }
+    return parts.isEmpty ? 'Nuvo member' : parts.join(' / ');
+  }
 }
 
 class RaceParticipant {
