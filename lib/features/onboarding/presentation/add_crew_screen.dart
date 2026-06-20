@@ -9,54 +9,6 @@ import '../../../core/widgets/nuvo_button.dart';
 class AddCrewScreen extends StatelessWidget {
   const AddCrewScreen({super.key});
 
-  void _showComingSoonSheet(BuildContext context, String title, String body) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: NuvoColors.page,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuvoColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Icon(
-                Icons.group_add_rounded,
-                color: NuvoColors.blue,
-                size: 44,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: AppTextStyles.headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                body,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: NuvoColors.muted,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.paddingOf(context).bottom;
@@ -122,65 +74,11 @@ class AddCrewScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    TextField(
-                      readOnly: true,
-                      onTap: () => _showComingSoonSheet(
-                        context,
-                        'Crew search is coming soon.',
-                        'For now, share your member pass link with friends after onboarding.',
+                    Text(
+                      'Search for crew members from the Crew tab after signing in.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
                       ),
-                      decoration: InputDecoration(
-                        hintText: 'Search by username or member ID',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: IconButton(
-                          onPressed: () => _showComingSoonSheet(
-                            context,
-                            'QR scanning coming soon.',
-                            'For now, share your member pass link with friends after onboarding.',
-                          ),
-                          icon: const Icon(Icons.qr_code_scanner_rounded),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _CrewAction(
-                            icon: Icons.qr_code_scanner_rounded,
-                            label: 'Scan QR',
-                            onTap: () => _showComingSoonSheet(
-                              context,
-                              'QR scanning coming soon.',
-                              'For now, share your member pass link with friends after onboarding.',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _CrewAction(
-                            icon: Icons.link_rounded,
-                            label: 'Invite link',
-                            onTap: () => _showComingSoonSheet(
-                              context,
-                              'Direct race links are coming soon.',
-                              'For now, share this invite code with your crew.',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _CrewAction(
-                            icon: Icons.contacts_rounded,
-                            label: 'Contacts',
-                            onTap: () => _showComingSoonSheet(
-                              context,
-                              'Contact invites are coming soon.',
-                              'For now, share your member pass link with friends after onboarding.',
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 24),
                     Container(
@@ -224,45 +122,6 @@ class AddCrewScreen extends StatelessWidget {
                   duration: 320.ms,
                   curve: Curves.easeOutCubic,
                 ),
-      ),
-    );
-  }
-}
-
-class _CrewAction extends StatelessWidget {
-  const _CrewAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          color: NuvoColors.icyBlue,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: NuvoColors.blue),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.navy),
-            ),
-          ],
-        ),
       ),
     );
   }

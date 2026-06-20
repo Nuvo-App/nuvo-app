@@ -26,7 +26,7 @@ String _raceContextLine(Race race) {
   } else {
     final method = switch (race.proofRequirement) {
       'photo_video' => 'Photo/video proof',
-      'ai_check' => 'AI Motion Proof coming soon',
+      'ai_check' => 'AI Motion Proof',
       _ => 'Manual proof',
     };
     parts.add(method);

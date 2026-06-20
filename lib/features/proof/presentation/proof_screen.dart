@@ -34,47 +34,6 @@ class ProofScreen extends StatelessWidget {
                 color: NuvoColors.white,
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Manual proof is active for this race. AI proof check is coming soon.',
-              style: AppTextStyles.bodyLarge.copyWith(
-                color: NuvoColors.softBlue,
-              ),
-            ),
-            const SizedBox(height: 26),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: NuvoColors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: NuvoColors.blue, width: 1.4),
-              ),
-              child: Column(
-                children: [
-                  const Icon(
-                    Icons.fact_check_rounded,
-                    color: NuvoColors.white,
-                    size: 44,
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'No proof is submitted from this screen.',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: NuvoColors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Continue to the race proof form to log real backend progress.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.softBlue,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
             const SizedBox(height: 24),
             NuvoPrimaryButton(
               label: 'Submit proof',

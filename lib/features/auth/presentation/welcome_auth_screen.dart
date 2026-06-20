@@ -213,8 +213,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                         ),
                       ),
                     ),
-                  ] else
-                    const _GoogleSetupRow(),
+                  ],
 
                   const SizedBox(height: 18),
 
@@ -532,51 +531,6 @@ class _CrewBubble extends StatelessWidget {
           fontWeight: FontWeight.w800,
           fontSize: 10,
         ),
-      ),
-    );
-  }
-}
-
-class _GoogleSetupRow extends StatelessWidget {
-  const _GoogleSetupRow();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.border),
-      ),
-      alignment: Alignment.center,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: const BoxDecoration(
-              color: NuvoColors.border,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: const Text(
-              'G',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: NuvoColors.muted,
-                height: 1,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'Google sign-in — needs setup',
-            style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.muted),
-          ),
-        ],
       ),
     );
   }

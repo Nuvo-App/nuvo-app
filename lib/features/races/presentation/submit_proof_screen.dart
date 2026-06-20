@@ -532,7 +532,7 @@ class _DisabledAiCard extends StatelessWidget {
                 Text('AI Motion Proof', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  'AI Motion Proof is coming soon for this movement.',
+                  'AI Motion Proof is not available for this race type.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: NuvoColors.muted,
                   ),

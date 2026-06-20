@@ -160,18 +160,6 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           NuvoActionTile(
-            icon: Icons.lock_rounded,
-            title: 'Privacy',
-            iconColor: NuvoColors.navy,
-            iconBg: NuvoColors.icyBlue,
-            onTap: () => _showComingSoonSheet(
-              context,
-              'Privacy settings are coming soon.',
-              'Your profile details are controlled by the backend profile settings already active in Nuvo.',
-            ),
-          ),
-          const SizedBox(height: 8),
-          NuvoActionTile(
             icon: Icons.logout_rounded,
             title: 'Sign out',
             iconColor: const Color(0xFFE5484D),

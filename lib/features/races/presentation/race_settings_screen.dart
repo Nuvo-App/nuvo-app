@@ -318,7 +318,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                   value: _proofRequirement,
                   values: const {
                     'manual': 'manual proof',
-                    'photo_video': 'photo/video proof coming soon',
+                    'photo_video': 'photo / video proof',
                     'ai_check': 'AI Motion Proof - 10 jumping jacks',
                   },
                   onChanged: (value) =>
@@ -330,7 +330,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                   values: const {
                     'auto_accept': 'auto accept',
                     'owner_review': 'owner review',
-                    'ai_review': 'AI review coming soon',
+                    'ai_review': 'AI review',
                   },
                   onChanged: (value) =>
                       setState(() => _proofReviewMode = value),

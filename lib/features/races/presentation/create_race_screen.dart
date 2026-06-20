@@ -313,7 +313,7 @@ class _DetectionCard extends StatelessWidget {
                 Text(
                   isAi
                       ? '${activity.title} · ${activity.targetLabel(parsed.targetValue)}. Nuvo can verify this with your iPhone camera.'
-                      : 'AI Motion Proof is coming soon for this movement.',
+                      : 'Manual proof for this race.',
                   style: AppTextStyles.bodySmall.copyWith(color: bodyColor),
                 ),
               ],
