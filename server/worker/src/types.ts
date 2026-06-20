@@ -19,6 +19,10 @@ export interface UserRow {
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
+  // Demo World Mode — added in migration 0006. Default 0 / null.
+  demo_world_enabled: number;
+  demo_world_seed: string | null;
+  demo_world_variant: string | null;
 }
 
 export interface ProfileRow {

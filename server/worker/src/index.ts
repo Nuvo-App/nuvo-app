@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth';
 import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
+import { arenaRouter } from './routes/arena';
 import { usersRouter } from './routes/users';
 import { crewRouter } from './routes/crew';
 import { requireAuth } from './lib/jwt';
@@ -52,6 +53,9 @@ app.route('/crew', crewRouter);
 
 // ── Race routes ───────────────────────────────────────────────────────────────
 app.route('/races', racesRouter);
+
+// ── Arena snapshot route ──────────────────────────────────────────────────────
+app.route('/arena', arenaRouter);
 
 // ── Onboarding complete ───────────────────────────────────────────────────────
 app.post('/onboarding/complete', requireAuth, async (c) => {
