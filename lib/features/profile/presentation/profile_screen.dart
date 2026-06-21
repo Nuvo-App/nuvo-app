@@ -7,6 +7,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/presentation/race_controller.dart';
 
@@ -19,6 +20,8 @@ class ProfileScreen extends ConsumerWidget {
     final displayName = user?.fullName ?? user?.email ?? '—';
     final username = user?.username != null ? '@${user!.username}' : '—';
     final initials = user?.avatarInitials ?? '?';
+    final uid = user?.id;
+
     final raceState = ref.watch(raceControllerProvider);
     final activeRaceCount = raceState.races
         .where((race) => race.status == 'active')
@@ -46,8 +49,9 @@ class ProfileScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
-          // ── Profile header ────────────────────────────────────────────────
+          // ── Identity block ─────────────────────────────────────────────────
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: 60,
@@ -79,12 +83,37 @@ class ProfileScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 10),
+              PressableScale(
+                onTap: () => context.push('/profile/edit'),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.icyBlue,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: NuvoColors.border),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1207152B),
+                        blurRadius: 0,
+                        offset: Offset(2, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.edit_rounded,
+                    color: NuvoColors.navy,
+                    size: 18,
+                  ),
+                ),
+              ),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
 
-          // ── Stats 2×2 grid ────────────────────────────────────────────────
+          // ── Stats board ────────────────────────────────────────────────────
           if (raceState.loading && raceState.races.isEmpty)
             const Center(
               child: Padding(
@@ -99,31 +128,17 @@ class ProfileScreen extends ConsumerWidget {
                   ref.read(raceControllerProvider.notifier).loadRaces(),
             )
           else
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 2.1,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                NuvoStatTile(value: '$activeRaceCount', label: 'Active races'),
-                NuvoStatTile(
-                  value: '$finishedRaceCount',
-                  label: 'Finished races',
-                ),
-                NuvoStatTile(value: '$proofCount', label: 'Proofs submitted'),
-                NuvoStatTile(
-                  value: '$averageProgress%',
-                  label: 'Average progress',
-                ),
-              ],
+            _StatsBoard(
+              activeRaceCount: activeRaceCount,
+              finishedRaceCount: finishedRaceCount,
+              proofCount: proofCount,
+              averageProgress: averageProgress,
             ),
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
 
-          // ── Race history ──────────────────────────────────────────────────
-          const NuvoSectionHeader(title: 'Race history', bottomPadding: 10),
+          // ── Races ──────────────────────────────────────────────────────────
+          const NuvoSectionHeader(title: 'Races', bottomPadding: 10),
           if (raceLoadFailed)
             const _RaceHistoryLoadError()
           else if (raceState.races.isEmpty)
@@ -134,15 +149,35 @@ class ProfileScreen extends ConsumerWidget {
               body: 'Create a race and submit proof to build real stats.',
             )
           else
-            for (final race in raceState.races.take(3)) ...[
-              _RaceHistoryRow(title: race.title, status: race.status),
+            for (final race in raceState.races.take(5)) ...[
+              NuvoDenseRaceRow(
+                title: race.title,
+                subtitle: race.status != 'active'
+                    ? _statusLabel(race.status)
+                    : null,
+                onTap: () => context.push('/race/${race.id}'),
+                isComplete: race.status != 'active',
+                isAiMotion: race.isSupportedAiMotionRace,
+                progressPercent: uid == null
+                    ? null
+                    : race.participantFor(uid)?.progressPercent,
+              ),
               const SizedBox(height: 8),
             ],
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
 
-          // ── Settings ──────────────────────────────────────────────────────
-          const NuvoSectionHeader(title: 'Settings', bottomPadding: 10),
+          // ── Account ────────────────────────────────────────────────────────
+          const NuvoSectionHeader(title: 'Account', bottomPadding: 10),
+          NuvoActionTile(
+            icon: Icons.badge_rounded,
+            title: 'Member pass',
+            subtitle: 'Share your identity',
+            iconColor: NuvoColors.blue,
+            iconBg: NuvoColors.icyBlue,
+            onTap: () => context.go('/pass'),
+          ),
+          const SizedBox(height: 8),
           NuvoActionTile(
             icon: Icons.edit_rounded,
             title: 'Edit profile',
@@ -174,6 +209,135 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+String _statusLabel(String status) => switch (status) {
+  'completed' || 'complete' || 'finished' => 'Finished',
+  'archived' => 'Archived',
+  'cancelled' => 'Cancelled',
+  _ => status.replaceAll('_', ' '),
+};
+
+// ── Stats board ───────────────────────────────────────────────────────────────
+
+class _StatsBoard extends StatelessWidget {
+  const _StatsBoard({
+    required this.activeRaceCount,
+    required this.finishedRaceCount,
+    required this.proofCount,
+    required this.averageProgress,
+  });
+
+  final int activeRaceCount;
+  final int finishedRaceCount;
+  final int proofCount;
+  final int averageProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.navy, width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1407152B),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Color(0x0B07152B),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _StatCell(
+                    value: '$activeRaceCount',
+                    label: 'Active races',
+                  ),
+                ),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 0.5,
+                  color: NuvoColors.border,
+                ),
+                Expanded(
+                  child: _StatCell(
+                    value: '$finishedRaceCount',
+                    label: 'Finished races',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 0.5, color: NuvoColors.border),
+          IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _StatCell(value: '$proofCount', label: 'Proofs'),
+                ),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 0.5,
+                  color: NuvoColors.border,
+                ),
+                Expanded(
+                  child: _StatCell(
+                    value: '$averageProgress%',
+                    label: 'Avg progress',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCell extends StatelessWidget {
+  const _StatCell({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: NuvoColors.blue,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Error state ───────────────────────────────────────────────────────────────
+
 class _RaceHistoryLoadError extends StatelessWidget {
   const _RaceHistoryLoadError();
 
@@ -194,64 +358,7 @@ class _RaceHistoryLoadError extends StatelessWidget {
   }
 }
 
-class _RaceHistoryRow extends StatelessWidget {
-  const _RaceHistoryRow({required this.title, required this.status});
-
-  final String title;
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final isActive = status == 'active';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0C07152B),
-            blurRadius: 0,
-            offset: Offset(2, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: isActive ? NuvoColors.icyBlue : NuvoColors.softBlue,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.flag_rounded,
-              color: NuvoColors.blue,
-              size: 17,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              style: AppTextStyles.titleMedium,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          NuvoPill(
-            label: status,
-            color: isActive ? NuvoColors.blue : NuvoColors.muted,
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ── Sheets ────────────────────────────────────────────────────────────────────
 
 void _showNotificationsSheet(BuildContext context) {
   _showComingSoonSheet(

@@ -72,13 +72,15 @@ class CompeteScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
-          Text('Compete', style: AppTextStyles.headlineLarge),
-          const SizedBox(height: 6),
-          Text(
-            'Create a race, pull in your crew, and move the leaderboard.',
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+          // ── Page header ────────────────────────────────────────────────────
+          const NuvoPageHeader(
+            title: 'Compete',
+            subtitle:
+                'Create a race, pull in your crew, and move the leaderboard.',
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 22),
+
+          // ── Primary action ─────────────────────────────────────────────────
           NuvoPrimaryButton(
             label: 'Start a race',
             icon: Icons.flag_rounded,
@@ -86,21 +88,23 @@ class CompeteScreen extends StatelessWidget {
             onPressed: () => context.push('/races/new'),
           ),
           const SizedBox(height: 10),
+
+          // ── Secondary action ───────────────────────────────────────────────
           NuvoOutlineButton(
             label: 'Join with code',
             icon: Icons.key_rounded,
             expand: true,
             onPressed: () => context.push('/races/join'),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
-          // ── Quick starts ──────────────────────────────────────────────────
+          // ── Quick starts ───────────────────────────────────────────────────
           const NuvoSectionHeader(title: 'Quick starts', bottomPadding: 4),
           Text(
             'Choose a template and start in seconds.',
             style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           for (var i = 0; i < _quickStarts.length; i++) ...[
             _QuickStartTile(
               quickStart: _quickStarts[i],
@@ -118,6 +122,8 @@ class CompeteScreen extends StatelessWidget {
   }
 }
 
+// ── Quick start tile ──────────────────────────────────────────────────────────
+
 class _QuickStartTile extends StatelessWidget {
   const _QuickStartTile({
     required this.quickStart,
@@ -132,7 +138,7 @@ class _QuickStartTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (featured) {
-      // 10 Jumping Jacks — premium dark card with strong backplate
+      // AI Motion featured template — navy card with double shadow
       return PressableScale(
         onTap: onTap,
         child: Container(
@@ -142,9 +148,14 @@ class _QuickStartTile extends StatelessWidget {
             borderRadius: BorderRadius.all(Radius.circular(20)),
             boxShadow: [
               BoxShadow(
-                color: Color(0xC007152B),
-                blurRadius: 0,
-                offset: Offset(4, 5),
+                color: Color(0x1407152B),
+                blurRadius: 20,
+                offset: Offset(0, 8),
+              ),
+              BoxShadow(
+                color: Color(0x0B07152B),
+                blurRadius: 4,
+                offset: Offset(0, 2),
               ),
             ],
           ),
@@ -193,61 +204,14 @@ class _QuickStartTile extends StatelessWidget {
       );
     }
 
-    // Non-featured: compact card with subtle backplate
-    return PressableScale(
+    // Non-featured: NuvoActionTile (icon, title, proof subtitle, arrow)
+    return NuvoActionTile(
+      icon: quickStart.icon,
+      title: quickStart.title,
+      subtitle: quickStart.subtitle,
+      iconBg: NuvoColors.icyBlue,
+      iconColor: NuvoColors.navy,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1007152B),
-              blurRadius: 0,
-              offset: Offset(2, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: NuvoColors.icyBlue,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: NuvoColors.border),
-              ),
-              alignment: Alignment.center,
-              child: Icon(quickStart.icon, color: NuvoColors.navy, size: 19),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(quickStart.title, style: AppTextStyles.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    quickStart.subtitle,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: NuvoColors.muted,
-              size: 13,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
@@ -151,12 +152,6 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       );
     }
 
-    final valueLabel = proof.value == null
-        ? 'No value'
-        : race.unit == null
-        ? '+${proof.value}'
-        : '+${proof.value} ${race.unit}';
-
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
@@ -164,92 +159,26 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
             ListView(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: NuvoIconAction(
-                        icon: Icons.arrow_back_rounded,
-                        tooltip: 'Back to race',
-                        onPressed: () =>
-                            safePopOrGo(context, '/race/${widget.raceId}'),
-                      ),
+                    NuvoBackNavRow(
+                      onBack: () =>
+                          safePopOrGo(context, '/race/${widget.raceId}'),
+                      title: 'Review proof',
                     ),
-                    const SizedBox(height: 18),
-                    Text('Review proof', style: AppTextStyles.headlineLarge),
-                    const SizedBox(height: 8),
-                    Text(
-                      race.title,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: NuvoColors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: NuvoColors.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _Badge(proof.verificationStatus),
-                          const SizedBox(height: 16),
-                          Text(
-                            proof.displayName,
-                            style: AppTextStyles.titleLarge,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            valueLabel,
-                            style: AppTextStyles.headlineMedium.copyWith(
-                              color: NuvoColors.blue,
-                            ),
-                          ),
-                          if (proof.note != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              proof.note!,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: NuvoColors.muted,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    TextField(
+                    const SizedBox(height: 22),
+                    _ProofSummaryCard(proof: proof, race: race),
+                    const SizedBox(height: 22),
+                    NuvoTextInput(
                       controller: _summaryController,
+                      label: 'Review note (optional)',
+                      hint: 'Add a note for the submitter',
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Review summary',
-                        hintText: 'Accepted by race owner',
-                        filled: true,
-                        fillColor: NuvoColors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: NuvoColors.icyBlue,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: NuvoColors.border),
-                      ),
-                      child: Text(
-                        'AI proof check is ready as a status path, but no AI validation runs yet.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
-                        ),
-                      ),
                     ),
                     if (_error != null) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.red,
+                          color: const Color(0xFFE5484D),
                         ),
                       ),
                     ],
@@ -285,23 +214,98 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
   }
 }
 
-class _Badge extends StatelessWidget {
-  const _Badge(this.status);
+// ── Proof summary card ────────────────────────────────────────────────────────
 
-  final String status;
+class _ProofSummaryCard extends StatelessWidget {
+  const _ProofSummaryCard({required this.proof, required this.race});
+
+  final RaceProof proof;
+  final Race race;
+
+  Color get _statusColor => switch (proof.verificationStatus) {
+    'accepted' || 'verified' => NuvoColors.success,
+    'rejected' => const Color(0xFFE5484D),
+    'needs_review' => NuvoColors.muted,
+    _ => NuvoColors.blue,
+  };
+
+  String get _statusLabel {
+    final s = proof.verificationStatus.replaceAll('_', ' ');
+    return s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final valueLabel = proof.value == null
+        ? null
+        : race.unit == null
+        ? '+${proof.value}'
+        : '+${proof.value} ${race.unit}';
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: NuvoColors.border),
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.navy, width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1407152B),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Color(0x0B07152B),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
-      child: Text(
-        status.replaceAll('_', ' '),
-        style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.navy),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              NuvoPill(label: _statusLabel, color: _statusColor),
+              const Spacer(),
+              Text(
+                proof.displayName,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.navy,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            race.title,
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          ),
+          const SizedBox(height: 3),
+          if (valueLabel != null) ...[
+            Text(
+              valueLabel,
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: NuvoColors.blue,
+              ),
+            ),
+          ],
+          if (proof.note != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: NuvoColors.icyBlue,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                proof.note!,
+                style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.navy),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
