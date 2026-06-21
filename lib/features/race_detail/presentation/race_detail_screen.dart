@@ -255,8 +255,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-                child: NuvoBackButton(
-                  onPressed: () => safePopOrGo(context, '/arena'),
+                child: NuvoBackNavRow(
+                  onBack: () => safePopOrGo(context, '/arena'),
                 ),
               ),
               Expanded(
@@ -289,15 +289,10 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
             children: [
-              // ── Header row ─────────────────────────────────────────────────
-              Row(
-                children: [
-                  NuvoBackButton(
-                    onPressed: () => safePopOrGo(context, '/arena'),
-                  ),
-                  const Spacer(),
-                  _StatusPill(status: race.status),
-                ],
+              // ── Back nav row ───────────────────────────────────────────────
+              NuvoBackNavRow(
+                onBack: () => safePopOrGo(context, '/arena'),
+                trailing: _StatusPill(status: race.status),
               ),
 
               const SizedBox(height: 14),
@@ -385,28 +380,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
 
               const SizedBox(height: 22),
 
-              // ── Leaderboard ─────────────────────────────────────────────────
-              _Section(
-                title: 'Leaderboard',
-                child: race.participants.isEmpty
-                    ? const _CompactInfoRow(
-                        icon: Icons.people_outline_rounded,
-                        text:
-                            'Your crew is waiting at the start line. Invite people with a code until direct race links are ready.',
-                      )
-                    : Column(
-                        children: [
-                          for (var i = 0; i < race.participants.length; i++)
-                            _ParticipantRow(
-                              participant: race.participants[i],
-                              rank: i + 1,
-                              showTarget: race.targetValue != null,
-                              targetValue: race.targetValue,
-                              unit: race.unit,
-                            ),
-                        ],
-                      ),
-              ),
+              // ── Leaderboard card (Arena board style) ─────────────────────
+              _LeaderboardCard(race: race, userId: user?.id),
 
               // ── Proof method ────────────────────────────────────────────────
               _Section(
@@ -595,13 +570,94 @@ class _MyProgressCard extends StatelessWidget {
   }
 }
 
-// ── Participant row with inline progress ──────────────────────────────────────
+// ── Leaderboard card (Arena board style) ─────────────────────────────────────
+
+class _LeaderboardCard extends StatelessWidget {
+  const _LeaderboardCard({required this.race, this.userId});
+
+  final Race race;
+  final String? userId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.navy, width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1407152B),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Color(0x0B07152B),
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+            child: Text('Leaderboard', style: AppTextStyles.titleLarge),
+          ),
+          const Divider(
+            height: 1,
+            thickness: 0.5,
+            color: NuvoColors.border,
+            indent: 18,
+            endIndent: 18,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+            child: race.participants.isEmpty
+                ? const _CompactInfoRow(
+                    icon: Icons.people_outline_rounded,
+                    text:
+                        'Your crew is waiting at the start line. Invite people with a code until direct race links are ready.',
+                  )
+                : Column(
+                    children: [
+                      for (var i = 0; i < race.participants.length; i++) ...[
+                        _ParticipantRow(
+                          participant: race.participants[i],
+                          rank: i + 1,
+                          showTarget: race.targetValue != null,
+                          targetValue: race.targetValue,
+                          unit: race.unit,
+                          isCurrentUser:
+                              userId != null &&
+                              userId == race.participants[i].userId,
+                        ),
+                        if (i < race.participants.length - 1)
+                          const Divider(
+                            height: 14,
+                            thickness: 0.5,
+                            color: NuvoColors.border,
+                          ),
+                      ],
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Participant row ───────────────────────────────────────────────────────────
 
 class _ParticipantRow extends StatelessWidget {
   const _ParticipantRow({
     required this.participant,
     required this.rank,
     required this.showTarget,
+    required this.isCurrentUser,
     this.targetValue,
     this.unit,
   });
@@ -609,6 +665,7 @@ class _ParticipantRow extends StatelessWidget {
   final RaceParticipant participant;
   final int rank;
   final bool showTarget;
+  final bool isCurrentUser;
   final int? targetValue;
   final String? unit;
 
@@ -621,136 +678,63 @@ class _ParticipantRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress = (participant.progressPercent / 100).clamp(0.0, 1.0);
-    final isLeader = rank == 1;
     final initials = _initials(participant.displayName);
-
-    final bg = isLeader ? NuvoColors.navy : NuvoColors.white;
-    final textColor = isLeader ? NuvoColors.white : NuvoColors.navy;
-    final mutedColor = isLeader
-        ? NuvoColors.white.withValues(alpha: 0.60)
-        : NuvoColors.muted;
-
     final valueText = showTarget && targetValue != null
-        ? unit != null
-              ? '${participant.progressValue} / $targetValue $unit'
-              : '${participant.progressValue} / $targetValue'
-        : '${participant.progressValue}';
+        ? '${participant.progressValue} / $targetValue'
+        : '${participant.progressPercent}%';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isLeader ? NuvoColors.navy : NuvoColors.border,
-        ),
-        boxShadow: isLeader
-            ? const [
-                BoxShadow(
-                  color: Color(0x3307152B),
-                  blurRadius: 0,
-                  offset: Offset(3, 4),
-                ),
-              ]
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // Rank badge
-              Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: isLeader ? NuvoColors.blue : NuvoColors.icyBlue,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$rank',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: isLeader ? NuvoColors.white : NuvoColors.navy,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 9,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Avatar initials
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: isLeader
-                      ? NuvoColors.blue.withValues(alpha: 0.25)
-                      : NuvoColors.icyBlue,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  initials,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: textColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Name + progress label
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      participant.displayName,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: textColor,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (showTarget && targetValue != null)
-                      Text(
-                        valueText,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: mutedColor,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              // Percentage
-              Text(
-                '${participant.progressPercent}%',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: isLeader ? NuvoColors.white : NuvoColors.blue,
-                ),
-              ),
-            ],
+    if (isCurrentUser) {
+      return NuvoCurrentUserRow(
+        rank: rank,
+        name: participant.displayName,
+        value: valueText,
+        initials: initials,
+      );
+    }
+
+    // Flat non-user row — no border, no shadow, no background
+    return Row(
+      children: [
+        SizedBox(
+          width: 24,
+          child: Text(
+            '$rank',
+            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
+            textAlign: TextAlign.center,
           ),
-          if (showTarget && targetValue != null) ...[
-            const SizedBox(height: 9),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: isLeader
-                    ? NuvoColors.white.withValues(alpha: 0.15)
-                    : NuvoColors.border,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  NuvoColors.blue,
-                ),
-                minHeight: 5,
-              ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          width: 30,
+          height: 30,
+          decoration: const BoxDecoration(
+            color: NuvoColors.border,
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            initials,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: NuvoColors.navy,
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            participant.displayName,
+            style: AppTextStyles.bodyMedium,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Text(
+          valueText,
+          style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
+        ),
+      ],
     );
   }
 }

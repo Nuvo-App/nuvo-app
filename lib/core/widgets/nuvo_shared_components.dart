@@ -448,3 +448,314 @@ class NuvoStatTile extends StatelessWidget {
     );
   }
 }
+
+// ── NuvoPageHeader ────────────────────────────────────────────────────────────
+
+/// Tab-screen page header: large bold title, optional subtitle, optional trailing.
+/// Matches Arena spacing and typography for use on Compete, Pass, Profile tabs.
+class NuvoPageHeader extends StatelessWidget {
+  const NuvoPageHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppTextStyles.headlineLarge),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle!,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+      ],
+    );
+  }
+}
+
+// ── NuvoBackNavRow ────────────────────────────────────────────────────────────
+
+/// Deep-screen back navigation row: chevron button, optional title, optional trailing.
+/// Replaces Material AppBar on push routes — sits directly on the page background.
+class NuvoBackNavRow extends StatelessWidget {
+  const NuvoBackNavRow({
+    super.key,
+    required this.onBack,
+    this.title,
+    this.trailing,
+  });
+
+  final VoidCallback onBack;
+  final String? title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        PressableScale(
+          onTap: onBack,
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: NuvoColors.icyBlue,
+              shape: BoxShape.circle,
+              border: Border.all(color: NuvoColors.border),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x1207152B),
+                  blurRadius: 0,
+                  offset: Offset(2, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.arrow_back_rounded,
+              color: NuvoColors.navy,
+              size: 20,
+            ),
+          ),
+        ),
+        if (title != null) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title!,
+              style: AppTextStyles.titleLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ] else
+          const Spacer(),
+        if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+      ],
+    );
+  }
+}
+
+// ── NuvoTextInput ─────────────────────────────────────────────────────────────
+
+/// Standard form input: label above, white fill, #DCE5F2 border, radius 14,
+/// focused blue border, muted helper/error text.
+class NuvoTextInput extends StatelessWidget {
+  const NuvoTextInput({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.helperText,
+    this.errorText,
+    this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.onChanged,
+    this.minLines,
+    this.maxLines = 1,
+    this.autofocus = false,
+    this.enabled = true,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final String? helperText;
+  final String? errorText;
+  final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final ValueChanged<String>? onChanged;
+  final int? minLines;
+  final int maxLines;
+  final bool autofocus;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textCapitalization: textCapitalization,
+          onChanged: onChanged,
+          minLines: minLines,
+          maxLines: maxLines,
+          autofocus: autofocus,
+          enabled: enabled,
+          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.muted,
+            ),
+            filled: true,
+            fillColor: NuvoColors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: NuvoColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: NuvoColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Color(0xFFE5484D)),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: Color(0xFFE5484D),
+                width: 1.6,
+              ),
+            ),
+            errorText: errorText,
+            helperText: helperText,
+            helperStyle: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.muted,
+            ),
+            errorStyle: AppTextStyles.bodySmall.copyWith(
+              color: const Color(0xFFE5484D),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── NuvoCurrentUserRow ────────────────────────────────────────────────────────
+
+/// Current-user highlight row for leaderboards.
+/// Pale blue fill, blue 1.5px border, blue rank pill, bold navy name,
+/// blue right-aligned value. No shadow.
+class NuvoCurrentUserRow extends StatelessWidget {
+  const NuvoCurrentUserRow({
+    super.key,
+    required this.rank,
+    required this.name,
+    required this.value,
+    this.initials,
+  });
+
+  final int rank;
+  final String name;
+  final String value;
+
+  /// Pre-computed initials; if null, derived from [name].
+  final String? initials;
+
+  String _abbreviate(String n) {
+    final parts = n.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final abbr = initials ?? _abbreviate(name);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: NuvoColors.icyBlue,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NuvoColors.blue, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          // Blue rank circle pill
+          Container(
+            width: 24,
+            height: 24,
+            decoration: const BoxDecoration(
+              color: NuvoColors.blue,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$rank',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: NuvoColors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Initials circle
+          Container(
+            width: 30,
+            height: 30,
+            decoration: const BoxDecoration(
+              color: NuvoColors.icyBlue,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              abbr,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: NuvoColors.blue,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Name
+          Expanded(
+            child: Text(
+              name,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w700,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Value right-aligned
+          Text(
+            value,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.blue,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

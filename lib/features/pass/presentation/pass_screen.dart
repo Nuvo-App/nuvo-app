@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -135,6 +137,27 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
   bool _isCrew(PublicUser user) => _crew.any((member) => member.id == user.id);
 
+  void _sharePass() {
+    final passInfo = _passInfo;
+    if (passInfo == null) return;
+    Share.share(passInfo.shareUrl);
+  }
+
+  Future<void> _copyId() async {
+    final passInfo = _passInfo;
+    if (passInfo == null) return;
+    await Clipboard.setData(ClipboardData(text: passInfo.memberId));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Member ID copied.'),
+          duration: Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
@@ -147,48 +170,89 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
           children: [
-            Text('Crew', style: AppTextStyles.headlineLarge),
-            const SizedBox(height: 6),
-            Text(
-              'Find people by username or member ID.',
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+            // ── Page header ────────────────────────────────────────────────
+            const NuvoPageHeader(
+              title: 'Crew',
+              subtitle: 'Find people by username or member ID.',
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 22),
+
+            // ── Loading ────────────────────────────────────────────────────
             if (_loading)
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
+                  padding: EdgeInsets.symmetric(vertical: 48),
                   child: CircularProgressIndicator(),
                 ),
               )
+            // ── Error ──────────────────────────────────────────────────────
             else if (_error != null)
               NuvoErrorState(message: _error!, onRetry: _fetch)
+            // ── Content ────────────────────────────────────────────────────
             else ...[
-              const NuvoSectionHeader(title: 'Your member pass'),
+              // Quick identity actions
+              if (_passInfo != null) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: NuvoActionTile(
+                        icon: Icons.ios_share_rounded,
+                        title: 'Share pass',
+                        iconColor: NuvoColors.blue,
+                        iconBg: NuvoColors.icyBlue,
+                        showArrow: false,
+                        onTap: _sharePass,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: NuvoActionTile(
+                        icon: Icons.copy_rounded,
+                        title: 'Copy ID',
+                        iconColor: NuvoColors.navy,
+                        iconBg: NuvoColors.icyBlue,
+                        showArrow: false,
+                        onTap: _copyId,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // ── Member pass ────────────────────────────────────────────
+              const NuvoSectionHeader(title: 'Member pass', bottomPadding: 12),
               MemberPassCard(profile: profile, compact: true),
-              const SizedBox(height: 20),
-              const NuvoSectionHeader(title: 'Find people'),
+              const SizedBox(height: 28),
+
+              // ── Find people ────────────────────────────────────────────
+              const NuvoSectionHeader(title: 'Find people', bottomPadding: 12),
               _SearchField(
                 controller: _searchController,
                 searching: _searching,
                 onChanged: _onSearchChanged,
               ),
-              const SizedBox(height: 12),
-              if (_results.isNotEmpty)
+              if (_results.isNotEmpty) ...[
+                const SizedBox(height: 12),
                 for (final result in _results)
                   _UserRow(
                     user: result,
                     added: _isCrew(result),
                     loading: _adding.contains(result.id),
-                    actionLabel: _isCrew(result) ? 'Added' : 'Add',
+                    actionLabel: _isCrew(result) ? 'In crew' : 'Add',
                     onPressed: _isCrew(result) || _adding.contains(result.id)
                         ? null
                         : () => _addCrew(result),
-                  )
-              else if (_searchController.text.trim().length >= 2 && !_searching)
+                  ),
+              ] else if (_searchController.text.trim().length >= 2 &&
+                  !_searching) ...[
+                const SizedBox(height: 12),
                 const _SmallEmpty(text: 'No matching Nuvo members found.'),
-              const SizedBox(height: 20),
-              const NuvoSectionHeader(title: 'Your crew'),
+              ],
+              const SizedBox(height: 28),
+
+              // ── Your crew ──────────────────────────────────────────────
+              const NuvoSectionHeader(title: 'Your crew', bottomPadding: 12),
               if (_crew.isEmpty)
                 const _SmallEmpty(
                   text:
@@ -196,7 +260,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 )
               else
                 for (final member in _crew)
-                  _UserRow(user: member, added: true, actionLabel: 'Added'),
+                  _UserRow(user: member, added: true, actionLabel: 'In crew'),
             ],
           ],
         ),
@@ -204,6 +268,8 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     );
   }
 }
+
+// ── Search field ──────────────────────────────────────────────────────────────
 
 class _SearchField extends StatelessWidget {
   const _SearchField({
@@ -218,54 +284,52 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1007152B),
-            blurRadius: 0,
-            offset: Offset(2, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 14),
-          const Icon(Icons.search_rounded, color: NuvoColors.muted, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: AppTextStyles.bodyMedium,
-              decoration: InputDecoration(
-                hintText: 'Search username or member ID',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(
-                  color: NuvoColors.muted,
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+      decoration: InputDecoration(
+        hintText: 'Search username or member ID',
+        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+        filled: true,
+        fillColor: NuvoColors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: NuvoColors.muted,
+          size: 20,
+        ),
+        suffixIcon: searching
+            ? const Padding(
+                padding: EdgeInsets.all(14),
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
-          if (searching)
-            const Padding(
-              padding: EdgeInsets.only(right: 14),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-        ],
+              )
+            : null,
+        suffixIconConstraints: const BoxConstraints(),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+        ),
       ),
     );
   }
 }
+
+// ── User row ──────────────────────────────────────────────────────────────────
 
 class _UserRow extends StatelessWidget {
   const _UserRow({
@@ -290,6 +354,7 @@ class _UserRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
+            // Initials circle
             Container(
               width: 38,
               height: 38,
@@ -306,6 +371,7 @@ class _UserRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
+            // Name + handle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,21 +387,34 @@ class _UserRow extends StatelessWidget {
                 ],
               ),
             ),
+            // Action
             if (actionLabel != null)
-              SizedBox(
-                width: 84,
-                child: NuvoOutlineButton(
-                  label: loading ? '...' : actionLabel!,
-                  small: true,
-                  onPressed: added || loading ? null : onPressed,
-                ),
-              ),
+              added
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text(
+                        actionLabel!,
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: NuvoColors.muted,
+                        ),
+                      ),
+                    )
+                  : SizedBox(
+                      width: 72,
+                      child: NuvoOutlineButton(
+                        label: loading ? '...' : actionLabel!,
+                        small: true,
+                        onPressed: loading ? null : onPressed,
+                      ),
+                    ),
           ],
         ),
       ),
     );
   }
 }
+
+// ── Inline empty state ────────────────────────────────────────────────────────
 
 class _SmallEmpty extends StatelessWidget {
   const _SmallEmpty({required this.text});
