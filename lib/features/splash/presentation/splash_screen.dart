@@ -165,17 +165,24 @@ class _DotField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _DotPainter(), child: const SizedBox.expand());
+    final size = MediaQuery.sizeOf(context);
+    return SizedBox(
+      width: size.width,
+      height: size.height,
+      child: CustomPaint(painter: _DotPainter()),
+    );
   }
 }
 
 class _DotPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width == 0 || size.height == 0) return;
     final paint = Paint()..color = NuvoColors.white.withValues(alpha: 0.08);
     for (var i = 0; i < 42; i++) {
       final x = (i * 73) % size.width;
       final y = (i * 131) % size.height;
+      if (x.isNaN || y.isNaN) continue;
       canvas.drawCircle(Offset(x, y), i.isEven ? 1.6 : 1.1, paint);
     }
   }
