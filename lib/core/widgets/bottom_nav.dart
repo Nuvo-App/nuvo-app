@@ -28,11 +28,11 @@ class NuvoBottomNav extends StatelessWidget {
       color: Colors.transparent,
       padding: EdgeInsets.fromLTRB(24, 0, 24, bottom + 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         decoration: BoxDecoration(
           color: NuvoColors.white,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: NuvoColors.navy, width: 1.4),
+          border: Border.all(color: const Color(0xFF07152B), width: 1.4),
           boxShadow: const [
             BoxShadow(
               color: Color(0x1407152B),
@@ -41,18 +41,34 @@ class NuvoBottomNav extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
-          children: [
-            for (var i = 0; i < items.length; i++)
-              Expanded(
-                child: _NavButton(
-                  icon: items[i].$1,
-                  label: items[i].$2,
-                  selected: i == currentIndex,
-                  onTap: () => onTap(i),
-                ),
-              ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final totalW = constraints.maxWidth;
+            // Selected tab is twice as wide as each unselected tab.
+            // total = 2u + 3u = 5u → u = total / 5
+            final unit = totalW / 5.0;
+            final selectedW = unit * 2.0;
+            final unselectedW = unit;
+
+            return Row(
+              children: [
+                for (var i = 0; i < items.length; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInOut,
+                    width: i == currentIndex ? selectedW : unselectedW,
+                    clipBehavior: Clip.hardEdge,
+                    decoration: const BoxDecoration(),
+                    child: _NavButton(
+                      icon: items[i].$1,
+                      label: items[i].$2,
+                      selected: i == currentIndex,
+                      onTap: () => onTap(i),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -74,35 +90,33 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? NuvoColors.blue : NuvoColors.muted;
-
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedScale(
-        scale: selected ? 1.04 : 1,
-        duration: const Duration(milliseconds: 180),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? NuvoColors.icyBlue : Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: color,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: selected ? NuvoColors.icyBlue : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
         ),
+        child: selected
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: NuvoColors.blue, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: const Color(0xFF07152B),
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                  ),
+                ],
+              )
+            : Center(child: Icon(icon, color: NuvoColors.muted, size: 20)),
       ),
     );
   }

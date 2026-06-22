@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -99,7 +98,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         onRefresh: () =>
             ref.read(arenaControllerProvider.notifier).loadSnapshot(),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 120),
           children: [
             // ── Greeting header ───────────────────────────────────────────────
             ArenaGreetingHeader(
@@ -150,23 +149,20 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 ArenaFocusBoardCard(
                   board: activeBoard,
                   isLoadingDetail: _isLoadingBoardDetail,
+                  userName: firstName,
+                  userInitials: initials,
                   onSubmitProof: () => _handleSubmitProof(context, activeBoard),
                   onOpenBoard: () => _openBoard(context, activeBoard),
                 ),
                 const SizedBox(height: 28),
               ],
 
-              // More boards 2-column grid
-              if (otherBoards.isNotEmpty) ...[
-                const NuvoSectionHeader(
-                  title: 'More boards',
-                  bottomPadding: 12,
-                ),
+              // More boards 2-column grid (section header is inside the widget)
+              if (otherBoards.isNotEmpty)
                 ArenaMoreBoardsGrid(
                   boards: otherBoards,
                   onTap: (board) => _onChipTap(board, snapshot, user?.id),
                 ),
-              ],
             ],
           ],
         ),
