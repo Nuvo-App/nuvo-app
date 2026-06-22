@@ -142,14 +142,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             ? AiMotionProofStatus.permissionDenied
             : AiMotionProofStatus.cameraError;
         _message = _isPermissionError(e)
-            ? 'Camera permission is needed for AI Motion Proof. You can still use manual proof.'
+            ? 'Camera access is needed to verify your reps. Enable it in Settings.'
             : 'Camera could not start. ${e.description ?? e.code}';
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _status = AiMotionProofStatus.cameraError;
-        _message = 'Camera could not start. Try again or use manual proof.';
+        _message = "Camera couldn't start. Try again.";
       });
     }
   }
@@ -237,7 +237,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       if (!mounted) return;
       setState(() {
         _status = AiMotionProofStatus.cameraError;
-        _message = 'Pose detector failed. Try again or use manual proof.';
+        _message = 'Detection failed. Try again.';
       });
       await _stopImageStream();
     }
@@ -379,15 +379,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'AI Motion Proof',
-                          style: AppTextStyles.titleLarge,
-                        ),
+                        Text('Verify reps', style: AppTextStyles.titleLarge),
                         const SizedBox(height: 2),
                         Text(
                           _activity == AiMotionActivity.plankHold
                               ? 'Hold plank for $_targetValue seconds.'
-                              : 'Verify $_targetLabel live.',
+                              : 'Nuvo will count your $_targetLabel.',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: NuvoColors.muted,
                           ),
@@ -668,7 +665,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'AI Motion Proof accepted',
+                  'Reps verified. Leaderboard is updating.',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: NuvoColors.white.withValues(alpha: 0.50),
                   ),
@@ -787,8 +784,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             'Nuvo will check body visibility while recording.',
           AiMotionProofStatus.processing => 'Nuvo is checking your proof.',
           AiMotionProofStatus.permissionDenied =>
-            'Camera permission is needed. You can still use manual proof.',
-          AiMotionProofStatus.cameraError => 'Try again or use manual proof.',
+            'Enable camera access in Settings to verify your reps.',
+          AiMotionProofStatus.cameraError => 'Try again.',
           AiMotionProofStatus.submitting =>
             'Saving verified proof to the race.',
           AiMotionProofStatus.submitted =>
@@ -913,9 +910,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           onPressed: _recordAgain,
         ),
         const SizedBox(height: 12),
-        NuvoOutlineButton(
-          label: 'Use manual proof',
-          icon: Icons.edit_note_rounded,
+        NuvoGhostButton(
+          label: 'Log manually',
           expand: true,
           onPressed: () => safePopOrGo(context, '/race/${widget.raceId}/proof'),
         ),

@@ -192,10 +192,18 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     ),
                     const SizedBox(height: 12),
                     NuvoOutlineButton(
-                      label: 'Needs review',
+                      label: 'Ask to resubmit',
                       icon: Icons.rate_review_rounded,
                       expand: true,
                       onPressed: _saving ? null : () => _review('needs_review'),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'The racer can submit again after reviewing your note.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
                     NuvoDangerButton(
@@ -203,6 +211,14 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       icon: Icons.close_rounded,
                       expand: true,
                       onPressed: _saving ? null : () => _review('rejected'),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'This declines the proof.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 )
@@ -267,6 +283,15 @@ class _ProofSummaryCard extends StatelessWidget {
           Row(
             children: [
               NuvoPill(label: _statusLabel, color: _statusColor),
+              const SizedBox(width: 6),
+              NuvoPill(
+                label: proof.proofType == 'ai_motion'
+                    ? 'AI verified'
+                    : 'Manual',
+                color: proof.proofType == 'ai_motion'
+                    ? NuvoColors.blue
+                    : NuvoColors.muted,
+              ),
               const Spacer(),
               Text(
                 proof.displayName,
