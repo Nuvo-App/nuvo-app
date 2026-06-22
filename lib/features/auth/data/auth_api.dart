@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'auth_models.dart';
 
@@ -33,34 +34,62 @@ class AuthApi {
     Map<String, dynamic> body, {
     String? accessToken,
   }) async {
-    final res = await _client.post(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(accessToken: accessToken),
-      body: jsonEncode(body),
-    );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
+    final url = '$_kApiBase$path';
+    try {
+      final res = await _client.post(
+        Uri.parse(url),
+        headers: _headers(accessToken: accessToken),
+        body: jsonEncode(body),
       );
+      debugPrint('[AuthApi] POST $path → ${res.statusCode}');
+      if (res.statusCode >= 400) {
+        final snippet = res.body.length > 200
+            ? res.body.substring(0, 200)
+            : res.body;
+        debugPrint('[AuthApi] error body: $snippet');
+      }
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode >= 400) {
+        throw ApiException(
+          res.statusCode,
+          json['error'] as String? ?? 'Request failed',
+        );
+      }
+      return json;
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      // Network-level failure (CORS blocked, no connectivity, etc.)
+      debugPrint('[AuthApi] POST $path network error (${e.runtimeType}): $e');
+      rethrow;
     }
-    return json;
   }
 
   Future<Map<String, dynamic>> _get(String path, {String? accessToken}) async {
-    final res = await _client.get(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(accessToken: accessToken),
-    );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
+    try {
+      final res = await _client.get(
+        Uri.parse('$_kApiBase$path'),
+        headers: _headers(accessToken: accessToken),
       );
+      debugPrint('[AuthApi] GET $path → ${res.statusCode}');
+      if (res.statusCode >= 400) {
+        final snippet = res.body.length > 200
+            ? res.body.substring(0, 200)
+            : res.body;
+        debugPrint('[AuthApi] error body: $snippet');
+      }
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode >= 400) {
+        throw ApiException(
+          res.statusCode,
+          json['error'] as String? ?? 'Request failed',
+        );
+      }
+      return json;
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      debugPrint('[AuthApi] GET $path network error (${e.runtimeType}): $e');
+      rethrow;
     }
-    return json;
   }
 
   Future<Map<String, dynamic>> _delete(

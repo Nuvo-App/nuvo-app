@@ -46,6 +46,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       await ref.read(authControllerProvider.notifier).startEmailAuth(email);
       if (mounted) context.push('/auth/verify', extra: email);
     } catch (e) {
+      debugPrint('[EmailStart] startEmailAuth failed (${e.runtimeType}): $e');
       if (mounted) {
         setState(() {
           _error = 'Could not send code. Please try again.';
