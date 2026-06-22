@@ -53,7 +53,6 @@ class AuthRepository {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
     );
-    await _store.saveUserId(res.user.id);
     return res.user;
   }
 
@@ -63,7 +62,6 @@ class AuthRepository {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
     );
-    await _store.saveUserId(res.user.id);
     return res.user;
   }
 

@@ -8,7 +8,6 @@ class SecureTokenStore {
 
   static const _accessKey = 'nuvo_access_token';
   static const _refreshKey = 'nuvo_refresh_token';
-  static const _userIdKey = 'nuvo_user_id';
 
   Future<void> saveTokens({
     required String accessToken,
@@ -23,9 +22,6 @@ class SecureTokenStore {
 
   Future<String?> getAccessToken() => _storage.read(key: _accessKey);
   Future<String?> getRefreshToken() => _storage.read(key: _refreshKey);
-
-  Future<void> saveUserId(String id) =>
-      _storage.write(key: _userIdKey, value: id);
 
   Future<void> clear() => _storage.deleteAll();
 }

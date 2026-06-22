@@ -44,6 +44,10 @@ class ArenaController extends StateNotifier<ArenaState> {
       }
     }
   }
+
+  void clearSnapshot() {
+    if (mounted) state = const ArenaState();
+  }
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────
@@ -60,5 +64,14 @@ final arenaRepositoryProvider = Provider<ArenaRepository>((ref) {
 
 final arenaControllerProvider =
     StateNotifierProvider<ArenaController, ArenaState>((ref) {
-      return ArenaController(ref.watch(arenaRepositoryProvider));
+      final controller = ArenaController(ref.watch(arenaRepositoryProvider));
+      ref.listen<AuthState>(authControllerProvider, (prev, next) {
+        if (next.status == AuthStatus.unauthenticated) {
+          controller.clearSnapshot();
+        } else if (next.status == AuthStatus.authenticated &&
+            prev?.status != AuthStatus.authenticated) {
+          controller.loadSnapshot();
+        }
+      });
+      return controller;
     });
