@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show BuildContext, ChangeNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,15 +17,27 @@ class RouterNotifier extends ChangeNotifier {
     final authState = _ref.read(authControllerProvider);
     final loc = state.matchedLocation;
 
-    if (authState.status == AuthStatus.loading) return null;
+    // While auth is being determined, never render protected routes — they
+    // would try to access secure storage concurrently with the auth restore
+    // and can corrupt the session (race condition on web). Send them to
+    // /splash which shows the loading state harmlessly.
+    if (authState.status == AuthStatus.loading) {
+      final dest = _isProtected(loc) ? '/splash' : null;
+      debugPrint('[Router] loading → $loc : redirect=$dest');
+      return dest;
+    }
+
     if (loc == '/splash') return null;
 
     if (authState.status == AuthStatus.unauthenticated) {
-      return _isProtected(loc) ? '/welcome' : null;
+      final dest = _isProtected(loc) ? '/welcome' : null;
+      debugPrint('[Router] unauthenticated → $loc : redirect=$dest');
+      return dest;
     }
 
     // Authenticated
     final user = authState.user!;
+    debugPrint('[Router] authenticated uid=${user.id} → $loc');
     if (user.onboardingComplete) {
       if (_isAuthOrOnboarding(loc)) return '/arena';
     } else {

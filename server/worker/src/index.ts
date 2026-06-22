@@ -24,6 +24,12 @@ app.use(
       if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
         return origin; // local dev
       }
+      // GitHub Codespaces forwarded-port preview URLs:
+      // https://{name}-8080.preview.app.github.dev  (current format)
+      // https://{name}-8080.app.github.dev           (legacy format)
+      if (origin.endsWith('.app.github.dev')) {
+        return origin;
+      }
       return (ALLOWED_WEB_ORIGINS as readonly string[]).includes(origin)
         ? origin
         : ALLOWED_WEB_ORIGINS[0];

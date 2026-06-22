@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_api.dart';
@@ -23,14 +24,19 @@ class AuthController extends StateNotifier<AuthState> {
   final AuthRepository _repo;
 
   Future<void> _init() async {
+    debugPrint('[AuthController] restoring session');
     try {
       final user = await _repo.restoreSession();
+      debugPrint(
+        '[AuthController] restore result: ${user != null ? 'authenticated uid=${user.id}' : 'no session'}',
+      );
       if (mounted) {
         state = user != null
             ? AuthState(status: AuthStatus.authenticated, user: user)
             : const AuthState(status: AuthStatus.unauthenticated);
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AuthController] restore error (${e.runtimeType})');
       if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }
@@ -77,6 +83,14 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _repo.logout();
+    if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  // Called by feature screens on 401 — clears tokens locally without an API
+  // call (the server already rejected us) and marks the session as gone.
+  Future<void> sessionExpired() async {
+    debugPrint('[AuthController] session expired — clearing tokens');
+    await _repo.clearSession();
     if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
   }
 

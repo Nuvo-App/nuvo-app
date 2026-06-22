@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_api.dart';
@@ -25,11 +26,13 @@ class ArenaState {
 }
 
 class ArenaController extends StateNotifier<ArenaState> {
-  ArenaController(this._repo) : super(const ArenaState()) {
+  ArenaController(this._repo, {this.onSessionExpired})
+    : super(const ArenaState()) {
     loadSnapshot();
   }
 
   final ArenaRepository _repo;
+  final VoidCallback? onSessionExpired;
 
   Future<void> loadSnapshot() async {
     state = state.copyWith(loading: true, error: null);
@@ -37,10 +40,19 @@ class ArenaController extends StateNotifier<ArenaState> {
       final snapshot = await _repo.getArenaSnapshot();
       if (mounted) state = state.copyWith(snapshot: snapshot, loading: false);
     } on ApiException catch (e) {
-      if (mounted) state = state.copyWith(loading: false, error: e.message);
-    } catch (_) {
+      if (e.statusCode == 401) {
+        debugPrint('[ArenaController] 401 — triggering session expiry');
+        if (mounted) state = state.copyWith(loading: false);
+        onSessionExpired?.call();
+        return;
+      }
       if (mounted) {
-        state = state.copyWith(loading: false, error: 'Failed to load arena.');
+        state = state.copyWith(loading: false, error: 'Couldn\'t load races.');
+      }
+    } catch (e, st) {
+      debugPrint('[ArenaController] unexpected error: $e\n$st');
+      if (mounted) {
+        state = state.copyWith(loading: false, error: 'Couldn\'t load races.');
       }
     }
   }
@@ -64,7 +76,13 @@ final arenaRepositoryProvider = Provider<ArenaRepository>((ref) {
 
 final arenaControllerProvider =
     StateNotifierProvider<ArenaController, ArenaState>((ref) {
-      final controller = ArenaController(ref.watch(arenaRepositoryProvider));
+      final controller = ArenaController(
+        ref.watch(arenaRepositoryProvider),
+        onSessionExpired: () {
+          debugPrint('[Arena] session expired — notifying AuthController');
+          ref.read(authControllerProvider.notifier).sessionExpired();
+        },
+      );
       ref.listen<AuthState>(authControllerProvider, (prev, next) {
         if (next.status == AuthStatus.unauthenticated) {
           controller.clearSnapshot();

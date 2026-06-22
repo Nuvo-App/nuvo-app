@@ -25,7 +25,10 @@ class WelcomeAuthScreen extends ConsumerStatefulWidget {
 }
 
 class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
-  final _googleSignIn = GoogleSignIn();
+  // Constructed lazily: on web with no client ID configured the GoogleSignIn()
+  // constructor asserts, so we must not touch it until the button is tapped.
+  // With _kGoogleEnabled = false the button is hidden and this is never accessed.
+  late final _googleSignIn = GoogleSignIn();
   _AuthMode _mode = _AuthMode.signup;
   bool _googleLoading = false;
   String? _googleError;

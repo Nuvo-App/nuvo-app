@@ -102,6 +102,11 @@ class AuthRepository {
     await _store.clear();
   }
 
+  // Clears stored tokens without attempting a server-side logout.
+  // Use this when the server already rejected the session (401) so we don't
+  // make a pointless API call that will fail.
+  Future<void> clearSession() => _store.clear();
+
   Future<void> deleteAccount() async {
     await _withRefresh(_api.deleteAccount);
     await _store.clear();

@@ -88,8 +88,8 @@ class ArenaBoard {
     boardContext: json['boardContext'] as String? ?? '',
     primaryActionLabel: json['primaryActionLabel'] as String? ?? 'Open board',
     primaryActionType: json['primaryActionType'] as String? ?? 'open_board',
-    progressPercent: json['progressPercent'] as int?,
-    racerCount: json['racerCount'] as int?,
+    progressPercent: (json['progressPercent'] as num?)?.toInt(),
+    racerCount: (json['racerCount'] as num?)?.toInt(),
     isResult: json['isResult'] as bool? ?? false,
     badgeLabel: json['badgeLabel'] as String?,
     miniLeaderboard:

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart';
@@ -24,6 +25,7 @@ class ArenaApi {
       Uri.parse('$_kApiBase/arena'),
       headers: _headers(token),
     );
+    debugPrint('[ArenaApi] status=${res.statusCode} body=${res.body.length > 300 ? res.body.substring(0, 300) : res.body}');
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode >= 400) {
       throw ApiException(
@@ -31,6 +33,10 @@ class ArenaApi {
         json['error'] as String? ?? 'Request failed',
       );
     }
-    return ArenaSnapshot.fromJson(json['snapshot'] as Map<String, dynamic>);
+    final snapshot = json['snapshot'];
+    if (snapshot == null) {
+      throw const ApiException(200, 'Missing snapshot in response');
+    }
+    return ArenaSnapshot.fromJson(snapshot as Map<String, dynamic>);
   }
 }

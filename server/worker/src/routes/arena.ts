@@ -92,26 +92,38 @@ arenaRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const db = c.env.DB;
 
-  // Read demo flags — query only the columns we need.
-  const userFlags = await db
-    .prepare(
-      'SELECT demo_world_enabled, demo_world_seed, demo_world_variant FROM users WHERE id = ?',
-    )
-    .bind(userId)
-    .first<{ demo_world_enabled: number; demo_world_seed: string | null; demo_world_variant: string | null }>();
+  // Read demo flags (added in migration 0006 — columns may not exist on older DBs).
+  let demoEnabled = false;
+  let demoSeed: string | null = null;
+  let demoVariant = 'summer_v1';
 
-  if (!userFlags) {
-    return c.json({ ok: false, error: 'User not found' }, 404);
+  try {
+    const userRow = await db
+      .prepare(
+        'SELECT demo_world_enabled, demo_world_seed, demo_world_variant FROM users WHERE id = ?',
+      )
+      .bind(userId)
+      .first<{ demo_world_enabled: number; demo_world_seed: string | null; demo_world_variant: string | null }>();
+
+    if (!userRow) {
+      return c.json({ ok: false, error: 'User not found' }, 404);
+    }
+    demoEnabled = Boolean(userRow.demo_world_enabled);
+    demoSeed = userRow.demo_world_seed;
+    demoVariant = userRow.demo_world_variant ?? 'summer_v1';
+  } catch {
+    // Migration 0006 not yet applied — verify user exists then fall through to real mode.
+    const exists = await db
+      .prepare('SELECT id FROM users WHERE id = ?')
+      .bind(userId)
+      .first<{ id: string }>();
+    if (!exists) return c.json({ ok: false, error: 'User not found' }, 404);
   }
 
   // ── Demo mode ─────────────────────────────────────────────────────────────
 
-  if (userFlags.demo_world_enabled) {
-    const snapshot = generateDemoSnapshot(
-      userId,
-      userFlags.demo_world_seed,
-      userFlags.demo_world_variant ?? 'summer_v1',
-    );
+  if (demoEnabled) {
+    const snapshot = generateDemoSnapshot(userId, demoSeed, demoVariant);
     return c.json({ ok: true, snapshot });
   }
 
