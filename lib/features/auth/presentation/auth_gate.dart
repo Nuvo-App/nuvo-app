@@ -52,6 +52,7 @@ class RouterNotifier extends ChangeNotifier {
       loc.startsWith('/arena') ||
       loc.startsWith('/pass') ||
       loc.startsWith('/compete') ||
+      loc.startsWith('/move') ||
       loc.startsWith('/profile') ||
       loc.startsWith('/race/') ||
       loc.startsWith('/races/') ||

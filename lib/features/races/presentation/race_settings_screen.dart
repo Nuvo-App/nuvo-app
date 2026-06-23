@@ -246,7 +246,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             Text('Race settings', style: AppTextStyles.headlineLarge),
             const SizedBox(height: 8),
             Text(
-              'Tune the start line, finish line, proof rules, and lifecycle.',
+              'Tune the start line, finish line, move rules, and lifecycle.',
               style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 24),
@@ -311,21 +311,21 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
               ],
             ),
             _Section(
-              title: 'Proof',
+              title: 'Moves',
               children: [
                 _Menu(
-                  label: 'Proof requirement',
+                  label: 'Move method',
                   value: _proofRequirement,
                   values: const {
-                    'manual': 'manual proof',
-                    'photo_video': 'photo / video proof',
-                    'ai_check': 'AI Motion Proof - 10 jumping jacks',
+                    'manual': 'manual logging',
+                    'photo_video': 'photo / video move',
+                    'ai_check': 'AI MoveCheck - 10 jumping jacks',
                   },
                   onChanged: (value) =>
                       setState(() => _proofRequirement = value),
                 ),
                 _Menu(
-                  label: 'Proof review mode',
+                  label: 'Review mode',
                   value: _proofReviewMode,
                   values: const {
                     'auto_accept': 'auto accept',
@@ -425,7 +425,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                       : () => _runLifecycleAction(
                           title: 'Delete race?',
                           message:
-                              'This hides the race from your arena. Proof history is preserved in the backend.',
+                              'This hides the race from your arena. Move history is preserved in the backend.',
                           confirmLabel: 'Delete',
                           returnToArena: true,
                           action: () => ref

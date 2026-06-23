@@ -93,6 +93,7 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
     email,
     fullName: profile?.full_name ?? null,
     username: profile?.username ?? null,
+    profilePhotoUrl: profile?.avatar_url ?? null,
     onboardingComplete: Boolean(profile?.onboarding_complete),
     hasMemberPass: Boolean(pass),
   };

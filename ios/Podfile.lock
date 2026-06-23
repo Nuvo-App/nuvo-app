@@ -68,6 +68,11 @@ PODS:
   - GTMSessionFetcher/Core (3.5.0)
   - GTMSessionFetcher/Full (3.5.0):
     - GTMSessionFetcher/Core
+  - image_cropper (0.0.4):
+    - Flutter
+    - TOCropViewController (~> 2.6.1)
+  - image_picker_ios (0.0.1):
+    - Flutter
   - MLImage (1.0.0-beta8)
   - MLKitCommon (14.0.0):
     - GoogleDataTransport (~> 10.0)
@@ -107,6 +112,10 @@ PODS:
   - RecaptchaInterop (101.0.0)
   - share_plus (0.0.1):
     - Flutter
+  - sqflite_darwin (0.0.4):
+    - Flutter
+    - FlutterMacOS
+  - TOCropViewController (2.6.1)
   - url_launcher_ios (0.0.1):
     - Flutter
 
@@ -117,7 +126,10 @@ DEPENDENCIES:
   - google_mlkit_commons (from `.symlinks/plugins/google_mlkit_commons/ios`)
   - google_mlkit_pose_detection (from `.symlinks/plugins/google_mlkit_pose_detection/ios`)
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
+  - image_cropper (from `.symlinks/plugins/image_cropper/ios`)
+  - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
+  - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
 
 SPEC REPOS:
@@ -142,6 +154,7 @@ SPEC REPOS:
     - PromisesObjC
     - PromisesSwift
     - RecaptchaInterop
+    - TOCropViewController
 
 EXTERNAL SOURCES:
   camera_avfoundation:
@@ -156,8 +169,14 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/google_mlkit_pose_detection/ios"
   google_sign_in_ios:
     :path: ".symlinks/plugins/google_sign_in_ios/darwin"
+  image_cropper:
+    :path: ".symlinks/plugins/image_cropper/ios"
+  image_picker_ios:
+    :path: ".symlinks/plugins/image_picker_ios/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
+  sqflite_darwin:
+    :path: ".symlinks/plugins/sqflite_darwin/darwin"
   url_launcher_ios:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
 
@@ -177,6 +196,8 @@ SPEC CHECKSUMS:
   GoogleUtilities: 4f2618a4a1e762a1ee134a1e2323bba9843e06da
   GTMAppAuth: f69bd07d68cd3b766125f7e072c45d7340dea0de
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
+  image_cropper: 655b3ba703c9e15e3111e79151624d6154288774
+  image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   MLImage: 0de5c6c2bf9e93b80ef752e2797f0836f03b58c0
   MLKitCommon: 47d47b50a031d00db62f1b0efe5a1d8b09a3b2e6
   MLKitPoseDetection: 037fc62d6ccdd5a63253d1f40f90a8120b0d9c61
@@ -189,6 +210,8 @@ SPEC CHECKSUMS:
   PromisesSwift: 217dea0fd5d2ad65222a109c48698add13cc1c5b
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
+  sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
+  TOCropViewController: edfd4f25713d56905ad1e0b9f5be3fbe0f59c863
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
 PODFILE CHECKSUM: 8ea0b2d251de9e3fe8357b876667f298583c5ae2

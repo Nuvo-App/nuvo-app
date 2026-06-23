@@ -139,6 +139,7 @@ class PublicUser {
     this.memberId,
     required this.initials,
     this.addedAt,
+    this.profilePhotoUrl,
   });
 
   final String id;
@@ -147,6 +148,7 @@ class PublicUser {
   final String? memberId;
   final String initials;
   final String? addedAt;
+  final String? profilePhotoUrl;
 
   factory PublicUser.fromJson(Map<String, dynamic> json) => PublicUser(
     id: json['id'] as String,
@@ -155,6 +157,7 @@ class PublicUser {
     memberId: json['memberId'] as String?,
     initials: json['initials'] as String? ?? 'N',
     addedAt: json['addedAt'] as String?,
+    profilePhotoUrl: json['profilePhotoUrl'] as String?,
   );
 
   String get handleLine {
@@ -177,6 +180,7 @@ class RaceParticipant {
     required this.progressValue,
     required this.progressPercent,
     required this.joinedAt,
+    this.profilePhotoUrl,
   });
 
   final String id;
@@ -185,6 +189,7 @@ class RaceParticipant {
   final int progressValue;
   final int progressPercent;
   final String joinedAt;
+  final String? profilePhotoUrl;
 
   factory RaceParticipant.fromJson(Map<String, dynamic> json) =>
       RaceParticipant(
@@ -194,6 +199,7 @@ class RaceParticipant {
         progressValue: json['progressValue'] as int? ?? 0,
         progressPercent: json['progressPercent'] as int? ?? 0,
         joinedAt: json['joinedAt'] as String,
+        profilePhotoUrl: json['profilePhotoUrl'] as String?,
       );
 }
 
@@ -218,11 +224,18 @@ class RaceProof {
     this.reviewedBy,
     this.reviewedAt,
     required this.createdAt,
+    this.profilePhotoUrl,
+    this.thumbnailUrl,
+    this.rankBefore,
+    this.rankAfter,
+    this.peoplePassed,
   });
 
   final String id;
   final String userId;
   final String displayName;
+  final String? profilePhotoUrl;
+  final String? thumbnailUrl;
   final String proofType;
   final String? aiActivityType;
   final String? note;
@@ -239,6 +252,9 @@ class RaceProof {
   final String? reviewedBy;
   final String? reviewedAt;
   final String createdAt;
+  final int? rankBefore;
+  final int? rankAfter;
+  final int? peoplePassed;
 
   factory RaceProof.fromJson(Map<String, dynamic> json) => RaceProof(
     id: json['id'] as String,
@@ -260,5 +276,10 @@ class RaceProof {
     reviewedBy: json['reviewedBy'] as String?,
     reviewedAt: json['reviewedAt'] as String?,
     createdAt: json['createdAt'] as String,
+    profilePhotoUrl: json['profilePhotoUrl'] as String?,
+    thumbnailUrl: json['thumbnailUrl'] as String?,
+    rankBefore: (json['rankBefore'] as num?)?.toInt(),
+    rankAfter: (json['rankAfter'] as num?)?.toInt(),
+    peoplePassed: (json['peoplePassed'] as num?)?.toInt(),
   );
 }

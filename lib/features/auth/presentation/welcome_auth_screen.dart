@@ -393,7 +393,7 @@ class _ProductPreviewCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'AI Motion Proof · 10 reps',
+                      'AI MoveCheck · 10 reps',
                       style: AppTextStyles.labelSmall.copyWith(
                         color: const Color(0x99FFFFFF),
                         fontWeight: FontWeight.w600,
@@ -461,7 +461,7 @@ class _ProductPreviewCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Crew bubbles + submit proof CTA
+          // Crew bubbles + move CTA
           Row(
             children: [
               const _CrewBubble('A', Color(0xFF8B9CFF)),
@@ -495,7 +495,7 @@ class _ProductPreviewCard extends StatelessWidget {
                   ],
                 ),
                 child: Text(
-                  'Submit proof',
+                  'Log move',
                   style: AppTextStyles.labelSmall.copyWith(
                     color: NuvoColors.white,
                     fontWeight: FontWeight.w800,

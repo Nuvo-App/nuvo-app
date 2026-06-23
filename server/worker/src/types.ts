@@ -6,6 +6,7 @@ export type AppEnv = {
     RESEND_FROM_EMAIL: string;
     JWT_SECRET: string;
     API_BASE_URL: string;
+    PROFILE_PHOTOS: R2Bucket;
   };
   Variables: {
     userId: string;

@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'pressable_scale.dart';
+
+// ── Tab definitions ───────────────────────────────────────────────────────────
+// Indices map to shell paths in main_shell.dart:
+// 0 → /arena, 1 → /compete (Races), 2 → /move, 3 → /pass (Crew), 4 → /profile
 
 class NuvoBottomNav extends StatelessWidget {
   const NuvoBottomNav({
@@ -13,11 +18,12 @@ class NuvoBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  static const items = [
-    (Icons.grid_view_rounded, 'Arena'),
-    (Icons.group_rounded, 'Crew'),
-    (Icons.add_circle_rounded, 'Compete'),
-    (Icons.person_rounded, 'Profile'),
+  static const _items = [
+    _NavItem(icon: Icons.bolt_rounded,       label: 'Arena'),
+    _NavItem(icon: Icons.flag_rounded,        label: 'Races'),
+    _NavItem(icon: Icons.add_rounded,         label: 'Move',  isCta: true),
+    _NavItem(icon: Icons.group_rounded,       label: 'Crew'),
+    _NavItem(icon: Icons.person_rounded,      label: 'Profile'),
   ];
 
   @override
@@ -25,98 +31,111 @@ class NuvoBottomNav extends StatelessWidget {
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Container(
-      color: Colors.transparent,
-      padding: EdgeInsets.fromLTRB(24, 0, 24, bottom + 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-        decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFF07152B), width: 1.4),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1407152B),
-              blurRadius: 24,
-              offset: Offset(0, 12),
-            ),
-          ],
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final totalW = constraints.maxWidth;
-            // Selected tab is twice as wide as each unselected tab.
-            // total = 2u + 3u = 5u → u = total / 5
-            final unit = totalW / 5.0;
-            final selectedW = unit * 2.0;
-            final unselectedW = unit;
-
-            return Row(
-              children: [
-                for (var i = 0; i < items.length; i++)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeInOut,
-                    width: i == currentIndex ? selectedW : unselectedW,
-                    clipBehavior: Clip.hardEdge,
-                    decoration: const BoxDecoration(),
-                    child: _NavButton(
-                      icon: items[i].$1,
-                      label: items[i].$2,
-                      selected: i == currentIndex,
-                      onTap: () => onTap(i),
+      color: NuvoColors.white,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Top hairline divider
+          Container(height: 1, color: NuvoColors.divider),
+          Padding(
+            padding: EdgeInsets.only(bottom: bottom),
+            child: SizedBox(
+              height: 58,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _items.length; i++)
+                    Expanded(
+                      child: _NavButton(
+                        item: _items[i],
+                        selected: i == currentIndex,
+                        onTap: () => onTap(i),
+                        index: i,
+                      ),
                     ),
-                  ),
-              ],
-            );
-          },
-        ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _NavButton extends StatelessWidget {
-  const _NavButton({
+class _NavItem {
+  const _NavItem({
     required this.icon,
     required this.label,
-    required this.selected,
-    required this.onTap,
+    this.isCta = false,
   });
 
   final IconData icon;
   final String label;
+  final bool isCta;
+}
+
+class _NavButton extends StatelessWidget {
+  const _NavButton({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+    required this.index,
+  });
+
+  final _NavItem item;
   final bool selected;
   final VoidCallback onTap;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
+    // Center CTA button (Move) — raised circle
+    if (item.isCta) {
+      return PressableScale(
+        onTap: onTap,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: selected ? NuvoColors.navy : NuvoColors.blue,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                item.icon,
+                color: NuvoColors.white,
+                size: 22,
+                weight: 600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Regular tab
+    final isActive = selected;
+    final iconColor = isActive ? NuvoColors.navy : NuvoColors.muted;
+    final labelColor = isActive ? NuvoColors.navy : NuvoColors.muted;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        height: 40,
-        decoration: BoxDecoration(
-          color: selected ? NuvoColors.icyBlue : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: selected
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: NuvoColors.blue, size: 20),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: const Color(0xFF07152B),
-                      fontWeight: FontWeight.w800,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.clip,
-                  ),
-                ],
-              )
-            : Center(child: Icon(icon, color: NuvoColors.muted, size: 20)),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(item.icon, color: iconColor, size: 22),
+          const SizedBox(height: 3),
+          Text(
+            item.label,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: labelColor,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

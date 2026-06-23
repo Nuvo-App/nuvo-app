@@ -151,12 +151,60 @@ class AuthApi {
     String? fullName,
     String? username,
     bool? privateProfile,
+    String? profilePhotoUrl,
+    bool removePhoto = false,
   }) async {
     final body = <String, dynamic>{};
     if (fullName != null) body['fullName'] = fullName;
     if (username != null) body['username'] = username;
     if (privateProfile != null) body['privateProfile'] = privateProfile;
+    if (removePhoto) {
+      body['profilePhotoUrl'] = null;
+    } else if (profilePhotoUrl != null) {
+      body['profilePhotoUrl'] = profilePhotoUrl;
+    }
+    if (body.containsKey('profilePhotoUrl')) {
+      debugPrint('PATCH_PROFILE_PHOTO_URL: ${body['profilePhotoUrl']}');
+    }
     await _post('/profile', body, accessToken: accessToken);
+  }
+
+  /// Step 1 of photo upload: ask the backend for a signed upload URL.
+  /// Returns { uploadUrl: "...", publicUrl: "...", key: "..." }.
+  Future<({String uploadUrl, String publicUrl, String key})> requestPhotoUploadUrl(
+    String accessToken, {
+    required String fileName,
+    required String contentType,
+  }) async {
+    final json = await _post(
+      '/profile/photo/upload-url',
+      {'fileName': fileName, 'contentType': contentType},
+      accessToken: accessToken,
+    );
+    final publicUrl = json['publicUrl'] as String;
+    debugPrint('UPLOAD_PUBLIC_URL: $publicUrl');
+    return (
+      uploadUrl: json['uploadUrl'] as String,
+      publicUrl: publicUrl,
+      key: json['key'] as String,
+    );
+  }
+
+  /// Step 2: PUT the image bytes directly to the signed R2 URL.
+  /// No auth header — the signature in the URL is the credential.
+  Future<void> uploadBytesToSignedUrl(
+    String signedUrl,
+    Uint8List bytes,
+    String contentType,
+  ) async {
+    final res = await _client.put(
+      Uri.parse(signedUrl),
+      headers: {'Content-Type': contentType},
+      body: bytes,
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, 'Photo upload failed');
+    }
   }
 
   Future<bool> checkUsername(String accessToken, String username) async {

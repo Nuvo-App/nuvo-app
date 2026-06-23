@@ -60,6 +60,11 @@ class ArenaBoard {
     required this.isResult,
     this.badgeLabel,
     this.miniLeaderboard = const [],
+    this.myRank,
+    this.chaseCopy,
+    this.leaderName,
+    this.leaderPhotoUrl,
+    this.daysLeft,
   });
 
   final String id;
@@ -76,6 +81,11 @@ class ArenaBoard {
   final bool isResult;
   final String? badgeLabel;
   final List<ArenaMiniLeaderboardRow> miniLeaderboard;
+  final int? myRank;
+  final String? chaseCopy;
+  final String? leaderName;
+  final String? leaderPhotoUrl;
+  final int? daysLeft;
 
   bool get isDemo => source == 'demo';
 
@@ -100,6 +110,11 @@ class ArenaBoard {
             )
             .toList() ??
         [],
+    myRank: (json['myRank'] as num?)?.toInt(),
+    chaseCopy: json['chaseCopy'] as String?,
+    leaderName: json['leaderName'] as String?,
+    leaderPhotoUrl: json['leaderPhotoUrl'] as String?,
+    daysLeft: (json['daysLeft'] as num?)?.toInt(),
   );
 }
 
@@ -108,17 +123,20 @@ class ArenaMiniLeaderboardRow {
     required this.label,
     required this.value,
     this.isCurrentUser = false,
+    this.profilePhotoUrl,
   });
 
   final String label;
   final String value;
   final bool isCurrentUser;
+  final String? profilePhotoUrl;
 
   factory ArenaMiniLeaderboardRow.fromJson(Map<String, dynamic> json) =>
       ArenaMiniLeaderboardRow(
         label: json['label'] as String? ?? '',
         value: json['value'] as String? ?? '',
         isCurrentUser: json['isCurrentUser'] as bool? ?? false,
+        profilePhotoUrl: json['profilePhotoUrl'] as String?,
       );
 }
 

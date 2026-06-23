@@ -11,6 +11,7 @@ interface CrewUserRow {
   id: string;
   full_name: string | null;
   username: string | null;
+  avatar_url: string | null;
   member_id: string | null;
   primary_email: string | null;
   created_at: string;
@@ -30,6 +31,7 @@ function serializeCrewUser(row: CrewUserRow) {
     username: row.username,
     memberId: row.member_id,
     initials: initialsFor(row.full_name, row.username, row.primary_email),
+    profilePhotoUrl: row.avatar_url,
     addedAt: row.created_at,
   };
 }
@@ -37,7 +39,7 @@ function serializeCrewUser(row: CrewUserRow) {
 async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
   return db
     .prepare(
-      `SELECT u.id, u.primary_email, p.full_name, p.username, mp.member_id, cc.created_at
+      `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at
        FROM crew_connections cc
        JOIN users u ON u.id = cc.crew_user_id
        LEFT JOIN profiles p ON p.user_id = u.id
@@ -52,7 +54,7 @@ async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
 crewRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, mp.member_id, cc.created_at
+    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at
      FROM crew_connections cc
      JOIN users u ON u.id = cc.crew_user_id
      LEFT JOIN profiles p ON p.user_id = u.id

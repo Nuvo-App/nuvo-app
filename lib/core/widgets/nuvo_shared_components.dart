@@ -759,3 +759,198 @@ class NuvoCurrentUserRow extends StatelessWidget {
     );
   }
 }
+
+// ── NuvoRaceLane ──────────────────────────────────────────────────────────────
+
+/// Horizontal progress track — thin line with a blue dot at the current
+/// position. The core visual element of the Nuvo redesign, echoing the logo's
+/// smooth line + blue dot motif.
+class NuvoRaceLane extends StatelessWidget {
+  const NuvoRaceLane({
+    super.key,
+    required this.progressPercent,
+    this.onDark = false,
+    this.trackHeight = 3.0,
+    this.dotDiameter = 12.0,
+  });
+
+  final int progressPercent;
+  final bool onDark;
+  final double trackHeight;
+  final double dotDiameter;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (progressPercent / 100).clamp(0.0, 1.0);
+    final trackColor = onDark
+        ? Colors.white.withValues(alpha: 0.18)
+        : NuvoColors.trackBg;
+    final fillColor =
+        progress >= 1 ? NuvoColors.success : NuvoColors.blue;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
+
+        return SizedBox(
+          height: dotDiameter,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: trackHeight,
+                decoration: BoxDecoration(
+                  color: trackColor,
+                  borderRadius: BorderRadius.circular(trackHeight / 2),
+                ),
+              ),
+              if (progress > 0)
+                Container(
+                  width: fillWidth,
+                  height: trackHeight,
+                  decoration: BoxDecoration(
+                    color: fillColor,
+                    borderRadius: BorderRadius.circular(trackHeight / 2),
+                  ),
+                ),
+              if (progress > 0 && progress < 1)
+                Positioned(
+                  left: (fillWidth - dotDiameter / 2)
+                      .clamp(0.0, totalWidth - dotDiameter),
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
+                    decoration: const BoxDecoration(
+                      color: NuvoColors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              if (progress >= 1)
+                Positioned(
+                  right: 0,
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
+                    decoration: const BoxDecoration(
+                      color: NuvoColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── NuvoLeaderboardRow ────────────────────────────────────────────────────────
+
+/// Full-width leaderboard row with inline race lane and rank number.
+class NuvoLeaderboardRow extends StatelessWidget {
+  const NuvoLeaderboardRow({
+    super.key,
+    required this.rank,
+    required this.name,
+    required this.progressPercent,
+    this.value,
+    this.initials,
+    this.isCurrentUser = false,
+  });
+
+  final int rank;
+  final String name;
+  final int progressPercent;
+  final String? value;
+  final String? initials;
+  final bool isCurrentUser;
+
+  String _abbrev(String n) {
+    final parts = n.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts[0][0].toUpperCase();
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final abbr = initials ?? _abbrev(name);
+    final isComplete = progressPercent >= 100;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: isCurrentUser
+          ? BoxDecoration(
+              color: NuvoColors.icyBlue,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: NuvoColors.blue, width: 1.5),
+            )
+          : null,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            child: Text(
+              '$rank',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: isCurrentUser ? NuvoColors.blue : NuvoColors.muted,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: isCurrentUser ? NuvoColors.blue : NuvoColors.border,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              abbr,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isCurrentUser ? NuvoColors.white : NuvoColors.navy,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight:
+                        isCurrentUser ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 5),
+                NuvoRaceLane(
+                  progressPercent: progressPercent,
+                  trackHeight: 2.5,
+                  dotDiameter: 8,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            value ?? (isComplete ? '100%' : '$progressPercent%'),
+            style: AppTextStyles.labelMedium.copyWith(
+              color: isCurrentUser ? NuvoColors.blue : NuvoColors.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

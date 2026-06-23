@@ -5,7 +5,123 @@ import { normalizeUsername, isValidUsername } from '../lib/validation';
 
 export const profileRouter = new Hono<AppEnv>();
 
-// All profile routes require a valid access token
+const UPLOAD_URL_TTL_SECONDS = 600;
+
+function awsEncode(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
+    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+function encodeKeyPath(key: string): string {
+  return key.split('/').map(awsEncode).join('/');
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return [...new Uint8Array(buffer)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function b64url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function b64urlDecode(value: string): Uint8Array {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(
+    Math.ceil(value.length / 4) * 4,
+    '=',
+  );
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+
+async function hmac(key: string, data: string): Promise<ArrayBuffer> {
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign', 'verify'],
+  );
+  return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
+}
+
+function extensionFor(fileName: string, contentType: string): string {
+  const cleanName = fileName.toLowerCase();
+  const extension = cleanName.match(/\.(jpe?g|png|webp)$/)?.[1];
+  if (extension) return extension === 'jpeg' ? 'jpg' : extension;
+  if (contentType === 'image/png') return 'png';
+  if (contentType === 'image/webp') return 'webp';
+  return 'jpg';
+}
+
+async function signUploadToken(params: {
+  key: string;
+  contentType: string;
+  jwtSecret: string;
+}): Promise<string> {
+  const payload = b64url(
+    new TextEncoder().encode(JSON.stringify({
+      key: params.key,
+      contentType: params.contentType,
+      exp: Math.floor(Date.now() / 1000) + UPLOAD_URL_TTL_SECONDS,
+    })),
+  );
+  const signature = toHex(await hmac(params.jwtSecret, payload));
+  return `${payload}.${signature}`;
+}
+
+async function verifyUploadToken(token: string, jwtSecret: string) {
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) return null;
+  const expected = toHex(await hmac(jwtSecret, payload));
+  if (signature !== expected) return null;
+
+  const parsed = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) as {
+    key?: unknown;
+    contentType?: unknown;
+    exp?: unknown;
+  };
+  if (typeof parsed.exp !== 'number' || parsed.exp < Math.floor(Date.now() / 1000)) {
+    return null;
+  }
+  if (typeof parsed.key !== 'string' || !parsed.key.startsWith('profile-photos/')) {
+    return null;
+  }
+  if (typeof parsed.contentType !== 'string') return null;
+  return { key: parsed.key, contentType: parsed.contentType };
+}
+
+profileRouter.put('/photo/upload', async (c) => {
+  const token = c.req.query('token');
+  if (!token) return c.json({ ok: false, error: 'Missing upload token' }, 401);
+
+  const upload = await verifyUploadToken(token, c.env.JWT_SECRET);
+  if (!upload) return c.json({ ok: false, error: 'Invalid upload token' }, 401);
+
+  await c.env.PROFILE_PHOTOS.put(upload.key, c.req.raw.body, {
+    httpMetadata: { contentType: upload.contentType },
+  });
+  return c.json({ ok: true, key: upload.key });
+});
+
+profileRouter.get('/photo/object/*', async (c) => {
+  const key = c.req.path.replace('/profile/photo/object/', '');
+  if (!key.startsWith('profile-photos/')) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  const object = await c.env.PROFILE_PHOTOS.get(key);
+  if (!object) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  return new Response(object.body, { headers });
+});
+
+// All routes below require a valid access token.
 profileRouter.use('*', requireAuth);
 
 // GET /profile/me
@@ -22,17 +138,62 @@ profileRouter.get('/me', async (c) => {
   return c.json({
     fullName: profile.full_name,
     username: profile.username,
+    profilePhotoUrl: profile.avatar_url,
     avatarUrl: profile.avatar_url,
     privateProfile: Boolean(profile.private_profile),
     onboardingComplete: Boolean(profile.onboarding_complete),
   });
 });
 
+// POST /profile/photo/upload-url
+profileRouter.post('/photo/upload-url', async (c) => {
+  console.log('PROFILE_UPLOAD_URL_ROUTE_HIT');
+  const userId = c.get('userId');
+
+  let body: { fileName?: unknown; contentType?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  const fileName = typeof body.fileName === 'string' && body.fileName.trim()
+    ? body.fileName.trim()
+    : 'profile-photo.jpg';
+  const contentType = typeof body.contentType === 'string' && body.contentType.trim()
+    ? body.contentType.trim().toLowerCase()
+    : 'image/jpeg';
+
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
+    return c.json({ ok: false, error: 'Unsupported image type' }, 400);
+  }
+
+  const extension = extensionFor(fileName, contentType);
+  const key = `profile-photos/${userId}/${Date.now()}.${extension}`;
+  const baseUrl = new URL(c.req.url).origin;
+  const publicUrl = `${baseUrl}/profile/photo/object/${encodeKeyPath(key)}`;
+  const token = await signUploadToken({
+    key,
+    contentType,
+    jwtSecret: c.env.JWT_SECRET,
+  });
+  const uploadUrl = `${baseUrl}/profile/photo/upload?token=${awsEncode(token)}`;
+
+  console.log(`PROFILE_UPLOAD_URL_PUBLIC_URL: ${publicUrl}`);
+  return c.json({ uploadUrl, publicUrl, key });
+});
+
 // POST /profile
 profileRouter.post('/', async (c) => {
   const userId = c.get('userId');
 
-  let body: { fullName?: unknown; username?: unknown; privateProfile?: unknown };
+  let body: {
+    fullName?: unknown;
+    username?: unknown;
+    privateProfile?: unknown;
+    profilePhotoUrl?: unknown;
+    avatarUrl?: unknown;
+  };
   try {
     body = await c.req.json();
   } catch {
@@ -77,6 +238,17 @@ profileRouter.post('/', async (c) => {
     bindings.push(body.privateProfile ? 1 : 0);
   }
 
+  if (
+    body.profilePhotoUrl === null ||
+    body.avatarUrl === null ||
+    typeof body.profilePhotoUrl === 'string' ||
+    typeof body.avatarUrl === 'string'
+  ) {
+    const photoUrl = body.profilePhotoUrl ?? body.avatarUrl ?? null;
+    fields.push('avatar_url = ?');
+    bindings.push(photoUrl);
+  }
+
   if (fields.length === 1) {
     // Only the timestamp update — nothing else to change
     return c.json({ ok: false, error: 'No updatable fields provided' }, 400);
@@ -95,6 +267,7 @@ profileRouter.post('/', async (c) => {
   return c.json({
     fullName: profile?.full_name ?? null,
     username: profile?.username ?? null,
+    profilePhotoUrl: profile?.avatar_url ?? null,
     avatarUrl: profile?.avatar_url ?? null,
     privateProfile: Boolean(profile?.private_profile),
     onboardingComplete: Boolean(profile?.onboarding_complete),

@@ -43,9 +43,9 @@ int? _parseValueInt(String value) {
 
 String _proofPressureText(ArenaBoard board) {
   final rows = board.miniLeaderboard;
-  if (rows.isEmpty) return 'Submit proof to move the board.';
+  if (rows.isEmpty) return 'Log a move to move the board.';
   final userIdx = rows.indexWhere((r) => r.isCurrentUser);
-  if (userIdx < 0) return 'Submit proof to move the board.';
+  if (userIdx < 0) return 'Log a move to move the board.';
   if (userIdx == 0) return "You're leading — keep it moving.";
   final above = rows[userIdx - 1];
   final userVal = _parseValueInt(rows[userIdx].value);
@@ -56,7 +56,7 @@ String _proofPressureText(ArenaBoard board) {
     final aboveName = above.label == 'You' ? 'the leader' : above.label;
     return "You're $gap behind $aboveName — step it up!";
   }
-  return 'Submit proof to move up.';
+  return 'Log a move to move up.';
 }
 
 String _dotInitials(String label) {
@@ -302,7 +302,7 @@ class ArenaFocusBoardCard extends StatelessWidget {
             const Divider(height: 1, thickness: 0.5, color: _kBorder),
             const SizedBox(height: 14),
             _BlueButton(
-              label: board.isResult ? board.primaryActionLabel : 'Submit proof',
+              label: board.isResult ? board.primaryActionLabel : 'Log move',
               onTap: onSubmitProof,
             ),
             const SizedBox(height: 4),
