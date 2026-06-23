@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'auth_api.dart';
 import 'auth_models.dart';
 import 'secure_token_store.dart';
@@ -73,14 +75,35 @@ class AuthRepository {
     String? fullName,
     String? username,
     bool? privateProfile,
+    String? profilePhotoUrl,
+    bool removePhoto = false,
   }) => _withRefresh(
     (token) => _api.saveProfile(
       token,
       fullName: fullName,
       username: username,
       privateProfile: privateProfile,
+      profilePhotoUrl: profilePhotoUrl,
+      removePhoto: removePhoto,
     ),
   );
+
+  Future<({String uploadUrl, String publicUrl, String key})> requestPhotoUploadUrl({
+    required String fileName,
+    required String contentType,
+  }) => _withRefresh(
+    (token) => _api.requestPhotoUploadUrl(
+      token,
+      fileName: fileName,
+      contentType: contentType,
+    ),
+  );
+
+  Future<void> uploadBytesToSignedUrl(
+    String signedUrl,
+    Uint8List bytes,
+    String contentType,
+  ) => _api.uploadBytesToSignedUrl(signedUrl, bytes, contentType);
 
   Future<bool> checkUsername(String username) =>
       _withRefresh((token) => _api.checkUsername(token, username));

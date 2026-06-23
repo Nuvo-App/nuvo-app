@@ -25,7 +25,9 @@ import '../features/races/presentation/invite_crew_screen.dart';
 import '../features/races/presentation/join_race_screen.dart';
 import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
+import '../features/races/presentation/board_moved_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
+import '../features/move/presentation/move_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
@@ -134,6 +136,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/move',
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const MoveScreen(),
+            ),
+          ),
+          GoRoute(
             path: '/profile',
             pageBuilder: (_, state) => NoTransitionPage(
               key: state.pageKey,
@@ -199,6 +208,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => _authPage(
           state,
           AiMotionProofScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/board-moved',
+        pageBuilder: (_, state) => _authPage(
+          state,
+          BoardMovedScreen(
+            raceId: state.pathParameters['id']!,
+            args: state.extra is BoardMovedArgs
+                ? state.extra! as BoardMovedArgs
+                : BoardMovedArgs(
+                    raceId: state.pathParameters['id']!,
+                    raceName: '',
+                    value: 0,
+                  ),
+          ),
         ),
       ),
       GoRoute(

@@ -24,7 +24,11 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Nuvo uses your camera to verify motion proof during races.</string>
+	<string>Nuvo uses your camera to record moves and take profile photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Nuvo uses your photo library so you can set a profile photo.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Nuvo saves edited profile photos to your library.</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>

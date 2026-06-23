@@ -10,7 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/member_pass_card.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../../data/models/user_profile.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -54,9 +54,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       _error = null;
     });
     try {
-      final passFuture = ref
-          .read(authControllerProvider.notifier)
-          .getMemberPass();
+      final passFuture = ref.read(authControllerProvider.notifier).getMemberPass();
       final crewFuture = ref.read(raceControllerProvider.notifier).getCrew();
       final pass = await passFuture;
       final crew = await crewFuture;
@@ -99,15 +97,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     setState(() => _searching = true);
     _debounce = Timer(const Duration(milliseconds: 280), () async {
       try {
-        final results = await ref
-            .read(raceControllerProvider.notifier)
-            .searchUsers(query);
-        if (mounted) {
-          setState(() {
-            _results = results;
-            _searching = false;
-          });
-        }
+        final results =
+            await ref.read(raceControllerProvider.notifier).searchUsers(query);
+        if (mounted) setState(() { _results = results; _searching = false; });
       } catch (_) {
         if (mounted) setState(() => _searching = false);
       }
@@ -135,7 +127,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     }
   }
 
-  bool _isCrew(PublicUser user) => _crew.any((member) => member.id == user.id);
+  bool _isCrew(PublicUser user) => _crew.any((m) => m.id == user.id);
 
   void _sharePass() {
     final passInfo = _passInfo;
@@ -165,103 +157,150 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      body: RefreshIndicator(
-        onRefresh: _fetch,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-          children: [
-            // ── Page header ────────────────────────────────────────────────
-            const NuvoPageHeader(
-              title: 'Crew',
-              subtitle: 'Find people by username or member ID.',
-            ),
-            const SizedBox(height: 22),
-
-            // ── Loading ────────────────────────────────────────────────────
-            if (_loading)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 48),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            // ── Error ──────────────────────────────────────────────────────
-            else if (_error != null)
-              NuvoErrorState(message: _error!, onRetry: _fetch)
-            // ── Content ────────────────────────────────────────────────────
-            else ...[
-              // Quick identity actions
-              if (_passInfo != null) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: NuvoActionTile(
-                        icon: Icons.ios_share_rounded,
-                        title: 'Share pass',
-                        iconColor: NuvoColors.blue,
-                        iconBg: NuvoColors.icyBlue,
-                        showArrow: false,
-                        onTap: _sharePass,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: NuvoActionTile(
-                        icon: Icons.copy_rounded,
-                        title: 'Copy ID',
-                        iconColor: NuvoColors.navy,
-                        iconBg: NuvoColors.icyBlue,
-                        showArrow: false,
-                        onTap: _copyId,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
-
-              // ── Member pass ────────────────────────────────────────────
-              const NuvoSectionHeader(title: 'Member pass', bottomPadding: 12),
-              MemberPassCard(profile: profile, compact: true),
-              const SizedBox(height: 28),
-
-              // ── Find people ────────────────────────────────────────────
-              const NuvoSectionHeader(title: 'Find people', bottomPadding: 12),
-              _SearchField(
-                controller: _searchController,
-                searching: _searching,
-                onChanged: _onSearchChanged,
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: _fetch,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 120),
+            children: [
+              // ── Header ───────────────────────────────────────────────────
+              Text(
+                'CREW',
+                style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.blue),
               ),
-              if (_results.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                for (final result in _results)
-                  _UserRow(
-                    user: result,
-                    added: _isCrew(result),
-                    loading: _adding.contains(result.id),
-                    actionLabel: _isCrew(result) ? 'In crew' : 'Add',
-                    onPressed: _isCrew(result) || _adding.contains(result.id)
-                        ? null
-                        : () => _addCrew(result),
-                  ),
-              ] else if (_searchController.text.trim().length >= 2 &&
-                  !_searching) ...[
-                const SizedBox(height: 12),
-                const _SmallEmpty(text: 'No matching Nuvo members found.'),
-              ],
+              const SizedBox(height: 2),
+              Text('Your crew.', style: AppTextStyles.displaySmall),
               const SizedBox(height: 28),
 
-              // ── Your crew ──────────────────────────────────────────────
-              const NuvoSectionHeader(title: 'Your crew', bottomPadding: 12),
-              if (_crew.isEmpty)
-                const _SmallEmpty(
-                  text:
-                      'Search a username or member ID to add your first crew member.',
+              // ── Loading ──────────────────────────────────────────────────
+              if (_loading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 )
-              else
-                for (final member in _crew)
-                  _UserRow(user: member, added: true, actionLabel: 'In crew'),
+              // ── Error ────────────────────────────────────────────────────
+              else if (_error != null)
+                NuvoErrorState(message: _error!, onRetry: _fetch)
+              // ── Content ──────────────────────────────────────────────────
+              else ...[
+                // Quick identity actions
+                if (_passInfo != null) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _QuickActionButton(
+                          icon: Icons.ios_share_rounded,
+                          label: 'Share pass',
+                          onTap: _sharePass,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _QuickActionButton(
+                          icon: Icons.copy_rounded,
+                          label: 'Copy ID',
+                          onTap: _copyId,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // ── Member pass ──────────────────────────────────────────
+                Text(
+                  'MEMBER PASS',
+                  style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.muted),
+                ),
+                const SizedBox(height: 12),
+                MemberPassCard(profile: profile, compact: true),
+                const SizedBox(height: 28),
+
+                // ── Find people ──────────────────────────────────────────
+                Text(
+                  'FIND PEOPLE',
+                  style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.muted),
+                ),
+                const SizedBox(height: 12),
+                _SearchField(
+                  controller: _searchController,
+                  searching: _searching,
+                  onChanged: _onSearchChanged,
+                ),
+                if (_results.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  for (final result in _results)
+                    _UserRow(
+                      user: result,
+                      added: _isCrew(result),
+                      loading: _adding.contains(result.id),
+                      actionLabel: _isCrew(result) ? 'In crew' : 'Add',
+                      onPressed: _isCrew(result) || _adding.contains(result.id)
+                          ? null
+                          : () => _addCrew(result),
+                    ),
+                ] else if (_searchController.text.trim().length >= 2 &&
+                    !_searching) ...[
+                  const SizedBox(height: 12),
+                  const _EmptyNote(text: 'No matching Nuvo members found.'),
+                ],
+                const SizedBox(height: 28),
+
+                // ── Your crew ────────────────────────────────────────────
+                Text(
+                  'YOUR CREW',
+                  style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.muted),
+                ),
+                const SizedBox(height: 12),
+                if (_crew.isEmpty)
+                  const _EmptyNote(
+                    text: 'Search a username or member ID to add crew.',
+                  )
+                else
+                  for (final member in _crew)
+                    _UserRow(user: member, added: true, actionLabel: 'In crew'),
+              ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Quick action button ───────────────────────────────────────────────────────
+
+class _QuickActionButton extends StatelessWidget {
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: NuvoColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: NuvoColors.divider),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: NuvoColors.navy, size: 16),
+            const SizedBox(width: 8),
+            Text(label, style: AppTextStyles.labelMedium),
           ],
         ),
       ),
@@ -289,19 +328,12 @@ class _SearchField extends StatelessWidget {
       onChanged: onChanged,
       style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
       decoration: InputDecoration(
-        hintText: 'Search username or member ID',
+        hintText: 'Username or member ID',
         hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         filled: true,
         fillColor: NuvoColors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        prefixIcon: const Icon(
-          Icons.search_rounded,
-          color: NuvoColors.muted,
-          size: 20,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        prefixIcon: const Icon(Icons.search_rounded, color: NuvoColors.muted, size: 20),
         suffixIcon: searching
             ? const Padding(
                 padding: EdgeInsets.all(14),
@@ -349,12 +381,16 @@ class _UserRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: NuvoCompactCard(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: NuvoColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: NuvoColors.divider),
+        ),
         child: Row(
           children: [
-            // Initials circle
             Container(
               width: 38,
               height: 38,
@@ -365,13 +401,10 @@ class _UserRow extends StatelessWidget {
               alignment: Alignment.center,
               child: Text(
                 user.initials,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.white,
-                ),
+                style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.white),
               ),
             ),
             const SizedBox(width: 12),
-            // Name + handle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -380,23 +413,18 @@ class _UserRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     user.handleLine,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
+                    style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
                   ),
                 ],
               ),
             ),
-            // Action
             if (actionLabel != null)
               added
                   ? Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: Text(
                         actionLabel!,
-                        style: AppTextStyles.labelMedium.copyWith(
-                          color: NuvoColors.muted,
-                        ),
+                        style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
                       ),
                     )
                   : SizedBox(
@@ -414,17 +442,21 @@ class _UserRow extends StatelessWidget {
   }
 }
 
-// ── Inline empty state ────────────────────────────────────────────────────────
+// ── Empty note ────────────────────────────────────────────────────────────────
 
-class _SmallEmpty extends StatelessWidget {
-  const _SmallEmpty({required this.text});
-
+class _EmptyNote extends StatelessWidget {
+  const _EmptyNote({required this.text});
   final String text;
 
   @override
   Widget build(BuildContext context) {
-    return NuvoCompactCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: NuvoColors.panel,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NuvoColors.divider),
+      ),
       child: Text(
         text,
         style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),

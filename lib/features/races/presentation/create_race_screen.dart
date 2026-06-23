@@ -83,7 +83,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             title: idea,
             description: activity == null
                 ? null
-                : 'AI Motion Proof checks ${activity.targetLabel(parsed.targetValue)} live.',
+                : 'AI MoveCheck counts ${activity.targetLabel(parsed.targetValue)} live.',
             category: activity == null ? null : 'fitness',
             goalType: 'manual',
             targetValue: parsed.targetValue,
@@ -140,7 +140,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Type a movement race naturally. Nuvo detects AI Motion Proof support automatically.',
+                            'Type a movement race naturally. Nuvo detects MoveCheck support automatically.',
                             style: AppTextStyles.bodyLarge.copyWith(
                               color: NuvoColors.muted,
                             ),
@@ -306,14 +306,14 @@ class _DetectionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isAi ? 'AI Motion Proof available' : 'Manual proof',
+                  isAi ? 'AI MoveCheck available' : 'Manual logging',
                   style: AppTextStyles.titleMedium.copyWith(color: titleColor),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   isAi
                       ? '${activity.title} · ${activity.targetLabel(parsed.targetValue)}. Nuvo can verify this with your iPhone camera.'
-                      : 'Manual proof for this race.',
+                      : 'Manual logging for this race.',
                   style: AppTextStyles.bodySmall.copyWith(color: bodyColor),
                 ),
               ],

@@ -53,6 +53,7 @@ interface ParticipantRow {
   race_id: string;
   user_id: string;
   display_name: string | null;
+  profile_photo_url: string | null;
   progress_value: number;
   progress_percent: number;
   joined_at: string;
@@ -78,6 +79,7 @@ interface ProofRow {
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
+  profile_photo_url: string | null;
 }
 
 interface InviteRow {
@@ -192,6 +194,7 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
       .prepare(
         `SELECT rp.id, rp.race_id, rp.user_id,
                 COALESCE(rp.display_name, p.full_name, 'Unknown') as display_name,
+                p.avatar_url as profile_photo_url,
                 rp.progress_value, rp.progress_percent, rp.joined_at
          FROM race_participants rp
          LEFT JOIN profiles p ON p.user_id = rp.user_id
@@ -208,7 +211,8 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
                 pr.frames_analyzed, pr.valid_pose_frames, pr.duration_ms,
                 pr.verification_status, pr.verification_summary, pr.reviewed_by,
                 pr.reviewed_at, pr.created_at,
-                COALESCE(p.full_name, 'Unknown') as display_name
+                COALESCE(p.full_name, 'Unknown') as display_name,
+                p.avatar_url as profile_photo_url
          FROM proofs pr
          LEFT JOIN profiles p ON p.user_id = pr.user_id
          WHERE pr.race_id = ?
@@ -254,6 +258,7 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
       id: p.id,
       userId: p.user_id,
       displayName: p.display_name ?? 'Unknown',
+      profilePhotoUrl: p.profile_photo_url,
       progressValue: p.progress_value,
       progressPercent: p.progress_percent,
       joinedAt: p.joined_at,
@@ -262,6 +267,7 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
       id: pr.id,
       userId: pr.user_id,
       displayName: (pr as ProofRow & { display_name: string }).display_name,
+      profilePhotoUrl: pr.profile_photo_url,
       proofType: pr.proof_type,
       aiActivityType: pr.ai_activity_type,
       note: pr.note,

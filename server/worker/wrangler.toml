@@ -9,5 +9,9 @@ database_name = "nuvo_db"
 database_id = "c46cb25d-f2b1-47cb-9e50-d8d1324e640e"
 migrations_dir = "migrations"
 
+[[r2_buckets]]
+binding = "PROFILE_PHOTOS"
+bucket_name = "nuvor2"
+
 [vars]
 RESEND_FROM_EMAIL = "no-reply@getnuvo.net"

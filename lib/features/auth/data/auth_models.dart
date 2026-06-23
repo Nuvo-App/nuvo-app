@@ -5,6 +5,7 @@ class AuthUser {
   final String? username;
   final bool onboardingComplete;
   final bool hasMemberPass;
+  final String? profilePhotoUrl;
 
   const AuthUser({
     required this.id,
@@ -13,6 +14,7 @@ class AuthUser {
     this.username,
     required this.onboardingComplete,
     required this.hasMemberPass,
+    this.profilePhotoUrl,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
@@ -22,6 +24,10 @@ class AuthUser {
     username: json['username'] as String?,
     onboardingComplete: json['onboardingComplete'] as bool? ?? false,
     hasMemberPass: json['hasMemberPass'] as bool? ?? false,
+    profilePhotoUrl: (json['profilePhotoUrl'] ??
+        json['profile_photo_url'] ??
+        json['avatarUrl'] ??
+        json['avatar_url']) as String?,
   );
 
   AuthUser copyWith({
@@ -29,6 +35,8 @@ class AuthUser {
     String? username,
     bool? onboardingComplete,
     bool? hasMemberPass,
+    String? profilePhotoUrl,
+    bool clearPhoto = false,
   }) => AuthUser(
     id: id,
     email: email,
@@ -36,6 +44,7 @@ class AuthUser {
     username: username ?? this.username,
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     hasMemberPass: hasMemberPass ?? this.hasMemberPass,
+    profilePhotoUrl: clearPhoto ? null : (profilePhotoUrl ?? this.profilePhotoUrl),
   );
 
   String get avatarInitials {

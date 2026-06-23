@@ -153,7 +153,7 @@ class _OnboardingMemberPassScreenState
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Access to races, crew invites, and proof features.',
+                                  'Access to races, crew invites, and move logging.',
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: NuvoColors.muted,
                                   ),

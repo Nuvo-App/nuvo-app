@@ -34,6 +34,7 @@ interface LightParticipantRow {
   race_id: string;
   user_id: string;
   display_name: string | null;
+  profile_photo_url: string | null;
   progress_value: number;
   progress_percent: number;
 }
@@ -166,6 +167,7 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
     .prepare(
       `SELECT rp.race_id, rp.user_id,
               COALESCE(rp.display_name, p.full_name, 'Unknown') as display_name,
+              p.avatar_url as profile_photo_url,
               rp.progress_value, rp.progress_percent
        FROM race_participants rp
        LEFT JOIN profiles p ON p.user_id = rp.user_id
@@ -300,6 +302,7 @@ function buildRealBoard(
         ? `${p.progress_value} / ${race.target_value}`
         : `${p.progress_percent}%`,
       isCurrentUser: p.user_id === userId,
+      profilePhotoUrl: p.profile_photo_url,
     }));
   }
 

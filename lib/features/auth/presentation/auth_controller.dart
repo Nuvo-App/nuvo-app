@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../data/auth_api.dart';
 import '../data/auth_models.dart';
@@ -37,7 +38,9 @@ class AuthController extends StateNotifier<AuthState> {
       }
     } catch (e) {
       debugPrint('[AuthController] restore error (${e.runtimeType})');
-      if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
+      if (mounted) {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+      }
     }
   }
 
@@ -45,14 +48,16 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> verifyEmailCode(String email, String code) async {
     final user = await _repo.verifyEmailCode(email, code);
-    if (mounted)
+    if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
   }
 
   Future<void> signInWithGoogle(String idToken) async {
     final user = await _repo.signInWithGoogle(idToken);
-    if (mounted)
+    if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
   }
 
   Future<void> saveProfile({
@@ -66,8 +71,10 @@ class AuthController extends StateNotifier<AuthState> {
       privateProfile: privateProfile,
     );
     final user = await _repo.getMe();
-    if (mounted)
+    debugPrint('REFRESHED_USER_PHOTO_URL: ${user.profilePhotoUrl}');
+    if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
   }
 
   Future<bool> checkUsername(String username) => _repo.checkUsername(username);
@@ -75,28 +82,60 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> completeOnboarding() async {
     await _repo.completeOnboarding();
     final user = await _repo.getMe();
-    if (mounted)
+    if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
+  }
+
+  /// Three-step photo upload: get signed URL → upload bytes → save URL to profile.
+  /// Storage credentials never leave the backend; the signed URL carries permission.
+  Future<void> uploadProfilePhoto(XFile xFile) async {
+    final bytes = await xFile.readAsBytes();
+    final contentType = xFile.mimeType ?? 'image/jpeg';
+    final urls = await _repo.requestPhotoUploadUrl(
+      fileName: xFile.name,
+      contentType: contentType,
+    );
+    await _repo.uploadBytesToSignedUrl(urls.uploadUrl, bytes, contentType);
+    await _repo.saveProfile(profilePhotoUrl: urls.publicUrl);
+    final user = await _repo.getMe();
+    debugPrint('REFRESHED_USER_PHOTO_URL: ${user.profilePhotoUrl}');
+    if (mounted) {
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
+  }
+
+  Future<void> removeProfilePhoto() async {
+    await _repo.saveProfile(removePhoto: true);
+    final user = await _repo.getMe();
+    debugPrint('REFRESHED_USER_PHOTO_URL: ${user.profilePhotoUrl}');
+    if (mounted) {
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
   }
 
   Future<PassInfo> getMemberPass() => _repo.getMemberPass();
 
   Future<void> logout() async {
     await _repo.logout();
-    if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
+    if (mounted) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
   }
 
-  // Called by feature screens on 401 — clears tokens locally without an API
-  // call (the server already rejected us) and marks the session as gone.
   Future<void> sessionExpired() async {
     debugPrint('[AuthController] session expired — clearing tokens');
     await _repo.clearSession();
-    if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
+    if (mounted) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
   }
 
   Future<void> deleteAccount() async {
     await _repo.deleteAccount();
-    if (mounted) state = const AuthState(status: AuthStatus.unauthenticated);
+    if (mounted) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+    }
   }
 }
 

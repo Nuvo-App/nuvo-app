@@ -17,6 +17,7 @@ export interface ArenaMiniLeaderboardRow {
   label: string;
   value: string;
   isCurrentUser?: boolean;
+  profilePhotoUrl?: string | null;
 }
 
 export interface ArenaBoard {

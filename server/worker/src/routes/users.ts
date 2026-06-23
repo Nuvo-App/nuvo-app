@@ -21,7 +21,7 @@ usersRouter.get('/search', async (c) => {
 
   const like = `%${q}%`;
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, mp.member_id
+    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
@@ -48,6 +48,7 @@ usersRouter.get('/search', async (c) => {
       primary_email: string | null;
       full_name: string | null;
       username: string | null;
+      avatar_url: string | null;
       member_id: string | null;
     }>();
 
@@ -59,6 +60,7 @@ usersRouter.get('/search', async (c) => {
       username: row.username,
       memberId: row.member_id,
       initials: initialsFor(row.full_name, row.username, row.primary_email),
+      profilePhotoUrl: row.avatar_url,
     })),
   });
 });

@@ -75,7 +75,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _error = 'Could not load proof review.';
+          _error = 'Could not load move review.';
           _loading = false;
         });
       }
@@ -108,7 +108,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _error = 'Could not review proof.';
+          _error = 'Could not review move.';
           _saving = false;
         });
       }
@@ -133,7 +133,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
         backgroundColor: NuvoColors.page,
         body: SafeArea(
           child: NuvoErrorState(
-            message: _error ?? 'Proof not found.',
+            message: _error ?? 'Move not found.',
             onRetry: _load,
           ),
         ),
@@ -145,7 +145,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
         backgroundColor: NuvoColors.page,
         body: SafeArea(
           child: NuvoErrorState(
-            message: 'Only the race creator can review proof.',
+            message: 'Only the race creator can review moves.',
             onRetry: () => context.go('/race/${widget.raceId}'),
           ),
         ),
@@ -162,10 +162,10 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     NuvoBackNavRow(
                       onBack: () =>
                           safePopOrGo(context, '/race/${widget.raceId}'),
-                      title: 'Review proof',
+                      title: 'Review move',
                     ),
                     const SizedBox(height: 22),
-                    _ProofSummaryCard(proof: proof, race: race),
+                    _MoveSummaryCard(proof: proof, race: race),
                     const SizedBox(height: 22),
                     NuvoTextInput(
                       controller: _summaryController,
@@ -184,7 +184,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     ],
                     const SizedBox(height: 22),
                     NuvoPrimaryButton(
-                      label: 'Accept proof',
+                      label: 'Accept move',
                       icon: Icons.check_rounded,
                       expand: true,
                       loading: _saving,
@@ -207,14 +207,14 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     ),
                     const SizedBox(height: 12),
                     NuvoDangerButton(
-                      label: 'Reject proof',
+                      label: 'Reject move',
                       icon: Icons.close_rounded,
                       expand: true,
                       onPressed: _saving ? null : () => _review('rejected'),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'This declines the proof.',
+                      'This declines the move.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -230,10 +230,10 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
   }
 }
 
-// ── Proof summary card ────────────────────────────────────────────────────────
+// ── Move summary card ─────────────────────────────────────────────────────────
 
-class _ProofSummaryCard extends StatelessWidget {
-  const _ProofSummaryCard({required this.proof, required this.race});
+class _MoveSummaryCard extends StatelessWidget {
+  const _MoveSummaryCard({required this.proof, required this.race});
 
   final RaceProof proof;
   final Race race;

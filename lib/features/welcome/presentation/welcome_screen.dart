@@ -105,7 +105,7 @@ class _RaceLoopCard extends StatelessWidget {
           Text('Create race', style: AppTextStyles.headlineMedium),
           const SizedBox(height: 8),
           Text(
-            'Pull in crew, submit proof, track progress, and climb the leaderboard.',
+            'Pull in crew, log moves, track progress, and climb the leaderboard.',
             style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
           ),
         ],
