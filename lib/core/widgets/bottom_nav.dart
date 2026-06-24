@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
 
-// ── Tab definitions ───────────────────────────────────────────────────────────
 // Indices map to shell paths in main_shell.dart:
 // 0 → /arena, 1 → /compete (Races), 2 → /move, 3 → /pass (Crew), 4 → /profile
 
@@ -19,11 +18,11 @@ class NuvoBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const _items = [
-    _NavItem(icon: Icons.bolt_rounded,       label: 'Arena'),
-    _NavItem(icon: Icons.flag_rounded,        label: 'Races'),
-    _NavItem(icon: Icons.add_rounded,         label: 'Move',  isCta: true),
-    _NavItem(icon: Icons.group_rounded,       label: 'Crew'),
-    _NavItem(icon: Icons.person_rounded,      label: 'Profile'),
+    _NavItem(icon: Icons.bolt_rounded,    label: 'Arena'),
+    _NavItem(icon: Icons.flag_rounded,    label: 'Races'),
+    _NavItem(icon: Icons.add_rounded,     label: 'Move',   isCta: true),
+    _NavItem(icon: Icons.group_rounded,   label: 'Crew'),
+    _NavItem(icon: Icons.person_rounded,  label: 'Profile'),
   ];
 
   @override
@@ -31,32 +30,32 @@ class NuvoBottomNav extends StatelessWidget {
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Container(
-      color: NuvoColors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Top hairline divider
-          Container(height: 1, color: NuvoColors.divider),
-          Padding(
-            padding: EdgeInsets.only(bottom: bottom),
-            child: SizedBox(
-              height: 58,
-              child: Row(
-                children: [
-                  for (var i = 0; i < _items.length; i++)
-                    Expanded(
-                      child: _NavButton(
-                        item: _items[i],
-                        selected: i == currentIndex,
-                        onTap: () => onTap(i),
-                        index: i,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+      decoration: const BoxDecoration(
+        color: NuvoColors.navy,
+        border: Border(
+          top: BorderSide(color: Color(0x14FFFFFF), width: 0.5),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottom, top: 6),
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            children: [
+              for (var i = 0; i < _items.length; i++)
+                Expanded(
+                  child: _NavButton(
+                    item: _items[i],
+                    selected: i == currentIndex,
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      onTap(i);
+                    },
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -79,46 +78,15 @@ class _NavButton extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onTap,
-    required this.index,
   });
 
   final _NavItem item;
   final bool selected;
   final VoidCallback onTap;
-  final int index;
 
   @override
   Widget build(BuildContext context) {
-    // Center CTA button (Move) — raised circle
-    if (item.isCta) {
-      return PressableScale(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: selected ? NuvoColors.navy : NuvoColors.blue,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                item.icon,
-                color: NuvoColors.white,
-                size: 22,
-                weight: 600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Regular tab
-    final isActive = selected;
-    final iconColor = isActive ? NuvoColors.navy : NuvoColors.muted;
-    final labelColor = isActive ? NuvoColors.navy : NuvoColors.muted;
+    if (item.isCta) return _CtaButton(selected: selected, onTap: onTap);
 
     return GestureDetector(
       onTap: onTap,
@@ -126,16 +94,76 @@ class _NavButton extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(item.icon, color: iconColor, size: 22),
-          const SizedBox(height: 3),
-          Text(
-            item.label,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: labelColor,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+          // Icon
+          AnimatedScale(
+            scale: selected ? 1.08 : 1.0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            child: Icon(
+              item.icon,
+              size: 22,
+              color: selected
+                  ? NuvoColors.white
+                  : NuvoColors.white.withValues(alpha: 0.38),
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          // Animated indicator pill
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            width: selected ? 18.0 : 0.0,
+            height: 3,
+            decoration: BoxDecoration(
+              color: NuvoColors.blue,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CtaButton extends StatelessWidget {
+  const _CtaButton({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      scale: 0.90,
+      child: Center(
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2B7FFF), NuvoColors.blue],
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: NuvoColors.blue.withValues(alpha: 0.40),
+                blurRadius: 18,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.add_rounded,
+            color: NuvoColors.white,
+            size: 26,
+          ),
+        ),
       ),
     );
   }

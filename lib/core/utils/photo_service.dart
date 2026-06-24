@@ -38,12 +38,11 @@ class PhotoService {
     try {
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
-        cropStyle: CropStyle.circle,
-        aspectRatioPresets: [CropAspectRatioPreset.square],
         compressFormat: ImageCompressFormat.jpg,
         compressQuality: 85,
         uiSettings: [
           AndroidUiSettings(
+            cropStyle: CropStyle.circle,
             toolbarTitle: 'Position photo',
             toolbarColor: _kNavy,
             toolbarWidgetColor: Colors.white,
@@ -53,6 +52,7 @@ class PhotoService {
             initAspectRatio: CropAspectRatioPreset.square,
           ),
           IOSUiSettings(
+            cropStyle: CropStyle.circle,
             title: 'Position photo',
             doneButtonTitle: 'Use photo',
             cancelButtonTitle: 'Cancel',

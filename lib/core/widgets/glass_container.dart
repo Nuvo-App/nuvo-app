@@ -5,11 +5,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
 /// A frosted-glass surface: blurred backdrop + translucent tint + hairline
-/// border. Reach for this any time you need a card-like container that
-/// should feel weightless on top of the dark canvas.
-///
-/// Wrap in a [DecoratedBox] (or pass [boxShadow]) when you need an
-/// accompanying glow.
+/// border. Two presets: [GlassContainer] for light surfaces,
+/// [GlassContainer.dark] for dark/navy surfaces.
 class GlassContainer extends StatelessWidget {
   const GlassContainer({
     super.key,
@@ -18,10 +15,27 @@ class GlassContainer extends StatelessWidget {
     this.margin,
     this.width,
     this.height,
-    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(24)),
     this.blurSigma = 18,
     this.tint = AppColors.glassTint,
     this.borderColor = AppColors.glassBorder,
+    this.borderWidth = 1,
+    this.boxShadow,
+    this.onTap,
+  });
+
+  /// Dark-mode variant — designed for use on navy/dark backgrounds.
+  const GlassContainer.dark({
+    super.key,
+    this.child,
+    this.padding,
+    this.margin,
+    this.width,
+    this.height,
+    this.borderRadius = const BorderRadius.all(Radius.circular(24)),
+    this.blurSigma = 24,
+    this.tint = const Color(0x18FFFFFF),
+    this.borderColor = const Color(0x22FFFFFF),
     this.borderWidth = 1,
     this.boxShadow,
     this.onTap,
@@ -42,7 +56,7 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glass = ClipRRect(
+    Widget glass = ClipRRect(
       borderRadius: borderRadius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
@@ -52,7 +66,10 @@ class GlassContainer extends StatelessWidget {
             borderRadius: borderRadius,
             border: Border.all(color: borderColor, width: borderWidth),
           ),
-          child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+          child: Padding(
+            padding: padding ?? EdgeInsets.zero,
+            child: child,
+          ),
         ),
       ),
     );
@@ -72,7 +89,11 @@ class GlassContainer extends StatelessWidget {
     if (onTap != null) {
       result = Material(
         color: Colors.transparent,
-        child: InkWell(onTap: onTap, borderRadius: borderRadius, child: result),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: borderRadius,
+          child: result,
+        ),
       );
     }
 

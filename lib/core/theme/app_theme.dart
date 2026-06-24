@@ -62,7 +62,7 @@ abstract final class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: NuvoColors.border, width: 1),
         ),
         shadowColor: const Color(0x0A000000),
@@ -101,6 +101,9 @@ abstract final class AppTheme {
         focusedBorder: _inputBorder(NuvoColors.blue, width: 1.5),
         errorBorder: _inputBorder(AppColors.danger),
         focusedErrorBorder: _inputBorder(AppColors.danger, width: 1.5),
+        floatingLabelStyle: AppTextStyles.labelMedium.copyWith(
+          color: NuvoColors.blue,
+        ),
       ),
 
       // Buttons
@@ -111,7 +114,7 @@ abstract final class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
           elevation: 0,
         ),
@@ -123,7 +126,7 @@ abstract final class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),
@@ -141,7 +144,7 @@ abstract final class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
       ),
@@ -196,7 +199,7 @@ abstract final class AppTheme {
 
   static OutlineInputBorder _inputBorder(Color color, {double width = 1}) =>
       OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: color, width: width),
       );
 }

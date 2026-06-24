@@ -5,7 +5,7 @@ class PressableScale extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
-    this.scale = 0.975,
+    this.scale = 0.96,
   });
 
   final Widget child;
@@ -16,23 +16,53 @@ class PressableScale extends StatefulWidget {
   State<PressableScale> createState() => _PressableScaleState();
 }
 
-class _PressableScaleState extends State<PressableScale> {
-  bool _pressed = false;
+class _PressableScaleState extends State<PressableScale>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onPress(_) {
+    if (widget.onTap == null) return;
+    _ctrl.animateTo(
+      1.0,
+      duration: const Duration(milliseconds: 80),
+      curve: Curves.easeIn,
+    );
+  }
+
+  void _onRelease() {
+    _ctrl.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onTap,
-      onTapDown: widget.onTap == null
-          ? null
-          : (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
+      onTapDown: _onPress,
+      onTapCancel: _onRelease,
+      onTapUp: (_) => _onRelease(),
       behavior: HitTestBehavior.opaque,
-      child: AnimatedScale(
-        scale: _pressed ? widget.scale : 1,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) => Transform.scale(
+          scale: 1.0 - (1.0 - widget.scale) * _ctrl.value,
+          child: child,
+        ),
         child: widget.child,
       ),
     );
