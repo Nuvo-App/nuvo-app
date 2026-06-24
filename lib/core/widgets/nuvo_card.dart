@@ -25,24 +25,29 @@ class NuvoCard extends StatelessWidget {
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: NuvoColors.card,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: borderColor ?? NuvoColors.border, width: 1),
         boxShadow: elevated
             ? const [
                 BoxShadow(
-                  color: Color(0x0D000000),
-                  blurRadius: 16,
-                  offset: Offset(0, 4),
+                  color: Color(0x10000000),
+                  blurRadius: 24,
+                  offset: Offset(0, 6),
+                ),
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
                 ),
               ]
             : const [
                 BoxShadow(
-                  color: Color(0x0A000000),
-                  blurRadius: 12,
+                  color: Color(0x0C000000),
+                  blurRadius: 16,
                   offset: Offset(0, 4),
                 ),
                 BoxShadow(
-                  color: Color(0x06000000),
+                  color: Color(0x05000000),
                   blurRadius: 4,
                   offset: Offset(0, 1),
                 ),

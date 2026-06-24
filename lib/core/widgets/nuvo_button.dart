@@ -44,7 +44,7 @@ Widget _buttonContent({
 }
 
 // ── NuvoPrimaryButton ─────────────────────────────────────────────────────────
-/// Main CTA — navy fill, white text. One per screen.
+/// Main CTA — navy gradient fill, white text. One per screen.
 class NuvoPrimaryButton extends StatelessWidget {
   const NuvoPrimaryButton({
     super.key,
@@ -68,7 +68,7 @@ class NuvoPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 54.0;
+    final height = small ? 44.0 : 56.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
@@ -79,8 +79,12 @@ class NuvoPrimaryButton extends StatelessWidget {
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: NuvoColors.navy,
-            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D2040), NuvoColors.navy],
+            ),
+            borderRadius: BorderRadius.circular(16),
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -100,7 +104,7 @@ class NuvoPrimaryButton extends StatelessWidget {
 }
 
 // ── NuvoBlueButton ────────────────────────────────────────────────────────────
-/// Blue-fill CTA — the single blue focal point on a screen.
+/// Blue gradient CTA — the single blue focal point on a screen.
 class NuvoBlueButton extends StatelessWidget {
   const NuvoBlueButton({
     super.key,
@@ -122,7 +126,7 @@ class NuvoBlueButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 54.0;
+    final height = small ? 44.0 : 56.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
@@ -133,8 +137,19 @@ class NuvoBlueButton extends StatelessWidget {
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2B7FFF), NuvoColors.blue],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: NuvoColors.blue.withValues(alpha: 0.28),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -175,7 +190,7 @@ class NuvoOutlineButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final height = small ? 44.0 : 54.0;
+    final height = small ? 44.0 : 56.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
@@ -187,7 +202,7 @@ class NuvoOutlineButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: NuvoColors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: NuvoColors.navy, width: 1.5),
           ),
           alignment: Alignment.center,
@@ -230,7 +245,7 @@ class NuvoGhostButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final height = small ? 44.0 : 54.0;
+    final height = small ? 44.0 : 56.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
@@ -242,7 +257,7 @@ class NuvoGhostButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: NuvoColors.panel,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: NuvoColors.border),
           ),
           alignment: Alignment.center,
@@ -282,7 +297,7 @@ class NuvoDangerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 54.0;
+    final height = small ? 44.0 : 56.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
@@ -294,7 +309,7 @@ class NuvoDangerButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: const Color(0xFFFFF0F0),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: NuvoColors.danger),
           ),
           alignment: Alignment.center,
@@ -304,7 +319,8 @@ class NuvoDangerButton extends StatelessWidget {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(NuvoColors.danger),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(NuvoColors.danger),
                   ),
                 )
               : _buttonContent(
