@@ -151,6 +151,26 @@ class RaceController extends StateNotifier<RaceState> {
     return race;
   }
 
+  Future<Race> submitMove(
+    String raceId, {
+    String moveSource = 'manual',
+    String? note,
+    required int value,
+  }) async {
+    final race = await _repo.submitMove(
+      raceId,
+      moveSource: moveSource,
+      note: note,
+      value: value,
+    );
+    if (mounted) {
+      state = state.copyWith(
+        races: state.races.map((r) => r.id == raceId ? race : r).toList(),
+      );
+    }
+    return race;
+  }
+
   Future<Race> submitAiMotionProof(
     String raceId, {
     required AiMotionResult result,
@@ -238,6 +258,14 @@ class RaceController extends StateNotifier<RaceState> {
     _upsertRace(race);
     return race;
   }
+
+  Future<Race> reviewMove(
+    String raceId,
+    String moveId, {
+    required String status,
+    String? summary,
+  }) =>
+      reviewProof(raceId, moveId, status: status, summary: summary);
 
   void _upsertRace(Race race) {
     if (!mounted) return;

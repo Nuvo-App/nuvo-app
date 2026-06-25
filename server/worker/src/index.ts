@@ -76,6 +76,19 @@ app.post('/onboarding/complete', requireAuth, async (c) => {
     .bind(userId)
     .first<ProfileRow>();
 
+  if (profile) {
+    await c.env.DB.prepare(
+      `UPDATE people
+       SET display_name = COALESCE(?, display_name),
+           username = COALESCE(?, username),
+           avatar_url = COALESCE(?, avatar_url),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+    )
+      .bind(profile.full_name, profile.username, profile.avatar_url, userId)
+      .run();
+  }
+
   return c.json({
     ok: true,
     onboardingComplete: Boolean(profile?.onboarding_complete),

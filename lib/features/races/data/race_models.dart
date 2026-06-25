@@ -22,7 +22,8 @@ class Race {
     required this.createdAt,
     required this.updatedAt,
     this.participants = const [],
-    this.recentProofs = const [],
+    this.raceMembers = const [],
+    this.recentMoves = const [],
   });
 
   final String id;
@@ -47,7 +48,10 @@ class Race {
   final String createdAt;
   final String updatedAt;
   final List<RaceParticipant> participants;
-  final List<RaceProof> recentProofs;
+  final List<RaceParticipant> raceMembers;
+  final List<RaceMove> recentMoves;
+
+  List<RaceMove> get recentProofs => recentMoves;
 
   factory Race.fromJson(Map<String, dynamic> json) => Race(
     id: json['id'] as String,
@@ -76,11 +80,17 @@ class Race {
             ?.map((p) => RaceParticipant.fromJson(p as Map<String, dynamic>))
             .toList() ??
         [],
-    recentProofs:
-        (json['recentProofs'] as List<dynamic>?)
-            ?.map((p) => RaceProof.fromJson(p as Map<String, dynamic>))
+    raceMembers:
+        (json['raceMembers'] as List<dynamic>?)
+            ?.map((p) => RaceParticipant.fromJson(p as Map<String, dynamic>))
             .toList() ??
         [],
+    recentMoves:
+        ((json['recentMoves'] ?? json['moveLog'] ?? json['recentProofs'])
+                    as List<dynamic>?)
+                ?.map((p) => RaceMove.fromJson(p as Map<String, dynamic>))
+                .toList() ??
+            [],
   );
 
   int get participantCount => participants.length;
@@ -194,7 +204,7 @@ class RaceParticipant {
   factory RaceParticipant.fromJson(Map<String, dynamic> json) =>
       RaceParticipant(
         id: json['id'] as String,
-        userId: json['userId'] as String,
+        userId: (json['userId'] ?? json['personId']) as String,
         displayName: json['displayName'] as String? ?? 'Unknown',
         progressValue: json['progressValue'] as int? ?? 0,
         progressPercent: json['progressPercent'] as int? ?? 0,
@@ -203,15 +213,16 @@ class RaceParticipant {
       );
 }
 
-class RaceProof {
-  const RaceProof({
+class RaceMove {
+  const RaceMove({
     required this.id,
     required this.userId,
     required this.displayName,
-    required this.proofType,
+    required this.moveSource,
     this.aiActivityType,
     this.note,
     this.value,
+    this.amountUnit,
     this.detectedValue,
     this.targetValue,
     this.confidence,
@@ -229,6 +240,7 @@ class RaceProof {
     this.rankBefore,
     this.rankAfter,
     this.peoplePassed,
+    this._jsonProofType,
   });
 
   final String id;
@@ -236,10 +248,11 @@ class RaceProof {
   final String displayName;
   final String? profilePhotoUrl;
   final String? thumbnailUrl;
-  final String proofType;
+  final String moveSource;
   final String? aiActivityType;
   final String? note;
   final int? value;
+  final String? amountUnit;
   final int? detectedValue;
   final int? targetValue;
   final double? confidence;
@@ -256,14 +269,27 @@ class RaceProof {
   final int? rankAfter;
   final int? peoplePassed;
 
-  factory RaceProof.fromJson(Map<String, dynamic> json) => RaceProof(
+  String get proofType => switch (moveSource) {
+        'ai' => 'ai_motion',
+        'photo' => 'photo',
+        _ => jsonProofType,
+      };
+
+  String get jsonProofType => _jsonProofType ?? 'manual';
+
+  final String? _jsonProofType;
+
+  factory RaceMove.fromJson(Map<String, dynamic> json) => RaceMove(
     id: json['id'] as String,
-    userId: json['userId'] as String,
+    userId: (json['userId'] ?? json['personId']) as String,
     displayName: json['displayName'] as String? ?? 'Unknown',
-    proofType: json['proofType'] as String? ?? 'manual',
+    moveSource:
+        json['moveSource'] as String? ??
+        _moveSourceFromProofType(json['proofType'] as String?),
     aiActivityType: json['aiActivityType'] as String?,
     note: json['note'] as String?,
-    value: json['value'] as int?,
+    value: (json['value'] ?? json['amountValue']) as int?,
+    amountUnit: json['amountUnit'] as String?,
     detectedValue: json['detectedValue'] as int?,
     targetValue: json['targetValue'] as int?,
     confidence: (json['confidence'] as num?)?.toDouble(),
@@ -281,5 +307,14 @@ class RaceProof {
     rankBefore: (json['rankBefore'] as num?)?.toInt(),
     rankAfter: (json['rankAfter'] as num?)?.toInt(),
     peoplePassed: (json['peoplePassed'] as num?)?.toInt(),
+    jsonProofType: json['proofType'] as String?,
   );
+
+  static String _moveSourceFromProofType(String? proofType) {
+    if (proofType == 'ai_motion') return 'ai';
+    if (proofType == 'photo' || proofType == 'photo_video') return 'photo';
+    return 'manual';
+  }
 }
+
+typedef RaceProof = RaceMove;

@@ -32,6 +32,55 @@ async function ensureProfileAndPass(db: D1Database, userId: string): Promise<voi
     .bind(userId)
     .run();
 
+  const profileUser = await db
+    .prepare(
+      `SELECT u.id, u.primary_email, u.status, u.created_at, u.updated_at,
+              p.full_name, p.username, p.avatar_url
+       FROM users u
+       LEFT JOIN profiles p ON p.user_id = u.id
+       WHERE u.id = ?`,
+    )
+    .bind(userId)
+    .first<{
+      id: string;
+      primary_email: string | null;
+      status: string;
+      created_at: string;
+      updated_at: string;
+      full_name: string | null;
+      username: string | null;
+      avatar_url: string | null;
+    }>();
+
+  if (profileUser) {
+    const displayName = profileUser.full_name ?? profileUser.username ?? profileUser.primary_email ?? 'Nuvo member';
+    const personKey = profileUser.username ?? `user_${userId.slice(0, 8)}`;
+    await db
+      .prepare(
+        `INSERT INTO people
+           (id, person_key, user_id, display_name, username, avatar_url, is_demo, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           display_name = excluded.display_name,
+           username = excluded.username,
+           avatar_url = excluded.avatar_url,
+           status = excluded.status,
+           updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(
+        userId,
+        personKey,
+        userId,
+        displayName,
+        profileUser.username,
+        profileUser.avatar_url,
+        profileUser.status,
+        profileUser.created_at,
+        profileUser.updated_at,
+      )
+      .run();
+  }
+
   const existing = await db
     .prepare('SELECT id FROM member_passes WHERE user_id = ?')
     .bind(userId)
@@ -80,9 +129,14 @@ async function createSession(
 
 async function buildUserObject(db: D1Database, userId: string, email: string) {
   const profile = await db
-    .prepare('SELECT * FROM profiles WHERE user_id = ?')
+    .prepare(
+      `SELECT pr.*, pe.display_name, pe.username AS person_username, pe.avatar_url AS person_avatar_url
+       FROM profiles pr
+       LEFT JOIN people pe ON pe.user_id = pr.user_id
+       WHERE pr.user_id = ?`,
+    )
     .bind(userId)
-    .first<ProfileRow>();
+    .first<ProfileRow & { display_name: string | null; person_username: string | null; person_avatar_url: string | null }>();
   const pass = await db
     .prepare('SELECT id FROM member_passes WHERE user_id = ?')
     .bind(userId)
@@ -91,9 +145,9 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
   return {
     id: userId,
     email,
-    fullName: profile?.full_name ?? null,
-    username: profile?.username ?? null,
-    profilePhotoUrl: profile?.avatar_url ?? null,
+    fullName: profile?.display_name ?? profile?.full_name ?? null,
+    username: profile?.person_username ?? profile?.username ?? null,
+    profilePhotoUrl: profile?.person_avatar_url ?? profile?.avatar_url ?? null,
     onboardingComplete: Boolean(profile?.onboarding_complete),
     hasMemberPass: Boolean(pass),
   };
