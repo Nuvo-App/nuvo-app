@@ -226,6 +226,23 @@ class RaceApi {
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
+  Future<Race> submitMove(
+    String token,
+    String raceId, {
+    String moveSource = 'manual',
+    String? note,
+    required int value,
+  }) async {
+    final body = <String, dynamic>{
+      'moveSource': moveSource,
+      'proofType': moveSource == 'ai' ? 'ai_motion' : 'manual',
+      'value': value,
+    };
+    if (note != null) body['note'] = note;
+    final json = await _post('/races/$raceId/proof', token, body);
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
   Future<Race> submitAiMotionProof(
     String token,
     String raceId, {
@@ -295,4 +312,13 @@ class RaceApi {
     final json = await _patch('/races/$raceId/proofs/$proofId', token, body);
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
+
+  Future<Race> reviewMove(
+    String token,
+    String raceId,
+    String moveId, {
+    required String status,
+    String? summary,
+  }) =>
+      reviewProof(token, raceId, moveId, status: status, summary: summary);
 }

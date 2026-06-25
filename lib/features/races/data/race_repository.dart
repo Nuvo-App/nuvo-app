@@ -138,6 +138,21 @@ class RaceRepository {
     ),
   );
 
+  Future<Race> submitMove(
+    String raceId, {
+    String moveSource = 'manual',
+    String? note,
+    required int value,
+  }) => _withRefresh(
+    (token) => _api.submitMove(
+      token,
+      raceId,
+      moveSource: moveSource,
+      note: note,
+      value: value,
+    ),
+  );
+
   Future<Race> submitAiMotionProof(
     String raceId, {
     required AiMotionResult result,
@@ -183,4 +198,12 @@ class RaceRepository {
       summary: summary,
     ),
   );
+
+  Future<Race> reviewMove(
+    String raceId,
+    String moveId, {
+    required String status,
+    String? summary,
+  }) =>
+      reviewProof(raceId, moveId, status: status, summary: summary);
 }

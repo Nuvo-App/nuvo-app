@@ -32,7 +32,7 @@ interface LightRaceRow {
 
 interface LightParticipantRow {
   race_id: string;
-  user_id: string;
+  user_id: string | null;
   display_name: string | null;
   profile_photo_url: string | null;
   progress_value: number;
@@ -135,17 +135,35 @@ arenaRouter.get('/', async (c) => {
 });
 
 async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaSnapshot> {
+  const person = await db
+    .prepare('SELECT id FROM people WHERE user_id = ?')
+    .bind(userId)
+    .first<{ id: string }>();
+  if (!person) {
+    return {
+      mode: 'real',
+      headerPulse: 'Start a race with your crew',
+      focusBoard: null,
+      liveBoards: [],
+      activity: [],
+      results: [],
+    };
+  }
+
   // Fetch races this user created or joined (same criteria as GET /races).
   const raceRows = await db
     .prepare(
       `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.unit,
               r.proof_requirement, r.proof_mode, r.ai_activity_type, r.creator_id
        FROM races r
-       LEFT JOIN race_participants rp ON rp.race_id = r.id AND rp.user_id = ?
-       WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rp.user_id IS NOT NULL)
+       LEFT JOIN race_members rm
+         ON rm.race_id = r.id
+        AND rm.person_id = ?
+        AND rm.member_status = 'active'
+       WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.id IS NOT NULL)
        ORDER BY r.created_at DESC`,
     )
-    .bind(userId, userId)
+    .bind(person.id, userId)
     .all<LightRaceRow>();
 
   const races = raceRows.results;
@@ -165,14 +183,19 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
   const placeholders = raceIds.map(() => '?').join(', ');
   const participantRows = await db
     .prepare(
-      `SELECT rp.race_id, rp.user_id,
-              COALESCE(rp.display_name, p.full_name, 'Unknown') as display_name,
+      `SELECT rm.race_id, p.user_id,
+              p.display_name,
               p.avatar_url as profile_photo_url,
-              rp.progress_value, rp.progress_percent
-       FROM race_participants rp
-       LEFT JOIN profiles p ON p.user_id = rp.user_id
-       WHERE rp.race_id IN (${placeholders})
-       ORDER BY rp.progress_percent DESC, rp.progress_value DESC, rp.joined_at ASC`,
+              rm.score_value as progress_value, rm.score_percent as progress_percent
+       FROM race_members rm
+       JOIN people p ON p.id = rm.person_id
+       WHERE rm.race_id IN (${placeholders})
+         AND rm.member_status = 'active'
+       ORDER BY
+         COALESCE(rm.rank_override, 999999) ASC,
+         rm.score_percent DESC,
+         rm.score_value DESC,
+         rm.joined_at ASC`,
     )
     .bind(...raceIds)
     .all<LightParticipantRow>();

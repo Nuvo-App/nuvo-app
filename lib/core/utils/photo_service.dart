@@ -38,8 +38,6 @@ class PhotoService {
     try {
       cropped = await ImageCropper().cropImage(
         sourcePath: picked.path,
-        cropStyle: CropStyle.circle,
-        aspectRatioPresets: [CropAspectRatioPreset.square],
         compressFormat: ImageCompressFormat.jpg,
         compressQuality: 85,
         uiSettings: [
@@ -50,6 +48,8 @@ class PhotoService {
             activeControlsWidgetColor: _kBlue,
             lockAspectRatio: true,
             hideBottomControls: false,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [CropAspectRatioPreset.square],
             initAspectRatio: CropAspectRatioPreset.square,
           ),
           IOSUiSettings(
@@ -60,6 +60,8 @@ class PhotoService {
             resetAspectRatioEnabled: false,
             aspectRatioLockEnabled: true,
             aspectRatioPickerButtonHidden: true,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: [CropAspectRatioPreset.square],
           ),
         ],
       );

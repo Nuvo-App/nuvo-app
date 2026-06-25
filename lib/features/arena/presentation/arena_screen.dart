@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/nuvo_board_components.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -65,7 +64,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       }
     });
 
-    final firstName = user?.fullName?.split(' ').first ?? 'there';
     final initials = user?.avatarInitials ?? '?';
 
     final allBoards = snapshot == null
@@ -78,7 +76,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
 
     final resolvedId = _selectedBoardId ?? snapshot?.focusBoard?.id;
     final activeBoard = _scoreCenterBoard ?? snapshot?.focusBoard;
-    final otherBoards = allBoards.where((b) => b.id != resolvedId).toList();
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
@@ -89,48 +86,37 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               ref.read(arenaControllerProvider.notifier).loadSnapshot(),
           child: CustomScrollView(
             slivers: [
-              // ── Header ─────────────────────────────────────────────────────
+              // ── Compact header ──────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'ARENA',
-                              style: AppTextStyles.brandLabel.copyWith(
-                                color: NuvoColors.blue,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(firstName, style: AppTextStyles.displayMedium),
-                          ],
+                      Text(
+                        'NUVO',
+                        style: AppTextStyles.brandLabel.copyWith(
+                          color: NuvoColors.navy,
+                          fontSize: 13,
+                          letterSpacing: 3.0,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      PressableScale(
+                      const Spacer(),
+                      NuvoIconAction(
+                        icon: Icons.notifications_outlined,
                         onTap: () => _showNotificationsSheet(context),
-                        child: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: NuvoColors.navy,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: NuvoColors.divider,
-                              width: 2,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            initials,
-                            style: AppTextStyles.labelMedium.copyWith(
-                              color: NuvoColors.white,
-                            ),
-                          ),
+                      ),
+                      const SizedBox(width: 10),
+                      PressableScale(
+                        onTap: () => context.push('/profile'),
+                        child: NuvoAvatar(
+                          initials: initials,
+                          photoUrl: user?.profilePhotoUrl,
+                          size: 36,
+                          bgColor: NuvoColors.navy,
+                          textColor: NuvoColors.white,
+                          borderColor: NuvoColors.divider,
                         ),
                       ),
                     ],
@@ -138,7 +124,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 ),
               ),
 
-              // ── Content ────────────────────────────────────────────────────
+              // ── Content ─────────────────────────────────────────────────
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 28, 20, 120),
                 sliver: SliverList(
@@ -146,7 +132,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                     if (arenaState.loading && snapshot == null)
                       const Center(
                         child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
+                          padding: EdgeInsets.symmetric(vertical: 60),
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                       )
@@ -159,48 +145,28 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       )
                     else if (snapshot == null || snapshot.isEmpty)
                       _EmptyState(
-                        onStart: () => context.push('/races/new'),
+                        onBuild: () => context.push('/races/new'),
                         onJoin: () => context.push('/races/join'),
                       )
                     else ...[
-                      // ── Focus board ─────────────────────────────────────────
-                      if (activeBoard != null)
-                        _FocusBoardCard(
-                          board: activeBoard,
-                          isLoading: _isLoadingBoardDetail,
-                          onLogMove: () =>
-                              _handlePrimaryAction(context, activeBoard),
-                          onOpen: () => _openBoard(context, activeBoard),
-                        ),
-
-                      // ── Race chips ──────────────────────────────────────────
+                      // ── Race chip switcher (above hero) ──────────────────
                       if (allBoards.length > 1) ...[
-                        const SizedBox(height: 20),
                         _RaceChipRow(
                           boards: allBoards,
                           selectedId: resolvedId,
                           onTap: (b) => _onChipTap(b, snapshot, user?.id),
                         ),
+                        const SizedBox(height: 20),
                       ],
 
-                      // ── Other races ─────────────────────────────────────────
-                      if (otherBoards.isNotEmpty) ...[
-                        const SizedBox(height: 28),
-                        Text(
-                          'OTHER RACES',
-                          style: AppTextStyles.brandLabel.copyWith(
-                            color: NuvoColors.muted,
-                          ),
+                      // ── START surface ─────────────────────────────────────
+                      if (activeBoard != null)
+                        _StartSurface(
+                          board: activeBoard,
+                          loading: _isLoadingBoardDetail,
+                          onStart: () =>
+                              _handlePrimaryAction(context, activeBoard),
                         ),
-                        const SizedBox(height: 10),
-                        for (final b in otherBoards) ...[
-                          _CompactBoardRow(
-                            board: b,
-                            onTap: () => _onChipTap(b, snapshot, user?.id),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                      ],
                     ],
                   ]),
                 ),
@@ -270,8 +236,14 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final isResult =
         _kResultStatuses.contains(race.status) || myProgress >= 100;
     final count = race.participantCount;
-    final boardContext = isResult
+
+    // Rich type/unit line for boards loaded via chip tap
+    final typeContext = isResult
         ? '$count ${count == 1 ? 'racer' : 'racers'} finished'
+        : race.targetValue != null
+        ? 'First to ${race.targetValue} ${race.unit ?? 'reps'}'
+        : race.finishLineAt != null
+        ? 'Most by time · ${race.unit ?? 'reps'}'
         : count <= 1
         ? 'Solo · add crew from the race room'
         : '$count ${count == 1 ? 'racer' : 'racers'} on the board';
@@ -285,11 +257,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       proofLabel: race.isAiMotionRace ? 'AI MoveCheck' : 'Manual logging',
       progressLabel: myPart != null
           ? (race.targetValue != null
-                ? 'You ${myPart.progressValue} / ${race.targetValue}'
-                : 'You $myProgress%')
+                ? '${myPart.progressValue} / ${race.targetValue} ${race.unit ?? 'reps'}'
+                : '$myProgress%')
           : '',
-      boardContext: boardContext,
-      primaryActionLabel: isResult ? 'Open board' : 'Log move',
+      boardContext: typeContext,
+      primaryActionLabel: isResult ? 'View Board' : 'START',
       primaryActionType: isResult ? 'open_board' : 'submit_proof',
       progressPercent: myProgress,
       racerCount: count,
@@ -302,14 +274,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       leaderPhotoUrl: chase.leaderPhotoUrl,
       daysLeft: chase.daysLeft,
     );
-  }
-
-  void _openBoard(BuildContext context, ArenaBoard board) {
-    if (board.isDemo) {
-      _demoSnack(context);
-      return;
-    }
-    context.push('/race/${board.id}');
   }
 
   void _handlePrimaryAction(BuildContext context, ArenaBoard board) {
@@ -337,272 +301,185 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   }
 }
 
-// ── Focus board card ──────────────────────────────────────────────────────────
-//
-// Loading strategy: keep the outer container and primary content (title,
-// progress %, race lane, CTA) visible at all times — they come from snapshot
-// data and are available immediately. Only the mini leaderboard section uses
-// skeleton bars while the full race detail is fetching.
+// ── START surface ─────────────────────────────────────────────────────────────
+// The main action module on Home. Shows the selected race, progress context,
+// and a dominant START button. No board list. No stats grid.
 
-class _FocusBoardCard extends StatelessWidget {
-  const _FocusBoardCard({
+class _StartSurface extends StatelessWidget {
+  const _StartSurface({
     required this.board,
-    required this.isLoading,
-    required this.onLogMove,
-    required this.onOpen,
+    required this.loading,
+    required this.onStart,
   });
 
   final ArenaBoard board;
-  final bool isLoading;
-  final VoidCallback onLogMove;
-  final VoidCallback onOpen;
+  final bool loading;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
-    final isResult = board.isResult;
     final pct = board.progressPercent ?? 0;
+    final isResult = board.isResult;
+    final ctaLabel = isResult ? 'View Board' : 'START';
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Loading bar — thin blue accent at top, invisible when idle ───
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            height: isLoading ? 2 : 0,
-            width: double.infinity,
-            margin: EdgeInsets.only(bottom: isLoading ? 16 : 0),
-            decoration: BoxDecoration(
-              color: NuvoColors.blue,
-              borderRadius: BorderRadius.circular(2),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Race title ─────────────────────────────────────────────────
+        Text(
+          board.title,
+          style: AppTextStyles.headlineLarge,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 5),
+        // ── Type / context line ────────────────────────────────────────
+        Text(
+          board.boardContext,
+          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+
+        const SizedBox(height: 20),
+
+        // ── Progress block ─────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          decoration: BoxDecoration(
+            color: NuvoColors.panel,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: NuvoColors.divider),
           ),
-
-          // ── Race title + badge ─────────────────────────────────────────
-          Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  board.title,
-                  style: AppTextStyles.headlineMedium,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (board.badgeLabel != null) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: NuvoColors.blue,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    board.badgeLabel!,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-
-          const SizedBox(height: 6),
-          Text(
-            board.boardContext,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-          ),
-
-          // ── Crew strip ────────────────────────────────────────────────
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              if (board.miniLeaderboard.isNotEmpty)
-                NuvoAvatarStack(
-                  avatars: board.miniLeaderboard
-                      .map(
-                        (r) => (initials: r.label, photoUrl: r.profilePhotoUrl),
-                      )
-                      .toList(),
-                  total: board.racerCount ?? board.miniLeaderboard.length,
-                  size: 24,
-                  max: 4,
-                ),
-              const Spacer(),
-              if (board.daysLeft != null)
+              // Progress number
+              if (board.progressLabel.isNotEmpty)
                 Text(
-                  '${board.daysLeft}d left',
-                  style: AppTextStyles.labelSmall.copyWith(
+                  board.progressLabel,
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+
+              // Human chase line
+              if (board.chaseCopy != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  board.chaseCopy!,
+                  style: AppTextStyles.bodySmall.copyWith(
                     color: NuvoColors.muted,
                   ),
                 ),
-            ],
-          ),
+              ],
 
-          // ── Rank + chase ──────────────────────────────────────────────
-          if (board.myRank != null && !isResult) ...[
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // Progress lane
+              const SizedBox(height: 14),
+              NuvoRaceLane(progressPercent: pct),
+
+              // Crew strip + rank
+              if (board.miniLeaderboard.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
                   children: [
-                    Text(
-                      '#${board.myRank}',
-                      style: AppTextStyles.displaySmall.copyWith(
-                        color: NuvoColors.navy,
-                      ),
+                    NuvoAvatarStack(
+                      avatars: board.miniLeaderboard
+                          .map((r) => (
+                                initials: _initials(r.label),
+                                photoUrl: r.profilePhotoUrl,
+                              ))
+                          .toList(),
+                      total: board.racerCount ?? board.miniLeaderboard.length,
+                      size: 22,
+                      max: 4,
                     ),
-                    Text(
-                      'of ${board.racerCount ?? 1}',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.muted,
+                    const SizedBox(width: 8),
+                    if (board.myRank != null && !isResult)
+                      Text(
+                        '#${board.myRank} of ${board.racerCount ?? 1}',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.muted,
+                        ),
                       ),
-                    ),
+                    if (board.daysLeft != null) ...[
+                      const Spacer(),
+                      Text(
+                        '${board.daysLeft}d left',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.muted,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                if (board.chaseCopy != null) ...[
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      board.chaseCopy!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                  ),
-                ],
               ],
-            ),
-          ],
-
-          const SizedBox(height: 16),
-
-          // ── Progress number + lane ─────────────────────────────────────
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$pct',
-                style: AppTextStyles.displaySmall.copyWith(
-                  color: isResult ? NuvoColors.success : NuvoColors.navy,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5, left: 2),
-                child: Text(
-                  '%',
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: NuvoColors.muted,
-                  ),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 10),
-          NuvoRaceLane(progressPercent: pct),
+        ),
 
-          // ── Mini leaderboard — real or skeleton ────────────────────────
-          if (isLoading || board.miniLeaderboard.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Container(height: 1, color: NuvoColors.divider),
-            const SizedBox(height: 12),
+        const SizedBox(height: 20),
 
-            if (isLoading)
-              // Skeleton rows — same height as real rows, no layout jump
-              ..._buildSkeletonRows()
-            else
-              for (var i = 0; i < board.miniLeaderboard.length; i++) ...[
-                NuvoBoardLane(
-                  participant: NuvoBoardParticipant(
-                    rank: i + 1,
-                    name: board.miniLeaderboard[i].label,
-                    initials: _initials(board.miniLeaderboard[i].label),
-                    progressPercent: _progressFromValue(
-                      board.miniLeaderboard[i].value,
-                    ),
-                    progressLabel: board.miniLeaderboard[i].value,
-                    photoUrl: board.miniLeaderboard[i].profilePhotoUrl,
-                    isCurrentUser: board.miniLeaderboard[i].isCurrentUser,
+        // ── START — dominant CTA ───────────────────────────────────────
+        _StartButton(label: ctaLabel, loading: loading, onTap: onStart),
+      ],
+    );
+  }
+}
+
+// ── START button ──────────────────────────────────────────────────────────────
+// Larger than standard buttons — the primary action on Home.
+
+class _StartButton extends StatelessWidget {
+  const _StartButton({
+    required this.label,
+    required this.onTap,
+    this.loading = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: loading ? null : onTap,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 150),
+        opacity: loading ? 0.7 : 1.0,
+        child: Container(
+          height: 62,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          alignment: Alignment.center,
+          child: loading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(NuvoColors.white),
+                  ),
+                )
+              : Text(
+                  label,
+                  style: AppTextStyles.headlineMedium.copyWith(
+                    color: NuvoColors.white,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                if (i < board.miniLeaderboard.length - 1)
-                  const SizedBox(height: 8),
-              ],
-          ],
-
-          const SizedBox(height: 20),
-
-          // ── CTA ────────────────────────────────────────────────────────
-          isResult
-              ? NuvoGhostButton(
-                  label: 'Open board',
-                  icon: Icons.arrow_forward_rounded,
-                  expand: true,
-                  onPressed: onOpen,
-                )
-              : NuvoPrimaryButton(
-                  label: 'Log move',
-                  expand: true,
-                  onPressed: onLogMove,
-                ),
-        ],
+        ),
       ),
     );
   }
-
-  static List<Widget> _buildSkeletonRows() {
-    return [
-      for (var i = 0; i < 3; i++) ...[
-        const Row(
-          children: [
-            _Skel(width: 22, height: 22, radius: 11),
-            SizedBox(width: 8),
-            _Skel(width: 14, height: 14, radius: 4),
-            SizedBox(width: 8),
-            _Skel(width: 90, height: 12, radius: 4),
-            Spacer(),
-            _Skel(width: 44, height: 12, radius: 4),
-          ],
-        ),
-        if (i < 2) const SizedBox(height: 8),
-      ],
-    ];
-  }
 }
 
-// ── Skeleton bar ──────────────────────────────────────────────────────────────
-
-class _Skel extends StatelessWidget {
-  const _Skel({this.width, required this.height, this.radius = 4});
-  final double? width;
-  final double height;
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: width,
-    height: height,
-    decoration: BoxDecoration(
-      color: NuvoColors.trackBg,
-      borderRadius: BorderRadius.circular(radius),
-    ),
-  );
-}
-
-// ── Race chip row ─────────────────────────────────────────────────────────────
+// ── Race chip switcher ────────────────────────────────────────────────────────
 
 class _RaceChipRow extends StatelessWidget {
   const _RaceChipRow({
@@ -671,49 +548,7 @@ class _RaceChip extends StatelessWidget {
   }
 }
 
-// ── Compact board row (other races) ──────────────────────────────────────────
-
-class _CompactBoardRow extends StatelessWidget {
-  const _CompactBoardRow({required this.board, required this.onTap});
-
-  final ArenaBoard board;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = board.progressPercent ?? 0;
-    final count = board.racerCount ?? 0;
-
-    return NuvoRaceRow(
-      title: board.title,
-      subtitle: board.boardContext,
-      progressPercent: pct,
-      avatars: board.miniLeaderboard
-          .map(
-            (r) => (initials: _initials(r.label), photoUrl: r.profilePhotoUrl),
-          )
-          .toList(),
-      total: count,
-      onTap: onTap,
-    );
-  }
-}
-
-int _progressFromValue(String value) {
-  final ratio = RegExp(r'(\d+)\s*/\s*(\d+)').firstMatch(value);
-  if (ratio != null) {
-    final current = int.tryParse(ratio.group(1) ?? '');
-    final total = int.tryParse(ratio.group(2) ?? '');
-    if (current != null && total != null && total > 0) {
-      return ((current / total) * 100).round().clamp(0, 100);
-    }
-  }
-  final pct = RegExp(r'(\d+)\s*%').firstMatch(value);
-  if (pct != null) {
-    return (int.tryParse(pct.group(1) ?? '') ?? 0).clamp(0, 100);
-  }
-  return 0;
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 String _initials(String name) {
   final parts = name.trim().split(RegExp(r'\s+'));
@@ -724,12 +559,12 @@ String _initials(String name) {
   return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
 }
 
-// ── Empty / error states ──────────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
-class _ArenaEmptyState extends StatelessWidget {
-  const _ArenaEmptyState({required this.onStart, required this.onJoin});
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onBuild, required this.onJoin});
 
-  final VoidCallback onStart;
+  final VoidCallback onBuild;
   final VoidCallback onJoin;
 
   @override
@@ -737,39 +572,38 @@ class _ArenaEmptyState extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 12),
-        Text('No active races.', style: AppTextStyles.headlineMedium),
+        const SizedBox(height: 16),
+        Text('Start a race.', style: AppTextStyles.headlineLarge),
         const SizedBox(height: 8),
         Text(
-          'Set a finish line, pull in your crew, and move the leaderboard.',
+          'Set the unit, invite your crew, and race to the finish line.',
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         ),
-        const SizedBox(height: 20),
-        // Crew invite prompt
+        const SizedBox(height: 32),
+        // Crew visual
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: NuvoColors.panel,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: NuvoColors.divider),
           ),
           child: Row(
             children: [
-              // Placeholder crew avatars
               SizedBox(
-                width: 68,
-                height: 24,
+                width: 72,
+                height: 28,
                 child: Stack(
                   children: [
                     for (var i = 0; i < 3; i++)
                       Positioned(
-                        left: i * 15.0,
+                        left: i * 16.0,
                         child: Container(
-                          width: 24,
-                          height: 24,
+                          width: 28,
+                          height: 28,
                           decoration: BoxDecoration(
                             color: NuvoColors.navy.withValues(
-                              alpha: 0.15 + i * 0.12,
+                              alpha: 0.10 + i * 0.10,
                             ),
                             shape: BoxShape.circle,
                             border: Border.all(
@@ -782,10 +616,10 @@ class _ArenaEmptyState extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Invite crew to race against you.',
+                  'Invite your crew and race toward a finish line.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: NuvoColors.muted,
                   ),
@@ -795,11 +629,7 @@ class _ArenaEmptyState extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        NuvoPrimaryButton(
-          label: 'Start a race',
-          expand: true,
-          onPressed: onStart,
-        ),
+        _StartButton(label: 'BUILD', onTap: onBuild),
         const SizedBox(height: 10),
         NuvoOutlineButton(
           label: 'Join with code',
@@ -811,7 +641,7 @@ class _ArenaEmptyState extends StatelessWidget {
   }
 }
 
-typedef _EmptyState = _ArenaEmptyState;
+// ── Error state ───────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});

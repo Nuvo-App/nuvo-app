@@ -21,25 +21,29 @@ usersRouter.get('/search', async (c) => {
 
   const like = `%${q}%`;
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id
+    `SELECT u.id, u.primary_email,
+            pe.display_name AS full_name,
+            pe.username,
+            pe.avatar_url,
+            mp.member_id
      FROM users u
-     LEFT JOIN profiles p ON p.user_id = u.id
+     LEFT JOIN people pe ON pe.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
      WHERE u.id != ?
        AND u.status = 'active'
        AND (
-         LOWER(COALESCE(p.username, '')) LIKE ?
+         LOWER(COALESCE(pe.username, '')) LIKE ?
          OR LOWER(COALESCE(mp.member_id, '')) LIKE ?
-         OR LOWER(COALESCE(p.full_name, '')) LIKE ?
+         OR LOWER(COALESCE(pe.display_name, '')) LIKE ?
          OR LOWER(SUBSTR(COALESCE(u.primary_email, ''), 1, INSTR(COALESCE(u.primary_email, ''), '@') - 1)) LIKE ?
        )
      ORDER BY
        CASE
-         WHEN LOWER(COALESCE(p.username, '')) = ? THEN 0
+         WHEN LOWER(COALESCE(pe.username, '')) = ? THEN 0
          WHEN LOWER(COALESCE(mp.member_id, '')) = ? THEN 1
          ELSE 2
        END,
-       p.full_name COLLATE NOCASE ASC
+       pe.display_name COLLATE NOCASE ASC
      LIMIT 10`,
   )
     .bind(userId, like, like, like, like, q, q)

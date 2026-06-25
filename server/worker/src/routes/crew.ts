@@ -36,13 +36,26 @@ function serializeCrewUser(row: CrewUserRow) {
   };
 }
 
+async function getPersonId(db: D1Database, userId: string): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT id FROM people WHERE user_id = ?')
+    .bind(userId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
 async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
   return db
     .prepare(
-      `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at
+      `SELECT u.id, u.primary_email,
+              pe.display_name AS full_name,
+              pe.username,
+              pe.avatar_url,
+              mp.member_id,
+              cc.created_at
        FROM crew_connections cc
        JOIN users u ON u.id = cc.crew_user_id
-       LEFT JOIN profiles p ON p.user_id = u.id
+       LEFT JOIN people pe ON pe.user_id = u.id
        LEFT JOIN member_passes mp ON mp.user_id = u.id
        WHERE cc.user_id = ? AND cc.crew_user_id = ? AND cc.status = 'active'`,
     )
@@ -54,10 +67,15 @@ async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
 crewRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at
+    `SELECT u.id, u.primary_email,
+            pe.display_name AS full_name,
+            pe.username,
+            pe.avatar_url,
+            mp.member_id,
+            cc.created_at
      FROM crew_connections cc
      JOIN users u ON u.id = cc.crew_user_id
-     LEFT JOIN profiles p ON p.user_id = u.id
+     LEFT JOIN people pe ON pe.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
      WHERE cc.user_id = ? AND cc.status = 'active'
      ORDER BY cc.created_at DESC`,
@@ -87,21 +105,30 @@ crewRouter.post('/add', async (c) => {
     .first<{ id: string }>();
   if (!target) return c.json({ ok: false, error: 'User not found' }, 404);
 
+  const personId = await getPersonId(c.env.DB, userId);
+  const crewPersonId = await getPersonId(c.env.DB, crewUserId);
+
   await c.env.DB.prepare(
-    `INSERT INTO crew_connections (id, user_id, crew_user_id, status, created_at)
-     VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)
-     ON CONFLICT(user_id, crew_user_id) DO UPDATE SET status = 'active'`,
+    `INSERT INTO crew_connections (id, user_id, crew_user_id, person_id, crew_person_id, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
+     ON CONFLICT(user_id, crew_user_id) DO UPDATE SET
+       status = 'active',
+       person_id = excluded.person_id,
+       crew_person_id = excluded.crew_person_id`,
   )
-    .bind(generateId(), userId, crewUserId)
+    .bind(generateId(), userId, crewUserId, personId, crewPersonId)
     .run();
 
   // Demo-friendly mutual connection, while preserving one-way semantics if this fails later.
   await c.env.DB.prepare(
-    `INSERT INTO crew_connections (id, user_id, crew_user_id, status, created_at)
-     VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)
-     ON CONFLICT(user_id, crew_user_id) DO UPDATE SET status = 'active'`,
+    `INSERT INTO crew_connections (id, user_id, crew_user_id, person_id, crew_person_id, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
+     ON CONFLICT(user_id, crew_user_id) DO UPDATE SET
+       status = 'active',
+       person_id = excluded.person_id,
+       crew_person_id = excluded.crew_person_id`,
   )
-    .bind(generateId(), crewUserId, userId)
+    .bind(generateId(), crewUserId, userId, crewPersonId, personId)
     .run();
 
   const crewUser = await getCrewUser(c.env.DB, userId, crewUserId);

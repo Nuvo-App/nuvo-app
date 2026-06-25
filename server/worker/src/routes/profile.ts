@@ -127,19 +127,24 @@ profileRouter.use('*', requireAuth);
 // GET /profile/me
 profileRouter.get('/me', async (c) => {
   const userId = c.get('userId');
-  const profile = await c.env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?')
+  const profile = await c.env.DB.prepare(
+    `SELECT pr.*, pe.display_name, pe.username AS person_username, pe.avatar_url AS person_avatar_url
+     FROM profiles pr
+     LEFT JOIN people pe ON pe.user_id = pr.user_id
+     WHERE pr.user_id = ?`,
+  )
     .bind(userId)
-    .first<ProfileRow>();
+    .first<ProfileRow & { display_name: string | null; person_username: string | null; person_avatar_url: string | null }>();
 
   if (!profile) {
     return c.json({ ok: false, error: 'Profile not found' }, 404);
   }
 
   return c.json({
-    fullName: profile.full_name,
-    username: profile.username,
-    profilePhotoUrl: profile.avatar_url,
-    avatarUrl: profile.avatar_url,
+    fullName: profile.display_name ?? profile.full_name,
+    username: profile.person_username ?? profile.username,
+    profilePhotoUrl: profile.person_avatar_url ?? profile.avatar_url,
+    avatarUrl: profile.person_avatar_url ?? profile.avatar_url,
     privateProfile: Boolean(profile.private_profile),
     onboardingComplete: Boolean(profile.onboarding_complete),
   });
@@ -222,9 +227,11 @@ profileRouter.post('/', async (c) => {
       );
     }
     const taken = await c.env.DB.prepare(
-      'SELECT user_id FROM profiles WHERE username = ? AND user_id != ?',
+      `SELECT user_id FROM profiles WHERE username = ? AND user_id != ?
+       UNION
+       SELECT user_id FROM people WHERE username = ? AND user_id != ?`,
     )
-      .bind(username, userId)
+      .bind(username, userId, username, userId)
       .first<{ user_id: string }>();
     if (taken) {
       return c.json({ ok: false, error: 'Username already taken' }, 409);
@@ -254,21 +261,52 @@ profileRouter.post('/', async (c) => {
     return c.json({ ok: false, error: 'No updatable fields provided' }, 400);
   }
 
-  await c.env.DB.prepare(
-    `UPDATE profiles SET ${fields.join(', ')} WHERE user_id = ?`,
-  )
+  await c.env.DB.prepare(`UPDATE profiles SET ${fields.join(', ')} WHERE user_id = ?`)
     .bind(...bindings, userId)
     .run();
 
-  const profile = await c.env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?')
+  const updatedProfile = await c.env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?')
     .bind(userId)
     .first<ProfileRow>();
 
+  if (updatedProfile) {
+    const displayName = updatedProfile.full_name ?? updatedProfile.username ?? 'Nuvo member';
+    const personKey = (updatedProfile.username ?? `user_${userId.slice(0, 8)}`).toLowerCase();
+    await c.env.DB.prepare(
+      `INSERT INTO people
+         (id, person_key, user_id, display_name, username, avatar_url, is_demo, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id) DO UPDATE SET
+         display_name = excluded.display_name,
+         username = excluded.username,
+         avatar_url = excluded.avatar_url,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(
+        userId,
+        personKey,
+        userId,
+        displayName,
+        updatedProfile.username,
+        updatedProfile.avatar_url,
+      )
+      .run();
+  }
+
+  const profile = await c.env.DB.prepare(
+    `SELECT pr.*, pe.display_name, pe.username AS person_username, pe.avatar_url AS person_avatar_url
+     FROM profiles pr
+     LEFT JOIN people pe ON pe.user_id = pr.user_id
+     WHERE pr.user_id = ?`,
+  )
+    .bind(userId)
+    .first<ProfileRow & { display_name: string | null; person_username: string | null; person_avatar_url: string | null }>();
+
   return c.json({
-    fullName: profile?.full_name ?? null,
-    username: profile?.username ?? null,
-    profilePhotoUrl: profile?.avatar_url ?? null,
-    avatarUrl: profile?.avatar_url ?? null,
+    fullName: profile?.display_name ?? profile?.full_name ?? null,
+    username: profile?.person_username ?? profile?.username ?? null,
+    profilePhotoUrl: profile?.person_avatar_url ?? profile?.avatar_url ?? null,
+    avatarUrl: profile?.person_avatar_url ?? profile?.avatar_url ?? null,
     privateProfile: Boolean(profile?.private_profile),
     onboardingComplete: Boolean(profile?.onboarding_complete),
   });
@@ -294,9 +332,11 @@ profileRouter.post('/username/check', async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    'SELECT user_id FROM profiles WHERE username = ?',
+    `SELECT user_id FROM profiles WHERE username = ?
+     UNION
+     SELECT user_id FROM people WHERE username = ?`,
   )
-    .bind(username)
+    .bind(username, username)
     .first<{ user_id: string }>();
 
   return c.json({ available: !existing });
