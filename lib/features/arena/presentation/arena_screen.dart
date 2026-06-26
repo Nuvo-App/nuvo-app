@@ -23,13 +23,14 @@ const _kResultStatuses = {
   'cancelled',
 };
 
-// Dark palette — deep navy/glass aesthetic
-const _kCard = Color(0xFF0D2040);
-const _kCardBorder = Color(0x18FFFFFF);
-const _kDivider = Color(0x0DFFFFFF);
+const _kBlack = Color(0xFF02050B);
+const _kCard = Color(0xFF08172F);
+const _kCardBorder = Color(0x20FFFFFF);
+const _kBlueBorder = Color(0x99075BFF);
+const _kDivider = Color(0x12FFFFFF);
 const _kSkel = Color(0x22FFFFFF);
-const _kSub = Color(0x99FFFFFF); // white 60%
-const _kMuted = Color(0x61FFFFFF); // white 38%
+const _kSub = Color(0xB3FFFFFF);
+const _kMuted = Color(0x66FFFFFF);
 
 class ArenaScreen extends ConsumerStatefulWidget {
   const ArenaScreen({super.key});
@@ -88,7 +89,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final otherBoards = allBoards.where((b) => b.id != resolvedId).toList();
 
     return Scaffold(
-      backgroundColor: NuvoColors.navy,
+      backgroundColor: _kBlack,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -112,8 +113,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             Text(
                               'ARENA',
                               style: AppTextStyles.brandLabel.copyWith(
-                                color: NuvoColors.blue,
-                                letterSpacing: 2.0,
+                                color: NuvoColors.blue2,
+                                letterSpacing: 0,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -132,12 +133,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: _kCard,
+                            color: Colors.white.withValues(alpha: 0.07),
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _kCardBorder,
-                              width: 1.5,
-                            ),
+                            border: Border.all(color: _kCardBorder, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: NuvoColors.blue.withValues(alpha: 0.22),
+                                blurRadius: 22,
+                              ),
+                            ],
                           ),
                           alignment: Alignment.center,
                           child: Text(
@@ -155,13 +159,13 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
 
               // ── Content ────────────────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 120),
+                padding: const EdgeInsets.fromLTRB(20, 26, 20, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     if (arenaState.loading && snapshot == null)
-                      Center(
+                      const Center(
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 48),
+                          padding: EdgeInsets.symmetric(vertical: 48),
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: NuvoColors.blue,
@@ -208,7 +212,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           'OTHER RACES',
                           style: AppTextStyles.brandLabel.copyWith(
                             color: _kMuted,
-                            letterSpacing: 1.5,
+                            letterSpacing: 0,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -379,14 +383,23 @@ class _FocusBoardCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: _kCard,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF102A58), _kCard, _kBlack],
+        ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _kCardBorder),
-        boxShadow: const [
+        border: Border.all(color: _kBlueBorder),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x30000000),
-            blurRadius: 32,
-            offset: Offset(0, 10),
+            color: NuvoColors.blue.withValues(alpha: 0.26),
+            blurRadius: 34,
+            offset: const Offset(0, 14),
+          ),
+          const BoxShadow(
+            color: Color(0x90000000),
+            blurRadius: 28,
+            offset: Offset(0, 18),
           ),
         ],
       ),
@@ -414,6 +427,7 @@ class _FocusBoardCard extends StatelessWidget {
                   board.title,
                   style: AppTextStyles.headlineMedium.copyWith(
                     color: Colors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -445,7 +459,7 @@ class _FocusBoardCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             board.boardContext,
-            style: AppTextStyles.bodySmall.copyWith(color: _kSub),
+            style: AppTextStyles.bodySmall.copyWith(color: _kSub, height: 1.35),
           ),
 
           // Crew strip
@@ -481,7 +495,7 @@ class _FocusBoardCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _kCardBorder),
+                border: Border.all(color: _kBlueBorder.withValues(alpha: 0.55)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -816,11 +830,11 @@ class _RaceChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? NuvoColors.blue : _kCard,
+          color: selected
+              ? NuvoColors.blue
+              : Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? NuvoColors.blue : _kCardBorder,
-          ),
+          border: Border.all(color: selected ? NuvoColors.blue : _kCardBorder),
           boxShadow: selected
               ? [
                   BoxShadow(
@@ -835,7 +849,7 @@ class _RaceChip extends StatelessWidget {
           board.title,
           style: AppTextStyles.labelMedium.copyWith(
             color: selected ? Colors.white : _kSub,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           ),
           maxLines: 1,
         ),
@@ -863,9 +877,16 @@ class _CompactBoardRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: _kCard,
+          color: Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: _kCardBorder),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x50000000),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -917,11 +938,7 @@ class _CompactBoardRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: _kMuted,
-              size: 16,
-            ),
+            const Icon(Icons.chevron_right_rounded, color: _kMuted, size: 16),
           ],
         ),
       ),
@@ -966,9 +983,9 @@ class _ArenaEmptyState extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: _kCard,
+            color: Colors.white.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _kCardBorder),
+            border: Border.all(color: _kBlueBorder.withValues(alpha: 0.45)),
           ),
           child: Row(
             children: [
@@ -988,10 +1005,7 @@ class _ArenaEmptyState extends StatelessWidget {
                               alpha: 0.08 + i * 0.06,
                             ),
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _kCardBorder,
-                              width: 1.5,
-                            ),
+                            border: Border.all(color: _kCardBorder, width: 1.5),
                           ),
                         ),
                       ),
@@ -1009,11 +1023,7 @@ class _ArenaEmptyState extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        NuvoBlueButton(
-          label: 'Start a race',
-          expand: true,
-          onPressed: onStart,
-        ),
+        NuvoBlueButton(label: 'Start a race', expand: true, onPressed: onStart),
         const SizedBox(height: 10),
         _DarkOutlineButton(label: 'Join with code', onTap: onJoin),
       ],
@@ -1034,10 +1044,7 @@ class _ErrorState extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        Text(
-          message,
-          style: AppTextStyles.bodyMedium.copyWith(color: _kSub),
-        ),
+        Text(message, style: AppTextStyles.bodyMedium.copyWith(color: _kSub)),
         const SizedBox(height: 16),
         _DarkOutlineButton(label: 'Retry', onTap: onRetry),
       ],
@@ -1076,7 +1083,7 @@ void _showNotificationsSheet(BuildContext context) {
               'UPDATES',
               style: AppTextStyles.brandLabel.copyWith(
                 color: NuvoColors.blue,
-                letterSpacing: 2.0,
+                letterSpacing: 0,
               ),
             ),
             const SizedBox(height: 12),
