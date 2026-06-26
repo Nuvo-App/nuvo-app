@@ -11,6 +11,12 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
 
+const _kProfileBlack = Color(0xFF02050B);
+const _kProfileCard = Color(0xFF08172F);
+const _kProfileBorder = Color(0x20FFFFFF);
+const _kProfileBlueBorder = Color(0x7A075BFF);
+const _kProfileTextMuted = Color(0x99FFFFFF);
+
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -26,7 +32,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final username = user?.username != null ? '@${user!.username}' : null;
     final initials = user?.avatarInitials ?? '?';
     final photoUrl = user?.profilePhotoUrl;
-    debugPrint('PROFILE_SCREEN_PHOTO_URL: $photoUrl');
     final uid = user?.id;
 
     final raceState = ref.watch(raceControllerProvider);
@@ -52,14 +57,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final safeTop = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: _kProfileBlack,
       body: CustomScrollView(
         slivers: [
           // ── Navy header ───────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
-              color: NuvoColors.navy,
-              padding: EdgeInsets.fromLTRB(20, safeTop + 24, 20, 32),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [_kProfileCard, _kProfileBlack],
+                ),
+              ),
+              padding: EdgeInsets.fromLTRB(20, safeTop + 24, 20, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -69,7 +80,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       Text(
                         'PROFILE',
                         style: AppTextStyles.brandLabel.copyWith(
-                          color: NuvoColors.white.withValues(alpha: 0.45),
+                          color: NuvoColors.blue2,
+                          letterSpacing: 0,
                         ),
                       ),
                       const Spacer(),
@@ -83,6 +95,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.10),
                             borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: _kProfileBorder),
                           ),
                           child: Text(
                             'Edit',
@@ -97,75 +110,123 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 20),
 
                   // Avatar + name
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      NuvoAvatar(
-                        initials: initials,
-                        photoUrl: photoUrl,
-                        size: NuvoAvatarSizes.profile,
-                        bgColor: Colors.white.withValues(alpha: 0.14),
-                        textColor: NuvoColors.white,
-                        borderColor: Colors.white.withValues(alpha: 0.25),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              style: AppTextStyles.headlineLarge.copyWith(
-                                color: NuvoColors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (username != null) ...[
-                              const SizedBox(height: 3),
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: _kProfileBlueBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: NuvoColors.blue.withValues(alpha: 0.20),
+                          blurRadius: 32,
+                          offset: const Offset(0, 14),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        NuvoAvatar(
+                          initials: initials,
+                          photoUrl: photoUrl,
+                          size: NuvoAvatarSizes.profile,
+                          bgColor: NuvoColors.blue.withValues(alpha: 0.22),
+                          textColor: NuvoColors.white,
+                          borderColor: NuvoColors.blue.withValues(alpha: 0.55),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                username,
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: NuvoColors.white.withValues(
-                                    alpha: 0.5,
+                                displayName,
+                                style: AppTextStyles.headlineLarge.copyWith(
+                                  color: NuvoColors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (username != null) ...[
+                                const SizedBox(height: 5),
+                                Text(
+                                  username,
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: _kProfileTextMuted,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: NuvoColors.blue.withValues(
+                                    alpha: 0.18,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: NuvoColors.blue.withValues(
+                                      alpha: 0.42,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Member pass active',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: NuvoColors.white,
+                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ),
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
 
                   // Stats row
-                  const SizedBox(height: 28),
-                  Row(
-                    children: [
-                      _HeaderStat(value: '$activeCount', label: 'Active'),
-                      _HeaderDivider(),
-                      _HeaderStat(value: '$finishedCount', label: 'Finished'),
-                      _HeaderDivider(),
-                      _HeaderStat(value: '$moveCount', label: 'Moves'),
-                      _HeaderDivider(),
-                      _HeaderStat(value: '$avgProgress%', label: 'Avg'),
-                    ],
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _kProfileBorder),
+                    ),
+                    child: Row(
+                      children: [
+                        _HeaderStat(value: '$activeCount', label: 'Active'),
+                        _HeaderDivider(),
+                        _HeaderStat(value: '$finishedCount', label: 'Finished'),
+                        _HeaderDivider(),
+                        _HeaderStat(value: '$moveCount', label: 'Moves'),
+                        _HeaderDivider(),
+                        _HeaderStat(value: '$avgProgress%', label: 'Avg'),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
 
-          // ── White body ────────────────────────────────────────────────────
+          // ── Dark body ─────────────────────────────────────────────────────
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 100),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 112),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // Race history
                 Text(
                   'RACE HISTORY',
                   style: AppTextStyles.brandLabel.copyWith(
-                    color: NuvoColors.muted,
+                    color: _kProfileTextMuted,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -174,14 +235,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const Center(
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: NuvoColors.blue,
+                      ),
                     ),
                   )
                 else if (raceState.races.isEmpty)
                   Text(
                     'Start your first race to build your history.',
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.muted,
+                      color: _kProfileTextMuted,
                     ),
                   )
                 else
@@ -200,7 +264,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(
                   'ACCOUNT',
                   style: AppTextStyles.brandLabel.copyWith(
-                    color: NuvoColors.muted,
+                    color: _kProfileTextMuted,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -247,7 +312,10 @@ class _HeaderStat extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTextStyles.displaySmall.copyWith(color: NuvoColors.white),
+            style: AppTextStyles.displaySmall.copyWith(
+              color: NuvoColors.white,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 3),
           Text(
@@ -293,9 +361,18 @@ class _ProfileRaceRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.divider),
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isActive ? _kProfileBlueBorder : _kProfileBorder,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x50000000),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,7 +382,9 @@ class _ProfileRaceRow extends StatelessWidget {
                 Expanded(
                   child: Text(
                     race.displayTitle,
-                    style: AppTextStyles.titleMedium,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: NuvoColors.white,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -317,9 +396,14 @@ class _ProfileRaceRow extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? NuvoColors.blue.withValues(alpha: 0.10)
-                        : NuvoColors.panel,
-                    borderRadius: BorderRadius.circular(6),
+                        ? NuvoColors.blue.withValues(alpha: 0.18)
+                        : Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: isActive
+                          ? NuvoColors.blue.withValues(alpha: 0.35)
+                          : _kProfileBorder,
+                    ),
                   ),
                   child: Text(
                     isActive ? 'Active' : _statusLabel(race.status),
@@ -335,6 +419,7 @@ class _ProfileRaceRow extends StatelessWidget {
               progressPercent: pct,
               trackHeight: 2.5,
               dotDiameter: 9,
+              onDark: true,
             ),
           ],
         ),
@@ -360,20 +445,35 @@ class _AccountRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDanger ? NuvoColors.danger : NuvoColors.navy;
+    final color = isDanger ? NuvoColors.danger : NuvoColors.white;
+    final bg = isDanger
+        ? NuvoColors.danger.withValues(alpha: 0.10)
+        : NuvoColors.blue.withValues(alpha: 0.14);
 
     return PressableScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: NuvoColors.divider),
+          color: Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDanger
+                ? NuvoColors.danger.withValues(alpha: 0.30)
+                : _kProfileBorder,
+          ),
         ),
         child: Row(
           children: [
-            Icon(icon, color: color, size: 18),
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 18),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -384,7 +484,7 @@ class _AccountRow extends StatelessWidget {
             if (!isDanger)
               const Icon(
                 Icons.chevron_right_rounded,
-                color: NuvoColors.muted,
+                color: _kProfileTextMuted,
                 size: 16,
               ),
           ],
