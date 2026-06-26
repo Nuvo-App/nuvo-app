@@ -55,129 +55,125 @@ class RaceLaneRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: NuvoColors.divider, width: 0.8),
         ),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── Left accent strip ──────────────────────────────────────
-              Container(width: 3, color: accentColor),
+        child: Stack(
+          children: [
+            // ── Left accent strip ──────────────────────────────────────
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              child: ColoredBox(color: accentColor),
+            ),
 
-              // ── Content ────────────────────────────────────────────────
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(13, 13, 14, 13),
-                  child: Column(
+            // ── Content ────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title row + score
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title row + score
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _RaceTypePill(
-                                  label: isComplete
-                                      ? 'Done'
-                                      : raceTypeLabel,
-                                  complete: isComplete,
-                                ),
-                                const SizedBox(height: 5),
-                                Text(
-                                  title,
-                                  style: AppTextStyles.titleMedium,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                scoreLabel,
-                                style: AppTextStyles.labelLarge.copyWith(
-                                  color: isComplete
-                                      ? NuvoColors.success
-                                      : NuvoColors.navy,
-                                ),
-                              ),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 14,
-                                color: NuvoColors.muted,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      // Progress lane — the dominant visual
-                      const SizedBox(height: 12),
-                      _LaneProgress(
-                        progressPercent: pct,
-                        laneColor: laneColor,
-                      ),
-
-                      // Crew avatars + gap copy
-                      const SizedBox(height: 9),
-                      Row(
-                        children: [
-                          if (avatars.isNotEmpty)
-                            NuvoAvatarStack(
-                              avatars: avatars,
-                              total: racerCount,
-                              size: 18,
-                              max: 4,
-                            ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: gapCopy != null
-                                ? RaceGapText(copy: gapCopy!)
-                                : Text(
-                                    '$racerCount ${racerCount == 1 ? 'racer' : 'racers'}',
-                                    style: AppTextStyles.bodySmall,
-                                  ),
-                          ),
-                        ],
-                      ),
-
-                      // Recent activity pulse
-                      if (recentActivityLine != null) ...[
-                        const SizedBox(height: 8),
-                        Row(
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 5,
-                              height: 5,
-                              decoration: const BoxDecoration(
-                                color: NuvoColors.success,
-                                shape: BoxShape.circle,
-                              ),
+                            _RaceTypePill(
+                              label: isComplete ? 'Done' : raceTypeLabel,
+                              complete: isComplete,
                             ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                recentActivityLine!,
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: NuvoColors.muted,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                            const SizedBox(height: 5),
+                            Text(
+                              title,
+                              style: AppTextStyles.titleMedium,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            scoreLabel,
+                            style: AppTextStyles.labelLarge.copyWith(
+                              color: isComplete
+                                  ? NuvoColors.success
+                                  : NuvoColors.navy,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 14,
+                            color: NuvoColors.muted,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ),
+
+                  // Progress lane — the dominant visual
+                  const SizedBox(height: 12),
+                  _LaneProgress(progressPercent: pct, laneColor: laneColor),
+
+                  // Crew avatars + gap copy
+                  const SizedBox(height: 9),
+                  Row(
+                    children: [
+                      if (avatars.isNotEmpty)
+                        NuvoAvatarStack(
+                          avatars: avatars,
+                          total: racerCount,
+                          size: 18,
+                          max: 4,
+                        ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: gapCopy != null
+                            ? RaceGapText(copy: gapCopy!)
+                            : Text(
+                                '$racerCount ${racerCount == 1 ? 'racer' : 'racers'}',
+                                style: AppTextStyles.bodySmall,
+                              ),
+                      ),
+                    ],
+                  ),
+
+                  // Recent activity pulse
+                  if (recentActivityLine != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: const BoxDecoration(
+                            color: NuvoColors.success,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            recentActivityLine!,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: NuvoColors.muted,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -188,10 +184,7 @@ class RaceLaneRow extends StatelessWidget {
 // The centrepiece visual: a 5px track with a dot rider and a flag at the end.
 
 class _LaneProgress extends StatelessWidget {
-  const _LaneProgress({
-    required this.progressPercent,
-    required this.laneColor,
-  });
+  const _LaneProgress({required this.progressPercent, required this.laneColor});
 
   final int progressPercent;
   final Color laneColor;
