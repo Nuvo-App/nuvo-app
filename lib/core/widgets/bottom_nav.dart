@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
 
 // Indices map to shell paths in main_shell.dart:
@@ -18,42 +19,62 @@ class NuvoBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const _items = [
-    _NavItem(icon: Icons.bolt_rounded,    label: 'Arena'),
-    _NavItem(icon: Icons.flag_rounded,    label: 'Races'),
-    _NavItem(icon: Icons.add_rounded,     label: 'Move',   isCta: true),
-    _NavItem(icon: Icons.group_rounded,   label: 'Crew'),
-    _NavItem(icon: Icons.person_rounded,  label: 'Profile'),
+    _NavItem(icon: Icons.bolt_rounded, label: 'Arena'),
+    _NavItem(icon: Icons.flag_rounded, label: 'Races'),
+    _NavItem(icon: Icons.add_rounded, label: 'Move', isCta: true),
+    _NavItem(icon: Icons.group_rounded, label: 'Crew'),
+    _NavItem(icon: Icons.person_rounded, label: 'Profile'),
   ];
 
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: NuvoColors.navy,
-        border: Border(
-          top: BorderSide(color: Color(0x14FFFFFF), width: 0.5),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 14),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: NuvoColors.blue.withValues(alpha: 0.14),
+              blurRadius: 40,
+              offset: const Offset(0, 16),
+            ),
+            BoxShadow(
+              color: NuvoColors.navy.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottom, top: 6),
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            children: [
-              for (var i = 0; i < _items.length; i++)
-                Expanded(
-                  child: _NavButton(
-                    item: _items[i],
-                    selected: i == currentIndex,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      onTap(i);
-                    },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            height: 68,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+            decoration: BoxDecoration(
+              color: NuvoColors.white.withValues(alpha: 0.96),
+              border: Border.all(
+                color: NuvoColors.white,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                for (var i = 0; i < _items.length; i++)
+                  Expanded(
+                    child: _NavButton(
+                      item: _items[i],
+                      selected: i == currentIndex,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        onTap(i);
+                      },
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -88,40 +109,68 @@ class _NavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (item.isCta) return _CtaButton(selected: selected, onTap: onTap);
 
-    return GestureDetector(
+    return PressableScale(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Icon
-          AnimatedScale(
-            scale: selected ? 1.08 : 1.0,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            child: Icon(
-              item.icon,
-              size: 22,
-              color: selected
-                  ? NuvoColors.white
-                  : NuvoColors.white.withValues(alpha: 0.38),
+      scale: 0.93,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        height: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: selected
+              ? NuvoColors.blue.withValues(alpha: 0.08)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              width: selected ? 36 : 28,
+              height: selected ? 28 : 28,
+              decoration: BoxDecoration(
+                gradient: selected
+                    ? const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [NuvoColors.blue, NuvoColors.blueInk],
+                      )
+                    : null,
+                color: selected ? null : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                item.icon,
+                size: 18,
+                color: selected ? NuvoColors.white : NuvoColors.paleSlate,
+              ),
             ),
-          ),
-
-          const SizedBox(height: 5),
-
-          // Animated indicator pill
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            width: selected ? 18.0 : 0.0,
-            height: 3,
-            decoration: BoxDecoration(
-              color: NuvoColors.blue,
-              borderRadius: BorderRadius.circular(2),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              child: selected
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.fade,
+                        softWrap: false,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.blue,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : const SizedBox(height: 0),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -139,29 +188,30 @@ class _CtaButton extends StatelessWidget {
       onTap: onTap,
       scale: 0.90,
       child: Center(
-        child: Container(
-          width: 50,
-          height: 50,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          width: selected ? 58 : 54,
+          height: selected ? 54 : 50,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF2B7FFF), NuvoColors.blue],
+              colors: [NuvoColors.navy2, NuvoColors.navy, NuvoColors.blueInk],
             ),
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: NuvoColors.blue.withValues(alpha: 0.40),
-                blurRadius: 18,
-                spreadRadius: 0,
-                offset: const Offset(0, 4),
+                color: NuvoColors.blue.withValues(alpha: 0.30),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
           child: const Icon(
             Icons.add_rounded,
             color: NuvoColors.white,
-            size: 26,
+            size: 28,
           ),
         ),
       ),

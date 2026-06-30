@@ -15,7 +15,7 @@ class NuvoIconBadge extends StatelessWidget {
     this.iconSize = 20,
     this.color = NuvoColors.navy,
     this.iconColor = NuvoColors.white,
-    this.radius = 13,
+    this.radius = 12,
   });
 
   final IconData icon;
@@ -33,6 +33,13 @@ class NuvoIconBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.20),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       alignment: Alignment.center,
       child: Icon(icon, color: iconColor, size: iconSize),
@@ -59,23 +66,24 @@ class NuvoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = onDark
         ? color.withValues(alpha: 0.22)
-        : color.withValues(alpha: 0.12);
+        : color.withValues(alpha: 0.10);
     final text = onDark ? NuvoColors.white : color;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: color.withValues(alpha: onDark ? 0.35 : 0.28),
+          color: color.withValues(alpha: onDark ? 0.32 : 0.22),
+          width: 1,
         ),
       ),
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
           color: text,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           fontSize: 10,
         ),
       ),
@@ -85,14 +93,14 @@ class NuvoPill extends StatelessWidget {
 
 // ── NuvoBackplateCard ─────────────────────────────────────────────────────────
 
-/// Hero / premium surface with offset navy backplate shadow.
+/// Hero / premium surface with a soft gradient and refined shadow.
 class NuvoBackplateCard extends StatelessWidget {
   const NuvoBackplateCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
-    this.color = NuvoColors.navy,
-    this.radius = 24.0,
+    this.color = NuvoColors.white,
+    this.radius = 20.0,
     this.onTap,
     this.shadowOpacity = 0.70,
   });
@@ -109,13 +117,36 @@ class NuvoBackplateCard extends StatelessWidget {
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: color == NuvoColors.white
+              ? const [
+                  NuvoColors.white,
+                  NuvoColors.inkWash,
+                  NuvoColors.icyBlue,
+                ]
+              : [color, color],
+        ),
         borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: NuvoColors.border,
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Color.fromRGBO(7, 21, 43, shadowOpacity),
-            blurRadius: 0,
-            offset: const Offset(5, 6),
+            color: NuvoColors.blue.withValues(
+              alpha: 0.12 * shadowOpacity,
+            ),
+            blurRadius: 28,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: NuvoColors.navy.withValues(
+              alpha: 0.06 * shadowOpacity,
+            ),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -131,7 +162,7 @@ class NuvoBackplateCard extends StatelessWidget {
 
 // ── NuvoCompactCard ───────────────────────────────────────────────────────────
 
-/// Light card with subtle border and small offset shadow — for secondary rows.
+/// White card with a very soft shadow — secondary rows and tiles.
 class NuvoCompactCard extends StatelessWidget {
   const NuvoCompactCard({
     super.key,
@@ -139,7 +170,7 @@ class NuvoCompactCard extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     this.onTap,
     this.color = NuvoColors.white,
-    this.radius = 18.0,
+    this.radius = 16.0,
     this.borderColor,
   });
 
@@ -157,12 +188,20 @@ class NuvoCompactCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? NuvoColors.border),
-        boxShadow: const [
+        border: Border.all(
+          color: borderColor ?? NuvoColors.border,
+          width: 1,
+        ),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x1007152B),
-            blurRadius: 0,
-            offset: Offset(2, 3),
+            color: NuvoColors.blue.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
+          const BoxShadow(
+            color: Color(0x080A1A33),
+            blurRadius: 8,
+            offset: Offset(0, 3),
           ),
         ],
       ),
@@ -199,7 +238,18 @@ class NuvoSectionHeader extends StatelessWidget {
       padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: AppTextStyles.titleLarge)),
+          Container(
+            width: 5,
+            height: 20,
+            decoration: BoxDecoration(
+              color: NuvoColors.blue,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(title, style: AppTextStyles.titleMedium),
+          ),
           ?action,
         ],
       ),
@@ -248,17 +298,13 @@ class NuvoActionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: iconBg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NuvoColors.border),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x1207152B),
-                  blurRadius: 0,
-                  offset: Offset(2, 2),
-                ),
-              ],
+              border: Border.all(
+                color: NuvoColors.border,
+                width: 1,
+              ),
             ),
             alignment: Alignment.center,
-            child: Icon(icon, color: iconColor, size: 18),
+            child: Icon(icon, color: iconColor, size: 17),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -284,8 +330,8 @@ class NuvoActionTile extends StatelessWidget {
           ] else if (showArrow && onTap != null)
             const Icon(
               Icons.chevron_right_rounded,
-              color: NuvoColors.muted,
-              size: 18,
+              color: NuvoColors.paleSlate,
+              size: 17,
             ),
         ],
       ),
@@ -324,13 +370,18 @@ class NuvoDenseRaceRow extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
           color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: const [
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: NuvoColors.border, width: 1),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x1207152B),
-              blurRadius: 0,
-              offset: Offset(2, 3),
+              color: NuvoColors.blue.withValues(alpha: 0.07),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+            const BoxShadow(
+              color: Color(0x080A1A33),
+              blurRadius: 8,
+              offset: Offset(0, 3),
             ),
           ],
         ),
@@ -341,14 +392,14 @@ class NuvoDenseRaceRow extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: isComplete ? NuvoColors.success : NuvoColors.navy,
+                color: isComplete ? NuvoColors.success : NuvoColors.blue,
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.center,
               child: Icon(
                 isAiMotion ? Icons.directions_run_rounded : icon,
                 color: NuvoColors.white,
-                size: 19,
+                size: 18,
               ),
             ),
             const SizedBox(width: 12),
@@ -391,8 +442,8 @@ class NuvoDenseRaceRow extends StatelessWidget {
                 const SizedBox(width: 6),
                 const Icon(
                   Icons.arrow_forward_ios_rounded,
-                  color: NuvoColors.muted,
-                  size: 13,
+                  color: NuvoColors.paleSlate,
+                  size: 12,
                 ),
               ],
             ),
@@ -415,16 +466,16 @@ class NuvoStatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x1007152B),
-            blurRadius: 0,
-            offset: Offset(2, 3),
+            color: NuvoColors.blue.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -452,7 +503,7 @@ class NuvoStatTile extends StatelessWidget {
 // ── NuvoPageHeader ────────────────────────────────────────────────────────────
 
 /// Tab-screen page header: large bold title, optional subtitle, optional trailing.
-/// Matches Arena spacing and typography for use on Compete, Pass, Profile tabs.
+/// A single blue accent line at the top instead of multi-colored dots.
 class NuvoPageHeader extends StatelessWidget {
   const NuvoPageHeader({
     super.key,
@@ -474,9 +525,18 @@ class NuvoPageHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: AppTextStyles.headlineLarge),
+              Container(
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: NuvoColors.blue,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(title, style: AppTextStyles.displaySmall),
               if (subtitle != null) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
                 Text(
                   subtitle!,
                   style: AppTextStyles.bodyMedium.copyWith(
@@ -516,24 +576,24 @@ class NuvoBackNavRow extends StatelessWidget {
         PressableScale(
           onTap: onBack,
           child: Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: NuvoColors.icyBlue,
+              color: NuvoColors.white,
               shape: BoxShape.circle,
-              border: Border.all(color: NuvoColors.border),
-              boxShadow: const [
+              border: Border.all(color: NuvoColors.border, width: 1),
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x1207152B),
-                  blurRadius: 0,
-                  offset: Offset(2, 3),
+                  color: NuvoColors.blue.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: const Icon(
               Icons.arrow_back_rounded,
               color: NuvoColors.navy,
-              size: 20,
+              size: 19,
             ),
           ),
         ),
@@ -556,7 +616,7 @@ class NuvoBackNavRow extends StatelessWidget {
 
 // ── NuvoTextInput ─────────────────────────────────────────────────────────────
 
-/// Standard form input: label above, white fill, #DCE5F2 border, radius 14,
+/// Standard form input: label above, white fill, clean 14px radius border,
 /// focused blue border, muted helper/error text.
 class NuvoTextInput extends StatelessWidget {
   const NuvoTextInput({
@@ -611,7 +671,7 @@ class NuvoTextInput extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: AppTextStyles.bodyMedium.copyWith(
-              color: NuvoColors.muted,
+              color: NuvoColors.textMuted,
             ),
             filled: true,
             fillColor: NuvoColors.white,
@@ -629,16 +689,19 @@ class NuvoTextInput extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+              borderSide: const BorderSide(
+                color: NuvoColors.blue,
+                width: 1.6,
+              ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFFE5484D)),
+              borderSide: const BorderSide(color: NuvoColors.danger),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(
-                color: Color(0xFFE5484D),
+                color: NuvoColors.danger,
                 width: 1.6,
               ),
             ),
@@ -648,7 +711,7 @@ class NuvoTextInput extends StatelessWidget {
               color: NuvoColors.muted,
             ),
             errorStyle: AppTextStyles.bodySmall.copyWith(
-              color: const Color(0xFFE5484D),
+              color: NuvoColors.danger,
             ),
           ),
         ),
@@ -660,8 +723,7 @@ class NuvoTextInput extends StatelessWidget {
 // ── NuvoCurrentUserRow ────────────────────────────────────────────────────────
 
 /// Current-user highlight row for leaderboards.
-/// Pale blue fill, blue 1.5px border, blue rank pill, bold navy name,
-/// blue right-aligned value. No shadow.
+/// Icy blue fill, blue border, blue rank pill, bold navy name, blue value.
 class NuvoCurrentUserRow extends StatelessWidget {
   const NuvoCurrentUserRow({
     super.key,
@@ -693,11 +755,14 @@ class NuvoCurrentUserRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.icyBlue,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: NuvoColors.blue, width: 1.5),
+        border: Border.all(
+          color: NuvoColors.blue.withValues(alpha: 0.50),
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
-          // Blue rank circle pill
+          // Blue rank circle
           Container(
             width: 24,
             height: 24,
@@ -710,7 +775,7 @@ class NuvoCurrentUserRow extends StatelessWidget {
               '$rank',
               style: const TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: NuvoColors.white,
               ),
             ),
@@ -720,8 +785,8 @@ class NuvoCurrentUserRow extends StatelessWidget {
           Container(
             width: 30,
             height: 30,
-            decoration: const BoxDecoration(
-              color: NuvoColors.icyBlue,
+            decoration: BoxDecoration(
+              color: NuvoColors.blue.withValues(alpha: 0.14),
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -729,7 +794,7 @@ class NuvoCurrentUserRow extends StatelessWidget {
               abbr,
               style: const TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: NuvoColors.blue,
               ),
             ),
@@ -785,8 +850,6 @@ class NuvoRaceLane extends StatelessWidget {
     final trackColor = onDark
         ? Colors.white.withValues(alpha: 0.18)
         : NuvoColors.trackBg;
-    final fillColor =
-        progress >= 1 ? NuvoColors.success : NuvoColors.blue;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -810,20 +873,32 @@ class NuvoRaceLane extends StatelessWidget {
                   width: fillWidth,
                   height: trackHeight,
                   decoration: BoxDecoration(
-                    color: fillColor,
+                    gradient: LinearGradient(
+                      colors: progress >= 1
+                          ? const [NuvoColors.success, NuvoColors.aqua]
+                          : const [NuvoColors.blueInk, NuvoColors.blue2],
+                    ),
                     borderRadius: BorderRadius.circular(trackHeight / 2),
                   ),
                 ),
               if (progress > 0 && progress < 1)
                 Positioned(
-                  left: (fillWidth - dotDiameter / 2)
-                      .clamp(0.0, totalWidth - dotDiameter),
+                  left: (fillWidth - dotDiameter / 2).clamp(
+                    0.0,
+                    totalWidth - dotDiameter,
+                  ),
                   child: Container(
                     width: dotDiameter,
                     height: dotDiameter,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: NuvoColors.blue,
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: NuvoColors.blue.withValues(alpha: 0.25),
+                          blurRadius: 10,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -886,7 +961,10 @@ class NuvoLeaderboardRow extends StatelessWidget {
           ? BoxDecoration(
               color: NuvoColors.icyBlue,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NuvoColors.blue, width: 1.5),
+              border: Border.all(
+                color: NuvoColors.blue.withValues(alpha: 0.50),
+                width: 1.5,
+              ),
             )
           : null,
       child: Row(
@@ -903,10 +981,12 @@ class NuvoLeaderboardRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Container(
-            width: 28,
-            height: 28,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
-              color: isCurrentUser ? NuvoColors.blue : NuvoColors.border,
+              color: isCurrentUser
+                  ? NuvoColors.blue
+                  : NuvoColors.border,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,

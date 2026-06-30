@@ -241,7 +241,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.red,
+                          color: NuvoColors.danger,
                         ),
                       ),
                     ],

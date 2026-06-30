@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -22,15 +21,6 @@ const _kResultStatuses = {
   'archived',
   'cancelled',
 };
-
-const _kBlack = Color(0xFF02050B);
-const _kCard = Color(0xFF08172F);
-const _kCardBorder = Color(0x20FFFFFF);
-const _kBlueBorder = Color(0x99075BFF);
-const _kDivider = Color(0x12FFFFFF);
-const _kSkel = Color(0x22FFFFFF);
-const _kSub = Color(0xB3FFFFFF);
-const _kMuted = Color(0x66FFFFFF);
 
 class ArenaScreen extends ConsumerStatefulWidget {
   const ArenaScreen({super.key});
@@ -89,89 +79,37 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final otherBoards = allBoards.where((b) => b.id != resolvedId).toList();
 
     return Scaffold(
-      backgroundColor: _kBlack,
+      backgroundColor: NuvoColors.page,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
           color: NuvoColors.blue,
-          backgroundColor: _kCard,
+          backgroundColor: NuvoColors.surface,
+          displacement: 20,
           onRefresh: () =>
               ref.read(arenaControllerProvider.notifier).loadSnapshot(),
           child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              // ── Header ─────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'ARENA',
-                              style: AppTextStyles.brandLabel.copyWith(
-                                color: NuvoColors.blue2,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              firstName,
-                              style: AppTextStyles.displayMedium.copyWith(
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PressableScale(
-                        onTap: () => _showNotificationsSheet(context),
-                        child: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.07),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: _kCardBorder, width: 1.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: NuvoColors.blue.withValues(alpha: 0.22),
-                                blurRadius: 22,
-                              ),
-                            ],
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            initials,
-                            style: AppTextStyles.labelMedium.copyWith(
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: _ArenaHeader(
+                    firstName: firstName,
+                    initials: initials,
+                    liveCount: snapshot?.liveBoards.length ?? 0,
+                    totalCount: allBoards.length,
+                    onAvatarTap: () => _showNotificationsSheet(context),
                   ),
                 ),
               ),
 
-              // ── Content ────────────────────────────────────────────────────
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 26, 20, 120),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     if (arenaState.loading && snapshot == null)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: NuvoColors.blue,
-                          ),
-                        ),
-                      )
+                      const _LoadingState()
                     else if (arenaState.error != null && snapshot == null)
                       _ErrorState(
                         message: arenaState.error!,
@@ -185,7 +123,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         onJoin: () => context.push('/races/join'),
                       )
                     else ...[
-                      // ── Focus board ─────────────────────────────────────────
                       if (activeBoard != null)
                         _FocusBoardCard(
                           board: activeBoard,
@@ -195,7 +132,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           onOpen: () => _openBoard(context, activeBoard),
                         ),
 
-                      // ── Race chips ──────────────────────────────────────────
                       if (allBoards.length > 1) ...[
                         const SizedBox(height: 20),
                         _RaceChipRow(
@@ -205,17 +141,10 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         ),
                       ],
 
-                      // ── Other races ─────────────────────────────────────────
                       if (otherBoards.isNotEmpty) ...[
                         const SizedBox(height: 28),
-                        Text(
-                          'OTHER RACES',
-                          style: AppTextStyles.brandLabel.copyWith(
-                            color: _kMuted,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
+                        const _SectionLabel(label: 'Other races'),
+                        const SizedBox(height: 12),
                         for (final b in otherBoards) ...[
                           _CompactBoardRow(
                             board: b,
@@ -360,6 +289,197 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   }
 }
 
+// ── Arena header ──────────────────────────────────────────────────────────────
+
+class _ArenaHeader extends StatelessWidget {
+  const _ArenaHeader({
+    required this.firstName,
+    required this.initials,
+    required this.liveCount,
+    required this.totalCount,
+    required this.onAvatarTap,
+  });
+
+  final String firstName;
+  final String initials;
+  final int liveCount;
+  final int totalCount;
+  final VoidCallback onAvatarTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 20, 20, 22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.navy, Color(0xFF162D52), NuvoColors.blueInk],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: NuvoColors.navy.withValues(alpha: 0.24),
+            blurRadius: 32,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: NuvoColors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: NuvoColors.white.withValues(alpha: 0.16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: NuvoColors.aqua,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$liveCount live',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.white,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              PressableScale(
+                onTap: onAvatarTap,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue.withValues(alpha: 0.22),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: NuvoColors.white.withValues(alpha: 0.24),
+                      width: 1.5,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initials,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: NuvoColors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Hi, $firstName.',
+            style: AppTextStyles.displaySmall.copyWith(
+              color: NuvoColors.white,
+              height: 1.0,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Your crew is waiting. Move the leaderboard.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.70),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _StatChip(value: '$totalCount', label: 'boards'),
+              const SizedBox(width: 8),
+              _StatChip(value: '$liveCount', label: 'live'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.value, required this.label});
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: NuvoColors.white.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: NuvoColors.white.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.65),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Section label ─────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: NuvoColors.muted,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Focus board card ──────────────────────────────────────────────────────────
 
 class _FocusBoardCard extends StatelessWidget {
@@ -381,219 +501,260 @@ class _FocusBoardCard extends StatelessWidget {
     final pct = board.progressPercent ?? 0;
 
     return Container(
-      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF102A58), _kCard, _kBlack],
-        ),
+        color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _kBlueBorder),
+        border: Border.all(
+          color: NuvoColors.blue.withValues(alpha: 0.18),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.26),
-            blurRadius: 34,
-            offset: const Offset(0, 14),
+            color: NuvoColors.blue.withValues(alpha: 0.10),
+            blurRadius: 32,
+            offset: const Offset(0, 12),
           ),
           const BoxShadow(
-            color: Color(0x90000000),
-            blurRadius: 28,
-            offset: Offset(0, 18),
+            color: Color(0x0A0A1A33),
+            blurRadius: 16,
+            offset: Offset(0, 6),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Loading bar
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            height: isLoading ? 2 : 0,
-            width: double.infinity,
-            margin: EdgeInsets.only(bottom: isLoading ? 16 : 0),
-            decoration: BoxDecoration(
+          // Progress stripe
+          if (isLoading)
+            LinearProgressIndicator(
               color: NuvoColors.blue,
-              borderRadius: BorderRadius.circular(2),
+              backgroundColor: NuvoColors.blue.withValues(alpha: 0.10),
+              minHeight: 2,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            )
+          else if (pct > 0)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              child: LinearProgressIndicator(
+                value: pct / 100,
+                color: isResult ? NuvoColors.success : NuvoColors.blue,
+                backgroundColor: NuvoColors.blue.withValues(alpha: 0.08),
+                minHeight: 3,
+              ),
             ),
-          ),
 
-          // Title + badge
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  board.title,
-                  style: AppTextStyles.headlineMedium.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (board.badgeLabel != null) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: NuvoColors.blue,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    board.badgeLabel!,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-
-          const SizedBox(height: 6),
-          Text(
-            board.boardContext,
-            style: AppTextStyles.bodySmall.copyWith(color: _kSub, height: 1.35),
-          ),
-
-          // Crew strip
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              if (board.miniLeaderboard.isNotEmpty)
-                NuvoAvatarStack(
-                  avatars: board.miniLeaderboard
-                      .map(
-                        (r) => (initials: r.label, photoUrl: r.profilePhotoUrl),
-                      )
-                      .toList(),
-                  total: board.racerCount ?? board.miniLeaderboard.length,
-                  size: 24,
-                  max: 4,
-                  borderColor: _kCard,
-                ),
-              const Spacer(),
-              if (board.daysLeft != null)
-                Text(
-                  '${board.daysLeft}d left',
-                  style: AppTextStyles.labelSmall.copyWith(color: _kMuted),
-                ),
-            ],
-          ),
-
-          // Rank + chase
-          if (board.myRank != null && !isResult) ...[
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _kBlueBorder.withValues(alpha: 0.55)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '#${board.myRank}',
-                        style: AppTextStyles.displaySmall.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        'of ${board.racerCount ?? 1}',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: _kMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (board.chaseCopy != null) ...[
-                    const SizedBox(width: 14),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (board.badgeLabel != null)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: NuvoColors.blue.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                board.badgeLabel!,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: NuvoColors.blue,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          Text(
+                            board.title,
+                            style: AppTextStyles.headlineMedium.copyWith(
+                              color: NuvoColors.navy,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isResult
+                            ? NuvoColors.success.withValues(alpha: 0.10)
+                            : NuvoColors.blue.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
                       child: Text(
-                        board.chaseCopy!,
-                        style: AppTextStyles.bodySmall.copyWith(color: _kSub),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        '$pct%',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: isResult ? NuvoColors.success : NuvoColors.blue,
+                        ),
                       ),
                     ),
                   ],
+                ),
+
+                const SizedBox(height: 8),
+                Text(
+                  board.boardContext,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                    height: 1.4,
+                  ),
+                ),
+
+                // Crew strip
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (board.miniLeaderboard.isNotEmpty)
+                      NuvoAvatarStack(
+                        avatars: board.miniLeaderboard
+                            .map(
+                              (r) => (
+                                initials: r.label,
+                                photoUrl: r.profilePhotoUrl,
+                              ),
+                            )
+                            .toList(),
+                        total: board.racerCount ?? board.miniLeaderboard.length,
+                        size: 24,
+                        max: 4,
+                        borderColor: NuvoColors.surface,
+                      ),
+                    const Spacer(),
+                    if (board.daysLeft != null)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 12,
+                            color: NuvoColors.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${board.daysLeft}d left',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: NuvoColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+
+                // Rank + chase
+                if (board.myRank != null && !isResult) ...[
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      color: NuvoColors.panel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: NuvoColors.blue.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '#${board.myRank}',
+                              style: AppTextStyles.displaySmall.copyWith(
+                                color: NuvoColors.blue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              'of ${board.racerCount ?? 1}',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: NuvoColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (board.chaseCopy != null) ...[
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              board.chaseCopy!,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: NuvoColors.muted,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
-              ),
-            ),
-          ],
 
-          const SizedBox(height: 18),
+                const SizedBox(height: 20),
 
-          // Progress number + lane
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '$pct',
-                style: AppTextStyles.displaySmall.copyWith(
-                  color: isResult ? NuvoColors.success : Colors.white,
-                  fontWeight: FontWeight.w900,
+                // Divider
+                Container(
+                  height: 1,
+                  color: NuvoColors.divider,
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5, left: 3),
-                child: Text(
-                  '%',
-                  style: AppTextStyles.titleLarge.copyWith(color: _kMuted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          NuvoRaceLane(progressPercent: pct, onDark: true),
+                const SizedBox(height: 16),
 
-          // Mini leaderboard
-          if (isLoading || board.miniLeaderboard.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Container(height: 1, color: _kDivider),
-            const SizedBox(height: 14),
-            if (isLoading)
-              ..._buildSkeletonRows()
-            else
-              for (var i = 0; i < board.miniLeaderboard.length; i++) ...[
-                _DarkMiniRow(
-                  rank: i + 1,
-                  label: board.miniLeaderboard[i].label,
-                  value: board.miniLeaderboard[i].value,
-                  isCurrentUser: board.miniLeaderboard[i].isCurrentUser,
-                  photoUrl: board.miniLeaderboard[i].profilePhotoUrl,
-                ),
-                if (i < board.miniLeaderboard.length - 1)
-                  const SizedBox(height: 10),
+                // Mini leaderboard
+                if (isLoading)
+                  ..._buildSkeletonRows()
+                else
+                  for (var i = 0; i < board.miniLeaderboard.length; i++) ...[
+                    _LeaderboardRow(
+                      rank: i + 1,
+                      label: board.miniLeaderboard[i].label,
+                      value: board.miniLeaderboard[i].value,
+                      isCurrentUser: board.miniLeaderboard[i].isCurrentUser,
+                      photoUrl: board.miniLeaderboard[i].profilePhotoUrl,
+                    ),
+                    if (i < board.miniLeaderboard.length - 1)
+                      const SizedBox(height: 10),
+                  ],
+
+                const SizedBox(height: 20),
+
+                // CTA
+                isResult
+                    ? NuvoOutlineButton(
+                        label: 'Open board',
+                        icon: Icons.arrow_forward_rounded,
+                        expand: true,
+                        onPressed: onOpen,
+                      )
+                    : NuvoPrimaryButton(
+                        label: 'Log move',
+                        expand: true,
+                        onPressed: onLogMove,
+                      ),
               ],
-          ],
-
-          const SizedBox(height: 22),
-
-          // CTA
-          isResult
-              ? _DarkOutlineButton(
-                  label: 'Open board',
-                  icon: Icons.arrow_forward_rounded,
-                  onTap: onOpen,
-                )
-              : NuvoBlueButton(
-                  label: 'Log move',
-                  expand: true,
-                  onPressed: onLogMove,
-                ),
+            ),
+          ),
         ],
       ),
     );
@@ -604,13 +765,13 @@ class _FocusBoardCard extends StatelessWidget {
       for (var i = 0; i < 3; i++) ...[
         const Row(
           children: [
-            _Skel(width: 26, height: 26, radius: 13),
+            _Skel(width: 24, height: 24, radius: 12),
             SizedBox(width: 8),
-            _Skel(width: 26, height: 26, radius: 13),
+            _Skel(width: 24, height: 24, radius: 12),
             SizedBox(width: 10),
-            _Skel(width: 80, height: 12, radius: 4),
+            _Skel(width: 80, height: 10, radius: 4),
             Spacer(),
-            _Skel(width: 40, height: 12, radius: 4),
+            _Skel(width: 36, height: 10, radius: 4),
           ],
         ),
         if (i < 2) const SizedBox(height: 10),
@@ -619,10 +780,10 @@ class _FocusBoardCard extends StatelessWidget {
   }
 }
 
-// ── Dark mini leaderboard row ─────────────────────────────────────────────────
+// ── Leaderboard row ───────────────────────────────────────────────────────────
 
-class _DarkMiniRow extends StatelessWidget {
-  const _DarkMiniRow({
+class _LeaderboardRow extends StatelessWidget {
+  const _LeaderboardRow({
     required this.rank,
     required this.label,
     required this.value,
@@ -638,129 +799,87 @@ class _DarkMiniRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = isCurrentUser ? NuvoColors.blue : Colors.white;
-    final rankBg = isCurrentUser
-        ? NuvoColors.blue.withValues(alpha: 0.18)
-        : Colors.white.withValues(alpha: 0.08);
-    final avatarBg = isCurrentUser
-        ? NuvoColors.blue.withValues(alpha: 0.22)
-        : Colors.white.withValues(alpha: 0.10);
-
-    return Row(
-      children: [
-        // Rank circle
-        Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(color: rankBg, shape: BoxShape.circle),
-          alignment: Alignment.center,
-          child: Text(
-            '$rank',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: isCurrentUser
+          ? BoxDecoration(
+              color: NuvoColors.blue.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: NuvoColors.blue.withValues(alpha: 0.20),
+              ),
+            )
+          : null,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 20,
+            child: Text(
+              '$rank',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: isCurrentUser ? NuvoColors.blue : NuvoColors.textMuted,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        // Avatar
-        photoUrl != null
-            ? NuvoAvatar(
-                initials: _initials(label),
-                photoUrl: photoUrl,
-                size: 26,
-                bgColor: avatarBg,
-                textColor: accent,
-              )
-            : Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: avatarBg,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _initials(label),
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
+          const SizedBox(width: 8),
+          photoUrl != null
+              ? NuvoAvatar(
+                  initials: _initials(label),
+                  photoUrl: photoUrl,
+                  size: 26,
+                  bgColor: isCurrentUser
+                      ? NuvoColors.blue.withValues(alpha: 0.14)
+                      : NuvoColors.panel,
+                  textColor:
+                      isCurrentUser ? NuvoColors.blue : NuvoColors.muted,
+                )
+              : Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: isCurrentUser
+                        ? NuvoColors.blue.withValues(alpha: 0.14)
+                        : NuvoColors.panel,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _initials(label),
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: isCurrentUser ? NuvoColors.blue : NuvoColors.muted,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
-              ),
-        const SizedBox(width: 10),
-        // Name
-        Expanded(
-          child: Text(
-            label,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: isCurrentUser ? Colors.white : _kSub,
-              fontWeight: isCurrentUser ? FontWeight.w700 : FontWeight.normal,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // Value
-        Text(
-          value,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: isCurrentUser ? NuvoColors.blue : _kMuted,
-            fontWeight: isCurrentUser ? FontWeight.w700 : FontWeight.normal,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── Dark outline ghost button ─────────────────────────────────────────────────
-
-class _DarkOutlineButton extends StatelessWidget {
-  const _DarkOutlineButton({
-    required this.label,
-    required this.onTap,
-    this.icon,
-  });
-
-  final String label;
-  final VoidCallback onTap;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        height: 52,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _kCardBorder),
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
               label,
-              style: AppTextStyles.labelLarge.copyWith(color: Colors.white),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: isCurrentUser ? NuvoColors.navy : NuvoColors.muted,
+                fontWeight:
+                    isCurrentUser ? FontWeight.w600 : FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            if (icon != null) ...[
-              const SizedBox(width: 8),
-              Icon(icon, color: Colors.white, size: 18),
-            ],
-          ],
-        ),
+          ),
+          Text(
+            value,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: isCurrentUser ? NuvoColors.blue : NuvoColors.textMuted,
+              fontWeight: isCurrentUser ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Skeleton bar ──────────────────────────────────────────────────────────────
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 class _Skel extends StatelessWidget {
   const _Skel({this.width, required this.height, this.radius = 4});
@@ -773,7 +892,7 @@ class _Skel extends StatelessWidget {
     width: width,
     height: height,
     decoration: BoxDecoration(
-      color: _kSkel,
+      color: NuvoColors.panel,
       borderRadius: BorderRadius.circular(radius),
     ),
   );
@@ -827,20 +946,22 @@ class _RaceChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return PressableScale(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.blue
-              : Colors.white.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? NuvoColors.blue : _kCardBorder),
+          color: selected ? NuvoColors.blue : NuvoColors.surface,
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(
+            color: selected ? NuvoColors.blue : NuvoColors.border,
+          ),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: NuvoColors.blue.withValues(alpha: 0.30),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: NuvoColors.blue.withValues(alpha: 0.28),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
                   ),
                 ]
               : null,
@@ -848,8 +969,7 @@ class _RaceChip extends StatelessWidget {
         child: Text(
           board.title,
           style: AppTextStyles.labelMedium.copyWith(
-            color: selected ? Colors.white : _kSub,
-            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? NuvoColors.white : NuvoColors.navy,
           ),
           maxLines: 1,
         ),
@@ -858,7 +978,7 @@ class _RaceChip extends StatelessWidget {
   }
 }
 
-// ── Compact board row (other races) ──────────────────────────────────────────
+// ── Compact board row ─────────────────────────────────────────────────────────
 
 class _CompactBoardRow extends StatelessWidget {
   const _CompactBoardRow({required this.board, required this.onTap});
@@ -875,16 +995,16 @@ class _CompactBoardRow extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _kCardBorder),
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: NuvoColors.border),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x50000000),
-              blurRadius: 18,
-              offset: Offset(0, 8),
+              color: Color(0x08050B14),
+              blurRadius: 16,
+              offset: Offset(0, 6),
             ),
           ],
         ),
@@ -896,16 +1016,16 @@ class _CompactBoardRow extends StatelessWidget {
                 children: [
                   Text(
                     board.title,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: Colors.white,
-                    ),
+                    style: AppTextStyles.titleMedium,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 3),
                   Text(
                     board.boardContext,
-                    style: AppTextStyles.bodySmall.copyWith(color: _kSub),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -924,21 +1044,24 @@ class _CompactBoardRow extends StatelessWidget {
                     )
                     .toList(),
                 total: count,
-                size: 26,
+                size: 22,
                 max: 3,
-                borderColor: _kCard,
+                borderColor: NuvoColors.surface,
               ),
             ],
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Text(
               '$pct%',
               style: AppTextStyles.labelMedium.copyWith(
-                color: isComplete ? NuvoColors.success : _kMuted,
-                fontWeight: FontWeight.w700,
+                color: isComplete ? NuvoColors.success : NuvoColors.blue,
               ),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.chevron_right_rounded, color: _kMuted, size: 16),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: NuvoColors.textMuted,
+              size: 16,
+            ),
           ],
         ),
       ),
@@ -955,11 +1078,29 @@ String _initials(String name) {
   return trimmed.isEmpty ? '?' : trimmed[0].toUpperCase();
 }
 
-// ── Empty / error states ──────────────────────────────────────────────────────
+// ── Loading state ─────────────────────────────────────────────────────────────
 
-class _ArenaEmptyState extends StatelessWidget {
-  const _ArenaEmptyState({required this.onStart, required this.onJoin});
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
 
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 64),
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: NuvoColors.blue,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onStart, required this.onJoin});
   final VoidCallback onStart;
   final VoidCallback onJoin;
 
@@ -968,29 +1109,44 @@ class _ArenaEmptyState extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Icon(
+            Icons.bolt_rounded,
+            color: NuvoColors.blue,
+            size: 28,
+          ),
+        ),
+        const SizedBox(height: 20),
         Text(
-          'No active races.',
-          style: AppTextStyles.headlineMedium.copyWith(color: Colors.white),
+          'Your arena is empty.',
+          style: AppTextStyles.headlineMedium.copyWith(color: NuvoColors.navy),
         ),
         const SizedBox(height: 8),
         Text(
-          'Set a finish line, pull in your crew, and move the leaderboard.',
-          style: AppTextStyles.bodyMedium.copyWith(color: _kSub),
+          'Set a finish line, pull in your crew, and move the leaderboard together.',
+          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         ),
-        const SizedBox(height: 20),
-        // Crew invite prompt
+        const SizedBox(height: 28),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _kBlueBorder.withValues(alpha: 0.45)),
+            color: NuvoColors.panel,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: NuvoColors.blue.withValues(alpha: 0.15),
+            ),
           ),
           child: Row(
             children: [
               SizedBox(
-                width: 68,
+                width: 62,
                 height: 26,
                 child: Stack(
                   children: [
@@ -1001,37 +1157,42 @@ class _ArenaEmptyState extends StatelessWidget {
                           width: 26,
                           height: 26,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(
+                            color: NuvoColors.blue.withValues(
                               alpha: 0.08 + i * 0.06,
                             ),
                             shape: BoxShape.circle,
-                            border: Border.all(color: _kCardBorder, width: 1.5),
+                            border: Border.all(
+                              color: NuvoColors.surface,
+                              width: 1.5,
+                            ),
                           ),
                         ),
                       ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
-                  'Invite crew to race against you.',
-                  style: AppTextStyles.bodySmall.copyWith(color: _kSub),
+                  'Invite your crew to race against you.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        NuvoBlueButton(label: 'Start a race', expand: true, onPressed: onStart),
+        const SizedBox(height: 16),
+        NuvoPrimaryButton(label: 'Start a race', expand: true, onPressed: onStart),
         const SizedBox(height: 10),
-        _DarkOutlineButton(label: 'Join with code', onTap: onJoin),
+        NuvoOutlineButton(label: 'Join with code', expand: true, onPressed: onJoin),
       ],
     );
   }
 }
 
-typedef _EmptyState = _ArenaEmptyState;
+// ── Error state ───────────────────────────────────────────────────────────────
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
@@ -1043,10 +1204,10 @@ class _ErrorState extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 12),
-        Text(message, style: AppTextStyles.bodyMedium.copyWith(color: _kSub)),
         const SizedBox(height: 16),
-        _DarkOutlineButton(label: 'Retry', onTap: onRetry),
+        Text(message, style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted)),
+        const SizedBox(height: 16),
+        NuvoOutlineButton(label: 'Retry', expand: true, onPressed: onRetry),
       ],
     );
   }
@@ -1057,46 +1218,93 @@ class _ErrorState extends StatelessWidget {
 void _showNotificationsSheet(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,
-    backgroundColor: _kCard,
+    backgroundColor: NuvoColors.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (context) => SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        padding: const EdgeInsets.fromLTRB(24, 14, 24, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
-                width: 36,
+                width: 32,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: _kCardBorder,
+                  color: NuvoColors.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            Text(
-              'UPDATES',
-              style: AppTextStyles.brandLabel.copyWith(
-                color: NuvoColors.blue,
-                letterSpacing: 0,
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_outlined,
+                    color: NuvoColors.blue,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Updates',
+                      style: AppTextStyles.titleLarge,
+                    ),
+                    Text(
+                      'From your crew and races',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: NuvoColors.panel,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.inbox_outlined,
+                    color: NuvoColors.textMuted,
+                    size: 32,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No updates yet',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: NuvoColors.navy,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'When your crew joins or crosses the finish line, you\'ll see it here.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'No updates yet.',
-              style: AppTextStyles.headlineMedium.copyWith(color: Colors.white),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'When your crew joins or crosses the finish line, you will see it here.',
-              style: AppTextStyles.bodyMedium.copyWith(color: _kSub),
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),

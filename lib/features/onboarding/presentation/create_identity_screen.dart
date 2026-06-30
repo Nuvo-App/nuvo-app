@@ -161,8 +161,15 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: _nameController.text.trim().isEmpty
-                              ? NuvoColors.border
-                              : NuvoColors.navy,
+                              ? NuvoColors.panel
+                              : NuvoColors.blue,
+                          boxShadow: [
+                            BoxShadow(
+                              color: NuvoColors.blue.withValues(alpha: 0.18),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
                         ),
                         alignment: Alignment.center,
                         child: Text(
@@ -220,7 +227,7 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                                 : Icons.cancel_rounded,
                             color: _usernameAvailable == true
                                 ? NuvoColors.success
-                                : Colors.red,
+                                : NuvoColors.danger,
                             size: 16,
                           ),
                           const SizedBox(width: 6),
@@ -231,7 +238,7 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                             style: AppTextStyles.bodySmall.copyWith(
                               color: _usernameAvailable == true
                                   ? NuvoColors.success
-                                  : Colors.red,
+                                  : NuvoColors.danger,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -244,7 +251,7 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.red,
+                          color: NuvoColors.danger,
                         ),
                       ),
                     ],

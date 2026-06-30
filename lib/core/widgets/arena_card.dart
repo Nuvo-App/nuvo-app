@@ -56,7 +56,7 @@ class StackedRaceCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: NuvoColors.softBlue,
                 borderRadius: radius,
-                border: Border.all(color: NuvoColors.navy, width: 1.5),
+                border: Border.all(color: NuvoColors.border, width: 1.2),
               ),
             ),
           ),
@@ -65,7 +65,10 @@ class StackedRaceCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.white,
               borderRadius: radius,
-              border: Border.all(color: NuvoColors.navy, width: 2.2),
+              border: Border.all(
+                color: NuvoColors.blue.withValues(alpha: 0.36),
+                width: 1.4,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,7 +184,7 @@ class CompactRaceCard extends StatelessWidget {
                     widthFactor: 0.72,
                     child: CircleAvatar(
                       radius: 15,
-                      backgroundColor: NuvoColors.navy,
+                      backgroundColor: NuvoColors.blue,
                       child: Text(
                         player.initials,
                         style: AppTextStyles.labelSmall.copyWith(

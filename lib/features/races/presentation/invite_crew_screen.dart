@@ -293,7 +293,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.red,
+                          color: NuvoColors.danger,
                         ),
                       ),
                     ],

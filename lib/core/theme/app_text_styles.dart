@@ -3,62 +3,84 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// Typography — Inter only, athletic scale with tight tracking on display sizes.
+/// Typography — Space Grotesk for display, Plus Jakarta Sans for body UI.
+/// Tight letter-spacing on display sizes for a premium, modern feel.
 abstract final class AppTextStyles {
-  static TextStyle _inter(
+  static TextStyle _body(
     double size,
     FontWeight weight, {
     Color? color,
     double? height,
     double? letterSpacing,
-  }) => GoogleFonts.inter(
-    fontSize: size,
-    fontWeight: weight,
-    color: color ?? AppColors.textPrimary,
-    height: height ?? 1.4,
-    letterSpacing: letterSpacing ?? 0,
-  );
+  }) =>
+      GoogleFonts.plusJakartaSans(
+        fontSize: size,
+        fontWeight: weight,
+        color: color ?? AppColors.textPrimary,
+        height: height ?? 1.42,
+        letterSpacing: letterSpacing ?? 0,
+      );
 
-  // ── Display — for big performance numbers (rank, %, totals) ──────────────────
-  /// 60px — for oversized stats: rank, percentage complete
+  static TextStyle _display(
+    double size,
+    FontWeight weight, {
+    Color? color,
+    double? height,
+    double letterSpacing = -0.3,
+  }) =>
+      GoogleFonts.spaceGrotesk(
+        fontSize: size,
+        fontWeight: weight,
+        color: color ?? AppColors.textPrimary,
+        height: height ?? 1.04,
+        letterSpacing: letterSpacing,
+      );
+
+  // ── Display ───────────────────────────────────────────────────────────────────
   static TextStyle get displayLarge =>
-      _inter(60, FontWeight.w900, height: 0.92, letterSpacing: -2.5);
+      _display(56, FontWeight.w700, height: 0.98, letterSpacing: -0.5);
 
-  /// 44px — for prominent stats panels
   static TextStyle get displayMedium =>
-      _inter(44, FontWeight.w900, height: 0.96, letterSpacing: -1.8);
+      _display(40, FontWeight.w700, height: 1.00, letterSpacing: -0.4);
 
-  /// 32px — for secondary stats, result screens
   static TextStyle get displaySmall =>
-      _inter(32, FontWeight.w800, height: 1.02, letterSpacing: -1.0);
+      _display(30, FontWeight.w700, height: 1.06, letterSpacing: -0.3);
 
-  // ── Headline ─────────────────────────────────────────────────────────────────
-  /// 26px — screen titles, race names
+  // ── Headline ──────────────────────────────────────────────────────────────────
   static TextStyle get headlineLarge =>
-      _inter(26, FontWeight.w800, height: 1.12, letterSpacing: -0.5);
+      _display(28, FontWeight.w700, height: 1.10, letterSpacing: -0.3);
 
-  /// 21px — section headers, card titles
   static TextStyle get headlineMedium =>
-      _inter(21, FontWeight.w700, height: 1.18, letterSpacing: -0.3);
+      _display(22, FontWeight.w700, height: 1.16, letterSpacing: -0.2);
 
-  // ── Title ────────────────────────────────────────────────────────────────────
-  static TextStyle get titleLarge  => _inter(17, FontWeight.w700, letterSpacing: -0.1);
-  static TextStyle get titleMedium => _inter(15, FontWeight.w700);
+  // ── Title ─────────────────────────────────────────────────────────────────────
+  static TextStyle get titleLarge =>
+      _body(18, FontWeight.w700, height: 1.26);
 
-  // ── Body ─────────────────────────────────────────────────────────────────────
-  static TextStyle get bodyLarge  => _inter(16, FontWeight.w500);
-  static TextStyle get bodyMedium => _inter(14, FontWeight.w500);
-  static TextStyle get bodySmall  =>
-      _inter(12, FontWeight.w500, color: AppColors.textSecondary);
+  static TextStyle get titleMedium =>
+      _body(15, FontWeight.w600, height: 1.32);
 
-  // ── Label ────────────────────────────────────────────────────────────────────
-  static TextStyle get labelLarge  => _inter(14, FontWeight.w800);
-  static TextStyle get labelMedium => _inter(12, FontWeight.w700);
-  static TextStyle get labelSmall  =>
-      _inter(10, FontWeight.w600, color: AppColors.textMuted, letterSpacing: 0.4);
+  // ── Body ──────────────────────────────────────────────────────────────────────
+  static TextStyle get bodyLarge =>
+      _body(16, FontWeight.w500, height: 1.55);
 
-  // ── Brand / track label ───────────────────────────────────────────────────────
-  /// All-caps track label — ARENA, RACES, MOVE etc.
+  static TextStyle get bodyMedium =>
+      _body(14, FontWeight.w500, height: 1.5);
+
+  static TextStyle get bodySmall =>
+      _body(12, FontWeight.w500, color: AppColors.textSecondary, height: 1.4);
+
+  // ── Label ─────────────────────────────────────────────────────────────────────
+  static TextStyle get labelLarge =>
+      _body(14, FontWeight.w700, height: 1.20);
+
+  static TextStyle get labelMedium =>
+      _body(12, FontWeight.w700, height: 1.22);
+
+  static TextStyle get labelSmall =>
+      _body(10, FontWeight.w600, color: AppColors.textMuted, height: 1.2);
+
+  // ── Brand ─────────────────────────────────────────────────────────────────────
   static TextStyle get brandLabel =>
-      _inter(11, FontWeight.w800, letterSpacing: 1.2);
+      _display(13, FontWeight.w700, color: NuvoColors.blue, height: 1.0);
 }

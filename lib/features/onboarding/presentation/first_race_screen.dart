@@ -191,7 +191,7 @@ class _FirstRaceScreenState extends ConsumerState<FirstRaceScreen> {
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: Colors.red,
+                          color: NuvoColors.danger,
                         ),
                       ),
                     ],
@@ -238,12 +238,12 @@ class _TemplateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: NuvoColors.border),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1A07152B),
-            blurRadius: 18,
-            offset: Offset(8, 10),
+            color: Color(0x140A1A33),
+            blurRadius: 22,
+            offset: Offset(0, 10),
           ),
         ],
       ),

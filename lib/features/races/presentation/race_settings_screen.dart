@@ -153,6 +153,9 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: NuvoColors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(title),
         content: Text(message),
         actions: [
@@ -355,7 +358,9 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             if (_error != null) ...[
               Text(
                 _error!,
-                style: AppTextStyles.bodySmall.copyWith(color: Colors.red),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.danger,
+                ),
               ),
               const SizedBox(height: 12),
             ],

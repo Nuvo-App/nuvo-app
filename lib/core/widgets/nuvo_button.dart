@@ -18,11 +18,12 @@ Widget _buttonContent({
       width: 20,
       height: 20,
       child: CircularProgressIndicator(
-        strokeWidth: 2.5,
+        strokeWidth: 2,
         valueColor: AlwaysStoppedAnimation(textColor),
       ),
     );
   }
+
   return Row(
     mainAxisSize: MainAxisSize.min,
     mainAxisAlignment: MainAxisAlignment.center,
@@ -37,14 +38,15 @@ Widget _buttonContent({
       ),
       if (icon != null) ...[
         const SizedBox(width: 8),
-        Icon(icon, color: textColor, size: 18),
+        Icon(icon, color: textColor, size: 17),
       ],
     ],
   );
 }
 
 // ── NuvoPrimaryButton ─────────────────────────────────────────────────────────
-/// Main CTA — navy gradient fill, white text. One per screen.
+
+/// Gradient blue CTA button — the primary action element.
 class NuvoPrimaryButton extends StatelessWidget {
   const NuvoPrimaryButton({
     super.key,
@@ -68,23 +70,35 @@ class NuvoPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 56.0;
+    final height = small ? 44.0 : 54.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: enabled ? 1.0 : 0.4,
+        duration: const Duration(milliseconds: 160),
+        opacity: enabled ? 1.0 : 0.42,
         child: Container(
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF0D2040), NuvoColors.navy],
-            ),
-            borderRadius: BorderRadius.circular(16),
+            gradient: enabled
+                ? const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [NuvoColors.blue, NuvoColors.blueInk],
+                  )
+                : null,
+            color: enabled ? null : NuvoColors.paleSlate,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: enabled
+                ? [
+                    BoxShadow(
+                      color: NuvoColors.blue.withValues(alpha: 0.28),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -98,77 +112,26 @@ class NuvoPrimaryButton extends StatelessWidget {
       ),
     );
 
-    if (expand) return SizedBox(width: double.infinity, child: button);
-    return button;
+    return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
-// ── NuvoBlueButton ────────────────────────────────────────────────────────────
-/// Blue gradient CTA — the single blue focal point on a screen.
-class NuvoBlueButton extends StatelessWidget {
+// Alias kept for backward compatibility.
+class NuvoBlueButton extends NuvoPrimaryButton {
   const NuvoBlueButton({
     super.key,
-    required this.label,
-    this.onPressed,
-    this.icon,
-    this.expand = false,
-    this.loading = false,
-    this.small = false,
+    required super.label,
+    super.onPressed,
+    super.icon,
+    super.expand,
+    super.loading,
+    super.small,
   });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final IconData? icon;
-  final bool expand;
-  final bool loading;
-  final bool small;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 56.0;
-
-    final button = PressableScale(
-      onTap: enabled ? onPressed : null,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: enabled ? 1.0 : 0.4,
-        child: Container(
-          height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF2B7FFF), NuvoColors.blue],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: NuvoColors.blue.withValues(alpha: 0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: _buttonContent(
-            label: label,
-            textColor: NuvoColors.white,
-            icon: icon,
-            loading: loading,
-          ),
-        ),
-      ),
-    );
-
-    if (expand) return SizedBox(width: double.infinity, child: button);
-    return button;
-  }
 }
 
 // ── NuvoOutlineButton ─────────────────────────────────────────────────────────
-/// Outline CTA — white fill, navy border. Secondary actions.
+
+/// Clean white button with soft slate border — secondary action.
 class NuvoOutlineButton extends StatelessWidget {
   const NuvoOutlineButton({
     super.key,
@@ -190,20 +153,30 @@ class NuvoOutlineButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final height = small ? 44.0 : 56.0;
+    final height = small ? 44.0 : 54.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: enabled ? 1.0 : 0.4,
+        duration: const Duration(milliseconds: 160),
+        opacity: enabled ? 1.0 : 0.46,
         child: Container(
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: NuvoColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: NuvoColors.navy, width: 1.5),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: NuvoColors.paleSlate.withValues(alpha: 0.65),
+              width: 1,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0C0A1A33),
+                blurRadius: 16,
+                offset: Offset(0, 6),
+              ),
+            ],
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -216,16 +189,15 @@ class NuvoOutlineButton extends StatelessWidget {
       ),
     );
 
-    if (expand) return SizedBox(width: double.infinity, child: button);
-    return button;
+    return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
-/// Alias — same as NuvoOutlineButton.
 typedef NuvoSecondaryButton = NuvoOutlineButton;
 
 // ── NuvoGhostButton ───────────────────────────────────────────────────────────
-/// Ghost CTA — panel fill, muted navy text. Tertiary actions.
+
+/// Light panel fill — tertiary / low-emphasis action.
 class NuvoGhostButton extends StatelessWidget {
   const NuvoGhostButton({
     super.key,
@@ -245,20 +217,23 @@ class NuvoGhostButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final height = small ? 44.0 : 56.0;
+    final height = small ? 40.0 : 48.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: enabled ? 1.0 : 0.4,
+        duration: const Duration(milliseconds: 160),
+        opacity: enabled ? 1.0 : 0.46,
         child: Container(
           height: height,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
             color: NuvoColors.panel,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: NuvoColors.border),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: NuvoColors.border,
+              width: 1,
+            ),
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -270,12 +245,13 @@ class NuvoGhostButton extends StatelessWidget {
       ),
     );
 
-    if (expand) return SizedBox(width: double.infinity, child: button);
-    return button;
+    return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
 // ── NuvoDangerButton ──────────────────────────────────────────────────────────
+
+/// Light danger-tinted button with danger border — destructive actions.
 class NuvoDangerButton extends StatelessWidget {
   const NuvoDangerButton({
     super.key,
@@ -297,50 +273,45 @@ class NuvoDangerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 56.0;
+    final height = small ? 44.0 : 54.0;
 
     final button = PressableScale(
       onTap: enabled ? onPressed : null,
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 150),
-        opacity: enabled ? 1.0 : 0.4,
+        duration: const Duration(milliseconds: 160),
+        opacity: enabled ? 1.0 : 0.46,
         child: Container(
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF0F0),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: NuvoColors.danger),
+            color: const Color(0xFFFFF3F4),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: NuvoColors.danger.withValues(alpha: 0.38),
+              width: 1,
+            ),
           ),
           alignment: Alignment.center,
-          child: loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(NuvoColors.danger),
-                  ),
-                )
-              : _buttonContent(
-                  label: label,
-                  textColor: NuvoColors.danger,
-                  icon: icon,
-                ),
+          child: _buttonContent(
+            label: label,
+            textColor: NuvoColors.danger,
+            icon: icon,
+            loading: loading,
+          ),
         ),
       ),
     );
 
-    if (expand) return SizedBox(width: double.infinity, child: button);
-    return button;
+    return expand ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
 
 // ── NuvoBackButton ────────────────────────────────────────────────────────────
-/// Circular back button — 44px, panel fill, navy arrow.
+
+/// Clean white circle back button with a soft shadow.
 class NuvoBackButton extends StatelessWidget {
   const NuvoBackButton({super.key, required this.onPressed});
+
   final VoidCallback onPressed;
 
   @override
@@ -348,17 +319,27 @@ class NuvoBackButton extends StatelessWidget {
     return PressableScale(
       onTap: onPressed,
       child: Container(
-        width: 44,
-        height: 44,
+        width: 42,
+        height: 42,
         decoration: BoxDecoration(
-          color: NuvoColors.panel,
+          color: NuvoColors.white,
           shape: BoxShape.circle,
-          border: Border.all(color: NuvoColors.border),
+          border: Border.all(
+            color: NuvoColors.border,
+            width: 1,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0E0A1A33),
+              blurRadius: 16,
+              offset: Offset(0, 6),
+            ),
+          ],
         ),
         child: const Icon(
           Icons.arrow_back_rounded,
           color: NuvoColors.navy,
-          size: 20,
+          size: 19,
         ),
       ),
     );
@@ -366,7 +347,8 @@ class NuvoBackButton extends StatelessWidget {
 }
 
 // ── NuvoIconAction ────────────────────────────────────────────────────────────
-/// Small 44×44 icon tap target — panel fill, border.
+
+/// White circle icon action button — top-bar and contextual actions.
 class NuvoIconAction extends StatelessWidget {
   const NuvoIconAction({
     super.key,
@@ -386,24 +368,34 @@ class NuvoIconAction extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: Container(
-        width: 44,
-        height: 44,
+        width: 42,
+        height: 42,
         decoration: BoxDecoration(
-          color: NuvoColors.panel,
+          color: NuvoColors.white,
           shape: BoxShape.circle,
-          border: Border.all(color: NuvoColors.border),
+          border: Border.all(
+            color: NuvoColors.border,
+            width: 1,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0C0A1A33),
+              blurRadius: 14,
+              offset: Offset(0, 5),
+            ),
+          ],
         ),
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Icon(icon, color: iconColor, size: 20),
+            Icon(icon, color: iconColor, size: 19),
             if (badge)
               Positioned(
                 top: 9,
                 right: 9,
                 child: Container(
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   decoration: const BoxDecoration(
                     color: NuvoColors.blue,
                     shape: BoxShape.circle,

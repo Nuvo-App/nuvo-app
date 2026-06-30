@@ -83,181 +83,204 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Scrollable hero area ─────────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-                child:
-                    Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _BrandMark(),
-                            const SizedBox(height: 22),
+      body: Stack(
+        children: [
+          const Positioned(top: -64, right: -46, child: _HeroHalo(size: 190)),
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── Scrollable hero area ─────────────────────────────────────────
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                    child:
+                        Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const _BrandMark(),
+                                const SizedBox(height: 22),
 
-                            // Hero — animates when mode switches
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 240),
-                              transitionBuilder: (child, animation) =>
-                                  FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween(
-                                        begin: const Offset(0, 0.04),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
+                                // Hero — animates when mode switches
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 240),
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                        opacity: animation,
+                                        child: SlideTransition(
+                                          position: Tween(
+                                            begin: const Offset(0, 0.04),
+                                            end: Offset.zero,
+                                          ).animate(animation),
+                                          child: child,
+                                        ),
+                                      ),
+                                  child: _HeroBlock(
+                                    key: ValueKey(_mode),
+                                    isSignup: isSignup,
                                   ),
-                              child: _HeroBlock(
-                                key: ValueKey(_mode),
-                                isSignup: isSignup,
+                                ),
+
+                                // Product preview card — signup only
+                                if (isSignup) ...[
+                                  const SizedBox(height: 22),
+                                  const _ProductPreviewCard(),
+                                ],
+                              ],
+                            )
+                            .animate()
+                            .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                            .slideY(
+                              begin: 0.04,
+                              end: 0,
+                              duration: 320.ms,
+                              curve: Curves.easeOutCubic,
+                            ),
+                  ),
+                ),
+
+                // ── Pinned CTA zone — never clips ───────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      NuvoPrimaryButton(
+                        label: 'Continue with Email',
+                        expand: true,
+                        leadingWidget: const Icon(
+                          Icons.mail_outline_rounded,
+                          size: 18,
+                          color: NuvoColors.white,
+                        ),
+                        onPressed: () => context.push('/auth/email'),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Google — interactive when _kGoogleEnabled, else needs-setup row
+                      if (_kGoogleEnabled) ...[
+                        if (_googleError != null) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _googleError!,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: NuvoColors.danger,
                               ),
                             ),
-
-                            // Product preview card — signup only
-                            if (isSignup) ...[
-                              const SizedBox(height: 22),
-                              const _ProductPreviewCard(),
-                            ],
-                          ],
-                        )
-                        .animate()
-                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                        .slideY(
-                          begin: 0.04,
-                          end: 0,
-                          duration: 320.ms,
-                          curve: Curves.easeOutCubic,
+                          ),
+                        ],
+                        GestureDetector(
+                          onTap: _googleLoading ? null : _signInWithGoogle,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 180),
+                            opacity: _googleLoading ? 0.55 : 1.0,
+                            child: Container(
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: NuvoColors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: NuvoColors.border,
+                                  width: 1.2,
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x100A1A33),
+                                    blurRadius: 16,
+                                    offset: Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              alignment: Alignment.center,
+                              child: _googleLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const _GoogleGIcon(),
+                                        const SizedBox(width: 10),
+                                        Text(
+                                          'Continue with Google',
+                                          style: AppTextStyles.labelLarge
+                                              .copyWith(color: NuvoColors.navy),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
                         ),
-              ),
-            ),
+                      ],
 
-            // ── Pinned CTA zone — never clips ───────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  NuvoPrimaryButton(
-                    label: 'Continue with Email',
-                    expand: true,
-                    leadingWidget: const Icon(
-                      Icons.mail_outline_rounded,
-                      size: 18,
-                      color: NuvoColors.white,
-                    ),
-                    onPressed: () => context.push('/auth/email'),
-                  ),
-                  const SizedBox(height: 12),
+                      const SizedBox(height: 18),
 
-                  // Google — interactive when _kGoogleEnabled, else needs-setup row
-                  if (_kGoogleEnabled) ...[
-                    if (_googleError != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                      // Signup ↔ login toggle
+                      GestureDetector(
+                        onTap: _toggleMode,
+                        behavior: HitTestBehavior.opaque,
+                        child: Center(
+                          child: Text(
+                            toggleLabel,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: NuvoColors.blue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Terms — always in view
+                      Center(
                         child: Text(
-                          _googleError!,
+                          'By continuing you agree to our Terms & Privacy Policy.',
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: const Color(0xFFE8304A),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: NuvoColors.muted.withValues(alpha: 0.65),
+                            height: 1.5,
                           ),
                         ),
                       ),
                     ],
-                    GestureDetector(
-                      onTap: _googleLoading ? null : _signInWithGoogle,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: _googleLoading ? 0.55 : 1.0,
-                        child: Container(
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: NuvoColors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: NuvoColors.border,
-                              width: 1.6,
-                            ),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x1A07152B),
-                                blurRadius: 0,
-                                offset: Offset(2, 3),
-                              ),
-                            ],
-                          ),
-                          alignment: Alignment.center,
-                          child: _googleLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const _GoogleGIcon(),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      'Continue with Google',
-                                      style: AppTextStyles.labelLarge.copyWith(
-                                        color: NuvoColors.navy,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 18),
-
-                  // Signup ↔ login toggle
-                  GestureDetector(
-                    onTap: _toggleMode,
-                    behavior: HitTestBehavior.opaque,
-                    child: Center(
-                      child: Text(
-                        toggleLabel,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.blue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
                   ),
-                  const SizedBox(height: 14),
-
-                  // Terms — always in view
-                  Center(
-                    child: Text(
-                      'By continuing you agree to our Terms & Privacy Policy.',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.muted.withValues(alpha: 0.65),
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // ── Private components ────────────────────────────────────────────────────────
+
+class _HeroHalo extends StatelessWidget {
+  const _HeroHalo({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: NuvoColors.softBlue.withValues(alpha: 0.55),
+        shape: BoxShape.circle,
+        border: Border.all(color: NuvoColors.white, width: 18),
+      ),
+    );
+  }
+}
 
 class _BrandMark extends StatelessWidget {
   const _BrandMark();
@@ -268,17 +291,103 @@ class _BrandMark extends StatelessWidget {
       children: [
         // trans.png is white — must stay inside dark container
         Container(
-          width: 44,
-          height: 44,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
             color: NuvoColors.navy,
-            borderRadius: BorderRadius.circular(13),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: NuvoColors.border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x2605070D),
+                blurRadius: 0,
+                offset: Offset(3, 4),
+              ),
+            ],
           ),
           padding: const EdgeInsets.all(7),
           child: Image.asset(AssetPaths.nuvoLogo, fit: BoxFit.contain),
         ),
-        const SizedBox(width: 10),
-        Text('Nuvo', style: AppTextStyles.titleLarge),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Nuvo', style: AppTextStyles.titleLarge),
+            const SizedBox(height: 1),
+            Text(
+              'RACE WITH YOUR CREW',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.blue,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StartLineChip extends StatelessWidget {
+  const _StartLineChip({this.label = 'START LINE OPEN'});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: NuvoColors.border, width: 1.1),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1605070D),
+            blurRadius: 0,
+            offset: Offset(2, 3),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: NuvoColors.navy,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _LoopStrip extends StatelessWidget {
+  const _LoopStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    const steps = ['Finish line', 'Crew', 'Proof', 'Leaderboard'];
+    return Wrap(
+      spacing: 7,
+      runSpacing: 7,
+      children: [
+        for (final step in steps)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: step == 'Proof' ? NuvoColors.blue : NuvoColors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: step == 'Proof' ? NuvoColors.blueInk : NuvoColors.border,
+              ),
+            ),
+            child: Text(
+              step,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: step == 'Proof' ? NuvoColors.white : NuvoColors.navy,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -295,30 +404,37 @@ class _HeroBlock extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const _StartLineChip(),
+          const SizedBox(height: 16),
           RichText(
             text: TextSpan(
-              style: AppTextStyles.displayMedium,
+              style: AppTextStyles.displayMedium.copyWith(
+                color: NuvoColors.navy,
+              ),
               children: const [
-                TextSpan(text: 'Compete on\n'),
+                TextSpan(text: 'Turn real life\ninto a '),
                 TextSpan(
-                  text: 'anything.',
+                  text: 'race.',
                   style: TextStyle(color: NuvoColors.blue),
                 ),
-                TextSpan(text: '\nWith anyone.'),
               ],
             ),
           ),
           const SizedBox(height: 14),
           Text(
-            'Pick a goal, pull in your crew, and prove you did it.',
+            'Pick a finish line, pull in your crew, and submit proof to move the leaderboard.',
             style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
           ),
+          const SizedBox(height: 16),
+          const _LoopStrip(),
         ],
       );
     } else {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const _StartLineChip(label: 'BACK IN THE ARENA'),
+          const SizedBox(height: 16),
           RichText(
             text: TextSpan(
               style: AppTextStyles.displayMedium,
@@ -349,18 +465,19 @@ class _ProductPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.all(Radius.circular(24)),
-        boxShadow: [
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: NuvoColors.border, width: 1.2),
+        boxShadow: const [
           BoxShadow(
-            color: Color(0xC007152B),
+            color: Color(0x2605070D),
             blurRadius: 0,
             offset: Offset(5, 6),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -388,14 +505,14 @@ class _ProductPreviewCard extends StatelessWidget {
                     Text(
                       '10 Jumping Jacks',
                       style: AppTextStyles.titleMedium.copyWith(
-                        color: NuvoColors.white,
+                        color: NuvoColors.navy,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'AI MoveCheck · 10 reps',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: const Color(0x99FFFFFF),
+                        color: NuvoColors.muted,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -411,9 +528,9 @@ class _ProductPreviewCard extends StatelessWidget {
                   border: Border.all(color: const Color(0x5516C784)),
                 ),
                 child: Text(
-                  'Active',
+                  'Live',
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.success,
+                    color: NuvoColors.navy,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -432,7 +549,7 @@ class _ProductPreviewCard extends StatelessWidget {
                     height: 5,
                     child: Stack(
                       children: [
-                        Container(color: const Color(0x1AFFFFFF)),
+                        Container(color: NuvoColors.trackBg),
                         FractionallySizedBox(
                           widthFactor: 0.6,
                           alignment: Alignment.centerLeft,
@@ -454,7 +571,7 @@ class _ProductPreviewCard extends StatelessWidget {
               Text(
                 '6 / 10',
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.white,
+                  color: NuvoColors.navy,
                 ),
               ),
             ],
@@ -473,7 +590,7 @@ class _ProductPreviewCard extends StatelessWidget {
               Text(
                 '3 crew',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: const Color(0x80FFFFFF),
+                  color: NuvoColors.muted,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -524,7 +641,7 @@ class _CrewBubble extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(color: NuvoColors.navy, width: 1.5),
+        border: Border.all(color: NuvoColors.white, width: 1.5),
       ),
       alignment: Alignment.center,
       child: Text(

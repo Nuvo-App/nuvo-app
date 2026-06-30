@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
+// ── NuvoPage ──────────────────────────────────────────────────────────────────
+
 /// Full-page scaffold wrapper for standalone pages (those outside the ShellRoute).
 /// Shell pages use SafeArea directly inside the shell scaffold.
 class NuvoPage extends StatelessWidget {
@@ -26,16 +28,35 @@ class NuvoPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor ?? NuvoColors.page,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      body: Column(
-        children: [
-          ?topBar,
-          Expanded(child: child),
-          ?bottomBar,
-        ],
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          color: backgroundColor ?? NuvoColors.page,
+          gradient: backgroundColor == null
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFF5F7FC),
+                    NuvoColors.page,
+                    Color(0xFFECF0F8),
+                  ],
+                  stops: [0.0, 0.50, 1.0],
+                )
+              : null,
+        ),
+        child: Column(
+          children: [
+            ?topBar,
+            Expanded(child: child),
+            ?bottomBar,
+          ],
+        ),
       ),
     );
   }
 }
+
+// ── NuvoTopBar ────────────────────────────────────────────────────────────────
 
 /// Standard app top bar — logo on left, optional trailing widget on right.
 /// Does not use AppBar so it works both inside and outside ShellRoute.
@@ -61,37 +82,100 @@ class NuvoTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
     return Container(
-      color: backgroundColor ?? NuvoColors.white,
-      padding: EdgeInsets.only(top: top, left: 20, right: 20, bottom: 12),
-      child: Row(
-        children: [
-          if (leading case final l?)
-            l
-          else if (showLogo)
-            Text(
-              'nuvo',
-              style: AppTextStyles.titleLarge.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.5,
-              ),
+      color: backgroundColor ?? Colors.transparent,
+      padding: EdgeInsets.only(
+        top: top + 8,
+        left: 16,
+        right: 16,
+        bottom: 10,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: NuvoColors.white.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: NuvoColors.border,
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: NuvoColors.blue.withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
             ),
-          if (centerTitle && title != null) ...[
-            const Spacer(),
-            Text(title!, style: AppTextStyles.titleLarge),
-            const Spacer(),
-          ] else if (title != null) ...[
-            const SizedBox(width: 12),
-            Text(title!, style: AppTextStyles.titleLarge),
-            const Spacer(),
-          ] else
-            const Spacer(),
-          ?trailing,
-        ],
+            const BoxShadow(
+              color: Color(0x080A1A33),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            if (leading case final l?)
+              l
+            else if (showLogo)
+              const _NuvoLogoMark(),
+            if (centerTitle && title != null) ...[
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  title!,
+                  style: AppTextStyles.titleLarge,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Spacer(),
+            ] else if (title != null) ...[
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title!,
+                  style: AppTextStyles.titleLarge,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ] else
+              const Spacer(),
+            ?trailing,
+          ],
+        ),
       ),
     );
   }
 }
+
+// ── _NuvoLogoMark ─────────────────────────────────────────────────────────────
+
+class _NuvoLogoMark extends StatelessWidget {
+  const _NuvoLogoMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(11, 7, 12, 7),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: NuvoColors.navy.withValues(alpha: 0.22),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Text(
+        'nuvo',
+        style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.white),
+      ),
+    );
+  }
+}
+
+// ── NuvoSectionHeader ─────────────────────────────────────────────────────────
 
 /// Section header with optional "See all" link.
 class NuvoSectionHeader extends StatelessWidget {
@@ -104,6 +188,15 @@ class NuvoSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        Container(
+          width: 6,
+          height: 20,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 9),
         Text(title, style: AppTextStyles.titleMedium),
         const Spacer(),
         if (onSeeAll != null)
@@ -111,7 +204,9 @@ class NuvoSectionHeader extends StatelessWidget {
             onTap: onSeeAll,
             child: Text(
               'See all',
-              style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.blue),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.blue,
+              ),
             ),
           ),
       ],

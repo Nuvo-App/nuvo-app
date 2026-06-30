@@ -61,8 +61,16 @@ class NuvoRaceHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(24),
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x10050B14),
+            blurRadius: 22,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -75,7 +83,7 @@ class NuvoRaceHero extends StatelessWidget {
                 Text(
                   '${daysLeft}d left',
                   style: AppTextStyles.labelMedium.copyWith(
-                    color: NuvoColors.white.withValues(alpha: 0.58),
+                    color: NuvoColors.muted,
                   ),
                 ),
             ],
@@ -84,7 +92,7 @@ class NuvoRaceHero extends StatelessWidget {
           Text(
             title,
             style: AppTextStyles.headlineLarge.copyWith(
-              color: NuvoColors.white,
+              color: NuvoColors.navy,
               letterSpacing: 0,
             ),
             maxLines: 2,
@@ -97,7 +105,7 @@ class NuvoRaceHero extends StatelessWidget {
                 child: Text(
                   contextLine,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.white.withValues(alpha: 0.58),
+                    color: NuvoColors.muted,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -110,7 +118,7 @@ class NuvoRaceHero extends StatelessWidget {
                   total: racerCount,
                   size: 34,
                   max: 4,
-                  borderColor: NuvoColors.navy,
+                  borderColor: NuvoColors.white,
                 ),
               ],
             ],
@@ -119,16 +127,16 @@ class NuvoRaceHero extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.09),
+              color: NuvoColors.panel,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+              border: Border.all(color: NuvoColors.border),
             ),
             child: Row(
               children: [
                 Text(
                   rankLabel,
                   style: AppTextStyles.displayLarge.copyWith(
-                    color: NuvoColors.white,
+                    color: NuvoColors.blue,
                     letterSpacing: 0,
                   ),
                 ),
@@ -140,7 +148,7 @@ class NuvoRaceHero extends StatelessWidget {
                       Text(
                         chaseCopy ?? 'Make your next move.',
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: NuvoColors.white,
+                          color: NuvoColors.navy,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -149,7 +157,7 @@ class NuvoRaceHero extends StatelessWidget {
                       Text(
                         subcopy,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.white.withValues(alpha: 0.55),
+                          color: NuvoColors.muted,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -161,7 +169,7 @@ class NuvoRaceHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          NuvoPrimaryButton(
+          NuvoBlueButton(
             label: primaryLabel,
             expand: true,
             loading: loading,

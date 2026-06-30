@@ -413,7 +413,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             Text(
                               _nameError!,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.red,
+                                color: NuvoColors.danger,
                               ),
                             ),
                           ],
@@ -432,7 +432,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             Text(
                               _usernameError!,
                               style: AppTextStyles.bodySmall.copyWith(
-                                color: Colors.red,
+                                color: NuvoColors.danger,
                               ),
                             ),
                           ],
