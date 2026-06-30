@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Navy accent card — used for proof scanner UI and premium feature tiles.
+/// Premium accent card — light-only surface with blue emphasis.
 class NuvoDarkCard extends StatelessWidget {
   const NuvoDarkCard({
     super.key,
@@ -20,13 +20,18 @@ class NuvoDarkCard extends StatelessWidget {
     Widget card = Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.white, NuvoColors.inkWash, NuvoColors.icyBlue],
+        ),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 20,
-            offset: Offset(0, 8),
+            color: Color(0x140A1A33),
+            blurRadius: 22,
+            offset: Offset(0, 10),
           ),
         ],
       ),
@@ -75,7 +80,7 @@ class NuvoDarkBadge extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: accent,
-              letterSpacing: 0.2,
+              letterSpacing: 0,
             ),
           ),
         ],

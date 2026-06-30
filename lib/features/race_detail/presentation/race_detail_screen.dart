@@ -210,10 +210,10 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: NuvoColors.navy,
+        backgroundColor: NuvoColors.page,
         body: Center(
           child: CircularProgressIndicator(
-            color: NuvoColors.white,
+            color: NuvoColors.blue,
             strokeWidth: 2,
           ),
         ),
@@ -306,7 +306,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
       backgroundColor: NuvoColors.page,
       body: Column(
         children: [
-          // ── Navy header ─────────────────────────────────────────────────────
+          // ── Race header ─────────────────────────────────────────────────────
           _NavyHeader(
             race: race,
             myProgress: myProgress,
@@ -364,12 +364,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   const SizedBox(height: 24),
 
                   // ── Board ──────────────────────────────────────────────────
-                  Text(
-                    'THE BOARD',
-                    style: AppTextStyles.brandLabel.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
+                  const _SectionLabel(label: 'The board'),
                   const SizedBox(height: 12),
                   if (sorted.isEmpty)
                     Text(
@@ -414,12 +409,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   const SizedBox(height: 30),
 
                   // ── Move log ────────────────────────────────────────────────
-                  Text(
-                    'MOVE LOG',
-                    style: AppTextStyles.brandLabel.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
+                  const _SectionLabel(label: 'Move log'),
                   const SizedBox(height: 12),
                   if (race.recentProofs.isEmpty)
                     Text(
@@ -451,12 +441,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   const SizedBox(height: 28),
 
                   // ── Rules ───────────────────────────────────────────────────
-                  Text(
-                    'RULES',
-                    style: AppTextStyles.brandLabel.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
+                  const _SectionLabel(label: 'Rules'),
                   const SizedBox(height: 10),
                   Text(
                     race.rules?.isNotEmpty == true
@@ -470,12 +455,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   // ── Owner manage section ────────────────────────────────────
                   if (isOwner) ...[
                     const SizedBox(height: 28),
-                    Text(
-                      'MANAGE',
-                      style: AppTextStyles.brandLabel.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
+                    const _SectionLabel(label: 'Manage'),
                     const SizedBox(height: 12),
                     _ManageRow(
                       icon: Icons.edit_rounded,
@@ -522,7 +502,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
   }
 }
 
-// ── Navy header ───────────────────────────────────────────────────────────────
+// ── Race header ───────────────────────────────────────────────────────────────
 
 class _NavyHeader extends StatelessWidget {
   const _NavyHeader({
@@ -547,8 +527,11 @@ class _NavyHeader extends StatelessWidget {
     final isActive = race.status == 'active';
 
     return Container(
-      color: NuvoColors.navy,
-      padding: EdgeInsets.fromLTRB(20, safeTop + 16, 20, 28),
+      decoration: const BoxDecoration(
+        color: NuvoColors.white,
+        border: Border(bottom: BorderSide(color: NuvoColors.divider)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, safeTop + 16, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -561,12 +544,13 @@ class _NavyHeader extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.10),
+                    color: NuvoColors.panel,
                     shape: BoxShape.circle,
+                    border: Border.all(color: NuvoColors.border),
                   ),
                   child: const Icon(
                     Icons.arrow_back_rounded,
-                    color: NuvoColors.white,
+                    color: NuvoColors.navy,
                     size: 20,
                   ),
                 ),
@@ -579,15 +563,13 @@ class _NavyHeader extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? NuvoColors.blue
-                      : Colors.white.withValues(alpha: 0.12),
+                  color: isActive ? NuvoColors.blue : NuvoColors.panel,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   isActive ? 'Active' : race.status.toUpperCase(),
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.white,
+                    color: isActive ? NuvoColors.white : NuvoColors.navy,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -600,12 +582,13 @@ class _NavyHeader extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.10),
+                      color: NuvoColors.panel,
                       shape: BoxShape.circle,
+                      border: Border.all(color: NuvoColors.border),
                     ),
                     child: const Icon(
                       Icons.tune_rounded,
-                      color: NuvoColors.white,
+                      color: NuvoColors.navy,
                       size: 18,
                     ),
                   ),
@@ -619,17 +602,13 @@ class _NavyHeader extends StatelessWidget {
           // Race title
           Text(
             race.displayTitle,
-            style: AppTextStyles.headlineLarge.copyWith(
-              color: NuvoColors.white,
-            ),
+            style: AppTextStyles.headlineLarge.copyWith(color: NuvoColors.navy),
             maxLines: 2,
           ),
           const SizedBox(height: 4),
           Text(
             _contextLine(race),
-            style: AppTextStyles.bodySmall.copyWith(
-              color: NuvoColors.white.withValues(alpha: 0.55),
-            ),
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
           ),
 
           // My progress — only shown when participant
@@ -643,7 +622,7 @@ class _NavyHeader extends StatelessWidget {
                   style: AppTextStyles.displayLarge.copyWith(
                     color: myProgress >= 100
                         ? NuvoColors.success
-                        : NuvoColors.white,
+                        : NuvoColors.blue,
                   ),
                 ),
                 Padding(
@@ -651,7 +630,7 @@ class _NavyHeader extends StatelessWidget {
                   child: Text(
                     '%',
                     style: AppTextStyles.headlineMedium.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.4),
+                      color: NuvoColors.muted,
                     ),
                   ),
                 ),
@@ -661,16 +640,12 @@ class _NavyHeader extends StatelessWidget {
             Text(
               'Your progress',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.white.withValues(alpha: 0.45),
-                letterSpacing: 0.5,
+                color: NuvoColors.muted,
+                letterSpacing: 0,
               ),
             ),
             const SizedBox(height: 14),
-            NuvoRaceLane(
-              progressPercent: myProgress,
-              onDark: true,
-              dotDiameter: 14,
-            ),
+            NuvoRaceLane(progressPercent: myProgress, dotDiameter: 14),
             // Chase context
             Builder(
               builder: (context) {
@@ -682,7 +657,7 @@ class _NavyHeader extends StatelessWidget {
                   child: Text(
                     chase.chaseCopy!,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.60),
+                      color: NuvoColors.muted,
                     ),
                   ),
                 );
@@ -836,6 +811,37 @@ int? _daysLeft(String? finishLineAt) {
   final now = DateTime.now();
   final diff = finish.difference(now).inDays;
   return diff < 0 ? 0 : diff + 1;
+}
+
+// ── Section label ─────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTextStyles.labelMedium.copyWith(
+            color: NuvoColors.muted,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ── Manage row ────────────────────────────────────────────────────────────────

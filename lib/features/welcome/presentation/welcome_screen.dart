@@ -85,7 +85,7 @@ class _RaceLoopCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: NuvoColors.border, width: 1.2),
         boxShadow: const [
           BoxShadow(
             color: Color(0x1A07152B),

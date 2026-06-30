@@ -7,8 +7,8 @@ import '../../data/arena_models.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const _kNavy = Color(0xFF07152B);
-const _kBlue = Color(0xFF075BFF);
+const _kNavy = NuvoColors.navy;
+const _kBlue = NuvoColors.blue;
 const _kMuted = Color(0xFF66728A);
 const _kBorder = Color(0xFFDCE5F2);
 const _kIcy = Color(0xFFEEF5FF);

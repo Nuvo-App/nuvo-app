@@ -33,8 +33,19 @@ class MainShell extends StatelessWidget {
     final currentIndex = _indexFor(location);
 
     return Scaffold(
-      backgroundColor: NuvoColors.navy,
-      body: child,
+      backgroundColor: NuvoColors.page,
+      extendBody: true,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [NuvoColors.pageWarm, NuvoColors.page, NuvoColors.icyBlue],
+            stops: [0.0, 0.48, 1.0],
+          ),
+        ),
+        child: child,
+      ),
       bottomNavigationBar: NuvoBottomNav(
         currentIndex: currentIndex,
         onTap: (index) => context.go(_paths[index]),

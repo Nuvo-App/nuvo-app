@@ -178,7 +178,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       Text(
                         _error!,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: const Color(0xFFE5484D),
+                          color: NuvoColors.danger,
                         ),
                       ),
                     ],
@@ -240,7 +240,7 @@ class _MoveSummaryCard extends StatelessWidget {
 
   Color get _statusColor => switch (proof.verificationStatus) {
     'accepted' || 'verified' => NuvoColors.success,
-    'rejected' => const Color(0xFFE5484D),
+    'rejected' => NuvoColors.danger,
     'needs_review' => NuvoColors.muted,
     _ => NuvoColors.blue,
   };
@@ -263,7 +263,7 @@ class _MoveSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.navy, width: 1.5),
+        border: Border.all(color: NuvoColors.border, width: 1.2),
         boxShadow: const [
           BoxShadow(
             color: Color(0x1407152B),

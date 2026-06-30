@@ -46,7 +46,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   }
 
   Future<void> _loadRace() async {
-    setState(() { _raceLoading = true; _raceError = null; });
+    setState(() {
+      _raceLoading = true;
+      _raceError = null;
+    });
     try {
       final race = await ref
           .read(raceControllerProvider.notifier)
@@ -59,7 +62,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() { _raceError = 'Could not load race details.'; _raceLoading = false; });
+      setState(() {
+        _raceError = 'Could not load race details.';
+        _raceLoading = false;
+      });
     }
   }
 
@@ -69,14 +75,19 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       setState(() => _error = 'Enter a progress amount greater than 0.');
       return;
     }
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final note = _noteController.text.trim();
-      await ref.read(raceControllerProvider.notifier).submitProof(
-        widget.raceId,
-        value: raw,
-        note: note.isEmpty ? null : note,
-      );
+      await ref
+          .read(raceControllerProvider.notifier)
+          .submitProof(
+            widget.raceId,
+            value: raw,
+            note: note.isEmpty ? null : note,
+          );
       if (mounted) {
         setState(() => _loading = false);
         context.pushReplacement(
@@ -91,9 +102,19 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         );
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() { _error = e.message; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _loading = false;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() { _error = 'Something went wrong. Try again.'; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = 'Something went wrong. Try again.';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -107,17 +128,23 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       backgroundColor: NuvoColors.page,
       bottomNavigationBar: _bottomBar(race, showManualSubmit),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-          children: _raceLoading
-              ? _loadingContent()
-              : _raceError != null
-              ? _errorContent()
-              : _formContent(race!),
-        )
-            .animate()
-            .fadeIn(duration: 240.ms, curve: Curves.easeOut)
-            .slideY(begin: 0.03, end: 0, duration: 280.ms, curve: Curves.easeOutCubic),
+        child:
+            ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                  children: _raceLoading
+                      ? _loadingContent()
+                      : _raceError != null
+                      ? _errorContent()
+                      : _formContent(race!),
+                )
+                .animate()
+                .fadeIn(duration: 240.ms, curve: Curves.easeOut)
+                .slideY(
+                  begin: 0.03,
+                  end: 0,
+                  duration: 280.ms,
+                  curve: Curves.easeOutCubic,
+                ),
       ),
     );
   }
@@ -159,7 +186,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     'Log manually instead',
-                    style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -189,7 +218,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
                 r.proofReviewMode == 'auto_accept'
                     ? 'Move accepted immediately.'
                     : 'Your move will be reviewed.',
-                style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -274,7 +305,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
   String _raceSubtitle(Race race) {
     if (race.isSupportedAiMotionRace) {
-      final activity = motionActivityForBackendValue(race.effectiveAiActivityType);
+      final activity = motionActivityForBackendValue(
+        race.effectiveAiActivityType,
+      );
       if (race.targetValue != null && activity != null) {
         return 'AI MoveCheck · First to ${activity.targetLabel(race.targetValue!)}';
       }
@@ -327,10 +360,11 @@ class _CheckpointField extends StatelessWidget {
               : AppTextStyles.bodyMedium,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: (maxLines == 1
-                    ? AppTextStyles.displaySmall
-                    : AppTextStyles.bodyMedium)
-                .copyWith(color: NuvoColors.border),
+            hintStyle:
+                (maxLines == 1
+                        ? AppTextStyles.displaySmall
+                        : AppTextStyles.bodyMedium)
+                    .copyWith(color: NuvoColors.border),
             filled: true,
             fillColor: NuvoColors.white,
             contentPadding: EdgeInsets.symmetric(
@@ -371,11 +405,15 @@ class _MoveCheckCard extends StatelessWidget {
   final Race race;
 
   String _description() {
-    final activity = motionActivityForBackendValue(race.effectiveAiActivityType);
+    final activity = motionActivityForBackendValue(
+      race.effectiveAiActivityType,
+    );
     if (race.targetValue != null && activity != null) {
       return 'Nuvo will count your ${activity.targetLabel(race.targetValue!)} through the camera.';
     }
-    if (activity != null) return 'Nuvo will verify your ${activity.unit} through the camera.';
+    if (activity != null) {
+      return 'Nuvo will verify your ${activity.unit} through the camera.';
+    }
     return 'Nuvo will verify your reps through the camera.';
   }
 
@@ -398,7 +436,11 @@ class _MoveCheckCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.camera_alt_rounded, color: NuvoColors.white, size: 22),
+            child: const Icon(
+              Icons.camera_alt_rounded,
+              color: NuvoColors.white,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -409,7 +451,9 @@ class _MoveCheckCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   _description(),
-                  style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
                 ),
               ],
             ),

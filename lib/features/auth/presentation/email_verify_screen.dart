@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/otp_input.dart';
+import '../data/auth_api.dart';
 import 'auth_controller.dart';
 
 class EmailVerifyScreen extends ConsumerStatefulWidget {
@@ -20,6 +21,7 @@ class EmailVerifyScreen extends ConsumerStatefulWidget {
 class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
   late final List<TextEditingController> _controllers;
   bool _loading = false;
+  bool _resending = false;
   String? _error;
 
   @override
@@ -53,30 +55,62 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
           .read(authControllerProvider.notifier)
           .verifyEmailCode(widget.email, _code);
       // Router guard takes over navigation once auth state updates.
-    } catch (_) {
+    } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Invalid or expired code. Please try again.';
+          _error = e.statusCode == 401
+              ? 'Invalid or expired code. Use the newest code from your email.'
+              : e.message;
           _loading = false;
           for (final c in _controllers) {
             c.clear();
           }
         });
       }
+    } catch (e) {
+      debugPrint('[EmailVerify] finish sign-in failed (${e.runtimeType}): $e');
+      if (mounted) {
+        setState(() {
+          _error =
+              'Code accepted, but Nuvo could not finish sign-in. Refresh and try again.';
+          _loading = false;
+        });
+      }
     }
   }
 
   Future<void> _resend() async {
+    if (_resending) return;
+    setState(() {
+      _resending = true;
+      _error = null;
+    });
     try {
       await ref
           .read(authControllerProvider.notifier)
           .startEmailAuth(widget.email);
       if (mounted) {
+        for (final c in _controllers) {
+          c.clear();
+        }
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Code sent!')));
+        ).showSnackBar(const SnackBar(content: Text('New code sent')));
       }
-    } catch (_) {}
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _error = e.message);
+      }
+    } catch (e) {
+      debugPrint('[EmailVerify] resend failed (${e.runtimeType}): $e');
+      if (mounted) {
+        setState(() => _error = 'Could not send a new code. Try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _resending = false);
+      }
+    }
   }
 
   @override
@@ -118,17 +152,17 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                               Text(
                                 _error!,
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: const Color(0xFFE8304A),
+                                  color: NuvoColors.danger,
                                 ),
                               ),
                             ],
                             const SizedBox(height: 22),
                             GestureDetector(
-                              onTap: _resend,
+                              onTap: _resending ? null : _resend,
                               behavior: HitTestBehavior.opaque,
                               child: Center(
                                 child: Text(
-                                  'Resend code',
+                                  _resending ? 'Sending...' : 'Resend code',
                                   style: AppTextStyles.bodySmall.copyWith(
                                     color: NuvoColors.blue,
                                     fontWeight: FontWeight.w700,

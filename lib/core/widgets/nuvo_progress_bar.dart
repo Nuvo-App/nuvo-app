@@ -20,11 +20,14 @@ class NuvoProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveGradient = gradient ??
-        LinearGradient(colors: [
-          color ?? NuvoColors.blue,
-          (color ?? NuvoColors.blue).withValues(alpha: 0.75),
-        ]);
+    final effectiveGradient =
+        gradient ??
+        LinearGradient(
+          colors: [
+            color ?? NuvoColors.blue,
+            (color ?? NuvoColors.blue).withValues(alpha: 0.75),
+          ],
+        );
     final clamped = value.clamp(0.0, 1.0);
 
     return TweenAnimationBuilder<double>(

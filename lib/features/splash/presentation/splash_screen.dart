@@ -31,8 +31,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
       ),
     );
     Future.delayed(const Duration(milliseconds: 420), () {
@@ -74,13 +74,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     });
 
     return Scaffold(
-      backgroundColor: NuvoColors.navy,
+      backgroundColor: NuvoColors.page,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [NuvoColors.navy, NuvoColors.navy2, Color(0xFF0D3F99)],
+            colors: [NuvoColors.white, NuvoColors.page, NuvoColors.icyBlue],
           ),
         ),
         child: Stack(
@@ -98,9 +98,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: NuvoColors.blue.withValues(alpha: 0.50),
-                              blurRadius: 76,
-                              spreadRadius: 8,
+                              color: NuvoColors.blue.withValues(alpha: 0.24),
+                              blurRadius: 64,
+                              spreadRadius: 4,
                             ),
                           ],
                         ),
@@ -120,8 +120,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   Text(
                         'NUVO',
                         style: AppTextStyles.labelLarge.copyWith(
-                          color: NuvoColors.white,
-                          letterSpacing: 5,
+                          color: NuvoColors.navy,
+                          letterSpacing: 0,
                         ),
                       )
                       .animate(delay: 380.ms)
@@ -138,7 +138,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   Text(
                         'Compete on anything. With anyone.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.white.withValues(alpha: 0.50),
+                          color: NuvoColors.muted,
                         ),
                         textAlign: TextAlign.center,
                       )
@@ -178,7 +178,7 @@ class _DotPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width == 0 || size.height == 0) return;
-    final paint = Paint()..color = NuvoColors.white.withValues(alpha: 0.08);
+    final paint = Paint()..color = NuvoColors.blue.withValues(alpha: 0.12);
     for (var i = 0; i < 42; i++) {
       final x = (i * 73) % size.width;
       final y = (i * 131) % size.height;

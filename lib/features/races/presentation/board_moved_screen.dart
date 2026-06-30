@@ -92,7 +92,7 @@ class BoardMovedScreen extends StatelessWidget {
                             : _isRejected
                             ? NuvoColors.danger
                             : NuvoColors.muted,
-                        letterSpacing: 1.5,
+                        letterSpacing: 0,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -191,8 +191,7 @@ class BoardMovedScreen extends StatelessWidget {
                           photoUrl: args.leaderPhotoUrl,
                           size: 22,
                         ),
-                        text:
-                            '${args.leaderName} leads by ${args.leaderGap}.',
+                        text: '${args.leaderName} leads by ${args.leaderGap}.',
                       ),
                     ],
 

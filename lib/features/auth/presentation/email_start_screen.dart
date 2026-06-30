@@ -141,7 +141,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                               Text(
                                 _error!,
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: const Color(0xFFE8304A),
+                                  color: NuvoColors.danger,
                                 ),
                               ),
                             ],

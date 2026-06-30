@@ -21,14 +21,18 @@ class MemberPassCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(compact ? 18 : 22),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.white, NuvoColors.inkWash, NuvoColors.icyBlue],
+        ),
         borderRadius: BorderRadius.circular(compact ? 24 : 30),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: NuvoColors.border),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x3307152B),
-            blurRadius: 26,
-            offset: Offset(0, 16),
+            color: Color(0x180A1A33),
+            blurRadius: 28,
+            offset: Offset(0, 14),
           ),
         ],
       ),
@@ -42,7 +46,7 @@ class MemberPassCard extends StatelessWidget {
               child: Container(
                 width: 180,
                 height: 70,
-                color: NuvoColors.blue.withValues(alpha: 0.18),
+                color: NuvoColors.blue.withValues(alpha: 0.12),
               ),
             ),
           ),
@@ -61,7 +65,7 @@ class MemberPassCard extends StatelessWidget {
                   Text(
                     'NUVO PASS',
                     style: AppTextStyles.brandLabel.copyWith(
-                      color: NuvoColors.white,
+                      color: NuvoColors.navy,
                       fontSize: 13,
                     ),
                   ),
@@ -72,13 +76,16 @@ class MemberPassCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: NuvoColors.blue,
+                      color: NuvoColors.blue.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: NuvoColors.blue.withValues(alpha: 0.28),
+                      ),
                     ),
                     child: Text(
                       'ACTIVE',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.white,
+                        color: NuvoColors.blue,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -89,7 +96,7 @@ class MemberPassCard extends StatelessWidget {
               Text(
                 profile.name,
                 style: AppTextStyles.headlineLarge.copyWith(
-                  color: NuvoColors.white,
+                  color: NuvoColors.navy,
                   fontSize: compact ? 22 : 28,
                 ),
               ),
@@ -97,7 +104,7 @@ class MemberPassCard extends StatelessWidget {
               Text(
                 profile.username,
                 style: AppTextStyles.labelLarge.copyWith(
-                  color: NuvoColors.softBlue,
+                  color: NuvoColors.muted,
                 ),
               ),
               SizedBox(height: compact ? 20 : 28),
@@ -114,16 +121,14 @@ class MemberPassCard extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: NuvoColors.white.withValues(alpha: 0.09),
+                  color: NuvoColors.white.withValues(alpha: 0.78),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: NuvoColors.white.withValues(alpha: 0.14),
-                  ),
+                  border: Border.all(color: NuvoColors.border),
                 ),
                 child: Text(
                   'ID: ${profile.memberId}',
                   style: AppTextStyles.labelMedium.copyWith(
-                    color: NuvoColors.white,
+                    color: NuvoColors.navy,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -153,6 +158,14 @@ class _QrFrame extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.white,
             borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: NuvoColors.border),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x120A1A33),
+                blurRadius: 18,
+                offset: Offset(0, 8),
+              ),
+            ],
           ),
         ),
         QrImageView(data: value, size: size, backgroundColor: NuvoColors.white),
