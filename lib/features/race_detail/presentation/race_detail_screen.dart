@@ -11,6 +11,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_board_components.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_move_log_item.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -361,6 +362,18 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     _CompleteCallout(progress: myProgress),
                   ],
 
+                  if (isParticipant) ...[
+                    const SizedBox(height: 24),
+                    const _SectionLabel(label: 'Path to goal'),
+                    const SizedBox(height: 12),
+                    _CheckpointPath(
+                      progressPercent: myProgress,
+                      progressValue: myPart?.progressValue,
+                      targetValue: race.targetValue,
+                      unit: race.unit,
+                    ),
+                  ],
+
                   const SizedBox(height: 24),
 
                   // ── Board ──────────────────────────────────────────────────
@@ -548,10 +561,10 @@ class _NavyHeader extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: NuvoColors.border),
                   ),
-                  child: const Icon(
-                    Icons.arrow_back_rounded,
+                  child: const NuvoIcon(
+                    NuvoIconType.back,
                     color: NuvoColors.navy,
-                    size: 20,
+                    size: 18,
                   ),
                 ),
               ),
@@ -687,6 +700,179 @@ class _NavyHeader extends StatelessWidget {
   }
 }
 
+// ── Checkpoint path ────────────────────────────────────────────────────────────
+
+enum _NodeState { done, current, todo }
+
+class _Checkpoint {
+  const _Checkpoint({required this.label, required this.sub, required this.state, required this.marker});
+  final String label;
+  final String sub;
+  final _NodeState state;
+  final String marker;
+}
+
+/// Duolingo-style vertical checkpoint path toward the race goal. Checkpoints
+/// are derived from real progress (25/50/75/100% of the actual target or,
+/// for percent-only races, of 100%) — never invented milestone content.
+class _CheckpointPath extends StatelessWidget {
+  const _CheckpointPath({
+    required this.progressPercent,
+    required this.progressValue,
+    required this.targetValue,
+    required this.unit,
+  });
+
+  final int progressPercent;
+  final int? progressValue;
+  final int? targetValue;
+  final String? unit;
+
+  static const _fractions = [0.25, 0.5, 0.75, 1.0];
+  static const _labels = ['Quarter way', 'Halfway', 'Three quarters', 'Finish line'];
+
+  @override
+  Widget build(BuildContext context) {
+    var currentAssigned = false;
+    final checkpoints = <_Checkpoint>[];
+    for (var i = 0; i < _fractions.length; i++) {
+      final fraction = _fractions[i];
+      final reached = progressPercent >= (fraction * 100).round();
+      final marker = targetValue != null
+          ? '${(targetValue! * fraction).round()}'
+          : '${(fraction * 100).round()}%';
+
+      _NodeState state;
+      String sub;
+      if (reached) {
+        state = _NodeState.done;
+        sub = 'Verified';
+      } else if (!currentAssigned) {
+        state = _NodeState.current;
+        currentAssigned = true;
+        sub = targetValue != null
+            ? '$progressValue / $targetValue ${unit ?? ''}'.trim()
+            : '$progressPercent% verified';
+      } else {
+        state = _NodeState.todo;
+        sub = 'Locked';
+      }
+      checkpoints.add(
+        _Checkpoint(
+          label: _labels[i],
+          sub: sub,
+          state: state,
+          marker: marker,
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < checkpoints.length; i++)
+            _CheckpointRow(
+              checkpoint: checkpoints[i],
+              isFirst: i == 0,
+              isLast: i == checkpoints.length - 1,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckpointRow extends StatelessWidget {
+  const _CheckpointRow({required this.checkpoint, required this.isFirst, required this.isLast});
+  final _Checkpoint checkpoint;
+  final bool isFirst;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = checkpoint;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              clipBehavior: Clip.none,
+              children: [
+                if (!isFirst)
+                  Positioned(
+                    top: -10,
+                    child: Container(width: 2, height: 10, color: NuvoColors.divider),
+                  ),
+                if (!isLast)
+                  Positioned(
+                    bottom: -10,
+                    child: Container(width: 2, height: 10, color: NuvoColors.divider),
+                  ),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: switch (c.state) {
+                      _NodeState.done => NuvoColors.blue,
+                      _NodeState.current => NuvoColors.navy,
+                      _NodeState.todo => NuvoColors.surface,
+                    },
+                    border: c.state == _NodeState.todo
+                        ? Border.all(color: NuvoColors.divider, width: 2)
+                        : null,
+                    boxShadow: c.state == _NodeState.current
+                        ? const [BoxShadow(color: NuvoColors.panel, blurRadius: 0, spreadRadius: 5)]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    c.marker,
+                    style: AppTextStyles.number(
+                      12,
+                      color: c.state == _NodeState.todo ? NuvoColors.paleSlate : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  c.state == _NodeState.current ? 'You are here' : c.label,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  c.sub,
+                  style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Complete callout ──────────────────────────────────────────────────────────
 
 class _CompleteCallout extends StatelessWidget {
@@ -704,10 +890,10 @@ class _CompleteCallout extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.check_circle_rounded,
+          const NuvoIcon(
+            NuvoIconType.checkCircle,
             color: NuvoColors.success,
-            size: 22,
+            size: 20,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -873,10 +1059,10 @@ class _ManageRow extends StatelessWidget {
             Icon(icon, color: NuvoColors.navy, size: 18),
             const SizedBox(width: 12),
             Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
-            const Icon(
-              Icons.chevron_right_rounded,
+            const NuvoIcon(
+              NuvoIconType.arrow,
               color: NuvoColors.muted,
-              size: 16,
+              size: 14,
             ),
           ],
         ),

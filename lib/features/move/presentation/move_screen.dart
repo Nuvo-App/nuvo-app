@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/animations.dart' hide PressableScale;
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_icons.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -42,24 +45,11 @@ class MoveScreen extends ConsumerWidget {
                   width: 46,
                   height: 46,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [NuvoColors.blueInk, NuvoColors.blue],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: NuvoColors.blue.withValues(alpha: 0.28),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
+                    color: NuvoColors.navy,
+                    borderRadius: BorderRadius.circular(15),
                   ),
-                  child: const Icon(
-                    Icons.add_rounded,
-                    color: NuvoColors.white,
-                    size: 24,
+                  child: const Center(
+                    child: NuvoIcon(NuvoIconType.plus, color: NuvoColors.white, size: 20),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -100,13 +90,16 @@ class MoveScreen extends ConsumerWidget {
             else ...[
               const _SectionLabel(label: 'Your races'),
               const SizedBox(height: 12),
-              for (final race in activeRaces) ...[
-                _RaceLogRow(
-                  race: race,
-                  userId: uid,
-                  onLog: () => context.push('/race/${race.id}/proof').then((_) {
-                    ref.read(raceControllerProvider.notifier).loadRaces();
-                  }),
+              for (var i = 0; i < activeRaces.length; i++) ...[
+                FadeSlideIn(
+                  delay: Duration(milliseconds: 60 * i),
+                  child: _RaceLogRow(
+                    race: activeRaces[i],
+                    userId: uid,
+                    onLog: () => context.push('/race/${activeRaces[i].id}/proof').then((_) {
+                      ref.read(raceControllerProvider.notifier).loadRaces();
+                    }),
+                  ),
                 ),
                 const SizedBox(height: 8),
               ],
@@ -171,7 +164,6 @@ class _RaceLogRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = myPart?.progressPercent ?? 0;
-    final progress = (pct / 100).clamp(0.0, 1.0);
     final isComplete = pct >= 100;
 
     final others = race.participants
@@ -248,10 +240,10 @@ class _RaceLogRow extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.check_rounded,
+                        const NuvoIcon(
+                          NuvoIconType.check,
                           color: NuvoColors.success,
-                          size: 14,
+                          size: 12,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -267,7 +259,7 @@ class _RaceLogRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _MiniRaceLane(progress: progress),
+            NuvoRaceLane(progressPercent: pct, trackHeight: 3, dotDiameter: 10),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -322,84 +314,6 @@ class _ParticipantPill extends StatelessWidget {
           style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
         ),
       ],
-    );
-  }
-}
-
-// ── Mini race lane ────────────────────────────────────────────────────────────
-
-class _MiniRaceLane extends StatelessWidget {
-  const _MiniRaceLane({required this.progress});
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        const trackH = 3.0;
-        const dotD = 10.0;
-        final fill = (width * progress).clamp(0.0, width);
-
-        return SizedBox(
-          height: dotD,
-          child: Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              Container(
-                height: trackH,
-                decoration: BoxDecoration(
-                  color: NuvoColors.trackBg,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              if (progress > 0)
-                Container(
-                  width: fill,
-                  height: trackH,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: progress >= 1
-                          ? const [NuvoColors.success, NuvoColors.aqua]
-                          : const [NuvoColors.blueInk, NuvoColors.blue],
-                    ),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              if (progress > 0 && progress < 1)
-                Positioned(
-                  left: (fill - dotD / 2).clamp(0.0, width - dotD),
-                  child: Container(
-                    width: dotD,
-                    height: dotD,
-                    decoration: BoxDecoration(
-                      color: NuvoColors.blue,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: NuvoColors.blue.withValues(alpha: 0.30),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (progress >= 1)
-                Positioned(
-                  right: 0,
-                  child: Container(
-                    width: dotD,
-                    height: dotD,
-                    decoration: const BoxDecoration(
-                      color: NuvoColors.success,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

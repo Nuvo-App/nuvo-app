@@ -44,7 +44,7 @@ class _PressableScaleState extends State<PressableScale>
   void _onRelease() {
     _ctrl.animateTo(
       0.0,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
     );
   }

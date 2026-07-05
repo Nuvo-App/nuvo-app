@@ -40,7 +40,7 @@ abstract final class AppTheme {
       colorScheme: colorScheme,
       visualDensity: VisualDensity.adaptivePlatformDensity,
       splashFactory: InkSparkle.splashFactory,
-      fontFamily: GoogleFonts.plusJakartaSans().fontFamily,
+      fontFamily: GoogleFonts.manrope().fontFamily,
       textTheme: TextTheme(
         displayLarge: AppTextStyles.displayLarge,
         displayMedium: AppTextStyles.displayMedium,

@@ -52,6 +52,15 @@ Page<void> _authPage(GoRouterState state, Widget child) =>
       },
     );
 
+/// Bottom-nav tab switch: instant, no transition. Each tab is a full
+/// screen rebuild (this ShellRoute doesn't preserve branch state across
+/// switches — pre-existing architecture, not introduced by this redesign),
+/// so animating the switch just exposes that rebuild cost as visible jank.
+/// Native iOS tab bars don't crossfade content either; matching that instead
+/// of fighting it is the actually-seamless choice here.
+Page<void> _tabPage(GoRouterState state, Widget child) =>
+    NoTransitionPage<void>(key: state.pageKey, child: child);
+
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
   final router = GoRouter(
@@ -118,36 +127,23 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/arena',
-            pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const ArenaScreen(),
-            ),
+            pageBuilder: (_, state) => _tabPage(state, const ArenaScreen()),
           ),
           GoRoute(
             path: '/pass',
-            pageBuilder: (_, state) =>
-                NoTransitionPage(key: state.pageKey, child: const PassScreen()),
+            pageBuilder: (_, state) => _tabPage(state, const PassScreen()),
           ),
           GoRoute(
             path: '/compete',
-            pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const CompeteScreen(),
-            ),
+            pageBuilder: (_, state) => _tabPage(state, const CompeteScreen()),
           ),
           GoRoute(
             path: '/move',
-            pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const MoveScreen(),
-            ),
+            pageBuilder: (_, state) => _tabPage(state, const MoveScreen()),
           ),
           GoRoute(
             path: '/profile',
-            pageBuilder: (_, state) => NoTransitionPage(
-              key: state.pageKey,
-              child: const ProfileScreen(),
-            ),
+            pageBuilder: (_, state) => _tabPage(state, const ProfileScreen()),
           ),
         ],
       ),

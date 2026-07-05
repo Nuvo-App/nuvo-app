@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/animations.dart' hide PressableScale;
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -79,11 +81,14 @@ class CompeteScreen extends ConsumerWidget {
                       if (active.isNotEmpty) ...[
                         const _SectionLabel(label: 'Active'),
                         const SizedBox(height: 12),
-                        for (final race in active) ...[
-                          _RaceLaneCard(
-                            race: race,
-                            userId: uid,
-                            onTap: () => context.push('/race/${race.id}'),
+                        for (var i = 0; i < active.length; i++) ...[
+                          FadeSlideIn(
+                            delay: Duration(milliseconds: 60 * i),
+                            child: _RaceLaneCard(
+                              race: active[i],
+                              userId: uid,
+                              onTap: () => context.push('/race/${active[i].id}'),
+                            ),
                           ),
                           const SizedBox(height: 8),
                         ],
@@ -217,24 +222,11 @@ class _CompeteHero extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [NuvoColors.coral, NuvoColors.sunshine],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: NuvoColors.coral.withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
+                  color: NuvoColors.navy,
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(
-                  Icons.flag_rounded,
-                  color: NuvoColors.white,
-                  size: 22,
+                child: const Center(
+                  child: NuvoIcon(NuvoIconType.flag, color: NuvoColors.white, size: 20),
                 ),
               ),
               const Spacer(),
@@ -385,15 +377,16 @@ class _RaceLaneCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: NuvoColors.textMuted,
-                  size: 16,
-                ),
+                const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.textMuted, size: 14),
               ],
             ),
             const SizedBox(height: 12),
-            NuvoRaceLane(progressPercent: pct, trackHeight: 3, dotDiameter: 10),
+            NuvoRaceLane(
+              progressPercent: pct,
+              trackHeight: 3,
+              dotDiameter: 10,
+              delay: const Duration(milliseconds: 100),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -514,11 +507,7 @@ class _QuickStartRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: NuvoColors.textMuted,
-              size: 13,
-            ),
+            const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.textMuted, size: 13),
           ],
         ),
       ),
@@ -544,11 +533,7 @@ class _EmptyState extends StatelessWidget {
             color: NuvoColors.blue.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(
-            Icons.flag_rounded,
-            color: NuvoColors.blue,
-            size: 24,
-          ),
+          child: const NuvoIcon(NuvoIconType.flag, color: NuvoColors.blue, size: 22),
         ),
         const SizedBox(height: 20),
         Text(

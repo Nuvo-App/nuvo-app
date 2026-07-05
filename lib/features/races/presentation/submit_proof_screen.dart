@@ -9,7 +9,9 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../auth/data/auth_api.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
+import '../domain/chase_context.dart';
 import '../domain/motion_activity_catalog.dart';
 import 'board_moved_screen.dart';
 import 'race_controller.dart';
@@ -81,7 +83,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     });
     try {
       final note = _noteController.text.trim();
-      await ref
+      final updatedRace = await ref
           .read(raceControllerProvider.notifier)
           .submitProof(
             widget.raceId,
@@ -90,6 +92,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           );
       if (mounted) {
         setState(() => _loading = false);
+        final userId = ref.read(authControllerProvider).user?.id;
+        final myProof = updatedRace.recentProofs.isEmpty
+            ? null
+            : updatedRace.recentProofs.first;
+        final chase = userId == null
+            ? null
+            : ChaseContext.compute(updatedRace, userId);
         context.pushReplacement(
           '/race/${widget.raceId}/board-moved',
           extra: BoardMovedArgs(
@@ -97,7 +106,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
             raceName: _race?.displayTitle ?? '',
             value: raw,
             unit: _race?.unit,
-            status: 'accepted',
+            status: myProof?.verificationStatus ?? 'accepted',
+            rankBefore: myProof?.rankBefore,
+            rankAfter: myProof?.rankAfter ?? chase?.myRank,
+            peoplePassed: myProof?.peoplePassed,
+            leaderName: chase?.leaderName,
+            leaderPhotoUrl: chase?.leaderPhotoUrl,
+            leaderGap: chase?.leaderGap,
           ),
         );
       }

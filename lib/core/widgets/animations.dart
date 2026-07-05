@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../theme/app_colors.dart';
 
@@ -56,45 +57,89 @@ class _PressableScaleState extends State<PressableScale> {
   }
 }
 
-/// Progress bar that animates smoothly from 0 → [value] when first built.
-class AnimatedProgressBar extends StatelessWidget {
+/// Progress bar that animates smoothly from 0 → [value] (after an optional
+/// start [delay]), then keeps a continuous subtle shimmer sweep across the
+/// filled portion even at rest (matches the prototype's `.lb-bar-fill::after`
+/// shimmer).
+class AnimatedProgressBar extends StatefulWidget {
   const AnimatedProgressBar({
     super.key,
     required this.value,
     this.color,
     this.height = 5.0,
     this.duration = const Duration(milliseconds: 900),
+    this.delay = Duration.zero,
+    this.enableShimmer = true,
   });
 
   final double value;
   final Color? color;
   final double height;
   final Duration duration;
+  final Duration delay;
+  final bool enableShimmer;
+
+  @override
+  State<AnimatedProgressBar> createState() => _AnimatedProgressBarState();
+}
+
+class _AnimatedProgressBarState extends State<AnimatedProgressBar> {
+  double _target = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.delay == Duration.zero) {
+      _target = widget.value.clamp(0.0, 1.0);
+    } else {
+      Future.delayed(widget.delay, () {
+        if (mounted) setState(() => _target = widget.value.clamp(0.0, 1.0));
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _target = widget.value.clamp(0.0, 1.0);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final fill = color ?? NuvoColors.blue;
-    final clamped = value.clamp(0.0, 1.0);
+    final fill = widget.color ?? NuvoColors.blue;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(height),
+      borderRadius: BorderRadius.circular(widget.height),
       child: Container(
-        height: height,
-        color: NuvoColors.sectionBlue,
+        height: widget.height,
+        color: NuvoColors.trackBg,
         alignment: Alignment.centerLeft,
         child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: clamped),
-          duration: duration,
+          tween: Tween(begin: 0, end: _target),
+          duration: widget.duration,
           curve: Curves.easeOut,
-          builder: (context, progress, child) => FractionallySizedBox(
-            widthFactor: progress,
-            child: Container(
+          builder: (context, progress, child) {
+            final bar = Container(
               decoration: BoxDecoration(
                 color: fill,
-                borderRadius: BorderRadius.circular(height),
+                borderRadius: BorderRadius.circular(widget.height),
               ),
-            ),
-          ),
+            );
+            return FractionallySizedBox(
+              widthFactor: progress,
+              child: widget.enableShimmer && progress > 0
+                  ? Shimmer.fromColors(
+                      baseColor: fill,
+                      highlightColor: Colors.white.withValues(alpha: 0.55),
+                      period: const Duration(milliseconds: 2600),
+                      loop: 3,
+                      child: bar,
+                    )
+                  : bar,
+            );
+          },
         ),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -62,26 +63,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           // ── Navy header ───────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    NuvoColors.navy,
-                    NuvoColors.blueInk,
-                    NuvoColors.blue,
-                  ],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(34),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: NuvoColors.blue.withValues(alpha: 0.24),
-                    blurRadius: 34,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
+              decoration: const BoxDecoration(
+                color: NuvoColors.navy,
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
               ),
               padding: EdgeInsets.fromLTRB(20, safeTop + 22, 20, 28),
               child: Column(
@@ -215,13 +199,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     child: Row(
                       children: [
-                        _HeaderStat(value: '$activeCount', label: 'Active'),
+                        _HeaderStat(value: activeCount, label: 'Active'),
                         _HeaderDivider(),
-                        _HeaderStat(value: '$finishedCount', label: 'Finished'),
+                        _HeaderStat(value: finishedCount, label: 'Finished'),
                         _HeaderDivider(),
-                        _HeaderStat(value: '$moveCount', label: 'Moves'),
+                        _HeaderStat(value: moveCount, label: 'Moves'),
                         _HeaderDivider(),
-                        _HeaderStat(value: '$avgProgress%', label: 'Avg'),
+                        _HeaderStat(value: avgProgress, label: 'Avg', suffix: '%'),
                       ],
                     ),
                   ),
@@ -302,9 +286,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 // ── Header stat ───────────────────────────────────────────────────────────────
 
 class _HeaderStat extends StatelessWidget {
-  const _HeaderStat({required this.value, required this.label});
-  final String value;
+  const _HeaderStat({required this.value, required this.label, this.suffix = ''});
+  final int value;
   final String label;
+  final String suffix;
 
   @override
   Widget build(BuildContext context) {
@@ -312,11 +297,13 @@ class _HeaderStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            value,
-            style: AppTextStyles.displaySmall.copyWith(
-              color: NuvoColors.white,
-              fontWeight: FontWeight.w900,
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: value.toDouble()),
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeOutCubic,
+            builder: (context, animated, _) => Text(
+              '${animated.round()}$suffix',
+              style: AppTextStyles.number(24, color: NuvoColors.white, weight: FontWeight.w800),
             ),
           ),
           const SizedBox(height: 3),
@@ -481,11 +468,7 @@ class _AccountRow extends StatelessWidget {
               ),
             ),
             if (!isDanger)
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: _kProfileTextMuted,
-                size: 16,
-              ),
+              const NuvoIcon(NuvoIconType.arrow, color: _kProfileTextMuted, size: 14),
           ],
         ),
       ),

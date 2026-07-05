@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 
 class BoardMovedArgs {
   const BoardMovedArgs({
@@ -35,6 +35,10 @@ class BoardMovedArgs {
   final int? leaderGap;
 }
 
+/// Full-screen rank-up celebration shown right after a proof is verified —
+/// the emotional payoff moment. Every number here comes from the just-
+/// submitted proof's real response (rankBefore/rankAfter/peoplePassed),
+/// never invented.
 class BoardMovedScreen extends StatelessWidget {
   const BoardMovedScreen({super.key, required this.raceId, required this.args});
 
@@ -49,177 +53,119 @@ class BoardMovedScreen extends StatelessWidget {
 
   bool get _isPending => !_isChecked && !_isRejected;
 
-  bool get _boardMoved =>
+  bool get _movedUp =>
       args.rankAfter != null &&
       args.rankBefore != null &&
-      args.rankAfter != args.rankBefore;
+      args.rankAfter! < args.rankBefore!;
+
+  int get _spotsMoved =>
+      _movedUp ? (args.rankBefore! - args.rankAfter!) : 0;
 
   @override
   Widget build(BuildContext context) {
+    if (_isRejected) return _RejectedView(raceId: raceId, args: args);
+
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: NuvoColors.navy,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Back row ──────────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Row(
-                children: [
-                  NuvoBackButton(
-                    onPressed: () => safePopOrGo(context, '/race/$raceId'),
-                  ),
-                ],
-              ),
-            ),
-
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 32, 20, 32),
+                padding: const EdgeInsets.fromLTRB(28, 40, 28, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // ── Status header ─────────────────────────────────────────
-                    Text(
-                      _isChecked
-                          ? 'MOVE CHECKED'
-                          : _isRejected
-                          ? "MOVE DIDN'T COUNT"
-                          : 'MOVE LOGGED',
-                      style: AppTextStyles.brandLabel.copyWith(
-                        color: _isChecked
-                            ? NuvoColors.success
-                            : _isRejected
-                            ? NuvoColors.danger
-                            : NuvoColors.muted,
-                        letterSpacing: 0,
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: const BoxDecoration(color: NuvoColors.blue, shape: BoxShape.circle),
+                      child: const Center(
+                        child: NuvoIcon(NuvoIconType.check, color: Colors.white, size: 24),
                       ),
-                      textAlign: TextAlign.center,
                     ),
-
-                    const SizedBox(height: 12),
-
+                    const SizedBox(height: 20),
                     Text(
-                      _isRejected
-                          ? 'Try again with a clearer move.'
-                          : _isPending
-                          ? 'Your move is under review.'
-                          : _boardMoved
-                          ? 'Board moved.'
-                          : 'Progress updated.',
-                      style: AppTextStyles.headlineLarge,
-                      textAlign: TextAlign.center,
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // ── Value badge ───────────────────────────────────────────
-                    if (!_isRejected) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: NuvoColors.navy,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          '+${args.value}${args.unit != null ? ' ${args.unit}' : ''}',
-                          style: AppTextStyles.displaySmall.copyWith(
-                            color: NuvoColors.white,
-                          ),
-                        ),
+                      _isPending
+                          ? 'Move logged · under review'
+                          : '${args.value}${args.unit != null ? ' ${args.unit}' : ''} verified',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: Colors.white.withValues(alpha: 0.7),
+                        letterSpacing: 0.3,
                       ),
-                      const SizedBox(height: 28),
-                    ],
-
-                    // ── Rank change ───────────────────────────────────────────
+                    ),
                     if (args.rankAfter != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 16,
-                        ),
-                        decoration: BoxDecoration(
-                          color: NuvoColors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: NuvoColors.divider),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              '#${args.rankAfter}',
-                              style: AppTextStyles.displayMedium.copyWith(
-                                color: NuvoColors.navy,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _boardMoved &&
-                                      args.rankBefore != null &&
-                                      args.rankAfter! < args.rankBefore!
-                                  ? 'Up from #${args.rankBefore}'
-                                  : 'Your rank',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: NuvoColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       const SizedBox(height: 12),
-                    ],
-
-                    // ── Passed copy ───────────────────────────────────────────
-                    if ((args.peoplePassed ?? 0) > 0) ...[
-                      _ContextLine(
-                        text: args.peoplePassed == 1
-                            ? 'You passed 1 person.'
-                            : 'You passed ${args.peoplePassed} people.',
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (args.rankBefore != null && _movedUp) ...[
+                            Text(
+                              '#${args.rankBefore}',
+                              style: AppTextStyles.number(22, color: Colors.white.withValues(alpha: 0.4)),
+                            ),
+                            const SizedBox(width: 14),
+                            const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.paleSlate, size: 16),
+                            const SizedBox(width: 14),
+                          ],
+                          Text(
+                            '#${args.rankAfter}',
+                            style: AppTextStyles.number(46, color: Colors.white, weight: FontWeight.w800),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    // ── Chase copy ────────────────────────────────────────────
-                    if (args.leaderName != null &&
-                        (args.leaderGap ?? 0) > 0) ...[
-                      _ContextLine(
-                        leading: NuvoAvatar(
-                          initials: args.leaderName![0],
-                          photoUrl: args.leaderPhotoUrl,
-                          size: 22,
-                        ),
-                        text: '${args.leaderName} leads by ${args.leaderGap}.',
+                      const SizedBox(height: 6),
+                      Text(
+                        _movedUp
+                            ? "You moved up $_spotsMoved ${_spotsMoved == 1 ? 'spot' : 'spots'}"
+                                  '${(args.leaderGap ?? 0) > 0 ? ' · ${args.leaderGap} from #${(args.rankAfter ?? 1) - 1}' : ''}'
+                            : (args.peoplePassed ?? 0) > 0
+                            ? 'You passed ${args.peoplePassed} ${args.peoplePassed == 1 ? 'person' : 'people'}'
+                            : 'Your progress is verified.',
+                        style: AppTextStyles.bodyMedium.copyWith(color: Colors.white.withValues(alpha: 0.72)),
+                        textAlign: TextAlign.center,
                       ),
                     ],
-
-                    const SizedBox(height: 48),
                   ],
                 ),
               ),
             ),
-
-            // ── Bottom CTAs ───────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
               child: Column(
                 children: [
-                  NuvoPrimaryButton(
-                    label: 'View race',
-                    expand: true,
-                    onPressed: () => safePopOrGo(context, '/race/$raceId'),
-                  ),
-                  if (!_isRejected) ...[
-                    const SizedBox(height: 10),
-                    NuvoGhostButton(
-                      label: 'Log another move',
-                      expand: true,
-                      onPressed: () =>
-                          context.pushReplacement('/race/$raceId/proof'),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => safePopOrGo(context, '/race/$raceId'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: NuvoColors.navy,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                      ),
+                      child: Text(
+                        'View leaderboard',
+                        style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
+                      ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 14),
+                  GestureDetector(
+                    onTap: () => context.pushReplacement('/race/$raceId/proof'),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'Submit another proof',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -230,22 +176,66 @@ class BoardMovedScreen extends StatelessWidget {
   }
 }
 
-class _ContextLine extends StatelessWidget {
-  const _ContextLine({required this.text, this.leading});
-  final String text;
-  final Widget? leading;
+// ── Rejected view — kept as a light page, this isn't a celebration ────────────
+
+class _RejectedView extends StatelessWidget {
+  const _RejectedView({required this.raceId, required this.args});
+  final String raceId;
+  final BoardMovedArgs args;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (leading != null) ...[leading!, const SizedBox(width: 8)],
-        Text(
-          text,
-          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+    return Scaffold(
+      backgroundColor: NuvoColors.page,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                children: [
+                  NuvoBackButton(onPressed: () => safePopOrGo(context, '/race/$raceId')),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "MOVE DIDN'T COUNT",
+                        style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.danger, letterSpacing: 0),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Try again with a clearer move.',
+                        style: AppTextStyles.headlineLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: FilledButton(
+                onPressed: () => context.pushReplacement('/race/$raceId/proof'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: NuvoColors.navy,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                ),
+                child: const Text('Try again'),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
