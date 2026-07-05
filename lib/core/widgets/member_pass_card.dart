@@ -11,13 +11,21 @@ class MemberPassCard extends StatelessWidget {
     super.key,
     required this.profile,
     this.compact = false,
+    this.dark = false,
   });
 
   final UserProfile profile;
   final bool compact;
 
+  /// Solid-navy "pass in your pocket" treatment, matching the Crew screen's
+  /// member pass moment. When false, keeps the original light card used in
+  /// onboarding.
+  final bool dark;
+
   @override
   Widget build(BuildContext context) {
+    if (dark) return _buildDark(context);
+
     return Container(
       padding: EdgeInsets.all(compact ? 18 : 22),
       decoration: BoxDecoration(
@@ -134,6 +142,64 @@ class MemberPassCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDark(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 20 : 24),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(compact ? 22 : 26),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'NUVO PASS',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: Colors.white.withValues(alpha: 0.5),
+              letterSpacing: 2.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          SizedBox(height: compact ? 16 : 20),
+          _QrFrame(
+            value: 'https://nuvo.app/pass/${profile.memberId}',
+            size: compact ? 112 : 136,
+          ),
+          SizedBox(height: compact ? 16 : 20),
+          Text(
+            profile.name,
+            style: AppTextStyles.titleLarge.copyWith(
+              color: Colors.white,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            profile.username,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: Colors.white.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              'ID · ${profile.memberId}',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: Colors.white,
+                letterSpacing: 0.3,
+              ),
+            ),
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'nuvo_icons.dart';
 import 'pressable_scale.dart';
 
 // Indices map to shell paths in main_shell.dart:
@@ -19,11 +20,11 @@ class NuvoBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const _items = [
-    _NavItem(icon: Icons.bolt_rounded, label: 'Arena'),
-    _NavItem(icon: Icons.flag_rounded, label: 'Races'),
-    _NavItem(icon: Icons.add_rounded, label: 'Move', isCta: true),
-    _NavItem(icon: Icons.group_rounded, label: 'Crew'),
-    _NavItem(icon: Icons.person_rounded, label: 'Profile'),
+    _NavItem(icon: NuvoIconType.bolt, label: 'Arena'),
+    _NavItem(icon: NuvoIconType.flag, label: 'Races'),
+    _NavItem(icon: NuvoIconType.plus, label: 'Move', isCta: true),
+    _NavItem(icon: NuvoIconType.users, label: 'Crew'),
+    _NavItem(icon: NuvoIconType.user, label: 'Profile'),
   ];
 
   @override
@@ -31,40 +32,31 @@ class NuvoBottomNav extends StatelessWidget {
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, bottom + 14),
+      padding: EdgeInsets.fromLTRB(14, 0, 14, bottom + 16),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(999),
           boxShadow: [
             BoxShadow(
-              color: NuvoColors.blue.withValues(alpha: 0.14),
-              blurRadius: 40,
+              color: NuvoColors.navy.withValues(alpha: 0.18),
+              blurRadius: 34,
               offset: const Offset(0, 16),
-            ),
-            BoxShadow(
-              color: NuvoColors.navy.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(999),
           child: Container(
-            height: 68,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-            decoration: BoxDecoration(
-              color: NuvoColors.white.withValues(alpha: 0.96),
-              border: Border.all(
-                color: NuvoColors.white,
-                width: 1,
-              ),
-            ),
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            color: NuvoColors.surface,
             child: Row(
               children: [
                 for (var i = 0; i < _items.length; i++)
-                  Expanded(
-                    child: _NavButton(
+                  if (_items[i].isCta)
+                    _CtaButton(onTap: () => onTap(i))
+                  else
+                    _NavButton(
                       item: _items[i],
                       selected: i == currentIndex,
                       onTap: () {
@@ -72,7 +64,6 @@ class NuvoBottomNav extends StatelessWidget {
                         onTap(i);
                       },
                     ),
-                  ),
               ],
             ),
           ),
@@ -89,7 +80,7 @@ class _NavItem {
     this.isCta = false,
   });
 
-  final IconData icon;
+  final NuvoIconType icon;
   final String label;
   final bool isCta;
 }
@@ -107,111 +98,141 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (item.isCta) return _CtaButton(selected: selected, onTap: onTap);
-
-    return PressableScale(
-      onTap: onTap,
-      scale: 0.93,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        height: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.blue.withValues(alpha: 0.08)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              width: selected ? 36 : 28,
-              height: selected ? 28 : 28,
-              decoration: BoxDecoration(
-                gradient: selected
-                    ? const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [NuvoColors.blue, NuvoColors.blueInk],
-                      )
-                    : null,
-                color: selected ? null : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
+    return Expanded(
+      child: PressableScale(
+        onTap: onTap,
+        scale: 0.95,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(horizontal: selected ? 10 : 11, vertical: 11),
+          decoration: BoxDecoration(
+            color: selected ? NuvoColors.navy : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedScale(
+                scale: selected ? 1.08 : 1.0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                child: NuvoIcon(
+                  item.icon,
+                  size: 17,
+                  color: selected ? NuvoColors.white : NuvoColors.textDim,
+                ),
               ),
-              alignment: Alignment.center,
-              child: Icon(
-                item.icon,
-                size: 18,
-                color: selected ? NuvoColors.white : NuvoColors.paleSlate,
-              ),
-            ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              child: selected
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Text(
-                        item.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.fade,
-                        softWrap: false,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.blue,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
+              Flexible(
+                child: AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: const Cubic(0.22, 1, 0.36, 1),
+                child: selected
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 5),
+                        child: Text(
+                          item.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          softWrap: false,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: NuvoColors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    )
-                  : const SizedBox(height: 0),
-            ),
-          ],
+                      )
+                    : const SizedBox(width: 0),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _CtaButton extends StatelessWidget {
-  const _CtaButton({required this.selected, required this.onTap});
-
-  final bool selected;
+class _CtaButton extends StatefulWidget {
+  const _CtaButton({required this.onTap});
   final VoidCallback onTap;
 
   @override
+  State<_CtaButton> createState() => _CtaButtonState();
+}
+
+class _CtaButtonState extends State<_CtaButton> with SingleTickerProviderStateMixin {
+  late final AnimationController _ringCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    // A handful of breaths to draw the eye to the FAB, then it settles —
+    // the bottom nav is on screen the entire time the app is open, so an
+    // indefinite repeat here means a ticker runs forever in the background.
+    _ringCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))
+      ..repeat(count: 4);
+  }
+
+  @override
+  void dispose() {
+    _ringCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      scale: 0.90,
-      child: Center(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          width: selected ? 58 : 54,
-          height: selected ? 54 : 50,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [NuvoColors.navy2, NuvoColors.navy, NuvoColors.blueInk],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: NuvoColors.blue.withValues(alpha: 0.30),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SizedBox(
+        width: 52,
+        height: 52,
+        child: PressableScale(
+          onTap: widget.onTap,
+          scale: 0.88,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedBuilder(
+                animation: _ringCtrl,
+                builder: (context, _) {
+                  final t = _ringCtrl.value;
+                  final scale = 0.85 + t * 0.65;
+                  final opacity = (0.9 * (1 - t)).clamp(0.0, 1.0);
+                  return Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: NuvoColors.blue.withValues(alpha: opacity * 0.35),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: NuvoColors.blue,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: NuvoColors.blue.withValues(alpha: 0.45),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: NuvoIcon(NuvoIconType.plus, color: NuvoColors.white, size: 19),
+                ),
               ),
             ],
-          ),
-          child: const Icon(
-            Icons.add_rounded,
-            color: NuvoColors.white,
-            size: 28,
           ),
         ),
       ),

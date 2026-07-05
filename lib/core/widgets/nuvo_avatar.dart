@@ -14,6 +14,14 @@ abstract final class NuvoAvatarSizes {
   static const double profile = 96;
 }
 
+/// Deterministic flat avatar color per person, picked from the muted
+/// avatar palette — never a gradient, never generic.
+Color nuvoAvatarColorFor(String id) {
+  if (id.isEmpty) return NuvoColors.avatarPalette.first;
+  final hash = id.codeUnits.fold<int>(0, (acc, c) => acc + c);
+  return NuvoColors.avatarPalette[hash % NuvoColors.avatarPalette.length];
+}
+
 /// Circular avatar that shows a network photo when available, with a clean
 /// initials fallback. Never shows a broken-image icon.
 ///

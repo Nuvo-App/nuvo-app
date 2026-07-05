@@ -10,12 +10,26 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/member_pass_card.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../data/models/user_profile.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
+
+class _ClosestRace {
+  const _ClosestRace({
+    required this.race,
+    required this.me,
+    required this.crewMember,
+    required this.gap,
+  });
+  final Race race;
+  final RaceParticipant me;
+  final RaceParticipant crewMember;
+  final int gap;
+}
 
 class PassScreen extends ConsumerStatefulWidget {
   const PassScreen({super.key});
@@ -158,10 +172,30 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     }
   }
 
+  _ClosestRace? _closestCrewRace(List<Race> races, String userId) {
+    final crewIds = _crew.map((c) => c.id).toSet();
+    _ClosestRace? best;
+    for (final race in races) {
+      if (race.status != 'active') continue;
+      final me = race.participantFor(userId);
+      if (me == null) continue;
+      for (final p in race.participants) {
+        if (p.userId == userId || !crewIds.contains(p.userId)) continue;
+        final gap = (me.progressPercent - p.progressPercent).abs();
+        if (best == null || gap < best.gap) {
+          best = _ClosestRace(race: race, me: me, crewMember: p, gap: gap);
+        }
+      }
+    }
+    return best;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final profile = _buildProfile(user);
+    final races = ref.watch(raceControllerProvider).races;
+    final closest = user == null ? null : _closestCrewRace(races, user.id);
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
@@ -196,8 +230,15 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 // ── Member pass ──────────────────────────────────────────
                 const _SectionLabel(label: 'Member pass'),
                 const SizedBox(height: 12),
-                MemberPassCard(profile: profile, compact: true),
+                MemberPassCard(profile: profile, compact: true, dark: true),
                 const SizedBox(height: 28),
+
+                if (closest != null) ...[
+                  const _SectionLabel(label: 'Closest race'),
+                  const SizedBox(height: 12),
+                  _ClosestRaceCard(closest: closest),
+                  const SizedBox(height: 28),
+                ],
 
                 // ── Find people ──────────────────────────────────────────
                 const _SectionLabel(label: 'Find people'),
@@ -276,6 +317,150 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
+// ── Closest race card ─────────────────────────────────────────────────────────
+
+class _ClosestRaceCard extends StatelessWidget {
+  const _ClosestRaceCard({required this.closest});
+  final _ClosestRace closest;
+
+  @override
+  Widget build(BuildContext context) {
+    final me = closest.me;
+    final crewMember = closest.crewMember;
+    final ahead = me.progressPercent >= crewMember.progressPercent;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(color: Color(0x080A1A33), blurRadius: 18, offset: Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${closest.race.displayTitle} · vs ${crewMember.displayName.split(' ').first}',
+            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            closest.gap == 0
+                ? "You're tied"
+                : '${closest.gap} ${closest.gap == 1 ? 'point' : 'points'} apart',
+            style: AppTextStyles.titleLarge,
+          ),
+          const SizedBox(height: 26),
+          _ComparisonTrack(
+            youPercent: me.progressPercent,
+            themPercent: crewMember.progressPercent,
+            youInitials: _initials2('You'),
+            themInitials: _initials2(crewMember.displayName),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            ahead
+                ? "You're ahead in this race."
+                : '${crewMember.displayName.split(' ').first} is ahead in this race.',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _initials2(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+  final s = name.trim();
+  return s.isEmpty ? '?' : s[0].toUpperCase();
+}
+
+class _ComparisonTrack extends StatelessWidget {
+  const _ComparisonTrack({
+    required this.youPercent,
+    required this.themPercent,
+    required this.youInitials,
+    required this.themInitials,
+  });
+
+  final int youPercent;
+  final int themPercent;
+  final String youInitials;
+  final String themInitials;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 60,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final trackWidth = constraints.maxWidth - 28;
+          double markerLeft(int percent) =>
+              (trackWidth * (percent / 100).clamp(0.0, 1.0));
+
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Positioned(
+                top: 28,
+                left: 0,
+                right: 28,
+                child: ColoredBox(color: NuvoColors.trackBg, child: SizedBox(height: 3)),
+              ),
+              const Positioned(
+                top: 21,
+                right: -2,
+                child: NuvoIcon(NuvoIconType.flag, size: 16, color: NuvoColors.paleSlate),
+              ),
+              Positioned(
+                left: markerLeft(themPercent),
+                top: 6,
+                child: _TrackAvatar(initials: themInitials, color: NuvoColors.avatarDustyBlue),
+              ),
+              Positioned(
+                left: markerLeft(youPercent),
+                top: 34,
+                child: _TrackAvatar(initials: youInitials, color: NuvoColors.blue),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TrackAvatar extends StatelessWidget {
+  const _TrackAvatar({required this.initials, required this.color});
+  final String initials;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: NuvoColors.surface, width: 2),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        initials,
+        style: AppTextStyles.labelSmall.copyWith(color: Colors.white, fontSize: 9),
+      ),
+    );
+  }
+}
+
 class _CrewHero extends StatelessWidget {
   const _CrewHero({
     required this.crewCount,
@@ -292,19 +477,11 @@ class _CrewHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.white, NuvoColors.icyBlue],
-        ),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: NuvoColors.white, width: 1.4),
-        boxShadow: [
-          BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.14),
-            blurRadius: 34,
-            offset: const Offset(0, 16),
-          ),
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: const [
+          BoxShadow(color: Color(0x080A1A33), blurRadius: 28, offset: Offset(0, 12)),
         ],
       ),
       child: Column(
@@ -316,24 +493,11 @@ class _CrewHero extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [NuvoColors.blueInk, NuvoColors.violet],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: NuvoColors.blue.withValues(alpha: 0.24),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+                  color: NuvoColors.navy,
+                  borderRadius: BorderRadius.circular(17),
                 ),
-                child: const Icon(
-                  Icons.group_rounded,
-                  color: NuvoColors.white,
-                  size: 26,
+                child: const Center(
+                  child: NuvoIcon(NuvoIconType.users, color: NuvoColors.white, size: 24),
                 ),
               ),
               const Spacer(),

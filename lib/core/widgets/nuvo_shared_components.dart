@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -830,13 +831,14 @@ class NuvoCurrentUserRow extends StatelessWidget {
 /// Horizontal progress track — thin line with a blue dot at the current
 /// position. The core visual element of the Nuvo redesign, echoing the logo's
 /// smooth line + blue dot motif.
-class NuvoRaceLane extends StatelessWidget {
+class NuvoRaceLane extends StatefulWidget {
   const NuvoRaceLane({
     super.key,
     required this.progressPercent,
     this.onDark = false,
     this.trackHeight = 3.0,
     this.dotDiameter = 12.0,
+    this.delay = Duration.zero,
   });
 
   final int progressPercent;
@@ -844,78 +846,127 @@ class NuvoRaceLane extends StatelessWidget {
   final double trackHeight;
   final double dotDiameter;
 
+  /// Delay before the fill starts animating from 0, so a stack of race
+  /// cards can stagger their bars the same way the design stipulates.
+  final Duration delay;
+
+  @override
+  State<NuvoRaceLane> createState() => _NuvoRaceLaneState();
+}
+
+class _NuvoRaceLaneState extends State<NuvoRaceLane> {
+  double _target = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.delay == Duration.zero) {
+      _target = (widget.progressPercent / 100).clamp(0.0, 1.0);
+    } else {
+      Future.delayed(widget.delay, () {
+        if (mounted) {
+          setState(() => _target = (widget.progressPercent / 100).clamp(0.0, 1.0));
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant NuvoRaceLane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.progressPercent != widget.progressPercent) {
+      _target = (widget.progressPercent / 100).clamp(0.0, 1.0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final progress = (progressPercent / 100).clamp(0.0, 1.0);
-    final trackColor = onDark
+    final trackHeight = widget.trackHeight;
+    final dotDiameter = widget.dotDiameter;
+    final trackColor = widget.onDark
         ? Colors.white.withValues(alpha: 0.18)
         : NuvoColors.trackBg;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
-        final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
 
-        return SizedBox(
-          height: dotDiameter,
-          child: Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              Container(
-                height: trackHeight,
-                decoration: BoxDecoration(
-                  color: trackColor,
-                  borderRadius: BorderRadius.circular(trackHeight / 2),
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: _target),
+          duration: const Duration(milliseconds: 1100),
+          curve: Curves.easeOut,
+          builder: (context, progress, _) {
+            final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
+            final fillBar = Container(
+              width: fillWidth,
+              height: trackHeight,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: progress >= 1
+                      ? const [NuvoColors.success, NuvoColors.aqua]
+                      : const [NuvoColors.blueInk, NuvoColors.blue2],
                 ),
+                borderRadius: BorderRadius.circular(trackHeight / 2),
               ),
-              if (progress > 0)
-                Container(
-                  width: fillWidth,
-                  height: trackHeight,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: progress >= 1
-                          ? const [NuvoColors.success, NuvoColors.aqua]
-                          : const [NuvoColors.blueInk, NuvoColors.blue2],
-                    ),
-                    borderRadius: BorderRadius.circular(trackHeight / 2),
-                  ),
-                ),
-              if (progress > 0 && progress < 1)
-                Positioned(
-                  left: (fillWidth - dotDiameter / 2).clamp(
-                    0.0,
-                    totalWidth - dotDiameter,
-                  ),
-                  child: Container(
-                    width: dotDiameter,
-                    height: dotDiameter,
+            );
+
+            return SizedBox(
+              height: dotDiameter,
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  Container(
+                    height: trackHeight,
                     decoration: BoxDecoration(
-                      color: NuvoColors.blue,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: NuvoColors.blue.withValues(alpha: 0.25),
-                          blurRadius: 10,
+                      color: trackColor,
+                      borderRadius: BorderRadius.circular(trackHeight / 2),
+                    ),
+                  ),
+                  if (progress > 0)
+                    Shimmer.fromColors(
+                      baseColor: NuvoColors.blue,
+                      highlightColor: Colors.white.withValues(alpha: 0.55),
+                      period: const Duration(milliseconds: 2600),
+                      loop: 3,
+                      child: fillBar,
+                    ),
+                  if (progress > 0 && progress < 1)
+                    Positioned(
+                      left: (fillWidth - dotDiameter / 2).clamp(
+                        0.0,
+                        totalWidth - dotDiameter,
+                      ),
+                      child: Container(
+                        width: dotDiameter,
+                        height: dotDiameter,
+                        decoration: BoxDecoration(
+                          color: NuvoColors.blue,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: NuvoColors.blue.withValues(alpha: 0.25),
+                              blurRadius: 10,
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              if (progress >= 1)
-                Positioned(
-                  right: 0,
-                  child: Container(
-                    width: dotDiameter,
-                    height: dotDiameter,
-                    decoration: const BoxDecoration(
-                      color: NuvoColors.success,
-                      shape: BoxShape.circle,
+                  if (progress >= 1)
+                    Positioned(
+                      right: 0,
+                      child: Container(
+                        width: dotDiameter,
+                        height: dotDiameter,
+                        decoration: const BoxDecoration(
+                          color: NuvoColors.success,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-            ],
-          ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
