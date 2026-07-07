@@ -2,6 +2,15 @@ import 'motion_activity.dart';
 
 const motionActivityDefinitions = [
   MotionActivityDefinition(
+    type: MotionActivityType.pushUps,
+    title: 'Pushups',
+    unit: 'pushups',
+    defaultTarget: 10,
+    aliases: ['pushups', 'push ups', 'push-up', 'push-ups'],
+    proofLabel: 'pushups',
+    cameraInstruction: 'Upper body front view',
+  ),
+  MotionActivityDefinition(
     type: MotionActivityType.jumpingJacks,
     title: 'Jumping Jacks',
     unit: 'jumping jacks',
@@ -17,25 +26,16 @@ const motionActivityDefinitions = [
     defaultTarget: 10,
     aliases: ['squats', 'squat'],
     proofLabel: 'squats',
-    cameraInstruction: 'Full body front or slight side view',
-  ),
-  MotionActivityDefinition(
-    type: MotionActivityType.highKnees,
-    title: 'High Knees',
-    unit: 'high knees',
-    defaultTarget: 20,
-    aliases: ['high knees', 'high knee', 'knees'],
-    proofLabel: 'high knees',
     cameraInstruction: 'Full body front view',
   ),
   MotionActivityDefinition(
-    type: MotionActivityType.armRaises,
-    title: 'Arm Raises',
-    unit: 'arm raises',
+    type: MotionActivityType.lunges,
+    title: 'Lunges',
+    unit: 'lunges',
     defaultTarget: 10,
-    aliases: ['arm raises', 'arm raise', 'raises'],
-    proofLabel: 'arm raises',
-    cameraInstruction: 'Upper/full body front view',
+    aliases: ['lunges', 'lunge'],
+    proofLabel: 'lunges',
+    cameraInstruction: 'Full body front or slight side view',
   ),
   MotionActivityDefinition(
     type: MotionActivityType.plankHold,
@@ -49,6 +49,18 @@ const motionActivityDefinitions = [
   ),
 ];
 
+const supportedMotionActivityTypes = {
+  MotionActivityType.pushUps,
+  MotionActivityType.squats,
+  MotionActivityType.jumpingJacks,
+  MotionActivityType.plankHold,
+  MotionActivityType.lunges,
+};
+
+bool isCameraVerifiedMotionActivity(MotionActivityDefinition? definition) =>
+    definition != null &&
+    supportedMotionActivityTypes.contains(definition.type);
+
 MotionActivityDefinition? motionActivityForType(MotionActivityType? type) {
   if (type == null) return null;
   for (final definition in motionActivityDefinitions) {
@@ -59,6 +71,51 @@ MotionActivityDefinition? motionActivityForType(MotionActivityType? type) {
 
 MotionActivityDefinition? motionActivityForBackendValue(String? value) =>
     motionActivityForType(MotionActivityType.fromBackendValue(value));
+
+MotionActivityDefinition? resolveRaceMotionActivity({
+  String? aiActivityType,
+  String? title,
+  String? unit,
+  String? targetUnit,
+}) {
+  final explicit = motionActivityForBackendValue(aiActivityType);
+  if (isCameraVerifiedMotionActivity(explicit)) return explicit;
+
+  final inferred = _inferSupportedMotionActivity([title, unit, targetUnit]);
+  if (isCameraVerifiedMotionActivity(inferred)) return inferred;
+  return null;
+}
+
+MotionActivityDefinition? _inferSupportedMotionActivity(
+  Iterable<String?> values,
+) {
+  final normalized = values
+      .whereType<String>()
+      .join(' ')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-_]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (normalized.isEmpty) return null;
+
+  if (RegExp(r'(^|[^a-z])push\s*ups?([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])pushups?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.pushUps);
+  }
+  if (RegExp(r'(^|[^a-z])squats?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.squats);
+  }
+  if (RegExp(r'(^|[^a-z])jumping\s+jacks?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.jumpingJacks);
+  }
+  if (RegExp(r'(^|[^a-z])lunges?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.lunges);
+  }
+  if (RegExp(r'(^|[^a-z])planks?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.plankHold);
+  }
+  return null;
+}
 
 ParsedRaceIdea parseRaceIdea(String input) {
   final normalized = input.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();

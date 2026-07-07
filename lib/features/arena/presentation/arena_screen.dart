@@ -13,6 +13,7 @@ import '../../../core/widgets/race_ring.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/chase_context.dart';
+import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/presentation/race_controller.dart';
 import '../data/arena_models.dart';
 import 'arena_controller.dart';
@@ -56,7 +57,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final arenaState = ref.watch(arenaControllerProvider);
+    final raceState = ref.watch(raceControllerProvider);
     final snapshot = arenaState.snapshot;
+    final cameraRaceById = {
+      for (final race in raceState.races)
+        if (resolveCameraVerification(race).isCameraVerifiable) race.id: race,
+    };
 
     ref.listen<ArenaState>(arenaControllerProvider, (prev, next) {
       if (next.snapshot != null && next.snapshot != prev?.snapshot) {
@@ -81,10 +87,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             if (snapshot.focusBoard != null) snapshot.focusBoard!,
             ...snapshot.liveBoards,
             ...snapshot.results,
-          ];
+          ].where((board) => cameraRaceById.containsKey(board.id)).toList();
 
-    final resolvedId = _selectedBoardId ?? snapshot?.focusBoard?.id;
-    final activeBoard = _scoreCenterBoard ?? snapshot?.focusBoard;
+    final resolvedId =
+        _selectedBoardId ?? (allBoards.isEmpty ? null : allBoards.first.id);
+    final activeBoard =
+        (_scoreCenterBoard != null &&
+            cameraRaceById.containsKey(_scoreCenterBoard!.id))
+        ? _scoreCenterBoard
+        : (allBoards.isEmpty ? null : allBoards.first);
     final otherBoards = allBoards.where((b) => b.id != resolvedId).toList();
 
     return Scaffold(
@@ -110,8 +121,10 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                     rank: activeBoard?.myRank,
                     rankBoardTitle: activeBoard?.title,
                     hasActivity: (snapshot?.activity.isNotEmpty ?? false),
-                    onAvatarTap: () =>
-                        _showNotificationsSheet(context, snapshot?.activity ?? const []),
+                    onAvatarTap: () => _showNotificationsSheet(
+                      context,
+                      snapshot?.activity ?? const [],
+                    ),
                   ),
                 ),
               ),
@@ -120,7 +133,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    if (arenaState.loading && snapshot == null)
+                    if ((arenaState.loading && snapshot == null) ||
+                        (raceState.loading && raceState.races.isEmpty))
                       const _LoadingState()
                     else if (arenaState.error != null && snapshot == null)
                       _ErrorState(
@@ -129,7 +143,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             .read(arenaControllerProvider.notifier)
                             .loadSnapshot(),
                       )
-                    else if (snapshot == null || snapshot.isEmpty)
+                    else if (snapshot == null ||
+                        snapshot.isEmpty ||
+                        allBoards.isEmpty)
                       _EmptyState(
                         onStart: () => context.push('/races/new'),
                         onJoin: () => context.push('/races/join'),
@@ -141,8 +157,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           isLoading: _isLoadingBoardDetail,
                           currentUserId: user?.id,
                           participants: _scoreCenterParticipants,
-                          onLogMove: () =>
-                              _handlePrimaryAction(context, activeBoard),
+                          onLogMove: () => _handlePrimaryAction(
+                            context,
+                            activeBoard,
+                            cameraRaceById,
+                          ),
                           onOpen: () => _openBoard(context, activeBoard),
                         ),
 
@@ -215,6 +234,19 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
           .read(raceControllerProvider.notifier)
           .getRaceDetail(board.id);
       if (!mounted) return;
+      final eligibility = resolveCameraVerification(race);
+      debugLogCameraVerificationDecision(
+        race,
+        eligibility,
+        routeAction: 'arena_chip_select',
+      );
+      if (!eligibility.isCameraVerifiable) {
+        setState(() {
+          _scoreCenterBoard = null;
+          _isLoadingBoardDetail = false;
+        });
+        return;
+      }
       setState(() {
         _scoreCenterBoard = _boardFromRace(race, userId);
         _scoreCenterParticipants = race.participants;
@@ -252,25 +284,26 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         ? 'Solo · add crew from the race room'
         : '$count ${count == 1 ? 'racer' : 'racers'} on the board';
 
+    final eligibility = resolveCameraVerification(race);
     final chase = ChaseContext.compute(race, userId ?? '');
 
     return ArenaBoard(
       id: race.id,
       source: 'real',
       title: race.title,
-      proofLabel: race.isAiMotionRace ? 'AI MoveCheck' : 'Manual logging',
+      proofLabel: eligibility.movementDefinition?.title ?? 'MoveCheck',
       progressLabel: myPart != null
           ? (race.targetValue != null
                 ? 'You ${myPart.progressValue} / ${race.targetValue}'
                 : 'You $myProgress%')
           : '',
       boardContext: boardContext,
-      primaryActionLabel: isResult ? 'Open board' : 'Log move',
+      primaryActionLabel: isResult ? 'Open board' : 'Verify',
       primaryActionType: isResult ? 'open_board' : 'submit_proof',
       progressPercent: myProgress,
       racerCount: count,
       isResult: isResult,
-      badgeLabel: race.isAiMotionRace ? 'AI' : null,
+      badgeLabel: eligibility.movementDefinition?.title,
       miniLeaderboard: miniLeaderboard,
       myRank: chase.myRank,
       chaseCopy: chase.chaseCopy,
@@ -288,10 +321,22 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     context.push('/race/${board.id}');
   }
 
-  void _handlePrimaryAction(BuildContext context, ArenaBoard board) {
+  void _handlePrimaryAction(
+    BuildContext context,
+    ArenaBoard board,
+    Map<String, Race> cameraRaceById,
+  ) {
     if (board.isDemo) {
       _demoSnack(context);
       return;
+    }
+    final race = cameraRaceById[board.id];
+    if (race != null) {
+      debugLogCameraVerificationDecision(
+        race,
+        resolveCameraVerification(race),
+        routeAction: 'arena_primary_action_${board.primaryActionType}',
+      );
     }
     switch (board.primaryActionType) {
       case 'submit_proof':
@@ -359,7 +404,10 @@ class _ArenaHeader extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: NuvoColors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(99),
@@ -393,7 +441,11 @@ class _ArenaHeader extends StatelessWidget {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      const NuvoIcon(NuvoIconType.bell, color: NuvoColors.white, size: 16),
+                      const NuvoIcon(
+                        NuvoIconType.bell,
+                        color: NuvoColors.white,
+                        size: 16,
+                      ),
                       if (hasActivity)
                         Positioned(
                           top: -1,
@@ -404,7 +456,10 @@ class _ArenaHeader extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: NuvoColors.amber,
                               shape: BoxShape.circle,
-                              border: Border.all(color: NuvoColors.blue2, width: 1.4),
+                              border: Border.all(
+                                color: NuvoColors.blue2,
+                                width: 1.4,
+                              ),
                             ),
                           ),
                         ),
@@ -427,7 +482,9 @@ class _ArenaHeader extends StatelessWidget {
                 alignment: Alignment.center,
                 child: Text(
                   initials,
-                  style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.white),
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: NuvoColors.white,
+                  ),
                 ),
               ),
             ],
@@ -453,7 +510,9 @@ class _ArenaHeader extends StatelessWidget {
               children: [
                 _HeroStat(
                   icon: NuvoIconType.trendUp,
-                  label: rankBoardTitle != null ? '#$rank in $rankBoardTitle' : '#$rank',
+                  label: rankBoardTitle != null
+                      ? '#$rank in $rankBoardTitle'
+                      : '#$rank',
                 ),
               ],
             ),
@@ -472,14 +531,17 @@ class _BlinkingDot extends StatefulWidget {
   State<_BlinkingDot> createState() => _BlinkingDotState();
 }
 
-class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderStateMixin {
+class _BlinkingDotState extends State<_BlinkingDot>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
-      ..repeat(reverse: true);
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -704,7 +766,9 @@ class _FocusBoardCard extends StatelessWidget {
                       child: Text(
                         '$pct%',
                         style: AppTextStyles.labelLarge.copyWith(
-                          color: isResult ? NuvoColors.success : NuvoColors.blue,
+                          color: isResult
+                              ? NuvoColors.success
+                              : NuvoColors.blue,
                         ),
                       ),
                     ),
@@ -827,10 +891,7 @@ class _FocusBoardCard extends StatelessWidget {
                 const SizedBox(height: 20),
 
                 // Divider
-                Container(
-                  height: 1,
-                  color: NuvoColors.divider,
-                ),
+                Container(height: 1, color: NuvoColors.divider),
                 const SizedBox(height: 16),
 
                 // Mini leaderboard
@@ -860,7 +921,7 @@ class _FocusBoardCard extends StatelessWidget {
                         onPressed: onOpen,
                       )
                     : NuvoPrimaryButton(
-                        label: 'Log move',
+                        label: board.primaryActionLabel,
                         expand: true,
                         onPressed: onLogMove,
                       ),
@@ -919,7 +980,9 @@ class _LeaderboardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tierColor = _rankTierColor;
-    final avatarColor = isCurrentUser ? NuvoColors.navy : nuvoAvatarColorFor(label);
+    final avatarColor = isCurrentUser
+        ? NuvoColors.navy
+        : nuvoAvatarColorFor(label);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -961,7 +1024,11 @@ class _LeaderboardRow extends StatelessWidget {
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: NuvoIcon(NuvoIconType.crown, size: 13, color: NuvoColors.gold),
+                    child: NuvoIcon(
+                      NuvoIconType.crown,
+                      size: 13,
+                      color: NuvoColors.gold,
+                    ),
                   ),
                 ),
             ],
@@ -972,8 +1039,7 @@ class _LeaderboardRow extends StatelessWidget {
               label,
               style: AppTextStyles.bodySmall.copyWith(
                 color: isCurrentUser ? NuvoColors.navy : NuvoColors.muted,
-                fontWeight:
-                    isCurrentUser ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: isCurrentUser ? FontWeight.w600 : FontWeight.w500,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1170,7 +1236,11 @@ class _CompactBoardRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 4),
-            const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.textMuted, size: 14),
+            const NuvoIcon(
+              NuvoIconType.arrow,
+              color: NuvoColors.textMuted,
+              size: 14,
+            ),
           ],
         ),
       ),
@@ -1226,7 +1296,11 @@ class _ActivityCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: NuvoColors.border),
         boxShadow: const [
-          BoxShadow(color: Color(0x08050B14), blurRadius: 18, offset: Offset(0, 8)),
+          BoxShadow(
+            color: Color(0x08050B14),
+            blurRadius: 18,
+            offset: Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
@@ -1244,7 +1318,9 @@ class _ActivityCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.timeLabel,
-                  style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
                 ),
               ),
             ],
@@ -1268,7 +1344,9 @@ class _ActivityCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.raceTitle ?? '',
-                  style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1329,7 +1407,11 @@ class _EmptyState extends StatelessWidget {
             color: NuvoColors.blue.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const NuvoIcon(NuvoIconType.bolt, color: NuvoColors.blue, size: 26),
+          child: const NuvoIcon(
+            NuvoIconType.bolt,
+            color: NuvoColors.blue,
+            size: 26,
+          ),
         ),
         const SizedBox(height: 20),
         Text(
@@ -1347,9 +1429,7 @@ class _EmptyState extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.panel,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: NuvoColors.blue.withValues(alpha: 0.15),
-            ),
+            border: Border.all(color: NuvoColors.blue.withValues(alpha: 0.15)),
           ),
           child: Row(
             children: [
@@ -1392,9 +1472,17 @@ class _EmptyState extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        NuvoPrimaryButton(label: 'Start a race', expand: true, onPressed: onStart),
+        NuvoPrimaryButton(
+          label: 'Start a race',
+          expand: true,
+          onPressed: onStart,
+        ),
         const SizedBox(height: 10),
-        NuvoOutlineButton(label: 'Join with code', expand: true, onPressed: onJoin),
+        NuvoOutlineButton(
+          label: 'Join with code',
+          expand: true,
+          onPressed: onJoin,
+        ),
       ],
     );
   }
@@ -1413,7 +1501,10 @@ class _ErrorState extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        Text(message, style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted)),
+        Text(
+          message,
+          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+        ),
         const SizedBox(height: 16),
         NuvoOutlineButton(label: 'Retry', expand: true, onPressed: onRetry),
       ],
@@ -1471,7 +1562,9 @@ class _NotifRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   item.timeLabel,
-                  style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -1484,7 +1577,10 @@ class _NotifRow extends StatelessWidget {
 
 // ── Notifications sheet ───────────────────────────────────────────────────────
 
-void _showNotificationsSheet(BuildContext context, List<ArenaActivity> activity) {
+void _showNotificationsSheet(
+  BuildContext context,
+  List<ArenaActivity> activity,
+) {
   showModalBottomSheet<void>(
     context: context,
     backgroundColor: NuvoColors.surface,
@@ -1518,16 +1614,17 @@ void _showNotificationsSheet(BuildContext context, List<ArenaActivity> activity)
                     color: NuvoColors.blue.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const NuvoIcon(NuvoIconType.bell, color: NuvoColors.blue, size: 19),
+                  child: const NuvoIcon(
+                    NuvoIconType.bell,
+                    color: NuvoColors.blue,
+                    size: 19,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Activity',
-                      style: AppTextStyles.titleLarge,
-                    ),
+                    Text('Activity', style: AppTextStyles.titleLarge),
                     Text(
                       'From your crew and races',
                       style: AppTextStyles.bodySmall.copyWith(
@@ -1548,7 +1645,11 @@ void _showNotificationsSheet(BuildContext context, List<ArenaActivity> activity)
                 ),
                 child: Column(
                   children: [
-                    const NuvoIcon(NuvoIconType.bell, color: NuvoColors.textMuted, size: 28),
+                    const NuvoIcon(
+                      NuvoIconType.bell,
+                      color: NuvoColors.textMuted,
+                      size: 28,
+                    ),
                     const SizedBox(height: 12),
                     Text(
                       'No updates yet',

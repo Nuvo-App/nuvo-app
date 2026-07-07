@@ -17,14 +17,18 @@ class RaceCreatePrefill {
 
   final String idea;
 
+  static const pushups = RaceCreatePrefill(idea: '10 Pushups');
+  static const squats = RaceCreatePrefill(idea: '10 Squats');
   static const jumpingJacks = RaceCreatePrefill(idea: '10 Jumping Jacks');
+  static const lunges = RaceCreatePrefill(idea: '10 Lunges');
+  static const plank = RaceCreatePrefill(idea: '20 Second Plank');
 }
 
 const _quickStarts = [
+  '10 Pushups',
   '10 Jumping Jacks',
   '10 Squats',
-  '20 High Knees',
-  '10 Arm Raises',
+  '10 Lunges',
   '20 Second Plank',
 ];
 
@@ -56,7 +60,10 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
 
   ParsedRaceIdea get _parsed => parseRaceIdea(_ideaController.text);
 
-  bool get _canStart => _ideaController.text.trim().isNotEmpty && !_loading;
+  bool get _canStart =>
+      _ideaController.text.trim().isNotEmpty &&
+      _parsed.aiSupported &&
+      !_loading;
 
   void _setIdea(String idea) {
     setState(() {
@@ -77,22 +84,24 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
 
     try {
       final activity = parsed.activity;
+      final unit = _unitForActivity(activity);
+      final targetLabel = _targetLabel(parsed);
       final race = await ref
           .read(raceControllerProvider.notifier)
           .createRace(
             title: idea,
             description: activity == null
                 ? null
-                : 'AI MoveCheck counts ${activity.targetLabel(parsed.targetValue)} live.',
+                : 'MoveCheck counts $targetLabel through the camera.',
             category: activity == null ? null : 'fitness',
             goalType: 'manual',
             targetValue: parsed.targetValue,
-            unit: parsed.unit,
-            proofRequirement: parsed.aiSupported ? 'ai_check' : 'manual',
+            unit: unit,
+            proofRequirement: 'ai_check',
             proofReviewMode: 'auto_accept',
             aiActivityType: activity?.type.backendValue,
-            targetUnit: parsed.unit,
-            proofMode: parsed.aiSupported ? 'ai_check' : 'manual',
+            targetUnit: unit,
+            proofMode: 'ai_check',
           );
 
       if (mounted) context.go('/race/${race.id}');
@@ -135,18 +144,18 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            parsed.aiSupported ? 'Start AI race' : 'New race',
+                            'Start race',
                             style: AppTextStyles.headlineLarge,
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Type a movement race naturally. Nuvo detects MoveCheck support automatically.',
+                            'Type a supported movement race naturally.',
                             style: AppTextStyles.bodyLarge.copyWith(
                               color: NuvoColors.muted,
                             ),
                           ),
                           const SizedBox(height: 22),
-                          Text('Race idea', style: AppTextStyles.titleMedium),
+                          Text('Movement', style: AppTextStyles.titleMedium),
                           const SizedBox(height: 8),
                           _InputField(
                             controller: _ideaController,
@@ -198,7 +207,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: NuvoPrimaryButton(
-                label: parsed.aiSupported ? 'Start AI race' : 'Start race',
+                label: 'Start race',
                 icon: Icons.flag_rounded,
                 expand: true,
                 loading: _loading,
@@ -306,14 +315,14 @@ class _DetectionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isAi ? 'AI MoveCheck available' : 'Manual logging',
+                  isAi ? activity.title : 'Unsupported movement',
                   style: AppTextStyles.titleMedium.copyWith(color: titleColor),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   isAi
-                      ? '${activity.title} · ${activity.targetLabel(parsed.targetValue)}. Nuvo can verify this with your iPhone camera.'
-                      : 'Manual logging for this race.',
+                      ? 'Target: ${_targetLabel(parsed)}'
+                      : 'Nuvo can’t verify this movement yet.',
                   style: AppTextStyles.bodySmall.copyWith(color: bodyColor),
                 ),
               ],
@@ -323,6 +332,17 @@ class _DetectionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _unitForActivity(MotionActivityDefinition? activity) {
+  if (activity == null) return 'reps';
+  return activity.isHold ? 'seconds' : 'reps';
+}
+
+String _targetLabel(ParsedRaceIdea parsed) {
+  final activity = parsed.activity;
+  final unit = _unitForActivity(activity);
+  return '${parsed.targetValue} $unit';
 }
 
 class _QuickStartPill extends StatelessWidget {

@@ -12,6 +12,7 @@ import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
+import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/presentation/create_race_screen.dart';
 import '../../races/presentation/race_controller.dart';
 
@@ -24,9 +25,13 @@ class CompeteScreen extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final uid = user?.id;
 
-    final active = raceState.races.where((r) => r.status == 'active').toList();
+    final cameraRaces = raceState.races
+        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
+        .toList();
+    final active = cameraRaces.where((r) => r.status == 'active').toList();
     final finished = raceState.races
         .where((r) => r.status != 'active')
+        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
         .toList();
 
     return Scaffold(
@@ -74,7 +79,7 @@ class CompeteScreen extends ConsumerWidget {
                           color: NuvoColors.muted,
                         ),
                       )
-                    else if (raceState.races.isEmpty)
+                    else if (raceState.races.isEmpty || cameraRaces.isEmpty)
                       _EmptyState(onStart: () => context.push('/races/new'))
                     else ...[
                       // Active races
@@ -116,7 +121,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.directions_run_rounded,
                         label: '10 Jumping Jacks',
-                        sublabel: 'AI MoveCheck · 10 reps',
+                        sublabel: 'MoveCheck · camera verification',
                         accentColor: NuvoColors.blue,
                         onTap: () => context.push(
                           '/races/new',
@@ -126,18 +131,24 @@ class CompeteScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       _QuickStartRow(
                         icon: Icons.fitness_center_rounded,
-                        label: '100 Push-Ups',
-                        sublabel: 'Manual · track your reps',
+                        label: '10 Pushups',
+                        sublabel: 'MoveCheck · camera verification',
                         accentColor: NuvoColors.coral,
-                        onTap: () => context.push('/races/new'),
+                        onTap: () => context.push(
+                          '/races/new',
+                          extra: RaceCreatePrefill.pushups,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       _QuickStartRow(
-                        icon: Icons.menu_book_rounded,
-                        label: 'Study Sprint',
-                        sublabel: 'Manual · track sessions',
+                        icon: Icons.accessibility_new_rounded,
+                        label: '10 Squats',
+                        sublabel: 'MoveCheck · camera verification',
                         accentColor: NuvoColors.aqua,
-                        onTap: () => context.push('/races/new'),
+                        onTap: () => context.push(
+                          '/races/new',
+                          extra: RaceCreatePrefill.squats,
+                        ),
                       ),
                     ],
                   ]),
@@ -238,7 +249,9 @@ class _CompeteHero extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             'Races',
-            style: AppTextStyles.headlineMedium.copyWith(color: NuvoColors.navy),
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: NuvoColors.navy,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -361,7 +374,10 @@ class _RaceLaneCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: isComplete
                         ? NuvoColors.success.withValues(alpha: 0.10)
@@ -546,7 +562,11 @@ class _EmptyState extends StatelessWidget {
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         ),
         const SizedBox(height: 20),
-        NuvoPrimaryButton(label: 'Start a race', expand: true, onPressed: onStart),
+        NuvoPrimaryButton(
+          label: 'Start a race',
+          expand: true,
+          onPressed: onStart,
+        ),
       ],
     );
   }

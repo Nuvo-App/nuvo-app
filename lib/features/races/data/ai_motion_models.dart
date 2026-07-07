@@ -4,7 +4,8 @@ enum AiMotionActivity {
   highKnees,
   armRaises,
   plankHold,
-  pushUps;
+  pushUps,
+  lunges;
 
   String get backendValue => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping_jacks',
@@ -13,6 +14,7 @@ enum AiMotionActivity {
     AiMotionActivity.armRaises => 'arm_raises',
     AiMotionActivity.plankHold => 'plank_hold',
     AiMotionActivity.pushUps => 'push_ups',
+    AiMotionActivity.lunges => 'lunges',
   };
 
   String get label => switch (this) {
@@ -22,6 +24,7 @@ enum AiMotionActivity {
     AiMotionActivity.armRaises => 'arm raises',
     AiMotionActivity.plankHold => 'seconds of plank',
     AiMotionActivity.pushUps => 'push-ups',
+    AiMotionActivity.lunges => 'lunges',
   };
 
   static AiMotionActivity fromBackendValue(String value) => switch (value) {
@@ -29,6 +32,8 @@ enum AiMotionActivity {
     'high_knees' => AiMotionActivity.highKnees,
     'arm_raises' => AiMotionActivity.armRaises,
     'plank_hold' => AiMotionActivity.plankHold,
+    'push_ups' || 'pushups' => AiMotionActivity.pushUps,
+    'lunges' || 'lunge' => AiMotionActivity.lunges,
     _ => AiMotionActivity.jumpingJacks,
   };
 }
@@ -45,6 +50,7 @@ enum AiMotionProofStatus {
   submitted,
   permissionDenied,
   cameraError,
+  unsupportedMovement,
 }
 
 class AiMotionResult {

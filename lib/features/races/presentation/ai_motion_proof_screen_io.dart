@@ -16,6 +16,7 @@ import '../ai/camera_image_converter.dart';
 import '../ai/motion_validators.dart';
 import '../ai/pose_detector_service.dart';
 import '../data/ai_motion_models.dart';
+import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity_catalog.dart';
 import 'race_controller.dart';
 
@@ -32,9 +33,9 @@ class AiMotionProofScreen extends ConsumerStatefulWidget {
 class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     with WidgetsBindingObserver {
   final _poseDetector = PoseDetectorService();
-  MotionValidator _validator = createMotionValidator(
-    AiMotionActivity.jumpingJacks,
-    10,
+  final NuvoVerifyEngine _engine = NuvoVerifyEngine(
+    movement: supportedMovementDefinitions.first,
+    target: 10,
   );
 
   AiMotionActivity _activity = AiMotionActivity.jumpingJacks;
@@ -44,9 +45,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   AiMotionProofStatus _status = AiMotionProofStatus.setup;
   AiMotionResult? _result;
   String? _message;
+  CameraVerificationEligibility? _eligibility;
   bool _disposed = false;
   Timer? _recordingTimer;
   Duration _elapsed = Duration.zero;
+  int _debugFrameCount = 0;
 
   @override
   void initState() {
@@ -61,20 +64,68 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
-      final activity = AiMotionActivity.fromBackendValue(
-        race.effectiveAiActivityType,
+      final eligibility = resolveCameraVerification(race);
+      debugLogCameraVerificationDecision(
+        race,
+        eligibility,
+        routeAction: 'ai_motion_screen_loaded',
       );
-      final target = race.targetValue ?? 10;
+      final target =
+          race.targetValue ??
+          eligibility.movementDefinition?.defaultTarget ??
+          10;
       setState(() {
-        _activity = activity;
-        _validator = createMotionValidator(activity, target);
+        _eligibility = eligibility;
+        final definition = _movementDefinitionForEligibility(eligibility);
+        if (definition == null) {
+          _status = AiMotionProofStatus.unsupportedMovement;
+          _message = eligibility.unsupportedMessage;
+          return;
+        }
+        _activity = definition.activity;
+        _engine.selectMovement(definition, target);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _message = 'Race details could not load. Jumping jacks proof is ready.';
+        _message = 'Race details could not load. Start when ready.';
       });
     }
+  }
+
+  MovementDefinition? _movementDefinitionForEligibility(
+    CameraVerificationEligibility eligibility,
+  ) {
+    final activity = eligibility.movementDefinition;
+    if (!eligibility.isCameraVerifiable || activity == null) return null;
+    for (final definition in supportedMovementDefinitions) {
+      if (definition.activity.backendValue == activity.type.backendValue) {
+        return definition;
+      }
+    }
+    return null;
+  }
+
+  void _selectMovement(MovementDefinition definition) {
+    if (_status == AiMotionProofStatus.recording ||
+        _status == AiMotionProofStatus.processing ||
+        _status == AiMotionProofStatus.submitting) {
+      return;
+    }
+    setState(() {
+      _activity = definition.activity;
+      _engine.selectMovement(definition, _targetValue);
+      _eligibility = null;
+      _result = null;
+      _message = null;
+      _debugLog(
+        'selectedMovement=${definition.type.name} '
+        'definition=${definition.title} target=$_targetValue',
+      );
+      if (_status == AiMotionProofStatus.unsupportedMovement) {
+        _status = AiMotionProofStatus.setup;
+      }
+    });
   }
 
   @override
@@ -182,8 +233,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
-    _validator.start();
+    _engine.start();
     _elapsed = Duration.zero;
+    _debugFrameCount = 0;
+    _debugLog(
+      'verificationStarted movement=${_engine.movement.type.name} '
+      'mode=camera target=${_engine.targetValue}',
+    );
     setState(() {
       _status = AiMotionProofStatus.recording;
       _message = null;
@@ -224,7 +280,18 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       );
       if (_disposed || _status != AiMotionProofStatus.recording) return;
       if (frame == null) return;
-      _validator.update(frame);
+      final output = _engine.update(frame);
+      _debugFrameCount++;
+      if (_debugFrameCount == 1 || _debugFrameCount % 15 == 0) {
+        _debugLog(
+          'validatorState=${output.validatorState} '
+          'movement=${output.selectedMovement.type.name} '
+          'count=${output.count} holdSeconds=${output.holdSeconds} '
+          'confidence=${output.confidence.toStringAsFixed(2)} '
+          'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
+          'debug=${output.debugValues}',
+        );
+      }
       if (mounted) setState(() {});
     } on CameraImageConversionException catch (e) {
       if (!mounted) return;
@@ -250,7 +317,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await _stopImageStream();
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
-    final result = _validator.finish();
+    final result = _engine.finish();
+    _debugLog(
+      'verificationFinished movement=${_engine.movement.type.name} '
+      'value=${result.detectedReps} '
+      'confidence=${result.confidence.toStringAsFixed(2)} '
+      'status=${result.verificationStatus} '
+      'failedRule=${_engine.failedRuleReason.isEmpty ? 'none' : _engine.failedRuleReason}',
+    );
     if (!mounted) return;
     setState(() {
       _result = result;
@@ -324,14 +398,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       e.code == 'CameraAccessDeniedWithoutPrompt' ||
       e.code == 'CameraAccessRestricted';
 
+  void _debugLog(String message) {
+    assert(() {
+      debugPrint('[NuvoVerify] $message');
+      return true;
+    }());
+  }
+
   // Show premium result panels instead of camera for terminal states.
   bool get _isResultState =>
       _status == AiMotionProofStatus.aiVerified ||
       _status == AiMotionProofStatus.aiFailed;
 
-  int get _targetValue => _validator.targetValue;
+  int get _targetValue => _engine.targetValue;
 
-  int get _currentValue => _validator.currentValue;
+  int get _currentValue => _engine.currentValue;
 
   String get _targetLabel {
     final definition = motionActivityForBackendValue(_activity.backendValue);
@@ -345,11 +426,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         '$_currentValue / $_targetValue';
   }
 
+  String get _movementTitle =>
+      motionActivityForBackendValue(_activity.backendValue)?.title ??
+      _activity.label;
+
   String get _cameraInstruction =>
       motionActivityForBackendValue(
         _activity.backendValue,
       )?.cameraInstruction ??
       'Full body front view';
+
+  List<String> get _setupInstructions {
+    final instructions = _eligibility?.instructions;
+    if (instructions != null && instructions.isNotEmpty) return instructions;
+    return [_cameraInstruction, 'Start when ready.'];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -398,10 +489,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             const SizedBox(height: 14),
 
             // ── Setup card (setup state only) ────────────────────────────
-            if (_status == AiMotionProofStatus.setup) ...[
+            if (_status == AiMotionProofStatus.setup ||
+                _status == AiMotionProofStatus.unsupportedMovement) ...[
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _setupCard(),
+                child: _movementPicker(),
               ),
               const SizedBox(height: 10),
             ],
@@ -410,14 +502,19 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _isResultState ? _resultPanel() : _cameraPanel(),
+                child: _isResultState
+                    ? _resultPanel()
+                    : _status == AiMotionProofStatus.setup
+                    ? _preCameraPanel()
+                    : _cameraPanel(),
               ),
             ),
 
             // ── Compact status hint (camera-ready / error / processing) ──
             if (!_isResultState &&
                 _status != AiMotionProofStatus.setup &&
-                _status != AiMotionProofStatus.recording) ...[
+                _status != AiMotionProofStatus.recording &&
+                _status != AiMotionProofStatus.unsupportedMovement) ...[
               const SizedBox(height: 10),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -441,35 +538,46 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _setupCard() {
-    final items = [
-      'Place your iPhone 6–8 feet away.',
-      _cameraInstruction,
-      _activity == AiMotionActivity.plankHold
-          ? 'Only valid plank posture time counts.'
-          : 'Keep the movement clear and controlled.',
-      'Use good lighting.',
-    ];
-
+  Widget _preCameraPanel() {
+    final items = _setupInstructions.take(3).toList();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: NuvoColors.border),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x1207152B),
+            color: Color(0x1007152B),
             blurRadius: 0,
-            offset: Offset(3, 4),
+            offset: Offset(4, 5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Set up your shot', style: AppTextStyles.titleMedium),
-          const SizedBox(height: 8),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: NuvoColors.icyBlue,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.camera_alt_rounded,
+              color: NuvoColors.blue,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(_movementTitle, style: AppTextStyles.headlineMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Target: $_targetLabel',
+            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+          ),
+          const SizedBox(height: 18),
           for (final item in items) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -483,17 +591,46 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 Expanded(
                   child: Text(
                     item,
-                    style: AppTextStyles.bodySmall.copyWith(
+                    style: AppTextStyles.bodyMedium.copyWith(
                       color: NuvoColors.muted,
                     ),
                   ),
                 ),
               ],
             ),
-            if (item != items.last) const SizedBox(height: 6),
+            if (item != items.last) const SizedBox(height: 10),
           ],
         ],
       ),
+    );
+  }
+
+  Widget _movementPicker() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final definition in supportedMovementDefinitions)
+          ChoiceChip(
+            label: Text(definition.title),
+            selected: definition.activity == _activity,
+            onSelected: (_) => _selectMovement(definition),
+            showCheckmark: false,
+            selectedColor: NuvoColors.blue,
+            backgroundColor: NuvoColors.white,
+            labelStyle: AppTextStyles.labelSmall.copyWith(
+              color: definition.activity == _activity
+                  ? NuvoColors.white
+                  : NuvoColors.navy,
+              fontWeight: FontWeight.w800,
+            ),
+            side: BorderSide(
+              color: definition.activity == _activity
+                  ? NuvoColors.blue
+                  : NuvoColors.border,
+            ),
+          ),
+      ],
     );
   }
 
@@ -658,26 +795,18 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '$_targetLabel detected',
+                  '${_countedLabel(result)} counted',
                   style: AppTextStyles.bodyLarge.copyWith(
                     color: NuvoColors.white.withValues(alpha: 0.78),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Reps verified. Leaderboard is updating.',
+                  'Leaderboard is updating.',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: NuvoColors.white.withValues(alpha: 0.50),
                   ),
                 ),
-                if (result != null) ...[
-                  const SizedBox(height: 22),
-                  _metric(
-                    'Confidence',
-                    '${(result.confidence * 100).round()}%',
-                    dark: true,
-                  ),
-                ],
               ],
             ),
           ),
@@ -753,7 +882,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         children: [
           Expanded(
             child: Text(
-              targetReached ? 'Target reached — tap Done' : _counterLabel,
+              targetReached ? 'Target complete.' : 'Keep going. $_counterLabel',
               style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.white),
             ),
           ),
@@ -768,20 +897,20 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Widget _statusHint() {
     final title = switch (_status) {
-      AiMotionProofStatus.cameraReady => 'Frame your body',
+      AiMotionProofStatus.cameraReady => 'Position yourself in frame.',
       AiMotionProofStatus.processing => 'Checking proof...',
       AiMotionProofStatus.permissionDenied => 'Camera permission needed',
       AiMotionProofStatus.cameraError => 'Camera issue',
       AiMotionProofStatus.submitting => 'Submitting proof...',
       AiMotionProofStatus.submitted => 'Proof submitted',
-      AiMotionProofStatus.needsReview => 'Needs review',
+      AiMotionProofStatus.needsReview => 'Try again',
+      AiMotionProofStatus.unsupportedMovement => 'Unsupported movement',
       _ => '',
     };
     final body =
         _message ??
         switch (_status) {
-          AiMotionProofStatus.cameraReady =>
-            'Nuvo will check body visibility while recording.',
+          AiMotionProofStatus.cameraReady => 'Start when ready.',
           AiMotionProofStatus.processing => 'Nuvo is checking your proof.',
           AiMotionProofStatus.permissionDenied =>
             'Enable camera access in Settings to verify your reps.',
@@ -790,7 +919,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             'Saving verified proof to the race.',
           AiMotionProofStatus.submitted =>
             'Leaderboard progress is refreshing.',
-          AiMotionProofStatus.needsReview => 'This proof needs manual review.',
+          AiMotionProofStatus.needsReview => 'Try again.',
+          AiMotionProofStatus.unsupportedMovement =>
+            'Nuvo can’t verify this movement yet.',
           _ => '',
         };
 
@@ -863,9 +994,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           onPressed: () => safePopOrGo(context, '/race/${widget.raceId}/proof'),
         ),
       ],
+      AiMotionProofStatus.unsupportedMovement => [
+        NuvoOutlineButton(
+          label: 'Back',
+          expand: true,
+          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}/proof'),
+        ),
+      ],
       AiMotionProofStatus.cameraReady => [
         NuvoPrimaryButton(
-          label: 'Record proof',
+          label: 'Start when ready',
           icon: Icons.videocam_rounded,
           expand: true,
           onPressed: _startRecording,
@@ -909,12 +1047,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           expand: true,
           onPressed: _recordAgain,
         ),
-        const SizedBox(height: 12),
-        NuvoGhostButton(
-          label: 'Log manually',
-          expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}/proof'),
-        ),
       ],
       _ => [
         NuvoPrimaryButton(
@@ -946,16 +1078,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Widget _visibilityPill() {
     final recording = _status == AiMotionProofStatus.recording;
-    final visible = _validator.fullBodyVisible;
+    final visible = _engine.fullBodyVisible;
     final targetReached = _currentValue >= _targetValue;
 
     final label = recording && targetReached
-        ? 'Target reached'
+        ? 'Target complete'
         : recording && visible
-        ? 'Tracking'
+        ? 'Keep going'
         : recording
-        ? 'Full body needed'
-        : 'Frame body';
+        ? 'Position yourself in frame'
+        : 'Position yourself';
     final color = recording && targetReached
         ? NuvoColors.success
         : recording && visible
@@ -979,34 +1111,31 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _metric(String label, String value, {bool dark = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: dark
-            ? NuvoColors.white.withValues(alpha: 0.12)
-            : NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        '$label: $value',
-        style: AppTextStyles.labelSmall.copyWith(
-          color: dark ? NuvoColors.white : NuvoColors.navy,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
   String get _cameraPlaceholderText {
+    if (_status == AiMotionProofStatus.unsupportedMovement) {
+      return 'Nuvo can’t verify this movement yet.';
+    }
     if (_status == AiMotionProofStatus.processing) return 'Starting camera...';
-    return 'Place your iPhone 6–8 feet away.\n$_cameraInstruction.';
+    return 'Position yourself in frame.\n$_cameraInstruction.';
   }
 
   String _formatElapsed(Duration duration) {
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+
+  String _countedLabel(AiMotionResult? result) {
+    final value = result?.detectedReps ?? _targetValue;
+    if (_activity == AiMotionActivity.plankHold) return '$value seconds';
+    final unit = switch (_activity) {
+      AiMotionActivity.pushUps => 'pushups',
+      AiMotionActivity.squats => 'squats',
+      AiMotionActivity.jumpingJacks => 'jumping jacks',
+      AiMotionActivity.lunges => 'lunges',
+      _ => _activity.label,
+    };
+    return '$value $unit';
   }
 }
 

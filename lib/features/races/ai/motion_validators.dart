@@ -2,6 +2,169 @@ import 'dart:math' as math;
 
 import '../data/ai_motion_models.dart';
 
+enum MovementType { pushups, squats, jumpingJacks, plank, lunges, unsupported }
+
+enum MovementPhase { unknown, start, active }
+
+enum MovementVerificationState {
+  loadingCamera,
+  waitingForBody,
+  ready,
+  verifying,
+  targetComplete,
+  tryAgain,
+  unsupportedMovement,
+}
+
+class MovementDefinition {
+  const MovementDefinition({
+    required this.type,
+    required this.activity,
+    required this.title,
+    required this.unit,
+    required this.defaultTarget,
+    this.isHold = false,
+  });
+
+  final MovementType type;
+  final AiMotionActivity activity;
+  final String title;
+  final String unit;
+  final int defaultTarget;
+  final bool isHold;
+
+  String targetLabel(int target) => isHold ? '$target sec' : '$target $unit';
+}
+
+const supportedMovementDefinitions = [
+  MovementDefinition(
+    type: MovementType.pushups,
+    activity: AiMotionActivity.pushUps,
+    title: 'Pushups',
+    unit: 'pushups',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.squats,
+    activity: AiMotionActivity.squats,
+    title: 'Squats',
+    unit: 'squats',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.jumpingJacks,
+    activity: AiMotionActivity.jumpingJacks,
+    title: 'Jumping jacks',
+    unit: 'jumping jacks',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.plank,
+    activity: AiMotionActivity.plankHold,
+    title: 'Plank',
+    unit: 'seconds',
+    defaultTarget: 20,
+    isHold: true,
+  ),
+  MovementDefinition(
+    type: MovementType.lunges,
+    activity: AiMotionActivity.lunges,
+    title: 'Lunges',
+    unit: 'lunges',
+    defaultTarget: 10,
+  ),
+];
+
+MovementDefinition? movementDefinitionForActivity(AiMotionActivity activity) {
+  for (final definition in supportedMovementDefinitions) {
+    if (definition.activity == activity) return definition;
+  }
+  return null;
+}
+
+class NuvoVerifyOutput {
+  const NuvoVerifyOutput({
+    required this.selectedMovement,
+    required this.state,
+    required this.count,
+    required this.holdSeconds,
+    required this.target,
+    required this.confidence,
+    required this.feedbackMessage,
+    required this.completed,
+    required this.debugValues,
+    required this.validatorState,
+    required this.failedRuleReason,
+  });
+
+  final MovementDefinition selectedMovement;
+  final MovementVerificationState state;
+  final int count;
+  final int holdSeconds;
+  final int target;
+  final double confidence;
+  final String feedbackMessage;
+  final bool completed;
+  final Map<String, double> debugValues;
+  final String validatorState;
+  final String failedRuleReason;
+}
+
+class NuvoVerifyEngine {
+  NuvoVerifyEngine({required MovementDefinition movement, required int target})
+    : _movement = movement,
+      _validator = createMotionValidator(movement.activity, target);
+
+  MovementDefinition _movement;
+  MotionValidator _validator;
+
+  MovementDefinition get movement => _movement;
+  MotionValidator get validator => _validator;
+  int get targetValue => _validator.targetValue;
+  int get currentValue => _validator.currentValue;
+  bool get fullBodyVisible => _validator.fullBodyVisible;
+  String get validatorState => _validator.stateLabel;
+  String get failedRuleReason => _validator.failedRuleReason;
+
+  void selectMovement(MovementDefinition movement, int target) {
+    _movement = movement;
+    _validator = createMotionValidator(movement.activity, target);
+  }
+
+  void start() => _validator.start();
+  AiMotionResult finish() => _validator.finish();
+
+  NuvoVerifyOutput update(NuvoPoseFrame frame) {
+    _validator.update(frame);
+    return output(MovementVerificationState.verifying);
+  }
+
+  NuvoVerifyOutput output(MovementVerificationState state) {
+    final value = _validator.currentValue;
+    final completed = value >= _validator.targetValue;
+    final nextState = completed
+        ? MovementVerificationState.targetComplete
+        : state;
+    return NuvoVerifyOutput(
+      selectedMovement: _movement,
+      state: nextState,
+      count: _movement.isHold ? 0 : value,
+      holdSeconds: _movement.isHold ? value : 0,
+      target: _validator.targetValue,
+      confidence: _validator.confidence,
+      feedbackMessage: completed
+          ? 'Target complete.'
+          : _validator.fullBodyVisible
+          ? _validator.coachingText
+          : 'Position your full body in frame.',
+      completed: completed,
+      debugValues: _validator.debugValues,
+      validatorState: _validator.stateLabel,
+      failedRuleReason: _validator.failedRuleReason,
+    );
+  }
+}
+
 class MotionValidationUpdate {
   const MotionValidationUpdate({
     required this.currentValue,
@@ -37,6 +200,10 @@ abstract class MotionValidator {
   bool get fullBodyVisible;
   String get statusText;
   String get coachingText;
+  double get confidence;
+  Map<String, double> get debugValues;
+  String get stateLabel;
+  String get failedRuleReason;
 
   void start();
   MotionValidationUpdate update(NuvoPoseFrame frame);
@@ -59,17 +226,151 @@ MotionValidator createMotionValidator(
   AiMotionActivity activity,
   int targetValue,
 ) => switch (activity) {
+  AiMotionActivity.pushUps => PushupsValidator(targetValue: targetValue),
   AiMotionActivity.jumpingJacks => JumpingJacksValidator(
     targetValue: targetValue,
   ),
   AiMotionActivity.squats => SquatsValidator(targetValue: targetValue),
+  AiMotionActivity.lunges => LungesValidator(targetValue: targetValue),
   AiMotionActivity.highKnees => HighKneesValidator(targetValue: targetValue),
   AiMotionActivity.armRaises => ArmRaisesValidator(targetValue: targetValue),
   AiMotionActivity.plankHold => PlankHoldValidator(targetValue: targetValue),
-  AiMotionActivity.pushUps => throw UnsupportedError(
-    'Push-ups are not enabled for AI Motion Proof.',
-  ),
 };
+
+class RepCounterStateMachine {
+  MovementPhase _stableState = MovementPhase.unknown;
+  MovementPhase _candidateState = MovementPhase.unknown;
+  int _candidateFrames = 0;
+  bool _hitActive = false;
+  int _count = 0;
+
+  int get count => _count;
+  MovementPhase get stableState => _stableState;
+
+  void reset() {
+    _stableState = MovementPhase.unknown;
+    _candidateState = MovementPhase.unknown;
+    _candidateFrames = 0;
+    _hitActive = false;
+    _count = 0;
+  }
+
+  void update(MovementPhase measuredState, {int stableFrames = 3}) {
+    if (measuredState == MovementPhase.unknown) return;
+    if (measuredState == _candidateState) {
+      _candidateFrames++;
+    } else {
+      _candidateState = measuredState;
+      _candidateFrames = 1;
+    }
+    if (_candidateFrames < stableFrames || measuredState == _stableState) {
+      return;
+    }
+
+    final previousState = _stableState;
+    _stableState = measuredState;
+    if (previousState == MovementPhase.start &&
+        measuredState == MovementPhase.active) {
+      _hitActive = true;
+      return;
+    }
+    if (previousState == MovementPhase.active &&
+        measuredState == MovementPhase.start &&
+        _hitActive) {
+      _count++;
+      _hitActive = false;
+    }
+  }
+}
+
+class HoldTimerStateMachine {
+  int _validHoldMs = 0;
+  DateTime? _lastValidFrameAt;
+
+  int get seconds => (_validHoldMs / 1000).floor();
+
+  void reset() {
+    _validHoldMs = 0;
+    _lastValidFrameAt = null;
+  }
+
+  void update({required DateTime now, required bool valid}) {
+    if (!valid) {
+      _lastValidFrameAt = null;
+      return;
+    }
+    if (_lastValidFrameAt != null) {
+      final delta = now.difference(_lastValidFrameAt!).inMilliseconds;
+      if (delta > 0 && delta < 500) _validHoldMs += delta;
+    }
+    _lastValidFrameAt = now;
+  }
+}
+
+class PoseFeatureExtractor {
+  const PoseFeatureExtractor(this.frame);
+
+  final NuvoPoseFrame frame;
+
+  double get shoulderY => _averageY('leftShoulder', 'rightShoulder');
+  double get hipY => _averageY('leftHip', 'rightHip');
+  double get kneeY => _averageY('leftKnee', 'rightKnee');
+  double get ankleY => _averageY('leftAnkle', 'rightAnkle');
+  double get shoulderWidth => _distanceX('leftShoulder', 'rightShoulder');
+  double get hipWidth => _distanceX('leftHip', 'rightHip');
+  double get ankleWidth => _distanceX('leftAnkle', 'rightAnkle');
+  double get bodyWidth => math.max(shoulderWidth, hipWidth).clamp(0.08, 0.6);
+  double get torsoHeight => (hipY - shoulderY).abs().clamp(0.12, 0.6);
+
+  bool get wristsAboveShoulders {
+    final leftWrist = frame.point('leftWrist')!;
+    final rightWrist = frame.point('rightWrist')!;
+    return leftWrist.y < shoulderY - 0.03 && rightWrist.y < shoulderY - 0.03;
+  }
+
+  bool get wristsNearBody {
+    final leftWrist = frame.point('leftWrist')!;
+    final rightWrist = frame.point('rightWrist')!;
+    return leftWrist.y > shoulderY - 0.01 &&
+        rightWrist.y > shoulderY - 0.01 &&
+        leftWrist.y < hipY + 0.24 &&
+        rightWrist.y < hipY + 0.24;
+  }
+
+  double elbowAngle({required bool left}) {
+    final shoulder = frame.point(left ? 'leftShoulder' : 'rightShoulder')!;
+    final elbow = frame.point(left ? 'leftElbow' : 'rightElbow')!;
+    final wrist = frame.point(left ? 'leftWrist' : 'rightWrist')!;
+    return _angle(shoulder, elbow, wrist);
+  }
+
+  double kneeAngle({required bool left}) {
+    final hip = frame.point(left ? 'leftHip' : 'rightHip')!;
+    final knee = frame.point(left ? 'leftKnee' : 'rightKnee')!;
+    final ankle = frame.point(left ? 'leftAnkle' : 'rightAnkle')!;
+    return _angle(hip, knee, ankle);
+  }
+
+  double hipToKneeRatio() => (kneeY - hipY) / torsoHeight;
+
+  double _averageY(String a, String b) =>
+      (frame.point(a)!.y + frame.point(b)!.y) / 2;
+  double _distanceX(String a, String b) =>
+      (frame.point(a)!.x - frame.point(b)!.x).abs();
+
+  double _angle(NuvoPosePoint a, NuvoPosePoint b, NuvoPosePoint c) {
+    final abx = a.x - b.x;
+    final aby = a.y - b.y;
+    final cbx = c.x - b.x;
+    final cby = c.y - b.y;
+    final dot = abx * cbx + aby * cby;
+    final ab = math.sqrt(abx * abx + aby * aby);
+    final cb = math.sqrt(cbx * cbx + cby * cby);
+    if (ab == 0 || cb == 0) return 180;
+    final cosine = (dot / (ab * cb)).clamp(-1.0, 1.0);
+    return math.acos(cosine) * 180 / math.pi;
+  }
+}
 
 abstract class _BaseValidator extends MotionValidator {
   _BaseValidator({required super.targetValue});
@@ -83,6 +384,7 @@ abstract class _BaseValidator extends MotionValidator {
   int invalidPoseFrames = 0;
   DateTime? startedAt;
   double lastVisibilityScore = 0;
+  String lastFailureReason = '';
 
   @override
   int get durationMs => startedAt == null
@@ -91,6 +393,12 @@ abstract class _BaseValidator extends MotionValidator {
 
   @override
   bool get fullBodyVisible => lastVisibilityScore >= 0.70;
+
+  @override
+  String get stateLabel => 'tracking';
+
+  @override
+  String get failedRuleReason => lastFailureReason;
 
   List<String> get criticalPoints;
 
@@ -101,6 +409,7 @@ abstract class _BaseValidator extends MotionValidator {
     invalidPoseFrames = 0;
     startedAt = DateTime.now();
     lastVisibilityScore = 0;
+    lastFailureReason = '';
     resetState();
   }
 
@@ -112,16 +421,21 @@ abstract class _BaseValidator extends MotionValidator {
     if (!frame.hasPoints(criticalPoints)) {
       invalidPoseFrames++;
       lastVisibilityScore = 0;
+      lastFailureReason = 'missing_landmarks';
       return snapshot();
     }
     validPoseFrames++;
     lastVisibilityScore = _visibilityScore(frame);
+    if (!fullBodyVisible) {
+      lastFailureReason = 'low_landmark_confidence';
+    }
     analyzeValidFrame(frame);
     return snapshot();
   }
 
   void analyzeValidFrame(NuvoPoseFrame frame);
 
+  @override
   double get confidence {
     if (framesAnalyzed == 0 || validPoseFrames == 0) return 0;
     final validRatio = validPoseFrames / framesAnalyzed;
@@ -132,6 +446,13 @@ abstract class _BaseValidator extends MotionValidator {
       1.0 - invalidPenalty,
     );
   }
+
+  @override
+  Map<String, double> get debugValues => {
+    'framesAnalyzed': framesAnalyzed.toDouble(),
+    'validPoseFrames': validPoseFrames.toDouble(),
+    'visibility': lastVisibilityScore,
+  };
 
   @override
   AiMotionResult finish() {
@@ -166,19 +487,138 @@ abstract class _BaseValidator extends MotionValidator {
 
 enum _OpenClosedState { unknown, closed, open }
 
+class PushupsValidator extends _BaseValidator {
+  PushupsValidator({required super.targetValue});
+
+  final RepCounterStateMachine _counter = RepCounterStateMachine();
+  double? _topShoulderY;
+  int _cooldownFrames = 0;
+  double _lastElbowAngle = 180;
+  double _lastShoulderDrop = 0;
+  double _lastSymmetryError = 0;
+  String _pushupFeedback = 'Position yourself in frame.';
+
+  @override
+  AiMotionActivity get activity => AiMotionActivity.pushUps;
+  @override
+  int get currentValue => _counter.count;
+  @override
+  String get statusText => 'Tracking pushups';
+  @override
+  String get coachingText => _pushupFeedback;
+  @override
+  String get stateLabel =>
+      '${_counter.stableState.name}:${_cooldownFrames > 0 ? 'cooldown' : 'ready'}';
+  @override
+  List<String> get criticalPoints => const [
+    'leftShoulder',
+    'rightShoulder',
+    'leftElbow',
+    'rightElbow',
+    'leftWrist',
+    'rightWrist',
+    'leftHip',
+    'rightHip',
+  ];
+
+  @override
+  void resetState() {
+    _counter.reset();
+    _topShoulderY = null;
+    _cooldownFrames = 0;
+    _lastElbowAngle = 180;
+    _lastShoulderDrop = 0;
+    _lastSymmetryError = 0;
+    _pushupFeedback = 'Position yourself in frame.';
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
+    final leftElbowAngle = features.elbowAngle(left: true);
+    final rightElbowAngle = features.elbowAngle(left: false);
+    final elbowAngle = (leftElbowAngle + rightElbowAngle) / 2;
+    final symmetryError = (leftElbowAngle - rightElbowAngle).abs();
+    final shoulderY = features.shoulderY;
+    final wristY =
+        (frame.point('leftWrist')!.y + frame.point('rightWrist')!.y) / 2;
+    final handsBelowShoulders =
+        wristY > shoulderY - features.torsoHeight * 0.15;
+    final symmetrical = symmetryError < 62;
+
+    _lastElbowAngle = elbowAngle;
+    _lastSymmetryError = symmetryError;
+
+    if (!fullBodyVisible) {
+      lastFailureReason = 'low_landmark_confidence';
+      _pushupFeedback = 'Position yourself in frame.';
+      _counter.update(MovementPhase.unknown);
+      return;
+    }
+    if (!handsBelowShoulders) {
+      lastFailureReason = 'hands_not_visible_for_pushup';
+      _pushupFeedback = 'Keep your upper body in frame.';
+      _counter.update(MovementPhase.unknown);
+      return;
+    }
+    if (!symmetrical) {
+      lastFailureReason = 'pushup_asymmetry';
+      _pushupFeedback = 'Face the camera.';
+      _counter.update(MovementPhase.unknown);
+      return;
+    }
+
+    if (elbowAngle > 150) {
+      _topShoulderY = _topShoulderY == null
+          ? shoulderY
+          : math.min(_topShoulderY!, shoulderY);
+    }
+    final topShoulderY = _topShoulderY ?? shoulderY;
+    final shoulderDrop = (shoulderY - topShoulderY).clamp(0.0, 1.0);
+    _lastShoulderDrop = shoulderDrop;
+
+    final previousCount = _counter.count;
+    if (_cooldownFrames > 0) _cooldownFrames--;
+
+    if (elbowAngle > 150) {
+      _counter.update(MovementPhase.start);
+      _pushupFeedback = 'Start when ready.';
+    } else if (_cooldownFrames == 0 &&
+        (elbowAngle < 112 || shoulderDrop > features.torsoHeight * 0.16)) {
+      _counter.update(MovementPhase.active);
+      _pushupFeedback = 'Keep going.';
+    } else {
+      lastFailureReason = 'pushup_not_low_enough';
+      _pushupFeedback = 'Keep going.';
+      _counter.update(MovementPhase.unknown);
+    }
+
+    if (_counter.count > previousCount) {
+      _cooldownFrames = 6;
+      lastFailureReason = '';
+      _topShoulderY = shoulderY;
+    }
+  }
+
+  @override
+  Map<String, double> get debugValues => {
+    ...super.debugValues,
+    'elbowAngle': _lastElbowAngle,
+    'shoulderDrop': _lastShoulderDrop,
+    'symmetryError': _lastSymmetryError,
+    'cooldownFrames': _cooldownFrames.toDouble(),
+  };
+}
+
 class JumpingJacksValidator extends _BaseValidator {
   JumpingJacksValidator({required super.targetValue});
 
-  _OpenClosedState _stableState = _OpenClosedState.unknown;
-  _OpenClosedState _candidateState = _OpenClosedState.unknown;
-  int _candidateFrames = 0;
-  bool _hasOpenedFromClosed = false;
-  int _reps = 0;
+  final RepCounterStateMachine _counter = RepCounterStateMachine();
 
   @override
   AiMotionActivity get activity => AiMotionActivity.jumpingJacks;
   @override
-  int get currentValue => _reps;
+  int get currentValue => _counter.count;
   @override
   String get statusText => 'Tracking motion';
   @override
@@ -198,66 +638,23 @@ class JumpingJacksValidator extends _BaseValidator {
 
   @override
   void resetState() {
-    _stableState = _OpenClosedState.unknown;
-    _candidateState = _OpenClosedState.unknown;
-    _candidateFrames = 0;
-    _hasOpenedFromClosed = false;
-    _reps = 0;
+    _counter.reset();
   }
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
-    final measuredState = _measureState(frame);
-    if (measuredState == _OpenClosedState.unknown) return;
-    if (measuredState == _candidateState) {
-      _candidateFrames++;
-    } else {
-      _candidateState = measuredState;
-      _candidateFrames = 1;
-    }
-    if (_candidateFrames < 3 || measuredState == _stableState) return;
-    final previousState = _stableState;
-    _stableState = measuredState;
-    if (previousState == _OpenClosedState.closed &&
-        measuredState == _OpenClosedState.open) {
-      _hasOpenedFromClosed = true;
-      return;
-    }
-    if (previousState == _OpenClosedState.open &&
-        measuredState == _OpenClosedState.closed &&
-        _hasOpenedFromClosed) {
-      _reps++;
-      _hasOpenedFromClosed = false;
-    }
+    _counter.update(_measureState(frame));
   }
 
-  _OpenClosedState _measureState(NuvoPoseFrame frame) {
-    final leftWrist = frame.point('leftWrist')!;
-    final rightWrist = frame.point('rightWrist')!;
-    final leftShoulder = frame.point('leftShoulder')!;
-    final rightShoulder = frame.point('rightShoulder')!;
-    final leftHip = frame.point('leftHip')!;
-    final rightHip = frame.point('rightHip')!;
-    final leftAnkle = frame.point('leftAnkle')!;
-    final rightAnkle = frame.point('rightAnkle')!;
-    final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-    final hipY = (leftHip.y + rightHip.y) / 2;
-    final shoulderWidth = (leftShoulder.x - rightShoulder.x).abs();
-    final hipWidth = (leftHip.x - rightHip.x).abs();
-    final bodyWidth = math.max(shoulderWidth, hipWidth).clamp(0.08, 0.6);
-    final ankleWidth = (leftAnkle.x - rightAnkle.x).abs();
-    final wristsAboveShoulders =
-        leftWrist.y < shoulderY - 0.03 && rightWrist.y < shoulderY - 0.03;
-    final wristsDown =
-        leftWrist.y > shoulderY - 0.01 &&
-        rightWrist.y > shoulderY - 0.01 &&
-        leftWrist.y < hipY + 0.24 &&
-        rightWrist.y < hipY + 0.24;
-    final anklesWide = ankleWidth > bodyWidth * 1.38;
-    final anklesClose = ankleWidth < bodyWidth * 1.18;
-    if (wristsAboveShoulders && anklesWide) return _OpenClosedState.open;
-    if (wristsDown && anklesClose) return _OpenClosedState.closed;
-    return _OpenClosedState.unknown;
+  MovementPhase _measureState(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
+    final anklesWide = features.ankleWidth > features.bodyWidth * 1.38;
+    final anklesClose = features.ankleWidth < features.bodyWidth * 1.18;
+    if (features.wristsAboveShoulders && anklesWide) {
+      return MovementPhase.active;
+    }
+    if (features.wristsNearBody && anklesClose) return MovementPhase.start;
+    return MovementPhase.unknown;
   }
 }
 
@@ -325,19 +722,15 @@ class ArmRaisesValidator extends _BaseValidator {
   }
 }
 
-enum _SquatState { unknown, standing, down }
-
 class SquatsValidator extends _BaseValidator {
   SquatsValidator({required super.targetValue});
 
-  _SquatState _stableState = _SquatState.unknown;
-  bool _hitDepth = false;
-  int _reps = 0;
+  final RepCounterStateMachine _counter = RepCounterStateMachine();
 
   @override
   AiMotionActivity get activity => AiMotionActivity.squats;
   @override
-  int get currentValue => _reps;
+  int get currentValue => _counter.count;
   @override
   String get statusText => 'Tracking squats';
   @override
@@ -357,36 +750,71 @@ class SquatsValidator extends _BaseValidator {
 
   @override
   void resetState() {
-    _stableState = _SquatState.unknown;
-    _hitDepth = false;
-    _reps = 0;
+    _counter.reset();
   }
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
-    final leftHip = frame.point('leftHip')!;
-    final rightHip = frame.point('rightHip')!;
-    final leftKnee = frame.point('leftKnee')!;
-    final rightKnee = frame.point('rightKnee')!;
-    final leftShoulder = frame.point('leftShoulder')!;
-    final rightShoulder = frame.point('rightShoulder')!;
-    final hipY = (leftHip.y + rightHip.y) / 2;
-    final kneeY = (leftKnee.y + rightKnee.y) / 2;
-    final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-    final torso = (hipY - shoulderY).abs().clamp(0.12, 0.6);
-    final hipToKnee = (kneeY - hipY) / torso;
+    final hipToKnee = PoseFeatureExtractor(frame).hipToKneeRatio();
     final state = hipToKnee < 0.58
-        ? _SquatState.down
+        ? MovementPhase.active
         : hipToKnee > 0.86
-        ? _SquatState.standing
-        : _SquatState.unknown;
-    if (state == _SquatState.unknown || state == _stableState) return;
-    _stableState = state;
-    if (state == _SquatState.down) _hitDepth = true;
-    if (state == _SquatState.standing && _hitDepth) {
-      _reps++;
-      _hitDepth = false;
+        ? MovementPhase.start
+        : MovementPhase.unknown;
+    _counter.update(state);
+  }
+}
+
+class LungesValidator extends _BaseValidator {
+  LungesValidator({required super.targetValue});
+
+  final RepCounterStateMachine _counter = RepCounterStateMachine();
+
+  @override
+  AiMotionActivity get activity => AiMotionActivity.lunges;
+  @override
+  int get currentValue => _counter.count;
+  @override
+  String get statusText => 'Tracking lunges';
+  @override
+  String get coachingText =>
+      fullBodyVisible ? 'Drop into depth, then stand tall' : 'Full body needed';
+  @override
+  List<String> get criticalPoints => const [
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ];
+
+  @override
+  void resetState() {
+    _counter.reset();
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
+    final leftKneeAngle = features.kneeAngle(left: true);
+    final rightKneeAngle = features.kneeAngle(left: false);
+    final leftKneeBent = leftKneeAngle < 118;
+    final rightKneeBent = rightKneeAngle < 118;
+    final kneesSeparated =
+        (frame.point('leftKnee')!.x - frame.point('rightKnee')!.x).abs() >
+        features.hipWidth * 0.55;
+    final bothStanding = leftKneeAngle > 154 && rightKneeAngle > 154;
+
+    if (bothStanding) {
+      _counter.update(MovementPhase.start);
+      return;
     }
+    if (kneesSeparated && (leftKneeBent || rightKneeBent)) {
+      _counter.update(MovementPhase.active);
+      return;
+    }
+    _counter.update(MovementPhase.unknown);
   }
 }
 
@@ -447,66 +875,128 @@ class HighKneesValidator extends _BaseValidator {
 class PlankHoldValidator extends _BaseValidator {
   PlankHoldValidator({required super.targetValue});
 
-  int _validHoldMs = 0;
-  DateTime? _lastValidFrameAt;
+  final HoldTimerStateMachine _timer = HoldTimerStateMachine();
+  int _stableAlignmentFrames = 0;
+  String _plankFeedback = 'Position your full body in frame.';
+  double _hipLineError = 0;
+  double _kneeLineError = 0;
+  double _averageKneeAngle = 0;
 
   @override
   AiMotionActivity get activity => AiMotionActivity.plankHold;
   @override
-  int get currentValue => (_validHoldMs / 1000).floor();
+  int get currentValue => _timer.seconds;
   @override
   String get statusText => 'Tracking plank';
   @override
-  String get coachingText => fullBodyVisible
-      ? 'Keep shoulder, hip, and ankle aligned'
-      : 'Side view needed';
+  String get coachingText => _plankFeedback;
+  @override
+  String get stateLabel =>
+      _stableAlignmentFrames >= 4 ? 'hold_valid' : 'hold_paused';
   @override
   List<String> get criticalPoints => const [
     'leftShoulder',
     'rightShoulder',
     'leftHip',
     'rightHip',
+    'leftKnee',
+    'rightKnee',
     'leftAnkle',
     'rightAnkle',
   ];
 
   @override
   void resetState() {
-    _validHoldMs = 0;
-    _lastValidFrameAt = null;
+    _timer.reset();
+    _stableAlignmentFrames = 0;
+    _plankFeedback = 'Position your full body in frame.';
+    _hipLineError = 0;
+    _kneeLineError = 0;
+    _averageKneeAngle = 0;
   }
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
     final shoulder = _mid(
       frame.point('leftShoulder')!,
       frame.point('rightShoulder')!,
     );
     final hip = _mid(frame.point('leftHip')!, frame.point('rightHip')!);
+    final knee = _mid(frame.point('leftKnee')!, frame.point('rightKnee')!);
     final ankle = _mid(frame.point('leftAnkle')!, frame.point('rightAnkle')!);
-    final bodySpan = math.max((shoulder.x - ankle.x).abs(), 0.1);
-    final hipLineY = _interpolateY(shoulder, ankle, hip.x);
-    final straightEnough = (hip.y - hipLineY).abs() < bodySpan * 0.34;
-    if (!straightEnough) {
-      _lastValidFrameAt = null;
+    final bodyLength = _distance(shoulder, ankle).clamp(0.18, 1.2);
+    _hipLineError = _distanceFromLine(hip, shoulder, ankle) / bodyLength;
+    _kneeLineError = _distanceFromLine(knee, hip, ankle) / bodyLength;
+    _averageKneeAngle =
+        (features.kneeAngle(left: true) + features.kneeAngle(left: false)) / 2;
+
+    final kneesBent = _averageKneeAngle < 148;
+    final kneesDropped = knee.y > hip.y && _kneeLineError > 0.16;
+    final hipsOutOfLine = _hipLineError > 0.16;
+    final legsNotExtended = _kneeLineError > 0.18 || kneesBent;
+
+    if (!fullBodyVisible) {
+      _pause(
+        frame,
+        'low_landmark_confidence',
+        'Position your full body in frame.',
+      );
       return;
     }
-    final now = frame.createdAt;
-    if (_lastValidFrameAt != null) {
-      final delta = now.difference(_lastValidFrameAt!).inMilliseconds;
-      if (delta > 0 && delta < 500) _validHoldMs += delta;
+    if (kneesDropped) {
+      _pause(frame, 'knees_down', 'Lift your knees.');
+      return;
     }
-    _lastValidFrameAt = now;
+    if (legsNotExtended) {
+      _pause(frame, 'legs_not_extended', 'Straighten your legs.');
+      return;
+    }
+    if (hipsOutOfLine) {
+      _pause(frame, 'body_line_broken', 'Keep your body in one line.');
+      return;
+    }
+
+    _stableAlignmentFrames++;
+    _plankFeedback = _stableAlignmentFrames >= 4
+        ? 'Hold steady.'
+        : 'Hold steady.';
+    lastFailureReason = '';
+    _timer.update(now: frame.createdAt, valid: _stableAlignmentFrames >= 4);
+  }
+
+  @override
+  Map<String, double> get debugValues => {
+    ...super.debugValues,
+    'stableAlignmentFrames': _stableAlignmentFrames.toDouble(),
+    'hipLineError': _hipLineError,
+    'kneeLineError': _kneeLineError,
+    'averageKneeAngle': _averageKneeAngle,
+  };
+
+  void _pause(NuvoPoseFrame frame, String reason, String feedback) {
+    _stableAlignmentFrames = 0;
+    lastFailureReason = reason;
+    _plankFeedback = feedback;
+    _timer.update(now: frame.createdAt, valid: false);
   }
 
   _Point _mid(NuvoPosePoint a, NuvoPosePoint b) =>
       _Point((a.x + b.x) / 2, (a.y + b.y) / 2);
 
-  double _interpolateY(_Point a, _Point b, double x) {
+  double _distance(_Point a, _Point b) {
+    final dx = a.x - b.x;
+    final dy = a.y - b.y;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+  double _distanceFromLine(_Point point, _Point a, _Point b) {
     final dx = b.x - a.x;
-    if (dx.abs() < 0.001) return (a.y + b.y) / 2;
-    final t = ((x - a.x) / dx).clamp(0.0, 1.0);
-    return a.y + (b.y - a.y) * t;
+    final dy = b.y - a.y;
+    final length = math.sqrt(dx * dx + dy * dy);
+    if (length < 0.001) return _distance(point, a);
+    return ((dy * point.x) - (dx * point.y) + (b.x * a.y) - (b.y * a.x)).abs() /
+        length;
   }
 }
 
