@@ -1,6 +1,8 @@
 enum MotionActivityType {
+  pushUps('push_ups'),
   jumpingJacks('jumping_jacks'),
   squats('squats'),
+  lunges('lunges'),
   highKnees('high_knees'),
   armRaises('arm_raises'),
   plankHold('plank_hold');

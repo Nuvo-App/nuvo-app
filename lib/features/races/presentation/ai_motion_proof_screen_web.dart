@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -49,7 +48,7 @@ class AiMotionProofScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 22),
                     Text(
-                      'AI verification runs\non the mobile app',
+                      'Camera verification runs\non the mobile app',
                       style: AppTextStyles.headlineMedium.copyWith(
                         color: NuvoColors.navy,
                       ),
@@ -57,7 +56,7 @@ class AiMotionProofScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Use the Nuvo mobile app to record verified reps.\nYou can still preview the rest of the proof UI here.',
+                      'Use the Nuvo mobile app to verify this movement with the camera.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -72,12 +71,6 @@ class AiMotionProofScreen extends StatelessWidget {
                 icon: Icons.arrow_back_rounded,
                 expand: true,
                 onPressed: () => safePopOrGo(context, '/race/$raceId/proof'),
-              ),
-              const SizedBox(height: 12),
-              NuvoGhostButton(
-                label: 'Log manually',
-                expand: true,
-                onPressed: () => context.go('/race/$raceId/proof'),
               ),
             ],
           ),

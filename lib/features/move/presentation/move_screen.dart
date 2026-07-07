@@ -12,6 +12,7 @@ import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
+import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/presentation/race_controller.dart';
 
 class MoveScreen extends ConsumerWidget {
@@ -24,10 +25,15 @@ class MoveScreen extends ConsumerWidget {
     final uid = user?.id;
 
     final activeRaces = raceState.races
-        .where((r) => r.status == 'active')
+        .where(
+          (race) =>
+              race.status == 'active' &&
+              resolveCameraVerification(race).isCameraVerifiable,
+        )
         .toList();
 
     final recentMoves = raceState.races
+        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
         .expand((r) => r.recentProofs.map((p) => (race: r, proof: p)))
         .take(10)
         .toList();
@@ -49,7 +55,11 @@ class MoveScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: const Center(
-                    child: NuvoIcon(NuvoIconType.plus, color: NuvoColors.white, size: 20),
+                    child: NuvoIcon(
+                      NuvoIconType.plus,
+                      color: NuvoColors.white,
+                      size: 20,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -58,11 +68,11 @@ class MoveScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Log a move',
+                        'Verify a move',
                         style: AppTextStyles.headlineMedium,
                       ),
                       Text(
-                        'Pick a race and record progress.',
+                        'Pick a race and use camera verification.',
                         style: AppTextStyles.bodySmall.copyWith(
                           color: NuvoColors.muted,
                         ),
@@ -96,9 +106,17 @@ class MoveScreen extends ConsumerWidget {
                   child: _RaceLogRow(
                     race: activeRaces[i],
                     userId: uid,
-                    onLog: () => context.push('/race/${activeRaces[i].id}/proof').then((_) {
-                      ref.read(raceControllerProvider.notifier).loadRaces();
-                    }),
+                    onLog: () {
+                      final race = activeRaces[i];
+                      debugLogCameraVerificationDecision(
+                        race,
+                        resolveCameraVerification(race),
+                        routeAction: 'move_screen_to_submit_proof',
+                      );
+                      context.push('/race/${race.id}/proof').then((_) {
+                        ref.read(raceControllerProvider.notifier).loadRaces();
+                      });
+                    },
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -224,7 +242,7 @@ class _RaceLogRow extends StatelessWidget {
                       ],
                     ),
                     child: Text(
-                      'Log',
+                      'Verify',
                       style: AppTextStyles.labelMedium.copyWith(
                         color: NuvoColors.white,
                       ),
@@ -232,7 +250,10 @@ class _RaceLogRow extends StatelessWidget {
                   )
                 else
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: NuvoColors.success.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(99),
@@ -485,10 +506,7 @@ class _EmptyState extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        Text(
-          'No active races yet.',
-          style: AppTextStyles.titleLarge,
-        ),
+        Text('No active races yet.', style: AppTextStyles.titleLarge),
         const SizedBox(height: 6),
         Text(
           'Start a race to begin logging moves.',

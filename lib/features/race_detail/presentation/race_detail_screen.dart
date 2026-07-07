@@ -19,6 +19,7 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/chase_context.dart';
+import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/presentation/race_controller.dart';
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -78,6 +79,11 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           _race = race;
           _loading = false;
         });
+        debugLogCameraVerificationDecision(
+          race,
+          resolveCameraVerification(race),
+          routeAction: 'race_detail_loaded',
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -264,7 +270,11 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final user = ref.watch(authControllerProvider).user;
     final isOwner = user != null && race.isCreator(user.id);
     final isParticipant = user != null && race.isParticipant(user.id);
-    final canSubmit = race.status == 'active' && (isOwner || isParticipant);
+    final eligibility = resolveCameraVerification(race);
+    final canVerify =
+        race.status == 'active' &&
+        (isOwner || isParticipant) &&
+        eligibility.isCameraVerifiable;
     final canJoin = race.status == 'active' && !isOwner && !isParticipant;
     final myPart = isParticipant ? race.participantFor(user.id) : null;
     final myProgress = myPart?.progressPercent ?? 0;
@@ -342,22 +352,37 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     primaryLabel: canJoin
                         ? 'Join race'
                         : myRaceComplete
-                        ? 'Log more moves'
-                        : 'Log move',
+                        ? 'Verify more moves'
+                        : eligibility.isCameraVerifiable
+                        ? 'Verify'
+                        : 'Unsupported',
                     loading: _busy,
                     onPrimary: _busy
                         ? null
                         : canJoin
                         ? _joinRace
-                        : canSubmit
+                        : canVerify
                         ? () async {
+                            debugLogCameraVerificationDecision(
+                              race,
+                              eligibility,
+                              routeAction: 'race_detail_to_submit_proof',
+                            );
                             await context.push('/race/${race.id}/proof');
                             _load();
                           }
                         : null,
                   ),
 
-                  if (canSubmit && myRaceComplete) ...[
+                  if (race.status == 'active' &&
+                      !eligibility.isCameraVerifiable) ...[
+                    const SizedBox(height: 12),
+                    _UnsupportedVerificationNotice(
+                      message: eligibility.unsupportedMessage,
+                    ),
+                  ],
+
+                  if (canVerify && myRaceComplete) ...[
                     const SizedBox(height: 12),
                     _CompleteCallout(progress: myProgress),
                   ],
@@ -401,14 +426,14 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     movers: movementAvatars.take(3).toList(),
                   ),
 
-                  if (canSubmit && myRaceComplete) ...[
+                  if (canVerify && myRaceComplete) ...[
                     const SizedBox(height: 18),
                     NuvoGhostButton(
                       label: 'Start another race',
                       expand: true,
                       onPressed: () => context.push('/races/new'),
                     ),
-                  ] else if (canSubmit && isOwner) ...[
+                  ] else if (canVerify && isOwner) ...[
                     const SizedBox(height: 18),
                     NuvoOutlineButton(
                       label: 'Invite crew',
@@ -684,14 +709,11 @@ class _NavyHeader extends StatelessWidget {
 
   String _contextLine(Race race) {
     final parts = <String>[];
-    if (race.isSupportedAiMotionRace) {
-      parts.add('AI MoveCheck');
+    final eligibility = resolveCameraVerification(race);
+    if (eligibility.isCameraVerifiable) {
+      parts.add('MoveCheck');
     } else {
-      parts.add(switch (race.proofRequirement) {
-        'photo_video' => 'Photo / video move',
-        'ai_check' => 'AI MoveCheck',
-        _ => 'Manual logging',
-      });
+      parts.add(eligibility.unsupportedMessage);
     }
     if (race.targetValue != null) {
       parts.add('${race.targetValue} ${race.unit ?? 'reps'}');
@@ -875,6 +897,40 @@ class _CheckpointRow extends StatelessWidget {
 
 // ── Complete callout ──────────────────────────────────────────────────────────
 
+class _UnsupportedVerificationNotice extends StatelessWidget {
+  const _UnsupportedVerificationNotice({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: NuvoColors.icyBlue,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.videocam_off_rounded,
+            color: NuvoColors.navy,
+            size: 22,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CompleteCallout extends StatelessWidget {
   const _CompleteCallout({required this.progress});
   final int progress;
@@ -933,14 +989,11 @@ String _moveActionLine(RaceProof proof, String? unit) {
 
 String _contextLine(Race race) {
   final parts = <String>[];
-  if (race.isSupportedAiMotionRace) {
-    parts.add('AI MoveCheck');
+  final eligibility = resolveCameraVerification(race);
+  if (eligibility.isCameraVerifiable) {
+    parts.add('MoveCheck');
   } else {
-    parts.add(switch (race.proofRequirement) {
-      'photo_video' => 'Photo / video move',
-      'ai_check' => 'AI MoveCheck',
-      _ => 'Manual logging',
-    });
+    parts.add(eligibility.unsupportedMessage);
   }
   if (race.targetValue != null) {
     parts.add('${race.targetValue} ${race.unit ?? 'reps'}');

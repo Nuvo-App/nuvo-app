@@ -11,6 +11,7 @@ import '../../../core/widgets/nuvo_error_state.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
+import '../domain/camera_verification_resolver.dart';
 import 'race_controller.dart';
 
 class RaceSettingsScreen extends ConsumerStatefulWidget {
@@ -80,7 +81,9 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
       _startLineController.text = race.startLineAt ?? '';
       _finishLineController.text = race.finishLineAt ?? '';
       _goalType = race.goalType;
-      _proofRequirement = race.proofRequirement;
+      _proofRequirement = resolveCameraVerification(race).isCameraVerifiable
+          ? 'ai_check'
+          : race.proofRequirement;
       _proofReviewMode = race.proofReviewMode;
       _visibility = race.visibility;
       setState(() => _loading = false);
@@ -108,6 +111,10 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
 
     try {
       final target = int.tryParse(_targetController.text.trim());
+      final existingRace = _race;
+      final eligibility = existingRace == null
+          ? null
+          : resolveCameraVerification(existingRace);
       final race = await ref
           .read(raceControllerProvider.notifier)
           .updateRace(
@@ -117,11 +124,15 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             category: _categoryController.text.trim(),
             goalType: _goalType,
             targetValue: target,
-            unit: _unitController.text.trim(),
+            unit: eligibility?.isCameraVerifiable == true
+                ? _unitForEligibility(eligibility!)
+                : _unitController.text.trim(),
             startLineAt: _startLineController.text.trim(),
             finishLineAt: _finishLineController.text.trim(),
             rules: _rulesController.text.trim(),
-            proofRequirement: _proofRequirement,
+            proofRequirement: eligibility?.isCameraVerifiable == true
+                ? 'ai_check'
+                : _proofRequirement,
             proofReviewMode: _proofReviewMode,
             visibility: _visibility,
           );
@@ -201,6 +212,10 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final isOwner = _race?.creatorId == user?.id;
+    final eligibility = _race == null
+        ? null
+        : resolveCameraVerification(_race!);
+    final isCameraRace = eligibility?.isCameraVerifiable == true;
 
     if (_loading) {
       return const Scaffold(
@@ -267,39 +282,56 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             ),
             _Section(
               title: 'Goal',
-              children: [
-                _Menu(
-                  label: 'Goal type',
-                  value: _goalType,
-                  values: const {'manual': 'manual', 'photo': 'photo'},
-                  onChanged: (value) => setState(() => _goalType = value),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Input(
+              children: isCameraRace
+                  ? [
+                      _MovementSummary(eligibility: eligibility!),
+                      _Input(
                         controller: _targetController,
-                        label: 'Target value',
+                        label: 'Target',
+                        hint: _targetHint(eligibility),
                         keyboardType: TextInputType.number,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _Input(controller: _unitController, label: 'Unit'),
-                    ),
-                  ],
-                ),
-                _Input(
-                  controller: _startLineController,
-                  label: 'Start line date',
-                  hint: 'Optional ISO date',
-                ),
-                _Input(
-                  controller: _finishLineController,
-                  label: 'Finish line date',
-                  hint: 'Optional ISO date',
-                ),
-              ],
+                      _Input(
+                        controller: _startLineController,
+                        label: 'Start',
+                        hint: 'Add start date',
+                      ),
+                      _Input(
+                        controller: _finishLineController,
+                        label: 'Finish',
+                        hint: 'Add finish date',
+                      ),
+                    ]
+                  : [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _Input(
+                              controller: _targetController,
+                              label: 'Target value',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _Input(
+                              controller: _unitController,
+                              label: 'Unit',
+                            ),
+                          ),
+                        ],
+                      ),
+                      _Input(
+                        controller: _startLineController,
+                        label: 'Start',
+                        hint: 'Add start date',
+                      ),
+                      _Input(
+                        controller: _finishLineController,
+                        label: 'Finish',
+                        hint: 'Add finish date',
+                      ),
+                    ],
             ),
             _Section(
               title: 'Rules',
@@ -313,33 +345,18 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                 ),
               ],
             ),
-            _Section(
-              title: 'Moves',
-              children: [
-                _Menu(
-                  label: 'Move method',
-                  value: _proofRequirement,
-                  values: const {
-                    'manual': 'manual logging',
-                    'photo_video': 'photo / video move',
-                    'ai_check': 'AI MoveCheck - 10 jumping jacks',
-                  },
-                  onChanged: (value) =>
-                      setState(() => _proofRequirement = value),
-                ),
-                _Menu(
-                  label: 'Review mode',
-                  value: _proofReviewMode,
-                  values: const {
-                    'auto_accept': 'auto accept',
-                    'owner_review': 'owner review',
-                    'ai_review': 'AI review',
-                  },
-                  onChanged: (value) =>
-                      setState(() => _proofReviewMode = value),
-                ),
-              ],
-            ),
+            if (!isCameraRace)
+              _Section(
+                title: 'Moves',
+                children: [
+                  _Menu(
+                    label: 'Move method',
+                    value: 'unsupported',
+                    values: const {'unsupported': 'unsupported movement'},
+                    onChanged: (_) {},
+                  ),
+                ],
+              ),
             _Section(
               title: 'Visibility',
               children: [
@@ -531,4 +548,55 @@ class _Menu extends StatelessWidget {
       },
     );
   }
+}
+
+class _MovementSummary extends StatelessWidget {
+  const _MovementSummary({required this.eligibility});
+
+  final CameraVerificationEligibility eligibility;
+
+  @override
+  Widget build(BuildContext context) {
+    final movement = eligibility.movementDefinition;
+    final unit = _unitForEligibility(eligibility);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Movement',
+            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            movement?.title ?? 'Unsupported movement',
+            style: AppTextStyles.titleMedium,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Target uses $unit.',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _unitForEligibility(CameraVerificationEligibility eligibility) {
+  return eligibility.movementDefinition?.isHold == true ? 'seconds' : 'reps';
+}
+
+String _targetHint(CameraVerificationEligibility eligibility) {
+  final unit = _unitForEligibility(eligibility);
+  final target = eligibility.movementDefinition?.defaultTarget ?? 10;
+  return '$target $unit';
 }
