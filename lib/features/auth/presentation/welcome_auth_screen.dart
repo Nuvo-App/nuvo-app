@@ -15,7 +15,7 @@ enum _AuthMode { signup, login }
 // Flip to true once the two external steps in GOOGLE_OAUTH_FIX_PLAN.md are done:
 // 1. Google Cloud Console iOS OAuth client registered for com.example.nuvo
 // 2. GOOGLE_IOS_CLIENT_ID set in Cloudflare Worker secrets via wrangler secret put
-const _kGoogleEnabled = false;
+const _kGoogleEnabled = true;
 
 class WelcomeAuthScreen extends ConsumerStatefulWidget {
   const WelcomeAuthScreen({super.key});

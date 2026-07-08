@@ -166,27 +166,30 @@ PreferredCameraView _preferredCameraView(MotionActivityType movement) {
 List<String> _instructions(MotionActivityType movement) {
   return switch (movement) {
     MotionActivityType.pushUps => const [
-      'Face the camera.',
-      'Keep your upper body in frame.',
-      'Start when ready.',
+      'Stand 6\u20138 feet from the camera.',
+      'Keep your hands and shoulders visible.',
+      'Wait until MoveCheck says Ready.',
     ],
     MotionActivityType.squats => const [
-      'Face the camera.',
-      'Keep your full body in frame.',
+      'Stand 6\u20138 feet away, facing the camera.',
+      'Keep your full body in frame, head to feet.',
+      'Wait until MoveCheck says Ready.',
     ],
     MotionActivityType.jumpingJacks => const [
-      'Face the camera.',
-      'Keep your arms and feet in frame.',
+      'Stand 6\u20138 feet away, facing the camera.',
+      'Leave room above your head for arms.',
+      'Wait until MoveCheck says Ready.',
     ],
     MotionActivityType.lunges => const [
-      'Face the camera or turn slightly.',
-      'Keep your full body in frame.',
+      'Stand 6\u20138 feet away, facing or slightly angled.',
+      'Keep your full body in frame, head to feet.',
+      'Wait until MoveCheck says Ready.',
     ],
     MotionActivityType.plankHold => const [
-      'Turn sideways.',
-      'Keep your full body in frame.',
-      'Keep your body in one line.',
+      'Place the camera to your side, 5\u20136 feet away.',
+      'Get into position so your whole body is visible.',
+      'Wait until MoveCheck says Ready.',
     ],
-    _ => const ['Position yourself in frame.'],
+    _ => const ['Stand 6\u20138 feet from the camera.'],
   };
 }

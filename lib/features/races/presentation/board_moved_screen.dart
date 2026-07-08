@@ -58,8 +58,7 @@ class BoardMovedScreen extends StatelessWidget {
       args.rankBefore != null &&
       args.rankAfter! < args.rankBefore!;
 
-  int get _spotsMoved =>
-      _movedUp ? (args.rankBefore! - args.rankAfter!) : 0;
+  int get _spotsMoved => _movedUp ? (args.rankBefore! - args.rankAfter!) : 0;
 
   @override
   Widget build(BuildContext context) {
@@ -79,20 +78,35 @@ class BoardMovedScreen extends StatelessWidget {
                     Container(
                       width: 56,
                       height: 56,
-                      decoration: const BoxDecoration(color: NuvoColors.blue, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                        color: NuvoColors.blue,
+                        shape: BoxShape.circle,
+                      ),
                       child: const Center(
-                        child: NuvoIcon(NuvoIconType.check, color: Colors.white, size: 24),
+                        child: NuvoIcon(
+                          NuvoIconType.check,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
                     Text(
                       _isPending
                           ? 'Move logged · under review'
-                          : '${args.value}${args.unit != null ? ' ${args.unit}' : ''} verified',
+                          : 'Move verified',
                       style: AppTextStyles.labelMedium.copyWith(
                         color: Colors.white.withValues(alpha: 0.7),
                         letterSpacing: 0.3,
                       ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '${args.value}${args.unit != null ? ' ${args.unit}' : ''} completed.',
+                      style: AppTextStyles.headlineMedium.copyWith(
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                     if (args.rankAfter != null) ...[
                       const SizedBox(height: 12),
@@ -103,15 +117,26 @@ class BoardMovedScreen extends StatelessWidget {
                           if (args.rankBefore != null && _movedUp) ...[
                             Text(
                               '#${args.rankBefore}',
-                              style: AppTextStyles.number(22, color: Colors.white.withValues(alpha: 0.4)),
+                              style: AppTextStyles.number(
+                                22,
+                                color: Colors.white.withValues(alpha: 0.4),
+                              ),
                             ),
                             const SizedBox(width: 14),
-                            const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.paleSlate, size: 16),
+                            const NuvoIcon(
+                              NuvoIconType.arrow,
+                              color: NuvoColors.paleSlate,
+                              size: 16,
+                            ),
                             const SizedBox(width: 14),
                           ],
                           Text(
                             '#${args.rankAfter}',
-                            style: AppTextStyles.number(46, color: Colors.white, weight: FontWeight.w800),
+                            style: AppTextStyles.number(
+                              46,
+                              color: Colors.white,
+                              weight: FontWeight.w800,
+                            ),
                           ),
                         ],
                       ),
@@ -122,11 +147,45 @@ class BoardMovedScreen extends StatelessWidget {
                                   '${(args.leaderGap ?? 0) > 0 ? ' · ${args.leaderGap} from #${(args.rankAfter ?? 1) - 1}' : ''}'
                             : (args.peoplePassed ?? 0) > 0
                             ? 'You passed ${args.peoplePassed} ${args.peoplePassed == 1 ? 'person' : 'people'}'
-                            : 'Your progress is verified.',
-                        style: AppTextStyles.bodyMedium.copyWith(color: Colors.white.withValues(alpha: 0.72)),
+                            : 'Updating your race...',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: Colors.white.withValues(alpha: 0.72),
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
+                    const SizedBox(height: 22),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '+${args.value}${args.unit != null ? ' ${args.unit}' : ''}',
+                            style: AppTextStyles.titleLarge.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            '1 move added',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: Colors.white.withValues(alpha: 0.66),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -143,11 +202,15 @@ class BoardMovedScreen extends StatelessWidget {
                         backgroundColor: Colors.white,
                         foregroundColor: NuvoColors.navy,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                       child: Text(
-                        'View leaderboard',
-                        style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
+                        'View race',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: NuvoColors.navy,
+                        ),
                       ),
                     ),
                   ),
@@ -158,7 +221,7 @@ class BoardMovedScreen extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Text(
-                        'Submit another proof',
+                        'Record again',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: Colors.white.withValues(alpha: 0.75),
                           fontWeight: FontWeight.w600,
@@ -194,7 +257,9 @@ class _RejectedView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Row(
                 children: [
-                  NuvoBackButton(onPressed: () => safePopOrGo(context, '/race/$raceId')),
+                  NuvoBackButton(
+                    onPressed: () => safePopOrGo(context, '/race/$raceId'),
+                  ),
                 ],
               ),
             ),
@@ -207,7 +272,10 @@ class _RejectedView extends StatelessWidget {
                     children: [
                       Text(
                         "MOVE DIDN'T COUNT",
-                        style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.danger, letterSpacing: 0),
+                        style: AppTextStyles.brandLabel.copyWith(
+                          color: NuvoColors.danger,
+                          letterSpacing: 0,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),
@@ -228,7 +296,9 @@ class _RejectedView extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: NuvoColors.navy,
                   minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
                 child: const Text('Try again'),
               ),

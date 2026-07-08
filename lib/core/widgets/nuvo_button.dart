@@ -230,10 +230,7 @@ class NuvoGhostButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.panel,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: NuvoColors.border,
-              width: 1,
-            ),
+            border: Border.all(color: NuvoColors.border, width: 1),
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -319,15 +316,12 @@ class NuvoBackButton extends StatelessWidget {
     return PressableScale(
       onTap: onPressed,
       child: Container(
-        width: 42,
-        height: 42,
+        width: 46,
+        height: 46,
         decoration: BoxDecoration(
           color: NuvoColors.white,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: NuvoColors.border,
-            width: 1,
-          ),
+          border: Border.all(color: NuvoColors.border, width: 1),
           boxShadow: const [
             BoxShadow(
               color: Color(0x0E0A1A33),
@@ -339,7 +333,7 @@ class NuvoBackButton extends StatelessWidget {
         child: const Icon(
           Icons.arrow_back_rounded,
           color: NuvoColors.navy,
-          size: 19,
+          size: 16,
         ),
       ),
     );
@@ -373,10 +367,7 @@ class NuvoIconAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.white,
           shape: BoxShape.circle,
-          border: Border.all(
-            color: NuvoColors.border,
-            width: 1,
-          ),
+          border: Border.all(color: NuvoColors.border, width: 1),
           boxShadow: const [
             BoxShadow(
               color: Color(0x0C0A1A33),

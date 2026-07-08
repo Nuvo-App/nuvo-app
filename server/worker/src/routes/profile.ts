@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import type { AppEnv, ProfileRow } from '../types';
+import type { AppEnv, MediaObjectRow, ProfileRow } from '../types';
+import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
 import { normalizeUsername, isValidUsername } from '../lib/validation';
 
@@ -88,7 +89,7 @@ async function verifyUploadToken(token: string, jwtSecret: string) {
   if (typeof parsed.exp !== 'number' || parsed.exp < Math.floor(Date.now() / 1000)) {
     return null;
   }
-  if (typeof parsed.key !== 'string' || !parsed.key.startsWith('profile-photos/')) {
+  if (typeof parsed.key !== 'string' || (!parsed.key.startsWith('profile-photos/') && !parsed.key.startsWith('profile-avatars/'))) {
     return null;
   }
   if (typeof parsed.contentType !== 'string') return null;
@@ -105,12 +106,41 @@ profileRouter.put('/photo/upload', async (c) => {
   await c.env.PROFILE_PHOTOS.put(upload.key, c.req.raw.body, {
     httpMetadata: { contentType: upload.contentType },
   });
-  return c.json({ ok: true, key: upload.key });
+
+  // Track the object in media_objects and link it to the user's profile.
+  // The userId is encoded in the path: profile-avatars/{userId}/{timestamp}.{ext}
+  const userIdMatch = upload.key.match(/^profile-(?:avatars|photos)\/([^/]+)/);
+  const userId = userIdMatch?.[1];
+  const baseUrl = new URL(c.req.url).origin;
+  const publicUrl = `${baseUrl}/profile/photo/object/${encodeKeyPath(upload.key)}`;
+
+  if (userId) {
+    const existing = await c.env.DB.prepare('SELECT id FROM media_objects WHERE object_key = ?')
+      .bind(upload.key)
+      .first<MediaObjectRow>();
+    if (existing) {
+      await c.env.DB.prepare(
+        "UPDATE media_objects SET public_url = ?, status = 'active', deleted_at = NULL WHERE id = ?"
+      ).bind(publicUrl, existing.id).run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO media_objects (id, owner_user_id, bucket, object_key, public_url, media_type, purpose, status, created_at)
+         VALUES (?, ?, 'nuvor2', ?, ?, 'image', 'profile_avatar', 'active', CURRENT_TIMESTAMP)`
+      ).bind(generateId(), userId, upload.key, publicUrl).run();
+    }
+    await c.env.DB.prepare(
+      'UPDATE profiles SET avatar_object_key = ?, avatar_url = ? WHERE user_id = ?'
+    ).bind(upload.key, publicUrl, userId).run();
+  }
+
+  return c.json({ ok: true, key: upload.key, publicUrl });
 });
 
 profileRouter.get('/photo/object/*', async (c) => {
   const key = c.req.path.replace('/profile/photo/object/', '');
-  if (!key.startsWith('profile-photos/')) return c.json({ ok: false, error: 'Not found' }, 404);
+  if (!key.startsWith('profile-photos/') && !key.startsWith('profile-avatars/')) {
+    return c.json({ ok: false, error: 'Not found' }, 404);
+  }
 
   const object = await c.env.PROFILE_PHOTOS.get(key);
   if (!object) return c.json({ ok: false, error: 'Not found' }, 404);
@@ -169,7 +199,7 @@ profileRouter.post('/photo/upload-url', async (c) => {
   }
 
   const extension = extensionFor(fileName, contentType);
-  const key = `profile-photos/${userId}/${Date.now()}.${extension}`;
+  const key = `profile-avatars/${userId}/${Date.now()}.${extension}`;
   const baseUrl = new URL(c.req.url).origin;
   const publicUrl = `${baseUrl}/profile/photo/object/${encodeKeyPath(key)}`;
   const token = await signUploadToken({
@@ -178,6 +208,21 @@ profileRouter.post('/photo/upload-url', async (c) => {
     jwtSecret: c.env.JWT_SECRET,
   });
   const uploadUrl = `${baseUrl}/profile/photo/upload?token=${awsEncode(token)}`;
+
+  // Upsert a media_objects row so the upload is tracked in D1 even before it happens.
+  const existing = await c.env.DB.prepare('SELECT id FROM media_objects WHERE object_key = ?')
+    .bind(key)
+    .first<MediaObjectRow>();
+  if (existing) {
+    await c.env.DB.prepare(
+      "UPDATE media_objects SET public_url = ?, status = 'active', deleted_at = NULL WHERE id = ?"
+    ).bind(publicUrl, existing.id).run();
+  } else {
+    await c.env.DB.prepare(
+      `INSERT INTO media_objects (id, owner_user_id, bucket, object_key, public_url, media_type, purpose, status, created_at)
+       VALUES (?, ?, 'nuvor2', ?, ?, 'image', 'profile_avatar', 'active', CURRENT_TIMESTAMP)`
+    ).bind(generateId(), userId, key, publicUrl).run();
+  }
 
   console.log(`PROFILE_UPLOAD_URL_PUBLIC_URL: ${publicUrl}`);
   return c.json({ uploadUrl, publicUrl, key });
@@ -244,9 +289,25 @@ profileRouter.post('/', async (c) => {
     typeof body.profilePhotoUrl === 'string' ||
     typeof body.avatarUrl === 'string'
   ) {
-    const photoUrl = body.profilePhotoUrl ?? body.avatarUrl ?? null;
+    const photoUrl = (body.profilePhotoUrl ?? body.avatarUrl) as string | null;
     fields.push('avatar_url = ?');
     bindings.push(photoUrl);
+
+    // Try to link to a media_objects row. Fallback to extracting object_key from URL.
+    let objectKey: string | null = null;
+    if (photoUrl) {
+      const media = await c.env.DB.prepare('SELECT object_key FROM media_objects WHERE public_url = ? AND owner_user_id = ?')
+        .bind(photoUrl, userId)
+        .first<{ object_key: string }>();
+      if (media) {
+        objectKey = media.object_key;
+      } else {
+        const match = photoUrl.match(/profile-(?:avatars|photos)\/(.+)$/);
+        if (match) objectKey = `profile-${photoUrl.includes('profile-avatars/') ? 'avatars' : 'photos'}/${match[1]}`;
+      }
+    }
+    fields.push('avatar_object_key = ?');
+    bindings.push(objectKey);
   }
 
   if (fields.length === 1) {

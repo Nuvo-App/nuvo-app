@@ -39,7 +39,7 @@ class NuvoRaceHero extends StatelessWidget {
     required this.avatars,
     required this.racerCount,
     required this.onPrimary,
-    this.primaryLabel = 'Log move',
+    this.primaryLabel = 'Log Move',
     this.loading = false,
     this.daysLeft,
   });
