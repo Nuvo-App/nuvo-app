@@ -121,7 +121,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.directions_run_rounded,
                         label: '10 Jumping Jacks',
-                        sublabel: 'MoveCheck · camera verification',
+                        sublabel: 'Camera verified',
                         accentColor: NuvoColors.blue,
                         onTap: () => context.push(
                           '/races/new',
@@ -132,7 +132,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.fitness_center_rounded,
                         label: '10 Pushups',
-                        sublabel: 'MoveCheck · camera verification',
+                        sublabel: 'Camera verified',
                         accentColor: NuvoColors.coral,
                         onTap: () => context.push(
                           '/races/new',
@@ -143,7 +143,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.accessibility_new_rounded,
                         label: '10 Squats',
-                        sublabel: 'MoveCheck · camera verification',
+                        sublabel: 'Camera verified',
                         accentColor: NuvoColors.aqua,
                         onTap: () => context.push(
                           '/races/new',

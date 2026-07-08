@@ -316,8 +316,8 @@ class NuvoBackButton extends StatelessWidget {
     return PressableScale(
       onTap: onPressed,
       child: Container(
-        width: 46,
-        height: 46,
+        width: 48,
+        height: 48,
         decoration: BoxDecoration(
           color: NuvoColors.white,
           shape: BoxShape.circle,
@@ -333,7 +333,7 @@ class NuvoBackButton extends StatelessWidget {
         child: const Icon(
           Icons.arrow_back_rounded,
           color: NuvoColors.navy,
-          size: 16,
+          size: 20,
         ),
       ),
     );

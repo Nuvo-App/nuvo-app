@@ -45,7 +45,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   AiMotionProofStatus _status = AiMotionProofStatus.setup;
   AiMotionResult? _result;
   String? _message;
-  CameraVerificationEligibility? _eligibility;
   bool _disposed = false;
   Timer? _recordingTimer;
   Duration _elapsed = Duration.zero;
@@ -75,17 +74,20 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           race.targetValue ??
           eligibility.movementDefinition?.defaultTarget ??
           10;
-      setState(() {
-        _eligibility = eligibility;
-        final definition = _movementDefinitionForEligibility(eligibility);
-        if (definition == null) {
+      final definition = _movementDefinitionForEligibility(eligibility);
+      if (definition == null) {
+        setState(() {
           _status = AiMotionProofStatus.unsupportedMovement;
           _message = eligibility.unsupportedMessage;
-          return;
-        }
+        });
+        return;
+      }
+      setState(() {
         _activity = definition.activity;
         _engine.selectMovement(definition, target);
       });
+      // Skip redundant pre-camera panel — go straight to camera
+      _initializeCamera();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -430,11 +432,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       )?.cameraInstruction ??
       'Full body front view';
 
-  List<String> get _setupInstructions {
-    final instructions = _eligibility?.instructions;
-    if (instructions != null && instructions.isNotEmpty) return instructions;
-    return [_cameraInstruction, 'Start when ready.'];
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +466,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         Text(
                           _activity == AiMotionActivity.plankHold
                               ? 'Hold until the timer finishes.'
-                              : 'Nuvo will count your $_targetLabel.',
+                              : 'Camera will count your $_targetLabel.',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: NuvoColors.muted,
                           ),
@@ -489,7 +486,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 child: _isResultState
                     ? _resultPanel()
                     : _status == AiMotionProofStatus.setup
-                    ? _preCameraPanel()
+                    ? _loadingPanel()
                     : _cameraPanel(),
               ),
             ),
@@ -522,94 +519,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _preCameraPanel() {
-    final items = _setupInstructions.take(3).toList();
+  Widget _loadingPanel() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: NuvoColors.navy,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1007152B),
-            blurRadius: 0,
-            offset: Offset(4, 5),
-          ),
-        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: NuvoColors.icyBlue,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.camera_alt_rounded,
-              color: NuvoColors.blue,
-              size: 24,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(_movementTitle, style: AppTextStyles.headlineMedium),
-          const SizedBox(height: 4),
-          Text(
-            'Place your whole body inside the frame.',
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: NuvoColors.panel,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'Goal',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.muted,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _targetLabel,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: NuvoColors.navy,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          for (final item in items) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: NuvoColors.blue,
-                  size: 14,
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: Text(
-                    item,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (item != items.last) const SizedBox(height: 10),
-          ],
-        ],
+      child: const Center(
+        child: CircularProgressIndicator(
+          color: NuvoColors.white,
+          strokeWidth: 2,
+        ),
       ),
     );
   }
@@ -708,31 +628,22 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Widget _bodyGuideOverlay() {
+    final isRecording = _status == AiMotionProofStatus.recording;
     return Padding(
       padding: const EdgeInsets.fromLTRB(34, 76, 34, 72),
       child: CustomPaint(
         painter: _BodyGuidePainter(),
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: NuvoColors.navy.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: NuvoColors.white.withValues(alpha: 0.18),
+        child: isRecording
+            ? const SizedBox.expand()
+            : Center(
+                child: Text(
+                  'Step into frame',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.white.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-            child: Text(
-              _cameraInstruction,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.white,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -778,9 +689,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _status == AiMotionProofStatus.submitting
+                  _status == AiMotionProofStatus.submitted
+                      ? 'Race updated'
+                      : _status == AiMotionProofStatus.submitting
                       ? 'Adding to your race\u2026'
-                      : 'Move verified.',
+                      : 'Camera verified',
                   style: AppTextStyles.bodyLarge.copyWith(
                     color: NuvoColors.white.withValues(alpha: 0.78),
                   ),
@@ -825,8 +738,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               const SizedBox(height: 10),
               Text(
                 _activity == AiMotionActivity.plankHold
-                    ? 'Nuvo counted $detected valid seconds out of $_targetValue.'
-                    : 'Nuvo detected $detected clean ${_activity.label} out of $_targetValue.',
+                    ? 'Counted $detected valid seconds out of $_targetValue.'
+                    : 'Detected $detected clean ${_activity.label} out of $_targetValue.',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: NuvoColors.muted,
                 ),
@@ -890,7 +803,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _message ??
         switch (_status) {
           AiMotionProofStatus.cameraReady => 'Hold until the timer finishes.',
-          AiMotionProofStatus.processing => 'MoveCheck is checking your move.',
+          AiMotionProofStatus.processing => 'Checking your move…',
           AiMotionProofStatus.permissionDenied =>
             'Enable camera access in Settings to verify your reps.',
           AiMotionProofStatus.cameraError => 'Try again.',
@@ -898,7 +811,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           AiMotionProofStatus.submitted => 'Heading back to the race.',
           AiMotionProofStatus.needsReview => 'Try again.',
           AiMotionProofStatus.unsupportedMovement =>
-            'Nuvo can’t verify this movement yet.',
+            'This movement cannot be camera verified yet.',
           _ => '',
         };
 
@@ -957,19 +870,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
     return switch (_status) {
       AiMotionProofStatus.setup => [
-        NuvoPrimaryButton(
-          label: 'Begin MoveCheck',
-          icon: Icons.camera_alt_rounded,
-          expand: true,
-          loading: loading,
-          onPressed: loading ? null : _initializeCamera,
-        ),
-        const SizedBox(height: 12),
-        NuvoOutlineButton(
-          label: 'Back',
-          expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}/proof'),
-        ),
+        const SizedBox.shrink(),
       ],
       AiMotionProofStatus.unsupportedMovement => [
         NuvoOutlineButton(
@@ -980,7 +881,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ],
       AiMotionProofStatus.cameraReady => [
         NuvoPrimaryButton(
-          label: 'Start MoveCheck',
+          label: 'Start recording',
           icon: Icons.videocam_rounded,
           expand: true,
           onPressed: _startRecording,
@@ -1016,21 +917,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         ),
       ],
       AiMotionProofStatus.submitting => [
-        const NuvoPrimaryButton(
-          label: 'Updating your race',
-          icon: Icons.verified_rounded,
-          expand: true,
-          loading: true,
-          onPressed: null,
-        ),
+        const SizedBox.shrink(),
       ],
       AiMotionProofStatus.submitted => [
-        NuvoPrimaryButton(
-          label: 'View Race',
-          icon: Icons.flag_rounded,
-          expand: true,
-          onPressed: () => context.go('/race/${widget.raceId}'),
-        ),
+        const SizedBox.shrink(),
       ],
       AiMotionProofStatus.aiFailed ||
       AiMotionProofStatus.permissionDenied ||
@@ -1044,7 +934,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ],
       _ => [
         NuvoPrimaryButton(
-          label: loading ? 'Checking move' : 'Begin MoveCheck',
+          label: loading ? 'Checking move' : 'Begin',
           expand: true,
           loading: loading,
           onPressed: null,
@@ -1107,7 +997,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   String get _cameraPlaceholderText {
     if (_status == AiMotionProofStatus.unsupportedMovement) {
-      return 'Nuvo can’t verify this movement yet.';
+      return 'This movement cannot be camera verified yet.';
     }
     if (_status == AiMotionProofStatus.processing) return 'Starting camera...';
     return 'Place your whole body inside the frame.\n$_cameraInstruction.';
@@ -1136,13 +1026,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 class _BodyGuidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final cornerPaint = Paint()
+    final paint = Paint()
       ..color = NuvoColors.white.withValues(alpha: 0.9)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    // Corner brackets only — no full rectangle border
+    // Corner brackets only — professional camera framing, no body drawing
     const corner = 34.0;
     final path = Path()
       ..moveTo(0, corner)
@@ -1157,80 +1047,7 @@ class _BodyGuidePainter extends CustomPainter {
       ..moveTo(corner, size.height)
       ..lineTo(0, size.height)
       ..lineTo(0, size.height - corner);
-    canvas.drawPath(path, cornerPaint);
-
-    // Rounded human silhouette — airport-icon style, filled, human proportions
-    final fillPaint = Paint()
-      ..color = NuvoColors.white.withValues(alpha: 0.14)
-      ..style = PaintingStyle.fill;
-
-    final cx = size.width / 2;
-    final headRadius = size.width * 0.065;
-    final headY = size.height * 0.18;
-
-    // Head — filled circle
-    canvas.drawCircle(Offset(cx, headY), headRadius, fillPaint);
-
-    // Torso — rounded rectangle
-    final torsoTop = headY + headRadius + size.height * 0.02;
-    final torsoBottom = size.height * 0.56;
-    final torsoHalfW = size.width * 0.10;
-    final torsoRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(cx - torsoHalfW, torsoTop, cx + torsoHalfW, torsoBottom),
-      Radius.circular(torsoHalfW * 0.5),
-    );
-    canvas.drawRRect(torsoRect, fillPaint);
-
-    // Arms — rounded rectangles hanging from shoulders
-    final shoulderY = torsoTop + size.height * 0.03;
-    final armW = size.width * 0.045;
-    final armLen = size.height * 0.20;
-    final leftArmRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        cx - torsoHalfW - armW,
-        shoulderY,
-        cx - torsoHalfW,
-        shoulderY + armLen,
-      ),
-      Radius.circular(armW * 0.5),
-    );
-    canvas.drawRRect(leftArmRect, fillPaint);
-    final rightArmRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        cx + torsoHalfW,
-        shoulderY,
-        cx + torsoHalfW + armW,
-        shoulderY + armLen,
-      ),
-      Radius.circular(armW * 0.5),
-    );
-    canvas.drawRRect(rightArmRect, fillPaint);
-
-    // Legs — rounded rectangles from hip
-    final hipY = torsoBottom;
-    final legW = size.width * 0.055;
-    final legLen = size.height * 0.26;
-    final legGap = size.width * 0.015;
-    final leftLegRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        cx - legGap - legW,
-        hipY,
-        cx - legGap,
-        hipY + legLen,
-      ),
-      Radius.circular(legW * 0.4),
-    );
-    canvas.drawRRect(leftLegRect, fillPaint);
-    final rightLegRect = RRect.fromRectAndRadius(
-      Rect.fromLTRB(
-        cx + legGap,
-        hipY,
-        cx + legGap + legW,
-        hipY + legLen,
-      ),
-      Radius.circular(legW * 0.4),
-    );
-    canvas.drawRRect(rightLegRect, fillPaint);
+    canvas.drawPath(path, paint);
   }
 
   @override

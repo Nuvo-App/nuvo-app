@@ -36,17 +36,66 @@ Page<void> _authPage(GoRouterState state, Widget child) =>
     CustomTransitionPage<void>(
       key: state.pageKey,
       child: child,
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 240),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurveTween(curve: Curves.easeOut).animate(animation),
           child: SlideTransition(
             position: Tween(
-              begin: const Offset(0.05, 0),
+              begin: const Offset(0.06, 0),
               end: Offset.zero,
             ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(animation),
             child: child,
+          ),
+        );
+      },
+    );
+
+// Slide-up transition for camera/verification — feels like the action is expanding.
+Page<void> _cameraPage(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 340),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: CurveTween(curve: Curves.easeOut).animate(animation),
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0, 0.08),
+              end: Offset.zero,
+            ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(animation),
+            child: child,
+          ),
+        );
+      },
+    );
+
+// Race detail: horizontal slide with slight scale for depth.
+Page<void> _detailPage(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 300),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween(
+              begin: const Offset(0.04, 0),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: ScaleTransition(
+              scale: Tween(begin: 0.97, end: 1.0).animate(curvedAnimation),
+              child: child,
+            ),
           ),
         );
       },
@@ -166,9 +215,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/race/:id',
-        pageBuilder: (_, state) => NoTransitionPage(
-          key: state.pageKey,
-          child: RaceDetailScreen(id: state.pathParameters['id']!),
+        pageBuilder: (_, state) => _detailPage(
+          state,
+          RaceDetailScreen(id: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
@@ -194,14 +243,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/race/:id/proof',
-        pageBuilder: (_, state) => _authPage(
+        pageBuilder: (_, state) => _cameraPage(
           state,
           SubmitProofScreen(raceId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(
         path: '/race/:id/proof/ai-motion',
-        pageBuilder: (_, state) => _authPage(
+        pageBuilder: (_, state) => _cameraPage(
           state,
           AiMotionProofScreen(raceId: state.pathParameters['id']!),
         ),

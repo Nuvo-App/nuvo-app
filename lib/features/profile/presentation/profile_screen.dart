@@ -12,7 +12,6 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
 
-const _kProfileBlack = NuvoColors.page;
 const _kProfileBorder = NuvoColors.border;
 const _kProfileBlueBorder = NuvoColors.blue;
 const _kProfileTextMuted = NuvoColors.muted;
@@ -57,10 +56,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final safeTop = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      backgroundColor: _kProfileBlack,
+      backgroundColor: NuvoColors.navy,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         slivers: [
-          // ── Navy header ───────────────────────────────────────────────────
+          // ── Navy header — never reveals white on overscroll ─────────────
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
@@ -121,13 +123,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        NuvoAvatar(
-                          initials: initials,
-                          photoUrl: photoUrl,
-                          size: NuvoAvatarSizes.profile,
-                          bgColor: NuvoColors.blue.withValues(alpha: 0.22),
-                          textColor: NuvoColors.white,
-                          borderColor: NuvoColors.blue.withValues(alpha: 0.55),
+                        Hero(
+                          tag: 'profile-avatar',
+                          child: NuvoAvatar(
+                            initials: initials,
+                            photoUrl: photoUrl,
+                            size: NuvoAvatarSizes.profile,
+                            bgColor: NuvoColors.blue.withValues(alpha: 0.22),
+                            textColor: NuvoColors.white,
+                            borderColor: NuvoColors.blue.withValues(alpha: 0.55),
+                          ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -214,72 +219,85 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
 
-          // ── Profile body ──────────────────────────────────────────────────
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 112),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                // Race history
-                const _SectionLabel(label: 'Race history'),
-                const SizedBox(height: 12),
-
-                if (raceState.loading && raceState.races.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: NuvoColors.blue,
-                      ),
-                    ),
-                  )
-                else if (raceState.races.isEmpty)
-                  Text(
-                    'Start your first race to build your history.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: _kProfileTextMuted,
-                    ),
-                  )
-                else
-                  for (final race in raceState.races.take(6)) ...[
-                    _ProfileRaceRow(
-                      race: race,
-                      userId: uid,
-                      onTap: () => context.push('/race/${race.id}'),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-
-                const SizedBox(height: 32),
-
-                // Account
-                const _SectionLabel(label: 'Account'),
-                const SizedBox(height: 12),
-                _AccountRow(
-                  icon: Icons.badge_rounded,
-                  label: 'Crew pass',
-                  onTap: () => context.go('/pass'),
-                ),
-                const SizedBox(height: 8),
-                _AccountRow(
-                  icon: Icons.edit_rounded,
-                  label: 'Edit profile',
-                  onTap: () => context.push('/profile/edit'),
-                ),
-                const SizedBox(height: 8),
-                _AccountRow(
-                  icon: Icons.logout_rounded,
-                  label: 'Sign out',
-                  isDanger: true,
-                  onTap: () =>
-                      ref.read(authControllerProvider.notifier).logout(),
-                ),
-              ]),
+          // ── Profile body — page-colored background ────────────────────────
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Container(
+              color: NuvoColors.page,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 112),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _profileBody(raceState, uid, context),
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  List<Widget> _profileBody(
+    RaceState raceState,
+    String? uid,
+    BuildContext context,
+  ) {
+    return [
+      // Race history
+      const _SectionLabel(label: 'Race history'),
+      const SizedBox(height: 12),
+
+      if (raceState.loading && raceState.races.isEmpty)
+        const Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: NuvoColors.blue,
+            ),
+          ),
+        )
+      else if (raceState.races.isEmpty)
+        Text(
+          'Start your first race to build your history.',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: _kProfileTextMuted,
+          ),
+        )
+      else
+        for (final race in raceState.races.take(6)) ...[
+          _ProfileRaceRow(
+            race: race,
+            userId: uid,
+            onTap: () => context.push('/race/${race.id}'),
+          ),
+          const SizedBox(height: 8),
+        ],
+
+      const SizedBox(height: 32),
+
+      // Account
+      const _SectionLabel(label: 'Account'),
+      const SizedBox(height: 12),
+      _AccountRow(
+        icon: Icons.badge_rounded,
+        label: 'Crew pass',
+        onTap: () => context.go('/pass'),
+      ),
+      const SizedBox(height: 8),
+      _AccountRow(
+        icon: Icons.edit_rounded,
+        label: 'Edit profile',
+        onTap: () => context.push('/profile/edit'),
+      ),
+      const SizedBox(height: 8),
+      _AccountRow(
+        icon: Icons.logout_rounded,
+        label: 'Sign out',
+        isDanger: true,
+        onTap: () =>
+            ref.read(authControllerProvider.notifier).logout(),
+      ),
+    ];
   }
 }
 

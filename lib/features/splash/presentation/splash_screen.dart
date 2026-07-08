@@ -40,7 +40,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       _shortDelayDone = true;
       _tryNavigate();
     });
-    Future.delayed(const Duration(milliseconds: 1900), () {
+    Future.delayed(const Duration(milliseconds: 900), () {
       if (!mounted) return;
       _longDelayDone = true;
       _tryNavigate();
@@ -107,12 +107,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                         child: Image.asset(AssetPaths.nuvoLogo),
                       )
                       .animate()
-                      .fadeIn(duration: 620.ms, curve: Curves.easeOut)
+                      .fadeIn(duration: 400.ms, curve: Curves.easeOut)
                       .scale(
-                        begin: const Offset(0.80, 0.80),
+                        begin: const Offset(0.85, 0.85),
                         end: const Offset(1.0, 1.0),
-                        duration: 700.ms,
-                        curve: Curves.easeOutCubic,
+                        duration: 500.ms,
+                        curve: Curves.easeOutBack,
                       ),
 
                   const SizedBox(height: 26),
@@ -124,12 +124,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                           letterSpacing: 0,
                         ),
                       )
-                      .animate(delay: 380.ms)
-                      .fadeIn(duration: 360.ms, curve: Curves.easeOut)
+                      .animate(delay: 220.ms)
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
                       .slideY(
-                        begin: 0.14,
+                        begin: 0.10,
                         end: 0,
-                        duration: 400.ms,
+                        duration: 320.ms,
                         curve: Curves.easeOutCubic,
                       ),
 
@@ -142,12 +142,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                         ),
                         textAlign: TextAlign.center,
                       )
-                      .animate(delay: 540.ms)
-                      .fadeIn(duration: 360.ms, curve: Curves.easeOut)
+                      .animate(delay: 360.ms)
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
                       .slideY(
-                        begin: 0.14,
+                        begin: 0.10,
                         end: 0,
-                        duration: 400.ms,
+                        duration: 320.ms,
                         curve: Curves.easeOutCubic,
                       ),
                 ],
