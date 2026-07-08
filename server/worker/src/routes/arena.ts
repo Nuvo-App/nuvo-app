@@ -23,10 +23,9 @@ interface LightRaceRow {
   title: string;
   status: string;
   target_value: number | null;
-  unit: string | null;
-  proof_requirement: string;
-  proof_mode: string | null;
-  ai_activity_type: string | null;
+  target_unit: string | null;
+  verification_type: string;
+  movement_type: string | null;
   creator_id: string;
 }
 
@@ -46,7 +45,7 @@ function isResultRace(race: LightRaceRow, myProgress: number): boolean {
 }
 
 function buildBadge(race: LightRaceRow): string | undefined {
-  if (race.proof_requirement === 'ai_check' || race.proof_mode === 'ai_check') return 'AI';
+  if (race.verification_type === 'movecheck') return 'AI';
   return undefined;
 }
 
@@ -60,7 +59,7 @@ function buildProgressLabel(
   }
   const { progress_value: val, progress_percent: pct } = myParticipant;
   if (race.target_value) {
-    return `${val} / ${race.target_value} ${race.unit ?? 'reps'}`;
+    return `${val} / ${race.target_value} ${race.target_unit ?? 'reps'}`;
   }
   if (pct > 0) return `${pct}% to the finish line`;
   return 'Submit your first proof';
@@ -73,7 +72,7 @@ function buildRowSubtitle(
 ): string {
   const racerLabel = `${participantCount} ${participantCount === 1 ? 'racer' : 'racers'}`;
   if (myParticipant && race.target_value) {
-    return `${myParticipant.progress_value} / ${race.target_value} ${race.unit ?? 'reps'} · ${racerLabel}`;
+    return `${myParticipant.progress_value} / ${race.target_value} ${race.target_unit ?? 'reps'} · ${racerLabel}`;
   }
   if (myParticipant && myParticipant.progress_percent > 0) {
     return `${myParticipant.progress_percent}% to the finish line · ${racerLabel}`;
@@ -138,11 +137,11 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
   // Fetch races this user created or joined (same criteria as GET /races).
   const raceRows = await db
     .prepare(
-      `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.unit,
-              r.proof_requirement, r.proof_mode, r.ai_activity_type, r.creator_id
+      `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.target_unit,
+              r.verification_type, r.movement_type, r.creator_id
        FROM races r
-       LEFT JOIN race_participants rp ON rp.race_id = r.id AND rp.user_id = ?
-       WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rp.user_id IS NOT NULL)
+       LEFT JOIN race_members rm ON rm.race_id = r.id AND rm.user_id = ? AND rm.status = 'active'
+       WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
        ORDER BY r.created_at DESC`,
     )
     .bind(userId, userId)
@@ -165,14 +164,15 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
   const placeholders = raceIds.map(() => '?').join(', ');
   const participantRows = await db
     .prepare(
-      `SELECT rp.race_id, rp.user_id,
-              COALESCE(rp.display_name, p.full_name, 'Unknown') as display_name,
-              p.avatar_url as profile_photo_url,
+      `SELECT rm.race_id, rm.user_id,
+              COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
+              COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
               rp.progress_value, rp.progress_percent
-       FROM race_participants rp
-       LEFT JOIN profiles p ON p.user_id = rp.user_id
-       WHERE rp.race_id IN (${placeholders})
-       ORDER BY rp.progress_percent DESC, rp.progress_value DESC, rp.joined_at ASC`,
+       FROM race_members rm
+       LEFT JOIN profiles p ON p.user_id = rm.user_id
+       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'
+       ORDER BY rp.progress_percent DESC, rp.progress_value DESC, rm.joined_at ASC`,
     )
     .bind(...raceIds)
     .all<LightParticipantRow>();

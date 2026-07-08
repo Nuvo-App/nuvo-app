@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -284,6 +285,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final sorted = [...race.participants]
       ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
     final chase = user == null ? null : ChaseContext.compute(race, user.id);
+    final heroChaseCopy = myRaceComplete ? 'You finished.' : chase?.chaseCopy;
     final rank = chase?.myRank;
     final boardParticipants = [
       for (var i = 0; i < sorted.length; i++)
@@ -340,7 +342,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     title: race.displayTitle,
                     contextLine: _contextLine(race),
                     rankLabel: rank == null ? '--' : '#$rank',
-                    chaseCopy: chase?.chaseCopy,
+                    chaseCopy: heroChaseCopy,
                     subcopy: _heroSubcopy(
                       race: race,
                       userId: user?.id,
@@ -352,15 +354,17 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     primaryLabel: canJoin
                         ? 'Join race'
                         : myRaceComplete
-                        ? 'Verify more moves'
+                        ? 'Start another race'
                         : eligibility.isCameraVerifiable
-                        ? 'Verify'
+                        ? 'Log Move'
                         : 'Unsupported',
                     loading: _busy,
                     onPrimary: _busy
                         ? null
                         : canJoin
                         ? _joinRace
+                        : myRaceComplete
+                        ? () => context.push('/races/new')
                         : canVerify
                         ? () async {
                             debugLogCameraVerificationDecision(
@@ -384,19 +388,39 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
 
                   if (canVerify && myRaceComplete) ...[
                     const SizedBox(height: 12),
-                    _CompleteCallout(progress: myProgress),
+                    _CompleteCallout(progress: myProgress)
+                        .animate()
+                        .fadeIn(duration: 220.ms, curve: Curves.easeOut)
+                        .slideY(
+                          begin: 0.08,
+                          end: 0,
+                          duration: 260.ms,
+                          curve: Curves.easeOutCubic,
+                        ),
                   ],
 
                   if (isParticipant) ...[
                     const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Path to goal'),
-                    const SizedBox(height: 12),
-                    _CheckpointPath(
-                      progressPercent: myProgress,
-                      progressValue: myPart?.progressValue,
-                      targetValue: race.targetValue,
-                      unit: race.unit,
+                    _SectionLabel(
+                      label: myRaceComplete
+                          ? 'Completed milestones'
+                          : 'Path to goal',
                     ),
+                    const SizedBox(height: 12),
+                    if (myRaceComplete)
+                      _CompletedMilestones(
+                        progressPercent: myProgress,
+                        progressValue: myPart.progressValue,
+                        targetValue: race.targetValue,
+                        unit: race.unit,
+                      )
+                    else
+                      _CheckpointPath(
+                        progressPercent: myProgress,
+                        progressValue: myPart?.progressValue,
+                        targetValue: race.targetValue,
+                        unit: race.unit,
+                      ),
                   ],
 
                   const SizedBox(height: 24),
@@ -426,14 +450,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     movers: movementAvatars.take(3).toList(),
                   ),
 
-                  if (canVerify && myRaceComplete) ...[
-                    const SizedBox(height: 18),
-                    NuvoGhostButton(
-                      label: 'Start another race',
-                      expand: true,
-                      onPressed: () => context.push('/races/new'),
-                    ),
-                  ] else if (canVerify && isOwner) ...[
+                  if (canVerify && isOwner && !myRaceComplete) ...[
                     const SizedBox(height: 18),
                     NuvoOutlineButton(
                       label: 'Invite crew',
@@ -657,17 +674,17 @@ class _NavyHeader extends StatelessWidget {
               children: [
                 Text(
                   '$myProgress',
-                  style: AppTextStyles.displayLarge.copyWith(
+                  style: AppTextStyles.displaySmall.copyWith(
                     color: myProgress >= 100
                         ? NuvoColors.success
                         : NuvoColors.blue,
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8, left: 3),
+                  padding: const EdgeInsets.only(bottom: 4, left: 3),
                   child: Text(
                     '%',
-                    style: AppTextStyles.headlineMedium.copyWith(
+                    style: AppTextStyles.titleLarge.copyWith(
                       color: NuvoColors.muted,
                     ),
                   ),
@@ -683,7 +700,7 @@ class _NavyHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            NuvoRaceLane(progressPercent: myProgress, dotDiameter: 14),
+            NuvoRaceLane(progressPercent: myProgress, trackHeight: 5, dotDiameter: 16),
             // Chase context
             Builder(
               builder: (context) {
@@ -727,7 +744,12 @@ class _NavyHeader extends StatelessWidget {
 enum _NodeState { done, current, todo }
 
 class _Checkpoint {
-  const _Checkpoint({required this.label, required this.sub, required this.state, required this.marker});
+  const _Checkpoint({
+    required this.label,
+    required this.sub,
+    required this.state,
+    required this.marker,
+  });
   final String label;
   final String sub;
   final _NodeState state;
@@ -751,7 +773,12 @@ class _CheckpointPath extends StatelessWidget {
   final String? unit;
 
   static const _fractions = [0.25, 0.5, 0.75, 1.0];
-  static const _labels = ['Quarter way', 'Halfway', 'Three quarters', 'Finish line'];
+  static const _labels = [
+    'Quarter way',
+    'Halfway',
+    'Three quarters',
+    'Finish line',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -780,12 +807,7 @@ class _CheckpointPath extends StatelessWidget {
         sub = 'Locked';
       }
       checkpoints.add(
-        _Checkpoint(
-          label: _labels[i],
-          sub: sub,
-          state: state,
-          marker: marker,
-        ),
+        _Checkpoint(label: _labels[i], sub: sub, state: state, marker: marker),
       );
     }
 
@@ -810,8 +832,58 @@ class _CheckpointPath extends StatelessWidget {
   }
 }
 
+class _CompletedMilestones extends StatelessWidget {
+  const _CompletedMilestones({
+    required this.progressPercent,
+    required this.progressValue,
+    required this.targetValue,
+    required this.unit,
+  });
+
+  final int progressPercent;
+  final int? progressValue;
+  final int? targetValue;
+  final String? unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+          initiallyExpanded: false,
+          title: Text('Show completed path', style: AppTextStyles.titleMedium),
+          subtitle: Text(
+            'Finish line reached',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          ),
+          children: [
+            _CheckpointPath(
+              progressPercent: progressPercent,
+              progressValue: progressValue,
+              targetValue: targetValue,
+              unit: unit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CheckpointRow extends StatelessWidget {
-  const _CheckpointRow({required this.checkpoint, required this.isFirst, required this.isLast});
+  const _CheckpointRow({
+    required this.checkpoint,
+    required this.isFirst,
+    required this.isLast,
+  });
   final _Checkpoint checkpoint;
   final bool isFirst;
   final bool isLast;
@@ -834,12 +906,20 @@ class _CheckpointRow extends StatelessWidget {
                 if (!isFirst)
                   Positioned(
                     top: -10,
-                    child: Container(width: 2, height: 10, color: NuvoColors.divider),
+                    child: Container(
+                      width: 2,
+                      height: 10,
+                      color: NuvoColors.divider,
+                    ),
                   ),
                 if (!isLast)
                   Positioned(
                     bottom: -10,
-                    child: Container(width: 2, height: 10, color: NuvoColors.divider),
+                    child: Container(
+                      width: 2,
+                      height: 10,
+                      color: NuvoColors.divider,
+                    ),
                   ),
                 Container(
                   width: 40,
@@ -855,7 +935,13 @@ class _CheckpointRow extends StatelessWidget {
                         ? Border.all(color: NuvoColors.divider, width: 2)
                         : null,
                     boxShadow: c.state == _NodeState.current
-                        ? const [BoxShadow(color: NuvoColors.panel, blurRadius: 0, spreadRadius: 5)]
+                        ? const [
+                            BoxShadow(
+                              color: NuvoColors.panel,
+                              blurRadius: 0,
+                              spreadRadius: 5,
+                            ),
+                          ]
                         : null,
                   ),
                   alignment: Alignment.center,
@@ -863,7 +949,9 @@ class _CheckpointRow extends StatelessWidget {
                     c.marker,
                     style: AppTextStyles.number(
                       12,
-                      color: c.state == _NodeState.todo ? NuvoColors.paleSlate : Colors.white,
+                      color: c.state == _NodeState.todo
+                          ? NuvoColors.paleSlate
+                          : Colors.white,
                     ),
                   ),
                 ),
@@ -884,7 +972,9 @@ class _CheckpointRow extends StatelessWidget {
                 ),
                 Text(
                   c.sub,
-                  style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -956,10 +1046,10 @@ class _CompleteCallout extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Race complete', style: AppTextStyles.titleMedium),
+                Text('You finished.', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 2),
                 Text(
-                  '$progress% — you crossed the finish line.',
+                  'See if your crew can beat $progress%.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: NuvoColors.muted,
                   ),
@@ -1019,6 +1109,9 @@ String _heroSubcopy({
     ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
   final leader = sorted.isEmpty ? null : sorted.first;
   final me = userId == null ? null : race.participantFor(userId);
+  if (me != null && me.progressPercent >= 100) {
+    return 'See if your crew can beat your finish.';
+  }
   final parts = <String>[];
 
   if (leader != null && me != null && leader.userId != me.userId) {
