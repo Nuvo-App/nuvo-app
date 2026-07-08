@@ -67,6 +67,19 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
   }
 
   Future<void> _load() async {
+    // Use cached race from controller first to prevent stale 0% flash
+    final cachedRaces = ref.read(raceControllerProvider).races;
+    final cached = cachedRaces.where((r) => r.id == widget.id).firstOrNull;
+    if (cached != null && _race == null) {
+      setState(() {
+        _race = cached;
+        _loading = false;
+      });
+      // Still refresh from network in the background
+      _silentRefresh();
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
@@ -285,8 +298,10 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final sorted = [...race.participants]
       ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
     final chase = user == null ? null : ChaseContext.compute(race, user.id);
-    final heroChaseCopy = myRaceComplete ? 'You finished.' : chase?.chaseCopy;
     final rank = chase?.myRank;
+    final heroChaseCopy = myRaceComplete
+        ? (rank != null ? 'You finished #$rank.' : 'You finished.')
+        : chase?.chaseCopy;
     final boardParticipants = [
       for (var i = 0; i < sorted.length; i++)
         NuvoBoardParticipant(
@@ -399,28 +414,16 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                         ),
                   ],
 
-                  if (isParticipant) ...[
+                  if (isParticipant && !myRaceComplete) ...[
                     const SizedBox(height: 24),
-                    _SectionLabel(
-                      label: myRaceComplete
-                          ? 'Completed milestones'
-                          : 'Path to goal',
-                    ),
+                    const _SectionLabel(label: 'Path to goal'),
                     const SizedBox(height: 12),
-                    if (myRaceComplete)
-                      _CompletedMilestones(
-                        progressPercent: myProgress,
-                        progressValue: myPart.progressValue,
-                        targetValue: race.targetValue,
-                        unit: race.unit,
-                      )
-                    else
-                      _CheckpointPath(
-                        progressPercent: myProgress,
-                        progressValue: myPart?.progressValue,
-                        targetValue: race.targetValue,
-                        unit: race.unit,
-                      ),
+                    _CheckpointPath(
+                      progressPercent: myProgress,
+                      progressValue: myPart?.progressValue,
+                      targetValue: race.targetValue,
+                      unit: race.unit,
+                    ),
                   ],
 
                   const SizedBox(height: 24),
@@ -437,18 +440,28 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     )
                   else
                     for (var i = 0; i < boardParticipants.length; i++) ...[
-                      NuvoBoardLane(participant: boardParticipants[i]),
+                      NuvoBoardLane(participant: boardParticipants[i])
+                          .animate(delay: Duration(milliseconds: 60 * i))
+                          .fadeIn(duration: 200.ms, curve: Curves.easeOut)
+                          .slideX(
+                            begin: 0.03,
+                            end: 0,
+                            duration: 240.ms,
+                            curve: Curves.easeOutCubic,
+                          ),
                       if (i < boardParticipants.length - 1)
                         const SizedBox(height: 8),
                     ],
 
-                  const SizedBox(height: 14),
-                  NuvoBoardMovementStrip(
-                    label: recentMoveCount == 0
-                        ? 'Board is waiting for the first move.'
-                        : 'Board moved ${recentMoveCount == 1 ? 'once' : '$recentMoveCount times'} recently',
-                    movers: movementAvatars.take(3).toList(),
-                  ),
+                  if (race.participantCount > 1) ...[
+                    const SizedBox(height: 14),
+                    NuvoBoardMovementStrip(
+                      label: recentMoveCount == 0
+                          ? 'Board is waiting for the first move.'
+                          : 'Board moved ${recentMoveCount == 1 ? 'once' : '$recentMoveCount times'} recently',
+                      movers: movementAvatars.take(3).toList(),
+                    ),
+                  ],
 
                   if (canVerify && isOwner && !myRaceComplete) ...[
                     const SizedBox(height: 18),
@@ -495,17 +508,19 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
 
                   const SizedBox(height: 28),
 
-                  // ── Rules ───────────────────────────────────────────────────
-                  const _SectionLabel(label: 'Rules'),
-                  const SizedBox(height: 10),
-                  Text(
-                    race.rules?.isNotEmpty == true
-                        ? race.rules!
-                        : 'Log moves before the finish line. Highest verified progress wins.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.muted,
+                  // ── Rules (hidden on completed races) ────────────────────
+                  if (!myRaceComplete) ...[
+                    const _SectionLabel(label: 'Rules'),
+                    const SizedBox(height: 10),
+                    Text(
+                      race.rules?.isNotEmpty == true
+                          ? race.rules!
+                          : 'Log moves before the finish line. Highest verified progress wins.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.muted,
+                      ),
                     ),
-                  ),
+                  ],
 
                   // ── Owner manage section ────────────────────────────────────
                   if (isOwner) ...[
@@ -654,11 +669,17 @@ class _NavyHeader extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // Race title
-          Text(
-            race.displayTitle,
-            style: AppTextStyles.headlineLarge.copyWith(color: NuvoColors.navy),
-            maxLines: 2,
+          // Race title — Hero matches arena card for shared-element transition
+          Hero(
+            tag: 'race-title-${race.id}',
+            child: Material(
+              color: Colors.transparent,
+              child: Text(
+                race.displayTitle,
+                style: AppTextStyles.headlineLarge.copyWith(color: NuvoColors.navy),
+                maxLines: 2,
+              ),
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -728,7 +749,7 @@ class _NavyHeader extends StatelessWidget {
     final parts = <String>[];
     final eligibility = resolveCameraVerification(race);
     if (eligibility.isCameraVerifiable) {
-      parts.add('MoveCheck');
+      parts.add('Camera verified');
     } else {
       parts.add(eligibility.unsupportedMessage);
     }
@@ -1046,10 +1067,13 @@ class _CompleteCallout extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('You finished.', style: AppTextStyles.titleMedium),
+                Text(
+                  '$progress% complete',
+                  style: AppTextStyles.titleMedium,
+                ),
                 const SizedBox(height: 2),
                 Text(
-                  'See if your crew can beat $progress%.',
+                  'Challenge your crew to beat your score.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: NuvoColors.muted,
                   ),
@@ -1070,7 +1094,7 @@ String _moveActionLine(RaceProof proof, String? unit) {
       ? 'logged ${proof.value} ${unit ?? 'reps'}'
       : 'logged a move';
   return switch (proof.verificationStatus) {
-    'accepted' || 'ai_verified' => '$verb · Move checked',
+    'accepted' || 'ai_verified' => '$verb · Camera verified',
     'ai_failed' || 'rejected' => "$verb · Move didn't count",
     'needs_review' => '$verb · Under review',
     _ => verb,
@@ -1081,7 +1105,7 @@ String _contextLine(Race race) {
   final parts = <String>[];
   final eligibility = resolveCameraVerification(race);
   if (eligibility.isCameraVerifiable) {
-    parts.add('MoveCheck');
+    parts.add('Camera verified');
   } else {
     parts.add(eligibility.unsupportedMessage);
   }

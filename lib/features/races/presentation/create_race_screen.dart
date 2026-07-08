@@ -92,7 +92,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             title: idea,
             description: activity == null
                 ? null
-                : 'MoveCheck counts $targetLabel through the camera.',
+                : 'Camera counts $targetLabel automatically.',
             category: activity == null ? null : 'fitness',
             goalType: 'manual',
             targetValue: parsed.targetValue,
@@ -149,41 +149,69 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Type a supported movement race naturally.',
+                            'What are you racing?',
                             style: AppTextStyles.bodyLarge.copyWith(
                               color: NuvoColors.muted,
                             ),
                           ),
                           const SizedBox(height: 22),
-                          Text('Movement', style: AppTextStyles.titleMedium),
-                          const SizedBox(height: 8),
                           _InputField(
                             controller: _ideaController,
                             hint: 'e.g. 10 squats',
                             onChanged: (_) => setState(() {}),
                           ),
-                          const SizedBox(height: 14),
-                          _DetectionCard(parsed: parsed),
-                          const SizedBox(height: 22),
-                          Text(
-                            'Quick starts',
-                            style: AppTextStyles.titleMedium,
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              for (final quickStart in _quickStarts)
-                                _QuickStartPill(
-                                  label: quickStart,
-                                  selected:
-                                      quickStart.toLowerCase() ==
-                                      _ideaController.text.trim().toLowerCase(),
-                                  onTap: () => _setIdea(quickStart),
+
+                          // Inline verification status — not a card, just text
+                          if (parsed.aiSupported) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: NuvoColors.blue,
+                                  size: 15,
                                 ),
-                            ],
-                          ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Camera verified \u00b7 ${_targetLabel(parsed)}',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ] else if (_ideaController.text.trim().isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  color: NuvoColors.muted,
+                                  size: 15,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Not supported for camera verification yet.',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: NuvoColors.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          const SizedBox(height: 28),
+
+                          // Quick starts — clean list, not floating pills
+                          for (final quickStart in _quickStarts) ...[
+                            _QuickStartRow(
+                              label: quickStart,
+                              selected:
+                                  quickStart.toLowerCase() ==
+                                  _ideaController.text.trim().toLowerCase(),
+                              onTap: () => _setIdea(quickStart),
+                            ),
+                          ],
                           if (_error != null) ...[
                             const SizedBox(height: 12),
                             Text(
@@ -264,76 +292,6 @@ class _InputField extends StatelessWidget {
   }
 }
 
-class _DetectionCard extends StatelessWidget {
-  const _DetectionCard({required this.parsed});
-
-  final ParsedRaceIdea parsed;
-
-  @override
-  Widget build(BuildContext context) {
-    final activity = parsed.activity;
-    final isAi = activity != null;
-    final bg = isAi ? NuvoColors.navy : NuvoColors.white;
-    final titleColor = isAi ? NuvoColors.white : NuvoColors.navy;
-    final bodyColor = isAi
-        ? NuvoColors.white.withValues(alpha: 0.72)
-        : NuvoColors.muted;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isAi ? NuvoColors.navy : NuvoColors.border),
-        boxShadow: isAi
-            ? const [
-                BoxShadow(
-                  color: Color(0x3307152B),
-                  blurRadius: 0,
-                  offset: Offset(3, 4),
-                ),
-              ]
-            : null,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: isAi ? NuvoColors.blue : NuvoColors.icyBlue,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              isAi ? Icons.directions_run_rounded : Icons.edit_note_rounded,
-              color: isAi ? NuvoColors.white : NuvoColors.blue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isAi ? activity.title : 'Unsupported movement',
-                  style: AppTextStyles.titleMedium.copyWith(color: titleColor),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isAi
-                      ? 'Target: ${_targetLabel(parsed)}'
-                      : 'Nuvo can’t verify this movement yet.',
-                  style: AppTextStyles.bodySmall.copyWith(color: bodyColor),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 String _unitForActivity(MotionActivityDefinition? activity) {
   if (activity == null) return 'reps';
   return activity.isHold ? 'seconds' : 'reps';
@@ -345,8 +303,8 @@ String _targetLabel(ParsedRaceIdea parsed) {
   return '${parsed.targetValue} $unit';
 }
 
-class _QuickStartPill extends StatelessWidget {
-  const _QuickStartPill({
+class _QuickStartRow extends StatelessWidget {
+  const _QuickStartRow({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -360,30 +318,32 @@ class _QuickStartPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? NuvoColors.blue : NuvoColors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? NuvoColors.blue : NuvoColors.border,
-          ),
-          boxShadow: selected
-              ? const [
-                  BoxShadow(
-                    color: Color(0x3307152B),
-                    blurRadius: 0,
-                    offset: Offset(2, 3),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: selected ? NuvoColors.white : NuvoColors.navy,
-          ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected ? NuvoColors.blue : Colors.transparent,
+                border: Border.all(
+                  color: selected ? NuvoColors.blue : NuvoColors.border,
+                  width: selected ? 6 : 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: selected ? NuvoColors.navy : NuvoColors.muted,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
         ),
       ),
     );

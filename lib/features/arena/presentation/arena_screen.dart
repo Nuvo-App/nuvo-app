@@ -152,17 +152,24 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       )
                     else ...[
                       if (activeBoard != null)
-                        _FocusBoardCard(
-                          board: activeBoard,
-                          isLoading: _isLoadingBoardDetail,
-                          currentUserId: user?.id,
-                          participants: _scoreCenterParticipants,
-                          onLogMove: () => _handlePrimaryAction(
-                            context,
-                            activeBoard,
-                            cameraRaceById,
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          alignment: Alignment.topCenter,
+                          clipBehavior: Clip.none,
+                          child: _FocusBoardCard(
+                            key: ValueKey(activeBoard.id),
+                            board: activeBoard,
+                            isLoading: _isLoadingBoardDetail,
+                            currentUserId: user?.id,
+                            participants: _scoreCenterParticipants,
+                            onLogMove: () => _handlePrimaryAction(
+                              context,
+                              activeBoard,
+                              cameraRaceById,
+                            ),
+                            onOpen: () => _openBoard(context, activeBoard),
                           ),
-                          onOpen: () => _openBoard(context, activeBoard),
                         ),
 
                       if (snapshot.activity.isNotEmpty) ...[
@@ -291,14 +298,14 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       id: race.id,
       source: 'real',
       title: race.title,
-      proofLabel: eligibility.movementDefinition?.title ?? 'MoveCheck',
+      proofLabel: eligibility.movementDefinition?.title ?? 'Camera',
       progressLabel: myPart != null
           ? (race.targetValue != null
                 ? 'You ${myPart.progressValue} / ${race.targetValue}'
                 : 'You $myProgress%')
           : '',
       boardContext: boardContext,
-      primaryActionLabel: isResult ? 'Open board' : 'Verify',
+      primaryActionLabel: isResult ? 'Open board' : 'Log Move',
       primaryActionType: isResult ? 'open_board' : 'submit_proof',
       progressPercent: myProgress,
       racerCount: count,
@@ -626,6 +633,7 @@ class _SectionLabel extends StatelessWidget {
 
 class _FocusBoardCard extends StatelessWidget {
   const _FocusBoardCard({
+    super.key,
     required this.board,
     required this.isLoading,
     required this.onLogMove,
@@ -682,30 +690,23 @@ class _FocusBoardCard extends StatelessWidget {
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Progress stripe
+          // Progress stripe — clipped by parent container's borderRadius
           if (isLoading)
             LinearProgressIndicator(
               color: NuvoColors.blue,
               backgroundColor: NuvoColors.blue.withValues(alpha: 0.10),
               minHeight: 2,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
             )
           else if (pct > 0)
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              child: LinearProgressIndicator(
-                value: pct / 100,
-                color: isResult ? NuvoColors.success : NuvoColors.blue,
-                backgroundColor: NuvoColors.blue.withValues(alpha: 0.08),
-                minHeight: 3,
-              ),
+            LinearProgressIndicator(
+              value: pct / 100,
+              color: isResult ? NuvoColors.success : NuvoColors.blue,
+              backgroundColor: NuvoColors.blue.withValues(alpha: 0.08),
+              minHeight: 3,
             ),
 
           Padding(
@@ -740,13 +741,30 @@ class _FocusBoardCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                          Text(
-                            board.title,
-                            style: AppTextStyles.headlineMedium.copyWith(
-                              color: NuvoColors.navy,
+                          Hero(
+                            tag: 'race-title-${board.id}',
+                            flightShuttleBuilder:
+                                (context, anim, direction, from, to) {
+                              return FadeTransition(
+                                opacity: anim,
+                                child: Text(
+                                  board.title,
+                                  style: AppTextStyles.headlineMedium.copyWith(
+                                    color: NuvoColors.navy,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            },
+                            child: Text(
+                              board.title,
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                color: NuvoColors.navy,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),

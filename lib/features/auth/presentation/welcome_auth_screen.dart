@@ -510,7 +510,7 @@ class _ProductPreviewCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'AI MoveCheck · 10 reps',
+                      'Camera verified · 10 reps',
                       style: AppTextStyles.labelSmall.copyWith(
                         color: NuvoColors.muted,
                         fontWeight: FontWeight.w600,

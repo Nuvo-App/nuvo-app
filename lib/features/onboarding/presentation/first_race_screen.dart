@@ -33,7 +33,7 @@ class _StarterRace {
 const _starterRaces = [
   _StarterRace(
     title: '10 Jumping Jacks',
-    description: 'AI MoveCheck counts 10 reps with your iPhone camera.',
+    description: 'Camera counts 10 reps automatically.',
     category: 'fitness',
     unit: 'jumping jacks',
     targetValue: 10,
@@ -283,7 +283,7 @@ class _TemplateCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                'AI MoveCheck · 10 reps',
+                'Camera verified · 10 reps',
                 style: AppTextStyles.labelMedium.copyWith(
                   color: NuvoColors.white,
                 ),

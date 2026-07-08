@@ -38,27 +38,31 @@ class ChaseContext {
     final personAhead = myIndex > 0 ? sorted[myIndex - 1] : null;
 
     String? chaseCopy;
-    if (total > 1 && myRank != null) {
+    if (total <= 1) {
+      chaseCopy = 'Set the pace. Invite your crew to chase you.';
+    } else if (myRank != null) {
       if (isLeading) {
         final second = sorted.length > 1 ? sorted[1] : null;
         if (second != null) {
           final gap = myValue - second.progressValue;
           final name = _firstName(second.displayName);
-          chaseCopy =
-              gap > 0 ? 'You lead. $name is $gap behind.' : 'Tied with $name.';
+          chaseCopy = gap > 0
+              ? 'Defend your lead. $name is $gap behind.'
+              : 'Tied with $name. Next move wins.';
         }
       } else if (personAhead != null) {
         final gapToPass = personAhead.progressValue - myValue;
         final name = _firstName(personAhead.displayName);
         if (gapToPass <= 0) {
-          chaseCopy = 'Tied with $name.';
+          chaseCopy = 'Tied with $name. Next move wins.';
         } else {
+          final targetRank = myRank - 1;
           final oneMove = race.targetValue != null
               ? (race.targetValue! * 0.12).ceil()
               : 10;
           chaseCopy = gapToPass <= oneMove
-              ? 'One move passes $name.'
-              : '$gapToPass to pass $name.';
+              ? 'One move beats $name.'
+              : 'Beat $name. $gapToPass to take #$targetRank.';
         }
       }
     }

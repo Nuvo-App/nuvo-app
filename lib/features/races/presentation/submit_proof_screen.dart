@@ -10,6 +10,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
+import '../domain/motion_activity.dart';
 import 'race_controller.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
@@ -105,7 +106,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               NuvoPrimaryButton(
-                label: 'Begin MoveCheck',
+                label: 'Begin',
                 icon: Icons.camera_alt_rounded,
                 expand: true,
                 onPressed: () {
@@ -165,12 +166,6 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       _backRow(),
       const SizedBox(height: 24),
 
-      // Race context — single clear header, no repetition
-      Text(
-        'VERIFY MOVE',
-        style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.blue),
-      ),
-      const SizedBox(height: 4),
       Text(
         race.displayTitle,
         style: AppTextStyles.headlineMedium,
@@ -180,7 +175,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       if (eligibility.isCameraVerifiable) ...[
         const SizedBox(height: 4),
         Text(
-          'MoveCheck will count and verify automatically.',
+          'Camera counts and verifies automatically.',
           style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         ),
       ] else ...[
@@ -224,6 +219,24 @@ class _MoveCheckCard extends StatelessWidget {
     return race.targetValue?.toString() ?? 'Ready';
   }
 
+  IconData get _movementIcon => switch (eligibility.movementType) {
+    MotionActivityType.pushUps => Icons.front_hand_rounded,
+    MotionActivityType.plankHold => Icons.straighten_rounded,
+    MotionActivityType.jumpingJacks => Icons.accessibility_new_rounded,
+    MotionActivityType.squats => Icons.person_outline_rounded,
+    MotionActivityType.lunges => Icons.directions_walk_rounded,
+    _ => Icons.person_outline_rounded,
+  };
+
+  String get _framingLabel => switch (eligibility.movementType) {
+    MotionActivityType.pushUps => 'Upper body + hands visible',
+    MotionActivityType.plankHold => 'Side view · full body in frame',
+    MotionActivityType.jumpingJacks => 'Full body · leave room for arms',
+    MotionActivityType.squats => 'Full body centered in frame',
+    MotionActivityType.lunges => 'Full body · lower body visible',
+    _ => 'Full body inside frame',
+  };
+
   String get _estimatedTime {
     final activity = eligibility.movementDefinition;
     final target = race.targetValue ?? activity?.defaultTarget ?? 10;
@@ -245,108 +258,133 @@ class _MoveCheckCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Goal tile — standalone, not wrapped in a generic card
+        // Goal — simple inline row
         Row(
           children: [
-            Expanded(
-              child: _MetricTile(label: 'Goal', value: _goalLabel),
+            Text(
+              'Goal',
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _MetricTile(
-                label: 'Typical verification time',
-                value: _estimatedTime,
-              ),
+            const SizedBox(width: 12),
+            Text(
+              _goalLabel,
+              style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy),
+            ),
+            const Spacer(),
+            Text(
+              _estimatedTime,
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
             ),
           ],
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
-        // Quick tips — actionable, movement-specific
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: NuvoColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: NuvoColors.divider),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Quick tips',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                ),
-              ),
-              const SizedBox(height: 12),
-              for (final item in eligibility.instructions.take(3)) ...[
-                _SetupLine(label: item),
-                if (item != eligibility.instructions.take(3).last)
-                  const SizedBox(height: 10),
-              ],
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Positioning preview
-        Container(
-          height: 178,
+        // Framing illustration — just corner brackets + instruction text
+        // This is what professional apps do: show framing, not a person
+        SizedBox(
+          height: 160,
           width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: NuvoColors.panel,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: NuvoColors.border),
-          ),
           child: CustomPaint(
-            painter: _MovePreviewPainter(
-              sideView:
-                  eligibility.preferredCameraView ==
-                  PreferredCameraView.sideOrDiagonalRequired,
+            painter: _FramingGuidePainter(),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _movementIcon,
+                    color: NuvoColors.navy.withValues(alpha: 0.18),
+                    size: 48,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _framingLabel,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+
+        const SizedBox(height: 20),
+
+        // Tips — no card, just clean text lines
+        for (final item in eligibility.instructions.take(3)) ...[
+          _SetupLine(label: item),
+          if (item != eligibility.instructions.take(3).last)
+            const SizedBox(height: 8),
+        ],
       ],
     );
   }
 }
 
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
+class _FramingGuidePainter extends CustomPainter {
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.navy),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = NuvoColors.navy.withValues(alpha: 0.14)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    const corner = 28.0;
+    const inset = 24.0;
+
+    // Top-left
+    canvas.drawLine(
+      const Offset(inset, inset + corner),
+      const Offset(inset, inset),
+      paint,
+    );
+    canvas.drawLine(
+      const Offset(inset, inset),
+      const Offset(inset + corner, inset),
+      paint,
+    );
+
+    // Top-right
+    canvas.drawLine(
+      Offset(size.width - inset - corner, inset),
+      Offset(size.width - inset, inset),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width - inset, inset),
+      Offset(size.width - inset, inset + corner),
+      paint,
+    );
+
+    // Bottom-left
+    canvas.drawLine(
+      Offset(inset, size.height - inset - corner),
+      Offset(inset, size.height - inset),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(inset, size.height - inset),
+      Offset(inset + corner, size.height - inset),
+      paint,
+    );
+
+    // Bottom-right
+    canvas.drawLine(
+      Offset(size.width - inset - corner, size.height - inset),
+      Offset(size.width - inset, size.height - inset),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width - inset, size.height - inset - corner),
+      Offset(size.width - inset, size.height - inset),
+      paint,
     );
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _SetupLine extends StatelessWidget {
@@ -375,113 +413,6 @@ class _SetupLine extends StatelessWidget {
   }
 }
 
-class _MovePreviewPainter extends CustomPainter {
-  const _MovePreviewPainter({required this.sideView});
-
-  final bool sideView;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final frame = RRect.fromRectAndRadius(
-      Offset.zero & size,
-      const Radius.circular(18),
-    );
-    final framePaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..color = NuvoColors.blue.withValues(alpha: 0.32);
-    canvas.drawRRect(frame, framePaint);
-
-    final fillPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..color = NuvoColors.navy.withValues(alpha: 0.18);
-
-    if (sideView) {
-      // Plank / side silhouette — horizontal body
-      final y = size.height * 0.54;
-      final headR = size.width * 0.06;
-      canvas.drawCircle(Offset(size.width * 0.18, y - 2), headR, fillPaint);
-
-      final bodyRect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(size.width * 0.26, y - 8, size.width * 0.82, y + 8),
-        const Radius.circular(6),
-      );
-      canvas.drawRRect(bodyRect, fillPaint);
-
-      // Supporting arms
-      final armRect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(size.width * 0.30, y + 6, size.width * 0.38, y + 28),
-        const Radius.circular(3),
-      );
-      canvas.drawRRect(armRect, fillPaint);
-
-      // Supporting legs
-      final legRect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(size.width * 0.72, y + 6, size.width * 0.80, y + 28),
-        const Radius.circular(3),
-      );
-      canvas.drawRRect(legRect, fillPaint);
-    } else {
-      // Standing front silhouette — airport-icon style
-      final cx = size.width * 0.5;
-      final headR = size.width * 0.07;
-      final headY = size.height * 0.22;
-      canvas.drawCircle(Offset(cx, headY), headR, fillPaint);
-
-      // Torso
-      final torsoHW = size.width * 0.10;
-      final torsoTop = headY + headR + size.height * 0.02;
-      final torsoBottom = size.height * 0.58;
-      final torsoRect = RRect.fromRectAndRadius(
-        Rect.fromLTRB(cx - torsoHW, torsoTop, cx + torsoHW, torsoBottom),
-        Radius.circular(torsoHW * 0.5),
-      );
-      canvas.drawRRect(torsoRect, fillPaint);
-
-      // Arms
-      final shoulderY = torsoTop + size.height * 0.03;
-      final armW = size.width * 0.045;
-      final armLen = size.height * 0.18;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(cx - torsoHW - armW, shoulderY, cx - torsoHW, shoulderY + armLen),
-          Radius.circular(armW * 0.5),
-        ),
-        fillPaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(cx + torsoHW, shoulderY, cx + torsoHW + armW, shoulderY + armLen),
-          Radius.circular(armW * 0.5),
-        ),
-        fillPaint,
-      );
-
-      // Legs
-      final legW = size.width * 0.055;
-      final legGap = size.width * 0.015;
-      final legLen = size.height * 0.22;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(cx - legGap - legW, torsoBottom, cx - legGap, torsoBottom + legLen),
-          Radius.circular(legW * 0.4),
-        ),
-        fillPaint,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(cx + legGap, torsoBottom, cx + legGap + legW, torsoBottom + legLen),
-          Radius.circular(legW * 0.4),
-        ),
-        fillPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MovePreviewPainter oldDelegate) =>
-      oldDelegate.sideView != sideView;
-}
 
 class _UnsupportedVerificationCard extends StatelessWidget {
   const _UnsupportedVerificationCard({required this.message});

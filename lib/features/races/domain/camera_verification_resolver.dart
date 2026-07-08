@@ -22,7 +22,7 @@ class CameraVerificationEligibility {
     required this.preferredCameraView,
     required this.instructions,
     required this.reason,
-    this.unsupportedMessage = 'Nuvo can’t verify this movement yet.',
+    this.unsupportedMessage = 'This movement cannot be camera verified yet.',
   });
 
   final String raceId;
@@ -168,27 +168,27 @@ List<String> _instructions(MotionActivityType movement) {
     MotionActivityType.pushUps => const [
       'Stand 6\u20138 feet from the camera.',
       'Keep your hands and shoulders visible.',
-      'Wait until MoveCheck says Ready.',
+      'Wait for the Ready signal.',
     ],
     MotionActivityType.squats => const [
       'Stand 6\u20138 feet away, facing the camera.',
       'Keep your full body in frame, head to feet.',
-      'Wait until MoveCheck says Ready.',
+      'Wait for the Ready signal.',
     ],
     MotionActivityType.jumpingJacks => const [
       'Stand 6\u20138 feet away, facing the camera.',
       'Leave room above your head for arms.',
-      'Wait until MoveCheck says Ready.',
+      'Wait for the Ready signal.',
     ],
     MotionActivityType.lunges => const [
       'Stand 6\u20138 feet away, facing or slightly angled.',
       'Keep your full body in frame, head to feet.',
-      'Wait until MoveCheck says Ready.',
+      'Wait for the Ready signal.',
     ],
     MotionActivityType.plankHold => const [
       'Place the camera to your side, 5\u20136 feet away.',
       'Get into position so your whole body is visible.',
-      'Wait until MoveCheck says Ready.',
+      'Wait for the Ready signal.',
     ],
     _ => const ['Stand 6\u20138 feet from the camera.'],
   };
