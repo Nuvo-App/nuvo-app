@@ -24,16 +24,21 @@ class MoveScreen extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final uid = user?.id;
 
-    final activeRaces = raceState.races
-        .where(
-          (race) =>
-              race.status == 'active' &&
-              resolveCameraVerification(race).isCameraVerifiable,
-        )
+    final cameraRaces = raceState.races
+        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
         .toList();
 
-    final recentMoves = raceState.races
-        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
+    final readyRaces = cameraRaces.where((race) {
+      final myPart = uid != null ? race.participantFor(uid) : null;
+      return race.status == 'active' && (myPart?.progressPercent ?? 0) < 100;
+    }).toList();
+
+    final completedRaces = cameraRaces.where((race) {
+      final myPart = uid != null ? race.participantFor(uid) : null;
+      return (myPart?.progressPercent ?? 0) >= 100;
+    }).toList();
+
+    final recentMoves = cameraRaces
         .expand((r) => r.recentProofs.map((p) => (race: r, proof: p)))
         .take(10)
         .toList();
@@ -84,8 +89,8 @@ class MoveScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
 
-            // ── Active races ─────────────────────────────────────────────────
-            if (raceState.loading && activeRaces.isEmpty)
+            // ── Ready to move ────────────────────────────────────────────────
+            if (raceState.loading && readyRaces.isEmpty && completedRaces.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 32),
@@ -95,19 +100,19 @@ class MoveScreen extends ConsumerWidget {
                   ),
                 ),
               )
-            else if (activeRaces.isEmpty)
+            else if (readyRaces.isEmpty && completedRaces.isEmpty)
               _EmptyState(onStart: () => context.push('/races/new'))
-            else ...[
-              const _SectionLabel(label: 'Your races'),
+            else if (readyRaces.isNotEmpty) ...[
+              const _SectionLabel(label: 'Ready to move'),
               const SizedBox(height: 12),
-              for (var i = 0; i < activeRaces.length; i++) ...[
+              for (var i = 0; i < readyRaces.length; i++) ...[
                 FadeSlideIn(
                   delay: Duration(milliseconds: 60 * i),
                   child: _RaceLogRow(
-                    race: activeRaces[i],
+                    race: readyRaces[i],
                     userId: uid,
                     onLog: () {
-                      final race = activeRaces[i];
+                      final race = readyRaces[i];
                       debugLogCameraVerificationDecision(
                         race,
                         resolveCameraVerification(race),
@@ -123,6 +128,15 @@ class MoveScreen extends ConsumerWidget {
               ],
             ],
 
+            // ── Completed races ──────────────────────────────────────────────
+            if (completedRaces.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              _CompletedSection(
+                completedRaces: completedRaces,
+                uid: uid,
+              ),
+            ],
+
             // ── Recent moves ─────────────────────────────────────────────────
             if (recentMoves.isNotEmpty) ...[
               const SizedBox(height: 28),
@@ -134,6 +148,81 @@ class MoveScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Completed races section ───────────────────────────────────────────────────
+
+class _CompletedSection extends StatefulWidget {
+  const _CompletedSection({required this.completedRaces, this.uid});
+
+  final List<Race> completedRaces;
+  final String? uid;
+
+  @override
+  State<_CompletedSection> createState() => _CompletedSectionState();
+}
+
+class _CompletedSectionState extends State<_CompletedSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        PressableScale(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Row(
+            children: [
+              Text(
+                'Completed',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.muted,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: NuvoColors.success.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  '${widget.completedRaces.length}',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.success,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              AnimatedRotation(
+                turns: _expanded ? 0.25 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: NuvoColors.muted,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 12),
+          for (var i = 0; i < widget.completedRaces.length; i++) ...[
+            _RaceLogRow(
+              race: widget.completedRaces[i],
+              userId: widget.uid,
+              onLog: () {},
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -359,17 +360,28 @@ class _ProfileRaceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myPart = userId != null ? race.participantFor(userId!) : null;
+    final uid = userId;
+    final myPart = uid != null ? race.participantFor(uid) : null;
     final pct = myPart?.progressPercent ?? 0;
-    final isActive = race.status == 'active';
+    final isComplete = pct >= 100;
+    final isActive = race.status == 'active' && !isComplete;
+    final rank = _rankForUser(race, userId);
+    final movementIcon = _movementIconData(race.aiActivityType);
+    final lastAt = _lastActivityAt(race, userId);
+    final racerCount = race.participantCount;
+    final others = race.participants
+        .where((p) => p.userId != userId)
+        .take(3)
+        .toList();
+    final isCameraVerified = race.isAiMotionRace;
 
     return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isActive ? _kProfileBlueBorder : _kProfileBorder,
           ),
@@ -384,51 +396,203 @@ class _ProfileRaceRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Title row with movement icon and rank/status
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (movementIcon != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: NuvoColors.icyBlue,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      movementIcon,
+                      color: NuvoColors.blue,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        race.displayTitle,
+                        style: AppTextStyles.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        _metaLine(
+                          pct: pct,
+                          racerCount: racerCount,
+                          isCameraVerified: isCameraVerified,
+                          lastAt: lastAt,
+                        ),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.muted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (rank != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isComplete
+                          ? NuvoColors.success.withValues(alpha: 0.10)
+                          : NuvoColors.navy.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: CountUpText(
+                      value: rank,
+                      prefix: '#',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: isComplete
+                            ? NuvoColors.success
+                            : NuvoColors.navy,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? NuvoColors.blue.withValues(alpha: 0.10)
+                          : _kProfileBorder.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      isActive ? 'Active' : _statusLabel(race.status),
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: isActive ? NuvoColors.blue : NuvoColors.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                    race.displayTitle,
-                    style: AppTextStyles.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: NuvoRaceLane(
+                    progressPercent: pct,
+                    trackHeight: 3,
+                    dotDiameter: 9,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+                if (racerCount > 1) ...[
+                  const SizedBox(width: 12),
+                  NuvoAvatarStack(
+                    avatars: others
+                        .map(
+                          (p) => (
+                            initials: _initials(p.displayName),
+                            photoUrl: p.profilePhotoUrl
+                          ),
+                        )
+                        .toList(),
+                    total: racerCount - 1,
+                    size: 24,
+                    max: 3,
                   ),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? NuvoColors.blue.withValues(alpha: 0.18)
-                        : Colors.white.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: isActive
-                          ? NuvoColors.blue.withValues(alpha: 0.35)
-                          : _kProfileBorder,
-                    ),
-                  ),
-                  child: Text(
-                    isActive ? 'Active' : _statusLabel(race.status),
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: isActive ? NuvoColors.blue : NuvoColors.muted,
-                    ),
-                  ),
-                ),
+                ],
               ],
-            ),
-            const SizedBox(height: 10),
-            NuvoRaceLane(
-              progressPercent: pct,
-              trackHeight: 2.5,
-              dotDiameter: 9,
             ),
           ],
         ),
       ),
     );
+  }
+
+  static String _initials(String displayName) {
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    final s = displayName.trim();
+    return s.isEmpty ? '?' : s[0].toUpperCase();
+  }
+
+  static int? _rankForUser(Race race, String? userId) {
+    if (userId == null) return null;
+    final sorted = [...race.participants]
+      ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
+    final idx = sorted.indexWhere((p) => p.userId == userId);
+    return idx == -1 ? null : idx + 1;
+  }
+
+  static IconData? _movementIconData(String? aiActivityType) {
+    return switch (aiActivityType) {
+      'push_ups' || 'pushups' => Icons.fitness_center_rounded,
+      'plank_hold' || 'plank' => Icons.straighten_rounded,
+      'jumping_jacks' => Icons.accessibility_new_rounded,
+      'squats' => Icons.person_outline_rounded,
+      'lunges' => Icons.directions_walk_rounded,
+      'high_knees' => Icons.directions_run_rounded,
+      'arm_raises' => Icons.sports_gymnastics_rounded,
+      _ => null,
+    };
+  }
+
+  static String? _lastActivityAt(Race race, String? userId) {
+    if (race.recentProofs.isEmpty) return null;
+    final myProofs = userId != null
+        ? race.recentProofs.where((p) => p.userId == userId).toList()
+        : race.recentProofs;
+    if (myProofs.isEmpty) return null;
+    myProofs.sort(
+      (a, b) => b.createdAt.compareTo(a.createdAt),
+    );
+    return myProofs.first.createdAt;
+  }
+
+  static String _metaLine({
+    required int pct,
+    required int racerCount,
+    required bool isCameraVerified,
+    required String? lastAt,
+  }) {
+    final parts = <String>[
+      if (pct >= 100) 'Finished' else '$pct% complete',
+      if (racerCount > 1) '$racerCount racers' else 'Solo',
+      if (isCameraVerified) 'Camera verified',
+    ];
+    if (lastAt != null) {
+      final ago = _timeAgo(lastAt);
+      if (ago.isNotEmpty) parts.add(ago);
+    }
+    return parts.join(' · ');
+  }
+
+  static String _timeAgo(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inSeconds < 60) return 'just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      return '${diff.inDays}d ago';
+    } catch (_) {
+      return '';
+    }
   }
 }
 
