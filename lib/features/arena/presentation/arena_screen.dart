@@ -8,6 +8,7 @@ import '../../../core/widgets/animations.dart' hide PressableScale;
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
+import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/race_ring.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -120,6 +121,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                     liveCount: snapshot?.liveBoards.length ?? 0,
                     rank: activeBoard?.myRank,
                     rankBoardTitle: activeBoard?.title,
+                    chaseCopy: activeBoard?.chaseCopy,
                     hasActivity: (snapshot?.activity.isNotEmpty ?? false),
                     onAvatarTap: () => _showNotificationsSheet(
                       context,
@@ -375,6 +377,7 @@ class _ArenaHeader extends StatelessWidget {
     required this.onAvatarTap,
     this.rank,
     this.rankBoardTitle,
+    this.chaseCopy,
     this.hasActivity = false,
   });
 
@@ -384,6 +387,7 @@ class _ArenaHeader extends StatelessWidget {
   final VoidCallback onAvatarTap;
   final int? rank;
   final String? rankBoardTitle;
+  final String? chaseCopy;
   final bool hasActivity;
 
   @override
@@ -506,7 +510,7 @@ class _ArenaHeader extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Your crew is waiting. Move the leaderboard.',
+            chaseCopy ?? 'Your crew is waiting. Move the leaderboard.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: NuvoColors.white.withValues(alpha: 0.82),
             ),
@@ -517,9 +521,8 @@ class _ArenaHeader extends StatelessWidget {
               children: [
                 _HeroStat(
                   icon: NuvoIconType.trendUp,
-                  label: rankBoardTitle != null
-                      ? '#$rank in $rankBoardTitle'
-                      : '#$rank',
+                  rank: rank,
+                  rankBoardTitle: rankBoardTitle,
                 ),
               ],
             ),
@@ -571,9 +574,14 @@ class _BlinkingDotState extends State<_BlinkingDot>
 }
 
 class _HeroStat extends StatelessWidget {
-  const _HeroStat({required this.icon, required this.label});
+  const _HeroStat({
+    required this.icon,
+    this.rank,
+    this.rankBoardTitle,
+  });
   final NuvoIconType icon;
-  final String label;
+  final int? rank;
+  final String? rankBoardTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -588,10 +596,24 @@ class _HeroStat extends StatelessWidget {
         children: [
           NuvoIcon(icon, size: 12, color: NuvoColors.white),
           const SizedBox(width: 7),
-          Text(
-            label,
-            style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.white),
-          ),
+          if (rank != null)
+            CountUpText(
+              value: rank!,
+              prefix: '#',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          else
+            Text(
+              rankBoardTitle != null
+                  ? '#$rank in $rankBoardTitle'
+                  : '#$rank',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.white,
+              ),
+            ),
         ],
       ),
     );

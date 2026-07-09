@@ -328,36 +328,36 @@ class _RaceLaneCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myPart = userId != null ? race.participantFor(userId!) : null;
+    final uid = userId;
+    final myPart = uid != null ? race.participantFor(uid) : null;
     final pct = myPart?.progressPercent ?? 0;
     final count = race.participantCount;
     final isComplete = pct >= 100 || race.status != 'active';
-    final isActive = race.status == 'active';
+    final isSolo = count <= 1;
 
     final others = race.participants
         .where((p) => p.userId != userId)
         .take(4)
         .toList();
 
+    final state = isComplete
+        ? _RaceCardState.finished
+        : isSolo
+            ? _RaceCardState.solo
+            : _RaceCardState.live;
+
     return PressableScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: state.backgroundColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isActive
-                ? NuvoColors.blue.withValues(alpha: 0.20)
-                : NuvoColors.border,
+            color: state.borderColor,
+            width: state.borderWidth,
           ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x08050B14),
-              blurRadius: 16,
-              offset: Offset(0, 6),
-            ),
-          ],
+          boxShadow: state.shadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,25 +375,40 @@ class _RaceLaneCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                    horizontal: 10,
+                    vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: isComplete
-                        ? NuvoColors.success.withValues(alpha: 0.10)
-                        : NuvoColors.blue.withValues(alpha: 0.10),
+                    color: state.pillBackground,
                     borderRadius: BorderRadius.circular(99),
                   ),
-                  child: Text(
-                    isComplete ? 'Done' : '$pct%',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: isComplete ? NuvoColors.success : NuvoColors.blue,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (state.icon != null) ...[
+                        Icon(
+                          state.icon,
+                          color: state.pillForeground,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        state.pillLabel(pct),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: state.pillForeground,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 4),
-                const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.textMuted, size: 14),
+                NuvoIcon(
+                  NuvoIconType.arrow,
+                  color: isComplete ? NuvoColors.muted : NuvoColors.textMuted,
+                  size: 14,
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -406,7 +421,9 @@ class _RaceLaneCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                if (others.isNotEmpty)
+                if (isSolo)
+                  _SoloHint(onInvite: onTap)
+                else if (others.isNotEmpty)
                   _ParticipantAvatarRow(participants: others, total: count)
                 else
                   Text(
@@ -415,9 +432,172 @@ class _RaceLaneCard extends StatelessWidget {
                       color: NuvoColors.textMuted,
                     ),
                   ),
+                const Spacer(),
+                if (state == _RaceCardState.live)
+                  _LogMoveChip(onTap: onTap),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Card state helpers ─────────────────────────────────────────────────────────
+
+enum _RaceCardState {
+  live,
+  solo,
+  finished,
+}
+
+extension _RaceCardStateExt on _RaceCardState {
+  Color get backgroundColor {
+    return switch (this) {
+      _RaceCardState.live => NuvoColors.surface,
+      _RaceCardState.solo => NuvoColors.white,
+      _RaceCardState.finished => NuvoColors.white,
+    };
+  }
+
+  Color get borderColor {
+    return switch (this) {
+      _RaceCardState.live => NuvoColors.blue.withValues(alpha: 0.28),
+      _RaceCardState.solo => NuvoColors.border,
+      _RaceCardState.finished => NuvoColors.border,
+    };
+  }
+
+  double get borderWidth {
+    return switch (this) {
+      _RaceCardState.live => 1.6,
+      _RaceCardState.solo => 1,
+      _RaceCardState.finished => 1,
+    };
+  }
+
+  List<BoxShadow> get shadow {
+    return switch (this) {
+      _RaceCardState.live => [
+          BoxShadow(
+            color: NuvoColors.blue.withValues(alpha: 0.10),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          const BoxShadow(
+            color: Color(0x08050B14),
+            blurRadius: 12,
+            offset: Offset(0, 5),
+          ),
+        ],
+      _ => const [
+          BoxShadow(
+            color: Color(0x08050B14),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+    };
+  }
+
+  Color get pillBackground {
+    return switch (this) {
+      _RaceCardState.live => NuvoColors.blue.withValues(alpha: 0.10),
+      _RaceCardState.solo => NuvoColors.navy.withValues(alpha: 0.08),
+      _RaceCardState.finished => NuvoColors.success.withValues(alpha: 0.10),
+    };
+  }
+
+  Color get pillForeground {
+    return switch (this) {
+      _RaceCardState.live => NuvoColors.blue,
+      _RaceCardState.solo => NuvoColors.navy,
+      _RaceCardState.finished => NuvoColors.success,
+    };
+  }
+
+  IconData? get icon {
+    return switch (this) {
+      _RaceCardState.live => null,
+      _RaceCardState.solo => Icons.person_outline_rounded,
+      _RaceCardState.finished => Icons.check_rounded,
+    };
+  }
+
+  String pillLabel(int pct) {
+    return switch (this) {
+      _RaceCardState.live => '$pct%',
+      _RaceCardState.solo => '$pct%',
+      _RaceCardState.finished => 'Done',
+    };
+  }
+}
+
+class _SoloHint extends StatelessWidget {
+  const _SoloHint({required this.onInvite});
+  final VoidCallback onInvite;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onInvite,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: NuvoColors.icyBlue,
+          borderRadius: BorderRadius.circular(99),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.group_add_rounded,
+              color: NuvoColors.blue,
+              size: 14,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Invite crew',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.blue,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LogMoveChip extends StatelessWidget {
+  const _LogMoveChip({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: NuvoColors.blue,
+          borderRadius: BorderRadius.circular(99),
+          boxShadow: [
+            BoxShadow(
+              color: NuvoColors.blue.withValues(alpha: 0.28),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Text(
+          'Log move',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: NuvoColors.white,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );

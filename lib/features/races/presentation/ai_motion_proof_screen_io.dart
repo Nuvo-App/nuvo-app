@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -679,14 +680,30 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   Icons.verified_rounded,
                   color: NuvoColors.blue,
                   size: 68,
-                ),
+                )
+                    .animate()
+                    .scale(
+                      begin: const Offset(0.4, 0.4),
+                      end: const Offset(1.0, 1.0),
+                      duration: 320.ms,
+                      curve: Curves.easeOutBack,
+                    )
+                    .fadeIn(duration: 200.ms, curve: Curves.easeOut),
                 const SizedBox(height: 18),
                 Text(
                   '+${_countedLabel(result)}',
                   style: AppTextStyles.displayMedium.copyWith(
                     color: NuvoColors.white,
                   ),
-                ),
+                )
+                    .animate(delay: 80.ms)
+                    .slideY(
+                      begin: 0.14,
+                      end: 0,
+                      duration: 260.ms,
+                      curve: Curves.easeOutCubic,
+                    )
+                    .fadeIn(duration: 220.ms, curve: Curves.easeOut),
                 const SizedBox(height: 8),
                 Text(
                   _status == AiMotionProofStatus.submitted

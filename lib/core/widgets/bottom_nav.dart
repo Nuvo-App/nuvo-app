@@ -103,8 +103,8 @@ class _NavButton extends StatelessWidget {
         onTap: onTap,
         scale: 0.95,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutBack,
           padding: EdgeInsets.symmetric(horizontal: selected ? 10 : 11, vertical: 11),
           decoration: BoxDecoration(
             color: selected ? NuvoColors.navy : Colors.transparent,
@@ -115,9 +115,9 @@ class _NavButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               AnimatedScale(
-                scale: selected ? 1.08 : 1.0,
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
+                scale: selected ? 1.12 : 1.0,
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutBack,
                 child: NuvoIcon(
                   item.icon,
                   size: 17,
