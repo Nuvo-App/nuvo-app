@@ -49,43 +49,9 @@ class MoveScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
           children: [
-            // ── Header ───────────────────────────────────────────────────────
-            Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: NuvoColors.navy,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: const Center(
-                    child: NuvoIcon(
-                      NuvoIconType.plus,
-                      color: NuvoColors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Verify a move',
-                        style: AppTextStyles.headlineMedium,
-                      ),
-                      Text(
-                        'Pick a race and use camera verification.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            // ── Hero ─────────────────────────────────────────────────────────
+            _MoveHero(
+              readyCount: readyRaces.length,
             ),
             const SizedBox(height: 28),
 
@@ -152,6 +118,81 @@ class MoveScreen extends ConsumerWidget {
   }
 }
 
+// ── Hero ──────────────────────────────────────────────────────────────────────
+
+class _MoveHero extends StatelessWidget {
+  const _MoveHero({required this.readyCount});
+  final int readyCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1A2C6D),
+            Color(0xFF2A4C9B),
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Verify a move',
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: NuvoColors.white,
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Pick a race and use camera verification.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.white.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (readyCount > 0) ...[
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NuvoColors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    '$readyCount ready',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Completed races section ───────────────────────────────────────────────────
 
 class _CompletedSection extends StatefulWidget {
@@ -177,10 +218,11 @@ class _CompletedSectionState extends State<_CompletedSection> {
           child: Row(
             children: [
               Text(
-                'Completed',
+                'Completed'.toUpperCase(),
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                  letterSpacing: 0.2,
+                  color: NuvoColors.textMuted,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
                 ),
               ),
               const SizedBox(width: 8),
@@ -235,25 +277,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 16,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ],
+    return Text(
+      label.toUpperCase(),
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+      ),
     );
   }
 }
@@ -286,16 +316,11 @@ class _RaceLogRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isComplete
-                ? NuvoColors.success.withValues(alpha: 0.25)
-                : NuvoColors.border,
-          ),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x08050B14),
+              color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
               blurRadius: 16,
-              offset: Offset(0, 6),
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -322,18 +347,12 @@ class _RaceLogRow extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: NuvoColors.blue,
                       borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: NuvoColors.blue.withValues(alpha: 0.28),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
                     ),
                     child: Text(
                       'Verify',
                       style: AppTextStyles.labelMedium.copyWith(
                         color: NuvoColors.white,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   )
@@ -474,12 +493,11 @@ class _RecentMoveRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x060A1A33),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),

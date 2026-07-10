@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/competition_ring.dart';
 import '../../../core/widgets/nuvo_board_components.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
@@ -366,6 +367,17 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     avatars: heroAvatars,
                     racerCount: race.participantCount,
                     daysLeft: _daysLeft(race.finishLineAt),
+                    ringParticipants: race.participants
+                        .map(
+                          (p) => CompetitionRingParticipant(
+                            userId: p.userId,
+                            displayName: p.displayName,
+                            photoUrl: p.profilePhotoUrl,
+                            progressPercent: p.progressPercent,
+                          ),
+                        )
+                        .toList(),
+                    currentUserId: user?.id,
                     primaryLabel: canJoin
                         ? 'Join race'
                         : myRaceComplete
@@ -598,8 +610,14 @@ class _NavyHeader extends StatelessWidget {
 
     return Container(
       decoration: const BoxDecoration(
-        color: NuvoColors.white,
-        border: Border(bottom: BorderSide(color: NuvoColors.divider)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1A2C6D),
+            Color(0xFF2A4C9B),
+          ],
+        ),
       ),
       padding: EdgeInsets.fromLTRB(20, safeTop + 16, 20, 24),
       child: Column(
@@ -614,13 +632,12 @@ class _NavyHeader extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: NuvoColors.panel,
+                    color: NuvoColors.white.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
-                    border: Border.all(color: NuvoColors.border),
                   ),
                   child: const NuvoIcon(
                     NuvoIconType.back,
-                    color: NuvoColors.navy,
+                    color: NuvoColors.white,
                     size: 18,
                   ),
                 ),
@@ -633,14 +650,16 @@ class _NavyHeader extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: isActive ? NuvoColors.blue : NuvoColors.panel,
+                  color: isActive
+                      ? NuvoColors.success.withValues(alpha: 0.20)
+                      : NuvoColors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   isActive ? 'Active' : race.status.toUpperCase(),
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: isActive ? NuvoColors.white : NuvoColors.navy,
-                    fontWeight: FontWeight.w700,
+                    color: NuvoColors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -652,13 +671,12 @@ class _NavyHeader extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: NuvoColors.panel,
+                      color: NuvoColors.white.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
-                      border: Border.all(color: NuvoColors.border),
                     ),
                     child: const Icon(
                       Icons.tune_rounded,
-                      color: NuvoColors.navy,
+                      color: NuvoColors.white,
                       size: 18,
                     ),
                   ),
@@ -676,7 +694,9 @@ class _NavyHeader extends StatelessWidget {
               color: Colors.transparent,
               child: Text(
                 race.displayTitle,
-                style: AppTextStyles.headlineLarge.copyWith(color: NuvoColors.navy),
+                style: AppTextStyles.headlineLarge.copyWith(
+                  color: NuvoColors.white,
+                ),
                 maxLines: 2,
               ),
             ),
@@ -684,7 +704,9 @@ class _NavyHeader extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             _contextLine(race),
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.75),
+            ),
           ),
 
           // My progress — only shown when participant
@@ -696,9 +718,7 @@ class _NavyHeader extends StatelessWidget {
                 Text(
                   '$myProgress',
                   style: AppTextStyles.displaySmall.copyWith(
-                    color: myProgress >= 100
-                        ? NuvoColors.success
-                        : NuvoColors.blue,
+                    color: NuvoColors.white,
                   ),
                 ),
                 Padding(
@@ -706,7 +726,7 @@ class _NavyHeader extends StatelessWidget {
                   child: Text(
                     '%',
                     style: AppTextStyles.titleLarge.copyWith(
-                      color: NuvoColors.muted,
+                      color: NuvoColors.white.withValues(alpha: 0.7),
                     ),
                   ),
                 ),
@@ -716,12 +736,17 @@ class _NavyHeader extends StatelessWidget {
             Text(
               'Your progress',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.muted,
+                color: NuvoColors.white.withValues(alpha: 0.75),
                 letterSpacing: 0,
               ),
             ),
             const SizedBox(height: 14),
-            NuvoRaceLane(progressPercent: myProgress, trackHeight: 5, dotDiameter: 16),
+            NuvoRaceLane(
+              progressPercent: myProgress,
+              trackHeight: 5,
+              dotDiameter: 16,
+              onDark: true,
+            ),
             // Chase context
             Builder(
               builder: (context) {
@@ -733,7 +758,7 @@ class _NavyHeader extends StatelessWidget {
                   child: Text(
                     chase.chaseCopy!,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
+                      color: NuvoColors.white.withValues(alpha: 0.75),
                     ),
                   ),
                 );
@@ -1177,25 +1202,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 16,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ],
+    return Text(
+      label.toUpperCase(),
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+      ),
     );
   }
 }

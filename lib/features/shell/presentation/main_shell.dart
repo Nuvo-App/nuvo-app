@@ -98,21 +98,11 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       extendBody: true,
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [NuvoColors.pageWarm, NuvoColors.page, NuvoColors.icyBlue],
-            stops: [0.0, 0.48, 1.0],
-          ),
-        ),
-        child: PageView(
-          controller: _pageCtrl,
-          onPageChanged: _onPageChanged,
-          physics: const BouncingScrollPhysics(),
-          children: _pages,
-        ),
+      body: PageView(
+        controller: _pageCtrl,
+        onPageChanged: _onPageChanged,
+        physics: const BouncingScrollPhysics(),
+        children: _pages,
       ),
       bottomNavigationBar: NuvoBottomNav(
         currentIndex: _currentIndex,

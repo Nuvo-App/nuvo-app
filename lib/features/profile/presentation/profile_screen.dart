@@ -4,17 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/competition_ring.dart';
 import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
 
 const _kProfileBorder = NuvoColors.border;
-const _kProfileBlueBorder = NuvoColors.blue;
 const _kProfileTextMuted = NuvoColors.muted;
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -57,17 +56,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final safeTop = MediaQuery.paddingOf(context).top;
 
     return Scaffold(
-      backgroundColor: NuvoColors.navy,
+      backgroundColor: NuvoColors.page,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          // ── Navy header — never reveals white on overscroll ─────────────
+          // ── Gradient hero header ────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
-                color: NuvoColors.navy,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1A2C6D),
+                    Color(0xFF2A4C9B),
+                  ],
+                ),
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
               ),
               padding: EdgeInsets.fromLTRB(20, safeTop + 22, 20, 28),
@@ -369,10 +375,6 @@ class _ProfileRaceRow extends StatelessWidget {
     final movementIcon = _movementIconData(race.aiActivityType);
     final lastAt = _lastActivityAt(race, userId);
     final racerCount = race.participantCount;
-    final others = race.participants
-        .where((p) => p.userId != userId)
-        .take(3)
-        .toList();
     final isCameraVerified = race.isAiMotionRace;
 
     return PressableScale(
@@ -380,16 +382,13 @@ class _ProfileRaceRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isActive ? _kProfileBlueBorder : _kProfileBorder,
-          ),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x10050B14),
-              blurRadius: 18,
-              offset: Offset(0, 8),
+              color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -489,46 +488,27 @@ class _ProfileRaceRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: NuvoRaceLane(
-                    progressPercent: pct,
-                    trackHeight: 3,
-                    dotDiameter: 9,
-                  ),
-                ),
-                if (racerCount > 1) ...[
-                  const SizedBox(width: 12),
-                  NuvoAvatarStack(
-                    avatars: others
-                        .map(
-                          (p) => (
-                            initials: _initials(p.displayName),
-                            photoUrl: p.profilePhotoUrl
-                          ),
-                        )
-                        .toList(),
-                    total: racerCount - 1,
-                    size: 24,
-                    max: 3,
-                  ),
-                ],
-              ],
+            Center(
+              child: CompetitionRing(
+                size: CompetitionRingSize.small,
+                participants: race.participants
+                    .map(
+                      (p) => CompetitionRingParticipant(
+                        userId: p.userId,
+                        displayName: p.displayName,
+                        photoUrl: p.profilePhotoUrl,
+                        progressPercent: p.progressPercent,
+                      ),
+                    )
+                    .toList(),
+                currentUserId: userId,
+                centerLabel: '$pct%',
+              ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  static String _initials(String displayName) {
-    final parts = displayName.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    final s = displayName.trim();
-    return s.isEmpty ? '?' : s[0].toUpperCase();
   }
 
   static int? _rankForUser(Race race, String? userId) {
@@ -623,13 +603,15 @@ class _AccountRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDanger
-                ? NuvoColors.danger.withValues(alpha: 0.30)
-                : _kProfileBorder,
-          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -666,25 +648,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 16,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ],
+    return Text(
+      label.toUpperCase(),
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+      ),
     );
   }
 }
