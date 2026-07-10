@@ -47,14 +47,11 @@ class CompeteScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: _CompeteHero(
-                    activeCount: active.length,
-                    finishedCount: finished.length,
-                    onStart: () => context.push('/races/new'),
-                    onJoin: () => context.push('/races/join'),
-                  ),
+                child: _CompeteHero(
+                  activeCount: active.length,
+                  finishedCount: finished.length,
+                  onStart: () => context.push('/races/new'),
+                  onJoin: () => context.push('/races/join'),
                 ),
               ),
 
@@ -170,25 +167,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 16,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ],
+    return Text(
+      label.toUpperCase(),
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+      ),
     );
   }
 }
@@ -211,58 +196,53 @@ class _CompeteHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.08),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1A2C6D),
+            Color(0xFF2A4C9B),
+          ],
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: NuvoColors.navy,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Center(
-                  child: NuvoIcon(NuvoIconType.flag, color: NuvoColors.white, size: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Races',
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: NuvoColors.white,
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Create a race, set a goal, pull in your crew.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.white.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
               _CountPill(value: '$activeCount', label: 'active'),
-              const SizedBox(width: 8),
-              _CountPill(value: '$finishedCount', label: 'done'),
             ],
           ),
-          const SizedBox(height: 18),
-          Text(
-            'Races',
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: NuvoColors.navy,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Create a race, set a goal, pull in your crew.',
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-          ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
-                flex: 3,
                 child: NuvoPrimaryButton(
                   label: 'Start race',
                   expand: true,
@@ -271,7 +251,6 @@ class _CompeteHero extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
-                flex: 2,
                 child: NuvoOutlineButton(
                   label: 'Join',
                   expand: true,
@@ -296,7 +275,7 @@ class _CountPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: NuvoColors.panel,
+        color: NuvoColors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(99),
       ),
       child: Row(
@@ -304,12 +283,17 @@ class _CountPill extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.blueInk),
+            style: AppTextStyles.labelLarge.copyWith(
+              color: NuvoColors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(width: 4),
           Text(
             label,
-            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.7),
+            ),
           ),
         ],
       ),
@@ -353,11 +337,19 @@ class _RaceLaneCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: state.backgroundColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: state.borderColor,
-            width: state.borderWidth,
-          ),
-          boxShadow: state.shadow,
+          border: state.borderColor != null
+              ? Border.all(
+                  color: state.borderColor!,
+                  width: state.borderWidth,
+                )
+              : null,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -453,53 +445,11 @@ enum _RaceCardState {
 }
 
 extension _RaceCardStateExt on _RaceCardState {
-  Color get backgroundColor {
-    return switch (this) {
-      _RaceCardState.live => NuvoColors.surface,
-      _RaceCardState.solo => NuvoColors.white,
-      _RaceCardState.finished => NuvoColors.white,
-    };
-  }
+  Color get backgroundColor => NuvoColors.surface;
 
-  Color get borderColor {
-    return switch (this) {
-      _RaceCardState.live => NuvoColors.blue.withValues(alpha: 0.28),
-      _RaceCardState.solo => NuvoColors.border,
-      _RaceCardState.finished => NuvoColors.border,
-    };
-  }
+  Color? get borderColor => null;
 
-  double get borderWidth {
-    return switch (this) {
-      _RaceCardState.live => 1.6,
-      _RaceCardState.solo => 1,
-      _RaceCardState.finished => 1,
-    };
-  }
-
-  List<BoxShadow> get shadow {
-    return switch (this) {
-      _RaceCardState.live => [
-          BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.10),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-          const BoxShadow(
-            color: Color(0x08050B14),
-            blurRadius: 12,
-            offset: Offset(0, 5),
-          ),
-        ],
-      _ => const [
-          BoxShadow(
-            color: Color(0x08050B14),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
-    };
-  }
+  double get borderWidth => 0;
 
   Color get pillBackground {
     return switch (this) {
@@ -545,7 +495,7 @@ class _SoloHint extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: NuvoColors.icyBlue,
+          color: NuvoColors.navy.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(99),
         ),
         child: Row(
@@ -553,15 +503,15 @@ class _SoloHint extends StatelessWidget {
           children: [
             const Icon(
               Icons.group_add_rounded,
-              color: NuvoColors.blue,
+              color: NuvoColors.navy,
               size: 14,
             ),
             const SizedBox(width: 6),
             Text(
               'Invite crew',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w700,
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -584,13 +534,6 @@ class _LogMoveChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.blue,
           borderRadius: BorderRadius.circular(99),
-          boxShadow: [
-            BoxShadow(
-              color: NuvoColors.blue.withValues(alpha: 0.28),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: Text(
           'Log move',
@@ -666,12 +609,11 @@ class _QuickStartRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x080A1A33),
+              color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
               blurRadius: 14,
-              offset: Offset(0, 5),
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -681,7 +623,7 @@ class _QuickStartRow extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.12),
+                color: accentColor.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(14),
               ),
               alignment: Alignment.center,
@@ -703,7 +645,8 @@ class _QuickStartRow extends StatelessWidget {
                 ],
               ),
             ),
-            const NuvoIcon(NuvoIconType.arrow, color: NuvoColors.textMuted, size: 13),
+            const Icon(Icons.chevron_right,
+                color: NuvoColors.textMuted, size: 16),
           ],
         ),
       ),
@@ -729,17 +672,25 @@ class _EmptyState extends StatelessWidget {
             color: NuvoColors.blue.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const NuvoIcon(NuvoIconType.flag, color: NuvoColors.blue, size: 22),
+          child: const NuvoIcon(
+            NuvoIconType.flag,
+            color: NuvoColors.blue,
+            size: 22,
+          ),
         ),
         const SizedBox(height: 20),
         Text(
           'No races yet.',
-          style: AppTextStyles.headlineMedium.copyWith(color: NuvoColors.navy),
+          style: AppTextStyles.headlineMedium.copyWith(
+            color: NuvoColors.navy,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           'Start a race, set a finish line, and pull in your crew.',
-          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: NuvoColors.muted,
+          ),
         ),
         const SizedBox(height: 20),
         NuvoPrimaryButton(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'competition_ring.dart';
 import 'nuvo_avatar.dart';
 import 'nuvo_button.dart';
 import 'pressable_scale.dart';
@@ -42,6 +43,8 @@ class NuvoRaceHero extends StatelessWidget {
     this.primaryLabel = 'Log Move',
     this.loading = false,
     this.daysLeft,
+    this.ringParticipants = const [],
+    this.currentUserId,
   });
 
   final String title;
@@ -55,20 +58,21 @@ class NuvoRaceHero extends StatelessWidget {
   final String primaryLabel;
   final bool loading;
   final int? daysLeft;
+  final List<CompetitionRingParticipant> ringParticipants;
+  final String? currentUserId;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x10050B14),
+            color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
             blurRadius: 22,
-            offset: Offset(0, 10),
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -123,6 +127,17 @@ class NuvoRaceHero extends StatelessWidget {
               ],
             ],
           ),
+          if (ringParticipants.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Center(
+              child: CompetitionRing(
+                size: CompetitionRingSize.medium,
+                participants: ringParticipants,
+                currentUserId: currentUserId,
+                centerLabel: rankLabel.replaceFirst('#', ''),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),

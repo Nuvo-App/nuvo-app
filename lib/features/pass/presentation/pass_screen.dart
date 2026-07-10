@@ -294,25 +294,13 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 3,
-          height: 16,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue,
-            borderRadius: BorderRadius.circular(99),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
-            letterSpacing: 0.2,
-          ),
-        ),
-      ],
+    return Text(
+      label.toUpperCase(),
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
+      ),
     );
   }
 }
@@ -334,9 +322,12 @@ class _ClosestRaceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(color: Color(0x080A1A33), blurRadius: 18, offset: Offset(0, 8)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
@@ -475,58 +466,65 @@ class _CrewHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(color: Color(0x080A1A33), blurRadius: 28, offset: Offset(0, 12)),
-        ],
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF1A2C6D),
+            Color(0xFF2A4C9B),
+          ],
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: NuvoColors.navy,
-                  borderRadius: BorderRadius.circular(17),
-                ),
-                child: const Center(
-                  child: NuvoIcon(NuvoIconType.users, color: NuvoColors.white, size: 24),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Crew hub',
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: NuvoColors.white,
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Share your pass, copy your ID, pull people into your next race.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.white.withValues(alpha: 0.75),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
+                  horizontal: 10,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: NuvoColors.white,
-                  borderRadius: BorderRadius.circular(999),
+                  color: NuvoColors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text(
                   '$crewCount in crew',
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: NuvoColors.blueInk,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.white,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Text('Crew hub.', style: AppTextStyles.displaySmall),
-          const SizedBox(height: 8),
-          Text(
-            'Share your member pass, copy your ID, and pull the right people into your next race.',
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-          ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
@@ -574,21 +572,19 @@ class _QuickActionButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x0F0A1A33),
-              blurRadius: 14,
-              offset: Offset(0, 7),
-            ),
-          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: NuvoColors.navy, size: 16),
             const SizedBox(width: 8),
-            Text(label, style: AppTextStyles.labelMedium),
+            Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),
@@ -680,14 +676,13 @@ class _UserRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x0F0A1A33),
+              color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
               blurRadius: 14,
-              offset: Offset(0, 7),
+              offset: const Offset(0, 7),
             ),
           ],
         ),
