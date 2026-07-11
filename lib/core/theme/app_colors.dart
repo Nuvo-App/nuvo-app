@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 final class NuvoColors {
   NuvoColors._();
 
-  // ── Brand core ────────────────────────────────────────────────────────────────
-  /// Primary action color.
-  static const Color blue = Color(0xFF5096F9);
+  // ── Brand core (Phase 0 lock) ─────────────────────────────────────────────────
+  /// Primary action color — CTA, progress, chips.
+  static const Color blue = Color(0xFF075BFF);
+
+  /// Alias of [blue] for explicit call sites.
+  static const Color actionBlue = blue;
 
   /// Gradient partner / pressed state.
-  static const Color blue2 = Color(0xFF2F6FE0);
+  static const Color blue2 = Color(0xFF0547C7);
 
   /// Pressed / deeper variant — ink state.
-  static const Color blueInk = Color(0xFF2F6FE0);
+  static const Color blueInk = Color(0xFF0547C7);
 
   /// Light blue tint.
   static const Color blueLight = Color(0xFF8EC3FF);
@@ -19,10 +22,13 @@ final class NuvoColors {
   /// Primary dark — headlines, nav active state.
   static const Color navy = Color(0xFF0A1A33);
 
-  /// Slightly lighter navy for layered surfaces.
-  static const Color navy2 = Color(0xFF07152B);
+  /// Ink navy — hard borders, hard shadows, ring track.
+  static const Color inkNavy = Color(0xFF07152B);
 
-  /// Platinum — legacy alias, main background.
+  /// Slightly deeper navy for layered surfaces (alias of ink).
+  static const Color navy2 = inkNavy;
+
+  /// Platinum — legacy alias.
   static const Color platinum = Color(0xFFEFEFEF);
 
   /// Disabled / locked state.
@@ -34,8 +40,11 @@ final class NuvoColors {
   static const Color sunshine = Color(0xFFFFC857);
 
   // ── Page & surfaces ───────────────────────────────────────────────────────────
-  /// Main page background.
-  static const Color page = Color(0xFFEFEFEF);
+  /// Main page background — ice.
+  static const Color page = Color(0xFFF8FBFF);
+
+  /// Alias of [page].
+  static const Color pageIce = page;
 
   static const Color pageWarm = Color(0xFFF5F2EE);
   static const Color surface = Color(0xFFFFFFFF);
@@ -44,7 +53,7 @@ final class NuvoColors {
   /// Light tint background — active pills, "you" row highlight.
   static const Color panel = Color(0xFFEDF4FE);
 
-  static const Color inkWash = Color(0xFFF8FAFF);
+  static const Color inkWash = Color(0xFFF8FBFF);
 
   // ── Lines and tracks ──────────────────────────────────────────────────────────
   static const Color trackBg = Color(0xFFEAE8E2);

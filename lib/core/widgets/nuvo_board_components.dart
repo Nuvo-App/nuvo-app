@@ -52,6 +52,7 @@ class NuvoRaceHero extends StatelessWidget {
     this.ringSize = CompetitionRingSize.medium,
     this.ringParticipants = const [],
     this.currentUserId,
+    this.isComplete = false,
   });
 
   final String? title;
@@ -70,12 +71,16 @@ class NuvoRaceHero extends StatelessWidget {
   final CompetitionRingSize ringSize;
   final List<CompetitionRingParticipant> ringParticipants;
   final String? currentUserId;
+  final bool isComplete;
 
   @override
   Widget build(BuildContext context) {
     final progress = progressPercent;
     final center = rankLabel.replaceFirst('#', '');
     final showHeader = badgeLabel != null || progress != null;
+    final borderColor =
+        isComplete ? NuvoColors.success : NuvoColors.inkNavy;
+    const accentBlue = NuvoColors.actionBlue;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -87,8 +92,8 @@ class NuvoRaceHero extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoTokens.card,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: NuvoBorders.action,
-        boxShadow: AppShadows.actionShadow,
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: AppShadows.hardShadow5,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,7 +104,8 @@ class NuvoRaceHero extends StatelessWidget {
               children: [
                 if (badgeLabel != null) _HeroPill(label: badgeLabel!),
                 const Spacer(),
-                if (progress != null) _ProgressPill(percent: progress),
+                if (progress != null)
+                  _ProgressPill(percent: progress, complete: isComplete),
               ],
             ),
 
@@ -130,7 +136,7 @@ class NuvoRaceHero extends StatelessWidget {
             ),
           ],
 
-          // Competition ring
+          // Competition ring — navy track + bright blue progress arc
           if (ringParticipants.isNotEmpty) ...[
             const SizedBox(height: NuvoTokens.space16),
             Center(
@@ -149,8 +155,15 @@ class NuvoRaceHero extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(NuvoTokens.space12),
             decoration: BoxDecoration(
-              color: NuvoColors.panel,
+              color: isComplete
+                  ? NuvoColors.success.withValues(alpha: 0.08)
+                  : NuvoColors.panel,
               borderRadius: BorderRadius.circular(NuvoRadii.sm),
+              border: Border.all(
+                color: isComplete
+                    ? NuvoColors.success.withValues(alpha: 0.35)
+                    : accentBlue.withValues(alpha: 0.22),
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -158,7 +171,7 @@ class NuvoRaceHero extends StatelessWidget {
                 Text(
                   rankLabel,
                   style: AppTextStyles.displaySmall.copyWith(
-                    color: NuvoColors.blue,
+                    color: isComplete ? NuvoColors.success : accentBlue,
                     letterSpacing: 0,
                   ),
                 ),
@@ -168,7 +181,10 @@ class NuvoRaceHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        chaseCopy ?? 'Make your next move.',
+                        chaseCopy ??
+                            (isComplete
+                                ? 'Finish line crossed.'
+                                : 'Make your next move.'),
                         style: AppTextStyles.titleMedium.copyWith(
                           color: NuvoColors.navy,
                         ),
@@ -199,7 +215,7 @@ class NuvoRaceHero extends StatelessWidget {
                         max: 4,
                         borderColor: NuvoColors.white,
                       ),
-                      if (daysLeft != null) ...[
+                      if (daysLeft != null && !isComplete) ...[
                         const SizedBox(height: NuvoTokens.space4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -306,9 +322,11 @@ class NuvoBoardLane extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: participant.isCurrentUser
-              ? NuvoColors.blue.withValues(alpha: 0.25)
-              : NuvoColors.divider,
+              ? NuvoColors.actionBlue
+              : NuvoColors.inkNavy,
+          width: 2,
         ),
+        boxShadow: AppShadows.hardShadow4,
       ),
       child: Row(
         children: [
@@ -456,9 +474,10 @@ class NuvoBoardMovementStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: NuvoColors.panel,
+        color: NuvoColors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.divider),
+        border: Border.all(color: NuvoColors.inkNavy, width: 2),
+        boxShadow: AppShadows.hardShadow3,
       ),
       child: Row(
         children: [
@@ -674,12 +693,14 @@ class _HeroPill extends StatelessWidget {
 }
 
 class _ProgressPill extends StatelessWidget {
-  const _ProgressPill({required this.percent});
+  const _ProgressPill({required this.percent, this.complete = false});
 
   final int percent;
+  final bool complete;
 
   @override
   Widget build(BuildContext context) {
+    final done = complete || percent >= 100;
     return Container(
       padding: const EdgeInsets.fromLTRB(
         NuvoTokens.space8,
@@ -688,13 +709,22 @@ class _ProgressPill extends StatelessWidget {
         NuvoTokens.space4,
       ),
       decoration: BoxDecoration(
-        color: NuvoColors.blue.withValues(alpha: 0.10),
+        color: done
+            ? NuvoColors.success.withValues(alpha: 0.12)
+            : NuvoColors.actionBlue.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(NuvoTokens.radiusPill),
+        border: Border.all(
+          color: done ? NuvoColors.success : NuvoColors.actionBlue,
+          width: 1.5,
+        ),
       ),
       child: CountUpText(
         value: percent,
         suffix: '%',
-        style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.blue),
+        style: AppTextStyles.labelLarge.copyWith(
+          color: done ? NuvoColors.success : NuvoColors.actionBlue,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

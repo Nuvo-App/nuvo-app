@@ -33,11 +33,11 @@ class NuvoEmptyState extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: NuvoColors.panel,
+                color: NuvoColors.white,
                 borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: NuvoBorders.quiet,
+                border: Border.all(color: NuvoColors.inkNavy, width: 2),
               ),
-              child: Icon(icon, size: 22, color: NuvoColors.blue),
+              child: Icon(icon, size: 22, color: NuvoColors.actionBlue),
             ),
             const SizedBox(height: 16),
             Text(

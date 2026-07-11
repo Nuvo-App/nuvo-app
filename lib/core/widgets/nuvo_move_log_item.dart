@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
 
@@ -58,7 +59,8 @@ class NuvoMoveLogItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.divider),
+          border: Border.all(color: NuvoColors.inkNavy, width: 2),
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: Row(
           children: [

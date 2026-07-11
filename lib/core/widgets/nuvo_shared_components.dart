@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
 
@@ -34,13 +34,8 @@ class NuvoIconBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.20),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
+        boxShadow: AppShadows.hardShadow3,
       ),
       alignment: Alignment.center,
       child: Icon(icon, color: iconColor, size: iconSize),
@@ -76,15 +71,15 @@ class NuvoPill extends StatelessWidget {
         color: bg,
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: color.withValues(alpha: onDark ? 0.32 : 0.22),
-          width: 1,
+          color: onDark ? color.withValues(alpha: 0.45) : color,
+          width: 1.4,
         ),
       ),
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
           color: text,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           fontSize: 10,
         ),
       ),
@@ -120,18 +115,8 @@ class NuvoBackplateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.border, width: 1),
-        boxShadow: shadowOpacity == 0
-            ? null
-            : [
-                BoxShadow(
-                  color: NuvoColors.navy.withValues(
-                    alpha: 0.08 * shadowOpacity,
-                  ),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+        border: Border.all(color: NuvoColors.inkNavy, width: 2),
+        boxShadow: shadowOpacity == 0 ? null : AppShadows.hardShadow5,
       ),
       child: child,
     );
@@ -145,7 +130,8 @@ class NuvoBackplateCard extends StatelessWidget {
 
 // ── NuvoCompactCard ───────────────────────────────────────────────────────────
 
-/// White card with a very soft shadow — secondary rows and tiles.
+/// Secondary row/tile — CTA construction with grey outline + grey offset plate
+/// (not navy ink outline; reserved for primary surfaces/buttons).
 class NuvoCompactCard extends StatelessWidget {
   const NuvoCompactCard({
     super.key,
@@ -166,15 +152,39 @@ class NuvoCompactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? NuvoColors.border, width: 1),
-        boxShadow: null,
+    // Match CTA hard-offset weight (4px plate), grey instead of navy.
+    const offset = 4.0;
+    final card = Padding(
+      padding: const EdgeInsets.only(right: offset, bottom: offset),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: offset,
+            top: offset,
+            right: 0,
+            bottom: 0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: NuvoColors.borderStrong,
+                borderRadius: BorderRadius.circular(radius),
+              ),
+            ),
+          ),
+          Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(
+                color: borderColor ?? NuvoColors.borderStrong,
+                width: 2,
+              ),
+            ),
+            child: child,
+          ),
+        ],
       ),
-      child: child,
     );
 
     if (onTap != null) {
@@ -933,14 +943,8 @@ class _NuvoRaceLaneState extends State<NuvoRaceLane> {
           curve: Curves.easeOut,
           builder: (context, progress, _) {
             final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
-            final fillBar = Container(
-              width: fillWidth,
-              height: trackHeight,
-              decoration: BoxDecoration(
-                color: progress >= 1 ? NuvoColors.success : NuvoColors.blue,
-                borderRadius: BorderRadius.circular(trackHeight / 2),
-              ),
-            );
+            final fillColor =
+                progress >= 1 ? NuvoColors.success : NuvoColors.actionBlue;
 
             return SizedBox(
               height: dotDiameter,
@@ -955,12 +959,13 @@ class _NuvoRaceLaneState extends State<NuvoRaceLane> {
                     ),
                   ),
                   if (progress > 0)
-                    Shimmer.fromColors(
-                      baseColor: NuvoColors.blue,
-                      highlightColor: Colors.white.withValues(alpha: 0.55),
-                      period: const Duration(milliseconds: 2600),
-                      loop: 3,
-                      child: fillBar,
+                    Container(
+                      width: fillWidth,
+                      height: trackHeight,
+                      decoration: BoxDecoration(
+                        color: fillColor,
+                        borderRadius: BorderRadius.circular(trackHeight / 2),
+                      ),
                     ),
                   if (progress > 0 && progress < 1)
                     Positioned(
@@ -972,14 +977,12 @@ class _NuvoRaceLaneState extends State<NuvoRaceLane> {
                         width: dotDiameter,
                         height: dotDiameter,
                         decoration: BoxDecoration(
-                          color: NuvoColors.blue,
+                          color: NuvoColors.actionBlue,
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: NuvoColors.blue.withValues(alpha: 0.25),
-                              blurRadius: 10,
-                            ),
-                          ],
+                          border: Border.all(
+                            color: NuvoColors.inkNavy,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -989,9 +992,13 @@ class _NuvoRaceLaneState extends State<NuvoRaceLane> {
                       child: Container(
                         width: dotDiameter,
                         height: dotDiameter,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: NuvoColors.success,
                           shape: BoxShape.circle,
+                          border: Border.all(
+                            color: NuvoColors.inkNavy,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),

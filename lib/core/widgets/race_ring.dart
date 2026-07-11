@@ -58,7 +58,7 @@ class RaceRing extends StatefulWidget {
     this.centerLabel,
     this.racers = const [],
     this.size = 160,
-    this.strokeWidth = 10,
+    this.strokeWidth = 14,
     this.delay = Duration.zero,
     this.duration = const Duration(milliseconds: 1000),
   });
@@ -194,9 +194,10 @@ class _RaceRingState extends State<RaceRing>
             children: [
               Text(
                 widget.centerValue,
-                style: AppTextStyles.number(widget.size * 0.26),
+                style: AppTextStyles.number(widget.size * 0.24),
               ),
-              if (widget.centerLabel != null)
+              if (widget.centerLabel != null &&
+                  widget.centerLabel!.trim().isNotEmpty)
                 Text(widget.centerLabel!, style: AppTextStyles.bodySmall),
             ],
           ),
@@ -218,8 +219,12 @@ class _RingPainter extends CustomPainter {
     final radius = (size.width / 2) - strokeWidth - 6;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
+    // Navy outline track — ring itself, not an outer wrapper
+    const navyOutline = NuvoColors.inkNavy;
+    const brightBlue = NuvoColors.actionBlue;
+
     final track = Paint()
-      ..color = NuvoColors.trackBg
+      ..color = navyOutline
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
@@ -227,11 +232,24 @@ class _RingPainter extends CustomPainter {
 
     if (progress <= 0) return;
     final fill = Paint()
-      ..color = NuvoColors.blue
+      ..color = brightBlue
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
+      ..strokeWidth = strokeWidth * 0.62
       ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, -math.pi / 2, progress * 2 * math.pi, false, fill);
+    final sweep = progress * 2 * math.pi;
+    canvas.drawArc(rect, -math.pi / 2, sweep, false, fill);
+
+    // Leading edge dot
+    final headAngle = -math.pi / 2 + sweep;
+    final headCenter =
+        center +
+        Offset(radius * math.cos(headAngle), radius * math.sin(headAngle));
+    canvas.drawCircle(headCenter, strokeWidth * 0.55, Paint()..color = brightBlue);
+    canvas.drawCircle(
+      headCenter,
+      strokeWidth * 0.22,
+      Paint()..color = Colors.white,
+    );
   }
 
   @override
