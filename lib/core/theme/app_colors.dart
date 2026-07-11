@@ -61,6 +61,10 @@ final class NuvoColors {
   static const Color border = Color(0xFFEAE8E2);
   static const Color borderStrong = paleSlate;
 
+  /// Solid grey hard-offset plate for secondary cards (CTA construction,
+  /// grey instead of ink navy). Must read clearly against white faces.
+  static const Color offsetGrey = Color(0xFF6B7280);
+
   // ── Legacy aliases kept stable for existing screens ───────────────────────────
   static const Color icyBlue = Color(0xFFEDF4FE);
   static const Color softBlue = Color(0xFF8EC3FF);

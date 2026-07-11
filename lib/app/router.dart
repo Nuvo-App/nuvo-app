@@ -7,7 +7,7 @@ import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
-import '../features/compete/presentation/compete_screen.dart';
+import '../features/compete/presentation/compete_screen_fixed.dart';
 import '../features/onboarding/presentation/add_crew_screen.dart';
 import '../features/onboarding/presentation/create_identity_screen.dart';
 import '../features/onboarding/presentation/first_race_screen.dart';

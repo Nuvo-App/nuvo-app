@@ -56,7 +56,6 @@ class CompeteScreen extends ConsumerWidget {
                   onJoin: () => context.push('/races/join'),
                 ),
               ),
-
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   20,
@@ -86,7 +85,6 @@ class CompeteScreen extends ConsumerWidget {
                     else if (raceState.races.isEmpty || cameraRaces.isEmpty)
                       _EmptyState(onStart: () => context.push('/races/new'))
                     else ...[
-                      // Active races
                       if (active.isNotEmpty) ...[
                         const _SectionLabel(label: 'Active'),
                         const SizedBox(height: 12),
@@ -99,8 +97,6 @@ class CompeteScreen extends ConsumerWidget {
                           const SizedBox(height: 6),
                         ],
                       ],
-
-                      // Finished races
                       if (finished.isNotEmpty) ...[
                         SizedBox(height: active.isEmpty ? 0 : 20),
                         const _SectionLabel(label: 'Finished'),
@@ -114,8 +110,6 @@ class CompeteScreen extends ConsumerWidget {
                           const SizedBox(height: 6),
                         ],
                       ],
-
-                      // Quick starts
                       const SizedBox(height: 24),
                       const _SectionLabel(label: 'Quick starts'),
                       const SizedBox(height: 12),
@@ -123,7 +117,6 @@ class CompeteScreen extends ConsumerWidget {
                         icon: Icons.directions_run_rounded,
                         label: '10 Jumping Jacks',
                         sublabel: 'Camera verified',
-                        accentColor: NuvoColors.blue,
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.jumpingJacks,
@@ -134,7 +127,6 @@ class CompeteScreen extends ConsumerWidget {
                         icon: Icons.fitness_center_rounded,
                         label: '10 Pushups',
                         sublabel: 'Camera verified',
-                        accentColor: NuvoColors.coral,
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.pushups,
@@ -145,7 +137,6 @@ class CompeteScreen extends ConsumerWidget {
                         icon: Icons.accessibility_new_rounded,
                         label: '10 Squats',
                         sublabel: 'Camera verified',
-                        accentColor: NuvoColors.aqua,
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.squats,
@@ -163,8 +154,6 @@ class CompeteScreen extends ConsumerWidget {
   }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
-
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label});
   final String label;
@@ -181,8 +170,6 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
-
-// ── Hero ──────────────────────────────────────────────────────────────────────
 
 class _CompeteHero extends StatelessWidget {
   const _CompeteHero({
@@ -304,8 +291,6 @@ class _CountPill extends StatelessWidget {
   }
 }
 
-// ── Race lane card ────────────────────────────────────────────────────────────
-
 class _RaceLaneCard extends StatelessWidget {
   const _RaceLaneCard({required this.race, required this.onTap, this.userId});
 
@@ -322,16 +307,14 @@ class _RaceLaneCard extends StatelessWidget {
     final isComplete = pct >= 100 || race.status != 'active';
     final isSolo = count <= 1;
 
-    final others = race.participants
-        .where((p) => p.userId != userId)
-        .take(4)
-        .toList();
+    final others =
+        race.participants.where((p) => p.userId != userId).take(4).toList();
 
     final state = isComplete
         ? _RaceCardState.finished
         : isSolo
-        ? _RaceCardState.solo
-        : _RaceCardState.live;
+            ? _RaceCardState.solo
+            : _RaceCardState.live;
 
     return PressableScale(
       onTap: onTap,
@@ -361,10 +344,8 @@ class _RaceLaneCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: state.pillBackground,
                     borderRadius: BorderRadius.circular(99),
@@ -414,10 +395,7 @@ class _RaceLaneCard extends StatelessWidget {
                 if (isSolo)
                   _SoloHint(onInvite: onTap)
                 else if (others.isNotEmpty)
-                  _ParticipantAvatarRow(
-                    participants: others,
-                    total: count,
-                  )
+                  _ParticipantAvatarRow(participants: others, total: count)
                 else
                   Text(
                     'Solo race',
@@ -436,8 +414,6 @@ class _RaceLaneCard extends StatelessWidget {
     );
   }
 }
-
-// ── Card state helpers ─────────────────────────────────────────────────────────
 
 enum _RaceCardState { live, solo, finished }
 
@@ -542,8 +518,6 @@ class _LogMoveChip extends StatelessWidget {
   }
 }
 
-// ── Participant avatar row ────────────────────────────────────────────────────
-
 class _ParticipantAvatarRow extends StatelessWidget {
   const _ParticipantAvatarRow({
     required this.participants,
@@ -578,8 +552,6 @@ class _ParticipantAvatarRow extends StatelessWidget {
   }
 }
 
-// ── Quick start row ───────────────────────────────────────────────────────────
-
 class _QuickStartRow extends StatelessWidget {
   const _QuickStartRow({
     required this.icon,
@@ -610,52 +582,68 @@ class _QuickStartRow extends StatelessWidget {
             Container(
               width: 38,
               height: 38,
-             NuvoH r Offsetdecoration: BoxDecoration(
-        r   us  Nuv RaliiCoa
-        p  t rB o   Nuv C  crl. Grey
-        faceColo onNuv CE d:s.whiCo,
-        b  dlnC   children: [       fontWeight: FontWeight.w800,
+              decoration: BoxDecoration(
+                color: NuvoColors.panel,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: NuvoColors.border, width: 1.2),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: NuvoColors.navy, size: 18),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: NuvoColors.navy,
+                      fontWeight: FontWeight.w800,
                     ),
-         Be         color: NuvoColors.muted,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    sublabel,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
-              ),
+            ),
             const Icon(
-                ons.chevron_right,
+              Icons.chevron_right,
               color: NuvoColors.textMuted,
               size: 16,
-              
-            
-          ),
-      ),
+            ),
           ],
+        ),
       ),
- ),
- );
- }
+    );
+  }
+}
 
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.onStart});
+  final VoidCallback onStart;
 
-─ Empty state ─────────────────────────────────────────────────────────────
-
-s _EmptyState extes StatelessWidget {
-t _EmptyState({required this.onStart});
-  final VoidCallbatart;
-
-erride
-idget build(BuildContecontext) {
-   return Column(
-  crossAxisAlignmentCrossAxisAlignment.start,
-children: [
-        Containe
-       width: 
-     height:52,
-       decoron: BoxDecoration(
-           coluvoColors.blue.withValues(alpha: 0.10),
-         bordedius: BorderRadius.circular(16),
-          ),or: NuvoColors.blue,
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const NuvoIcon(
+            NuvoIconType.flag,
+            color: NuvoColors.blue,
             size: 22,
           ),
         ),

@@ -5,10 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/animations.dart' hide PressableScale;
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/race_ring.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -953,120 +953,97 @@ class _CompactBoardRow extends StatelessWidget {
     final count = board.racerCount ?? 0;
     final isComplete = pct >= 100;
 
-    // CTA-style hard offset, grey plate (not navy).
-    const offset = 4.0;
     return PressableScale(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(right: offset, bottom: offset),
-        child: Stack(
-          clipBehavior: Clip.none,
+      child: NuvoHardOffset(
+        radius: 18,
+        plateColor: NuvoColors.offsetGrey,
+        faceColor: NuvoColors.white,
+        borderColor: NuvoColors.offsetGrey,
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        child: Row(
           children: [
-            Positioned(
-              left: offset,
-              top: offset,
-              right: 0,
-              bottom: 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: NuvoColors.borderStrong,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-              decoration: BoxDecoration(
-                color: NuvoColors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: NuvoColors.borderStrong, width: 2),
-              ),
-              child: Row(
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          board.title,
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: NuvoColors.navy,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          board.boardContext,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: NuvoColors.muted,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (board.miniLeaderboard.isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          NuvoAvatarStack(
-                            avatars: board.miniLeaderboard
-                                .map(
-                                  (r) => (
-                                    initials: _initials(r.label),
-                                    photoUrl: r.profilePhotoUrl,
-                                  ),
-                                )
-                                .toList(),
-                            total: count,
-                            size: 22,
-                            max: 3,
-                            borderColor: NuvoColors.white,
-                          ),
-                        ],
-                      ],
+                  Text(
+                    board.title,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: NuvoColors.navy,
+                      fontWeight: FontWeight.w800,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isComplete
-                              ? NuvoColors.success.withValues(alpha: 0.10)
-                              : NuvoColors.actionBlue.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(99),
-                          border: Border.all(
-                            color: isComplete
-                                ? NuvoColors.success
-                                : NuvoColors.actionBlue,
-                            width: 1.3,
-                          ),
-                        ),
-                        child: Text(
-                          '$pct%',
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: isComplete
-                                ? NuvoColors.success
-                                : NuvoColors.actionBlue,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const NuvoIcon(
-                        NuvoIconType.arrow,
-                        color: NuvoColors.textMuted,
-                        size: 14,
-                      ),
-                    ],
+                  const SizedBox(height: 4),
+                  Text(
+                    board.boardContext,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  if (board.miniLeaderboard.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    NuvoAvatarStack(
+                      avatars: board.miniLeaderboard
+                          .map(
+                            (r) => (
+                              initials: _initials(r.label),
+                              photoUrl: r.profilePhotoUrl,
+                            ),
+                          )
+                          .toList(),
+                      total: count,
+                      size: 22,
+                      max: 3,
+                      borderColor: NuvoColors.white,
+                    ),
+                  ],
                 ],
               ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isComplete
+                        ? NuvoColors.success.withValues(alpha: 0.10)
+                        : NuvoColors.actionBlue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: isComplete
+                          ? NuvoColors.success
+                          : NuvoColors.actionBlue,
+                      width: 1.3,
+                    ),
+                  ),
+                  child: Text(
+                    '$pct%',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: isComplete
+                          ? NuvoColors.success
+                          : NuvoColors.actionBlue,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const NuvoIcon(
+                  NuvoIconType.arrow,
+                  color: NuvoColors.textMuted,
+                  size: 14,
+                ),
+              ],
             ),
           ],
         ),
@@ -1090,10 +1067,7 @@ class _ActivityFeed extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         itemCount: activity.length,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, i) => FadeSlideIn(
-          delay: Duration(milliseconds: 60 * i),
-          child: _ActivityCard(item: activity[i]),
-        ),
+        itemBuilder: (context, i) => _ActivityCard(item: activity[i]),
       ),
     );
   }

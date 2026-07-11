@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../arena/presentation/arena_screen_fixed.dart';
-import '../../compete/presentation/compete_screen.dart';
+import '../../compete/presentation/compete_screen_fixed.dart';
 import '../../move/presentation/move_screen.dart';
 import '../../pass/presentation/pass_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
