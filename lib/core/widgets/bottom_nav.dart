@@ -60,15 +60,8 @@ class NuvoBottomNav extends StatelessWidget {
               decoration: BoxDecoration(
                 color: NuvoColors.white,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: NuvoColors.navy, width: 1.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: NuvoColors.navy2.withValues(alpha: 0.08),
-                    blurRadius: 16,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+                border: Border.all(color: NuvoColors.inkNavy, width: 2),
+                boxShadow: AppShadows.hardShadow4,
               ),
               child: Row(
                 children: [
@@ -170,8 +163,8 @@ class _NavButton extends StatelessWidget {
     }
 
     final color = selected
-        ? NuvoColors.navy
-        : NuvoColors.navy.withValues(alpha: 0.58);
+        ? NuvoColors.actionBlue
+        : NuvoColors.navy.withValues(alpha: 0.55);
 
     return Expanded(
       child: GestureDetector(
@@ -185,7 +178,7 @@ class _NavButton extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: selected
-                  ? NuvoColors.navy.withValues(alpha: 0.08)
+                  ? NuvoColors.actionBlue.withValues(alpha: 0.10)
                   : CupertinoColors.transparent,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
             ),

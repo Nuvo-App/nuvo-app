@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 
 // ── NuvoPage ──────────────────────────────────────────────────────────────────
@@ -74,21 +75,10 @@ class NuvoTopBar extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 52),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: NuvoColors.white.withValues(alpha: 0.94),
+          color: NuvoColors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: NuvoColors.blue.withValues(alpha: 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 10),
-            ),
-            const BoxShadow(
-              color: Color(0x080A1A33),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
+          border: Border.all(color: NuvoColors.inkNavy, width: 2),
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: Row(
           children: [

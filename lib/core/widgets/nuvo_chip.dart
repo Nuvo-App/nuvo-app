@@ -20,12 +20,12 @@ class NuvoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor ?? NuvoColors.blue;
-    final bgColor = selected ? NuvoColors.bluePale : NuvoColors.sectionBlue;
-    final borderColor = selected
-        ? accent.withValues(alpha: 0.35)
-        : NuvoColors.border;
-    final textColor = selected ? accent : NuvoColors.muted;
+    final accent = accentColor ?? NuvoColors.actionBlue;
+    final bgColor = selected
+        ? accent.withValues(alpha: 0.10)
+        : NuvoColors.white;
+    final border = selected ? accent : NuvoColors.border;
+    final textColor = selected ? accent : NuvoColors.navy;
 
     return GestureDetector(
       onTap: onTap,
@@ -36,11 +36,14 @@ class NuvoChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: borderColor),
+          border: Border.all(color: border, width: selected ? 1.5 : 1),
         ),
         child: Text(
           label,
-          style: AppTextStyles.labelMedium.copyWith(color: textColor),
+          style: AppTextStyles.labelMedium.copyWith(
+            color: textColor,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );

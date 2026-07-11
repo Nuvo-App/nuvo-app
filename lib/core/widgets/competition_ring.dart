@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/nuvo_tokens.dart';
 
 /// A reusable circular race progress component.
@@ -377,18 +376,21 @@ class _RingPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = arcRect.width / 2;
 
-    // Track ring
+    // Navy outline track — the ring itself, not an outer wrapper
+    const navyOutline = NuvoTokens.inkNavy;
+    const brightBlue = NuvoTokens.actionBlue;
+
     final trackPaint = Paint()
-      ..color = NuvoTokens.gray200
+      ..color = navyOutline
       ..style = PaintingStyle.stroke
       ..strokeWidth = ringThickness
       ..strokeCap = StrokeCap.round;
     canvas.drawArc(arcRect, 0, 2 * math.pi, false, trackPaint);
 
-    // Race-track tick marks
+    // Subtle inner ticks for race-track feel
     final tickCount = 60;
     final tickPaint = Paint()
-      ..color = NuvoTokens.gray200.withValues(alpha: 0.5)
+      ..color = navyOutline.withValues(alpha: 0.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     for (var i = 0; i < tickCount; i++) {
@@ -411,34 +413,25 @@ class _RingPainter extends CustomPainter {
       canvas.drawLine(start, end, tickPaint);
     }
 
-    // Gradient progress arc
+    // Bright blue progress arc rides on the navy track
     final sweep = (2 * math.pi) * ((progressPercent / 100) * progress);
     if (sweep > 0) {
-      final gradientShader = SweepGradient(
-        center: Alignment.center,
-        startAngle: -math.pi / 2,
-        endAngle: -math.pi / 2 + sweep,
-        colors: const [NuvoColors.blue, NuvoColors.blue2, NuvoColors.navy],
-        stops: const [0.0, 0.5, 1.0],
-        transform: const GradientRotation(-math.pi / 2),
-      ).createShader(arcRect);
-
       final progressPaint = Paint()
-        ..shader = gradientShader
+        ..color = brightBlue
         ..style = PaintingStyle.stroke
-        ..strokeWidth = ringThickness
+        ..strokeWidth = ringThickness * 0.72
         ..strokeCap = StrokeCap.round;
       canvas.drawArc(arcRect, -math.pi / 2, sweep, false, progressPaint);
 
-      // Soft glow at the leading edge
+      // Leading edge dot
       final headAngle = -math.pi / 2 + sweep;
       final headCenter =
           center +
           Offset(radius * math.cos(headAngle), radius * math.sin(headAngle));
-      final glowPaint = Paint()
-        ..color = NuvoColors.blue2.withValues(alpha: 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(headCenter, ringThickness * 1.4, glowPaint);
+      final headPaint = Paint()..color = brightBlue;
+      canvas.drawCircle(headCenter, ringThickness * 0.55, headPaint);
+      final headCore = Paint()..color = Colors.white;
+      canvas.drawCircle(headCenter, ringThickness * 0.22, headCore);
     }
   }
 

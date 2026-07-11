@@ -27,11 +27,9 @@ class NuvoErrorState extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: NuvoColors.danger.withValues(alpha: 0.08),
+                color: NuvoColors.white,
                 borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: Border.all(
-                  color: NuvoColors.danger.withValues(alpha: 0.20),
-                ),
+                border: Border.all(color: NuvoColors.danger, width: 2),
               ),
               child: const Icon(
                 Icons.wifi_off_rounded,

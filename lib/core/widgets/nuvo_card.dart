@@ -4,15 +4,17 @@ import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 
-/// Clean white surface card with subtle shadow — light theme.
+/// White surface card — hard offset shadow; light border by default.
+/// Pass [borderColor] = NuvoColors.inkNavy for hero/focus surfaces.
 class NuvoCard extends StatelessWidget {
   const NuvoCard({
     super.key,
     required this.child,
     this.padding,
     this.onTap,
-    this.elevated = false,
+    this.elevated = true,
     this.borderColor,
+    this.borderWidth = 1,
   });
 
   final Widget child;
@@ -20,6 +22,7 @@ class NuvoCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool elevated;
   final Color? borderColor;
+  final double borderWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -28,8 +31,11 @@ class NuvoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.card,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: borderColor ?? NuvoColors.border, width: 1),
-        boxShadow: elevated ? AppShadows.card : null,
+        border: Border.all(
+          color: borderColor ?? NuvoColors.border,
+          width: borderWidth,
+        ),
+        boxShadow: elevated ? AppShadows.hardShadow4 : null,
       ),
       child: child,
     );

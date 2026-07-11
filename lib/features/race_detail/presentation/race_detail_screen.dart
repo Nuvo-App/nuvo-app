@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/competition_ring.dart';
 import '../../../core/widgets/nuvo_board_components.dart';
@@ -302,7 +303,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final chase = user == null ? null : ChaseContext.compute(race, user.id);
     final rank = chase?.myRank;
     final heroChaseCopy = myRaceComplete
-        ? (rank != null ? 'You finished #$rank.' : 'You finished.')
+        ? (rank != null
+              ? 'Finish line crossed · you placed #$rank.'
+              : 'Finish line crossed.')
         : chase?.chaseCopy;
     final boardParticipants = [
       for (var i = 0; i < sorted.length; i++)
@@ -333,7 +336,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final recentMoveCount = race.recentProofs.length;
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: NuvoColors.pageIce,
       body: Column(
         children: [
           // ── Race header ─────────────────────────────────────────────────────
@@ -367,9 +370,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     ),
                     avatars: heroAvatars,
                     racerCount: race.participantCount,
-                    daysLeft: _daysLeft(race.finishLineAt),
+                    daysLeft: myRaceComplete
+                        ? null
+                        : _daysLeft(race.finishLineAt),
                     badgeLabel: eligibility.movementDefinition?.title,
-                    progressPercent: null,
+                    progressPercent: myRaceComplete ? myProgress : null,
+                    isComplete: myRaceComplete,
                     ringParticipants: race.participants
                         .map(
                           (p) => CompetitionRingParticipant(
@@ -610,172 +616,255 @@ class _NavyHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final isActive = race.status == 'active';
+    final isComplete = isParticipant && myProgress >= 100;
+    const navy = NuvoColors.inkNavy;
+    const brightBlue = NuvoColors.actionBlue;
 
     return Container(
-      decoration: const BoxDecoration(color: NuvoColors.navy),
-      padding: EdgeInsets.fromLTRB(20, safeTop + 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Back row
-          Row(
-            children: [
-              PressableScale(
-                onTap: onBack,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: NuvoColors.white.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const NuvoIcon(
-                    NuvoIconType.back,
-                    color: NuvoColors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              // Status pill
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? NuvoColors.success.withValues(alpha: 0.20)
-                      : NuvoColors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                ),
-                child: Text(
-                  isActive ? 'Active' : race.status.toUpperCase(),
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              if (onSettings != null) ...[
-                const SizedBox(width: 8),
+      color: NuvoColors.pageIce,
+      padding: EdgeInsets.fromLTRB(20, safeTop + 12, 20, 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        decoration: BoxDecoration(
+          color: NuvoColors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isComplete ? NuvoColors.success : navy,
+            width: 2,
+          ),
+          boxShadow: AppShadows.hardShadow5,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
                 PressableScale(
-                  onTap: onSettings,
+                  onTap: onBack,
                   child: Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: NuvoColors.white.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.tune_rounded,
                       color: NuvoColors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: navy, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: NuvoColors.inkNavy,
+                          blurRadius: 0,
+                          offset: Offset(2, 2),
+                        ),
+                      ],
+                    ),
+                    child: const NuvoIcon(
+                      NuvoIconType.back,
+                      color: NuvoColors.navy,
                       size: 18,
                     ),
                   ),
                 ),
-              ],
-            ],
-          ),
-
-          const SizedBox(height: 20),
-
-          // Race title — Hero matches arena card for shared-element transition
-          Hero(
-            tag: 'race-title-${race.id}',
-            child: Material(
-              color: Colors.transparent,
-              child: Text(
-                race.displayTitle,
-                style: AppTextStyles.headlineLarge.copyWith(
-                  color: NuvoColors.white,
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isComplete
+                        ? NuvoColors.success.withValues(alpha: 0.12)
+                        : isActive
+                        ? brightBlue.withValues(alpha: 0.10)
+                        : NuvoColors.panel,
+                    borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                    border: Border.all(
+                      color: isComplete
+                          ? NuvoColors.success
+                          : isActive
+                          ? brightBlue
+                          : navy,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Text(
+                    isComplete
+                        ? 'Finish line'
+                        : isActive
+                        ? 'Live'
+                        : race.status.toUpperCase(),
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: isComplete
+                          ? NuvoColors.success
+                          : isActive
+                          ? brightBlue
+                          : NuvoColors.navy,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-                maxLines: 2,
+                if (onSettings != null) ...[
+                  const SizedBox(width: 8),
+                  PressableScale(
+                    onTap: onSettings,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: NuvoColors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: navy, width: 2),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: NuvoColors.inkNavy,
+                            blurRadius: 0,
+                            offset: Offset(2, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.tune_rounded,
+                        color: NuvoColors.navy,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Race title — Hero matches arena card for shared-element transition
+            Hero(
+              tag: 'race-title-${race.id}',
+              child: Material(
+                color: Colors.transparent,
+                child: Text(
+                  race.displayTitle,
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _contextLine(race),
-            style: AppTextStyles.bodySmall.copyWith(
-              color: NuvoColors.white.withValues(alpha: 0.75),
-            ),
-          ),
-
-          // My progress — only shown when participant
-          if (isParticipant) ...[
-            const SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Text(
-                  '$myProgress',
-                  style: AppTextStyles.displaySmall.copyWith(
-                    color: NuvoColors.white,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4, left: 3),
-                  child: Text(
-                    '%',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.7),
+                for (final chip in _headerChips(race))
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: brightBlue.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: brightBlue, width: 1.4),
+                    ),
+                    child: Text(
+                      chip,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: brightBlue,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
-            const SizedBox(height: 2),
-            Text(
-              'Your progress',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.white.withValues(alpha: 0.75),
-                letterSpacing: 0,
-              ),
-            ),
-            const SizedBox(height: 14),
-            NuvoRaceLane(
-              progressPercent: myProgress,
-              trackHeight: 5,
-              dotDiameter: 16,
-              onDark: true,
-            ),
-            // Chase context
-            Builder(
-              builder: (context) {
-                if (userId == null) return const SizedBox.shrink();
-                final chase = ChaseContext.compute(race, userId!);
-                if (chase.chaseCopy == null) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    chase.chaseCopy!,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.75),
+
+            // My progress — only shown when participant
+            if (isParticipant) ...[
+              const SizedBox(height: 18),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$myProgress',
+                    style: AppTextStyles.displaySmall.copyWith(
+                      color: isComplete ? NuvoColors.success : brightBlue,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                );
-              },
-            ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4, left: 3),
+                    child: Text(
+                      '%',
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: isComplete
+                            ? NuvoColors.success.withValues(alpha: 0.8)
+                            : brightBlue.withValues(alpha: 0.75),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      isComplete ? 'Finish line crossed' : 'Your progress',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.muted,
+                        letterSpacing: 0,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              NuvoRaceLane(
+                progressPercent: myProgress,
+                trackHeight: 5,
+                dotDiameter: 16,
+                onDark: false,
+              ),
+              Builder(
+                builder: (context) {
+                  if (userId == null) return const SizedBox.shrink();
+                  final chase = ChaseContext.compute(race, userId!);
+                  final copy = isComplete
+                      ? 'Pull in your crew and move the board again.'
+                      : chase.chaseCopy;
+                  if (copy == null || copy.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      copy,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.navy,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
-  String _contextLine(Race race) {
-    final parts = <String>[];
+  List<String> _headerChips(Race race) {
+    final chips = <String>[];
     final eligibility = resolveCameraVerification(race);
     if (eligibility.isCameraVerifiable) {
-      parts.add('Camera verified');
+      chips.add('Camera verified');
     } else {
-      parts.add(eligibility.unsupportedMessage);
+      chips.add('Proof needed');
     }
     if (race.targetValue != null) {
-      parts.add('${race.targetValue} ${race.unit ?? 'reps'}');
+      final unit = (race.unit ?? 'reps').trim();
+      chips.add('First to ${race.targetValue} $unit');
     }
-    return parts.join(' · ');
+    return chips;
   }
 }
 
@@ -1090,7 +1179,7 @@ String _heroSubcopy({
   final leader = sorted.isEmpty ? null : sorted.first;
   final me = userId == null ? null : race.participantFor(userId);
   if (me != null && me.progressPercent >= 100) {
-    return 'See if your crew can beat your finish.';
+    return 'You hit the finish line. Pull in your crew and move the board again.';
   }
   final parts = <String>[];
 
@@ -1165,14 +1254,22 @@ class _ManageRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
           color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: NuvoColors.divider),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: NuvoColors.inkNavy, width: 2),
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: Row(
           children: [
             Icon(icon, color: NuvoColors.navy, size: 18),
             const SizedBox(width: 12),
-            Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
             const NuvoIcon(
               NuvoIconType.arrow,
               color: NuvoColors.muted,

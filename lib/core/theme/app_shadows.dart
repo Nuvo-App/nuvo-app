@@ -3,24 +3,36 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 abstract final class AppShadows {
-  static const Color _navyShadow = Color(0xFF07152B);
+  static const Color _inkNavy = NuvoColors.inkNavy;
 
-  // Broad, soft elevation for signature objects such as the race track.
-  static const List<BoxShadow> heroShadow = [
-    BoxShadow(
-      color: Color(0x2407152B),
-      blurRadius: 24,
-      spreadRadius: -6,
-      offset: Offset(0, 14),
-    ),
+  /// Hard offset 3 — rows, chips, compact controls.
+  static const List<BoxShadow> hardShadow3 = [
+    BoxShadow(color: _inkNavy, blurRadius: 0, offset: Offset(3, 3)),
   ];
 
-  // Compact physical offset for primary controls only.
-  static const List<BoxShadow> actionShadow = [
-    BoxShadow(color: _navyShadow, blurRadius: 0, offset: Offset(0, 4)),
+  /// Hard offset 4 — buttons, board lanes, standard cards.
+  static const List<BoxShadow> hardShadow4 = [
+    BoxShadow(color: _inkNavy, blurRadius: 0, offset: Offset(4, 4)),
   ];
 
-  // Lower, wider lift for the global navigation dock.
+  /// Hard offset 5 — hero / focus surfaces.
+  static const List<BoxShadow> hardShadow5 = [
+    BoxShadow(color: _inkNavy, blurRadius: 0, offset: Offset(5, 5)),
+  ];
+
+  // Primary interactive elevation (buttons, action cards).
+  static const List<BoxShadow> actionShadow = hardShadow4;
+
+  // Hero surfaces (focus board, race hero).
+  static const List<BoxShadow> heroShadow = hardShadow5;
+
+  // Selected / urgent strips.
+  static const List<BoxShadow> selectedShadow = hardShadow3;
+
+  // Default card elevation — hard offset (Phase 0).
+  static const List<BoxShadow> card = hardShadow4;
+
+  // Lower, wider lift for the global navigation dock (soft, intentional).
   static const List<BoxShadow> dockShadow = [
     BoxShadow(
       color: Color(0x1A07152B),
@@ -37,16 +49,6 @@ abstract final class AppShadows {
       spreadRadius: -8,
       offset: Offset(0, -8),
     ),
-  ];
-
-  // Restrained treatment for selected or urgent race strips.
-  static const List<BoxShadow> selectedShadow = [
-    BoxShadow(color: Color(0x3307152B), blurRadius: 0, offset: Offset(0, 3)),
-  ];
-
-  // Standard quiet elevation for legacy components that still expect a card.
-  static const List<BoxShadow> card = [
-    BoxShadow(color: Color(0x0D07152B), blurRadius: 14, offset: Offset(0, 6)),
   ];
 
   // Soft blue glow for focused/active elements
