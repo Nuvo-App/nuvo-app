@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/nuvo_tokens.dart';
+import '../../../../core/widgets/nuvo_button.dart';
 import '../../../../core/widgets/pressable_scale.dart';
 import '../../data/arena_models.dart';
 
@@ -9,13 +11,21 @@ import '../../data/arena_models.dart';
 
 const _kNavy = NuvoColors.navy;
 const _kBlue = NuvoColors.blue;
-const _kMuted = Color(0xFF66728A);
-const _kBorder = Color(0xFFDCE5F2);
-const _kIcy = Color(0xFFEEF5FF);
+const _kMuted = NuvoColors.textMuted;
+const _kBorder = NuvoColors.border;
+const _kIcy = NuvoColors.icyBlue;
 
 const _kCardShadow = [
-  BoxShadow(color: Color(0x0D07152B), blurRadius: 12, offset: Offset(0, 4)),
-  BoxShadow(color: Color(0x0607152B), blurRadius: 3, offset: Offset(0, 1)),
+  BoxShadow(
+    color: Color.fromRGBO(10, 26, 51, 0.06),
+    blurRadius: 12,
+    offset: Offset(0, 4),
+  ),
+  BoxShadow(
+    color: Color.fromRGBO(10, 26, 51, 0.03),
+    blurRadius: 3,
+    offset: Offset(0, 1),
+  ),
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -335,28 +345,10 @@ class _BlueButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: _kBlue,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x28075BFF),
-              blurRadius: 0,
-              offset: Offset(0, 3),
-            ),
-          ],
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: AppTextStyles.titleMedium.copyWith(color: Colors.white),
-        ),
-      ),
+    return NuvoPrimaryButton(
+      label: label,
+      expand: true,
+      onPressed: onTap,
     );
   }
 }
@@ -389,7 +381,7 @@ class _RaceBoardTitleBlock extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0F1F3),
+                    color: NuvoTokens.gray100,
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
@@ -432,7 +424,7 @@ class _RaceBoardTitleBlock extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                          color: NuvoColors.white,
                         ),
                       ),
                     ),
@@ -506,9 +498,9 @@ class _CrewDots extends StatelessWidget {
                 width: dotSize,
                 height: dotSize,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0F1F3),
+                  color: NuvoTokens.gray100,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(color: NuvoColors.white, width: 2),
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -539,9 +531,9 @@ class _DotCircle extends StatelessWidget {
       width: 28,
       height: 28,
       decoration: BoxDecoration(
-        color: isCurrentUser ? _kIcy : const Color(0xFFE8ECF2),
+        color: isCurrentUser ? _kIcy : NuvoTokens.gray100,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: NuvoColors.white, width: 2),
       ),
       alignment: Alignment.center,
       child: Text(

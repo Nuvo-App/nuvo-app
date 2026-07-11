@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/animations.dart' hide PressableScale;
+import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
@@ -47,16 +49,21 @@ class MoveScreen extends ConsumerWidget {
       backgroundColor: NuvoColors.page,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            18,
+            20,
+            NuvoBottomNav.bottomPadding(context),
+          ),
           children: [
             // ── Hero ─────────────────────────────────────────────────────────
-            _MoveHero(
-              readyCount: readyRaces.length,
-            ),
+            _MoveHero(readyCount: readyRaces.length),
             const SizedBox(height: 28),
 
             // ── Ready to move ────────────────────────────────────────────────
-            if (raceState.loading && readyRaces.isEmpty && completedRaces.isEmpty)
+            if (raceState.loading &&
+                readyRaces.isEmpty &&
+                completedRaces.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 32),
@@ -70,7 +77,7 @@ class MoveScreen extends ConsumerWidget {
               _EmptyState(onStart: () => context.push('/races/new'))
             else if (readyRaces.isNotEmpty) ...[
               const _SectionLabel(label: 'Ready to move'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               for (var i = 0; i < readyRaces.length; i++) ...[
                 FadeSlideIn(
                   delay: Duration(milliseconds: 60 * i),
@@ -90,24 +97,21 @@ class MoveScreen extends ConsumerWidget {
                     },
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
               ],
             ],
 
             // ── Completed races ──────────────────────────────────────────────
             if (completedRaces.isNotEmpty) ...[
-              const SizedBox(height: 28),
-              _CompletedSection(
-                completedRaces: completedRaces,
-                uid: uid,
-              ),
+              const SizedBox(height: 20),
+              _CompletedSection(completedRaces: completedRaces, uid: uid),
             ],
 
             // ── Recent moves ─────────────────────────────────────────────────
             if (recentMoves.isNotEmpty) ...[
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               const _SectionLabel(label: 'Recent moves'),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               for (final entry in recentMoves)
                 _RecentMoveRow(proof: entry.proof, race: entry.race),
             ],
@@ -127,17 +131,11 @@ class _MoveHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1A2C6D),
-            Color(0xFF2A4C9B),
-          ],
-        ),
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(NuvoRadii.hero),
+        border: NuvoBorders.quiet,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,15 +149,16 @@ class _MoveHero extends StatelessWidget {
                     Text(
                       'Verify a move',
                       style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.white,
+                        color: NuvoColors.navy,
                         height: 1.05,
+                        fontSize: 26,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'Pick a race and use camera verification.',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.white.withValues(alpha: 0.75),
+                        color: NuvoColors.muted,
                       ),
                     ),
                   ],
@@ -173,13 +172,14 @@ class _MoveHero extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoColors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(99),
+                    color: NuvoColors.panel,
+                    borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                    border: NuvoBorders.quiet,
                   ),
                   child: Text(
                     '$readyCount ready',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.white,
+                      color: NuvoColors.navy,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -312,17 +312,11 @@ class _RaceLogRow extends StatelessWidget {
     return PressableScale(
       onTap: isComplete ? null : onLog,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          border: NuvoBorders.quiet,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,8 +335,8 @@ class _RaceLogRow extends StatelessWidget {
                 if (!isComplete)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
+                      horizontal: 12,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
                       color: NuvoColors.blue,
@@ -387,9 +381,9 @@ class _RaceLogRow extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
-            NuvoRaceLane(progressPercent: pct, trackHeight: 3, dotDiameter: 10),
             const SizedBox(height: 10),
+            NuvoRaceLane(progressPercent: pct, trackHeight: 3, dotDiameter: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -488,18 +482,12 @@ class _RecentMoveRow extends StatelessWidget {
         : '?';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: NuvoBorders.quiet,
       ),
       child: Row(
         children: [

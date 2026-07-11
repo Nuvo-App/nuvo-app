@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/competition_ring.dart';
 import '../../../core/widgets/nuvo_board_components.dart';
@@ -355,8 +356,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
                 children: [
                   NuvoRaceHero(
-                    title: race.displayTitle,
-                    contextLine: _contextLine(race),
+                    title: null,
+                    contextLine: null,
                     rankLabel: rank == null ? '--' : '#$rank',
                     chaseCopy: heroChaseCopy,
                     subcopy: _heroSubcopy(
@@ -367,6 +368,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     avatars: heroAvatars,
                     racerCount: race.participantCount,
                     daysLeft: _daysLeft(race.finishLineAt),
+                    badgeLabel: eligibility.movementDefinition?.title,
+                    progressPercent: null,
                     ringParticipants: race.participants
                         .map(
                           (p) => CompetitionRingParticipant(
@@ -609,16 +612,7 @@ class _NavyHeader extends StatelessWidget {
     final isActive = race.status == 'active';
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1A2C6D),
-            Color(0xFF2A4C9B),
-          ],
-        ),
-      ),
+      decoration: const BoxDecoration(color: NuvoColors.navy),
       padding: EdgeInsets.fromLTRB(20, safeTop + 16, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,7 +626,7 @@ class _NavyHeader extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: NuvoColors.white.withValues(alpha: 0.15),
+                    color: NuvoColors.white.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: const NuvoIcon(
@@ -653,7 +647,7 @@ class _NavyHeader extends StatelessWidget {
                   color: isActive
                       ? NuvoColors.success.withValues(alpha: 0.20)
                       : NuvoColors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(NuvoRadii.pill),
                 ),
                 child: Text(
                   isActive ? 'Active' : race.status.toUpperCase(),
@@ -671,7 +665,7 @@ class _NavyHeader extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: NuvoColors.white.withValues(alpha: 0.15),
+                      color: NuvoColors.white.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -878,52 +872,6 @@ class _CheckpointPath extends StatelessWidget {
   }
 }
 
-class _CompletedMilestones extends StatelessWidget {
-  const _CompletedMilestones({
-    required this.progressPercent,
-    required this.progressValue,
-    required this.targetValue,
-    required this.unit,
-  });
-
-  final int progressPercent;
-  final int? progressValue;
-  final int? targetValue;
-  final String? unit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-          childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-          initiallyExpanded: false,
-          title: Text('Show completed path', style: AppTextStyles.titleMedium),
-          subtitle: Text(
-            'Finish line reached',
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-          ),
-          children: [
-            _CheckpointPath(
-              progressPercent: progressPercent,
-              progressValue: progressValue,
-              targetValue: targetValue,
-              unit: unit,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _CheckpointRow extends StatelessWidget {
   const _CheckpointRow({
     required this.checkpoint,
@@ -1092,10 +1040,7 @@ class _CompleteCallout extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '$progress% complete',
-                  style: AppTextStyles.titleMedium,
-                ),
+                Text('$progress% complete', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 2),
                 Text(
                   'Challenge your crew to beat your score.',
@@ -1124,20 +1069,6 @@ String _moveActionLine(RaceProof proof, String? unit) {
     'needs_review' => '$verb · Under review',
     _ => verb,
   };
-}
-
-String _contextLine(Race race) {
-  final parts = <String>[];
-  final eligibility = resolveCameraVerification(race);
-  if (eligibility.isCameraVerifiable) {
-    parts.add('Camera verified');
-  } else {
-    parts.add(eligibility.unsupportedMessage);
-  }
-  if (race.targetValue != null) {
-    parts.add('${race.targetValue} ${race.unit ?? 'reps'}');
-  }
-  return parts.join(' · ');
 }
 
 String _initials(String name) {

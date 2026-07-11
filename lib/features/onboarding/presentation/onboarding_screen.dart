@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/presentation/auth_controller.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -155,23 +156,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    const _FieldLabel('FULL NAME'),
-                    const SizedBox(height: 8),
-                    TextField(
+                    NuvoTextInput(
                       controller: _nameController,
-                      textInputAction: TextInputAction.next,
+                      label: 'FULL NAME',
+                      hint: 'Your name',
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(hintText: 'Your name'),
                     ),
                     const SizedBox(height: 20),
 
-                    const _FieldLabel('USERNAME'),
-                    const SizedBox(height: 8),
-                    TextField(
+                    NuvoTextInput(
                       controller: _usernameController,
-                      decoration: const InputDecoration(
-                        prefixText: '@ ',
-                        hintText: 'handle',
+                      label: 'USERNAME',
+                      hint: 'handle',
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 14),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 1,
+                          child: Text('@', style: AppTextStyles.bodyMedium),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -266,19 +269,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   curve: Curves.easeOutCubic,
                 ),
       ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.muted),
     );
   }
 }

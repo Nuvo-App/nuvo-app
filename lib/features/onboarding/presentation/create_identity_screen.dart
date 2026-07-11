@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/presentation/auth_controller.dart';
 
 class CreateIdentityScreen extends ConsumerStatefulWidget {
@@ -182,31 +183,26 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    const _FieldLabel('FULL NAME'),
-                    const SizedBox(height: 8),
-                    TextField(
+                    NuvoTextInput(
                       controller: _nameController,
-                      focusNode: _nameFocus,
-                      textInputAction: TextInputAction.next,
+                      label: 'FULL NAME',
+                      hint: 'Your name',
                       textCapitalization: TextCapitalization.words,
-                      onSubmitted: (_) => _usernameFocus.requestFocus(),
-                      decoration: const InputDecoration(hintText: 'Your name'),
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 20),
 
-                    const _FieldLabel('USERNAME'),
-                    const SizedBox(height: 8),
-                    TextField(
+                    NuvoTextInput(
                       controller: _usernameController,
-                      focusNode: _usernameFocus,
-                      textInputAction: TextInputAction.done,
-                      autocorrect: false,
-                      onSubmitted: (_) {
-                        if (_canContinue) _submit();
-                      },
-                      decoration: const InputDecoration(
-                        prefixText: '@ ',
-                        hintText: 'pick a handle',
+                      label: 'USERNAME',
+                      hint: 'pick a handle',
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 14),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: 1,
+                          child: Text('@', style: AppTextStyles.bodyMedium),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -276,19 +272,6 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                   curve: Curves.easeOutCubic,
                 ),
       ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.muted),
     );
   }
 }

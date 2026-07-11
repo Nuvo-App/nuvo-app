@@ -3,15 +3,108 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
 
-const _kRaceTrackBackground = Color(0xFFEFEFEF);
-const _kRaceTrackNavy = Color(0xFF0A1A33);
-const _kRaceTrackBlue = Color(0xFF5096F9);
-const _kRaceTrackMuted = Color(0xFFBBBEC4);
-const _kRaceTrackWhite = Color(0xFFFFFFFF);
-const _kRaceTrackGold = Color(0xFFD4A24C);
+const _kRaceTrackNavy = NuvoColors.navy;
+const _kRaceTrackBlue = NuvoColors.blue;
+const _kRaceTrackMuted = NuvoColors.silver;
+const _kRaceTrackWhite = NuvoColors.white;
+const _kRaceTrackGold = NuvoColors.gold;
+
+class RaceCompetitor {
+  const RaceCompetitor({
+    required this.id,
+    required this.name,
+    required this.initials,
+    required this.progress,
+    required this.rank,
+    this.avatarImageUrl,
+    this.isCurrentUser = false,
+    this.isLeader = false,
+  });
+
+  final String id;
+  final String name;
+  final String initials;
+  final double progress;
+  final int rank;
+  final String? avatarImageUrl;
+  final bool isCurrentUser;
+  final bool isLeader;
+
+  double get clampedProgress => progress.clamp(0.0, 1.0);
+}
+
+class NuvoRaceTrack extends StatelessWidget {
+  const NuvoRaceTrack({
+    super.key,
+    required this.competitors,
+    required this.totalGoal,
+    required this.currentValue,
+    required this.currentRank,
+    this.pressureCopy,
+    this.size = 260,
+    this.trackWidth = 9,
+    this.animationDuration = const Duration(milliseconds: 1050),
+    this.curve = Curves.easeInOutCubic,
+  }) : assert(totalGoal > 0, 'totalGoal must be greater than zero.');
+
+  final List<RaceCompetitor> competitors;
+  final int totalGoal;
+  final int currentValue;
+  final int currentRank;
+  final String? pressureCopy;
+  final double size;
+  final double trackWidth;
+  final Duration animationDuration;
+  final Curve curve;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = competitors.isEmpty
+        ? <AnimatedRaceTrackCompetitor>[
+            AnimatedRaceTrackCompetitor(
+              id: 'current',
+              name: 'You',
+              initials: 'Y',
+              progress: currentValue / totalGoal,
+              rank: currentRank,
+              isCurrentUser: true,
+              isLeader: currentRank == 1,
+            ),
+          ]
+        : competitors
+              .map(
+                (competitor) => AnimatedRaceTrackCompetitor(
+                  id: competitor.id,
+                  name: competitor.name,
+                  initials: competitor.initials,
+                  progress: competitor.progress,
+                  rank: competitor.rank,
+                  avatarImageUrl: competitor.avatarImageUrl,
+                  isCurrentUser: competitor.isCurrentUser,
+                  isLeader: competitor.isLeader,
+                ),
+              )
+              .toList();
+
+    return AnimatedRaceTrack(
+      competitors: normalized,
+      totalGoal: totalGoal,
+      currentValue: currentValue,
+      currentRank: currentRank,
+      pressureCopy: pressureCopy,
+      size: size,
+      trackWidth: trackWidth,
+      animationDuration: animationDuration,
+      curve: curve,
+      showLeaderboard: false,
+    );
+  }
+}
 
 /// Display data for a competitor on [AnimatedRaceTrack].
 ///
@@ -26,6 +119,7 @@ class AnimatedRaceTrackCompetitor {
     required this.rank,
     this.avatarImageUrl,
     this.isCurrentUser = false,
+    this.isLeader = false,
   });
 
   final String id;
@@ -35,6 +129,7 @@ class AnimatedRaceTrackCompetitor {
   final int rank;
   final String? avatarImageUrl;
   final bool isCurrentUser;
+  final bool isLeader;
 
   double get clampedProgress => progress.clamp(0.0, 1.0);
 }
@@ -54,8 +149,10 @@ class AnimatedRaceTrack extends StatefulWidget {
     this.animationDuration = const Duration(milliseconds: 1050),
     this.curve = Curves.easeInOutCubic,
     this.showLeaderboard = true,
-  }) : assert(competitors.length >= 2, 'AnimatedRaceTrack needs 2+ players.'),
-       assert(competitors.length <= 20, 'AnimatedRaceTrack supports up to 20.'),
+    this.currentValue,
+    this.currentRank,
+    this.pressureCopy,
+  }) : assert(competitors.length <= 20, 'AnimatedRaceTrack supports up to 20.'),
        assert(totalGoal > 0, 'totalGoal must be greater than zero.');
 
   final List<AnimatedRaceTrackCompetitor> competitors;
@@ -65,6 +162,9 @@ class AnimatedRaceTrack extends StatefulWidget {
   final Duration animationDuration;
   final Curve curve;
   final bool showLeaderboard;
+  final int? currentValue;
+  final int? currentRank;
+  final String? pressureCopy;
 
   @override
   State<AnimatedRaceTrack> createState() => _AnimatedRaceTrackState();
@@ -131,71 +231,84 @@ class _AnimatedRaceTrackState extends State<AnimatedRaceTrack>
         ? sorted.length * _RaceTrackLeaderboardRow.height
         : 0.0;
 
-    return ColoredBox(
-      color: _kRaceTrackBackground,
-      child: SizedBox(
-        width: widget.size,
-        height:
-            widget.size + (widget.showLeaderboard ? 18 + leaderboardHeight : 0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox.square(
-              dimension: widget.size,
-              child: AnimatedBuilder(
-                animation: Listenable.merge([
-                  _progressController,
-                  _rankPulseController,
-                ]),
-                builder: (context, _) {
-                  final currentProgress = _animatedProgressFor(currentUser.id);
-                  final placements = _markerPlacements(widget.competitors);
+    return SizedBox(
+      width: widget.size,
+      height:
+          widget.size + (widget.showLeaderboard ? 18 + leaderboardHeight : 0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox.square(
+            dimension: widget.size,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([
+                _progressController,
+                _rankPulseController,
+              ]),
+              builder: (context, _) {
+                final currentProgress = _animatedProgressFor(currentUser.id);
+                final placements = _markerPlacements(widget.competitors);
 
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      CustomPaint(
-                        size: Size.square(widget.size),
-                        painter: _RaceTrackPainter(
-                          progress: currentProgress,
-                          trackWidth: widget.trackWidth,
-                        ),
-                      ),
-                      _CenterResult(
-                        rank: currentUser.rank,
-                        progressValue: _progressValue(currentProgress),
-                        totalGoal: widget.totalGoal,
-                        pulseValue: _rankPulseController.value,
-                      ),
-                      for (final placement in placements)
-                        _TrackAvatarMarker(
-                          competitor: placement.competitor,
-                          point: _pointForProgress(
-                            progress: _animatedProgressFor(
-                              placement.competitor.id,
-                            ),
-                            size: widget.size,
-                            radialOffset: placement.radialOffset,
+                return Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned.fill(
+                      child: Center(
+                        child: Container(
+                          width: widget.size - 78,
+                          height: widget.size - 78,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.transparent,
+                            boxShadow: AppShadows.heroShadow,
                           ),
                         ),
-                    ],
-                  );
-                },
-              ),
+                      ),
+                    ),
+                    CustomPaint(
+                      size: Size.square(widget.size),
+                      painter: _RaceTrackPainter(
+                        progress: currentProgress,
+                        trackWidth: widget.trackWidth,
+                      ),
+                    ),
+                    _CenterResult(
+                      rank: widget.currentRank ?? currentUser.rank,
+                      progressValue:
+                          widget.currentValue ??
+                          _progressValue(currentProgress),
+                      totalGoal: widget.totalGoal,
+                      pressureCopy: widget.pressureCopy,
+                      pulseValue: _rankPulseController.value,
+                    ),
+                    for (final placement in placements)
+                      _TrackAvatarMarker(
+                        competitor: placement.competitor,
+                        point: _pointForProgress(
+                          progress: _animatedProgressFor(
+                            placement.competitor.id,
+                          ),
+                          size: widget.size,
+                          radialOffset: placement.radialOffset,
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-            if (widget.showLeaderboard) ...[
-              const SizedBox(height: 18),
-              _AnimatedRaceTrackLeaderboard(
-                competitors: sorted,
-                totalGoal: widget.totalGoal,
-                animatedProgressFor: _animatedProgressFor,
-                duration: widget.animationDuration,
-                curve: widget.curve,
-              ),
-            ],
+          ),
+          if (widget.showLeaderboard) ...[
+            const SizedBox(height: 18),
+            _AnimatedRaceTrackLeaderboard(
+              competitors: sorted,
+              totalGoal: widget.totalGoal,
+              animatedProgressFor: _animatedProgressFor,
+              duration: widget.animationDuration,
+              curve: widget.curve,
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -219,6 +332,16 @@ class _AnimatedRaceTrackState extends State<AnimatedRaceTrack>
   static AnimatedRaceTrackCompetitor _currentUser(
     List<AnimatedRaceTrackCompetitor> competitors,
   ) {
+    if (competitors.isEmpty) {
+      return const AnimatedRaceTrackCompetitor(
+        id: 'current',
+        name: 'You',
+        initials: 'Y',
+        progress: 0,
+        rank: 1,
+        isCurrentUser: true,
+      );
+    }
     return competitors.firstWhere(
       (competitor) => competitor.isCurrentUser,
       orElse: () => competitors.first,
@@ -306,30 +429,14 @@ class _RaceTrackPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     canvas.drawCircle(center, radius, basePaint);
 
-    final tickPaint = Paint()
-      ..color = _kRaceTrackMuted.withValues(alpha: 0.72)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 10; i++) {
-      final angle = -math.pi / 2 + (i / 10) * 2 * math.pi;
-      final inner = radius - 7;
-      final outer = radius + 7;
-      canvas.drawLine(
-        center + Offset(math.cos(angle) * inner, math.sin(angle) * inner),
-        center + Offset(math.cos(angle) * outer, math.sin(angle) * outer),
-        tickPaint,
-      );
-    }
-
     final finishPaint = Paint()
-      ..color = _kRaceTrackNavy
+      ..color = _kRaceTrackNavy.withValues(alpha: 0.72)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
+      ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(
-      center + Offset(0, -radius - 12),
-      center + Offset(0, -radius + 10),
+      center + Offset(0, -radius - 8),
+      center + Offset(0, -radius + 7),
       finishPaint,
     );
 
@@ -360,12 +467,14 @@ class _CenterResult extends StatelessWidget {
     required this.rank,
     required this.progressValue,
     required this.totalGoal,
+    this.pressureCopy,
     required this.pulseValue,
   });
 
   final int rank;
   final int progressValue;
   final int totalGoal;
+  final String? pressureCopy;
   final double pulseValue;
 
   @override
@@ -394,6 +503,23 @@ class _CenterResult extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
+        if (pressureCopy != null && pressureCopy!.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 112,
+            child: Text(
+              pressureCopy!,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: _kRaceTrackNavy.withValues(alpha: 0.72),
+                fontWeight: FontWeight.w800,
+                height: 1.12,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -408,26 +534,23 @@ class _TrackAvatarMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = competitor.isCurrentUser ? 44.0 : 36.0;
-    final borderColor = competitor.isCurrentUser
-        ? _kRaceTrackBlue
-        : competitor.rank == 1
-        ? _kRaceTrackGold
-        : _kRaceTrackWhite;
-    final borderWidth = competitor.isCurrentUser ? 3.0 : 2.0;
+    final role = competitor.isCurrentUser
+        ? NuvoCompetitorAvatarRole.currentUser
+        : competitor.isLeader || competitor.rank == 1
+        ? NuvoCompetitorAvatarRole.leader
+        : NuvoCompetitorAvatarRole.standard;
 
     return Positioned(
       left: point.dx - size / 2,
       top: point.dy - size / 2,
       width: size,
       height: size,
-      child: NuvoAvatar(
+      child: NuvoCompetitorAvatar(
+        id: competitor.id,
         initials: competitor.initials,
         size: size,
         photoUrl: competitor.avatarImageUrl,
-        bgColor: nuvoAvatarColorFor(competitor.id),
-        textColor: _kRaceTrackWhite,
-        borderColor: borderColor,
-        borderWidth: borderWidth,
+        role: role,
       ),
     );
   }

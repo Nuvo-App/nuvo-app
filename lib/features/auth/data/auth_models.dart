@@ -24,10 +24,12 @@ class AuthUser {
     username: json['username'] as String?,
     onboardingComplete: json['onboardingComplete'] as bool? ?? false,
     hasMemberPass: json['hasMemberPass'] as bool? ?? false,
-    profilePhotoUrl: (json['profilePhotoUrl'] ??
-        json['profile_photo_url'] ??
-        json['avatarUrl'] ??
-        json['avatar_url']) as String?,
+    profilePhotoUrl:
+        (json['profilePhotoUrl'] ??
+                json['profile_photo_url'] ??
+                json['avatarUrl'] ??
+                json['avatar_url'])
+            as String?,
   );
 
   AuthUser copyWith({
@@ -44,7 +46,9 @@ class AuthUser {
     username: username ?? this.username,
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     hasMemberPass: hasMemberPass ?? this.hasMemberPass,
-    profilePhotoUrl: clearPhoto ? null : (profilePhotoUrl ?? this.profilePhotoUrl),
+    profilePhotoUrl: clearPhoto
+        ? null
+        : (profilePhotoUrl ?? this.profilePhotoUrl),
   );
 
   String get avatarInitials {

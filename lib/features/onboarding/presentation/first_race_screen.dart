@@ -239,11 +239,11 @@ class _TemplateCard extends StatelessWidget {
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x140A1A33),
+            color: NuvoColors.navy.withValues(alpha: 0.08),
             blurRadius: 22,
-            offset: Offset(0, 10),
+            offset: const Offset(0, 10),
           ),
         ],
       ),

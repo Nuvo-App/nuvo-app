@@ -100,7 +100,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final otherBoards = allBoards.where((b) => b.id != resolvedId).toList();
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: const Color(0xFFF8FBFF),
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -696,19 +696,15 @@ class _FocusBoardCard extends StatelessWidget {
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: NuvoColors.blue.withValues(alpha: 0.18),
-          width: 1.2,
+          color: const Color(0xFF07152B),
+          width: 2,
         ),
-        boxShadow: [
+        boxShadow: const [
+          // getnuvo.net hard offset
           BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.10),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
-          ),
-          const BoxShadow(
-            color: Color(0x0A0A1A33),
-            blurRadius: 16,
-            offset: Offset(0, 6),
+            color: Color(0xFF07152B),
+            blurRadius: 0,
+            offset: Offset(5, 5),
           ),
         ],
       ),

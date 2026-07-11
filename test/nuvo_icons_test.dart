@@ -25,7 +25,11 @@ void main() {
       // Exercises every icon that uses "a"/"A" (fire, hand, users, user,
       // lock, bell) to catch arcToPoint parameter mistakes.
       for (final type in NuvoIconType.values) {
-        expect(() => NuvoIcon(type, size: 24), returnsNormally, reason: 'building $type');
+        expect(
+          () => NuvoIcon(type, size: 24),
+          returnsNormally,
+          reason: 'building $type',
+        );
       }
     });
   });
@@ -38,7 +42,11 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.byType(NuvoIcon), findsOneWidget, reason: 'icon $type failed to render');
+      expect(
+        find.byType(NuvoIcon),
+        findsOneWidget,
+        reason: 'icon $type failed to render',
+      );
     }
   });
 }

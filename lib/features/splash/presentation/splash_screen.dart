@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -24,6 +23,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   // Signed-out users wait for the full animation before reaching auth.
   bool _longDelayDone = false;
   bool _navigated = false;
+  Timer? _shortDelayTimer;
+  Timer? _longDelayTimer;
 
   @override
   void initState() {
@@ -35,16 +36,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         statusBarBrightness: Brightness.light,
       ),
     );
-    Future.delayed(const Duration(milliseconds: 420), () {
+    _shortDelayTimer = Timer(const Duration(milliseconds: 420), () {
       if (!mounted) return;
       _shortDelayDone = true;
       _tryNavigate();
     });
-    Future.delayed(const Duration(milliseconds: 900), () {
+    _longDelayTimer = Timer(const Duration(milliseconds: 900), () {
       if (!mounted) return;
       _longDelayDone = true;
       _tryNavigate();
     });
+  }
+
+  @override
+  void dispose() {
+    _shortDelayTimer?.cancel();
+    _longDelayTimer?.cancel();
+    super.dispose();
   }
 
   void _tryNavigate() {
@@ -76,13 +84,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [NuvoColors.white, NuvoColors.page, NuvoColors.icyBlue],
-          ),
-        ),
+        color: NuvoColors.page,
         child: Stack(
           children: [
             const _DotField(),
@@ -90,66 +92,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Logo with royal-blue glow
-                  Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: NuvoColors.blue.withValues(alpha: 0.24),
-                              blurRadius: 64,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(AssetPaths.nuvoLogo),
-                      )
-                      .animate()
-                      .fadeIn(duration: 400.ms, curve: Curves.easeOut)
-                      .scale(
-                        begin: const Offset(0.85, 0.85),
-                        end: const Offset(1.0, 1.0),
-                        duration: 500.ms,
-                        curve: Curves.easeOutBack,
-                      ),
+                  // Logo mark
+                  SizedBox(
+                    width: 100,
+                    height: 100,
+                    child: Image.asset(AssetPaths.nuvoLogo),
+                  ),
 
                   const SizedBox(height: 26),
 
                   Text(
-                        'NUVO',
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: NuvoColors.navy,
-                          letterSpacing: 0,
-                        ),
-                      )
-                      .animate(delay: 220.ms)
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.10,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
+                    'NUVO',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: NuvoColors.navy,
+                      letterSpacing: 0,
+                    ),
+                  ),
 
                   const SizedBox(height: 8),
 
                   Text(
-                        'Compete on anything. With anyone.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
-                        ),
-                        textAlign: TextAlign.center,
-                      )
-                      .animate(delay: 360.ms)
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.10,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
+                    'Compete on anything. With anyone.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
             ),

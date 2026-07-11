@@ -6,6 +6,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import 'auth_controller.dart';
@@ -83,204 +85,171 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      body: Stack(
-        children: [
-          const Positioned(top: -64, right: -46, child: _HeroHalo(size: 190)),
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // ── Scrollable hero area ─────────────────────────────────────────
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-                    child:
-                        Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const _BrandMark(),
-                                const SizedBox(height: 22),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Scrollable hero area ─────────────────────────────────────────
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                child:
+                    Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const _BrandMark(),
+                            const SizedBox(height: 22),
 
-                                // Hero — animates when mode switches
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 240),
-                                  transitionBuilder: (child, animation) =>
-                                      FadeTransition(
-                                        opacity: animation,
-                                        child: SlideTransition(
-                                          position: Tween(
-                                            begin: const Offset(0, 0.04),
-                                            end: Offset.zero,
-                                          ).animate(animation),
-                                          child: child,
-                                        ),
-                                      ),
-                                  child: _HeroBlock(
-                                    key: ValueKey(_mode),
-                                    isSignup: isSignup,
-                                  ),
-                                ),
-
-                                // Product preview card — signup only
-                                if (isSignup) ...[
-                                  const SizedBox(height: 22),
-                                  const _ProductPreviewCard(),
-                                ],
-                              ],
-                            )
-                            .animate()
-                            .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                            .slideY(
-                              begin: 0.04,
-                              end: 0,
-                              duration: 320.ms,
-                              curve: Curves.easeOutCubic,
-                            ),
-                  ),
-                ),
-
-                // ── Pinned CTA zone — never clips ───────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      NuvoPrimaryButton(
-                        label: 'Continue with Email',
-                        expand: true,
-                        leadingWidget: const Icon(
-                          Icons.mail_outline_rounded,
-                          size: 18,
-                          color: NuvoColors.white,
-                        ),
-                        onPressed: () => context.push('/auth/email'),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Google — interactive when _kGoogleEnabled, else needs-setup row
-                      if (_kGoogleEnabled) ...[
-                        if (_googleError != null) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              _googleError!,
-                              textAlign: TextAlign.center,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: NuvoColors.danger,
-                              ),
-                            ),
-                          ),
-                        ],
-                        GestureDetector(
-                          onTap: _googleLoading ? null : _signInWithGoogle,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 180),
-                            opacity: _googleLoading ? 0.55 : 1.0,
-                            child: Container(
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: NuvoColors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: NuvoColors.border,
-                                  width: 1.2,
-                                ),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    color: Color(0x100A1A33),
-                                    blurRadius: 16,
-                                    offset: Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              alignment: Alignment.center,
-                              child: _googleLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const _GoogleGIcon(),
-                                        const SizedBox(width: 10),
-                                        Text(
-                                          'Continue with Google',
-                                          style: AppTextStyles.labelLarge
-                                              .copyWith(color: NuvoColors.navy),
-                                        ),
-                                      ],
+                            // Hero — animates when mode switches
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 240),
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween(
+                                        begin: const Offset(0, 0.04),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
                                     ),
+                                  ),
+                              child: _HeroBlock(
+                                key: ValueKey(_mode),
+                                isSignup: isSignup,
+                              ),
                             ),
-                          ),
+
+                            // Product preview card — signup only
+                            if (isSignup) ...[
+                              const SizedBox(height: 22),
+                              const _ProductPreviewCard(),
+                            ],
+                          ],
+                        )
+                        .animate()
+                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                        .slideY(
+                          begin: 0.04,
+                          end: 0,
+                          duration: 320.ms,
+                          curve: Curves.easeOutCubic,
                         ),
-                      ],
+              ),
+            ),
 
-                      const SizedBox(height: 18),
+            // ── Pinned CTA zone — never clips ───────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  NuvoPrimaryButton(
+                    label: 'Continue with Email',
+                    expand: true,
+                    leadingWidget: const Icon(
+                      Icons.mail_outline_rounded,
+                      size: 18,
+                      color: NuvoColors.white,
+                    ),
+                    onPressed: () => context.push('/auth/email'),
+                  ),
+                  const SizedBox(height: 12),
 
-                      // Signup ↔ login toggle
-                      GestureDetector(
-                        onTap: _toggleMode,
-                        behavior: HitTestBehavior.opaque,
-                        child: Center(
-                          child: Text(
-                            toggleLabel,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: NuvoColors.blue,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Terms — always in view
-                      Center(
+                  // Google — interactive when _kGoogleEnabled, else needs-setup row
+                  if (_kGoogleEnabled) ...[
+                    if (_googleError != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: Text(
-                          'By continuing you agree to our Terms & Privacy Policy.',
+                          _googleError!,
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: NuvoColors.muted.withValues(alpha: 0.65),
-                            height: 1.5,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: NuvoColors.danger,
                           ),
                         ),
                       ),
                     ],
+                    GestureDetector(
+                      onTap: _googleLoading ? null : _signInWithGoogle,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: _googleLoading ? 0.55 : 1.0,
+                        child: Container(
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: NuvoColors.white,
+                            borderRadius: BorderRadius.circular(NuvoRadii.md),
+                            border: NuvoBorders.quiet,
+                          ),
+                          alignment: Alignment.center,
+                          child: _googleLoading
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const _GoogleGIcon(),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Continue with Google',
+                                      style: AppTextStyles.labelLarge.copyWith(
+                                        color: NuvoColors.navy,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 18),
+
+                  // Signup ↔ login toggle
+                  GestureDetector(
+                    onTap: _toggleMode,
+                    behavior: HitTestBehavior.opaque,
+                    child: Center(
+                      child: Text(
+                        toggleLabel,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.blue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 14),
+
+                  // Terms — always in view
+                  Center(
+                    child: Text(
+                      'By continuing you agree to our Terms & Privacy Policy.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.muted.withValues(alpha: 0.65),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 // ── Private components ────────────────────────────────────────────────────────
-
-class _HeroHalo extends StatelessWidget {
-  const _HeroHalo({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: NuvoColors.softBlue.withValues(alpha: 0.55),
-        shape: BoxShape.circle,
-        border: Border.all(color: NuvoColors.white, width: 18),
-      ),
-    );
-  }
-}
 
 class _BrandMark extends StatelessWidget {
   const _BrandMark();
@@ -295,15 +264,9 @@ class _BrandMark extends StatelessWidget {
           height: 46,
           decoration: BoxDecoration(
             color: NuvoColors.navy,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: NuvoColors.border),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x2605070D),
-                blurRadius: 0,
-                offset: Offset(3, 4),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(NuvoRadii.sm),
+            border: NuvoBorders.action,
+            boxShadow: AppShadows.actionShadow,
           ),
           padding: const EdgeInsets.all(7),
           child: Image.asset(AssetPaths.nuvoLogo, fit: BoxFit.contain),
@@ -339,15 +302,8 @@ class _StartLineChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
         border: Border.all(color: NuvoColors.border, width: 1.1),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1605070D),
-            blurRadius: 0,
-            offset: Offset(2, 3),
-          ),
-        ],
       ),
       child: Text(
         label,
@@ -467,15 +423,8 @@ class _ProductPreviewCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
         border: Border.all(color: NuvoColors.border, width: 1.2),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x2605070D),
-            blurRadius: 0,
-            offset: Offset(5, 6),
-          ),
-        ],
       ),
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -603,13 +552,8 @@ class _ProductPreviewCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: NuvoColors.blue,
                   borderRadius: BorderRadius.circular(999),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x40075BFF),
-                      blurRadius: 8,
-                      offset: Offset(0, 3),
-                    ),
-                  ],
+                  border: NuvoBorders.action,
+                  boxShadow: AppShadows.actionShadow,
                 ),
                 child: Text(
                   'Log move',

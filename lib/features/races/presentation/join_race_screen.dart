@@ -7,6 +7,7 @@ import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import 'race_controller.dart';
 
@@ -84,41 +85,11 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    TextField(
+                    NuvoTextInput(
                       controller: _codeController,
+                      label: 'INVITE CODE',
+                      hint: 'NUV-XXXXXX',
                       textCapitalization: TextCapitalization.characters,
-                      style: AppTextStyles.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: 'NUV-XXXXXX',
-                        hintStyle: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.muted,
-                        ),
-                        filled: true,
-                        fillColor: NuvoColors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: NuvoColors.border,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: NuvoColors.border,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: const BorderSide(
-                            color: NuvoColors.blue,
-                            width: 1.6,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                      ),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),

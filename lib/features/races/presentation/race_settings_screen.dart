@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
@@ -503,16 +505,12 @@ class _Input extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return NuvoTextInput(
       controller: controller,
+      label: label,
+      hint: hint,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: NuvoColors.white,
-      ),
     );
   }
 }
@@ -536,8 +534,23 @@ class _Menu extends StatelessWidget {
       initialValue: values.containsKey(value) ? value : values.keys.first,
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.textMuted),
         filled: true,
         fillColor: NuvoColors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+        ),
       ),
       items: [
         for (final entry in values.entries)

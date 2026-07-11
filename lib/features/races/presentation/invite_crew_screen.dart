@@ -8,7 +8,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -223,10 +225,11 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Text('Add by username', style: AppTextStyles.titleLarge),
+                    const _SectionLabel(label: 'Add by username'),
                     const SizedBox(height: 10),
-                    _SearchField(
+                    NuvoSearchField(
                       controller: _searchController,
+                      hint: 'Search username or member ID',
                       searching: _searching,
                       onChanged: _onSearchChanged,
                     ),
@@ -245,7 +248,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                         text: 'No matching Nuvo members found.',
                       ),
                     const SizedBox(height: 24),
-                    Text('Your crew', style: AppTextStyles.titleLarge),
+                    const _SectionLabel(label: 'Your crew'),
                     const SizedBox(height: 10),
                     if (_crew.isEmpty)
                       const _SmallPanel(
@@ -261,7 +264,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                           onPressed: () => _addToRace(user),
                         ),
                     const SizedBox(height: 24),
-                    Text('Invite code', style: AppTextStyles.titleLarge),
+                    const _SectionLabel(label: 'Invite code'),
                     const SizedBox(height: 10),
                     _InviteCodeCard(code: _inviteCode),
                     const SizedBox(height: 14),
@@ -307,63 +310,18 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
   }
 }
 
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.searching,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final bool searching;
-  final ValueChanged<String> onChanged;
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1007152B),
-            blurRadius: 0,
-            offset: Offset(2, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 14),
-          const Icon(Icons.search_rounded, color: NuvoColors.muted, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              style: AppTextStyles.bodyMedium,
-              decoration: InputDecoration(
-                hintText: 'Search username or member ID',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(
-                  color: NuvoColors.muted,
-                ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
-          if (searching)
-            const Padding(
-              padding: EdgeInsets.only(right: 14),
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-        ],
+    return Text(
+      label.toUpperCase(),
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.8,
       ),
     );
   }
@@ -386,30 +344,34 @@ class _InviteUserRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: NuvoCompactCard(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: NuvoColors.white,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: NuvoBorders.quiet,
+        ),
         child: Row(
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: const BoxDecoration(
-                color: NuvoColors.navy,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                user.initials,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.white,
-                ),
-              ),
+            NuvoAvatar(
+              initials: user.initials,
+              photoUrl: user.profilePhotoUrl,
+              size: NuvoAvatarSizes.md,
+              bgColor: nuvoAvatarColorFor(user.id),
+              textColor: NuvoColors.white,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user.displayName, style: AppTextStyles.titleMedium),
+                  Text(
+                    user.displayName,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: NuvoColors.navy,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     user.handleLine,
@@ -447,21 +409,25 @@ class _InviteCodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x3307152B),
-            blurRadius: 0,
-            offset: Offset(5, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(NuvoRadii.hero),
+        border: Border.all(color: NuvoColors.navy2, width: 1.2),
       ),
-      child: Text(
-        code ?? 'Create a code',
-        style: AppTextStyles.headlineLarge.copyWith(color: NuvoColors.white),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              code ?? 'Create a code',
+              style: AppTextStyles.headlineLarge.copyWith(
+                color: NuvoColors.white,
+                fontSize: 26,
+              ),
+            ),
+          ),
+          const Icon(Icons.key_rounded, color: NuvoColors.blue, size: 20),
+        ],
       ),
     );
   }
@@ -474,12 +440,9 @@ class _SmallPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NuvoCompactCard(
-      padding: const EdgeInsets.all(16),
-      child: Text(
-        text,
-        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-      ),
+    return Text(
+      text,
+      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
     );
   }
 }

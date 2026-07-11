@@ -18,6 +18,7 @@ import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/proof/presentation/proof_screen.dart';
+import '../features/move/presentation/move_screen.dart';
 import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/presentation/create_race_screen.dart';
 import '../features/races/presentation/ai_motion_proof_screen.dart';
@@ -27,7 +28,6 @@ import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
 import '../features/races/presentation/board_moved_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
-import '../features/move/presentation/move_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
 

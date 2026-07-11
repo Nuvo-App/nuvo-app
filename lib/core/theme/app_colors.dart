@@ -5,7 +5,7 @@ final class NuvoColors {
 
   // ── Brand core ────────────────────────────────────────────────────────────────
   /// Primary action color.
-  static const Color blue = Color(0xFF4F8EF7);
+  static const Color blue = Color(0xFF5096F9);
 
   /// Gradient partner / pressed state.
   static const Color blue2 = Color(0xFF2F6FE0);
@@ -17,13 +17,13 @@ final class NuvoColors {
   static const Color blueLight = Color(0xFF8EC3FF);
 
   /// Primary dark — headlines, nav active state.
-  static const Color navy = Color(0xFF0F1E33);
+  static const Color navy = Color(0xFF0A1A33);
 
   /// Slightly lighter navy for layered surfaces.
-  static const Color navy2 = Color(0xFF17293F);
+  static const Color navy2 = Color(0xFF07152B);
 
   /// Platinum — legacy alias, main background.
-  static const Color platinum = Color(0xFFF7F6F3);
+  static const Color platinum = Color(0xFFEFEFEF);
 
   /// Disabled / locked state.
   static const Color paleSlate = Color(0xFFC4C7CC);
@@ -32,11 +32,10 @@ final class NuvoColors {
   static const Color aqua = Color(0xFF22C7B8);
   static const Color coral = Color(0xFFFF6B6B);
   static const Color sunshine = Color(0xFFFFC857);
-  static const Color violet = Color(0xFF7868FF);
 
   // ── Page & surfaces ───────────────────────────────────────────────────────────
   /// Main page background.
-  static const Color page = Color(0xFFF7F6F3);
+  static const Color page = Color(0xFFEFEFEF);
 
   static const Color pageWarm = Color(0xFFF5F2EE);
   static const Color surface = Color(0xFFFFFFFF);
@@ -46,7 +45,6 @@ final class NuvoColors {
   static const Color panel = Color(0xFFEDF4FE);
 
   static const Color inkWash = Color(0xFFF8FAFF);
-  static const Color glass = Color(0xF0FFFFFF);
 
   // ── Lines and tracks ──────────────────────────────────────────────────────────
   static const Color trackBg = Color(0xFFEAE8E2);
@@ -104,7 +102,6 @@ abstract final class AppColors {
   static const Color primary = NuvoColors.blue;
   static const Color primarySoft = NuvoColors.softBlue;
   static const Color primaryDeep = NuvoColors.navy;
-  static const Color dreamPurple = NuvoColors.violet;
   static const Color dreamPink = NuvoColors.coral;
   static const Color mint = NuvoColors.success;
   static const Color success = NuvoColors.success;
@@ -114,8 +111,6 @@ abstract final class AppColors {
   static const Color textSecondary = NuvoColors.muted;
   static const Color textMuted = NuvoColors.textMuted;
   static const Color textInverse = NuvoColors.white;
-  static const Color glassTint = Color(0xF0FFFFFF);
-  static const Color glassBorder = Color(0x99FFFFFF);
   static const Color electricBlue = NuvoColors.blue;
   static const Color deepBlue = NuvoColors.navy;
   static const Color neonMint = NuvoColors.aqua;

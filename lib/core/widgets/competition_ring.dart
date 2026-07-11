@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/nuvo_tokens.dart';
 
 /// A reusable circular race progress component.
@@ -114,10 +115,7 @@ class _CompetitionRingState extends State<CompetitionRing>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
     _positions = _computePositions(widget.participants);
     _maxProgress = _computeMaxProgress(widget.participants);
     if (widget.animate) {
@@ -398,12 +396,14 @@ class _RingPainter extends CustomPainter {
       final isMajor = i % 5 == 0;
       final tickInset = ringThickness + (isMajor ? 3 : 6);
       final tickLength = isMajor ? 4 : 2;
-      final start = center +
+      final start =
+          center +
           Offset(
             (radius - tickInset) * math.cos(angle),
             (radius - tickInset) * math.sin(angle),
           );
-      final end = center +
+      final end =
+          center +
           Offset(
             (radius - tickInset + tickLength) * math.cos(angle),
             (radius - tickInset + tickLength) * math.sin(angle),
@@ -418,11 +418,7 @@ class _RingPainter extends CustomPainter {
         center: Alignment.center,
         startAngle: -math.pi / 2,
         endAngle: -math.pi / 2 + sweep,
-        colors: const [
-          Color(0xFF4A90D9),
-          Color(0xFF1A73E8),
-          Color(0xFF0F4C81),
-        ],
+        colors: const [NuvoColors.blue, NuvoColors.blue2, NuvoColors.navy],
         stops: const [0.0, 0.5, 1.0],
         transform: const GradientRotation(-math.pi / 2),
       ).createShader(arcRect);
@@ -436,19 +432,13 @@ class _RingPainter extends CustomPainter {
 
       // Soft glow at the leading edge
       final headAngle = -math.pi / 2 + sweep;
-      final headCenter = center +
-          Offset(
-            radius * math.cos(headAngle),
-            radius * math.sin(headAngle),
-          );
+      final headCenter =
+          center +
+          Offset(radius * math.cos(headAngle), radius * math.sin(headAngle));
       final glowPaint = Paint()
-        ..color = const Color(0xFF1A73E8).withValues(alpha: 0.35)
+        ..color = NuvoColors.blue2.withValues(alpha: 0.35)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(
-        headCenter,
-        ringThickness * 1.4,
-        glowPaint,
-      );
+      canvas.drawCircle(headCenter, ringThickness * 1.4, glowPaint);
     }
   }
 

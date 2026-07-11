@@ -6,12 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/member_pass_card.dart';
+import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../data/models/user_profile.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -204,15 +207,20 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         child: RefreshIndicator(
           onRefresh: _fetch,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 120),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              18,
+              20,
+              NuvoBottomNav.bottomPadding(context),
+            ),
             children: [
               // ── Header ───────────────────────────────────────────────────
-              _CrewHero(
+              _CrewHeader(
                 crewCount: _crew.length,
                 onShare: _sharePass,
                 onCopy: _copyId,
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 24),
 
               // ── Loading ──────────────────────────────────────────────────
               if (_loading)
@@ -227,24 +235,16 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 NuvoErrorState(message: _error!, onRetry: _fetch)
               // ── Content ──────────────────────────────────────────────────
               else ...[
-                // ── Member pass ──────────────────────────────────────────
-                const _SectionLabel(label: 'Member pass'),
-                const SizedBox(height: 12),
+                // ── Member pass (hero) ───────────────────────────────────
                 MemberPassCard(profile: profile, compact: true, dark: true),
-                const SizedBox(height: 28),
-
-                if (closest != null) ...[
-                  const _SectionLabel(label: 'Closest race'),
-                  const SizedBox(height: 12),
-                  _ClosestRaceCard(closest: closest),
-                  const SizedBox(height: 28),
-                ],
+                const SizedBox(height: 20),
 
                 // ── Find people ──────────────────────────────────────────
                 const _SectionLabel(label: 'Find people'),
                 const SizedBox(height: 12),
-                _SearchField(
+                NuvoSearchField(
                   controller: _searchController,
+                  hint: 'Username or member ID',
                   searching: _searching,
                   onChanged: _onSearchChanged,
                 ),
@@ -262,12 +262,19 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     ),
                 ] else if (_searchController.text.trim().length >= 2 &&
                     !_searching) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   const _EmptyNote(text: 'No matching Nuvo members found.'),
                 ],
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
 
                 // ── Your crew ────────────────────────────────────────────
+                if (closest != null) ...[
+                  const _SectionLabel(label: 'Closest race'),
+                  const SizedBox(height: 12),
+                  _ClosestRaceCard(closest: closest),
+                  const SizedBox(height: 20),
+                ],
+
                 const _SectionLabel(label: 'Your crew'),
                 const SizedBox(height: 12),
                 if (_crew.isEmpty)
@@ -275,8 +282,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     text: 'Search a username or member ID to add crew.',
                   )
                 else
-                  for (final member in _crew)
-                    _UserRow(user: member, added: true, actionLabel: 'In crew'),
+                  _CrewList(members: _crew),
               ],
             ],
           ),
@@ -318,33 +324,29 @@ class _ClosestRaceCard extends StatelessWidget {
     final ahead = me.progressPercent >= crewMember.progressPercent;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: NuvoBorders.quiet,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '${closest.race.displayTitle} · vs ${crewMember.displayName.split(' ').first}',
-            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.textMuted,
+            ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             closest.gap == 0
                 ? "You're tied"
                 : '${closest.gap} ${closest.gap == 1 ? 'point' : 'points'} apart',
             style: AppTextStyles.titleLarge,
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 18),
           _ComparisonTrack(
             youPercent: me.progressPercent,
             themPercent: crewMember.progressPercent,
@@ -403,22 +405,35 @@ class _ComparisonTrack extends StatelessWidget {
                 top: 28,
                 left: 0,
                 right: 28,
-                child: ColoredBox(color: NuvoColors.trackBg, child: SizedBox(height: 3)),
+                child: ColoredBox(
+                  color: NuvoColors.trackBg,
+                  child: SizedBox(height: 3),
+                ),
               ),
               const Positioned(
                 top: 21,
                 right: -2,
-                child: NuvoIcon(NuvoIconType.flag, size: 16, color: NuvoColors.paleSlate),
+                child: NuvoIcon(
+                  NuvoIconType.flag,
+                  size: 16,
+                  color: NuvoColors.paleSlate,
+                ),
               ),
               Positioned(
                 left: markerLeft(themPercent),
                 top: 6,
-                child: _TrackAvatar(initials: themInitials, color: NuvoColors.avatarDustyBlue),
+                child: _TrackAvatar(
+                  initials: themInitials,
+                  color: NuvoColors.avatarDustyBlue,
+                ),
               ),
               Positioned(
                 left: markerLeft(youPercent),
                 top: 34,
-                child: _TrackAvatar(initials: youInitials, color: NuvoColors.blue),
+                child: _TrackAvatar(
+                  initials: youInitials,
+                  color: NuvoColors.blue,
+                ),
               ),
             ],
           );
@@ -446,14 +461,17 @@ class _TrackAvatar extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         initials,
-        style: AppTextStyles.labelSmall.copyWith(color: Colors.white, fontSize: 9),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: Colors.white,
+          fontSize: 9,
+        ),
       ),
     );
   }
 }
 
-class _CrewHero extends StatelessWidget {
-  const _CrewHero({
+class _CrewHeader extends StatelessWidget {
+  const _CrewHeader({
     required this.crewCount,
     required this.onShare,
     required this.onCopy,
@@ -465,189 +483,73 @@ class _CrewHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1A2C6D),
-            Color(0xFF2A4C9B),
-          ],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Crew hub',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.white,
-                        height: 1.05,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Share your pass, copy your ID, pull people into your next race.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.white.withValues(alpha: 0.75),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: NuvoColors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  '$crewCount in crew',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickActionButton(
-                  icon: Icons.ios_share_rounded,
-                  label: 'Share pass',
-                  onTap: onShare,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _QuickActionButton(
-                  icon: Icons.copy_rounded,
-                  label: 'Copy ID',
-                  onTap: onCopy,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Quick action button ───────────────────────────────────────────────────────
-
-class _QuickActionButton extends StatelessWidget {
-  const _QuickActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: NuvoColors.navy, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.navy,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Crew',
+                    style: AppTextStyles.headlineLarge.copyWith(
+                      color: NuvoColors.navy,
+                      height: 1.05,
+                      fontSize: 26,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Pull people into your next race.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: NuvoColors.panel,
+                borderRadius: BorderRadius.circular(NuvoRadii.pill),
+              ),
+              child: Text(
+                '$crewCount in crew',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: NuvoColors.blue,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ── Search field ──────────────────────────────────────────────────────────────
-
-class _SearchField extends StatelessWidget {
-  const _SearchField({
-    required this.controller,
-    required this.searching,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final bool searching;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
-      decoration: InputDecoration(
-        hintText: 'Username or member ID',
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-        filled: true,
-        fillColor: NuvoColors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: NuvoPrimaryButton(
+                label: 'Share pass',
+                icon: Icons.ios_share_rounded,
+                expand: true,
+                small: true,
+                onPressed: onShare,
+              ),
+            ),
+            const SizedBox(width: 10),
+            NuvoGhostButton(
+              label: 'Copy ID',
+              icon: Icons.copy_rounded,
+              small: true,
+              onPressed: onCopy,
+            ),
+          ],
         ),
-        prefixIcon: const Icon(
-          Icons.search_rounded,
-          color: NuvoColors.muted,
-          size: 20,
-        ),
-        suffixIcon: searching
-            ? const Padding(
-                padding: EdgeInsets.all(14),
-                child: SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            : null,
-        suffixIconConstraints: const BoxConstraints(),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
-        ),
-      ),
+      ],
     );
   }
 }
@@ -661,6 +563,7 @@ class _UserRow extends StatelessWidget {
     this.loading = false,
     this.actionLabel,
     this.onPressed,
+    this.isLast = false,
   });
 
   final PublicUser user;
@@ -668,79 +571,97 @@ class _UserRow extends StatelessWidget {
   final bool loading;
   final String? actionLabel;
   final VoidCallback? onPressed;
+  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
-              blurRadius: 14,
-              offset: const Offset(0, 7),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: const BoxDecoration(
-                color: NuvoColors.blue,
-                shape: BoxShape.circle,
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              NuvoAvatar(
+                initials: user.initials,
+                photoUrl: user.profilePhotoUrl,
+                size: NuvoAvatarSizes.md,
+                bgColor: nuvoAvatarColorFor(user.id),
+                textColor: NuvoColors.white,
               ),
-              alignment: Alignment.center,
-              child: Text(
-                user.initials,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.white,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.displayName,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.navy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      user.handleLine,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(user.displayName, style: AppTextStyles.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    user.handleLine,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (actionLabel != null)
-              added
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: Text(
-                        actionLabel!,
-                        style: AppTextStyles.labelMedium.copyWith(
-                          color: NuvoColors.muted,
+              if (actionLabel != null)
+                added
+                    ? Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(
+                          actionLabel!,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color: NuvoColors.muted,
+                          ),
+                        ),
+                      )
+                    : SizedBox(
+                        width: 72,
+                        child: NuvoOutlineButton(
+                          label: loading ? '...' : actionLabel!,
+                          small: true,
+                          onPressed: loading ? null : onPressed,
                         ),
                       ),
-                    )
-                  : SizedBox(
-                      width: 72,
-                      child: NuvoOutlineButton(
-                        label: loading ? '...' : actionLabel!,
-                        small: true,
-                        onPressed: loading ? null : onPressed,
-                      ),
-                    ),
-          ],
+            ],
+          ),
         ),
-      ),
+        if (!isLast)
+          Divider(
+            height: 1,
+            color: NuvoColors.border.withValues(alpha: 0.7),
+            indent: NuvoAvatarSizes.md + 12,
+          ),
+      ],
+    );
+  }
+}
+
+// ── Crew list ─────────────────────────────────────────────────────────────────
+
+class _CrewList extends StatelessWidget {
+  const _CrewList({required this.members});
+
+  final List<PublicUser> members;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < members.length; i++)
+          _UserRow(
+            user: members[i],
+            added: true,
+            actionLabel: 'In crew',
+            isLast: i == members.length - 1,
+          ),
+      ],
     );
   }
 }
@@ -753,17 +674,9 @@ class _EmptyNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: NuvoColors.panel,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: NuvoColors.divider),
-      ),
-      child: Text(
-        text,
-        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-      ),
+    return Text(
+      text,
+      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
     );
   }
 }

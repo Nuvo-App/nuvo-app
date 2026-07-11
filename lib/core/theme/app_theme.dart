@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
+import 'app_geometry.dart';
 import 'app_text_styles.dart';
 
 abstract final class AppTheme {
@@ -62,7 +63,7 @@ abstract final class AppTheme {
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
           side: const BorderSide(color: NuvoColors.border),
         ),
         shadowColor: NuvoColors.blue.withValues(alpha: 0.12),
@@ -92,8 +93,7 @@ abstract final class AppTheme {
         ),
         labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
         errorStyle: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
-        helperStyle:
-            AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        helperStyle: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         border: _inputBorder(NuvoColors.border),
         enabledBorder: _inputBorder(NuvoColors.border),
         focusedBorder: _inputBorder(NuvoColors.blue, width: 1.8),
@@ -107,14 +107,12 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: NuvoColors.blue,
           foregroundColor: NuvoColors.white,
-          disabledBackgroundColor:
-              NuvoColors.paleSlate.withValues(alpha: 0.38),
+          disabledBackgroundColor: NuvoColors.paleSlate.withValues(alpha: 0.38),
           disabledForegroundColor: NuvoColors.white,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
           elevation: 0,
           shadowColor: NuvoColors.blue.withValues(alpha: 0.28),
@@ -125,11 +123,10 @@ abstract final class AppTheme {
           foregroundColor: NuvoColors.navy,
           backgroundColor: NuvoColors.white,
           side: const BorderSide(color: NuvoColors.border, width: 1.2),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 15),
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
         ),
       ),
@@ -138,7 +135,7 @@ abstract final class AppTheme {
           foregroundColor: NuvoColors.blue,
           textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(NuvoRadii.sm),
           ),
         ),
       ),
@@ -146,13 +143,13 @@ abstract final class AppTheme {
         backgroundColor: NuvoColors.white,
         selectedColor: NuvoColors.icyBlue,
         disabledColor: NuvoColors.panel,
-        labelStyle:
-            AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
-        secondaryLabelStyle:
-            AppTextStyles.labelMedium.copyWith(color: NuvoColors.blue),
+        labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
+        secondaryLabelStyle: AppTextStyles.labelMedium.copyWith(
+          color: NuvoColors.blue,
+        ),
         side: const BorderSide(color: NuvoColors.border),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(NuvoRadii.pill),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       ),
@@ -183,7 +180,7 @@ abstract final class AppTheme {
         behavior: SnackBarBehavior.floating,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
         ),
       ),
       bottomSheetTheme: const BottomSheetThemeData(
@@ -198,7 +195,7 @@ abstract final class AppTheme {
 
   static OutlineInputBorder _inputBorder(Color color, {double width = 1}) =>
       OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
         borderSide: BorderSide(color: color, width: width),
       );
 }

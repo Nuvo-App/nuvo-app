@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/competition_ring.dart';
+import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_icons.dart';
@@ -62,21 +64,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           parent: AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
-          // ── Gradient hero header ────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF1A2C6D),
-                    Color(0xFF2A4C9B),
-                  ],
+              decoration: BoxDecoration(
+                color: NuvoColors.white,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(NuvoRadii.hero),
                 ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+                border: Border(
+                  bottom: BorderSide(
+                    color: NuvoColors.navy.withValues(alpha: 0.10),
+                  ),
+                ),
               ),
-              padding: EdgeInsets.fromLTRB(20, safeTop + 22, 20, 28),
+              padding: EdgeInsets.fromLTRB(20, safeTop + 14, 20, 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -84,9 +85,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Row(
                     children: [
                       Text(
-                        'PROFILE',
+                        'Profile',
                         style: AppTextStyles.brandLabel.copyWith(
-                          color: NuvoColors.white.withValues(alpha: 0.72),
+                          color: NuvoColors.navy,
                           letterSpacing: 0,
                         ),
                       ),
@@ -99,16 +100,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             vertical: 7,
                           ),
                           decoration: BoxDecoration(
-                            color: NuvoColors.white.withValues(alpha: 0.16),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: NuvoColors.white.withValues(alpha: 0.22),
-                            ),
+                            color: NuvoColors.panel,
+                            borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                            border: NuvoBorders.quiet,
                           ),
                           child: Text(
                             'Edit',
                             style: AppTextStyles.labelMedium.copyWith(
-                              color: NuvoColors.white,
+                              color: NuvoColors.navy,
                             ),
                           ),
                         ),
@@ -119,13 +118,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
                   // Avatar + name
                   Container(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: NuvoColors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: NuvoColors.white.withValues(alpha: 0.22),
-                      ),
+                      color: NuvoColors.navy,
+                      borderRadius: BorderRadius.circular(NuvoRadii.hero),
+                      border: Border.all(color: NuvoColors.navy2),
+                      boxShadow: AppShadows.heroShadow,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -135,10 +133,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: NuvoAvatar(
                             initials: initials,
                             photoUrl: photoUrl,
-                            size: NuvoAvatarSizes.profile,
+                            size: NuvoAvatarSizes.xl,
                             bgColor: NuvoColors.blue.withValues(alpha: 0.22),
                             textColor: NuvoColors.white,
-                            borderColor: NuvoColors.blue.withValues(alpha: 0.55),
+                            borderColor: NuvoColors.blue.withValues(
+                              alpha: 0.55,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -166,17 +166,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 5,
+                                  horizontal: 9,
+                                  vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
                                   color: NuvoColors.white.withValues(
                                     alpha: 0.18,
                                   ),
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: BorderRadius.circular(
+                                    NuvoRadii.pill,
+                                  ),
                                   border: Border.all(
                                     color: NuvoColors.blue.withValues(
                                       alpha: 0.24,
@@ -199,15 +201,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
 
                   // Stats row
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: NuvoColors.white.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(
-                        color: NuvoColors.white.withValues(alpha: 0.18),
-                      ),
+                      color: NuvoColors.panel,
+                      borderRadius: BorderRadius.circular(NuvoRadii.lg),
+                      border: NuvoBorders.quiet,
                     ),
                     child: Row(
                       children: [
@@ -217,7 +217,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         _HeaderDivider(),
                         _HeaderStat(value: moveCount, label: 'Moves'),
                         _HeaderDivider(),
-                        _HeaderStat(value: avgProgress, label: 'Avg', suffix: '%'),
+                        _HeaderStat(
+                          value: avgProgress,
+                          label: 'Avg',
+                          suffix: '%',
+                        ),
                       ],
                     ),
                   ),
@@ -231,7 +235,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             hasScrollBody: false,
             child: Container(
               color: NuvoColors.page,
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 112),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                18,
+                20,
+                NuvoBottomNav.bottomPadding(context),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: _profileBody(raceState, uid, context),
@@ -266,9 +275,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       else if (raceState.races.isEmpty)
         Text(
           'Start your first race to build your history.',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: _kProfileTextMuted,
-          ),
+          style: AppTextStyles.bodyMedium.copyWith(color: _kProfileTextMuted),
         )
       else
         for (final race in raceState.races.take(6)) ...[
@@ -277,10 +284,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             userId: uid,
             onTap: () => context.push('/race/${race.id}'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
         ],
 
-      const SizedBox(height: 32),
+      const SizedBox(height: 24),
 
       // Account
       const _SectionLabel(label: 'Account'),
@@ -301,8 +308,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         icon: Icons.logout_rounded,
         label: 'Sign out',
         isDanger: true,
-        onTap: () =>
-            ref.read(authControllerProvider.notifier).logout(),
+        onTap: () => ref.read(authControllerProvider.notifier).logout(),
       ),
     ];
   }
@@ -311,7 +317,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 // ── Header stat ───────────────────────────────────────────────────────────────
 
 class _HeaderStat extends StatelessWidget {
-  const _HeaderStat({required this.value, required this.label, this.suffix = ''});
+  const _HeaderStat({
+    required this.value,
+    required this.label,
+    this.suffix = '',
+  });
   final int value;
   final String label;
   final String suffix;
@@ -328,14 +338,18 @@ class _HeaderStat extends StatelessWidget {
             curve: Curves.easeOutCubic,
             builder: (context, animated, _) => Text(
               '${animated.round()}$suffix',
-              style: AppTextStyles.number(24, color: NuvoColors.white, weight: FontWeight.w800),
+              style: AppTextStyles.number(
+                24,
+                color: NuvoColors.navy,
+                weight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(height: 3),
           Text(
             label,
             style: AppTextStyles.labelSmall.copyWith(
-              color: _kProfileTextMuted,
+              color: NuvoColors.muted,
               letterSpacing: 0,
             ),
           ),
@@ -350,7 +364,7 @@ class _HeaderDivider extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: 1,
     height: 32,
-    color: NuvoColors.white.withValues(alpha: 0.22),
+    color: NuvoColors.navy.withValues(alpha: 0.12),
     margin: const EdgeInsets.symmetric(horizontal: 4),
   );
 }
@@ -380,17 +394,11 @@ class _ProfileRaceRow extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1A2C6D).withValues(alpha: 0.05),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          border: NuvoBorders.quiet,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -406,11 +414,7 @@ class _ProfileRaceRow extends StatelessWidget {
                       color: NuvoColors.icyBlue,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      movementIcon,
-                      color: NuvoColors.blue,
-                      size: 18,
-                    ),
+                    child: Icon(movementIcon, color: NuvoColors.blue, size: 18),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -487,22 +491,14 @@ class _ProfileRaceRow extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 14),
-            Center(
-              child: CompetitionRing(
-                size: CompetitionRingSize.small,
-                participants: race.participants
-                    .map(
-                      (p) => CompetitionRingParticipant(
-                        userId: p.userId,
-                        displayName: p.displayName,
-                        photoUrl: p.profilePhotoUrl,
-                        progressPercent: p.progressPercent,
-                      ),
-                    )
-                    .toList(),
-                currentUserId: userId,
-                centerLabel: '$pct%',
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(NuvoRadii.pill),
+              child: LinearProgressIndicator(
+                value: (pct / 100).clamp(0.0, 1.0),
+                minHeight: 3,
+                color: isComplete ? NuvoColors.success : NuvoColors.blue,
+                backgroundColor: NuvoColors.trackBg,
               ),
             ),
           ],
@@ -538,9 +534,7 @@ class _ProfileRaceRow extends StatelessWidget {
         ? race.recentProofs.where((p) => p.userId == userId).toList()
         : race.recentProofs;
     if (myProofs.isEmpty) return null;
-    myProofs.sort(
-      (a, b) => b.createdAt.compareTo(a.createdAt),
-    );
+    myProofs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return myProofs.first.createdAt;
   }
 
@@ -601,23 +595,17 @@ class _AccountRow extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1A2C6D).withValues(alpha: 0.04),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          border: NuvoBorders.quiet,
         ),
         child: Row(
           children: [
             Container(
-              width: 34,
-              height: 34,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: bg,
                 borderRadius: BorderRadius.circular(12),
@@ -632,7 +620,11 @@ class _AccountRow extends StatelessWidget {
               ),
             ),
             if (!isDanger)
-              const NuvoIcon(NuvoIconType.arrow, color: _kProfileTextMuted, size: 14),
+              const NuvoIcon(
+                NuvoIconType.arrow,
+                color: _kProfileTextMuted,
+                size: 14,
+              ),
           ],
         ),
       ),
