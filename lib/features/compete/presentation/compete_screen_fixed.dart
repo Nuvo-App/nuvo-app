@@ -316,15 +316,19 @@ class _RaceLaneCard extends StatelessWidget {
             ? _RaceCardState.solo
             : _RaceCardState.live;
 
+    final plate = state == _RaceCardState.finished
+        ? NuvoColors.success
+        : NuvoColors.offsetGrey;
+
     return PressableScale(
       onTap: onTap,
       child: NuvoHardOffset(
+        offset: 3,
         radius: NuvoRadii.lg,
-        plateColor: NuvoColors.offsetGrey,
+        plateColor: plate,
         faceColor: NuvoColors.white,
-        borderColor: state == _RaceCardState.finished
-            ? NuvoColors.success.withValues(alpha: 0.55)
-            : NuvoColors.offsetGrey,
+        borderColor: plate,
+        borderWidth: 1.5,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,10 +576,12 @@ class _QuickStartRow extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: NuvoHardOffset(
+        offset: 3,
         radius: NuvoRadii.lg,
         plateColor: NuvoColors.offsetGrey,
         faceColor: NuvoColors.white,
         borderColor: NuvoColors.offsetGrey,
+        borderWidth: 1.5,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
