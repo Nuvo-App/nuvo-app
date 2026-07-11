@@ -953,13 +953,17 @@ class _CompactBoardRow extends StatelessWidget {
     final count = board.racerCount ?? 0;
     final isComplete = pct >= 100;
 
+    final plate = isComplete ? NuvoColors.success : NuvoColors.offsetGrey;
+
     return PressableScale(
       onTap: onTap,
       child: NuvoHardOffset(
+        offset: 3,
         radius: 18,
-        plateColor: NuvoColors.offsetGrey,
+        plateColor: plate,
         faceColor: NuvoColors.white,
-        borderColor: NuvoColors.offsetGrey,
+        borderColor: plate,
+        borderWidth: 1.5,
         padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
         child: Row(
           children: [

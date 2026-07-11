@@ -140,12 +140,12 @@ class NuvoHardOffset extends StatelessWidget {
   const NuvoHardOffset({
     super.key,
     required this.child,
-    this.offset = 5.0,
+    this.offset = 3.0,
     this.radius = 18.0,
     this.plateColor = NuvoColors.offsetGrey,
     this.faceColor = NuvoColors.white,
     this.borderColor,
-    this.borderWidth = 2.0,
+    this.borderWidth = 1.5,
     this.padding = EdgeInsets.zero,
   });
 
@@ -205,10 +205,12 @@ class NuvoCompactCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final card = NuvoHardOffset(
+      offset: 3,
       radius: radius,
       plateColor: NuvoColors.offsetGrey,
       faceColor: color,
       borderColor: borderColor ?? NuvoColors.offsetGrey,
+      borderWidth: 1.5,
       padding: padding,
       child: child,
     );
