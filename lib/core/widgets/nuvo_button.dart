@@ -47,7 +47,7 @@ Widget _buttonContent({
   );
 }
 
-/// Classic Nuvo hard-offset backplate: solid navy plate sits under the face.
+/// Classic Nuvo hard-offset: outer solid plate, face inset right+bottom.
 Widget _backplateButton({
   required double height,
   required double radius,
@@ -63,31 +63,14 @@ Widget _backplateButton({
     child: AnimatedOpacity(
       duration: const Duration(milliseconds: 160),
       opacity: enabled ? 1.0 : 0.42,
-      child: Padding(
-        // Reserve room so the offset plate is never clipped by parents.
-        padding: EdgeInsets.only(right: offset, bottom: offset),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: offset,
-              top: offset,
-              right: 0,
-              bottom: 0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: plateColor,
-                  borderRadius: BorderRadius.circular(radius),
-                ),
-              ),
-            ),
-            SizedBox(
-              height: height,
-              width: expand ? double.infinity : null,
-              child: face,
-            ),
-          ],
+      child: Container(
+        width: expand ? double.infinity : null,
+        decoration: BoxDecoration(
+          color: plateColor,
+          borderRadius: BorderRadius.circular(radius),
         ),
+        padding: EdgeInsets.only(right: offset, bottom: offset),
+        child: SizedBox(height: height, child: face),
       ),
     ),
   );

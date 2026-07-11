@@ -128,10 +128,62 @@ class NuvoBackplateCard extends StatelessWidget {
   }
 }
 
+// ── NuvoHardOffset ────────────────────────────────────────────────────────────
+
+/// Bulletproof hard-offset "shadow box".
+///
+/// Outer solid plate is the full bounds; face is inset only on the right and
+/// bottom so the plate always shows as an L-shaped hard shadow (same geometry
+/// as classic Nuvo CTAs). Never use a Stack with left/top/right/bottom plate —
+/// that paints the plate fully under the face and hides it.
+class NuvoHardOffset extends StatelessWidget {
+  const NuvoHardOffset({
+    super.key,
+    required this.child,
+    this.offset = 5.0,
+    this.radius = 18.0,
+    this.plateColor = NuvoColors.offsetGrey,
+    this.faceColor = NuvoColors.white,
+    this.borderColor,
+    this.borderWidth = 2.0,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final Widget child;
+  final double offset;
+  final double radius;
+  final Color plateColor;
+  final Color faceColor;
+  final Color? borderColor;
+  final double borderWidth;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final edge = borderColor ?? plateColor;
+    return Container(
+      decoration: BoxDecoration(
+        color: plateColor,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      // Plate shows only on the right + bottom edges.
+      padding: EdgeInsets.only(right: offset, bottom: offset),
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: faceColor,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: edge, width: borderWidth),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
 // ── NuvoCompactCard ───────────────────────────────────────────────────────────
 
-/// Secondary row/tile — CTA construction with grey outline + grey offset plate
-/// (not navy ink outline; reserved for primary surfaces/buttons).
+/// Secondary row/tile — hard-offset grey plate (not navy).
 class NuvoCompactCard extends StatelessWidget {
   const NuvoCompactCard({
     super.key,
@@ -152,39 +204,13 @@ class NuvoCompactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Match CTA hard-offset weight (4px plate), grey instead of navy.
-    const offset = 4.0;
-    final card = Padding(
-      padding: const EdgeInsets.only(right: offset, bottom: offset),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: offset,
-            top: offset,
-            right: 0,
-            bottom: 0,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: NuvoColors.borderStrong,
-                borderRadius: BorderRadius.circular(radius),
-              ),
-            ),
-          ),
-          Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: borderColor ?? NuvoColors.borderStrong,
-                width: 2,
-              ),
-            ),
-            child: child,
-          ),
-        ],
-      ),
+    final card = NuvoHardOffset(
+      radius: radius,
+      plateColor: NuvoColors.offsetGrey,
+      faceColor: color,
+      borderColor: borderColor ?? NuvoColors.offsetGrey,
+      padding: padding,
+      child: child,
     );
 
     if (onTap != null) {
@@ -807,7 +833,6 @@ class NuvoCurrentUserRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Blue rank circle
           Container(
             width: 24,
             height: 24,
@@ -826,7 +851,6 @@ class NuvoCurrentUserRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Initials circle
           Container(
             width: 30,
             height: 30,
@@ -845,18 +869,17 @@ class NuvoCurrentUserRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Name
           Expanded(
             child: Text(
               name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: NuvoColors.navy,
                 fontWeight: FontWeight.w700,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Value right-aligned
           Text(
             value,
             style: AppTextStyles.bodyMedium.copyWith(
@@ -872,10 +895,9 @@ class NuvoCurrentUserRow extends StatelessWidget {
 
 // ── NuvoRaceLane ──────────────────────────────────────────────────────────────
 
-/// Horizontal progress track — thin line with a blue dot at the current
-/// position. The core visual element of the Nuvo redesign, echoing the logo's
-/// smooth line + blue dot motif.
-class NuvoRaceLane extends StatefulWidget {
+/// Horizontal progress track. Static — no entrance animation (list remounts
+/// would re-fire any TweenAnimationBuilder / AnimationController).
+class NuvoRaceLane extends StatelessWidget {
   const NuvoRaceLane({
     super.key,
     required this.progressPercent,
@@ -890,124 +912,82 @@ class NuvoRaceLane extends StatefulWidget {
   final double trackHeight;
   final double dotDiameter;
 
-  /// Delay before the fill starts animating from 0, so a stack of race
-  /// cards can stagger their bars the same way the design stipulates.
+  /// Kept for API compatibility; ignored.
   final Duration delay;
 
   @override
-  State<NuvoRaceLane> createState() => _NuvoRaceLaneState();
-}
-
-class _NuvoRaceLaneState extends State<NuvoRaceLane> {
-  double _target = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.delay == Duration.zero) {
-      _target = (widget.progressPercent / 100).clamp(0.0, 1.0);
-    } else {
-      Future.delayed(widget.delay, () {
-        if (mounted) {
-          setState(
-            () => _target = (widget.progressPercent / 100).clamp(0.0, 1.0),
-          );
-        }
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant NuvoRaceLane oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.progressPercent != widget.progressPercent) {
-      _target = (widget.progressPercent / 100).clamp(0.0, 1.0);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final trackHeight = widget.trackHeight;
-    final dotDiameter = widget.dotDiameter;
-    final trackColor = widget.onDark
-        ? Colors.white.withValues(alpha: 0.18)
-        : NuvoColors.trackBg;
+    final progress = (progressPercent / 100).clamp(0.0, 1.0);
+    final trackColor =
+        onDark ? Colors.white.withValues(alpha: 0.18) : NuvoColors.trackBg;
+    final fillColor =
+        progress >= 1 ? NuvoColors.success : NuvoColors.actionBlue;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
+    return SizedBox(
+      height: dotDiameter,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalWidth = constraints.maxWidth;
+          final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
 
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: _target),
-          duration: const Duration(milliseconds: 1100),
-          curve: Curves.easeOut,
-          builder: (context, progress, _) {
-            final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
-            final fillColor =
-                progress >= 1 ? NuvoColors.success : NuvoColors.actionBlue;
-
-            return SizedBox(
-              height: dotDiameter,
-              child: Stack(
-                alignment: Alignment.centerLeft,
-                children: [
-                  Container(
-                    height: trackHeight,
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              Container(
+                height: trackHeight,
+                decoration: BoxDecoration(
+                  color: trackColor,
+                  borderRadius: BorderRadius.circular(trackHeight / 2),
+                ),
+              ),
+              if (progress > 0)
+                Container(
+                  width: fillWidth,
+                  height: trackHeight,
+                  decoration: BoxDecoration(
+                    color: fillColor,
+                    borderRadius: BorderRadius.circular(trackHeight / 2),
+                  ),
+                ),
+              if (progress > 0 && progress < 1)
+                Positioned(
+                  left: (fillWidth - dotDiameter / 2).clamp(
+                    0.0,
+                    totalWidth - dotDiameter,
+                  ),
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
                     decoration: BoxDecoration(
-                      color: trackColor,
-                      borderRadius: BorderRadius.circular(trackHeight / 2),
+                      color: NuvoColors.actionBlue,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: NuvoColors.inkNavy,
+                        width: 1.5,
+                      ),
                     ),
                   ),
-                  if (progress > 0)
-                    Container(
-                      width: fillWidth,
-                      height: trackHeight,
-                      decoration: BoxDecoration(
-                        color: fillColor,
-                        borderRadius: BorderRadius.circular(trackHeight / 2),
+                ),
+              if (progress >= 1)
+                Positioned(
+                  right: 0,
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
+                    decoration: BoxDecoration(
+                      color: NuvoColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: NuvoColors.inkNavy,
+                        width: 1.5,
                       ),
                     ),
-                  if (progress > 0 && progress < 1)
-                    Positioned(
-                      left: (fillWidth - dotDiameter / 2).clamp(
-                        0.0,
-                        totalWidth - dotDiameter,
-                      ),
-                      child: Container(
-                        width: dotDiameter,
-                        height: dotDiameter,
-                        decoration: BoxDecoration(
-                          color: NuvoColors.actionBlue,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: NuvoColors.inkNavy,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (progress >= 1)
-                    Positioned(
-                      right: 0,
-                      child: Container(
-                        width: dotDiameter,
-                        height: dotDiameter,
-                        decoration: BoxDecoration(
-                          color: NuvoColors.success,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: NuvoColors.inkNavy,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
