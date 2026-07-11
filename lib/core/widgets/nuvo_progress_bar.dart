@@ -9,25 +9,15 @@ class NuvoProgressBar extends StatelessWidget {
     this.color,
     this.trackColor,
     this.height = 6.0,
-    this.gradient,
   });
 
   final double value;
   final Color? color;
   final Color? trackColor;
   final double height;
-  final Gradient? gradient;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveGradient =
-        gradient ??
-        LinearGradient(
-          colors: [
-            color ?? NuvoColors.blue,
-            (color ?? NuvoColors.blue).withValues(alpha: 0.75),
-          ],
-        );
     final clamped = value.clamp(0.0, 1.0);
 
     return TweenAnimationBuilder<double>(
@@ -45,7 +35,7 @@ class NuvoProgressBar extends StatelessWidget {
               widthFactor: animated,
               child: Container(
                 decoration: BoxDecoration(
-                  gradient: effectiveGradient,
+                  color: color ?? NuvoColors.blue,
                   borderRadius: BorderRadius.circular(height),
                 ),
               ),

@@ -94,7 +94,7 @@ class NuvoPill extends StatelessWidget {
 
 // ── NuvoBackplateCard ─────────────────────────────────────────────────────────
 
-/// Hero / premium surface with a soft gradient and refined shadow.
+/// Hero / premium surface with controlled Nuvo elevation.
 class NuvoBackplateCard extends StatelessWidget {
   const NuvoBackplateCard({
     super.key,
@@ -118,38 +118,20 @@ class NuvoBackplateCard extends StatelessWidget {
     final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: color == NuvoColors.white
-              ? const [
-                  NuvoColors.white,
-                  NuvoColors.inkWash,
-                  NuvoColors.icyBlue,
-                ]
-              : [color, color],
-        ),
+        color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: NuvoColors.border,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: NuvoColors.blue.withValues(
-              alpha: 0.12 * shadowOpacity,
-            ),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: NuvoColors.navy.withValues(
-              alpha: 0.06 * shadowOpacity,
-            ),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: shadowOpacity == 0
+            ? null
+            : [
+                BoxShadow(
+                  color: NuvoColors.navy.withValues(
+                    alpha: 0.08 * shadowOpacity,
+                  ),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
       ),
       child: child,
     );
@@ -189,22 +171,8 @@ class NuvoCompactCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: borderColor ?? NuvoColors.border,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 7),
-          ),
-          const BoxShadow(
-            color: Color(0x080A1A33),
-            blurRadius: 8,
-            offset: Offset(0, 3),
-          ),
-        ],
+        border: Border.all(color: borderColor ?? NuvoColors.border, width: 1),
+        boxShadow: null,
       ),
       child: child,
     );
@@ -248,9 +216,7 @@ class NuvoSectionHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 9),
-          Expanded(
-            child: Text(title, style: AppTextStyles.titleMedium),
-          ),
+          Expanded(child: Text(title, style: AppTextStyles.titleMedium)),
           ?action,
         ],
       ),
@@ -299,10 +265,7 @@ class NuvoActionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: iconBg,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: NuvoColors.border,
-                width: 1,
-              ),
+              border: Border.all(color: NuvoColors.border, width: 1),
             ),
             alignment: Alignment.center,
             child: Icon(icon, color: iconColor, size: 17),
@@ -634,6 +597,7 @@ class NuvoTextInput extends StatelessWidget {
     this.maxLines = 1,
     this.autofocus = false,
     this.enabled = true,
+    this.prefixIcon,
   });
 
   final TextEditingController controller;
@@ -648,6 +612,7 @@ class NuvoTextInput extends StatelessWidget {
   final int maxLines;
   final bool autofocus;
   final bool enabled;
+  final Widget? prefixIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -674,6 +639,7 @@ class NuvoTextInput extends StatelessWidget {
             hintStyle: AppTextStyles.bodyMedium.copyWith(
               color: NuvoColors.textMuted,
             ),
+            prefixIcon: prefixIcon,
             filled: true,
             fillColor: NuvoColors.white,
             contentPadding: const EdgeInsets.symmetric(
@@ -690,10 +656,7 @@ class NuvoTextInput extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(
-                color: NuvoColors.blue,
-                width: 1.6,
-              ),
+              borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
@@ -717,6 +680,77 @@ class NuvoTextInput extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── NuvoSearchField ───────────────────────────────────────────────────────────
+
+/// Search input: white fill, search icon, compact loading suffix.
+/// Matches the auth/form input styling used by [NuvoTextInput] but without
+/// a label so it can sit directly under section headers.
+class NuvoSearchField extends StatelessWidget {
+  const NuvoSearchField({
+    super.key,
+    required this.controller,
+    this.hint = 'Search',
+    this.onChanged,
+    this.searching = false,
+    this.autofocus = false,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+  final bool searching;
+  final bool autofocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      autofocus: autofocus,
+      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: AppTextStyles.bodyMedium.copyWith(
+          color: NuvoColors.textMuted,
+        ),
+        filled: true,
+        fillColor: NuvoColors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: NuvoColors.muted,
+          size: 20,
+        ),
+        suffixIcon: searching
+            ? const Padding(
+                padding: EdgeInsets.all(14),
+                child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : null,
+        suffixIconConstraints: const BoxConstraints(),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+        ),
+      ),
     );
   }
 }
@@ -865,7 +899,9 @@ class _NuvoRaceLaneState extends State<NuvoRaceLane> {
     } else {
       Future.delayed(widget.delay, () {
         if (mounted) {
-          setState(() => _target = (widget.progressPercent / 100).clamp(0.0, 1.0));
+          setState(
+            () => _target = (widget.progressPercent / 100).clamp(0.0, 1.0),
+          );
         }
       });
     }
@@ -901,11 +937,7 @@ class _NuvoRaceLaneState extends State<NuvoRaceLane> {
               width: fillWidth,
               height: trackHeight,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: progress >= 1
-                      ? const [NuvoColors.success, NuvoColors.aqua]
-                      : const [NuvoColors.blueInk, NuvoColors.blue2],
-                ),
+                color: progress >= 1 ? NuvoColors.success : NuvoColors.blue,
                 borderRadius: BorderRadius.circular(trackHeight / 2),
               ),
             );
@@ -1035,9 +1067,7 @@ class NuvoLeaderboardRow extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: isCurrentUser
-                  ? NuvoColors.blue
-                  : NuvoColors.border,
+              color: isCurrentUser ? NuvoColors.blue : NuvoColors.border,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -1058,8 +1088,9 @@ class NuvoLeaderboardRow extends StatelessWidget {
                 Text(
                   name,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight:
-                        isCurrentUser ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: isCurrentUser
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

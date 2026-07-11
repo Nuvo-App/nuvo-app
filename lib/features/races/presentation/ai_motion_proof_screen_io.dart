@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/data/auth_api.dart';
@@ -433,14 +435,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       )?.cameraInstruction ??
       'Full body front view';
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
           child: Column(mainAxisSize: MainAxisSize.min, children: _actions()),
         ),
       ),
@@ -450,7 +451,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           children: [
             // ── Compact inline header: back button left, title right ──────
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
               child: Row(
                 children: [
                   NuvoBackButton(
@@ -478,7 +479,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
 
             // ── Camera / result stage — Expanded fills remaining space ───
             Expanded(
@@ -497,7 +498,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 _status != AiMotionProofStatus.setup &&
                 _status != AiMotionProofStatus.recording &&
                 _status != AiMotionProofStatus.unsupportedMovement) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _statusHint(),
@@ -513,7 +514,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               ),
             ],
 
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -524,7 +525,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(NuvoRadii.hero),
       ),
       child: const Center(
         child: CircularProgressIndicator(
@@ -542,14 +543,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0xB007152B),
-            blurRadius: 0,
-            offset: Offset(5, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(NuvoRadii.hero),
+        boxShadow: AppShadows.heroShadow,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -585,7 +580,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   color: _status == AiMotionProofStatus.recording
                       ? (_currentValue >= _targetValue
                             ? NuvoColors.success
-                            : const Color(0xFFE8304A))
+                            : NuvoColors.danger)
                       : NuvoColors.blue,
                 ),
                 const Spacer(),
@@ -604,7 +599,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               ],
             ),
           ),
-          Positioned.fill(child: IgnorePointer(child: _bodyGuideOverlay())),
+          if (_status != AiMotionProofStatus.recording)
+            Positioned.fill(child: IgnorePointer(child: _bodyGuideOverlay())),
           if (_status == AiMotionProofStatus.recording)
             Positioned(left: 14, right: 14, bottom: 14, child: _recordingHud()),
         ],
@@ -631,7 +627,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget _bodyGuideOverlay() {
     final isRecording = _status == AiMotionProofStatus.recording;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(34, 76, 34, 72),
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 44),
       child: CustomPaint(
         painter: _BodyGuidePainter(),
         child: isRecording
@@ -639,8 +635,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             : Center(
                 child: Text(
                   'Step into frame',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.white.withValues(alpha: 0.7),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.white.withValues(alpha: 0.6),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -661,26 +657,20 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return Container(
         decoration: BoxDecoration(
           color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0xB007152B),
-              blurRadius: 0,
-              offset: Offset(5, 6),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(NuvoRadii.hero),
+          boxShadow: AppShadows.heroShadow,
         ),
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
-                  Icons.verified_rounded,
-                  color: NuvoColors.blue,
-                  size: 68,
-                )
+                      Icons.verified_rounded,
+                      color: NuvoColors.blue,
+                      size: 56,
+                    )
                     .animate()
                     .scale(
                       begin: const Offset(0.4, 0.4),
@@ -689,13 +679,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                       curve: Curves.easeOutBack,
                     )
                     .fadeIn(duration: 200.ms, curve: Curves.easeOut),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 Text(
-                  '+${_countedLabel(result)}',
-                  style: AppTextStyles.displayMedium.copyWith(
-                    color: NuvoColors.white,
-                  ),
-                )
+                      '+${_countedLabel(result)}',
+                      style: AppTextStyles.displayMedium.copyWith(
+                        color: NuvoColors.white,
+                      ),
+                    )
                     .animate(delay: 80.ms)
                     .slideY(
                       begin: 0.14,
@@ -704,7 +694,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                       curve: Curves.easeOutCubic,
                     )
                     .fadeIn(duration: 220.ms, curve: Curves.easeOut),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   _status == AiMotionProofStatus.submitted
                       ? 'Race updated'
@@ -727,18 +717,18 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(NuvoRadii.hero),
         border: Border.all(color: NuvoColors.border),
       ),
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 64,
-                height: 64,
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
                   color: NuvoColors.white,
                   shape: BoxShape.circle,
@@ -747,12 +737,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 child: const Icon(
                   Icons.refresh_rounded,
                   color: NuvoColors.muted,
-                  size: 30,
+                  size: 26,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Text('Try again', style: AppTextStyles.headlineLarge),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 _activity == AiMotionActivity.plankHold
                     ? 'Counted $detected valid seconds out of $_targetValue.'
@@ -762,7 +752,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 'Keep the camera view clear and try again.',
                 style: AppTextStyles.bodyMedium.copyWith(
@@ -780,10 +770,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget _recordingHud() {
     final targetReached = _currentValue >= _targetValue;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: NuvoColors.navy.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
         border: Border.all(color: NuvoColors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
@@ -835,18 +825,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     if (title.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
         border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0C07152B),
-            blurRadius: 0,
-            offset: Offset(2, 3),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -867,15 +850,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFEEF1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFE5484D).withValues(alpha: 0.4),
-        ),
+        color: NuvoColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.danger.withValues(alpha: 0.28)),
       ),
       child: Text(
         message,
-        style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFFE5484D)),
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
       ),
     );
   }
@@ -886,9 +867,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _status == AiMotionProofStatus.submitting;
 
     return switch (_status) {
-      AiMotionProofStatus.setup => [
-        const SizedBox.shrink(),
-      ],
+      AiMotionProofStatus.setup => [const SizedBox.shrink()],
       AiMotionProofStatus.unsupportedMovement => [
         NuvoOutlineButton(
           label: 'Back',
@@ -933,12 +912,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           onPressed: _recordAgain,
         ),
       ],
-      AiMotionProofStatus.submitting => [
-        const SizedBox.shrink(),
-      ],
-      AiMotionProofStatus.submitted => [
-        const SizedBox.shrink(),
-      ],
+      AiMotionProofStatus.submitting => [const SizedBox.shrink()],
+      AiMotionProofStatus.submitted => [const SizedBox.shrink()],
       AiMotionProofStatus.aiFailed ||
       AiMotionProofStatus.permissionDenied ||
       AiMotionProofStatus.cameraError => [
@@ -962,10 +937,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Widget _pill(String label, {required Color color}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
       ),
       child: Text(
         label,
@@ -996,10 +971,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         : NuvoColors.navy;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
         border: Border.all(color: NuvoColors.white.withValues(alpha: 0.14)),
       ),
       child: Text(
@@ -1043,28 +1018,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 class _BodyGuidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = NuvoColors.white.withValues(alpha: 0.9)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+    final rect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(16),
+    );
+    final paint =
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
+    canvas.drawRRect(rect, paint);
 
-    // Corner brackets only — professional camera framing, no body drawing
-    const corner = 34.0;
-    final path = Path()
-      ..moveTo(0, corner)
-      ..lineTo(0, 0)
-      ..lineTo(corner, 0)
-      ..moveTo(size.width - corner, 0)
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, corner)
-      ..moveTo(size.width, size.height - corner)
-      ..lineTo(size.width, size.height)
-      ..lineTo(size.width - corner, size.height)
-      ..moveTo(corner, size.height)
-      ..lineTo(0, size.height)
-      ..lineTo(0, size.height - corner);
-    canvas.drawPath(path, paint);
+    // Horizontal reference line
+    final centerY = size.height / 2;
+    canvas.drawLine(
+      Offset(size.width * 0.22, centerY),
+      Offset(size.width * 0.78, centerY),
+      paint,
+    );
   }
 
   @override

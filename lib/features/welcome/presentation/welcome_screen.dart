@@ -86,11 +86,11 @@ class _RaceLoopCard extends StatelessWidget {
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: NuvoColors.border, width: 1.2),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x1A07152B),
+            color: NuvoColors.navy2.withValues(alpha: 0.10),
             blurRadius: 18,
-            offset: Offset(8, 10),
+            offset: const Offset(8, 10),
           ),
         ],
       ),

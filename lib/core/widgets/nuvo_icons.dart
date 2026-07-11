@@ -34,7 +34,10 @@ class NuvoIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved =
-        color ?? IconTheme.of(context).color ?? DefaultTextStyle.of(context).style.color ?? Colors.black;
+        color ??
+        IconTheme.of(context).color ??
+        DefaultTextStyle.of(context).style.color ??
+        Colors.black;
     return CustomPaint(
       size: Size.square(size),
       painter: _NuvoIconPainter(_specs[type]!, resolved),
@@ -107,9 +110,7 @@ final Map<NuvoIconType, List<_Shape>> _specs = {
     _StrokePath('M4 17l6-6 4 4 6-8', width: 2.1),
     _StrokePath('M15 6h5v5', width: 2.1),
   ],
-  NuvoIconType.check: const [
-    _StrokePath('M4.5 12.5l5 5L20 6.5', width: 2.2),
-  ],
+  NuvoIconType.check: const [_StrokePath('M4.5 12.5l5 5L20 6.5', width: 2.2)],
   NuvoIconType.checkCircle: const [
     _StrokeCircle(Offset(12, 12), 9, width: 1.8),
     _StrokePath('M8 12.3l2.6 2.6L16 9.3', width: 1.8),
@@ -129,7 +130,9 @@ final Map<NuvoIconType, List<_Shape>> _specs = {
     _FillCircle(Offset(9, 8), 3.3),
     _FillPath('M2.8 20a6.2 6.2 0 0 1 12.4 0z'),
     _FillCircle(Offset(17, 9.2), 2.5),
-    _FillPath('M14.6 20a5 5 0 0 1 8-4.3v.2c0 .5-.3 1-.8 1.1a11 11 0 0 0-3.4 1.6c-.3.2-.5.6-.5 1z'),
+    _FillPath(
+      'M14.6 20a5 5 0 0 1 8-4.3v.2c0 .5-.3 1-.8 1.1a11 11 0 0 0-3.4 1.6c-.3.2-.5.6-.5 1z',
+    ),
   ],
   NuvoIconType.user: const [
     _FillCircle(Offset(12, 8), 4.1),
@@ -142,9 +145,7 @@ final Map<NuvoIconType, List<_Shape>> _specs = {
     _FillRRect(Rect.fromLTWH(5, 11, 14, 9.5), 2.3),
     _StrokePath('M8 11V8.3a4 4 0 0 1 8 0V11', width: 1.9, cap: StrokeCap.butt),
   ],
-  NuvoIconType.bolt: const [
-    _FillPath('M13 2 4 14h6l-1 8 9-12h-6z'),
-  ],
+  NuvoIconType.bolt: const [_FillPath('M13 2 4 14h6l-1 8 9-12h-6z')],
   NuvoIconType.bell: const [
     _StrokePath(
       'M12 3a5.5 5.5 0 0 0-5.5 5.5v3.2c0 .7-.3 1.4-.8 1.9L4.5 15h15l-1.2-1.4a2.7 2.7 0 0 1-.8-1.9V8.5A5.5 5.5 0 0 0 12 3z',
@@ -153,20 +154,16 @@ final Map<NuvoIconType, List<_Shape>> _specs = {
     ),
     _StrokePath('M9.5 18a2.5 2.5 0 0 0 5 0', width: 1.8),
   ],
-  NuvoIconType.close: const [
-    _StrokePath('M5 5l14 14M19 5L5 19', width: 2.1),
-  ],
-  NuvoIconType.arrow: const [
-    _StrokePath('M4 12h16M13 5l7 7-7 7', width: 2.1),
-  ],
-  NuvoIconType.back: const [
-    _StrokePath('M20 12H4M11 5l-7 7 7 7', width: 2.1),
-  ],
+  NuvoIconType.close: const [_StrokePath('M5 5l14 14M19 5L5 19', width: 2.1)],
+  NuvoIconType.arrow: const [_StrokePath('M4 12h16M13 5l7 7-7 7', width: 2.1)],
+  NuvoIconType.back: const [_StrokePath('M20 12H4M11 5l-7 7 7 7', width: 2.1)],
 };
 
 // ── SVG path-data parser ────────────────────────────────────────────────────────
 
-final RegExp _tokenPattern = RegExp(r'[MmLlHhVvCcAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?');
+final RegExp _tokenPattern = RegExp(
+  r'[MmLlHhVvCcAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?',
+);
 
 /// Parses the subset of the SVG path "d" mini-language used by Nuvo's icon
 /// set (M/m L/l H/h V/v C/c A/a Z/z) into a Flutter [Path], preserving
@@ -343,5 +340,6 @@ class _NuvoIconPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _NuvoIconPainter oldDelegate) => oldDelegate.color != color || oldDelegate.shapes != shapes;
+  bool shouldRepaint(covariant _NuvoIconPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.shapes != shapes;
 }

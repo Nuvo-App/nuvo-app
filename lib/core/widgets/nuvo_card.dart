@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_geometry.dart';
+import '../theme/app_shadows.dart';
 
 /// Clean white surface card with subtle shadow — light theme.
 class NuvoCard extends StatelessWidget {
@@ -25,33 +27,9 @@ class NuvoCard extends StatelessWidget {
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: NuvoColors.card,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
         border: Border.all(color: borderColor ?? NuvoColors.border, width: 1),
-        boxShadow: elevated
-            ? const [
-                BoxShadow(
-                  color: Color(0x10000000),
-                  blurRadius: 24,
-                  offset: Offset(0, 6),
-                ),
-                BoxShadow(
-                  color: Color(0x06000000),
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
-              ]
-            : const [
-                BoxShadow(
-                  color: Color(0x0C000000),
-                  blurRadius: 16,
-                  offset: Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: Color(0x05000000),
-                  blurRadius: 4,
-                  offset: Offset(0, 1),
-                ),
-              ],
+        boxShadow: elevated ? AppShadows.card : null,
       ),
       child: child,
     );

@@ -144,11 +144,11 @@ class CompactRaceCard extends StatelessWidget {
           color: NuvoColors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: NuvoColors.border),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x0A07152B),
+              color: NuvoColors.navy2.withValues(alpha: 0.04),
               blurRadius: 16,
-              offset: Offset(0, 8),
+              offset: const Offset(0, 8),
             ),
           ],
         ),

@@ -29,21 +29,7 @@ class NuvoPage extends StatelessWidget {
       backgroundColor: backgroundColor ?? NuvoColors.page,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       body: DecoratedBox(
-        decoration: BoxDecoration(
-          color: backgroundColor ?? NuvoColors.page,
-          gradient: backgroundColor == null
-              ? const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFF5F7FC),
-                    NuvoColors.page,
-                    Color(0xFFECF0F8),
-                  ],
-                  stops: [0.0, 0.50, 1.0],
-                )
-              : null,
-        ),
+        decoration: BoxDecoration(color: backgroundColor ?? NuvoColors.page),
         child: Column(
           children: [
             ?topBar,
@@ -83,22 +69,14 @@ class NuvoTopBar extends StatelessWidget {
     final top = MediaQuery.paddingOf(context).top;
     return Container(
       color: backgroundColor ?? Colors.transparent,
-      padding: EdgeInsets.only(
-        top: top + 8,
-        left: 16,
-        right: 16,
-        bottom: 10,
-      ),
+      padding: EdgeInsets.only(top: top + 8, left: 16, right: 16, bottom: 10),
       child: Container(
         constraints: const BoxConstraints(minHeight: 52),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: NuvoColors.white.withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: NuvoColors.border,
-            width: 1,
-          ),
+          border: Border.all(color: NuvoColors.border, width: 1),
           boxShadow: [
             BoxShadow(
               color: NuvoColors.blue.withValues(alpha: 0.08),
@@ -204,9 +182,7 @@ class NuvoSectionHeader extends StatelessWidget {
             onTap: onSeeAll,
             child: Text(
               'See all',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.blue,
-              ),
+              style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.blue),
             ),
           ),
       ],

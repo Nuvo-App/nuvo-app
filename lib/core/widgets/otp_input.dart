@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 
 class OtpInput extends StatelessWidget {
@@ -19,7 +20,9 @@ class OtpInput extends StatelessWidget {
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
               maxLength: 1,
-              style: AppTextStyles.headlineMedium,
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: NuvoColors.navy,
+              ),
               onChanged: (value) {
                 if (value.isNotEmpty && i < controllers.length - 1) {
                   FocusScope.of(context).nextFocus();
@@ -31,20 +34,22 @@ class OtpInput extends StatelessWidget {
               decoration: InputDecoration(
                 counterText: '',
                 filled: true,
-                fillColor: controllers[i].text.isEmpty
-                    ? NuvoColors.white
-                    : NuvoColors.icyBlue,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                fillColor: NuvoColors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
                   borderSide: const BorderSide(color: NuvoColors.border),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
                   borderSide: const BorderSide(
                     color: NuvoColors.blue,
                     width: 1.8,
                   ),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  borderSide: const BorderSide(color: NuvoColors.danger),
                 ),
               ),
             ),

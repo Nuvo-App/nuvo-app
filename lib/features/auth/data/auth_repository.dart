@@ -88,7 +88,8 @@ class AuthRepository {
     ),
   );
 
-  Future<({String uploadUrl, String publicUrl, String key})> requestPhotoUploadUrl({
+  Future<({String uploadUrl, String publicUrl, String key})>
+  requestPhotoUploadUrl({
     required String fileName,
     required String contentType,
   }) => _withRefresh(

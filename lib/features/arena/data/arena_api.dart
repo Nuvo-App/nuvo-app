@@ -25,7 +25,9 @@ class ArenaApi {
       Uri.parse('$_kApiBase/arena'),
       headers: _headers(token),
     );
-    debugPrint('[ArenaApi] status=${res.statusCode} body=${res.body.length > 300 ? res.body.substring(0, 300) : res.body}');
+    debugPrint(
+      '[ArenaApi] status=${res.statusCode} body=${res.body.length > 300 ? res.body.substring(0, 300) : res.body}',
+    );
     final json = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode >= 400) {
       throw ApiException(

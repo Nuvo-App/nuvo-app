@@ -77,7 +77,8 @@ class RaceRing extends StatefulWidget {
   State<RaceRing> createState() => _RaceRingState();
 }
 
-class _RaceRingState extends State<RaceRing> with SingleTickerProviderStateMixin {
+class _RaceRingState extends State<RaceRing>
+    with SingleTickerProviderStateMixin {
   double _target = 0;
   late final AnimationController _pulseCtrl;
 
@@ -87,8 +88,10 @@ class _RaceRingState extends State<RaceRing> with SingleTickerProviderStateMixin
     // A few pulses to draw the eye, then settle — an indefinite repeat here
     // keeps a ticker alive on every mounted Race Ring for as long as the
     // screen is open, which adds up when several are on screen.
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
-      ..repeat(reverse: true, count: 3);
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true, count: 3);
     if (widget.delay == Duration.zero) {
       _target = widget.progress.clamp(0.0, 1.0);
     } else {
@@ -189,7 +192,10 @@ class _RaceRingState extends State<RaceRing> with SingleTickerProviderStateMixin
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(widget.centerValue, style: AppTextStyles.number(widget.size * 0.26)),
+              Text(
+                widget.centerValue,
+                style: AppTextStyles.number(widget.size * 0.26),
+              ),
               if (widget.centerLabel != null)
                 Text(widget.centerLabel!, style: AppTextStyles.bodySmall),
             ],
@@ -230,5 +236,6 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RingPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.progress != progress ||
+      oldDelegate.strokeWidth != strokeWidth;
 }

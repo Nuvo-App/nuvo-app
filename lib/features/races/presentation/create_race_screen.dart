@@ -7,6 +7,7 @@ import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
@@ -155,8 +156,9 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
                             ),
                           ),
                           const SizedBox(height: 22),
-                          _InputField(
+                          NuvoTextInput(
                             controller: _ideaController,
+                            label: 'Race idea',
                             hint: 'e.g. 10 squats',
                             onChanged: (_) => setState(() {}),
                           ),
@@ -180,7 +182,9 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
                                 ),
                               ],
                             ),
-                          ] else if (_ideaController.text.trim().isNotEmpty) ...[
+                          ] else if (_ideaController.text
+                              .trim()
+                              .isNotEmpty) ...[
                             const SizedBox(height: 10),
                             Row(
                               children: [
@@ -243,49 +247,6 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InputField extends StatelessWidget {
-  const _InputField({
-    required this.controller,
-    required this.hint,
-    this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final ValueChanged<String>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      textInputAction: TextInputAction.done,
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-        filled: true,
-        fillColor: NuvoColors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
         ),
       ),
     );

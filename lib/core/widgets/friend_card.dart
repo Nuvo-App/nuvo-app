@@ -29,10 +29,10 @@ class FriendCard extends StatelessWidget {
           ),
           boxShadow: [
             if (selected)
-              const BoxShadow(
-                color: Color(0x19075BFF),
+              BoxShadow(
+                color: NuvoColors.blue.withValues(alpha: 0.10),
                 blurRadius: 16,
-                offset: Offset(0, 8),
+                offset: const Offset(0, 8),
               ),
           ],
         ),

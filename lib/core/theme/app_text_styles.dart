@@ -12,14 +12,13 @@ abstract final class AppTextStyles {
     Color? color,
     double? height,
     double letterSpacing = 0,
-  }) =>
-      GoogleFonts.manrope(
-        fontSize: size,
-        fontWeight: weight,
-        color: color ?? AppColors.textPrimary,
-        height: height ?? 1.42,
-        letterSpacing: letterSpacing,
-      );
+  }) => GoogleFonts.manrope(
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? AppColors.textPrimary,
+    height: height ?? 1.42,
+    letterSpacing: letterSpacing,
+  );
 
   // ── Display — huge stats, tight leading, aggressive tracking ────────────────
   static TextStyle get displayLarge =>
@@ -50,13 +49,19 @@ abstract final class AppTextStyles {
 
   static TextStyle get bodyMedium => _manrope(15, FontWeight.w500, height: 1.5);
 
-  static TextStyle get bodySmall =>
-      _manrope(13, FontWeight.w500, color: AppColors.textSecondary, height: 1.4);
+  static TextStyle get bodySmall => _manrope(
+    13,
+    FontWeight.w500,
+    color: AppColors.textSecondary,
+    height: 1.4,
+  );
 
   // ── Label — small, all-caps ready, high weight ────────────────────────────────
-  static TextStyle get labelLarge => _manrope(14, FontWeight.w700, height: 1.18);
+  static TextStyle get labelLarge =>
+      _manrope(14, FontWeight.w700, height: 1.18);
 
-  static TextStyle get labelMedium => _manrope(12, FontWeight.w700, height: 1.2);
+  static TextStyle get labelMedium =>
+      _manrope(12, FontWeight.w700, height: 1.2);
 
   static TextStyle get labelSmall =>
       _manrope(11, FontWeight.w700, color: AppColors.textMuted, height: 1.2);
@@ -66,24 +71,22 @@ abstract final class AppTextStyles {
     double size, {
     Color? color,
     FontWeight weight = FontWeight.w700,
-  }) =>
-      GoogleFonts.manrope(
-        fontSize: size,
-        fontWeight: weight,
-        color: color ?? AppColors.textPrimary,
-        height: 1.0,
-        letterSpacing: -0.3,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
+  }) => GoogleFonts.manrope(
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? AppColors.textPrimary,
+    height: 1.0,
+    letterSpacing: -0.3,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
 
   /// Uppercase label helper. Use for movement tags, status, and section kicker.
-  static TextStyle labelUppercase(double size, {Color? color}) =>
-      _manrope(
-        size,
-        FontWeight.w800,
-        color: color ?? AppColors.textMuted,
-        letterSpacing: 0.8,
-      );
+  static TextStyle labelUppercase(double size, {Color? color}) => _manrope(
+    size,
+    FontWeight.w800,
+    color: color ?? AppColors.textMuted,
+    letterSpacing: 0.8,
+  );
 
   // ── Brand ─────────────────────────────────────────────────────────────────────
   static TextStyle get brandLabel =>

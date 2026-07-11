@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_geometry.dart';
+import '../theme/app_shadows.dart';
 
 /// Premium accent card — light-only surface with blue emphasis.
 class NuvoDarkCard extends StatelessWidget {
@@ -20,20 +22,10 @@ class NuvoDarkCard extends StatelessWidget {
     Widget card = Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.white, NuvoColors.inkWash, NuvoColors.icyBlue],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x140A1A33),
-            blurRadius: 22,
-            offset: Offset(0, 10),
-          ),
-        ],
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: NuvoBorders.quiet,
+        boxShadow: AppShadows.card,
       ),
       child: child,
     );

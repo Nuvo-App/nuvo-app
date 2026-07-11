@@ -198,7 +198,6 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   Widget _backRow() => NuvoBackButton(
     onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
   );
-
 }
 
 // ── MoveCheck card ────────────────────────────────────────────────────────────
@@ -412,7 +411,6 @@ class _SetupLine extends StatelessWidget {
     );
   }
 }
-
 
 class _UnsupportedVerificationCard extends StatelessWidget {
   const _UnsupportedVerificationCard({required this.message});

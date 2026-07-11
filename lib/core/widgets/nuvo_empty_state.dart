@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_button.dart';
 
@@ -28,7 +29,16 @@ class NuvoEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 44, color: NuvoColors.blue),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: NuvoColors.panel,
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+                border: NuvoBorders.quiet,
+              ),
+              child: Icon(icon, size: 22, color: NuvoColors.blue),
+            ),
             const SizedBox(height: 16),
             Text(
               title,

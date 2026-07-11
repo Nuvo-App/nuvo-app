@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 
@@ -68,34 +69,37 @@ class AddCrewScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Your crew is waiting at the start line.',
+                      'Invite friends from the Crew tab after signing in.',
                       style: AppTextStyles.bodyLarge.copyWith(
                         color: NuvoColors.muted,
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Search for crew members from the Crew tab after signing in.',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: NuvoColors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(NuvoRadii.lg),
                         border: Border.all(color: NuvoColors.border),
                       ),
                       child: Column(
                         children: [
-                          const Icon(
-                            Icons.group_add_rounded,
-                            color: NuvoColors.blue,
-                            size: 34,
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: NuvoColors.icyBlue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: NuvoColors.border),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.group_add_rounded,
+                              color: NuvoColors.blue,
+                              size: 24,
+                            ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Text(
                             'Your crew is waiting at the start line.',
                             style: AppTextStyles.titleLarge,
@@ -103,7 +107,7 @@ class AddCrewScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Invite friends to turn this into a race.',
+                            'Tap Skip for now and find people later.',
                             style: AppTextStyles.bodyMedium.copyWith(
                               color: NuvoColors.muted,
                             ),

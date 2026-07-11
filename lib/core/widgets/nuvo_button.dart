@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
 
@@ -81,24 +82,10 @@ class NuvoPrimaryButton extends StatelessWidget {
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            gradient: enabled
-                ? const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [NuvoColors.blue, NuvoColors.blueInk],
-                  )
-                : null,
-            color: enabled ? null : NuvoColors.paleSlate,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: enabled
-                ? [
-                    BoxShadow(
-                      color: NuvoColors.blue.withValues(alpha: 0.28),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ]
-                : null,
+            color: enabled ? NuvoColors.blue : NuvoColors.paleSlate,
+            borderRadius: BorderRadius.circular(small ? 16 : 18),
+            border: Border.all(color: NuvoColors.navy, width: 2),
+            boxShadow: enabled ? AppShadows.actionShadow : null,
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -165,18 +152,11 @@ class NuvoOutlineButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: NuvoColors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(small ? 14 : 16),
             border: Border.all(
-              color: NuvoColors.paleSlate.withValues(alpha: 0.65),
-              width: 1,
+              color: NuvoColors.navy.withValues(alpha: 0.22),
+              width: 1.2,
             ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0C0A1A33),
-                blurRadius: 16,
-                offset: Offset(0, 6),
-              ),
-            ],
           ),
           alignment: Alignment.center,
           child: _buttonContent(
@@ -281,7 +261,7 @@ class NuvoDangerButton extends StatelessWidget {
           height: height,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFF3F4),
+            color: NuvoColors.danger.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: NuvoColors.danger.withValues(alpha: 0.38),
@@ -322,11 +302,11 @@ class NuvoBackButton extends StatelessWidget {
           color: NuvoColors.white,
           shape: BoxShape.circle,
           border: Border.all(color: NuvoColors.border, width: 1),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x0E0A1A33),
+              color: NuvoColors.navy.withValues(alpha: 0.06),
               blurRadius: 16,
-              offset: Offset(0, 6),
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -368,11 +348,11 @@ class NuvoIconAction extends StatelessWidget {
           color: NuvoColors.white,
           shape: BoxShape.circle,
           border: Border.all(color: NuvoColors.border, width: 1),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x0C0A1A33),
+              color: NuvoColors.navy.withValues(alpha: 0.05),
               blurRadius: 14,
-              offset: Offset(0, 5),
+              offset: const Offset(0, 5),
             ),
           ],
         ),

@@ -132,6 +132,74 @@ class NuvoAvatar extends StatelessWidget {
   }
 }
 
+enum NuvoCompetitorAvatarRole { standard, currentUser, leader }
+
+/// Competition-specific avatar treatment built on top of [NuvoAvatar].
+///
+/// Keeps the existing image loading and fallback behavior intact while adding
+/// the restrained outlines used in race tracks and leaderboards.
+class NuvoCompetitorAvatar extends StatelessWidget {
+  const NuvoCompetitorAvatar({
+    super.key,
+    required this.initials,
+    required this.id,
+    this.photoUrl,
+    this.size = NuvoAvatarSizes.sm,
+    this.role = NuvoCompetitorAvatarRole.standard,
+    this.showStatus = false,
+  });
+
+  final String initials;
+  final String id;
+  final String? photoUrl;
+  final double size;
+  final NuvoCompetitorAvatarRole role;
+  final bool showStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = switch (role) {
+      NuvoCompetitorAvatarRole.currentUser => NuvoColors.blue,
+      NuvoCompetitorAvatarRole.leader => NuvoColors.gold.withValues(
+        alpha: 0.86,
+      ),
+      NuvoCompetitorAvatarRole.standard => NuvoColors.white,
+    };
+    final borderWidth = role == NuvoCompetitorAvatarRole.currentUser
+        ? 3.0
+        : 2.0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        NuvoAvatar(
+          initials: initials,
+          size: size,
+          photoUrl: photoUrl,
+          bgColor: nuvoAvatarColorFor(id),
+          textColor: NuvoColors.white,
+          borderColor: borderColor,
+          borderWidth: borderWidth,
+        ),
+        if (showStatus)
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: (size * 0.22).clamp(7.0, 10.0),
+              height: (size * 0.22).clamp(7.0, 10.0),
+              decoration: BoxDecoration(
+                color: NuvoColors.blue,
+                shape: BoxShape.circle,
+                border: Border.all(color: NuvoColors.white, width: 1.5),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Overlapping avatar stack — shows up to [max] avatars then a +N bubble.
 class NuvoAvatarStack extends StatelessWidget {
   const NuvoAvatarStack({

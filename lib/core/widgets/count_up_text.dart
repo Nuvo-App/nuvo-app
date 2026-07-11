@@ -36,9 +36,10 @@ class _CountUpTextState extends State<CountUpText>
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: widget.duration);
-    _anim = IntTween(begin: 0, end: widget.value)
-        .chain(CurveTween(curve: widget.curve))
-        .animate(_ctrl);
+    _anim = IntTween(
+      begin: 0,
+      end: widget.value,
+    ).chain(CurveTween(curve: widget.curve)).animate(_ctrl);
     _ctrl.forward();
   }
 

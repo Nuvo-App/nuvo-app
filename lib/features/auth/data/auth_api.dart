@@ -171,16 +171,16 @@ class AuthApi {
 
   /// Step 1 of photo upload: ask the backend for a signed upload URL.
   /// Returns { uploadUrl: "...", publicUrl: "...", key: "..." }.
-  Future<({String uploadUrl, String publicUrl, String key})> requestPhotoUploadUrl(
+  Future<({String uploadUrl, String publicUrl, String key})>
+  requestPhotoUploadUrl(
     String accessToken, {
     required String fileName,
     required String contentType,
   }) async {
-    final json = await _post(
-      '/profile/photo/upload-url',
-      {'fileName': fileName, 'contentType': contentType},
-      accessToken: accessToken,
-    );
+    final json = await _post('/profile/photo/upload-url', {
+      'fileName': fileName,
+      'contentType': contentType,
+    }, accessToken: accessToken);
     final publicUrl = json['publicUrl'] as String;
     debugPrint('UPLOAD_PUBLIC_URL: $publicUrl');
     return (

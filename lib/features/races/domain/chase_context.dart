@@ -32,8 +32,9 @@ class ChaseContext {
 
     final leader = sorted.isNotEmpty ? sorted.first : null;
     final isLeading = leader?.userId == userId;
-    final leaderGap =
-        leader != null && !isLeading ? (leader.progressValue - myValue) : 0;
+    final leaderGap = leader != null && !isLeading
+        ? (leader.progressValue - myValue)
+        : 0;
 
     final personAhead = myIndex > 0 ? sorted[myIndex - 1] : null;
 
@@ -79,10 +80,12 @@ class ChaseContext {
       myRank: myRank,
       totalCount: total,
       chaseCopy: chaseCopy,
-      leaderName:
-          leader != null && !isLeading ? _firstName(leader.displayName) : null,
-      leaderPhotoUrl:
-          leader != null && !isLeading ? leader.profilePhotoUrl : null,
+      leaderName: leader != null && !isLeading
+          ? _firstName(leader.displayName)
+          : null,
+      leaderPhotoUrl: leader != null && !isLeading
+          ? leader.profilePhotoUrl
+          : null,
       leaderGap: leaderGap > 0 ? leaderGap : null,
       daysLeft: daysLeft,
     );

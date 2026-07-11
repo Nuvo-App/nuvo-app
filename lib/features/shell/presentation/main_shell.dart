@@ -26,7 +26,7 @@ class _MainShellState extends State<MainShell> {
   static const _paths = [
     '/arena', // 0 Arena
     '/compete', // 1 Races
-    '/move', // 2 Move
+    '/move', // 2 Verify
     '/pass', // 3 Crew
     '/profile', // 4 Profile
   ];

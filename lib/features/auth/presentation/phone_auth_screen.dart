@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
@@ -39,31 +40,21 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
               style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 34),
-            Text('PHONE NUMBER', style: AppTextStyles.brandLabel),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Container(
-                  height: 58,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: NuvoColors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: NuvoColors.border),
-                  ),
-                  child: Text('+1', style: AppTextStyles.titleMedium),
+            NuvoTextInput(
+              controller: _phoneController,
+              label: 'PHONE NUMBER',
+              hint: '555 014 2048',
+              keyboardType: TextInputType.phone,
+              prefixIcon: Container(
+                width: 50,
+                height: double.infinity,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(
+                  border: Border(right: BorderSide(color: NuvoColors.border)),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    style: AppTextStyles.titleMedium,
-                    decoration: const InputDecoration(hintText: '555 014 2048'),
-                  ),
-                ),
-              ],
+                alignment: Alignment.center,
+                child: Text('+1', style: AppTextStyles.bodyMedium),
+              ),
             ),
             const SizedBox(height: 28),
             NuvoPrimaryButton(

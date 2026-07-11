@@ -12,6 +12,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/photo_service.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 
@@ -401,41 +402,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           ),
 
                           const SizedBox(height: 28),
-                          Text('Full name', style: AppTextStyles.titleMedium),
-                          const SizedBox(height: 8),
-                          TextField(
+                          NuvoTextInput(
                             controller: _nameController,
+                            label: 'Full name',
+                            hint: 'Your full name',
+                            errorText: _nameError,
                             onChanged: (_) => setState(() => _nameError = null),
-                            decoration: _inputDecoration('Your full name'),
                           ),
-                          if (_nameError != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              _nameError!,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: NuvoColors.danger,
-                              ),
-                            ),
-                          ],
                           const SizedBox(height: 16),
-                          Text('Username', style: AppTextStyles.titleMedium),
-                          const SizedBox(height: 8),
-                          TextField(
+                          NuvoTextInput(
                             controller: _usernameController,
-                            autocorrect: false,
+                            label: 'Username',
+                            hint: 'e.g. akshay',
+                            errorText: _usernameError,
                             onChanged: (_) =>
                                 setState(() => _usernameError = null),
-                            decoration: _inputDecoration('e.g. akshay'),
                           ),
-                          if (_usernameError != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              _usernameError!,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: NuvoColors.danger,
-                              ),
-                            ),
-                          ],
                         ],
                       )
                       .animate()
@@ -462,26 +444,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ),
     );
   }
-
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-    filled: true,
-    fillColor: NuvoColors.white,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: NuvoColors.border),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: NuvoColors.border),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-  );
 }
 
 // ── Sheet option ──────────────────────────────────────────────────────────────
