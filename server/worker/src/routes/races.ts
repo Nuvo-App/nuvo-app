@@ -243,13 +243,19 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
   let winnerUserId: string | null = race.winner_user_id ?? null;
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
   if (scored.completed && effectiveStatus === 'active') {
-    raceCompleted = true;
-    winnerUserId = userId;
-    await db.prepare(
+    const completionUpdate = await db.prepare(
       `UPDATE races SET status = 'completed', winner_user_id = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status = 'active'`
     ).bind(userId, completedAt, race.id).run();
-    await snapshotFinalStandings(db, race.id);
+    const changed = completionUpdate.meta.changes ?? 0;
+    if (changed > 0) {
+      raceCompleted = true;
+      winnerUserId = userId;
+      await snapshotFinalStandings(db, race.id);
+    } else {
+      const closedRace = await getRace(db, race.id);
+      winnerUserId = closedRace?.winner_user_id ?? winnerUserId;
+    }
   }
 
   return {
@@ -820,7 +826,6 @@ racesRouter.post('/:id/proof', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') return c.json(badRequest('Race is not active'), 400);
   const config = raceConfigFromRow(race);
   if (!config) return c.json(badRequest('Race is missing activity configuration'), 400);
   const member = await c.env.DB.prepare(
@@ -833,11 +838,6 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const proofType = typeof body.proofType === 'string' ? body.proofType : 'manual';
   const isAiMotion = proofType === 'ai_motion';
-  const value = isAiMotion ? nonNegativeIntOrNull(body.value) : positiveIntOrNull(body.value);
-  const increment = value ?? 0;
-  if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
-  if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
-
   const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
   if (isAiMotion && !clientSubmissionId) return c.json(badRequest('clientSubmissionId is required'), 400);
   if (clientSubmissionId) {
@@ -845,6 +845,7 @@ racesRouter.post('/:id/proof', async (c) => {
       'SELECT * FROM move_logs WHERE race_id = ? AND user_id = ? AND client_submission_id = ?'
     ).bind(race.id, userId, clientSubmissionId).first<MoveLogRow>();
     if (existing) {
+      const updated = await getRace(c.env.DB, race.id);
       const result: SubmissionResult | undefined = existing.status === 'verified'
         ? {
           verifiedValue: existing.value ?? 0,
@@ -856,13 +857,17 @@ racesRouter.post('/:id/proof', async (c) => {
             ? existing.previous_rank - existing.new_rank
             : 0,
           raceCompleted: Boolean(existing.race_completed),
-          winnerUserId: race.winner_user_id ?? null,
+          winnerUserId: updated?.winner_user_id ?? race.winner_user_id ?? null,
         }
         : undefined;
-      const updated = await getRace(c.env.DB, race.id);
       return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, updated!, result), submissionResult: result ?? null });
     }
   }
+  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') return c.json(badRequest('Race is not active'), 400);
+  const value = isAiMotion ? nonNegativeIntOrNull(body.value) : positiveIntOrNull(body.value);
+  const increment = value ?? 0;
+  if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
+  if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
 
   await ensureProgress(c.env.DB, race.id, userId);
 

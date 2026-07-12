@@ -3,6 +3,8 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateDemoSnapshot } from '../lib/demoArenaWorld';
 import type { ArenaBoard, ArenaSnapshot, ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
+import { activityForId, normalizeMetric } from '../domain/raceActivities';
+import { effectiveRaceStatus } from '../domain/raceLifecycle';
 
 export const arenaRouter = new Hono<AppEnv>();
 
@@ -24,9 +26,15 @@ interface LightRaceRow {
   status: string;
   target_value: number | null;
   target_unit: string | null;
+  metric: string | null;
+  activity_id: string | null;
+  format: string | null;
   verification_type: string;
+  verification_method: string | null;
   movement_type: string | null;
   creator_id: string;
+  start_at: string | null;
+  end_at: string | null;
 }
 
 interface LightParticipantRow {
@@ -36,17 +44,33 @@ interface LightParticipantRow {
   profile_photo_url: string | null;
   progress_value: number;
   progress_percent: number;
+  rank_cache: number | null;
 }
 
-function isResultRace(race: LightRaceRow, myProgress: number): boolean {
-  if (RESULT_STATUSES.has(race.status)) return true;
-  if (myProgress >= 100) return true;
-  return false;
+function raceEffectiveStatus(race: LightRaceRow): string {
+  return effectiveRaceStatus(race.status, race.start_at, race.end_at);
+}
+
+function isResultRace(race: LightRaceRow): boolean {
+  return RESULT_STATUSES.has(raceEffectiveStatus(race));
 }
 
 function buildBadge(race: LightRaceRow): string | undefined {
-  if (race.verification_type === 'movecheck') return 'AI';
+  if ((race.verification_method ?? race.verification_type) === 'camera_pose') return 'AI';
   return undefined;
+}
+
+function metricLabel(race: LightRaceRow): string {
+  const activity = activityForId(race.activity_id ?? race.movement_type);
+  return normalizeMetric(race.metric ?? race.target_unit, activity) ?? activity?.defaultMetric ?? 'reps';
+}
+
+function progressPercent(race: LightRaceRow, participant: LightParticipantRow | undefined): number {
+  if (!participant) return 0;
+  if (race.target_value && race.target_value > 0) {
+    return Math.min(100, Math.floor((participant.progress_value / race.target_value) * 100));
+  }
+  return Math.min(100, Math.max(0, participant.progress_percent));
 }
 
 function buildProgressLabel(
@@ -59,9 +83,9 @@ function buildProgressLabel(
   }
   const { progress_value: val, progress_percent: pct } = myParticipant;
   if (race.target_value) {
-    return `${val} / ${race.target_value} ${race.target_unit ?? 'reps'}`;
+    return `${val} / ${race.target_value} ${metricLabel(race)}`;
   }
-  if (pct > 0) return `${pct}% to the finish line`;
+  if (pct > 0) return `${val} ${metricLabel(race)}`;
   return 'Submit your first proof';
 }
 
@@ -72,10 +96,10 @@ function buildRowSubtitle(
 ): string {
   const racerLabel = `${participantCount} ${participantCount === 1 ? 'racer' : 'racers'}`;
   if (myParticipant && race.target_value) {
-    return `${myParticipant.progress_value} / ${race.target_value} ${race.target_unit ?? 'reps'} · ${racerLabel}`;
+    return `${myParticipant.progress_value} / ${race.target_value} ${metricLabel(race)} · ${racerLabel}`;
   }
   if (myParticipant && myParticipant.progress_percent > 0) {
-    return `${myParticipant.progress_percent}% to the finish line · ${racerLabel}`;
+    return `${myParticipant.progress_value} ${metricLabel(race)} · ${racerLabel}`;
   }
   if (myParticipant && participantCount === 1) {
     return 'Solo · add crew from the race room';
@@ -138,7 +162,9 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
   const raceRows = await db
     .prepare(
       `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.target_unit,
-              r.verification_type, r.movement_type, r.creator_id
+              r.metric, r.activity_id, r.format, r.verification_type,
+              r.verification_method, r.movement_type, r.creator_id,
+              r.start_at, r.end_at
        FROM races r
        LEFT JOIN race_members rm ON rm.race_id = r.id AND rm.user_id = ? AND rm.status = 'active'
        WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
@@ -167,12 +193,14 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
       `SELECT rm.race_id, rm.user_id,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              rp.progress_value, rp.progress_percent
+              COALESCE(rp.progress_value, 0) as progress_value,
+              COALESCE(rp.progress_percent, 0) as progress_percent,
+              rp.rank_cache
        FROM race_members rm
        LEFT JOIN profiles p ON p.user_id = rm.user_id
        LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
        WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'
-       ORDER BY rp.progress_percent DESC, rp.progress_value DESC, rm.joined_at ASC`,
+       ORDER BY COALESCE(rp.rank_cache, 999999) ASC, rp.progress_value DESC, rm.joined_at ASC`,
     )
     .bind(...raceIds)
     .all<LightParticipantRow>();
@@ -190,9 +218,7 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
   const resultRaces: LightRaceRow[] = [];
 
   for (const race of races) {
-    const myP = (participantsByRace.get(race.id) ?? []).find((p) => p.user_id === userId);
-    const myPct = myP?.progress_percent ?? 0;
-    if (isResultRace(race, myPct)) {
+    if (isResultRace(race)) {
       resultRaces.push(race);
     } else {
       live.push(race);
@@ -248,7 +274,7 @@ function selectFocusBoard(
   for (const race of live) {
     const myP = (participantsByRace.get(race.id) ?? []).find((p) => p.user_id === userId);
     if (!myP) continue;
-    if (myP.progress_percent < 100) return race;
+    if (progressPercent(race, myP) < 100) return race;
   }
   // Priority 2: any live race I'm in.
   for (const race of live) {
@@ -271,9 +297,9 @@ function buildRealBoard(
 ): ArenaBoard {
   const participants = participantsByRace.get(race.id) ?? [];
   const myP = participants.find((p) => p.user_id === userId);
-  const myPct = myP?.progress_percent ?? 0;
+  const myPct = progressPercent(race, myP);
   const count = participants.length;
-  const isResult = forceResult || isResultRace(race, myPct);
+  const isResult = forceResult || isResultRace(race);
 
   const progressLabel = isResult
     ? 'Finished'
@@ -299,8 +325,8 @@ function buildRealBoard(
     miniLeaderboard = participants.slice(0, 5).map((p) => ({
       label: p.user_id === userId ? 'You' : (p.display_name ?? 'Racer'),
       value: race.target_value
-        ? `${p.progress_value} / ${race.target_value}`
-        : `${p.progress_percent}%`,
+        ? `${p.progress_value} / ${race.target_value} ${metricLabel(race)}`
+        : `${p.progress_value} ${metricLabel(race)}`,
       isCurrentUser: p.user_id === userId,
       profilePhotoUrl: p.profile_photo_url,
     }));

@@ -15,6 +15,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/domain/race_display.dart';
 import '../../races/presentation/create_race_screen.dart';
 import '../../races/presentation/race_controller.dart';
 
@@ -30,9 +31,9 @@ class CompeteScreen extends ConsumerWidget {
     final cameraRaces = raceState.races
         .where((race) => resolveCameraVerification(race).isCameraVerifiable)
         .toList();
-    final active = cameraRaces.where((r) => r.status == 'active').toList();
+    final active = cameraRaces.where(raceIsActive).toList();
     final finished = raceState.races
-        .where((r) => r.status != 'active')
+        .where(raceIsCompleted)
         .where((race) => resolveCameraVerification(race).isCameraVerifiable)
         .toList();
 
@@ -114,19 +115,9 @@ class CompeteScreen extends ConsumerWidget {
                       const _SectionLabel(label: 'Quick starts'),
                       const SizedBox(height: 12),
                       _QuickStartRow(
-                        icon: Icons.directions_run_rounded,
-                        label: '10 Jumping Jacks',
-                        sublabel: 'Camera verified',
-                        onTap: () => context.push(
-                          '/races/new',
-                          extra: RaceCreatePrefill.jumpingJacks,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _QuickStartRow(
                         icon: Icons.fitness_center_rounded,
-                        label: '10 Pushups',
-                        sublabel: 'Camera verified',
+                        label: 'First to 100 Pushups',
+                        sublabel: 'Editable camera race',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.pushups,
@@ -134,12 +125,22 @@ class CompeteScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       _QuickStartRow(
-                        icon: Icons.accessibility_new_rounded,
-                        label: '10 Squats',
-                        sublabel: 'Camera verified',
+                        icon: Icons.person_outline_rounded,
+                        label: 'First to 15 Squats',
+                        sublabel: 'Editable camera race',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.squats,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _QuickStartRow(
+                        icon: Icons.accessibility_new_rounded,
+                        label: 'First to 500 Jumping Jacks',
+                        sublabel: 'Editable camera race',
+                        onTap: () => context.push(
+                          '/races/new',
+                          extra: RaceCreatePrefill.jumpingJacks,
                         ),
                       ),
                     ],
@@ -302,10 +303,12 @@ class _RaceLaneCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = userId;
     final myPart = uid != null ? race.participantFor(uid) : null;
-    final pct = myPart?.progressPercent ?? 0;
+    final pct = raceProgressPercent(race, myPart);
     final count = race.participantCount;
-    final isComplete = pct >= 100 || race.status != 'active';
+    final isComplete = raceIsCompleted(race);
     final isSolo = count <= 1;
+    final rank = rankForUser(race, uid);
+    final scoreLabel = raceProgressLabel(race, myPart);
 
     final others = race.participants
         .where((p) => p.userId != userId)
@@ -367,7 +370,7 @@ class _RaceLaneCard extends StatelessWidget {
                         const SizedBox(width: 4),
                       ],
                       Text(
-                        state.pillLabel(pct),
+                        state.pillLabel(scoreLabel: scoreLabel, rank: rank),
                         style: AppTextStyles.labelSmall.copyWith(
                           color: state.pillForeground,
                           fontWeight: FontWeight.w800,
@@ -439,10 +442,10 @@ extension _RaceCardStateExt on _RaceCardState {
     };
   }
 
-  String pillLabel(int pct) {
+  String pillLabel({required String scoreLabel, required int? rank}) {
     return switch (this) {
-      _RaceCardState.live => '$pct%',
-      _RaceCardState.solo => '$pct%',
+      _RaceCardState.live => rank == null ? scoreLabel : '#$rank',
+      _RaceCardState.solo => scoreLabel,
       _RaceCardState.finished => 'Done',
     };
   }
@@ -504,7 +507,7 @@ class _LogMoveChip extends StatelessWidget {
           boxShadow: AppShadows.hardShadow3,
         ),
         child: Text(
-          'Log move',
+          'Submit proof',
           style: AppTextStyles.labelSmall.copyWith(
             color: NuvoColors.white,
             fontWeight: FontWeight.w800,

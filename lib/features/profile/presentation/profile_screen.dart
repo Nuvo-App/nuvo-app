@@ -13,6 +13,7 @@ import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
+import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 
 const _kProfileBorder = NuvoColors.border;
@@ -36,12 +37,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final uid = user?.id;
 
     final raceState = ref.watch(raceControllerProvider);
-    final activeCount = raceState.races
-        .where((r) => r.status == 'active')
-        .length;
-    final finishedCount = raceState.races
-        .where((r) => r.status != 'active')
-        .length;
+    final activeCount = raceState.races.where(raceIsActive).length;
+    final finishedCount = raceState.races.where(raceIsCompleted).length;
     final moveCount = raceState.races.fold<int>(
       0,
       (s, r) => s + r.recentProofs.length,
@@ -382,11 +379,13 @@ class _ProfileRaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = userId;
     final myPart = uid != null ? race.participantFor(uid) : null;
-    final pct = myPart?.progressPercent ?? 0;
-    final isComplete = pct >= 100;
-    final isActive = race.status == 'active' && !isComplete;
-    final rank = _rankForUser(race, userId);
-    final movementIcon = _movementIconData(race.aiActivityType);
+    final pct = raceProgressPercent(race, myPart);
+    final isComplete = raceIsCompleted(race);
+    final isActive = raceIsActive(race);
+    final rank = rankForUser(race, userId);
+    final movementIcon = _movementIconData(
+      race.activityId ?? race.aiActivityType,
+    );
     final lastAt = _lastActivityAt(race, userId);
     final racerCount = race.participantCount;
     final isCameraVerified = race.isAiMotionRace;
@@ -431,7 +430,8 @@ class _ProfileRaceRow extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         _metaLine(
-                          pct: pct,
+                          scoreLabel: raceProgressLabel(race, myPart),
+                          isComplete: isComplete,
                           racerCount: racerCount,
                           isCameraVerified: isCameraVerified,
                           lastAt: lastAt,
@@ -507,14 +507,6 @@ class _ProfileRaceRow extends StatelessWidget {
     );
   }
 
-  static int? _rankForUser(Race race, String? userId) {
-    if (userId == null) return null;
-    final sorted = [...race.participants]
-      ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
-    final idx = sorted.indexWhere((p) => p.userId == userId);
-    return idx == -1 ? null : idx + 1;
-  }
-
   static IconData? _movementIconData(String? aiActivityType) {
     return switch (aiActivityType) {
       'push_ups' || 'pushups' => Icons.fitness_center_rounded,
@@ -539,13 +531,14 @@ class _ProfileRaceRow extends StatelessWidget {
   }
 
   static String _metaLine({
-    required int pct,
+    required String scoreLabel,
+    required bool isComplete,
     required int racerCount,
     required bool isCameraVerified,
     required String? lastAt,
   }) {
     final parts = <String>[
-      if (pct >= 100) 'Finished' else '$pct% complete',
+      if (isComplete) 'Finished' else scoreLabel,
       if (racerCount > 1) '$racerCount racers' else 'Solo',
       if (isCameraVerified) 'Camera verified',
     ];
