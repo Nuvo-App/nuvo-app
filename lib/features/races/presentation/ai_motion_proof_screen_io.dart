@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -21,6 +22,7 @@ import '../ai/pose_detector_service.dart';
 import '../data/ai_motion_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity_catalog.dart';
+import 'board_moved_screen.dart';
 import 'race_controller.dart';
 
 class AiMotionProofScreen extends ConsumerStatefulWidget {
@@ -38,10 +40,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   final _poseDetector = PoseDetectorService();
   final NuvoVerifyEngine _engine = NuvoVerifyEngine(
     movement: supportedMovementDefinitions.first,
-    target: 10,
+    target: 1,
   );
 
-  AiMotionActivity _activity = AiMotionActivity.jumpingJacks;
+  AiMotionActivity _activity = AiMotionActivity.pushUps;
+  String _metric = 'reps';
+  String? _clientSubmissionId;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = const [];
   CameraDescription? _selectedCamera;
@@ -73,10 +77,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         eligibility,
         routeAction: 'ai_motion_screen_loaded',
       );
-      final target =
-          race.targetValue ??
-          eligibility.movementDefinition?.defaultTarget ??
-          10;
+      final target = race.format == 'first_to_goal'
+          ? 1
+          : race.targetValue ??
+                eligibility.movementDefinition?.defaultTarget ??
+                1;
       final definition = _movementDefinitionForEligibility(eligibility);
       if (definition == null) {
         setState(() {
@@ -87,6 +92,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       }
       setState(() {
         _activity = definition.activity;
+        _metric =
+            race.metric ??
+            eligibility.movementDefinition?.metric.backendValue ??
+            'reps';
         _engine.selectMovement(definition, target);
       });
       // Skip redundant pre-camera panel — go straight to camera
@@ -339,12 +348,32 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _message = null;
     });
     try {
-      await ref
+      final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
+      _clientSubmissionId = clientSubmissionId;
+      final race = await ref
           .read(raceControllerProvider.notifier)
-          .submitAiMotionProof(widget.raceId, result: result);
+          .submitAiMotionProof(
+            widget.raceId,
+            result: result,
+            clientSubmissionId: clientSubmissionId,
+            metric: _metric,
+          );
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);
-      context.go('/race/${widget.raceId}');
+      final submission = race.submissionResult;
+      context.go(
+        '/race/${widget.raceId}/board-moved',
+        extra: BoardMovedArgs(
+          raceId: widget.raceId,
+          raceName: race.title,
+          value: submission?.verifiedValue ?? result.detectedReps,
+          unit: race.metric ?? _metric,
+          status: result.verificationStatus,
+          rankBefore: submission?.previousRank,
+          rankAfter: submission?.newRank,
+          peoplePassed: submission?.peoplePassed,
+        ),
+      );
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -368,6 +397,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _message = null;
       _elapsed = Duration.zero;
       _autoSubmitScheduled = false;
+      _clientSubmissionId = null;
       _status = _cameraController?.value.isInitialized == true
           ? AiMotionProofStatus.cameraReady
           : AiMotionProofStatus.setup;
@@ -414,6 +444,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int get _currentValue => _engine.currentValue;
 
   String get _targetLabel {
+    if (_engine.targetValue == 1) return 'any verified ${_activity.label}';
     final definition = motionActivityForBackendValue(_activity.backendValue);
     return definition?.targetLabel(_targetValue) ??
         '$_targetValue ${_activity.label}';
@@ -468,7 +499,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         Text(
                           _activity == AiMotionActivity.plankHold
                               ? 'Hold until the timer finishes.'
-                              : 'Camera will count your $_targetLabel.',
+                              : 'Camera will count $_targetLabel.',
                           style: AppTextStyles.bodySmall.copyWith(
                             color: NuvoColors.muted,
                           ),
@@ -1022,11 +1053,10 @@ class _BodyGuidePainter extends CustomPainter {
       Offset.zero & size,
       const Radius.circular(16),
     );
-    final paint =
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.3)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5;
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
     canvas.drawRRect(rect, paint);
 
     // Horizontal reference line

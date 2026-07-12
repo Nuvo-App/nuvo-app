@@ -3,13 +3,18 @@ import type { Context } from 'hono';
 import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
+import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceScoringRule } from '../domain/raceActivities';
+import { assertSubmissionCompatible, configFromBody, type RaceConfig } from '../domain/raceValidation';
+import { applyVerifiedSubmission } from '../domain/raceScoring';
+import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
+import { effectiveRaceStatus } from '../domain/raceLifecycle';
 
 export const racesRouter = new Hono<AppEnv>();
 racesRouter.use('*', requireAuth);
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-const RACE_STATUSES = new Set(['draft', 'active', 'completed', 'archived', 'cancelled']);
+const RACE_STATUSES = new Set(['draft', 'scheduled', 'active', 'completed', 'archived', 'cancelled']);
 const VISIBILITIES = new Set(['private', 'crew_only', 'invite_code', 'public_demo']);
 const MOVE_SOURCES = new Set(['movecheck', 'manual', 'demo', 'import']);
 const MOVE_STATUSES = new Set(['pending', 'verified', 'rejected', 'removed']);
@@ -64,7 +69,8 @@ function mapGoalTypeToRaceType(goalType: string): string {
     case 'most': return 'most_in_time';
     case 'streak': return 'daily_streak';
     case 'habit': return 'habit_check';
-    default: return 'first_to_target';
+    case 'first_to_goal': return 'first_to_goal';
+    default: return 'first_to_goal';
   }
 }
 
@@ -73,6 +79,8 @@ function mapRaceTypeToGoalType(raceType: string): string {
     case 'most_in_time': return 'most';
     case 'daily_streak': return 'streak';
     case 'habit_check': return 'habit';
+    case 'first_to_goal': return 'first_to_goal';
+    case 'first_to_target': return 'first_to_goal';
     default: return 'manual';
   }
 }
@@ -103,6 +111,30 @@ async function getProfileName(db: D1Database, userId: string): Promise<string | 
   return row?.full_name ?? null;
 }
 
+function raceConfigFromRow(race: RaceRow): RaceConfig | null {
+  const activityId = normalizeActivityId(race.activity_id ?? race.movement_type);
+  const activity = activityForId(activityId);
+  if (!activity || !activityId) return null;
+  const metric = normalizeMetric(race.metric ?? race.target_unit, activity);
+  if (!metric) return null;
+  const format = ((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as RaceFormat;
+  const scoringRule = (race.scoring_rule ?? 'cumulative_sum') as RaceScoringRule;
+  return {
+    activityId,
+    metric,
+    format,
+    scoringRule,
+    targetValue: race.target_value,
+    attemptDurationSeconds: race.attempt_duration_seconds ?? null,
+    attemptLimit: race.attempt_limit ?? null,
+    verificationMethod: 'camera_pose',
+    timezone: race.timezone ?? 'America/New_York',
+    startsAt: race.start_at,
+    endsAt: race.end_at,
+    recurrence: race.recurrence === 'daily' || race.recurrence === 'weekly' ? race.recurrence : 'none',
+  };
+}
+
 async function ensureMember(db: D1Database, raceId: string, userId: string, role = 'racer'): Promise<void> {
   const existing = await db.prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string }>();
   if (existing) return;
@@ -122,53 +154,129 @@ async function ensureProgress(db: D1Database, raceId: string, userId: string): P
   ).bind(generateId(), raceId, userId).run();
 }
 
-async function recomputeRanks(db: D1Database, raceId: string): Promise<void> {
+async function rankedScores(db: D1Database, raceId: string): Promise<RankedScore[]> {
   const rows = await db.prepare(
-    `SELECT id FROM race_progress WHERE race_id = ? ORDER BY progress_percent DESC, progress_value DESC, updated_at ASC`
-  ).bind(raceId).all<{ id: string }>();
-  const stmts = rows.results.map((r, i) => db.prepare('UPDATE race_progress SET rank_cache = ? WHERE id = ?').bind(i + 1, r.id));
-  if (stmts.length) await db.batch(stmts);
+    `SELECT rm.user_id, rm.joined_at, rp.progress_value, rp.completed_at
+     FROM race_members rm
+     LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+     WHERE rm.race_id = ? AND rm.status = 'active'`
+  ).bind(raceId).all<{ user_id: string; joined_at: string; progress_value: number | null; completed_at: string | null }>();
+  return computeCompetitionRanks(rows.results.map((row) => ({
+    user_id: row.user_id,
+    joined_at: row.joined_at,
+    progress_value: row.progress_value ?? 0,
+    completed_at: row.completed_at,
+  })));
 }
 
-async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<void> {
+async function recomputeRanks(db: D1Database, raceId: string): Promise<RankedScore[]> {
+  const ranked = await rankedScores(db, raceId);
+  const stmts = ranked.map((r) => db.prepare(
+    'UPDATE race_progress SET rank_cache = ? WHERE race_id = ? AND user_id = ?'
+  ).bind(r.rank, raceId, r.user_id));
+  if (stmts.length) await db.batch(stmts);
+  return ranked;
+}
+
+async function snapshotFinalStandings(db: D1Database, raceId: string): Promise<void> {
+  const ranked = await rankedScores(db, raceId);
+  if (ranked.length === 0) return;
+  const stmts = ranked.map((row) => db.prepare(
+    `INSERT OR REPLACE INTO race_final_standings
+       (id, race_id, user_id, rank_position, score_value, completed_at, created_at)
+     VALUES (
+       COALESCE((SELECT id FROM race_final_standings WHERE race_id = ? AND user_id = ?), ?),
+       ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+     )`
+  ).bind(raceId, row.user_id, generateId(), raceId, row.user_id, row.rank, row.progress_value, row.completed_at));
+  await db.batch(stmts);
+}
+
+interface SubmissionResult {
+  verifiedValue: number;
+  previousScore: number;
+  newScore: number;
+  previousRank: number | null;
+  newRank: number | null;
+  peoplePassed: number;
+  raceCompleted: boolean;
+  winnerUserId: string | null;
+}
+
+async function rankForUser(db: D1Database, raceId: string, userId: string): Promise<number | null> {
+  const ranked = await rankedScores(db, raceId);
+  return ranked.find((row) => row.user_id === userId)?.rank ?? null;
+}
+
+async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<SubmissionResult> {
+  const config = raceConfigFromRow(race);
+  if (!config) throw new Error('Race is missing activity configuration');
   const increment = Math.max(0, Math.floor(value));
-  if (increment <= 0) return;
-  await ensureMember(db, race.id, userId);
-  await ensureProgress(db, race.id, userId);
+  if (increment <= 0) throw new Error('Verified value must be greater than 0');
 
   const progress = await db.prepare(
     'SELECT progress_value, completed_at FROM race_progress WHERE race_id = ? AND user_id = ?'
   ).bind(race.id, userId).first<RaceProgressRow>();
+  if (!progress) throw new Error('Only race participants can submit proof');
 
   const current = progress?.progress_value ?? 0;
-  const newValue = current + increment;
-  const newPercent = race.target_value && race.target_value > 0
-    ? Math.min(100, Math.round((newValue / race.target_value) * 100))
-    : 0;
-  const completedAt = newPercent >= 100 && !progress?.completed_at
+  const previousRank = await rankForUser(db, race.id, userId);
+  const scored = applyVerifiedSubmission({
+    format: config.format,
+    scoringRule: config.scoringRule,
+    previousScore: current,
+    submissionValue: increment,
+    targetValue: config.targetValue,
+  });
+  const completedAt = scored.completed && !progress?.completed_at
     ? new Date().toISOString()
-    : progress?.completed_at ?? null;
+    : progress.completed_at ?? null;
 
   await db.prepare(
     `UPDATE race_progress SET progress_value = ?, progress_percent = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
      WHERE race_id = ? AND user_id = ?`
-  ).bind(newValue, newPercent, completedAt, race.id, userId).run();
-  await recomputeRanks(db, race.id);
+  ).bind(scored.newScore, scored.progressPercent, completedAt, race.id, userId).run();
+  const ranked = await recomputeRanks(db, race.id);
+  const newRank = ranked.find((row) => row.user_id === userId)?.rank ?? null;
+
+  let raceCompleted = false;
+  let winnerUserId: string | null = race.winner_user_id ?? null;
+  const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
+  if (scored.completed && effectiveStatus === 'active') {
+    raceCompleted = true;
+    winnerUserId = userId;
+    await db.prepare(
+      `UPDATE races SET status = 'completed', winner_user_id = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'active'`
+    ).bind(userId, completedAt, race.id).run();
+    await snapshotFinalStandings(db, race.id);
+  }
+
+  return {
+    verifiedValue: increment,
+    previousScore: current,
+    newScore: scored.newScore,
+    previousRank,
+    newRank,
+    peoplePassed: previousRank && newRank && newRank < previousRank ? previousRank - newRank : 0,
+    raceCompleted,
+    winnerUserId,
+  };
 }
 
-async function buildRaceResponse(db: D1Database, race: RaceRow) {
-  const [participants, moves, invite] = await Promise.all([
+async function buildRaceResponse(db: D1Database, race: RaceRow, submissionResult?: SubmissionResult) {
+  const [participants, moves, invite, finalStandings] = await Promise.all([
     db.prepare(
       `SELECT rm.id, rm.user_id, rm.joined_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              rp.progress_value, rp.progress_percent
+              rp.progress_value, rp.progress_percent, rp.rank_cache
        FROM race_members rm
        LEFT JOIN profiles p ON p.user_id = rm.user_id
        LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
        WHERE rm.race_id = ? AND rm.status = 'active'
-       ORDER BY rp.progress_percent DESC, rp.progress_value DESC, rm.joined_at ASC`
-    ).bind(race.id).all<{ id: string; user_id: string; joined_at: string; display_name: string; profile_photo_url: string | null; progress_value: number; progress_percent: number }>(),
+       ORDER BY COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
+    ).bind(race.id).all<{ id: string; user_id: string; joined_at: string; display_name: string; profile_photo_url: string | null; progress_value: number; progress_percent: number; rank_cache: number | null }>(),
     db.prepare(
       `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url
        FROM move_logs ml
@@ -179,9 +287,18 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
     db.prepare(
       `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
     ).bind(race.id).first<InviteRow>(),
+    db.prepare(
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url
+       FROM race_final_standings fs
+       LEFT JOIN profiles p ON p.user_id = fs.user_id
+       WHERE fs.race_id = ?
+       ORDER BY fs.rank_position ASC`
+    ).bind(race.id).all<{ user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null }>(),
   ]);
 
   const proofRequirement = mapVerificationTypeToProofRequirement(race.verification_type);
+  const config = raceConfigFromRow(race);
+  const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
 
   return {
     id: race.id,
@@ -190,12 +307,24 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
     description: race.description,
     category: '',
     goalType: mapRaceTypeToGoalType(race.race_type),
+    activityId: config?.activityId ?? normalizeActivityId(race.activity_id ?? race.movement_type) ?? null,
+    metric: config?.metric ?? normalizeMetric(race.metric ?? race.target_unit, config ? activityForId(config.activityId) : undefined) ?? null,
+    format: config?.format ?? 'first_to_goal',
+    scoringRule: config?.scoringRule ?? 'cumulative_sum',
+    attemptDurationSeconds: race.attempt_duration_seconds ?? null,
+    attemptLimit: race.attempt_limit ?? null,
+    verificationMethod: race.verification_method ?? (race.verification_type === 'movecheck' ? 'camera_pose' : race.verification_type),
+    timezone: race.timezone ?? 'America/New_York',
+    recurrence: race.recurrence ?? 'none',
     targetValue: race.target_value,
     unit: race.target_unit,
     aiActivityType: race.movement_type,
     targetUnit: race.target_unit,
     proofMode: proofRequirement,
-    status: race.status,
+    status: effectiveStatus,
+    storedStatus: race.status,
+    winnerUserId: race.winner_user_id ?? null,
+    completedAt: race.completed_at ?? null,
     startLineAt: race.start_at,
     finishLineAt: race.end_at,
     rules: '',
@@ -212,6 +341,7 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
       profilePhotoUrl: p.profile_photo_url,
       progressValue: p.progress_value ?? 0,
       progressPercent: p.progress_percent ?? 0,
+      rank: p.rank_cache,
       joinedAt: p.joined_at,
     })),
     recentProofs: moves.results.map((m) => {
@@ -241,9 +371,21 @@ async function buildRaceResponse(db: D1Database, race: RaceRow) {
         verificationSummary: m.summary,
         reviewedBy: null,
         reviewedAt: null,
+        rankBefore: m.previous_rank ?? null,
+        rankAfter: m.new_rank ?? null,
+        peoplePassed: (m.previous_rank && m.new_rank && m.new_rank < m.previous_rank) ? m.previous_rank - m.new_rank : null,
         createdAt: m.created_at,
       };
     }),
+    finalStandings: finalStandings.results.map((row) => ({
+      userId: row.user_id,
+      displayName: row.display_name,
+      profilePhotoUrl: row.profile_photo_url,
+      rank: row.rank_position,
+      scoreValue: row.score_value,
+      completedAt: row.completed_at,
+    })),
+    submissionResult: submissionResult ?? null,
   };
 }
 
@@ -298,25 +440,54 @@ racesRouter.post('/', async (c) => {
   if (!title) return c.json(badRequest('title is required'), 400);
 
   const raceTypeRaw = typeof body.goalType === 'string' ? body.goalType : 'manual';
-  const raceType = mapGoalTypeToRaceType(raceTypeRaw);
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
   const verificationType = mapProofRequirementToVerificationType(verificationRaw);
+  const structuredConfig = configFromBody(body);
+  if (verificationType === 'movecheck' && 'error' in structuredConfig) {
+    return c.json(badRequest(structuredConfig.error), 400);
+  }
 
   const raceId = generateId();
   const description = stringOrNull(body.description) ?? null;
-  const targetValue = positiveIntOrNull(body.targetValue) ?? null;
-  const targetUnit = stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
-  const movementType = stringOrNull(body.aiActivityType) ?? null;
+  const config = 'error' in structuredConfig ? null : structuredConfig;
+  const raceType = config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
+  const targetValue = config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
+  const targetUnit = config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
+  const movementType = config?.activityId ?? stringOrNull(body.aiActivityType) ?? null;
   const visibility = typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility) ? body.visibility : 'private';
-  const startAt = stringOrNull(body.startLineAt) ?? null;
-  const endAt = stringOrNull(body.finishLineAt) ?? null;
+  const startAt = config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
+  const endAt = config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
   await c.env.DB.batch([
     c.env.DB.prepare(
       `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
-        target_value, target_unit, status, visibility, start_at, end_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).bind(raceId, userId, title, description, raceType, movementType, verificationType, targetValue, targetUnit, visibility, startAt, endAt),
+        target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
+        attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at,
+        created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).bind(
+      raceId,
+      userId,
+      title,
+      description,
+      raceType,
+      movementType,
+      verificationType,
+      targetValue,
+      targetUnit,
+      config?.activityId ?? normalizeActivityId(movementType),
+      config?.metric ?? normalizeMetric(targetUnit, activityForId(normalizeActivityId(movementType))),
+      config?.format ?? raceType,
+      config?.scoringRule ?? 'cumulative_sum',
+      config?.attemptDurationSeconds ?? null,
+      config?.attemptLimit ?? null,
+      config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType),
+      config?.timezone ?? 'America/New_York',
+      config?.recurrence ?? 'none',
+      visibility,
+      startAt,
+      endAt,
+    ),
     c.env.DB.prepare(
       `INSERT INTO race_members (id, race_id, user_id, role, status, joined_at)
        VALUES (?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP)`
@@ -328,6 +499,7 @@ racesRouter.post('/', async (c) => {
   ]);
 
   const race = await getRace(c.env.DB, raceId);
+  await recomputeRanks(c.env.DB, raceId);
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, race!) }, 201);
 });
 
@@ -648,7 +820,13 @@ racesRouter.post('/:id/proof', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') return c.json(badRequest('Race is not active'), 400);
+  const config = raceConfigFromRow(race);
+  if (!config) return c.json(badRequest('Race is missing activity configuration'), 400);
+  const member = await c.env.DB.prepare(
+    "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'"
+  ).bind(race.id, userId).first<{ id: string }>();
+  if (!member) return c.json(badRequest('Only race participants can submit proof'), 403);
 
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
@@ -658,11 +836,40 @@ racesRouter.post('/:id/proof', async (c) => {
   const value = isAiMotion ? nonNegativeIntOrNull(body.value) : positiveIntOrNull(body.value);
   const increment = value ?? 0;
   if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
+  if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
 
-  await ensureMember(c.env.DB, race.id, userId);
+  const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
+  if (isAiMotion && !clientSubmissionId) return c.json(badRequest('clientSubmissionId is required'), 400);
+  if (clientSubmissionId) {
+    const existing = await c.env.DB.prepare(
+      'SELECT * FROM move_logs WHERE race_id = ? AND user_id = ? AND client_submission_id = ?'
+    ).bind(race.id, userId, clientSubmissionId).first<MoveLogRow>();
+    if (existing) {
+      const result: SubmissionResult | undefined = existing.status === 'verified'
+        ? {
+          verifiedValue: existing.value ?? 0,
+          previousScore: existing.previous_score ?? 0,
+          newScore: existing.new_score ?? 0,
+          previousRank: existing.previous_rank ?? null,
+          newRank: existing.new_rank ?? null,
+          peoplePassed: existing.previous_rank && existing.new_rank && existing.new_rank < existing.previous_rank
+            ? existing.previous_rank - existing.new_rank
+            : 0,
+          raceCompleted: Boolean(existing.race_completed),
+          winnerUserId: race.winner_user_id ?? null,
+        }
+        : undefined;
+      const updated = await getRace(c.env.DB, race.id);
+      return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, updated!, result), submissionResult: result ?? null });
+    }
+  }
+
   await ensureProgress(c.env.DB, race.id, userId);
 
-  const activityType = isAiMotion ? stringOrNull(body.activityType) ?? 'jumping_jacks' : null;
+  const activityType = isAiMotion ? stringOrNull(body.activityType) : race.movement_type;
+  const metric = isAiMotion ? normalizeMetric(stringOrNull(body.metric) ?? stringOrNull(body.unit), activityForId(config.activityId)) : config.metric;
+  const compatibilityError = isAiMotion ? assertSubmissionCompatible(config, activityType ?? null, metric ?? null) : null;
+  if (compatibilityError) return c.json(badRequest(compatibilityError), 400);
   const detectedValue = isAiMotion ? nonNegativeIntOrNull(body.detectedValue) ?? increment : null;
   const targetValue = isAiMotion ? positiveIntOrNull(body.targetValue) ?? null : null;
   const confidence = isAiMotion ? confidenceOrNull(body.confidence) ?? null : null;
@@ -698,16 +905,51 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const moveId = generateId();
   await c.env.DB.prepare(
-    `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, value, unit, status, summary,
-      validator_version, duration_ms, metadata_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-  ).bind(moveId, race.id, userId, isAiMotion ? 'movecheck' : 'manual', activityType, increment,
-    race.target_unit, moveStatus, summary, validatorVersion, durationMs, metadata).run();
+    `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, activity_id, metric, value, unit, status, summary,
+      validator_version, duration_ms, metadata_json, client_submission_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).bind(
+    moveId,
+    race.id,
+    userId,
+    isAiMotion ? 'movecheck' : 'manual',
+    activityType,
+    normalizeActivityId(activityType),
+    metric ?? config.metric,
+    increment,
+    race.target_unit,
+    moveStatus,
+    summary,
+    validatorVersion,
+    durationMs,
+    metadata,
+    clientSubmissionId,
+  ).run();
 
-  if (moveStatus === 'verified') await applyMoveProgress(c.env.DB, race, userId, increment);
+  let result: SubmissionResult | undefined;
+  if (moveStatus === 'verified') {
+    try {
+      result = await applyMoveProgress(c.env.DB, race, userId, increment);
+      await c.env.DB.prepare(
+        `UPDATE move_logs SET previous_score = ?, new_score = ?, previous_rank = ?, new_rank = ?, race_completed = ?
+         WHERE id = ?`
+      ).bind(
+        result.previousScore,
+        result.newScore,
+        result.previousRank,
+        result.newRank,
+        result.raceCompleted ? 1 : 0,
+        moveId,
+      ).run();
+    } catch (err) {
+      await c.env.DB.prepare('UPDATE move_logs SET status = ?, summary = ? WHERE id = ?')
+        .bind('rejected', err instanceof Error ? err.message : 'Submission rejected', moveId).run();
+      return c.json(badRequest(err instanceof Error ? err.message : 'Submission rejected'), 400);
+    }
+  }
 
   const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, updated!) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, updated!, result), submissionResult: result ?? null });
 });
 
 // GET /races/:id/proofs - legacy endpoint, maps to move_logs.

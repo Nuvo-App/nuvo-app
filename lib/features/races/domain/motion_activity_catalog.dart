@@ -4,48 +4,102 @@ const motionActivityDefinitions = [
   MotionActivityDefinition(
     type: MotionActivityType.pushUps,
     title: 'Pushups',
-    unit: 'pushups',
-    defaultTarget: 10,
+    metric: RaceMetric.reps,
+    suggestedTargets: [6, 8, 15, 25, 50, 100],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
     aliases: ['pushups', 'push ups', 'push-up', 'push-ups'],
     proofLabel: 'pushups',
     cameraInstruction: 'Upper body front view',
+    instructions: [
+      'Keep your upper body and hands visible.',
+      'Wait for the Ready signal.',
+      'Finish each rep cleanly.',
+    ],
   ),
   MotionActivityDefinition(
     type: MotionActivityType.jumpingJacks,
     title: 'Jumping Jacks',
-    unit: 'jumping jacks',
-    defaultTarget: 10,
+    metric: RaceMetric.reps,
+    suggestedTargets: [15, 30, 60, 100],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
     aliases: ['jumping jacks', 'jumping jack', 'jacks'],
     proofLabel: 'jumping jacks',
     cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body visible.',
+      'Leave room above your head.',
+      'Finish each rep cleanly.',
+    ],
   ),
   MotionActivityDefinition(
     type: MotionActivityType.squats,
     title: 'Squats',
-    unit: 'squats',
-    defaultTarget: 10,
+    metric: RaceMetric.reps,
+    suggestedTargets: [10, 25, 50, 100],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
     aliases: ['squats', 'squat'],
     proofLabel: 'squats',
     cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body centered.',
+      'Go lower.',
+      'Stand tall to finish the rep.',
+    ],
   ),
   MotionActivityDefinition(
     type: MotionActivityType.lunges,
     title: 'Lunges',
-    unit: 'lunges',
-    defaultTarget: 10,
+    metric: RaceMetric.reps,
+    suggestedTargets: [10, 20, 40, 60],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
     aliases: ['lunges', 'lunge'],
     proofLabel: 'lunges',
     cameraInstruction: 'Full body front or slight side view',
+    instructions: [
+      'Keep your full body visible.',
+      'Step back into frame.',
+      'Stand tall to finish the rep.',
+    ],
   ),
   MotionActivityDefinition(
     type: MotionActivityType.plankHold,
-    title: 'Plank Hold',
-    unit: 'seconds',
-    defaultTarget: 20,
+    title: 'Plank',
+    metric: RaceMetric.seconds,
+    suggestedTargets: [20, 30, 60, 120, 600],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+    ],
     isHold: true,
     aliases: ['plank hold', 'hold plank', 'plank'],
     proofLabel: 'plank hold',
     cameraInstruction: 'Side view',
+    instructions: [
+      'Use a side view.',
+      'Keep your whole body visible.',
+      'Keep your body straight.',
+    ],
   ),
 ];
 
@@ -122,6 +176,21 @@ ParsedRaceIdea parseRaceIdea(String input) {
   final target = int.tryParse(
     RegExp(r'\d+').firstMatch(normalized)?.group(0) ?? '',
   );
+  final format =
+      normalized.contains('most ') ||
+          normalized.contains('today') ||
+          normalized.contains('weekend')
+      ? RaceFormat.mostInWindow
+      : normalized.contains('longest') || normalized.contains('best')
+      ? RaceFormat.bestAttempt
+      : normalized.contains('second') || normalized.contains('minute')
+      ? RaceFormat.timedAttempt
+      : RaceFormat.firstToGoal;
+  final recurrence = normalized.contains('weekly')
+      ? RaceRecurrence.weekly
+      : normalized.contains('daily')
+      ? RaceRecurrence.daily
+      : RaceRecurrence.none;
 
   MotionActivityDefinition? matched;
   var matchedAliasLength = 0;
@@ -141,5 +210,13 @@ ParsedRaceIdea parseRaceIdea(String input) {
     input: input,
     activity: matched,
     targetValue: target ?? matched?.defaultTarget ?? 1,
+    format: matched != null && matched.supportedFormats.contains(format)
+        ? format
+        : RaceFormat.firstToGoal,
+    recurrence: recurrence,
+    isAmbiguous:
+        matched != null &&
+        normalized.contains('weekly') &&
+        matched.type == MotionActivityType.plankHold,
   );
 }

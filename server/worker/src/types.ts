@@ -107,6 +107,17 @@ export interface RaceRow {
   verification_type: string;
   target_value: number | null;
   target_unit: string | null;
+  activity_id?: string | null;
+  metric?: string | null;
+  format?: string | null;
+  scoring_rule?: string | null;
+  attempt_duration_seconds?: number | null;
+  attempt_limit?: number | null;
+  verification_method?: string | null;
+  timezone?: string | null;
+  recurrence?: string | null;
+  winner_user_id?: string | null;
+  completed_at?: string | null;
   status: string;
   visibility: string;
   start_at: string | null;
@@ -144,6 +155,8 @@ export interface MoveLogRow {
   user_id: string;
   source: string;
   movement_type: string | null;
+  activity_id?: string | null;
+  metric?: string | null;
   value: number | null;
   unit: string | null;
   status: string;
@@ -152,5 +165,11 @@ export interface MoveLogRow {
   validator_version: string | null;
   duration_ms: number | null;
   metadata_json: string | null;
+  client_submission_id?: string | null;
+  previous_score?: number | null;
+  new_score?: number | null;
+  previous_rank?: number | null;
+  new_rank?: number | null;
+  race_completed?: number | null;
   created_at: string;
 }

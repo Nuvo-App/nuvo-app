@@ -21,10 +21,15 @@ class ChaseContext {
 
   static ChaseContext compute(Race race, String userId) {
     final sorted = [...race.participants]
-      ..sort((a, b) => b.progressValue.compareTo(a.progressValue));
+      ..sort((a, b) {
+        final rankA = a.rank ?? 9999;
+        final rankB = b.rank ?? 9999;
+        if (rankA != rankB) return rankA.compareTo(rankB);
+        return b.progressValue.compareTo(a.progressValue);
+      });
 
     final myIndex = sorted.indexWhere((p) => p.userId == userId);
-    final myRank = myIndex >= 0 ? myIndex + 1 : null;
+    final myRank = myIndex >= 0 ? sorted[myIndex].rank ?? myIndex + 1 : null;
     final total = sorted.length;
 
     final myPart = race.participantFor(userId);
