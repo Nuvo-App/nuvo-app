@@ -307,14 +307,16 @@ class _RaceLaneCard extends StatelessWidget {
     final isComplete = pct >= 100 || race.status != 'active';
     final isSolo = count <= 1;
 
-    final others =
-        race.participants.where((p) => p.userId != userId).take(4).toList();
+    final others = race.participants
+        .where((p) => p.userId != userId)
+        .take(4)
+        .toList();
 
     final state = isComplete
         ? _RaceCardState.finished
         : isSolo
-            ? _RaceCardState.solo
-            : _RaceCardState.live;
+        ? _RaceCardState.solo
+        : _RaceCardState.live;
 
     final plate = state == _RaceCardState.finished
         ? NuvoColors.success
@@ -348,25 +350,20 @@ class _RaceLaneCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: state.pillBackground,
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(
-                      color: state.pillForeground,
-                      width: 1.4,
-                    ),
+                    border: Border.all(color: state.pillForeground, width: 1.4),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (state.icon != null) ...[
-                        Icon(
-                          state.icon,
-                          color: state.pillForeground,
-                          size: 12,
-                        ),
+                        Icon(state.icon, color: state.pillForeground, size: 12),
                         const SizedBox(width: 4),
                       ],
                       Text(
@@ -388,11 +385,7 @@ class _RaceLaneCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            NuvoRaceLane(
-              progressPercent: pct,
-              trackHeight: 3,
-              dotDiameter: 10,
-            ),
+            NuvoRaceLane(progressPercent: pct, trackHeight: 3, dotDiameter: 10),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -562,14 +555,12 @@ class _QuickStartRow extends StatelessWidget {
     required this.label,
     required this.sublabel,
     required this.onTap,
-    this.accentColor = NuvoColors.blue,
   });
 
   final IconData icon;
   final String label;
   final String sublabel;
   final VoidCallback onTap;
-  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {

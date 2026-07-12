@@ -81,9 +81,14 @@ class AiMotionResult {
   bool get isVerified => verificationStatus == 'ai_verified';
   bool get isHold => activity == AiMotionActivity.plankHold;
 
-  Map<String, dynamic> toProofPayload() => {
+  Map<String, dynamic> toProofPayload({
+    required String clientSubmissionId,
+    required String metric,
+  }) => {
     'proofType': 'ai_motion',
+    'clientSubmissionId': clientSubmissionId,
     'activityType': activity.backendValue,
+    'metric': metric,
     'note': 'AI motion proof: $detectedReps ${activity.label} detected.',
     'value': detectedReps,
     'targetValue': targetReps,

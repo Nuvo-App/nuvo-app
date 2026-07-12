@@ -146,6 +146,10 @@ class RaceApi {
     String? proofReviewMode,
     String? visibility,
     String? aiActivityType,
+    String? activityId,
+    String? metric,
+    String? format,
+    String? recurrence,
     String? targetUnit,
     String? proofMode,
   }) async {
@@ -161,6 +165,10 @@ class RaceApi {
     if (proofReviewMode != null) body['proofReviewMode'] = proofReviewMode;
     if (visibility != null) body['visibility'] = visibility;
     if (aiActivityType != null) body['aiActivityType'] = aiActivityType;
+    if (activityId != null) body['activityId'] = activityId;
+    if (metric != null) body['metric'] = metric;
+    if (format != null) body['format'] = format;
+    if (recurrence != null) body['recurrence'] = recurrence;
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;
     final json = await _post('/races', token, body);
@@ -230,11 +238,16 @@ class RaceApi {
     String token,
     String raceId, {
     required AiMotionResult result,
+    required String clientSubmissionId,
+    required String metric,
   }) async {
     final json = await _post(
       '/races/$raceId/proof',
       token,
-      result.toProofPayload(),
+      result.toProofPayload(
+        clientSubmissionId: clientSubmissionId,
+        metric: metric,
+      ),
     );
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }

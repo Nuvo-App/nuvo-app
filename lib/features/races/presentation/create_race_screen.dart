@@ -11,6 +11,7 @@ import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
+import '../domain/race_draft.dart';
 import 'race_controller.dart';
 
 class RaceCreatePrefill {
@@ -18,19 +19,22 @@ class RaceCreatePrefill {
 
   final String idea;
 
-  static const pushups = RaceCreatePrefill(idea: '10 Pushups');
-  static const squats = RaceCreatePrefill(idea: '10 Squats');
-  static const jumpingJacks = RaceCreatePrefill(idea: '10 Jumping Jacks');
-  static const lunges = RaceCreatePrefill(idea: '10 Lunges');
-  static const plank = RaceCreatePrefill(idea: '20 Second Plank');
+  static const pushups = RaceCreatePrefill(idea: 'First to 100 Pushups');
+  static const squats = RaceCreatePrefill(idea: 'Most Squats Today');
+  static const jumpingJacks = RaceCreatePrefill(
+    idea: '60-Second Jumping Jack Challenge',
+  );
+  static const lunges = RaceCreatePrefill(idea: 'First to 40 Lunges');
+  static const plank = RaceCreatePrefill(idea: 'Longest Plank');
 }
 
 const _quickStarts = [
-  '10 Pushups',
-  '10 Jumping Jacks',
-  '10 Squats',
-  '10 Lunges',
-  '20 Second Plank',
+  'First to 100 Pushups',
+  'First to 15 Pushups',
+  'Most Squats Today',
+  'Longest Plank',
+  '60-Second Jumping Jack Challenge',
+  'Weekly Pushup Race',
 ];
 
 class CreateRaceScreen extends ConsumerStatefulWidget {
@@ -43,69 +47,107 @@ class CreateRaceScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
-  final _ideaController = TextEditingController();
+  late final TextEditingController _ideaController;
+  late final TextEditingController _targetController;
+  late RaceDraft _draft;
   bool _loading = false;
+  bool _inviteCrew = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _ideaController.text = widget.prefill?.idea ?? _quickStarts.first;
+    final idea = widget.prefill?.idea ?? _quickStarts.first;
+    _ideaController = TextEditingController(text: idea);
+    _draft =
+        draftFromIdea(idea) ??
+        draftForActivity(motionActivityDefinitions.first);
+    _targetController = TextEditingController(text: '${_draft.targetValue}');
   }
 
   @override
   void dispose() {
     _ideaController.dispose();
+    _targetController.dispose();
     super.dispose();
   }
 
-  ParsedRaceIdea get _parsed => parseRaceIdea(_ideaController.text);
-
-  bool get _canStart =>
-      _ideaController.text.trim().isNotEmpty &&
-      _parsed.aiSupported &&
-      !_loading;
-
-  void _setIdea(String idea) {
+  void _parseIdea() {
+    final parsed = draftFromIdea(_ideaController.text);
+    if (parsed == null) {
+      setState(() {
+        _error =
+            'Nuvo can verify Pushups, Squats, Jumping Jacks, Lunges, and Plank.';
+      });
+      return;
+    }
     setState(() {
-      _ideaController.text = idea;
-      _ideaController.selection = TextSelection.collapsed(offset: idea.length);
+      _draft = parsed;
+      _targetController.text = '${parsed.targetValue}';
+      _error = null;
     });
   }
 
-  Future<void> _start() async {
-    final parsed = _parsed;
-    final idea = _ideaController.text.trim();
-    if (idea.isEmpty) return;
+  void _setDraft(RaceDraft draft) {
+    setState(() {
+      _draft = draft;
+      _ideaController.text = draft.title;
+      _targetController.text = '${draft.targetValue}';
+      _error = null;
+    });
+  }
 
+  void _setActivity(MotionActivityDefinition activity) {
+    final format = activity.supportedFormats.contains(_draft.format)
+        ? _draft.format
+        : RaceFormat.firstToGoal;
+    _setDraft(
+      _draft.copyWith(
+        title: _draft.title.replaceAll(_draft.activity.title, activity.title),
+        activity: activity,
+        metric: activity.metric,
+        format: format,
+        targetValue: activity.suggestedTargets.contains(_draft.targetValue)
+            ? _draft.targetValue
+            : activity.defaultTarget,
+      ),
+    );
+  }
+
+  Future<void> _createRace() async {
+    final target = int.tryParse(_targetController.text.trim());
+    if (target == null || target <= 0) {
+      setState(() => _error = 'Enter a valid target.');
+      return;
+    }
+    final draft = _draft.copyWith(targetValue: target);
     setState(() {
       _loading = true;
       _error = null;
     });
-
     try {
-      final activity = parsed.activity;
-      final unit = _unitForActivity(activity);
-      final targetLabel = _targetLabel(parsed);
       final race = await ref
           .read(raceControllerProvider.notifier)
           .createRace(
-            title: idea,
-            description: activity == null
-                ? null
-                : 'Camera counts $targetLabel automatically.',
-            category: activity == null ? null : 'fitness',
-            goalType: 'manual',
-            targetValue: parsed.targetValue,
-            unit: unit,
+            title: draft.title,
+            description: '${draft.activity.title} race verified by camera.',
+            category: 'fitness',
+            goalType: draft.format.backendValue,
+            targetValue: draft.targetValue,
+            unit: draft.metric.backendValue,
             proofRequirement: 'ai_check',
             proofReviewMode: 'auto_accept',
-            aiActivityType: activity?.type.backendValue,
-            targetUnit: unit,
+            visibility: _inviteCrew ? 'invite_code' : 'private',
+            aiActivityType: draft.activity.type.backendValue,
+            activityId: draft.activity.type.backendValue,
+            metric: draft.metric.backendValue,
+            format: draft.format.backendValue,
+            recurrence: draft.recurrence.backendValue,
+            targetUnit: draft.metric.backendValue,
             proofMode: 'ai_check',
           );
-
-      if (mounted) context.go('/race/${race.id}');
+      if (!mounted) return;
+      context.go(_inviteCrew ? '/race/${race.id}/invite' : '/race/${race.id}');
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
@@ -125,147 +167,170 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final parsed = _parsed;
-
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 112),
           children: [
-            Expanded(
-              child:
-                  ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-                        children: [
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: NuvoBackButton(
-                              onPressed: () => safePopOrGo(context, '/compete'),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Start race',
-                            style: AppTextStyles.headlineLarge,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'What are you racing?',
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              color: NuvoColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: 22),
-                          NuvoTextInput(
-                            controller: _ideaController,
-                            label: 'Race idea',
-                            hint: 'e.g. 10 squats',
-                            onChanged: (_) => setState(() {}),
-                          ),
-
-                          // Inline verification status — not a card, just text
-                          if (parsed.aiSupported) ...[
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.check_circle_rounded,
-                                  color: NuvoColors.blue,
-                                  size: 15,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Camera verified \u00b7 ${_targetLabel(parsed)}',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: NuvoColors.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ] else if (_ideaController.text
-                              .trim()
-                              .isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.info_outline_rounded,
-                                  color: NuvoColors.muted,
-                                  size: 15,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Not supported for camera verification yet.',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: NuvoColors.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          const SizedBox(height: 28),
-
-                          // Quick starts — clean list, not floating pills
-                          for (final quickStart in _quickStarts) ...[
-                            _QuickStartRow(
-                              label: quickStart,
-                              selected:
-                                  quickStart.toLowerCase() ==
-                                  _ideaController.text.trim().toLowerCase(),
-                              onTap: () => _setIdea(quickStart),
-                            ),
-                          ],
-                          if (_error != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _error!,
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: NuvoColors.danger,
-                              ),
-                            ),
-                          ],
-                        ],
-                      )
-                      .animate()
-                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                      .slideY(
-                        begin: 0.04,
-                        end: 0,
-                        duration: 320.ms,
-                        curve: Curves.easeOutCubic,
-                      ),
+            NuvoBackButton(onPressed: () => safePopOrGo(context, '/compete')),
+            const SizedBox(height: 14),
+            Text('Create race', style: AppTextStyles.headlineLarge),
+            const SizedBox(height: 6),
+            Text(
+              'Describe it, then review the details before the start line.',
+              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              child: NuvoPrimaryButton(
-                label: 'Start race',
-                icon: Icons.flag_rounded,
-                expand: true,
-                loading: _loading,
-                onPressed: _canStart ? _start : null,
+            const SizedBox(height: 22),
+            NuvoTextInput(
+              controller: _ideaController,
+              label: 'Race idea',
+              hint: 'First to 100 pushups',
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: NuvoGhostButton(
+                label: 'Review idea',
+                small: true,
+                onPressed: _parseIdea,
               ),
             ),
+            const SizedBox(height: 24),
+            const _SectionTitle('Quick starts'),
+            const SizedBox(height: 10),
+            for (final quickStart in _quickStarts) ...[
+              _ChoiceRow(
+                label: quickStart,
+                selected:
+                    quickStart.toLowerCase() == _draft.title.toLowerCase(),
+                onTap: () => _setDraft(draftFromIdea(quickStart)!),
+              ),
+            ],
+            const SizedBox(height: 26),
+            const _SectionTitle('Activity'),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final activity in motionActivityDefinitions)
+                  _PillChoice(
+                    label: activity.title,
+                    selected: activity.type == _draft.activity.type,
+                    onTap: () => _setActivity(activity),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 26),
+            const _SectionTitle('How someone wins'),
+            const SizedBox(height: 10),
+            for (final format in _draft.activity.supportedFormats)
+              _ChoiceRow(
+                label: format.label,
+                selected: _draft.format == format,
+                onTap: () => _setDraft(_draft.copyWith(format: format)),
+              ),
+            const SizedBox(height: 26),
+            const _SectionTitle('Goal'),
+            const SizedBox(height: 10),
+            NuvoTextInput(
+              controller: _targetController,
+              label: 'Target',
+              keyboardType: TextInputType.number,
+              hint: '${_draft.activity.defaultTarget}',
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final target in _draft.activity.suggestedTargets)
+                  _PillChoice(
+                    label: '$target',
+                    selected: _targetController.text == '$target',
+                    onTap: () =>
+                        setState(() => _targetController.text = '$target'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 26),
+            const _SectionTitle('Repeat'),
+            const SizedBox(height: 10),
+            for (final recurrence in RaceRecurrence.values)
+              _ChoiceRow(
+                label: recurrence == RaceRecurrence.daily
+                    ? 'Starts fresh every day'
+                    : recurrence == RaceRecurrence.weekly
+                    ? 'Starts fresh every week'
+                    : 'One time',
+                selected: _draft.recurrence == recurrence,
+                onTap: () => _setDraft(_draft.copyWith(recurrence: recurrence)),
+              ),
+            const SizedBox(height: 26),
+            const _SectionTitle('Racers'),
+            const SizedBox(height: 10),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _inviteCrew,
+              onChanged: (value) => setState(() => _inviteCrew = value),
+              title: Text('Pull in your crew', style: AppTextStyles.bodyMedium),
+              subtitle: Text(
+                _inviteCrew
+                    ? 'Create an invite code after setup.'
+                    : 'Start solo.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _ReviewBlock(draft: _draft, target: _targetController.text),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.danger,
+                ),
+              ),
+            ],
           ],
+        ).animate().fadeIn(duration: 240.ms).slideY(begin: 0.03, end: 0),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+          child: NuvoPrimaryButton(
+            label: 'Create race',
+            icon: Icons.flag_rounded,
+            expand: true,
+            loading: _loading,
+            onPressed: _loading ? null : _createRace,
+          ),
         ),
       ),
     );
   }
 }
 
-String _unitForActivity(MotionActivityDefinition? activity) {
-  if (activity == null) return 'reps';
-  return activity.isHold ? 'seconds' : 'reps';
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
+    );
+  }
 }
 
-String _targetLabel(ParsedRaceIdea parsed) {
-  final activity = parsed.activity;
-  final unit = _unitForActivity(activity);
-  return '${parsed.targetValue} $unit';
-}
-
-class _QuickStartRow extends StatelessWidget {
-  const _QuickStartRow({
+class _ChoiceRow extends StatelessWidget {
+  const _ChoiceRow({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -277,35 +342,104 @@ class _QuickStartRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: selected ? NuvoColors.blue : Colors.transparent,
-                border: Border.all(
-                  color: selected ? NuvoColors.blue : NuvoColors.border,
-                  width: selected ? 6 : 1.5,
-                ),
-              ),
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? NuvoColors.blue : NuvoColors.muted,
+              size: 20,
             ),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: selected ? NuvoColors.navy : NuvoColors.muted,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: selected ? NuvoColors.navy : NuvoColors.muted,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PillChoice extends StatelessWidget {
+  const _PillChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      label: Text(label),
+      onPressed: onTap,
+      backgroundColor: selected ? NuvoColors.blue : NuvoColors.white,
+      labelStyle: AppTextStyles.labelMedium.copyWith(
+        color: selected ? NuvoColors.white : NuvoColors.navy,
+      ),
+      side: BorderSide(color: selected ? NuvoColors.blue : NuvoColors.border),
+    );
+  }
+}
+
+class _ReviewBlock extends StatelessWidget {
+  const _ReviewBlock({required this.draft, required this.target});
+
+  final RaceDraft draft;
+  final String target;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      ('Activity', draft.activity.title),
+      ('Win condition', draft.format.label),
+      ('Goal', '$target ${draft.metric.label}'),
+      ('Repeat', draft.recurrence.label),
+      ('Verification', 'Camera'),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        border: Border.all(color: NuvoColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(draft.title, style: AppTextStyles.titleLarge),
+          const SizedBox(height: 12),
+          for (final row in rows) ...[
+            Row(
+              children: [
+                SizedBox(
+                  width: 112,
+                  child: Text(
+                    row.$1,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ),
+                ),
+                Expanded(child: Text(row.$2, style: AppTextStyles.bodyMedium)),
+              ],
+            ),
+            if (row != rows.last) const SizedBox(height: 8),
+          ],
+        ],
       ),
     );
   }

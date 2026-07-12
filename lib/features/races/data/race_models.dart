@@ -11,7 +11,19 @@ class Race {
     this.aiActivityType,
     this.targetUnit,
     this.proofMode,
+    this.activityId,
+    this.metric,
+    this.format = 'first_to_goal',
+    this.scoringRule = 'cumulative_sum',
+    this.attemptDurationSeconds,
+    this.attemptLimit,
+    this.verificationMethod = 'camera_pose',
+    this.timezone = 'America/New_York',
+    this.recurrence = 'none',
     required this.status,
+    this.storedStatus,
+    this.winnerUserId,
+    this.completedAt,
     this.startLineAt,
     this.finishLineAt,
     this.rules,
@@ -23,6 +35,8 @@ class Race {
     required this.updatedAt,
     this.participants = const [],
     this.recentProofs = const [],
+    this.finalStandings = const [],
+    this.submissionResult,
   });
 
   final String id;
@@ -36,7 +50,19 @@ class Race {
   final String? aiActivityType;
   final String? targetUnit;
   final String? proofMode;
+  final String? activityId;
+  final String? metric;
+  final String format;
+  final String scoringRule;
+  final int? attemptDurationSeconds;
+  final int? attemptLimit;
+  final String verificationMethod;
+  final String timezone;
+  final String recurrence;
   final String status;
+  final String? storedStatus;
+  final String? winnerUserId;
+  final String? completedAt;
   final String? startLineAt;
   final String? finishLineAt;
   final String? rules;
@@ -48,6 +74,8 @@ class Race {
   final String updatedAt;
   final List<RaceParticipant> participants;
   final List<RaceProof> recentProofs;
+  final List<RaceFinalStanding> finalStandings;
+  final RaceSubmissionResult? submissionResult;
 
   factory Race.fromJson(Map<String, dynamic> json) => Race(
     id: json['id'] as String,
@@ -61,7 +89,23 @@ class Race {
     aiActivityType: json['aiActivityType'] as String?,
     targetUnit: json['targetUnit'] as String?,
     proofMode: json['proofMode'] as String?,
+    activityId:
+        json['activityId'] as String? ?? json['aiActivityType'] as String?,
+    metric:
+        json['metric'] as String? ??
+        json['targetUnit'] as String? ??
+        json['unit'] as String?,
+    format: json['format'] as String? ?? 'first_to_goal',
+    scoringRule: json['scoringRule'] as String? ?? 'cumulative_sum',
+    attemptDurationSeconds: json['attemptDurationSeconds'] as int?,
+    attemptLimit: json['attemptLimit'] as int?,
+    verificationMethod: json['verificationMethod'] as String? ?? 'camera_pose',
+    timezone: json['timezone'] as String? ?? 'America/New_York',
+    recurrence: json['recurrence'] as String? ?? 'none',
     status: json['status'] as String? ?? 'active',
+    storedStatus: json['storedStatus'] as String?,
+    winnerUserId: json['winnerUserId'] as String?,
+    completedAt: json['completedAt'] as String?,
     startLineAt: json['startLineAt'] as String?,
     finishLineAt: json['finishLineAt'] as String?,
     rules: json['rules'] as String?,
@@ -81,36 +125,45 @@ class Race {
             ?.map((p) => RaceProof.fromJson(p as Map<String, dynamic>))
             .toList() ??
         [],
+    finalStandings:
+        (json['finalStandings'] as List<dynamic>?)
+            ?.map((p) => RaceFinalStanding.fromJson(p as Map<String, dynamic>))
+            .toList() ??
+        [],
+    submissionResult: json['submissionResult'] is Map<String, dynamic>
+        ? RaceSubmissionResult.fromJson(
+            json['submissionResult'] as Map<String, dynamic>,
+          )
+        : null,
   );
 
   int get participantCount => participants.length;
 
   bool get isAiMotionRace =>
-      proofRequirement == 'ai_check' || proofMode == 'ai_check';
+      proofRequirement == 'ai_check' ||
+      proofMode == 'ai_check' ||
+      verificationMethod == 'camera_pose';
 
   bool get isSupportedAiMotionRace {
     const supported = {
+      'push_ups',
       'jumping_jacks',
       'squats',
-      'high_knees',
-      'arm_raises',
+      'lunges',
       'plank_hold',
     };
-    final activity = aiActivityType;
-    if (activity != null) return isAiMotionRace && supported.contains(activity);
-
-    final normalizedTitle = title.toLowerCase();
-    final normalizedUnit = unit?.toLowerCase() ?? '';
-    return isAiMotionRace &&
-        (normalizedTitle.contains('jumping jack') ||
-            normalizedUnit.contains('jumping jack'));
+    final activity = activityId ?? aiActivityType;
+    return isAiMotionRace && activity != null && supported.contains(activity);
   }
 
   String get effectiveAiActivityType {
+    if (activityId != null && activityId!.isNotEmpty) {
+      return activityId!;
+    }
     if (aiActivityType != null && aiActivityType!.isNotEmpty) {
       return aiActivityType!;
     }
-    return 'jumping_jacks';
+    return '';
   }
 
   String get displayTitle => title
@@ -179,6 +232,7 @@ class RaceParticipant {
     required this.displayName,
     required this.progressValue,
     required this.progressPercent,
+    this.rank,
     required this.joinedAt,
     this.profilePhotoUrl,
   });
@@ -188,6 +242,7 @@ class RaceParticipant {
   final String displayName;
   final int progressValue;
   final int progressPercent;
+  final int? rank;
   final String joinedAt;
   final String? profilePhotoUrl;
 
@@ -198,8 +253,71 @@ class RaceParticipant {
         displayName: json['displayName'] as String? ?? 'Unknown',
         progressValue: json['progressValue'] as int? ?? 0,
         progressPercent: json['progressPercent'] as int? ?? 0,
+        rank: json['rank'] as int?,
         joinedAt: json['joinedAt'] as String,
         profilePhotoUrl: json['profilePhotoUrl'] as String?,
+      );
+}
+
+class RaceFinalStanding {
+  const RaceFinalStanding({
+    required this.userId,
+    required this.displayName,
+    this.profilePhotoUrl,
+    required this.rank,
+    required this.scoreValue,
+    this.completedAt,
+  });
+
+  final String userId;
+  final String displayName;
+  final String? profilePhotoUrl;
+  final int rank;
+  final int scoreValue;
+  final String? completedAt;
+
+  factory RaceFinalStanding.fromJson(Map<String, dynamic> json) =>
+      RaceFinalStanding(
+        userId: json['userId'] as String,
+        displayName: json['displayName'] as String? ?? 'Unknown',
+        profilePhotoUrl: json['profilePhotoUrl'] as String?,
+        rank: json['rank'] as int? ?? 0,
+        scoreValue: json['scoreValue'] as int? ?? 0,
+        completedAt: json['completedAt'] as String?,
+      );
+}
+
+class RaceSubmissionResult {
+  const RaceSubmissionResult({
+    required this.verifiedValue,
+    required this.previousScore,
+    required this.newScore,
+    this.previousRank,
+    this.newRank,
+    required this.peoplePassed,
+    required this.raceCompleted,
+    this.winnerUserId,
+  });
+
+  final int verifiedValue;
+  final int previousScore;
+  final int newScore;
+  final int? previousRank;
+  final int? newRank;
+  final int peoplePassed;
+  final bool raceCompleted;
+  final String? winnerUserId;
+
+  factory RaceSubmissionResult.fromJson(Map<String, dynamic> json) =>
+      RaceSubmissionResult(
+        verifiedValue: json['verifiedValue'] as int? ?? 0,
+        previousScore: json['previousScore'] as int? ?? 0,
+        newScore: json['newScore'] as int? ?? 0,
+        previousRank: json['previousRank'] as int?,
+        newRank: json['newRank'] as int?,
+        peoplePassed: json['peoplePassed'] as int? ?? 0,
+        raceCompleted: json['raceCompleted'] as bool? ?? false,
+        winnerUserId: json['winnerUserId'] as String?,
       );
 }
 

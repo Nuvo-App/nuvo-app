@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -295,11 +294,17 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final canJoin = race.status == 'active' && !isOwner && !isParticipant;
     final myPart = isParticipant ? race.participantFor(user.id) : null;
     final myProgress = myPart?.progressPercent ?? 0;
-    final myRaceComplete = myPart != null && myProgress >= 100;
+    final myRaceComplete =
+        race.status == 'completed' || (myPart != null && myProgress >= 100);
 
     // Sorted participants for leaderboard
     final sorted = [...race.participants]
-      ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
+      ..sort((a, b) {
+        final rankA = a.rank ?? 9999;
+        final rankB = b.rank ?? 9999;
+        if (rankA != rankB) return rankA.compareTo(rankB);
+        return b.progressValue.compareTo(a.progressValue);
+      });
     final chase = user == null ? null : ChaseContext.compute(race, user.id);
     final rank = chase?.myRank;
     final heroChaseCopy = myRaceComplete
@@ -310,7 +315,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final boardParticipants = [
       for (var i = 0; i < sorted.length; i++)
         NuvoBoardParticipant(
-          rank: i + 1,
+          rank: sorted[i].rank ?? i + 1,
           name: sorted[i].displayName,
           initials: _initials(sorted[i].displayName),
           progressPercent: sorted[i].progressPercent,
@@ -424,15 +429,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
 
                   if (canVerify && myRaceComplete) ...[
                     const SizedBox(height: 12),
-                    _CompleteCallout(progress: myProgress)
-                        .animate()
-                        .fadeIn(duration: 220.ms, curve: Curves.easeOut)
-                        .slideY(
-                          begin: 0.08,
-                          end: 0,
-                          duration: 260.ms,
-                          curve: Curves.easeOutCubic,
-                        ),
+                    _CompleteCallout(progress: myProgress),
                   ],
 
                   if (isParticipant && !myRaceComplete) ...[
@@ -461,17 +458,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     )
                   else
                     for (var i = 0; i < boardParticipants.length; i++) ...[
-                      NuvoBoardLane(participant: boardParticipants[i])
-                          .animate(delay: Duration(milliseconds: 60 * i))
-                          .fadeIn(duration: 200.ms, curve: Curves.easeOut)
-                          .slideX(
-                            begin: 0.03,
-                            end: 0,
-                            duration: 240.ms,
-                            curve: Curves.easeOutCubic,
-                          ),
+                      NuvoBoardLane(participant: boardParticipants[i]),
                       if (i < boardParticipants.length - 1)
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                     ],
 
                   if (race.participantCount > 1) ...[
@@ -536,7 +525,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     Text(
                       race.rules?.isNotEmpty == true
                           ? race.rules!
-                          : 'Log moves before the finish line. Highest verified progress wins.',
+                          : _rulesCopy(race),
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -861,11 +850,18 @@ class _NavyHeader extends StatelessWidget {
       chips.add('Proof needed');
     }
     if (race.targetValue != null) {
-      final unit = (race.unit ?? 'reps').trim();
+      final unit = (race.metric ?? race.unit ?? 'reps').trim();
       chips.add('First to ${race.targetValue} $unit');
     }
     return chips;
   }
+}
+
+String _rulesCopy(Race race) {
+  if (race.format == 'first_to_goal') {
+    return 'Every verified session adds to your total. First racer to the finish line wins.';
+  }
+  return 'Submit verified proof before the finish line. The server updates the leaderboard.';
 }
 
 // ── Checkpoint path ────────────────────────────────────────────────────────────

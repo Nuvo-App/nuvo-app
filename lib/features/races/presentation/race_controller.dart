@@ -57,6 +57,10 @@ class RaceController extends StateNotifier<RaceState> {
     String? proofReviewMode,
     String? visibility,
     String? aiActivityType,
+    String? activityId,
+    String? metric,
+    String? format,
+    String? recurrence,
     String? targetUnit,
     String? proofMode,
   }) async {
@@ -74,6 +78,10 @@ class RaceController extends StateNotifier<RaceState> {
       proofReviewMode: proofReviewMode,
       visibility: visibility,
       aiActivityType: aiActivityType,
+      activityId: activityId,
+      metric: metric,
+      format: format,
+      recurrence: recurrence,
       targetUnit: targetUnit,
       proofMode: proofMode,
     );
@@ -154,8 +162,15 @@ class RaceController extends StateNotifier<RaceState> {
   Future<Race> submitAiMotionProof(
     String raceId, {
     required AiMotionResult result,
+    required String clientSubmissionId,
+    required String metric,
   }) async {
-    final race = await _repo.submitAiMotionProof(raceId, result: result);
+    final race = await _repo.submitAiMotionProof(
+      raceId,
+      result: result,
+      clientSubmissionId: clientSubmissionId,
+      metric: metric,
+    );
     if (mounted) {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),

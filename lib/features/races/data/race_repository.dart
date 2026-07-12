@@ -56,6 +56,10 @@ class RaceRepository {
     String? proofReviewMode,
     String? visibility,
     String? aiActivityType,
+    String? activityId,
+    String? metric,
+    String? format,
+    String? recurrence,
     String? targetUnit,
     String? proofMode,
   }) => _withRefresh(
@@ -74,6 +78,10 @@ class RaceRepository {
       proofReviewMode: proofReviewMode,
       visibility: visibility,
       aiActivityType: aiActivityType,
+      activityId: activityId,
+      metric: metric,
+      format: format,
+      recurrence: recurrence,
       targetUnit: targetUnit,
       proofMode: proofMode,
     ),
@@ -141,8 +149,16 @@ class RaceRepository {
   Future<Race> submitAiMotionProof(
     String raceId, {
     required AiMotionResult result,
+    required String clientSubmissionId,
+    required String metric,
   }) => _withRefresh(
-    (token) => _api.submitAiMotionProof(token, raceId, result: result),
+    (token) => _api.submitAiMotionProof(
+      token,
+      raceId,
+      result: result,
+      clientSubmissionId: clientSubmissionId,
+      metric: metric,
+    ),
   );
 
   Future<Race> archiveRace(String id) =>
