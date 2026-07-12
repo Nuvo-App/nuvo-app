@@ -23,6 +23,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -288,25 +289,17 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final isParticipant = user != null && race.isParticipant(user.id);
     final eligibility = resolveCameraVerification(race);
     final canVerify =
-        race.status == 'active' &&
+        raceIsActive(race) &&
         (isOwner || isParticipant) &&
         eligibility.isCameraVerifiable;
-    final canJoin = race.status == 'active' && !isOwner && !isParticipant;
+    final canJoin = raceIsActive(race) && !isOwner && !isParticipant;
     final myPart = isParticipant ? race.participantFor(user.id) : null;
-    final myProgress = myPart?.progressPercent ?? 0;
-    final myRaceComplete =
-        race.status == 'completed' || (myPart != null && myProgress >= 100);
+    final myProgress = raceProgressPercent(race, myPart);
+    final myRaceComplete = raceIsCompleted(race);
 
-    // Sorted participants for leaderboard
-    final sorted = [...race.participants]
-      ..sort((a, b) {
-        final rankA = a.rank ?? 9999;
-        final rankB = b.rank ?? 9999;
-        if (rankA != rankB) return rankA.compareTo(rankB);
-        return b.progressValue.compareTo(a.progressValue);
-      });
+    final sorted = serverRankedParticipants(race);
     final chase = user == null ? null : ChaseContext.compute(race, user.id);
-    final rank = chase?.myRank;
+    final rank = rankForUser(race, user?.id);
     final heroChaseCopy = myRaceComplete
         ? (rank != null
               ? 'Finish line crossed · you placed #$rank.'
@@ -318,10 +311,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           rank: sorted[i].rank ?? i + 1,
           name: sorted[i].displayName,
           initials: _initials(sorted[i].displayName),
-          progressPercent: sorted[i].progressPercent,
-          progressLabel: race.targetValue != null
-              ? '${sorted[i].progressValue}/${race.targetValue}'
-              : '${sorted[i].progressPercent}%',
+          progressPercent: raceProgressPercent(race, sorted[i]),
+          progressLabel: raceProgressLabel(race, sorted[i]),
           photoUrl: sorted[i].profilePhotoUrl,
           isCurrentUser: user != null && sorted[i].userId == user.id,
         ),
@@ -366,7 +357,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   NuvoRaceHero(
                     title: null,
                     contextLine: null,
-                    rankLabel: rank == null ? '--' : '#$rank',
+                    rankLabel: raceRankLabel(race, user?.id),
                     chaseCopy: heroChaseCopy,
                     subcopy: _heroSubcopy(
                       race: race,
@@ -387,7 +378,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                             userId: p.userId,
                             displayName: p.displayName,
                             photoUrl: p.profilePhotoUrl,
-                            progressPercent: p.progressPercent,
+                            progressPercent: raceProgressPercent(race, p),
                           ),
                         )
                         .toList(),
@@ -397,7 +388,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                         : myRaceComplete
                         ? 'Start another race'
                         : eligibility.isCameraVerifiable
-                        ? 'Log Move'
+                        ? 'Submit proof'
                         : 'Unsupported',
                     loading: _busy,
                     onPrimary: _busy
@@ -419,7 +410,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                         : null,
                   ),
 
-                  if (race.status == 'active' &&
+                  if (raceIsActive(race) &&
                       !eligibility.isCameraVerifiable) ...[
                     const SizedBox(height: 12),
                     _UnsupportedVerificationNotice(
@@ -440,7 +431,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                       progressPercent: myProgress,
                       progressValue: myPart?.progressValue,
                       targetValue: race.targetValue,
-                      unit: race.unit,
+                      unit: raceMetricLabel(race),
                     ),
                   ],
 
@@ -501,10 +492,10 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                       NuvoMoveLogItem(
                         displayName: proof.displayName,
                         profilePhotoUrl: proof.profilePhotoUrl,
-                        actionLine: _moveActionLine(proof, race.unit),
+                        actionLine: _moveActionLine(proof, race),
                         createdAt: proof.createdAt,
                         valueLabel: proof.value != null
-                            ? '+${proof.value} ${race.unit ?? 'reps'}'
+                            ? '+${raceScoreLabel(race, proof.value!)}'
                             : null,
                         isPositive:
                             proof.verificationStatus == 'accepted' ||
@@ -605,7 +596,18 @@ class _NavyHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final isActive = race.status == 'active';
-    final isComplete = isParticipant && myProgress >= 100;
+    final isComplete = raceIsCompleted(race);
+    final me = userId == null ? null : race.participantFor(userId!);
+    final score = me == null
+        ? '$myProgress% verified'
+        : raceProgressLabel(race, me);
+    final firstSpace = score.indexOf(' ');
+    final scoreNumber = firstSpace == -1
+        ? score
+        : score.substring(0, firstSpace);
+    final scoreUnit = firstSpace == -1
+        ? 'verified'
+        : score.substring(firstSpace + 1);
     const navy = NuvoColors.inkNavy;
     const brightBlue = NuvoColors.actionBlue;
 
@@ -773,7 +775,7 @@ class _NavyHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '$myProgress',
+                    scoreNumber,
                     style: AppTextStyles.displaySmall.copyWith(
                       color: isComplete ? NuvoColors.success : brightBlue,
                       fontWeight: FontWeight.w900,
@@ -782,7 +784,7 @@ class _NavyHeader extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4, left: 3),
                     child: Text(
-                      '%',
+                      scoreUnit,
                       style: AppTextStyles.titleLarge.copyWith(
                         color: isComplete
                             ? NuvoColors.success.withValues(alpha: 0.8)
@@ -850,8 +852,7 @@ class _NavyHeader extends StatelessWidget {
       chips.add('Proof needed');
     }
     if (race.targetValue != null) {
-      final unit = (race.metric ?? race.unit ?? 'reps').trim();
-      chips.add('First to ${race.targetValue} $unit');
+      chips.add('First to ${raceTargetLabel(race)}');
     }
     return chips;
   }
@@ -861,7 +862,7 @@ String _rulesCopy(Race race) {
   if (race.format == 'first_to_goal') {
     return 'Every verified session adds to your total. First racer to the finish line wins.';
   }
-  return 'Submit verified proof before the finish line. The server updates the leaderboard.';
+  return 'Submit verified proof before the finish line. Nuvo updates the leaderboard.';
 }
 
 // ── Checkpoint path ────────────────────────────────────────────────────────────
@@ -1128,7 +1129,7 @@ class _CompleteCallout extends StatelessWidget {
                 Text('$progress% complete', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 2),
                 Text(
-                  'Challenge your crew to beat your score.',
+                  'Start another race with your crew.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: NuvoColors.muted,
                   ),
@@ -1144,9 +1145,9 @@ class _CompleteCallout extends StatelessWidget {
 
 // ── Move action line helper ───────────────────────────────────────────────────
 
-String _moveActionLine(RaceProof proof, String? unit) {
+String _moveActionLine(RaceProof proof, Race race) {
   final verb = proof.value != null
-      ? 'logged ${proof.value} ${unit ?? 'reps'}'
+      ? 'logged ${raceScoreLabel(race, proof.value!)}'
       : 'logged a move';
   return switch (proof.verificationStatus) {
     'accepted' || 'ai_verified' => '$verb · Camera verified',
@@ -1170,11 +1171,10 @@ String _heroSubcopy({
   required String? userId,
   required int recentMoveCount,
 }) {
-  final sorted = [...race.participants]
-    ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
+  final sorted = serverRankedParticipants(race);
   final leader = sorted.isEmpty ? null : sorted.first;
   final me = userId == null ? null : race.participantFor(userId);
-  if (me != null && me.progressPercent >= 100) {
+  if (me != null && raceIsCompleted(race)) {
     return 'You hit the finish line. Pull in your crew and move the board again.';
   }
   final parts = <String>[];
@@ -1184,7 +1184,9 @@ String _heroSubcopy({
         ? leader.progressValue - me.progressValue
         : leader.progressPercent - me.progressPercent;
     if (gap > 0) {
-      parts.add('${leader.displayName.split(' ').first} leads by $gap.');
+      parts.add(
+        '${leader.displayName.split(' ').first} leads by ${raceScoreLabel(race, gap)}.',
+      );
     }
   } else if (leader != null) {
     parts.add('${leader.displayName.split(' ').first} leads the board.');

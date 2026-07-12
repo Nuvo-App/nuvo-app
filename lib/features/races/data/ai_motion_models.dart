@@ -34,7 +34,7 @@ enum AiMotionActivity {
     'plank_hold' => AiMotionActivity.plankHold,
     'push_ups' || 'pushups' => AiMotionActivity.pushUps,
     'lunges' || 'lunge' => AiMotionActivity.lunges,
-    _ => AiMotionActivity.jumpingJacks,
+    _ => AiMotionActivity.pushUps,
   };
 }
 

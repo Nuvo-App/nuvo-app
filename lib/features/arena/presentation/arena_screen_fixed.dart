@@ -15,17 +15,10 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../data/arena_models.dart';
 import 'arena_controller.dart';
-
-const _kResultStatuses = {
-  'completed',
-  'complete',
-  'finished',
-  'archived',
-  'cancelled',
-};
 
 class ArenaScreen extends ConsumerStatefulWidget {
   const ArenaScreen({super.key});
@@ -47,8 +40,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedBoardId =
-        ref.read(arenaControllerProvider).snapshot?.focusBoard?.id;
+    _selectedBoardId = ref
+        .read(arenaControllerProvider)
+        .snapshot
+        ?.focusBoard
+        ?.id;
   }
 
   @override
@@ -244,8 +240,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     });
 
     try {
-      final race =
-          await ref.read(raceControllerProvider.notifier).getRaceDetail(board.id);
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .getRaceDetail(board.id);
       if (!mounted) return;
       final eligibility = resolveCameraVerification(race);
       debugLogCameraVerificationDecision(
@@ -271,31 +268,26 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   }
 
   ArenaBoard _boardFromRace(Race race, String? userId) {
-    final sorted = [...race.participants]
-      ..sort((a, b) => b.progressPercent.compareTo(a.progressPercent));
+    final sorted = serverRankedParticipants(race);
     final miniLeaderboard = sorted.take(5).map((p) {
       final isUser = userId != null && p.userId == userId;
-      final valueStr = race.targetValue != null
-          ? '${p.progressValue} / ${race.targetValue}'
-          : '${p.progressPercent}%';
       return ArenaMiniLeaderboardRow(
         label: isUser ? 'You' : p.displayName,
-        value: valueStr,
+        value: raceProgressLabel(race, p),
         isCurrentUser: isUser,
         profilePhotoUrl: p.profilePhotoUrl,
       );
     }).toList();
 
     final myPart = userId != null ? race.participantFor(userId) : null;
-    final myProgress = myPart?.progressPercent ?? 0;
-    final isResult =
-        _kResultStatuses.contains(race.status) || myProgress >= 100;
+    final myProgress = raceProgressPercent(race, myPart);
+    final isResult = raceIsCompleted(race);
     final count = race.participantCount;
     final boardContext = isResult
         ? '$count ${count == 1 ? 'racer' : 'racers'} finished'
         : count <= 1
-            ? 'Solo · add crew from the race room'
-            : '$count ${count == 1 ? 'racer' : 'racers'} on the board';
+        ? 'Solo · add crew from the race room'
+        : '$count ${count == 1 ? 'racer' : 'racers'} on the board';
 
     final eligibility = resolveCameraVerification(race);
     final chase = ChaseContext.compute(race, userId ?? '');
@@ -307,11 +299,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       proofLabel: eligibility.movementDefinition?.title ?? 'Camera',
       progressLabel: myPart != null
           ? (race.targetValue != null
-              ? 'You ${myPart.progressValue} / ${race.targetValue}'
-              : 'You $myProgress%')
+                ? 'You ${myPart.progressValue} / ${race.targetValue}'
+                : 'You $myProgress%')
           : '',
       boardContext: boardContext,
-      primaryActionLabel: isResult ? 'Open board' : 'Log Move',
+      primaryActionLabel: isResult ? 'Open board' : 'Submit proof',
       primaryActionType: isResult ? 'open_board' : 'submit_proof',
       progressPercent: myProgress,
       racerCount: count,
@@ -521,8 +513,9 @@ class _FocusBoardCard extends StatelessWidget {
 
     final ringRacers = (participants ?? const []).map((p) {
       final isMe = currentUserId != null && p.userId == currentUserId;
-      final photo =
-          isMe ? (currentUserPhotoUrl ?? p.profilePhotoUrl) : p.profilePhotoUrl;
+      final photo = isMe
+          ? (currentUserPhotoUrl ?? p.profilePhotoUrl)
+          : p.profilePhotoUrl;
       final initials = isMe && (currentUserInitials?.isNotEmpty ?? false)
           ? currentUserInitials!
           : _initials(p.displayName);
@@ -613,7 +606,8 @@ class _FocusBoardCard extends StatelessWidget {
                           final photo = r.isCurrentUser
                               ? (currentUserPhotoUrl ?? r.profilePhotoUrl)
                               : r.profilePhotoUrl;
-                          final label = r.isCurrentUser &&
+                          final label =
+                              r.isCurrentUser &&
                                   (currentUserInitials?.isNotEmpty ?? false)
                               ? currentUserInitials!
                               : r.label;
@@ -659,7 +653,7 @@ class _FocusBoardCard extends StatelessWidget {
                       isCurrentUser: board.miniLeaderboard[i].isCurrentUser,
                       photoUrl: board.miniLeaderboard[i].isCurrentUser
                           ? (currentUserPhotoUrl ??
-                              board.miniLeaderboard[i].profilePhotoUrl)
+                                board.miniLeaderboard[i].profilePhotoUrl)
                           : board.miniLeaderboard[i].profilePhotoUrl,
                       initialsOverride: board.miniLeaderboard[i].isCurrentUser
                           ? currentUserInitials
@@ -729,17 +723,18 @@ class _LeaderboardRow extends StatelessWidget {
   final String? initialsOverride;
 
   Color? get _rankTierColor => switch (rank) {
-        1 => NuvoColors.gold,
-        2 => NuvoColors.silver,
-        3 => NuvoColors.bronze,
-        _ => null,
-      };
+    1 => NuvoColors.gold,
+    2 => NuvoColors.silver,
+    3 => NuvoColors.bronze,
+    _ => null,
+  };
 
   @override
   Widget build(BuildContext context) {
     final tierColor = _rankTierColor;
-    final avatarColor =
-        isCurrentUser ? NuvoColors.navy : nuvoAvatarColorFor(label);
+    final avatarColor = isCurrentUser
+        ? NuvoColors.navy
+        : nuvoAvatarColorFor(label);
     final initials = (initialsOverride != null && initialsOverride!.isNotEmpty)
         ? initialsOverride!
         : _initials(label);
@@ -809,8 +804,9 @@ class _LeaderboardRow extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.labelSmall.copyWith(
-              color:
-                  isCurrentUser ? NuvoColors.actionBlue : NuvoColors.textMuted,
+              color: isCurrentUser
+                  ? NuvoColors.actionBlue
+                  : NuvoColors.textMuted,
               fontWeight: isCurrentUser ? FontWeight.w800 : FontWeight.w500,
             ),
           ),
@@ -830,13 +826,13 @@ class _Skel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: NuvoColors.panel,
-          borderRadius: BorderRadius.circular(radius),
-        ),
-      );
+    width: width,
+    height: height,
+    decoration: BoxDecoration(
+      color: NuvoColors.panel,
+      borderRadius: BorderRadius.circular(radius),
+    ),
+  );
 }
 
 // ── Race chip row ─────────────────────────────────────────────────────────────
@@ -951,7 +947,7 @@ class _CompactBoardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = board.progressPercent ?? 0;
     final count = board.racerCount ?? 0;
-    final isComplete = pct >= 100;
+    final isComplete = board.isResult;
 
     final plate = isComplete ? NuvoColors.success : NuvoColors.offsetGrey;
 
@@ -1083,12 +1079,12 @@ class _ActivityCard extends StatelessWidget {
   final ArenaActivity item;
 
   NuvoIconType get _icon => switch (item.type) {
-        'proof_submitted' => NuvoIconType.checkCircle,
-        'joined' => NuvoIconType.users,
-        'leader_changed' => NuvoIconType.trendUp,
-        'finished' => NuvoIconType.flag,
-        _ => NuvoIconType.bell,
-      };
+    'proof_submitted' => NuvoIconType.checkCircle,
+    'joined' => NuvoIconType.users,
+    'leader_changed' => NuvoIconType.trendUp,
+    'finished' => NuvoIconType.flag,
+    _ => NuvoIconType.bell,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1282,12 +1278,12 @@ class _NotifRow extends StatelessWidget {
   final ArenaActivity item;
 
   NuvoIconType get _icon => switch (item.type) {
-        'proof_submitted' => NuvoIconType.checkCircle,
-        'joined' => NuvoIconType.users,
-        'leader_changed' => NuvoIconType.trendUp,
-        'finished' => NuvoIconType.flag,
-        _ => NuvoIconType.bell,
-      };
+    'proof_submitted' => NuvoIconType.checkCircle,
+    'joined' => NuvoIconType.users,
+    'leader_changed' => NuvoIconType.trendUp,
+    'finished' => NuvoIconType.flag,
+    _ => NuvoIconType.bell,
+  };
 
   @override
   Widget build(BuildContext context) {

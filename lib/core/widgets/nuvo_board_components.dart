@@ -44,7 +44,7 @@ class NuvoRaceHero extends StatelessWidget {
     required this.avatars,
     required this.racerCount,
     required this.onPrimary,
-    this.primaryLabel = 'Log Move',
+    this.primaryLabel = 'Submit proof',
     this.loading = false,
     this.daysLeft,
     this.badgeLabel,
@@ -78,8 +78,7 @@ class NuvoRaceHero extends StatelessWidget {
     final progress = progressPercent;
     final center = rankLabel.replaceFirst('#', '');
     final showHeader = badgeLabel != null || progress != null;
-    final borderColor =
-        isComplete ? NuvoColors.success : NuvoColors.inkNavy;
+    final borderColor = isComplete ? NuvoColors.success : NuvoColors.inkNavy;
     const accentBlue = NuvoColors.actionBlue;
 
     return Container(
@@ -128,9 +127,7 @@ class NuvoRaceHero extends StatelessWidget {
             const SizedBox(height: NuvoTokens.space4),
             Text(
               contextLine!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.muted,
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

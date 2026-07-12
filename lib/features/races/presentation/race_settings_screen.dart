@@ -535,10 +535,15 @@ class _Menu extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.textMuted),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(
+          color: NuvoColors.textMuted,
+        ),
         filled: true,
         fillColor: NuvoColors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
           borderSide: const BorderSide(color: NuvoColors.border),
@@ -610,6 +615,6 @@ String _unitForEligibility(CameraVerificationEligibility eligibility) {
 
 String _targetHint(CameraVerificationEligibility eligibility) {
   final unit = _unitForEligibility(eligibility);
-  final target = eligibility.movementDefinition?.defaultTarget ?? 10;
-  return '$target $unit';
+  final target = eligibility.movementDefinition?.defaultTarget;
+  return target == null ? unit : '$target $unit';
 }

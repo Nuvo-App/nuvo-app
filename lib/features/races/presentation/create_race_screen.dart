@@ -20,21 +20,21 @@ class RaceCreatePrefill {
   final String idea;
 
   static const pushups = RaceCreatePrefill(idea: 'First to 100 Pushups');
-  static const squats = RaceCreatePrefill(idea: 'Most Squats Today');
+  static const squats = RaceCreatePrefill(idea: 'First to 15 Squats');
   static const jumpingJacks = RaceCreatePrefill(
-    idea: '60-Second Jumping Jack Challenge',
+    idea: 'First to 500 Jumping Jacks',
   );
   static const lunges = RaceCreatePrefill(idea: 'First to 40 Lunges');
-  static const plank = RaceCreatePrefill(idea: 'Longest Plank');
+  static const plank = RaceCreatePrefill(idea: 'First to 300 Plank Seconds');
 }
 
 const _quickStarts = [
   'First to 100 Pushups',
   'First to 15 Pushups',
-  'Most Squats Today',
-  'Longest Plank',
-  '60-Second Jumping Jack Challenge',
-  'Weekly Pushup Race',
+  'First to 15 Squats',
+  'First to 500 Jumping Jacks',
+  'First to 40 Lunges',
+  'First to 300 Plank Seconds',
 ];
 
 class CreateRaceScreen extends ConsumerStatefulWidget {
@@ -226,7 +226,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             const SizedBox(height: 26),
             const _SectionTitle('How someone wins'),
             const SizedBox(height: 10),
-            for (final format in _draft.activity.supportedFormats)
+            for (final format in const [RaceFormat.firstToGoal])
               _ChoiceRow(
                 label: format.label,
                 selected: _draft.format == format,
@@ -259,7 +259,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             const SizedBox(height: 26),
             const _SectionTitle('Repeat'),
             const SizedBox(height: 10),
-            for (final recurrence in RaceRecurrence.values)
+            for (final recurrence in const [RaceRecurrence.none])
               _ChoiceRow(
                 label: recurrence == RaceRecurrence.daily
                     ? 'Starts fresh every day'

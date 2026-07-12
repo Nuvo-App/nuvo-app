@@ -16,6 +16,7 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/data/auth_api.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../ai/camera_image_converter.dart';
 import '../ai/motion_validators.dart';
 import '../ai/pose_detector_service.dart';
@@ -45,6 +46,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   AiMotionActivity _activity = AiMotionActivity.pushUps;
   String _metric = 'reps';
+  int _raceTotalBefore = 0;
+  int? _raceTargetValue;
   String? _clientSubmissionId;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = const [];
@@ -72,6 +75,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
       final eligibility = resolveCameraVerification(race);
+      final userId = ref.read(authControllerProvider).user?.id;
+      final myPart = userId == null ? null : race.participantFor(userId);
       debugLogCameraVerificationDecision(
         race,
         eligibility,
@@ -96,6 +101,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             race.metric ??
             eligibility.movementDefinition?.metric.backendValue ??
             'reps';
+        _raceTotalBefore = myPart?.progressValue ?? 0;
+        _raceTargetValue = race.targetValue;
         _engine.selectMovement(definition, target);
       });
       // Skip redundant pre-camera panel — go straight to camera
@@ -456,6 +463,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         '$_currentValue / $_targetValue';
   }
 
+  String get _raceTotalLabel {
+    final total = _raceTotalBefore + _currentValue;
+    final target = _raceTargetValue;
+    if (target != null && target > 0) {
+      return '$total / $target $_metric race total';
+    }
+    return '$total $_metric race total';
+  }
+
   String get _movementTitle =>
       motionActivityForBackendValue(_activity.backendValue)?.title ??
       _activity.label;
@@ -604,9 +620,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               children: [
                 _pill(
                   _status == AiMotionProofStatus.recording
-                      ? (_currentValue >= _targetValue
-                            ? _counterLabel
-                            : 'Recording')
+                      ? _raceTotalLabel
                       : 'Goal: $_targetLabel',
                   color: _status == AiMotionProofStatus.recording
                       ? (_currentValue >= _targetValue
@@ -811,7 +825,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         children: [
           Expanded(
             child: Text(
-              targetReached ? 'Target complete.' : 'Keep going. $_counterLabel',
+              targetReached
+                  ? 'Set ready. $_raceTotalLabel'
+                  : 'Keep going. $_counterLabel',
               style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.white),
             ),
           ),

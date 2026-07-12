@@ -452,14 +452,14 @@ class _ProductPreviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '10 Jumping Jacks',
+                      'First to 100 Pushups',
                       style: AppTextStyles.titleMedium.copyWith(
                         color: NuvoColors.navy,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Camera verified · 10 reps',
+                      'Camera verified · 65 / 100 reps',
                       style: AppTextStyles.labelSmall.copyWith(
                         color: NuvoColors.muted,
                         fontWeight: FontWeight.w600,
@@ -500,7 +500,7 @@ class _ProductPreviewCard extends StatelessWidget {
                       children: [
                         Container(color: NuvoColors.trackBg),
                         FractionallySizedBox(
-                          widthFactor: 0.6,
+                          widthFactor: 0.65,
                           alignment: Alignment.centerLeft,
                           child: Container(
                             decoration: const BoxDecoration(
@@ -518,7 +518,7 @@ class _ProductPreviewCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                '6 / 10',
+                '65 / 100',
                 style: AppTextStyles.labelMedium.copyWith(
                   color: NuvoColors.navy,
                 ),
@@ -556,7 +556,7 @@ class _ProductPreviewCard extends StatelessWidget {
                   boxShadow: AppShadows.actionShadow,
                 ),
                 child: Text(
-                  'Log move',
+                  'Submit proof',
                   style: AppTextStyles.labelSmall.copyWith(
                     color: NuvoColors.white,
                     fontWeight: FontWeight.w800,

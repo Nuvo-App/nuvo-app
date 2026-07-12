@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+server/worker/.tmp-test-dist/
 
 # Symbolication related
 app.*.symbols

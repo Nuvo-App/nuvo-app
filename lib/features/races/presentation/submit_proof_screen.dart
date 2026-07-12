@@ -11,6 +11,7 @@ import '../../../core/widgets/nuvo_error_state.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
+import '../domain/race_display.dart';
 import 'race_controller.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
@@ -208,14 +209,8 @@ class _MoveCheckCard extends StatelessWidget {
   final CameraVerificationEligibility eligibility;
 
   String get _goalLabel {
-    final activity = eligibility.movementDefinition;
-    if (race.targetValue != null && activity != null) {
-      return activity.targetLabel(race.targetValue!);
-    }
-    if (activity != null) {
-      return activity.targetLabel(activity.defaultTarget);
-    }
-    return race.targetValue?.toString() ?? 'Ready';
+    if (race.targetValue != null) return raceTargetLabel(race);
+    return 'Ready';
   }
 
   IconData get _movementIcon => switch (eligibility.movementType) {
@@ -238,7 +233,7 @@ class _MoveCheckCard extends StatelessWidget {
 
   String get _estimatedTime {
     final activity = eligibility.movementDefinition;
-    final target = race.targetValue ?? activity?.defaultTarget ?? 10;
+    final target = race.targetValue ?? activity?.defaultTarget ?? 1;
     if (activity?.isHold == true) {
       return '~${target + 5} sec';
     }
