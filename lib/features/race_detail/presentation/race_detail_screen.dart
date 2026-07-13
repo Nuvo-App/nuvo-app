@@ -418,9 +418,13 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     ),
                   ],
 
-                  if (canVerify && myRaceComplete) ...[
+                  if (isParticipant && myRaceComplete) ...[
                     const SizedBox(height: 12),
-                    _CompleteCallout(progress: myProgress),
+                    _CompleteCallout(
+                      race: race,
+                      participant: myPart,
+                      rank: rank,
+                    ),
                   ],
 
                   if (isParticipant && !myRaceComplete) ...[
@@ -436,6 +440,24 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   ],
 
                   const SizedBox(height: 24),
+
+                  // ── Final standings (completed races only) ──────────────
+                  if (myRaceComplete && race.finalStandings.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    const _SectionLabel(label: 'Final standings'),
+                    const SizedBox(height: 12),
+                    for (var i = 0; i < race.finalStandings.length; i++) ...[
+                      _FinalStandingRow(
+                        standing: race.finalStandings[i],
+                        isCurrentUser:
+                            user != null &&
+                            race.finalStandings[i].userId == user.id,
+                        race: race,
+                      ),
+                      if (i < race.finalStandings.length - 1)
+                        const SizedBox(height: 6),
+                    ],
+                  ],
 
                   // ── Board ──────────────────────────────────────────────────
                   const _SectionLabel(label: 'The board'),
@@ -930,7 +952,7 @@ class _CheckpointPath extends StatelessWidget {
             : '$progressPercent% verified';
       } else {
         state = _NodeState.todo;
-        sub = 'Locked';
+        sub = 'Not reached yet';
       }
       checkpoints.add(
         _Checkpoint(label: _labels[i], sub: sub, state: state, marker: marker),
@@ -1102,11 +1124,19 @@ class _UnsupportedVerificationNotice extends StatelessWidget {
 }
 
 class _CompleteCallout extends StatelessWidget {
-  const _CompleteCallout({required this.progress});
-  final int progress;
+  const _CompleteCallout({
+    required this.race,
+    required this.participant,
+    this.rank,
+  });
+  final Race race;
+  final RaceParticipant? participant;
+  final int? rank;
 
   @override
   Widget build(BuildContext context) {
+    final scoreText = raceProgressLabel(race, participant);
+    final rankText = rank != null ? ' · #$rank' : '';
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
@@ -1126,7 +1156,7 @@ class _CompleteCallout extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('$progress% complete', style: AppTextStyles.titleMedium),
+                Text('$scoreText$rankText', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 2),
                 Text(
                   'Start another race with your crew.',
@@ -1226,6 +1256,77 @@ class _SectionLabel extends StatelessWidget {
         color: NuvoColors.textMuted,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.8,
+      ),
+    );
+  }
+}
+
+// ── Final standing row ────────────────────────────────────────────────────────
+
+class _FinalStandingRow extends StatelessWidget {
+  const _FinalStandingRow({
+    required this.standing,
+    required this.isCurrentUser,
+    required this.race,
+  });
+
+  final RaceFinalStanding standing;
+  final bool isCurrentUser;
+  final Race race;
+
+  @override
+  Widget build(BuildContext context) {
+    final rankLabel = '#${standing.rank}';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isCurrentUser
+            ? NuvoColors.success.withValues(alpha: 0.08)
+            : NuvoColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isCurrentUser
+              ? NuvoColors.success.withValues(alpha: 0.4)
+              : NuvoColors.border,
+          width: isCurrentUser ? 1.5 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 36,
+            child: Text(
+              rankLabel,
+              style: AppTextStyles.labelLarge.copyWith(
+                color: standing.rank == 1
+                    ? NuvoColors.success
+                    : NuvoColors.muted,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              standing.displayName,
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontWeight: isCurrentUser ? FontWeight.w700 : FontWeight.w500,
+                color: NuvoColors.navy,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (standing.scoreValue > 0)
+            Text(
+              raceScoreLabel(race, standing.scoreValue),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
       ),
     );
   }

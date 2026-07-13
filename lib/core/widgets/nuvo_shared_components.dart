@@ -920,10 +920,12 @@ class NuvoRaceLane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = (progressPercent / 100).clamp(0.0, 1.0);
-    final trackColor =
-        onDark ? Colors.white.withValues(alpha: 0.18) : NuvoColors.trackBg;
-    final fillColor =
-        progress >= 1 ? NuvoColors.success : NuvoColors.actionBlue;
+    final trackColor = onDark
+        ? Colors.white.withValues(alpha: 0.18)
+        : NuvoColors.trackBg;
+    final fillColor = progress >= 1
+        ? NuvoColors.success
+        : NuvoColors.actionBlue;
 
     return SizedBox(
       height: dotDiameter,
@@ -963,10 +965,7 @@ class NuvoRaceLane extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: NuvoColors.actionBlue,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: NuvoColors.inkNavy,
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
                     ),
                   ),
                 ),
@@ -979,10 +978,7 @@ class NuvoRaceLane extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: NuvoColors.success,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: NuvoColors.inkNavy,
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
                     ),
                   ),
                 ),

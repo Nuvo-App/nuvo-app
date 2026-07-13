@@ -43,10 +43,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       0,
       (s, r) => s + r.recentProofs.length,
     );
-    final progressValues = raceState.races
-        .expand((r) => r.participants)
-        .map((p) => p.progressPercent)
-        .toList();
+    final progressValues = uid == null
+        ? <int>[]
+        : raceState.races
+              .map((r) => r.participantFor(uid)?.progressPercent)
+              .whereType<int>()
+              .toList();
     final avgProgress = progressValues.isEmpty
         ? 0
         : (progressValues.fold<int>(0, (s, v) => s + v) / progressValues.length)

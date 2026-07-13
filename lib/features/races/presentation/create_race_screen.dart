@@ -233,11 +233,11 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
                 onTap: () => _setDraft(_draft.copyWith(format: format)),
               ),
             const SizedBox(height: 26),
-            const _SectionTitle('Goal'),
+            _SectionTitle('Goal \u00b7 ${_draft.metric.label}'),
             const SizedBox(height: 10),
             NuvoTextInput(
               controller: _targetController,
-              label: 'Target',
+              label: 'Target ${_draft.metric.label}',
               keyboardType: TextInputType.number,
               hint: '${_draft.activity.defaultTarget}',
               onChanged: (_) => setState(() {}),

@@ -1,6 +1,10 @@
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 
+/// Returns the system-generated title for a given activity + target.
+String generatedTitle(MotionActivityDefinition activity, int targetValue) =>
+    'First to $targetValue ${activity.title}';
+
 class RaceDraft {
   const RaceDraft({
     required this.title,
@@ -8,6 +12,7 @@ class RaceDraft {
     required this.metric,
     required this.format,
     required this.targetValue,
+    this.hasCustomName = false,
     this.recurrence = RaceRecurrence.none,
     this.visibility = 'invite_code',
   });
@@ -17,11 +22,19 @@ class RaceDraft {
   final RaceMetric metric;
   final RaceFormat format;
   final int targetValue;
+
+  /// True only when the user has manually edited the race title.
+  final bool hasCustomName;
   final RaceRecurrence recurrence;
   final String visibility;
 
+  /// The title to show everywhere. When not custom, derived from activity+target.
+  String get resolvedTitle =>
+      hasCustomName ? title : generatedTitle(activity, targetValue);
+
   RaceDraft copyWith({
     String? title,
+    bool? hasCustomName,
     MotionActivityDefinition? activity,
     RaceMetric? metric,
     RaceFormat? format,
@@ -30,21 +43,23 @@ class RaceDraft {
     String? visibility,
   }) {
     final nextActivity = activity ?? this.activity;
+    final nextTarget = targetValue ?? this.targetValue;
     return RaceDraft(
       title: title ?? this.title,
+      hasCustomName: hasCustomName ?? this.hasCustomName,
       activity: nextActivity,
       metric: metric ?? nextActivity.metric,
       format: format != null && nextActivity.supportedFormats.contains(format)
           ? format
           : this.format,
-      targetValue: targetValue ?? this.targetValue,
+      targetValue: nextTarget,
       recurrence: recurrence ?? this.recurrence,
       visibility: visibility ?? this.visibility,
     );
   }
 
   Map<String, dynamic> toCreatePayload() => {
-    'title': title,
+    'title': resolvedTitle,
     'description': '${activity.title} race verified by camera.',
     'category': 'fitness',
     'goalType': format.backendValue,
@@ -68,7 +83,8 @@ RaceDraft? draftFromIdea(String idea) {
   final activity = parsed.activity;
   if (activity == null) return null;
   return RaceDraft(
-    title: parsed.title,
+    title: generatedTitle(activity, parsed.targetValue),
+    hasCustomName: false,
     activity: activity,
     metric: activity.metric,
     format: parsed.format,
@@ -78,7 +94,8 @@ RaceDraft? draftFromIdea(String idea) {
 }
 
 RaceDraft draftForActivity(MotionActivityDefinition activity) => RaceDraft(
-  title: 'First to ${activity.defaultTarget} ${activity.title}',
+  title: generatedTitle(activity, activity.defaultTarget),
+  hasCustomName: false,
   activity: activity,
   metric: activity.metric,
   format: RaceFormat.firstToGoal,

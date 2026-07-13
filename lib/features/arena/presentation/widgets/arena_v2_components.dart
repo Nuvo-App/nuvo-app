@@ -345,11 +345,7 @@ class _BlueButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NuvoPrimaryButton(
-      label: label,
-      expand: true,
-      onPressed: onTap,
-    );
+    return NuvoPrimaryButton(label: label, expand: true, onPressed: onTap);
   }
 }
 

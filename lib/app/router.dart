@@ -21,6 +21,7 @@ import '../features/proof/presentation/proof_screen.dart';
 import '../features/move/presentation/move_screen.dart';
 import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/presentation/create_race_screen.dart';
+import '../features/races/presentation/race_composer_screen.dart';
 import '../features/races/presentation/ai_motion_proof_screen.dart';
 import '../features/races/presentation/invite_crew_screen.dart';
 import '../features/races/presentation/join_race_screen.dart';
@@ -202,7 +203,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/races/new',
         pageBuilder: (_, state) => _authPage(
           state,
-          CreateRaceScreen(
+          RaceComposerScreen(
             prefill: state.extra is RaceCreatePrefill
                 ? state.extra! as RaceCreatePrefill
                 : null,

@@ -82,11 +82,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         eligibility,
         routeAction: 'ai_motion_screen_loaded',
       );
+      final raceTarget = race.targetValue;
+      final alreadyDone = myPart?.progressValue ?? 0;
       final target = race.format == 'first_to_goal'
-          ? 1
-          : race.targetValue ??
-                eligibility.movementDefinition?.defaultTarget ??
-                1;
+          ? (raceTarget != null && raceTarget > 0
+                ? (raceTarget - alreadyDone).clamp(1, raceTarget)
+                : eligibility.movementDefinition?.defaultTarget ?? 1)
+          : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
       final definition = _movementDefinitionForEligibility(eligibility);
       if (definition == null) {
         setState(() {
@@ -451,7 +453,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int get _currentValue => _engine.currentValue;
 
   String get _targetLabel {
-    if (_engine.targetValue == 1) return 'any verified ${_activity.label}';
     final definition = motionActivityForBackendValue(_activity.backendValue);
     return definition?.targetLabel(_targetValue) ??
         '$_targetValue ${_activity.label}';
@@ -466,10 +467,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String get _raceTotalLabel {
     final total = _raceTotalBefore + _currentValue;
     final target = _raceTargetValue;
+    final definition = motionActivityForBackendValue(_activity.backendValue);
+    final metricLabel = definition?.metric.label ?? _metric;
     if (target != null && target > 0) {
-      return '$total / $target $_metric race total';
+      return '$total / $target $metricLabel race total';
     }
-    return '$total $_metric race total';
+    return '$total $metricLabel race total';
   }
 
   String get _movementTitle =>
@@ -856,7 +859,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final body =
         _message ??
         switch (_status) {
-          AiMotionProofStatus.cameraReady => 'Hold until the timer finishes.',
+          AiMotionProofStatus.cameraReady =>
+            _activity == AiMotionActivity.plankHold
+                ? 'Hold for $_targetLabel. Camera tracks your time.'
+                : 'Camera will count $_targetLabel. Do clean reps.',
           AiMotionProofStatus.processing => 'Checking your move…',
           AiMotionProofStatus.permissionDenied =>
             'Enable camera access in Settings to verify your reps.',
@@ -946,7 +952,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ],
       AiMotionProofStatus.aiVerified => [
         NuvoPrimaryButton(
-          label: 'Back to Race',
+          label: 'Add to race',
           icon: Icons.verified_rounded,
           expand: true,
           onPressed: _submitVerifiedProof,
