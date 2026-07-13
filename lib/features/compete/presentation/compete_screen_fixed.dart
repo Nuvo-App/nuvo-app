@@ -143,6 +143,26 @@ class CompeteScreen extends ConsumerWidget {
                           extra: RaceCreatePrefill.jumpingJacks,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      _QuickStartRow(
+                        icon: Icons.directions_walk_rounded,
+                        label: 'First to 40 Lunges',
+                        sublabel: 'Editable camera race',
+                        onTap: () => context.push(
+                          '/races/new',
+                          extra: RaceCreatePrefill.lunges,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _QuickStartRow(
+                        icon: Icons.timer_outlined,
+                        label: 'First to 300 Plank Seconds',
+                        sublabel: 'Editable camera race',
+                        onTap: () => context.push(
+                          '/races/new',
+                          extra: RaceCreatePrefill.plank,
+                        ),
+                      ),
                     ],
                   ]),
                 ),
@@ -446,7 +466,7 @@ extension _RaceCardStateExt on _RaceCardState {
     return switch (this) {
       _RaceCardState.live => rank == null ? scoreLabel : '#$rank',
       _RaceCardState.solo => scoreLabel,
-      _RaceCardState.finished => 'Done',
+      _RaceCardState.finished => rank != null ? '#$rank' : 'Done',
     };
   }
 }

@@ -244,7 +244,11 @@ class _RingPainter extends CustomPainter {
     final headCenter =
         center +
         Offset(radius * math.cos(headAngle), radius * math.sin(headAngle));
-    canvas.drawCircle(headCenter, strokeWidth * 0.55, Paint()..color = brightBlue);
+    canvas.drawCircle(
+      headCenter,
+      strokeWidth * 0.55,
+      Paint()..color = brightBlue,
+    );
     canvas.drawCircle(
       headCenter,
       strokeWidth * 0.22,

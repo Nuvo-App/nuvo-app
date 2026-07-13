@@ -178,7 +178,7 @@ class BoardMovedScreen extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            '1 move added',
+                            'Added to your total',
                             style: AppTextStyles.bodyMedium.copyWith(
                               color: Colors.white.withValues(alpha: 0.66),
                             ),

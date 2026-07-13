@@ -132,8 +132,7 @@ final class NuvoTokens {
   static Border get borderInk =>
       Border.all(color: inkNavy, width: borderInkWidth);
 
-  static Border get borderAction =>
-      Border.all(color: actionBlue, width: 1.5);
+  static Border get borderAction => Border.all(color: actionBlue, width: 1.5);
 
   // ── Typography scale (Inter) ───────────────────────────────────────────────
 
