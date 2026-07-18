@@ -67,3 +67,4 @@ flutter:
   assets:
     - assets/images/
     - assets/branding/
+    - assets/animations/splash/
