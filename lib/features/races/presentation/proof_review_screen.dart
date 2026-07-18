@@ -158,7 +158,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
                     NuvoBackNavRow(
                       onBack: () =>

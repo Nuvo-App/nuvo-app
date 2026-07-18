@@ -19,7 +19,6 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
-  late final PageController _pageCtrl;
   int _currentIndex = 0;
 
   // Maps nav index → shell route path.
@@ -48,48 +47,18 @@ class _MainShellState extends State<MainShell> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _pageCtrl = PageController();
-  }
-
-  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final location = GoRouterState.of(context).uri.path;
     final newIndex = _indexFor(location);
     if (newIndex != _currentIndex) {
       _currentIndex = newIndex;
-      if (_pageCtrl.hasClients) {
-        _pageCtrl.animateToPage(
-          newIndex,
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-        );
-      }
     }
-  }
-
-  @override
-  void dispose() {
-    _pageCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onPageChanged(int index) {
-    if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
-    context.go(_paths[index]);
   }
 
   void _onNavTap(int index) {
     if (index == _currentIndex) return;
     setState(() => _currentIndex = index);
-    _pageCtrl.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-    );
     context.go(_paths[index]);
   }
 
@@ -98,11 +67,33 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       extendBody: true,
-      body: PageView(
-        controller: _pageCtrl,
-        onPageChanged: _onPageChanged,
-        physics: const BouncingScrollPhysics(),
-        children: _pages,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          for (var index = 0; index < _pages.length; index++)
+            IgnorePointer(
+              ignoring: index != _currentIndex,
+              child: ExcludeSemantics(
+                excluding: index != _currentIndex,
+                child: TickerMode(
+                  enabled: index == _currentIndex,
+                  child: AnimatedSlide(
+                    offset: index == _currentIndex
+                        ? Offset.zero
+                        : Offset(index < _currentIndex ? -0.025 : 0.025, 0),
+                    duration: const Duration(milliseconds: 360),
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedOpacity(
+                      opacity: index == _currentIndex ? 1 : 0,
+                      duration: const Duration(milliseconds: 280),
+                      curve: Curves.easeOutCubic,
+                      child: RepaintBoundary(child: _pages[index]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       bottomNavigationBar: NuvoBottomNav(
         currentIndex: _currentIndex,

@@ -125,7 +125,7 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
             Expanded(
               child:
                   SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -136,7 +136,10 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                             const SizedBox(height: 24),
                             Text(
                               'Check your email',
-                              style: AppTextStyles.headlineLarge,
+                              style: AppTextStyles.headlineLarge.copyWith(
+                                fontSize: 32,
+                                letterSpacing: -0.9,
+                              ),
                             ),
                             const SizedBox(height: 10),
                             Text(

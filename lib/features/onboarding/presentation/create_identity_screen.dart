@@ -117,7 +117,7 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 34, 20, 40),
+                  padding: const EdgeInsets.fromLTRB(22, 34, 22, 44),
                   children: [
                     // Step indicator
                     Row(
@@ -142,7 +142,10 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
 
                     Text(
                       'Create your\nNuvo identity',
-                      style: AppTextStyles.headlineLarge,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(

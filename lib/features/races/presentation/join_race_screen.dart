@@ -70,13 +70,19 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
                     NuvoBackButton(
                       onPressed: () => safePopOrGo(context, '/compete'),
                     ),
                     const SizedBox(height: 18),
-                    Text('Join a race', style: AppTextStyles.headlineLarge),
+                    Text(
+                      'Join a race',
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'Have a crew invite code? Enter it below to join the race.',
@@ -87,7 +93,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                     const SizedBox(height: 24),
                     NuvoTextInput(
                       controller: _codeController,
-                      label: 'INVITE CODE',
+                      label: 'Invite code',
                       hint: 'NUV-XXXXXX',
                       textCapitalization: TextCapitalization.characters,
                     ),

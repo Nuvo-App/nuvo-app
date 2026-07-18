@@ -206,7 +206,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
                     NuvoBackButton(
                       onPressed: () =>
@@ -215,7 +215,10 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                     const SizedBox(height: 18),
                     Text(
                       'Pull in your crew',
-                      style: AppTextStyles.headlineLarge,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(

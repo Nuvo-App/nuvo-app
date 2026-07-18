@@ -263,7 +263,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             Expanded(
               child:
                   ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                        padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
                         children: [
                           Align(
                             alignment: Alignment.centerLeft,
@@ -274,7 +274,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           const SizedBox(height: 12),
                           Text(
                             'Edit profile',
-                            style: AppTextStyles.headlineLarge,
+                            style: AppTextStyles.headlineLarge.copyWith(
+                              fontSize: 32,
+                              letterSpacing: -0.9,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(

@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
+import 'pressable_scale.dart';
 
-/// White surface card — hard offset shadow; light border by default.
-/// Pass [borderColor] = NuvoColors.inkNavy for hero/focus surfaces.
+/// Warm surface with quiet separation from the page.
 class NuvoCard extends StatelessWidget {
   const NuvoCard({
     super.key,
@@ -35,23 +35,19 @@ class NuvoCard extends StatelessWidget {
           color: borderColor ?? NuvoColors.border,
           width: borderWidth,
         ),
-        boxShadow: elevated ? AppShadows.hardShadow4 : null,
+        boxShadow: elevated ? AppShadows.hardShadow3 : null,
       ),
       child: child,
     );
 
     if (onTap != null) {
-      return GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: card,
-      );
+      return PressableScale(onTap: onTap, scale: 0.985, child: card);
     }
     return card;
   }
 }
 
-/// Compact bento-style card — tighter padding, used for stat tiles.
+/// Compact card for secondary information.
 class NuvoBentoCard extends StatelessWidget {
   const NuvoBentoCard({super.key, required this.child, this.onTap});
 

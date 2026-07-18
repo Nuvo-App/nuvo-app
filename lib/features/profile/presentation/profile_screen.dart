@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/count_up_text.dart';
@@ -65,18 +64,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Container(
-              decoration: BoxDecoration(
-                color: NuvoColors.white,
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(NuvoRadii.hero),
-                ),
-                border: Border(
-                  bottom: BorderSide(
-                    color: NuvoColors.navy.withValues(alpha: 0.10),
-                  ),
-                ),
-              ),
-              padding: EdgeInsets.fromLTRB(20, safeTop + 14, 20, 18),
+              padding: EdgeInsets.fromLTRB(22, safeTop + 20, 22, 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -85,9 +73,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     children: [
                       Text(
                         'Profile',
-                        style: AppTextStyles.brandLabel.copyWith(
+                        style: AppTextStyles.headlineLarge.copyWith(
                           color: NuvoColors.navy,
-                          letterSpacing: 0,
+                          fontSize: 32,
+                          letterSpacing: -0.9,
                         ),
                       ),
                       const Spacer(),
@@ -113,16 +102,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 26),
 
                   // Avatar + name
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: NuvoColors.navy,
+                      color: NuvoColors.surface,
                       borderRadius: BorderRadius.circular(NuvoRadii.hero),
-                      border: Border.all(color: NuvoColors.navy2),
-                      boxShadow: AppShadows.heroShadow,
+                      border: Border.all(color: NuvoColors.border),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -133,11 +121,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             initials: initials,
                             photoUrl: photoUrl,
                             size: NuvoAvatarSizes.xl,
-                            bgColor: NuvoColors.blue.withValues(alpha: 0.22),
-                            textColor: NuvoColors.white,
-                            borderColor: NuvoColors.blue.withValues(
-                              alpha: 0.55,
-                            ),
+                            bgColor: NuvoColors.panel,
+                            textColor: NuvoColors.navy,
+                            borderColor: NuvoColors.border,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -148,8 +134,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               Text(
                                 displayName,
                                 style: AppTextStyles.headlineLarge.copyWith(
-                                  color: NuvoColors.white,
-                                  fontWeight: FontWeight.w900,
+                                  color: NuvoColors.navy,
+                                  fontWeight: FontWeight.w700,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -159,9 +145,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 Text(
                                   username,
                                   style: AppTextStyles.bodyMedium.copyWith(
-                                    color: NuvoColors.white.withValues(
-                                      alpha: 0.74,
-                                    ),
+                                    color: NuvoColors.textMuted,
                                   ),
                                 ),
                               ],
@@ -172,23 +156,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: NuvoColors.white.withValues(
-                                    alpha: 0.18,
-                                  ),
+                                  color: NuvoColors.panel,
                                   borderRadius: BorderRadius.circular(
                                     NuvoRadii.pill,
                                   ),
-                                  border: Border.all(
-                                    color: NuvoColors.blue.withValues(
-                                      alpha: 0.24,
-                                    ),
-                                  ),
+                                  border: Border.all(color: NuvoColors.border),
                                 ),
                                 child: Text(
                                   'Member pass active',
                                   style: AppTextStyles.labelSmall.copyWith(
-                                    color: NuvoColors.white,
-                                    fontWeight: FontWeight.w800,
+                                    color: NuvoColors.blue,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),

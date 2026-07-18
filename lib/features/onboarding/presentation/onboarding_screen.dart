@@ -78,7 +78,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 34, 20, 40),
+                  padding: const EdgeInsets.fromLTRB(22, 34, 22, 44),
                   children: [
                     // Step progress
                     Row(
@@ -103,7 +103,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
                     Text(
                       'Build your profile',
-                      style: AppTextStyles.headlineLarge,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -158,7 +161,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
                     NuvoTextInput(
                       controller: _nameController,
-                      label: 'FULL NAME',
+                      label: 'Full name',
                       hint: 'Your name',
                       textCapitalization: TextCapitalization.words,
                     ),
@@ -166,7 +169,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
                     NuvoTextInput(
                       controller: _usernameController,
-                      label: 'USERNAME',
+                      label: 'Username',
                       hint: 'handle',
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 14),
@@ -204,9 +207,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         vertical: 14,
                       ),
                       decoration: BoxDecoration(
-                        color: NuvoColors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: NuvoColors.border),
+                        color: NuvoColors.panel.withValues(alpha: 0.58),
+                        borderRadius: BorderRadius.circular(22),
                       ),
                       child: Row(
                         children: [

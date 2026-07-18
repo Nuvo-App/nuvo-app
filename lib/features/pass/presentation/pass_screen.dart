@@ -498,12 +498,13 @@ class _CrewHeader extends StatelessWidget {
                     style: AppTextStyles.headlineLarge.copyWith(
                       color: NuvoColors.navy,
                       height: 1.05,
-                      fontSize: 26,
+                      fontSize: 32,
+                      letterSpacing: -0.9,
                     ),
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    'Pull people into your next race.',
+                    'The people you want at the start line.',
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: NuvoColors.muted,
                     ),
@@ -522,7 +523,7 @@ class _CrewHeader extends StatelessWidget {
                 '$crewCount in crew',
                 style: AppTextStyles.labelSmall.copyWith(
                   color: NuvoColors.blue,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

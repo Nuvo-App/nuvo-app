@@ -69,7 +69,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
             Expanded(
               child:
                   SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -79,7 +79,10 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                             const SizedBox(height: 24),
                             Text(
                               'Enter your email',
-                              style: AppTextStyles.headlineLarge,
+                              style: AppTextStyles.headlineLarge.copyWith(
+                                fontSize: 32,
+                                letterSpacing: -0.9,
+                              ),
                             ),
                             const SizedBox(height: 10),
                             Text(
@@ -91,7 +94,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                             const SizedBox(height: 30),
                             NuvoTextInput(
                               controller: _emailController,
-                              label: 'EMAIL',
+                              label: 'Email',
                               hint: 'your@email.com',
                               keyboardType: TextInputType.emailAddress,
                               onChanged: (_) => setState(() => _error = null),

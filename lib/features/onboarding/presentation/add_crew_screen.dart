@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 
@@ -42,7 +41,7 @@ class AddCrewScreen extends StatelessWidget {
         bottom: false,
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 30, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 24),
                   children: [
                     Row(
                       children: [
@@ -65,7 +64,10 @@ class AddCrewScreen extends StatelessWidget {
                     const SizedBox(height: 24),
                     Text(
                       'Pull in your crew',
-                      style: AppTextStyles.headlineLarge,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -75,22 +77,19 @@ class AddCrewScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 28),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: NuvoColors.white,
-                        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                        border: Border.all(color: NuvoColors.border),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 18,
                       ),
                       child: Column(
                         children: [
                           Container(
                             width: 52,
                             height: 52,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: NuvoColors.icyBlue,
                               shape: BoxShape.circle,
-                              border: Border.all(color: NuvoColors.border),
                             ),
                             alignment: Alignment.center,
                             child: const Icon(

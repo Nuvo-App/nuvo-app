@@ -182,11 +182,11 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label.toUpperCase(),
-      style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.textMuted,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
+      label,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: NuvoColors.navy,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
     );
   }
@@ -208,14 +208,8 @@ class _CompeteHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-        boxShadow: AppShadows.hardShadow5,
-      ),
+      margin: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -226,16 +220,17 @@ class _CompeteHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Races',
+                      'Compete',
                       style: AppTextStyles.headlineLarge.copyWith(
                         color: NuvoColors.navy,
                         height: 1.05,
-                        fontSize: 26,
+                        fontSize: 32,
+                        letterSpacing: -0.9,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Create a race, set a goal, pull in your crew.',
+                      'Set a finish line and pull in your crew.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                         fontSize: 14,
@@ -248,7 +243,7 @@ class _CompeteHero extends StatelessWidget {
               _CountPill(value: '$activeCount', label: 'active'),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 22),
           Row(
             children: [
               Expanded(
@@ -286,7 +281,9 @@ class _CountPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.actionBlue.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: NuvoColors.actionBlue, width: 1.4),
+        border: Border.all(
+          color: NuvoColors.actionBlue.withValues(alpha: 0.18),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -295,7 +292,7 @@ class _CountPill extends StatelessWidget {
             value,
             style: AppTextStyles.labelLarge.copyWith(
               color: NuvoColors.actionBlue,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(width: 4),
@@ -341,20 +338,16 @@ class _RaceLaneCard extends StatelessWidget {
         ? _RaceCardState.solo
         : _RaceCardState.live;
 
-    final plate = state == _RaceCardState.finished
-        ? NuvoColors.success
-        : NuvoColors.offsetGrey;
-
     return PressableScale(
       onTap: onTap,
-      child: NuvoHardOffset(
-        offset: 3,
-        radius: NuvoRadii.lg,
-        plateColor: plate,
-        faceColor: NuvoColors.white,
-        borderColor: plate,
-        borderWidth: 1.5,
+      scale: 0.985,
+      child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          border: Border.all(color: NuvoColors.border),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -365,7 +358,7 @@ class _RaceLaneCard extends StatelessWidget {
                     race.displayTitle,
                     style: AppTextStyles.titleMedium.copyWith(
                       color: NuvoColors.navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -380,7 +373,9 @@ class _RaceLaneCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: state.pillBackground,
                     borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: state.pillForeground, width: 1.4),
+                    border: Border.all(
+                      color: state.pillForeground.withValues(alpha: 0.16),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -393,7 +388,7 @@ class _RaceLaneCard extends StatelessWidget {
                         state.pillLabel(scoreLabel: scoreLabel, rank: rank),
                         style: AppTextStyles.labelSmall.copyWith(
                           color: state.pillForeground,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],

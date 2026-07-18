@@ -9,28 +9,28 @@ import 'package:flutter/material.dart';
 final class NuvoTokens {
   NuvoTokens._();
 
-  // ── Brand core (Phase 0 lock — getnuvo hard-offset system) ─────────────────
+  // ── Brand core ─────────────────────────────────────────────────────────────
 
   /// Navy — icons, type, dark surfaces, selected nav, overlays.
-  static const Color navy = Color(0xFF0A1A33);
+  static const Color navy = Color(0xFF302D29);
 
-  /// Ink navy — hard borders, hard shadows, ring track outline.
-  static const Color inkNavy = Color(0xFF07152B);
+  /// Warm structural edge for legacy borders and surfaces.
+  static const Color inkNavy = Color(0xFFD8CFC3);
 
   /// Action blue — CTA, progress arcs, chips, interactive only.
-  static const Color actionBlue = Color(0xFF075BFF);
+  static const Color actionBlue = Color(0xFF626A8F);
 
   /// Legacy name kept as alias of [actionBlue].
   static const Color royalBlue = actionBlue;
 
-  /// Ice page background — cool, never pure white / never warm gray.
-  static const Color pageIce = Color(0xFFF8FBFF);
+  /// Warm beige page background.
+  static const Color pageIce = Color(0xFFF3EEE6);
 
   /// Page background alias.
   static const Color background = pageIce;
 
   /// Card surface — only interactive surfaces.
-  static const Color card = Color(0xFFFFFFFF);
+  static const Color card = Color(0xFFFCF9F3);
 
   // ── Semantic colors ────────────────────────────────────────────────────────
 
@@ -84,19 +84,34 @@ final class NuvoTokens {
 
   // ── Shadows ────────────────────────────────────────────────────────────────
 
-  /// Hard offset 3 — compact rows, chips, manage rows.
+  /// Compact soft lift.
   static const List<BoxShadow> hardShadow3 = [
-    BoxShadow(color: inkNavy, blurRadius: 0, offset: Offset(3, 3)),
+    BoxShadow(
+      color: Color(0x122D2925),
+      blurRadius: 10,
+      spreadRadius: -4,
+      offset: Offset(0, 3),
+    ),
   ];
 
-  /// Hard offset 4 — buttons, board lanes, standard cards.
+  /// Standard soft lift.
   static const List<BoxShadow> hardShadow4 = [
-    BoxShadow(color: inkNavy, blurRadius: 0, offset: Offset(4, 4)),
+    BoxShadow(
+      color: Color(0x142D2925),
+      blurRadius: 14,
+      spreadRadius: -5,
+      offset: Offset(0, 5),
+    ),
   ];
 
-  /// Hard offset 5 — hero cards, focus boards, primary surfaces.
+  /// Hero soft lift.
   static const List<BoxShadow> hardShadow5 = [
-    BoxShadow(color: inkNavy, blurRadius: 0, offset: Offset(5, 5)),
+    BoxShadow(
+      color: Color(0x162D2925),
+      blurRadius: 20,
+      spreadRadius: -7,
+      offset: Offset(0, 8),
+    ),
   ];
 
   /// Default interactive elevation.
@@ -108,7 +123,7 @@ final class NuvoTokens {
   /// Shadow 2 — sheets (soft, intentional).
   static List<BoxShadow> get shadow2 => const [
     BoxShadow(
-      color: Color.fromRGBO(10, 26, 51, 0.08),
+      color: Color.fromRGBO(45, 41, 37, 0.07),
       blurRadius: 24,
       offset: Offset(0, 8),
     ),
@@ -117,17 +132,17 @@ final class NuvoTokens {
   /// Shadow 3 — floating nav (soft, intentional).
   static List<BoxShadow> get shadow3 => const [
     BoxShadow(
-      color: Color.fromRGBO(10, 26, 51, 0.12),
-      blurRadius: 60,
-      offset: Offset(0, 20),
+      color: Color.fromRGBO(45, 41, 37, 0.08),
+      blurRadius: 32,
+      offset: Offset(0, 12),
     ),
   ];
 
   // ── Border ─────────────────────────────────────────────────────────────────
 
-  static const Color borderColor = Color.fromRGBO(10, 26, 51, 0.08);
+  static const Color borderColor = Color(0xFFDED5C9);
   static const double borderWidth = 1;
-  static const double borderInkWidth = 2;
+  static const double borderInkWidth = 1;
 
   static Border get borderInk =>
       Border.all(color: inkNavy, width: borderInkWidth);

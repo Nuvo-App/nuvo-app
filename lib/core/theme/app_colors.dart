@@ -3,90 +3,90 @@ import 'package:flutter/material.dart';
 final class NuvoColors {
   NuvoColors._();
 
-  // ── Brand core (Phase 0 lock) ─────────────────────────────────────────────────
+  // ── Brand core ────────────────────────────────────────────────────────────────
   /// Primary action color — CTA, progress, chips.
-  static const Color blue = Color(0xFF075BFF);
+  static const Color blue = Color(0xFF626A8F);
 
   /// Alias of [blue] for explicit call sites.
   static const Color actionBlue = blue;
 
   /// Gradient partner / pressed state.
-  static const Color blue2 = Color(0xFF0547C7);
+  static const Color blue2 = Color(0xFF505777);
 
   /// Pressed / deeper variant — ink state.
-  static const Color blueInk = Color(0xFF0547C7);
+  static const Color blueInk = Color(0xFF434963);
 
   /// Light blue tint.
-  static const Color blueLight = Color(0xFF8EC3FF);
+  static const Color blueLight = Color(0xFFBBBFD2);
 
   /// Primary dark — headlines, nav active state.
-  static const Color navy = Color(0xFF0A1A33);
+  static const Color navy = Color(0xFF302D29);
 
-  /// Ink navy — hard borders, hard shadows, ring track.
-  static const Color inkNavy = Color(0xFF07152B);
+  /// Quiet structural ink used by legacy offset surfaces.
+  static const Color inkNavy = Color(0xFFD8CFC3);
 
   /// Slightly deeper navy for layered surfaces (alias of ink).
-  static const Color navy2 = inkNavy;
+  static const Color navy2 = Color(0xFF252320);
 
   /// Platinum — legacy alias.
-  static const Color platinum = Color(0xFFEFEFEF);
+  static const Color platinum = Color(0xFFE8E0D5);
 
   /// Disabled / locked state.
-  static const Color paleSlate = Color(0xFFC4C7CC);
+  static const Color paleSlate = Color(0xFFB9B0A5);
 
   // ── Accent palette ────────────────────────────────────────────────────────────
-  static const Color aqua = Color(0xFF22C7B8);
-  static const Color coral = Color(0xFFFF6B6B);
-  static const Color sunshine = Color(0xFFFFC857);
+  static const Color aqua = Color(0xFF718B79);
+  static const Color coral = Color(0xFFC97968);
+  static const Color sunshine = Color(0xFFD5AA63);
 
   // ── Page & surfaces ───────────────────────────────────────────────────────────
-  /// Main page background — ice.
-  static const Color page = Color(0xFFF8FBFF);
+  /// Main page background — warm natural beige.
+  static const Color page = Color(0xFFF3EEE6);
 
   /// Alias of [page].
   static const Color pageIce = page;
 
-  static const Color pageWarm = Color(0xFFF5F2EE);
-  static const Color surface = Color(0xFFFFFFFF);
+  static const Color pageWarm = Color(0xFFF7F2EA);
+  static const Color surface = Color(0xFFFCF9F3);
   static const Color card = surface;
 
   /// Light tint background — active pills, "you" row highlight.
-  static const Color panel = Color(0xFFEDF4FE);
+  static const Color panel = Color(0xFFEAE2D7);
 
-  static const Color inkWash = Color(0xFFF8FBFF);
+  static const Color inkWash = Color(0xFFF8F3EB);
 
   // ── Lines and tracks ──────────────────────────────────────────────────────────
-  static const Color trackBg = Color(0xFFEAE8E2);
-  static const Color divider = Color(0xFFEAE8E2);
-  static const Color border = Color(0xFFEAE8E2);
+  static const Color trackBg = Color(0xFFE2D9CE);
+  static const Color divider = Color(0xFFE3DACE);
+  static const Color border = Color(0xFFDED5C9);
   static const Color borderStrong = paleSlate;
 
   /// Solid grey hard-offset plate for secondary cards (CTA construction,
   /// grey instead of ink navy). Must read clearly against white faces.
-  static const Color offsetGrey = Color(0xFF6B7280);
+  static const Color offsetGrey = Color(0xFFD7CEC1);
 
   // ── Legacy aliases kept stable for existing screens ───────────────────────────
-  static const Color icyBlue = Color(0xFFEDF4FE);
-  static const Color softBlue = Color(0xFF8EC3FF);
-  static const Color lavenderRow = Color(0xFFEDF4FE);
+  static const Color icyBlue = Color(0xFFE6E3EA);
+  static const Color softBlue = Color(0xFFBBBFD2);
+  static const Color lavenderRow = Color(0xFFEAE6EC);
   static const Color sectionBlue = icyBlue;
   static const Color bluePale = softBlue;
   static const Color blueSoft = blue2;
   static const Color navySoft = navy2;
 
   // ── Text & semantic ───────────────────────────────────────────────────────────
-  static const Color muted = Color(0xFF8B8A85);
-  static const Color textMuted = Color(0xFF8B8A85);
-  static const Color textDim = Color(0xFF8B8A85);
+  static const Color muted = Color(0xFF746D65);
+  static const Color textMuted = Color(0xFF827A71);
+  static const Color textDim = Color(0xFF9A9289);
   static const Color white = surface;
-  static const Color success = Color(0xFF3E9C63);
-  static const Color danger = Color(0xFFC25A4E);
-  static const Color warning = Color(0xFFC97A2E);
-  static const Color amber = Color(0xFFC97A2E);
-  static const Color amberTint = Color(0xFFFBEEE0);
-  static const Color gold = Color(0xFFD4A24C);
-  static const Color silver = Color(0xFFA9ADB4);
-  static const Color bronze = Color(0xFFB98657);
+  static const Color success = Color(0xFF66816C);
+  static const Color danger = Color(0xFFB8665E);
+  static const Color warning = Color(0xFFB17A43);
+  static const Color amber = Color(0xFFB17A43);
+  static const Color amberTint = Color(0xFFF4E7D8);
+  static const Color gold = Color(0xFFC49A52);
+  static const Color silver = Color(0xFFA8A29A);
+  static const Color bronze = Color(0xFFA97752);
 
   // ── Avatar colors — flat, muted, never gradients ─────────────────────────────
   static const Color avatarTerracotta = Color(0xFFBE7B54);
