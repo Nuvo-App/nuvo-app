@@ -6,7 +6,7 @@ abstract final class AppShadows {
   /// Compact lift for rows, chips, and controls.
   static const List<BoxShadow> hardShadow3 = [
     BoxShadow(
-      color: Color(0x122D2925),
+      color: Color(0x1207152C),
       blurRadius: 10,
       spreadRadius: -4,
       offset: Offset(0, 3),
@@ -16,7 +16,7 @@ abstract final class AppShadows {
   /// Quiet lift for buttons, lanes, and standard cards.
   static const List<BoxShadow> hardShadow4 = [
     BoxShadow(
-      color: Color(0x142D2925),
+      color: Color(0x1407152C),
       blurRadius: 14,
       spreadRadius: -5,
       offset: Offset(0, 5),
@@ -26,7 +26,7 @@ abstract final class AppShadows {
   /// Soft depth for hero and focus surfaces.
   static const List<BoxShadow> hardShadow5 = [
     BoxShadow(
-      color: Color(0x162D2925),
+      color: Color(0x1607152C),
       blurRadius: 20,
       spreadRadius: -7,
       offset: Offset(0, 8),
@@ -48,7 +48,7 @@ abstract final class AppShadows {
   // Lower, wider lift for the global navigation dock (soft, intentional).
   static const List<BoxShadow> dockShadow = [
     BoxShadow(
-      color: Color(0x122D2925),
+      color: Color(0x1207152C),
       blurRadius: 22,
       spreadRadius: -8,
       offset: Offset(0, 10),
@@ -57,7 +57,7 @@ abstract final class AppShadows {
 
   static const List<BoxShadow> sheetShadow = [
     BoxShadow(
-      color: Color(0x142D2925),
+      color: Color(0x1407152C),
       blurRadius: 28,
       spreadRadius: -10,
       offset: Offset(0, -6),
