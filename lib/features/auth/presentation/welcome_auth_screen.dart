@@ -92,7 +92,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
             // ── Scrollable hero area ─────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                padding: const EdgeInsets.fromLTRB(24, 34, 24, 18),
                 child:
                     Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,8 +265,7 @@ class _BrandMark extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.navy,
             borderRadius: BorderRadius.circular(NuvoRadii.sm),
-            border: NuvoBorders.action,
-            boxShadow: AppShadows.actionShadow,
+            border: Border.all(color: NuvoColors.navy),
           ),
           padding: const EdgeInsets.all(7),
           child: Image.asset(AssetPaths.nuvoLogo, fit: BoxFit.contain),
@@ -281,7 +280,7 @@ class _BrandMark extends StatelessWidget {
               'RACE WITH YOUR CREW',
               style: AppTextStyles.labelSmall.copyWith(
                 color: NuvoColors.blue,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -309,7 +308,7 @@ class _StartLineChip extends StatelessWidget {
         label,
         style: AppTextStyles.labelSmall.copyWith(
           color: NuvoColors.navy,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -330,17 +329,15 @@ class _LoopStrip extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
             decoration: BoxDecoration(
-              color: step == 'Proof' ? NuvoColors.blue : NuvoColors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: step == 'Proof' ? NuvoColors.blueInk : NuvoColors.border,
-              ),
+              color: step == 'Proof' ? NuvoColors.icyBlue : NuvoColors.surface,
+              borderRadius: BorderRadius.circular(99),
+              border: Border.all(color: NuvoColors.border),
             ),
             child: Text(
               step,
               style: AppTextStyles.labelSmall.copyWith(
-                color: step == 'Proof' ? NuvoColors.white : NuvoColors.navy,
-                fontWeight: FontWeight.w800,
+                color: step == 'Proof' ? NuvoColors.blue : NuvoColors.navy,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -422,9 +419,9 @@ class _ProductPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.border, width: 1.2),
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: NuvoColors.border),
       ),
       padding: const EdgeInsets.all(18),
       child: Column(

@@ -4,8 +4,6 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
 Widget _buttonContent({
   required String label,
   required Color textColor,
@@ -15,8 +13,8 @@ Widget _buttonContent({
 }) {
   if (loading) {
     return SizedBox(
-      width: 20,
-      height: 20,
+      width: 19,
+      height: 19,
       child: CircularProgressIndicator(
         strokeWidth: 2,
         valueColor: AlwaysStoppedAnimation(textColor),
@@ -28,14 +26,15 @@ Widget _buttonContent({
     mainAxisSize: MainAxisSize.min,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      if (leadingWidget != null) ...[leadingWidget, const SizedBox(width: 10)],
+      if (leadingWidget != null) ...[leadingWidget, const SizedBox(width: 9)],
       Flexible(
         child: Text(
           label,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.labelLarge.copyWith(
             color: textColor,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.1,
           ),
         ),
       ),
@@ -47,40 +46,44 @@ Widget _buttonContent({
   );
 }
 
-/// Classic Nuvo hard-offset: outer solid plate, face inset right+bottom.
-Widget _backplateButton({
-  required double height,
-  required double radius,
-  required double offset,
-  required Widget face,
+Widget _buttonShell({
+  required Widget child,
   required VoidCallback? onTap,
   required bool enabled,
-  Color plateColor = NuvoColors.inkNavy,
+  required double height,
+  required double radius,
+  required Color color,
+  Color? borderColor,
   bool expand = false,
+  List<BoxShadow>? shadows,
 }) {
-  final shell = PressableScale(
+  final button = PressableScale(
     onTap: enabled ? onTap : null,
+    scale: 0.975,
     child: AnimatedOpacity(
-      duration: const Duration(milliseconds: 160),
-      opacity: enabled ? 1.0 : 0.42,
-      child: Container(
+      duration: const Duration(milliseconds: 180),
+      opacity: enabled ? 1 : 0.45,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
         width: expand ? double.infinity : null,
+        height: height,
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: plateColor,
+          color: color,
           borderRadius: BorderRadius.circular(radius),
+          border: borderColor == null ? null : Border.all(color: borderColor),
+          boxShadow: shadows,
         ),
-        padding: EdgeInsets.only(right: offset, bottom: offset),
-        child: SizedBox(height: height, child: face),
+        child: child,
       ),
     ),
   );
 
-  return expand ? SizedBox(width: double.infinity, child: shell) : shell;
+  return expand ? SizedBox(width: double.infinity, child: button) : button;
 }
 
-// ── NuvoPrimaryButton ─────────────────────────────────────────────────────────
-
-/// Royal-blue CTA with navy offset backplate.
 class NuvoPrimaryButton extends StatelessWidget {
   const NuvoPrimaryButton({
     super.key,
@@ -104,26 +107,23 @@ class NuvoPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 54.0;
-    final radius = small ? 16.0 : 18.0;
-    final offset = small ? 3.0 : 4.0;
-
-    final face = Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        gradient: enabled
-            ? const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [NuvoColors.actionBlue, NuvoColors.blue2],
-              )
-            : null,
-        color: enabled ? null : NuvoColors.paleSlate,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-      ),
-      alignment: Alignment.center,
+    return _buttonShell(
+      height: small ? 44 : 54,
+      radius: small ? 16 : 18,
+      color: enabled ? NuvoColors.actionBlue : NuvoColors.paleSlate,
+      shadows: enabled
+          ? [
+              BoxShadow(
+                color: NuvoColors.actionBlue.withValues(alpha: 0.16),
+                blurRadius: 18,
+                spreadRadius: -8,
+                offset: const Offset(0, 8),
+              ),
+            ]
+          : null,
+      onTap: onPressed,
+      enabled: enabled,
+      expand: expand,
       child: _buttonContent(
         label: label,
         textColor: NuvoColors.white,
@@ -132,20 +132,9 @@ class NuvoPrimaryButton extends StatelessWidget {
         loading: loading,
       ),
     );
-
-    return _backplateButton(
-      height: height,
-      radius: radius,
-      offset: offset,
-      face: face,
-      onTap: onPressed,
-      enabled: enabled,
-      expand: expand,
-    );
   }
 }
 
-// Alias kept for backward compatibility.
 class NuvoBlueButton extends NuvoPrimaryButton {
   const NuvoBlueButton({
     super.key,
@@ -158,12 +147,8 @@ class NuvoBlueButton extends NuvoPrimaryButton {
   });
 }
 
-/// Alias for the classic backplate primary.
 typedef NuvoBackplateButton = NuvoPrimaryButton;
 
-// ── NuvoOutlineButton ─────────────────────────────────────────────────────────
-
-/// White face + navy border + navy offset backplate.
 class NuvoOutlineButton extends StatelessWidget {
   const NuvoOutlineButton({
     super.key,
@@ -185,19 +170,14 @@ class NuvoOutlineButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final height = small ? 44.0 : 54.0;
-    final radius = small ? 14.0 : 16.0;
-    final offset = small ? 3.0 : 4.0;
-
-    final face = Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-      ),
-      alignment: Alignment.center,
+    return _buttonShell(
+      height: small ? 44 : 54,
+      radius: small ? 16 : 18,
+      color: NuvoColors.surface,
+      borderColor: NuvoColors.border,
+      onTap: onPressed,
+      enabled: enabled,
+      expand: expand,
       child: _buttonContent(
         label: label,
         textColor: NuvoColors.navy,
@@ -205,24 +185,11 @@ class NuvoOutlineButton extends StatelessWidget {
         leadingWidget: leadingWidget,
       ),
     );
-
-    return _backplateButton(
-      height: height,
-      radius: radius,
-      offset: offset,
-      face: face,
-      onTap: onPressed,
-      enabled: enabled,
-      expand: expand,
-    );
   }
 }
 
 typedef NuvoSecondaryButton = NuvoOutlineButton;
 
-// ── NuvoGhostButton ───────────────────────────────────────────────────────────
-
-/// Icy panel face + navy offset backplate — tertiary action.
 class NuvoGhostButton extends StatelessWidget {
   const NuvoGhostButton({
     super.key,
@@ -242,41 +209,22 @@ class NuvoGhostButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final height = small ? 40.0 : 48.0;
-    const radius = 12.0;
-    const offset = 3.0;
-
-    final face = Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: NuvoColors.panel,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-      ),
-      alignment: Alignment.center,
+    return _buttonShell(
+      height: small ? 40 : 48,
+      radius: 16,
+      color: NuvoColors.panel.withValues(alpha: 0.72),
+      onTap: onPressed,
+      enabled: enabled,
+      expand: expand,
       child: _buttonContent(
         label: label,
         textColor: NuvoColors.navy,
         icon: icon,
       ),
     );
-
-    return _backplateButton(
-      height: height,
-      radius: radius,
-      offset: offset,
-      face: face,
-      onTap: onPressed,
-      enabled: enabled,
-      expand: expand,
-    );
   }
 }
 
-// ── NuvoDangerButton ──────────────────────────────────────────────────────────
-
-/// White face + danger border + navy offset backplate.
 class NuvoDangerButton extends StatelessWidget {
   const NuvoDangerButton({
     super.key,
@@ -298,19 +246,14 @@ class NuvoDangerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
-    final height = small ? 44.0 : 54.0;
-    const radius = 14.0;
-    const offset = 4.0;
-
-    final face = Container(
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.danger, width: 2),
-      ),
-      alignment: Alignment.center,
+    return _buttonShell(
+      height: small ? 44 : 54,
+      radius: small ? 16 : 18,
+      color: NuvoColors.danger.withValues(alpha: 0.09),
+      borderColor: NuvoColors.danger.withValues(alpha: 0.22),
+      onTap: onPressed,
+      enabled: enabled,
+      expand: expand,
       child: _buttonContent(
         label: label,
         textColor: NuvoColors.danger,
@@ -318,22 +261,9 @@ class NuvoDangerButton extends StatelessWidget {
         loading: loading,
       ),
     );
-
-    return _backplateButton(
-      height: height,
-      radius: radius,
-      offset: offset,
-      face: face,
-      onTap: onPressed,
-      enabled: enabled,
-      expand: expand,
-    );
   }
 }
 
-// ── NuvoBackButton ────────────────────────────────────────────────────────────
-
-/// Round pale circle with navy offset backplate.
 class NuvoBackButton extends StatelessWidget {
   const NuvoBackButton({super.key, required this.onPressed});
 
@@ -341,56 +271,27 @@ class NuvoBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const size = 48.0;
-    const offset = 3.0;
-
     return PressableScale(
       onTap: onPressed,
-      child: Padding(
-        padding: const EdgeInsets.only(right: offset, bottom: offset),
-        child: SizedBox(
-          width: size + offset,
-          height: size + offset,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: offset,
-                top: offset,
-                child: Container(
-                  width: size,
-                  height: size,
-                  decoration: const BoxDecoration(
-                    color: NuvoColors.inkNavy,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: NuvoColors.panel,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: NuvoColors.inkNavy, width: 2),
-                ),
-                child: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: NuvoColors.navy,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
+      scale: 0.94,
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          shape: BoxShape.circle,
+          border: Border.all(color: NuvoColors.border),
+        ),
+        child: const Icon(
+          Icons.arrow_back_rounded,
+          color: NuvoColors.navy,
+          size: 20,
         ),
       ),
     );
   }
 }
 
-// ── NuvoIconAction ────────────────────────────────────────────────────────────
-
-/// White circle icon action with navy offset backplate.
 class NuvoIconAction extends StatelessWidget {
   const NuvoIconAction({
     super.key,
@@ -407,61 +308,36 @@ class NuvoIconAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const size = 42.0;
-    const offset = 3.0;
-
     return PressableScale(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(right: offset, bottom: offset),
-        child: SizedBox(
-          width: size + offset,
-          height: size + offset,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
+      scale: 0.94,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          shape: BoxShape.circle,
+          border: Border.all(color: NuvoColors.border),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(icon, color: iconColor, size: 19),
+            if (badge)
               Positioned(
-                left: offset,
-                top: offset,
+                top: 8,
+                right: 8,
                 child: Container(
-                  width: size,
-                  height: size,
-                  decoration: const BoxDecoration(
-                    color: NuvoColors.inkNavy,
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.coral,
                     shape: BoxShape.circle,
+                    border: Border.all(color: NuvoColors.surface, width: 1.2),
                   ),
                 ),
               ),
-              Container(
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: NuvoColors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: NuvoColors.inkNavy, width: 2),
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(icon, color: iconColor, size: 19),
-                    if (badge)
-                      Positioned(
-                        top: 9,
-                        right: 9,
-                        child: Container(
-                          width: 7,
-                          height: 7,
-                          decoration: const BoxDecoration(
-                            color: NuvoColors.actionBlue,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

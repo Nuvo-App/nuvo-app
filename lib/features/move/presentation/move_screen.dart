@@ -50,9 +50,9 @@ class MoveScreen extends ConsumerWidget {
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
-            20,
-            18,
-            20,
+            22,
+            22,
+            22,
             NuvoBottomNav.bottomPadding(context),
           ),
           children: [
@@ -131,12 +131,7 @@ class _MoveHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: NuvoBorders.quiet,
-      ),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -147,16 +142,17 @@ class _MoveHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Verify a move',
+                      'Move',
                       style: AppTextStyles.headlineLarge.copyWith(
                         color: NuvoColors.navy,
                         height: 1.05,
-                        fontSize: 26,
+                        fontSize: 32,
+                        letterSpacing: -0.9,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Pick a race and use camera verification.',
+                      'Choose a race, then submit proof.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -218,11 +214,10 @@ class _CompletedSectionState extends State<_CompletedSection> {
           child: Row(
             children: [
               Text(
-                'Completed'.toUpperCase(),
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.textMuted,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+                'Completed',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: NuvoColors.navy,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(width: 8),
@@ -278,11 +273,11 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label.toUpperCase(),
-      style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.textMuted,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
+      label,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: NuvoColors.navy,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
     );
   }

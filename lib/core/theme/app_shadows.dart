@@ -3,21 +3,34 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 abstract final class AppShadows {
-  static const Color _inkNavy = NuvoColors.inkNavy;
-
-  /// Hard offset 3 — rows, chips, compact controls.
+  /// Compact lift for rows, chips, and controls.
   static const List<BoxShadow> hardShadow3 = [
-    BoxShadow(color: _inkNavy, blurRadius: 0, offset: Offset(3, 3)),
+    BoxShadow(
+      color: Color(0x122D2925),
+      blurRadius: 10,
+      spreadRadius: -4,
+      offset: Offset(0, 3),
+    ),
   ];
 
-  /// Hard offset 4 — buttons, board lanes, standard cards.
+  /// Quiet lift for buttons, lanes, and standard cards.
   static const List<BoxShadow> hardShadow4 = [
-    BoxShadow(color: _inkNavy, blurRadius: 0, offset: Offset(4, 4)),
+    BoxShadow(
+      color: Color(0x142D2925),
+      blurRadius: 14,
+      spreadRadius: -5,
+      offset: Offset(0, 5),
+    ),
   ];
 
-  /// Hard offset 5 — hero / focus surfaces.
+  /// Soft depth for hero and focus surfaces.
   static const List<BoxShadow> hardShadow5 = [
-    BoxShadow(color: _inkNavy, blurRadius: 0, offset: Offset(5, 5)),
+    BoxShadow(
+      color: Color(0x162D2925),
+      blurRadius: 20,
+      spreadRadius: -7,
+      offset: Offset(0, 8),
+    ),
   ];
 
   // Primary interactive elevation (buttons, action cards).
@@ -29,33 +42,33 @@ abstract final class AppShadows {
   // Selected / urgent strips.
   static const List<BoxShadow> selectedShadow = hardShadow3;
 
-  // Default card elevation — hard offset (Phase 0).
+  // Default card elevation.
   static const List<BoxShadow> card = hardShadow4;
 
   // Lower, wider lift for the global navigation dock (soft, intentional).
   static const List<BoxShadow> dockShadow = [
     BoxShadow(
-      color: Color(0x1A07152B),
-      blurRadius: 14,
-      spreadRadius: -6,
-      offset: Offset(0, 8),
+      color: Color(0x122D2925),
+      blurRadius: 22,
+      spreadRadius: -8,
+      offset: Offset(0, 10),
     ),
   ];
 
   static const List<BoxShadow> sheetShadow = [
     BoxShadow(
-      color: Color(0x1F07152B),
-      blurRadius: 26,
-      spreadRadius: -8,
-      offset: Offset(0, -8),
+      color: Color(0x142D2925),
+      blurRadius: 28,
+      spreadRadius: -10,
+      offset: Offset(0, -6),
     ),
   ];
 
   // Soft blue glow for focused/active elements
   static List<BoxShadow> brandGlow({double intensity = 1}) => [
     BoxShadow(
-      color: AppColors.primary.withValues(alpha: 0.18 * intensity),
-      blurRadius: 16 * intensity,
+      color: AppColors.primary.withValues(alpha: 0.10 * intensity),
+      blurRadius: 14 * intensity,
       offset: const Offset(0, 4),
     ),
   ];
@@ -63,8 +76,8 @@ abstract final class AppShadows {
   // Mint glow for success / verified states
   static List<BoxShadow> victoryGlow({double intensity = 1}) => [
     BoxShadow(
-      color: AppColors.mint.withValues(alpha: 0.22 * intensity),
-      blurRadius: 16 * intensity,
+      color: AppColors.mint.withValues(alpha: 0.12 * intensity),
+      blurRadius: 14 * intensity,
       offset: const Offset(0, 4),
     ),
   ];
@@ -72,7 +85,7 @@ abstract final class AppShadows {
   // Warm glow (kept for legacy compat, no longer used in new UI)
   static List<BoxShadow> hotGlow({double intensity = 1}) => [
     BoxShadow(
-      color: AppColors.warning.withValues(alpha: 0.16 * intensity),
+      color: AppColors.warning.withValues(alpha: 0.10 * intensity),
       blurRadius: 12 * intensity,
       offset: const Offset(0, 3),
     ),

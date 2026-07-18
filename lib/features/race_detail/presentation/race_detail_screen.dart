@@ -352,7 +352,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
             child: RefreshIndicator(
               onRefresh: _load,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
+                padding: const EdgeInsets.fromLTRB(22, 28, 22, 56),
                 children: [
                   NuvoRaceHero(
                     title: null,
@@ -630,22 +630,23 @@ class _NavyHeader extends StatelessWidget {
     final scoreUnit = firstSpace == -1
         ? 'verified'
         : score.substring(firstSpace + 1);
-    const navy = NuvoColors.inkNavy;
+    const navy = NuvoColors.border;
     const brightBlue = NuvoColors.actionBlue;
 
     return Container(
       color: NuvoColors.pageIce,
-      padding: EdgeInsets.fromLTRB(20, safeTop + 12, 20, 8),
+      padding: EdgeInsets.fromLTRB(22, safeTop + 16, 22, 10),
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(22),
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(30),
           border: Border.all(
-            color: isComplete ? NuvoColors.success : navy,
-            width: 2,
+            color: isComplete
+                ? NuvoColors.success.withValues(alpha: 0.24)
+                : navy,
           ),
-          boxShadow: AppShadows.hardShadow5,
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -658,16 +659,9 @@ class _NavyHeader extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: NuvoColors.white,
+                      color: NuvoColors.surface,
                       shape: BoxShape.circle,
-                      border: Border.all(color: navy, width: 2),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: NuvoColors.inkNavy,
-                          blurRadius: 0,
-                          offset: Offset(2, 2),
-                        ),
-                      ],
+                      border: Border.all(color: navy),
                     ),
                     child: const NuvoIcon(
                       NuvoIconType.back,
@@ -695,7 +689,7 @@ class _NavyHeader extends StatelessWidget {
                           : isActive
                           ? brightBlue
                           : navy,
-                      width: 1.5,
+                      width: 1,
                     ),
                   ),
                   child: Text(
@@ -710,7 +704,7 @@ class _NavyHeader extends StatelessWidget {
                           : isActive
                           ? brightBlue
                           : NuvoColors.navy,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
@@ -722,16 +716,9 @@ class _NavyHeader extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: NuvoColors.white,
+                        color: NuvoColors.surface,
                         shape: BoxShape.circle,
-                        border: Border.all(color: navy, width: 2),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: NuvoColors.inkNavy,
-                            blurRadius: 0,
-                            offset: Offset(2, 2),
-                          ),
-                        ],
+                        border: Border.all(color: navy),
                       ),
                       child: const Icon(
                         Icons.tune_rounded,
@@ -755,7 +742,7 @@ class _NavyHeader extends StatelessWidget {
                   race.displayTitle,
                   style: AppTextStyles.headlineLarge.copyWith(
                     color: NuvoColors.navy,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     height: 1.15,
                   ),
                   maxLines: 2,
@@ -777,7 +764,9 @@ class _NavyHeader extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: brightBlue.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: brightBlue, width: 1.4),
+                      border: Border.all(
+                        color: brightBlue.withValues(alpha: 0.18),
+                      ),
                     ),
                     child: Text(
                       chip,
@@ -1251,11 +1240,11 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label.toUpperCase(),
-      style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.textMuted,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
+      label,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: NuvoColors.navy,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
     );
   }
@@ -1352,10 +1341,9 @@ class _ManageRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.inkNavy, width: 2),
-          boxShadow: AppShadows.hardShadow3,
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: NuvoColors.border),
         ),
         child: Row(
           children: [

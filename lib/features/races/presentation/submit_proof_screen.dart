@@ -71,7 +71,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
                   children: _raceLoading
                       ? _loadingContent()
                       : _raceError != null
@@ -168,8 +168,16 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       const SizedBox(height: 24),
 
       Text(
+        'Submit proof',
+        style: AppTextStyles.headlineLarge.copyWith(
+          fontSize: 32,
+          letterSpacing: -0.9,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
         race.displayTitle,
-        style: AppTextStyles.headlineMedium,
+        style: AppTextStyles.titleMedium,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),

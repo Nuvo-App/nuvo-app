@@ -171,11 +171,17 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
       backgroundColor: NuvoColors.page,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 112),
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 120),
           children: [
             NuvoBackButton(onPressed: () => safePopOrGo(context, '/compete')),
             const SizedBox(height: 14),
-            Text('Create race', style: AppTextStyles.headlineLarge),
+            Text(
+              'Create race',
+              style: AppTextStyles.headlineLarge.copyWith(
+                fontSize: 32,
+                letterSpacing: -0.9,
+              ),
+            ),
             const SizedBox(height: 6),
             Text(
               'Describe it, then review the details before the start line.',
@@ -386,7 +392,7 @@ class _PillChoice extends StatelessWidget {
     return ActionChip(
       label: Text(label),
       onPressed: onTap,
-      backgroundColor: selected ? NuvoColors.blue : NuvoColors.white,
+      backgroundColor: selected ? NuvoColors.blue : NuvoColors.surface,
       labelStyle: AppTextStyles.labelMedium.copyWith(
         color: selected ? NuvoColors.white : NuvoColors.navy,
       ),
@@ -413,9 +419,9 @@ class _ReviewBlock extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: NuvoColors.surface,
         border: Border.all(color: NuvoColors.border),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

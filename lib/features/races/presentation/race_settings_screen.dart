@@ -254,7 +254,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
       backgroundColor: NuvoColors.page,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
           children: [
             Align(
               alignment: Alignment.centerLeft,
@@ -263,7 +263,13 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            Text('Race settings', style: AppTextStyles.headlineLarge),
+            Text(
+              'Race settings',
+              style: AppTextStyles.headlineLarge.copyWith(
+                fontSize: 32,
+                letterSpacing: -0.9,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               'Tune the start line, finish line, move rules, and lifecycle.',

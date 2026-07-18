@@ -147,11 +147,14 @@ class _FirstRaceScreenState extends ConsumerState<FirstRaceScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 30, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 32),
                   children: [
                     Text(
                       'Start your first race',
-                      style: AppTextStyles.headlineLarge,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -236,13 +239,14 @@ class _TemplateCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(22),
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(30),
         border: Border.all(color: NuvoColors.border),
         boxShadow: [
           BoxShadow(
-            color: NuvoColors.navy.withValues(alpha: 0.08),
-            blurRadius: 22,
+            color: NuvoColors.navy.withValues(alpha: 0.05),
+            blurRadius: 20,
+            spreadRadius: -10,
             offset: const Offset(0, 10),
           ),
         ],

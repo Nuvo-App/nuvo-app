@@ -92,9 +92,15 @@ class _OnboardingMemberPassScreenState
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 32),
                   children: [
-                    Text('Member Pass', style: AppTextStyles.headlineLarge),
+                    Text(
+                      'Member pass',
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
+                    ),
                     const SizedBox(height: 18),
                     MemberPassCard(profile: profile),
                     const SizedBox(height: 20),

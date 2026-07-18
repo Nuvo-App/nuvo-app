@@ -34,8 +34,6 @@ class NuvoIconBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
-        boxShadow: AppShadows.hardShadow3,
       ),
       alignment: Alignment.center,
       child: Icon(icon, color: iconColor, size: iconSize),
@@ -61,8 +59,8 @@ class NuvoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = onDark
-        ? color.withValues(alpha: 0.22)
-        : color.withValues(alpha: 0.10);
+        ? color.withValues(alpha: 0.18)
+        : color.withValues(alpha: 0.09);
     final text = onDark ? NuvoColors.white : color;
 
     return Container(
@@ -70,16 +68,13 @@ class NuvoPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: onDark ? color.withValues(alpha: 0.45) : color,
-          width: 1.4,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
           color: text,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           fontSize: 10,
         ),
       ),
@@ -95,8 +90,8 @@ class NuvoBackplateCard extends StatelessWidget {
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
-    this.color = NuvoColors.white,
-    this.radius = 20.0,
+    this.color = NuvoColors.surface,
+    this.radius = 24.0,
     this.onTap,
     this.shadowOpacity = 0.70,
   });
@@ -115,8 +110,8 @@ class NuvoBackplateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-        boxShadow: shadowOpacity == 0 ? null : AppShadows.hardShadow5,
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: shadowOpacity == 0 ? null : AppShadows.hardShadow4,
       ),
       child: child,
     );
@@ -130,12 +125,7 @@ class NuvoBackplateCard extends StatelessWidget {
 
 // ── NuvoHardOffset ────────────────────────────────────────────────────────────
 
-/// Bulletproof hard-offset "shadow box".
-///
-/// Outer solid plate is the full bounds; face is inset only on the right and
-/// bottom so the plate always shows as an L-shaped hard shadow (same geometry
-/// as classic Nuvo CTAs). Never use a Stack with left/top/right/bottom plate —
-/// that paints the plate fully under the face and hides it.
+/// Compatibility wrapper for older call sites, now rendered as a soft surface.
 class NuvoHardOffset extends StatelessWidget {
   const NuvoHardOffset({
     super.key,
@@ -143,7 +133,7 @@ class NuvoHardOffset extends StatelessWidget {
     this.offset = 3.0,
     this.radius = 18.0,
     this.plateColor = NuvoColors.offsetGrey,
-    this.faceColor = NuvoColors.white,
+    this.faceColor = NuvoColors.surface,
     this.borderColor,
     this.borderWidth = 1.5,
     this.padding = EdgeInsets.zero,
@@ -160,37 +150,39 @@ class NuvoHardOffset extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final edge = borderColor ?? plateColor;
+    final edge = borderColor ?? NuvoColors.border;
     return Container(
+      padding: padding,
       decoration: BoxDecoration(
-        color: plateColor,
+        color: faceColor,
         borderRadius: BorderRadius.circular(radius),
-      ),
-      // Plate shows only on the right + bottom edges.
-      padding: EdgeInsets.only(right: offset, bottom: offset),
-      child: Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: faceColor,
-          borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: edge, width: borderWidth),
+        border: Border.all(
+          color: edge.withValues(alpha: borderWidth > 1 ? 0.42 : 0.28),
         ),
-        child: child,
+        boxShadow: [
+          BoxShadow(
+            color: plateColor.withValues(alpha: 0.10),
+            blurRadius: 8 + offset * 2,
+            spreadRadius: -5,
+            offset: Offset(0, offset + 1),
+          ),
+        ],
       ),
+      child: child,
     );
   }
 }
 
 // ── NuvoCompactCard ───────────────────────────────────────────────────────────
 
-/// Secondary row/tile — hard-offset grey plate (not navy).
+/// Secondary row or tile with subtle elevation.
 class NuvoCompactCard extends StatelessWidget {
   const NuvoCompactCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     this.onTap,
-    this.color = NuvoColors.white,
+    this.color = NuvoColors.surface,
     this.radius = 16.0,
     this.borderColor,
   });
@@ -245,16 +237,15 @@ class NuvoSectionHeader extends StatelessWidget {
       padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
       child: Row(
         children: [
-          Container(
-            width: 5,
-            height: 20,
-            decoration: BoxDecoration(
-              color: NuvoColors.blue,
-              borderRadius: BorderRadius.circular(99),
+          Expanded(
+            child: Text(
+              title,
+              style: AppTextStyles.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
             ),
           ),
-          const SizedBox(width: 9),
-          Expanded(child: Text(title, style: AppTextStyles.titleMedium)),
           ?action,
         ],
       ),
@@ -371,21 +362,10 @@ class NuvoDenseRaceRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: NuvoColors.border, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: NuvoColors.blue.withValues(alpha: 0.07),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-            const BoxShadow(
-              color: Color(0x080A1A33),
-              blurRadius: 8,
-              offset: Offset(0, 3),
-            ),
-          ],
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: Row(
           children: [
@@ -470,16 +450,10 @@ class NuvoStatTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: NuvoColors.border, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: AppShadows.hardShadow3,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -527,15 +501,6 @@ class NuvoPageHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 32,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuvoColors.blue,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              const SizedBox(height: 10),
               Text(title, style: AppTextStyles.displaySmall),
               if (subtitle != null) ...[
                 const SizedBox(height: 5),
