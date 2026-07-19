@@ -525,15 +525,26 @@ class _FocusBoardCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
+          stops: [0, 0.38, 1],
+        ),
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: NuvoColors.border.withValues(alpha: 0.72)),
+        border: Border.all(color: NuvoColors.border),
         boxShadow: [
           BoxShadow(
-            color: NuvoColors.navy.withValues(alpha: 0.08),
-            blurRadius: 28,
-            spreadRadius: -14,
-            offset: const Offset(0, 16),
+            color: NuvoColors.blue.withValues(alpha: 0.10),
+            blurRadius: 34,
+            spreadRadius: -18,
+            offset: const Offset(0, 18),
+          ),
+          BoxShadow(
+            color: NuvoColors.navy.withValues(alpha: 0.07),
+            blurRadius: 18,
+            spreadRadius: -12,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -554,29 +565,74 @@ class _FocusBoardCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: 11,
+                  vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: NuvoColors.panel.withValues(alpha: 0.72),
+                  color: isResult ? NuvoColors.success : NuvoColors.blue,
                   borderRadius: BorderRadius.circular(99),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isResult ? NuvoColors.success : NuvoColors.blue)
+                          .withValues(alpha: 0.20),
+                      blurRadius: 12,
+                      spreadRadius: -6,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-                child: Text(
-                  isResult ? 'FINISHED' : 'NEXT MOVE',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: isResult ? NuvoColors.success : NuvoColors.blue,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7,
-                    fontSize: 10,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isResult
+                          ? Icons.check_rounded
+                          : Icons.arrow_outward_rounded,
+                      color: NuvoColors.white,
+                      size: 13,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      isResult ? 'FINISHED' : 'NEXT MOVE',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.75,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const Spacer(),
               if (board.proofLabel case final proof?)
-                Text(
-                  proof,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.textMuted,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NuvoColors.surface.withValues(alpha: 0.90),
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(color: NuvoColors.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.motion_photos_on_outlined,
+                        color: NuvoColors.blue,
+                        size: 13,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        proof,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.navy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
             ],
@@ -747,8 +803,9 @@ class _FocusBoardCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
-              color: NuvoColors.pageWarm.withValues(alpha: 0.72),
+              color: NuvoColors.icyBlue,
               borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: NuvoColors.border),
             ),
             child: Column(
               children: [
