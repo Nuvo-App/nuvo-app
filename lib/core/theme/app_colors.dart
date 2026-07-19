@@ -17,22 +17,22 @@ final class NuvoColors {
   static const Color blueInk = Color(0xFF07152C);
 
   /// Light blue tint.
-  static const Color blueLight = Color(0x260165FC);
+  static const Color blueLight = Color(0x330165FC);
 
   /// Primary dark — headlines, nav active state.
   static const Color navy = Color(0xFF07152C);
 
   /// Quiet structural ink used by legacy offset surfaces.
-  static const Color inkNavy = Color(0x3307152C);
+  static const Color inkNavy = Color(0x4D07152C);
 
   /// Slightly deeper navy for layered surfaces (alias of ink).
   static const Color navy2 = Color(0xFF07152C);
 
   /// Platinum — legacy alias.
-  static const Color platinum = Color(0x1407152C);
+  static const Color platinum = Color(0x1F07152C);
 
   /// Disabled / locked state.
-  static const Color paleSlate = Color(0x5207152C);
+  static const Color paleSlate = Color(0x8007152C);
 
   // ── Accent palette ────────────────────────────────────────────────────────────
   static const Color aqua = Color(0xFF718B79);
@@ -51,33 +51,33 @@ final class NuvoColors {
   static const Color card = surface;
 
   /// Light tint background — active pills, "you" row highlight.
-  static const Color panel = Color(0x140165FC);
+  static const Color panel = Color(0x1F0165FC);
 
-  static const Color inkWash = Color(0x0A07152C);
+  static const Color inkWash = Color(0x1007152C);
 
   // ── Lines and tracks ──────────────────────────────────────────────────────────
-  static const Color trackBg = Color(0x1F0165FC);
-  static const Color divider = Color(0x1A07152C);
-  static const Color border = Color(0x2407152C);
+  static const Color trackBg = Color(0x330165FC);
+  static const Color divider = Color(0x2407152C);
+  static const Color border = Color(0x3307152C);
   static const Color borderStrong = paleSlate;
 
   /// Solid grey hard-offset plate for secondary cards (CTA construction,
   /// grey instead of ink navy). Must read clearly against white faces.
-  static const Color offsetGrey = Color(0x2E07152C);
+  static const Color offsetGrey = Color(0x4007152C);
 
   // ── Legacy aliases kept stable for existing screens ───────────────────────────
-  static const Color icyBlue = Color(0x140165FC);
-  static const Color softBlue = Color(0x260165FC);
-  static const Color lavenderRow = Color(0x0F0165FC);
+  static const Color icyBlue = Color(0x1F0165FC);
+  static const Color softBlue = Color(0x330165FC);
+  static const Color lavenderRow = Color(0x1A0165FC);
   static const Color sectionBlue = icyBlue;
   static const Color bluePale = softBlue;
   static const Color blueSoft = blue2;
   static const Color navySoft = navy2;
 
   // ── Text & semantic ───────────────────────────────────────────────────────────
-  static const Color muted = Color(0xB807152C);
-  static const Color textMuted = Color(0x9907152C);
-  static const Color textDim = Color(0x7307152C);
+  static const Color muted = Color(0xE007152C);
+  static const Color textMuted = Color(0xC207152C);
+  static const Color textDim = Color(0xA307152C);
   static const Color white = surface;
   static const Color success = Color(0xFF66816C);
   static const Color danger = Color(0xFFB8665E);

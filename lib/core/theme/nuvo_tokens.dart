@@ -15,7 +15,7 @@ final class NuvoTokens {
   static const Color navy = Color(0xFF07152C);
 
   /// Quiet structural edge for legacy borders and surfaces.
-  static const Color inkNavy = Color(0x3307152C);
+  static const Color inkNavy = Color(0x4D07152C);
 
   /// Action blue — CTA, progress arcs, chips, interactive only.
   static const Color actionBlue = Color(0xFF0165FC);
@@ -140,7 +140,7 @@ final class NuvoTokens {
 
   // ── Border ─────────────────────────────────────────────────────────────────
 
-  static const Color borderColor = Color(0x2407152C);
+  static const Color borderColor = Color(0x3307152C);
   static const double borderWidth = 1;
   static const double borderInkWidth = 1;
 
