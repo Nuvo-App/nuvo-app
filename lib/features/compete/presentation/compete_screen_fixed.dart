@@ -209,7 +209,18 @@ class _CompeteHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
+          stops: [0, 0.42, 1],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: AppShadows.surfaceShadow,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
