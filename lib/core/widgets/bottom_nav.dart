@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 
 class NuvoBottomNav extends StatelessWidget {
@@ -42,17 +43,19 @@ class NuvoBottomNav extends StatelessWidget {
           margin: EdgeInsets.fromLTRB(16, 0, 16, dockBottom),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
-            color: NuvoColors.surface.withValues(alpha: 0.98),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                NuvoColors.surface,
+                NuvoColors.surface,
+                NuvoColors.icyBlue,
+              ],
+              stops: [0, 0.68, 1],
+            ),
             borderRadius: BorderRadius.circular(26),
             border: Border.all(color: NuvoColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: NuvoColors.navy.withValues(alpha: 0.08),
-                blurRadius: 24,
-                spreadRadius: -9,
-                offset: const Offset(0, 10),
-              ),
-            ],
+            boxShadow: AppShadows.dockShadow,
           ),
           child: Row(
             children: [
@@ -122,15 +125,13 @@ class _NavButton extends StatelessWidget {
                   ? NuvoColors.icyBlue
                   : CupertinoColors.transparent,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
+              border: selected && !isPrimary
+                  ? Border.all(color: NuvoColors.border)
+                  : null,
               boxShadow: isPrimary
-                  ? [
-                      BoxShadow(
-                        color: NuvoColors.actionBlue.withValues(alpha: 0.18),
-                        blurRadius: 16,
-                        spreadRadius: -8,
-                        offset: const Offset(0, 7),
-                      ),
-                    ]
+                  ? AppShadows.brandGlow(intensity: 1.2)
+                  : selected
+                  ? AppShadows.brandGlow(intensity: 0.55)
                   : null,
             ),
             child: Column(
