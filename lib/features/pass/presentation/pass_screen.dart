@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/member_pass_card.dart';
@@ -483,74 +484,91 @@ class _CrewHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Crew',
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: NuvoColors.navy,
-                      height: 1.05,
-                      fontSize: 32,
-                      letterSpacing: -0.9,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
+          stops: [0, 0.42, 1],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: AppShadows.surfaceShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Crew',
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: NuvoColors.navy,
+                        height: 1.05,
+                        fontSize: 32,
+                        letterSpacing: -0.9,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    'The people you want at the start line.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.muted,
+                    const SizedBox(height: 5),
+                    Text(
+                      'The people you want at the start line.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.muted,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: NuvoColors.panel,
-                borderRadius: BorderRadius.circular(NuvoRadii.pill),
-              ),
-              child: Text(
-                '$crewCount in crew',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: NuvoColors.blue,
-                  fontWeight: FontWeight.w700,
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: NuvoPrimaryButton(
-                label: 'Share pass',
-                icon: Icons.ios_share_rounded,
-                expand: true,
-                small: true,
-                onPressed: onShare,
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: NuvoColors.panel,
+                  borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                ),
+                child: Text(
+                  '$crewCount in crew',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.blue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            NuvoGhostButton(
-              label: 'Copy ID',
-              icon: Icons.copy_rounded,
-              small: true,
-              onPressed: onCopy,
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: NuvoPrimaryButton(
+                  label: 'Share pass',
+                  icon: Icons.ios_share_rounded,
+                  expand: true,
+                  small: true,
+                  onPressed: onShare,
+                ),
+              ),
+              const SizedBox(width: 10),
+              NuvoGhostButton(
+                label: 'Copy ID',
+                icon: Icons.copy_rounded,
+                small: true,
+                onPressed: onCopy,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

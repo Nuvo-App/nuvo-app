@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/count_up_text.dart';
@@ -108,9 +109,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: NuvoColors.surface,
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          NuvoColors.icyBlue,
+                          NuvoColors.surface,
+                          NuvoColors.surface,
+                        ],
+                        stops: [0, 0.42, 1],
+                      ),
                       borderRadius: BorderRadius.circular(NuvoRadii.hero),
                       border: Border.all(color: NuvoColors.border),
+                      boxShadow: AppShadows.surfaceShadow,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,

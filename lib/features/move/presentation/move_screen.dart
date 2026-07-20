@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/animations.dart' hide PressableScale;
 import '../../../core/widgets/bottom_nav.dart';
@@ -131,7 +132,18 @@ class _MoveHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
+          stops: [0, 0.42, 1],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: NuvoColors.border),
+        boxShadow: AppShadows.surfaceShadow,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
