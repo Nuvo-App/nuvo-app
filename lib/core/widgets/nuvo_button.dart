@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
 
@@ -175,6 +176,7 @@ class NuvoOutlineButton extends StatelessWidget {
       radius: small ? 16 : 18,
       color: NuvoColors.surface,
       borderColor: NuvoColors.border,
+      shadows: enabled ? AppShadows.hardShadow3 : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -281,6 +283,7 @@ class NuvoBackButton extends StatelessWidget {
           color: NuvoColors.surface,
           shape: BoxShape.circle,
           border: Border.all(color: NuvoColors.border),
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: const Icon(
           Icons.arrow_back_rounded,
@@ -318,6 +321,7 @@ class NuvoIconAction extends StatelessWidget {
           color: NuvoColors.surface,
           shape: BoxShape.circle,
           border: Border.all(color: NuvoColors.border),
+          boxShadow: AppShadows.hardShadow3,
         ),
         child: Stack(
           alignment: Alignment.center,

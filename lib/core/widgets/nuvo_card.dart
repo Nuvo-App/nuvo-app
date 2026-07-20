@@ -5,7 +5,7 @@ import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import 'pressable_scale.dart';
 
-/// Warm surface with quiet separation from the page.
+/// Premium surface with quiet separation from the page.
 class NuvoCard extends StatelessWidget {
   const NuvoCard({
     super.key,
@@ -29,13 +29,18 @@ class NuvoCard extends StatelessWidget {
     Widget card = Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NuvoColors.card,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [NuvoColors.icyBlue, NuvoColors.card, NuvoColors.card],
+          stops: [0, 0.34, 1],
+        ),
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
         border: Border.all(
           color: borderColor ?? NuvoColors.border,
           width: borderWidth,
         ),
-        boxShadow: elevated ? AppShadows.hardShadow3 : null,
+        boxShadow: elevated ? AppShadows.surfaceShadow : null,
       ),
       child: child,
     );

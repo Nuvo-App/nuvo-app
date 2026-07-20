@@ -67,14 +67,14 @@ abstract final class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: NuvoColors.surface,
-        elevation: 0,
+        elevation: 0.6,
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           side: const BorderSide(color: NuvoColors.border),
         ),
-        shadowColor: NuvoColors.navy.withValues(alpha: 0.05),
+        shadowColor: NuvoColors.blue.withValues(alpha: 0.12),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -91,7 +91,7 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: NuvoColors.inkWash,
+        fillColor: NuvoColors.icyBlue,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 15,
@@ -122,14 +122,14 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
-          elevation: 0,
+          elevation: 0.5,
           shadowColor: NuvoColors.blue.withValues(alpha: 0.10),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: NuvoColors.navy,
-          backgroundColor: NuvoColors.surface,
+          backgroundColor: NuvoColors.inkWash,
           side: const BorderSide(color: NuvoColors.border),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           textStyle: AppTextStyles.labelLarge,
@@ -191,18 +191,28 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(NuvoRadii.md),
         ),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: NuvoColors.surface,
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: NuvoColors.surface,
         showDragHandle: true,
         dragHandleColor: NuvoColors.borderStrong,
+        elevation: 0,
+        modalElevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          side: BorderSide(color: NuvoColors.border),
+        ),
+        shadowColor: NuvoColors.navy.withValues(alpha: 0.10),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: NuvoColors.surface,
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: NuvoColors.blue.withValues(alpha: 0.12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          side: const BorderSide(color: NuvoColors.border),
         ),
       ),
     );

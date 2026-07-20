@@ -3,6 +3,22 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 abstract final class AppShadows {
+  /// Layered blue-and-navy depth for premium floating surfaces.
+  static const List<BoxShadow> surfaceShadow = [
+    BoxShadow(
+      color: Color(0x140165FC),
+      blurRadius: 30,
+      spreadRadius: -16,
+      offset: Offset(0, 16),
+    ),
+    BoxShadow(
+      color: Color(0x1007152C),
+      blurRadius: 16,
+      spreadRadius: -9,
+      offset: Offset(0, 7),
+    ),
+  ];
+
   /// Compact lift for rows, chips, and controls.
   static const List<BoxShadow> hardShadow3 = [
     BoxShadow(
@@ -47,6 +63,12 @@ abstract final class AppShadows {
 
   // Lower, wider lift for the global navigation dock (soft, intentional).
   static const List<BoxShadow> dockShadow = [
+    BoxShadow(
+      color: Color(0x140165FC),
+      blurRadius: 34,
+      spreadRadius: -16,
+      offset: Offset(0, 16),
+    ),
     BoxShadow(
       color: Color(0x1207152C),
       blurRadius: 22,
