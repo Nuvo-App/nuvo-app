@@ -161,25 +161,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ],
                               const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 9,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: NuvoColors.panel,
-                                  borderRadius: BorderRadius.circular(
-                                    NuvoRadii.pill,
-                                  ),
-                                  border: Border.all(color: NuvoColors.border),
-                                ),
-                                child: Text(
-                                  'Member pass active',
-                                  style: AppTextStyles.labelSmall.copyWith(
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle_rounded,
                                     color: NuvoColors.blue,
-                                    fontWeight: FontWeight.w700,
+                                    size: 16,
                                   ),
-                                ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Member pass active',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: NuvoColors.navy,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -625,11 +622,11 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label.toUpperCase(),
-      style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.textMuted,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
+      label,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: NuvoColors.navy,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
     );
   }
