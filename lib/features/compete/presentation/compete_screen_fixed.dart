@@ -226,6 +226,29 @@ class _CompeteHero extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: NuvoColors.blue,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                finishedCount == 0
+                    ? 'A fresh start line'
+                    : '$finishedCount ${finishedCount == 1 ? 'race' : 'races'} finished',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,35 +310,25 @@ class _CountPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: NuvoColors.actionBlue.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(
-          color: NuvoColors.actionBlue.withValues(alpha: 0.18),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          value,
+          style: AppTextStyles.number(
+            24,
+            color: NuvoColors.actionBlue,
+            weight: FontWeight.w800,
+          ),
         ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            value,
-            style: AppTextStyles.labelLarge.copyWith(
-              color: NuvoColors.actionBlue,
-              fontWeight: FontWeight.w700,
-            ),
+        Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: NuvoColors.muted,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.actionBlue,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

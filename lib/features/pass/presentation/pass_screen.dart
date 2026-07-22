@@ -302,11 +302,11 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      label.toUpperCase(),
-      style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.textMuted,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
+      label,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: NuvoColors.navy,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
     );
   }
@@ -501,6 +501,29 @@ class _CrewHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: NuvoColors.blue,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                crewCount == 0
+                    ? 'Your start line is open'
+                    : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -524,24 +547,6 @@ class _CrewHeader extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: NuvoColors.panel,
-                  borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                ),
-                child: Text(
-                  '$crewCount in crew',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.blue,
-                    fontWeight: FontWeight.w700,
-                  ),
                 ),
               ),
             ],

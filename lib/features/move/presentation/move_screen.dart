@@ -134,21 +134,25 @@ class _MoveHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
-          stops: [0, 0.42, 1],
-        ),
+        color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: NuvoColors.border),
-        boxShadow: AppShadows.surfaceShadow,
+        boxShadow: AppShadows.hardShadow4,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                width: 4,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: NuvoColors.blue,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
