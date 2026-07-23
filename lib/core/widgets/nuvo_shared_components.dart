@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
@@ -110,7 +111,7 @@ class NuvoBackplateCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: NuvoColors.border, width: 1.25),
         boxShadow: shadowOpacity == 0 ? null : AppShadows.hardShadow4,
       ),
       child: child,
@@ -125,7 +126,7 @@ class NuvoBackplateCard extends StatelessWidget {
 
 // ── NuvoHardOffset ────────────────────────────────────────────────────────────
 
-/// Compatibility wrapper for older call sites, now rendered as a soft surface.
+/// Compatibility wrapper for older call sites, rendered as a solid offset card.
 class NuvoHardOffset extends StatelessWidget {
   const NuvoHardOffset({
     super.key,
@@ -150,21 +151,19 @@ class NuvoHardOffset extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final edge = borderColor ?? NuvoColors.border;
+    final edge = borderColor ?? NuvoColors.navy;
     return Container(
+      transform: Matrix4.translationValues(-offset, -offset, 0),
       padding: padding,
       decoration: BoxDecoration(
         color: faceColor,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(
-          color: edge.withValues(alpha: borderWidth > 1 ? 0.42 : 0.28),
-        ),
+        border: Border.all(color: edge, width: borderWidth),
         boxShadow: [
           BoxShadow(
-            color: plateColor.withValues(alpha: 0.10),
-            blurRadius: 8 + offset * 2,
-            spreadRadius: -5,
-            offset: Offset(0, offset + 1),
+            color: plateColor,
+            blurRadius: 0,
+            offset: Offset(offset, offset),
           ),
         ],
       ),
@@ -583,7 +582,7 @@ class NuvoBackNavRow extends StatelessWidget {
 
 // ── NuvoTextInput ─────────────────────────────────────────────────────────────
 
-/// Standard form input: label above, white fill, clean 14px radius border,
+/// Standard form input: label above, white fill, rounded border,
 /// focused blue border, muted helper/error text.
 class NuvoTextInput extends StatelessWidget {
   const NuvoTextInput({
@@ -646,31 +645,34 @@ class NuvoTextInput extends StatelessWidget {
             filled: true,
             fillColor: NuvoColors.white,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 13,
+              horizontal: 16,
+              vertical: 15,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: NuvoColors.border),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              borderSide: const BorderSide(
+                color: NuvoColors.border,
+                width: 1.25,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: NuvoColors.border),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              borderSide: const BorderSide(
+                color: NuvoColors.border,
+                width: 1.25,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
               borderSide: const BorderSide(color: NuvoColors.danger),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(
-                color: NuvoColors.danger,
-                width: 1.6,
-              ),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              borderSide: const BorderSide(color: NuvoColors.danger, width: 2),
             ),
             errorText: errorText,
             helperText: helperText,
@@ -723,12 +725,12 @@ class NuvoSearchField extends StatelessWidget {
         filled: true,
         fillColor: NuvoColors.white,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
+          horizontal: 16,
+          vertical: 15,
         ),
         prefixIcon: const Icon(
           Icons.search_rounded,
-          color: NuvoColors.muted,
+          color: NuvoColors.navy,
           size: 20,
         ),
         suffixIcon: searching
@@ -742,16 +744,16 @@ class NuvoSearchField extends StatelessWidget {
             : null,
         suffixIconConstraints: const BoxConstraints(),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: NuvoColors.border),
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border, width: 1.25),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: NuvoColors.border),
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border, width: 1.25),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
         ),
       ),
     );

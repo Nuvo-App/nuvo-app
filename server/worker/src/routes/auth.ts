@@ -79,6 +79,10 @@ async function createSession(
 }
 
 async function buildUserObject(db: D1Database, userId: string, email: string) {
+  const user = await db
+    .prepare('SELECT terms_accepted_at FROM users WHERE id = ?')
+    .bind(userId)
+    .first<UserRow>();
   const profile = await db
     .prepare('SELECT * FROM profiles WHERE user_id = ?')
     .bind(userId)
@@ -96,7 +100,68 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
     profilePhotoUrl: profile?.avatar_url ?? null,
     onboardingComplete: Boolean(profile?.onboarding_complete),
     hasMemberPass: Boolean(pass),
+    termsAccepted: Boolean(user?.terms_accepted_at),
   };
+}
+
+async function hardDeleteAccount(db: D1Database, r2: R2Bucket, userId: string): Promise<void> {
+  const user = await db.prepare('SELECT primary_email FROM users WHERE id = ?').bind(userId).first<UserRow>();
+
+  // Delete the current and any prior profile photos from R2.
+  const objectKeys = await db.prepare('SELECT object_key FROM media_objects WHERE owner_user_id = ?').bind(userId).all<{ object_key: string }>();
+  for (const row of objectKeys.results) {
+    try { await r2.delete(row.object_key); } catch { /* ignore R2 errors */ }
+  }
+  await db.prepare('DELETE FROM media_objects WHERE owner_user_id = ?').bind(userId).run();
+
+  // Anonymize race memberships the user was part of so shared races remain intact.
+  await db.prepare(
+    `UPDATE race_members
+     SET cached_display_name = 'Deleted User', cached_avatar_url = NULL
+     WHERE user_id = ?`,
+  ).bind(userId).run();
+
+  // Remove optional personal notes from move logs; aggregate values remain.
+  await db.prepare('UPDATE move_logs SET summary = NULL WHERE user_id = ?').bind(userId).run();
+
+  // Soft-delete races the user created that have no other active participants.
+  const ownedRaces = await db
+    .prepare('SELECT id FROM races WHERE creator_id = ? AND deleted_at IS NULL')
+    .bind(userId)
+    .all<{ id: string }>();
+  for (const race of ownedRaces.results) {
+    const countRow = await db
+      .prepare('SELECT COUNT(*) as cnt FROM race_members WHERE race_id = ? AND status = \'active\' AND user_id != ?')
+      .bind(race.id, userId)
+      .first<{ cnt: number }>();
+    if (countRow && countRow.cnt === 0) {
+      await db.prepare('UPDATE races SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_members WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_progress WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM move_logs WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_invites WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
+    }
+  }
+
+  // Delete user-specific records.
+  await db.prepare('DELETE FROM auth_identities WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+  if (user?.primary_email) {
+    await db.prepare('DELETE FROM email_codes WHERE email = ?').bind(user.primary_email).run();
+  }
+  await db.prepare('DELETE FROM crew_connections WHERE user_id = ? OR crew_user_id = ?').bind(userId, userId).run();
+  await db.prepare('DELETE FROM member_passes WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?').bind(userId, userId).run();
+
+  // Finally, mark the account deleted and remove the email identifier.
+  await db.prepare(
+    `UPDATE users
+     SET status = 'deleted', primary_email = NULL, demo_world_enabled = 0,
+         demo_world_seed = NULL, demo_world_variant = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(userId).run();
 }
 
 async function findOrCreateUser(
@@ -375,18 +440,18 @@ authRouter.get('/me', requireAuth, async (c) => {
   return c.json({ user: userObj });
 });
 
-// DELETE /auth/account  (requires auth — soft delete)
+// POST /auth/terms  (requires auth)
+authRouter.post('/terms', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  await c.env.DB.prepare(
+    'UPDATE users SET terms_accepted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+  ).bind(userId).run();
+  return c.json({ ok: true });
+});
+
+// DELETE /auth/account  (requires auth — hard delete / anonymization)
 authRouter.delete('/account', requireAuth, async (c) => {
   const userId = c.get('userId');
-
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      "UPDATE users SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-    ).bind(userId),
-    c.env.DB.prepare(
-      'UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL',
-    ).bind(userId),
-  ]);
-
+  await hardDeleteAccount(c.env.DB, c.env.PROFILE_PHOTOS, userId);
   return c.json({ ok: true });
 });

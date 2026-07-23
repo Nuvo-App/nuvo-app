@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+import 'app_geometry.dart';
+import 'app_shadows.dart';
+
 /// Nuvo Design System v1.0 — tokens only.
 ///
 /// This file is the single source of truth for colors, spacing, radii,
@@ -12,25 +16,25 @@ final class NuvoTokens {
   // ── Brand core ─────────────────────────────────────────────────────────────
 
   /// Navy — icons, type, dark surfaces, selected nav, overlays.
-  static const Color navy = Color(0xFF07152C);
+  static const Color navy = NuvoColors.navy;
 
   /// Quiet structural edge for legacy borders and surfaces.
-  static const Color inkNavy = Color(0x4D07152C);
+  static const Color inkNavy = NuvoColors.inkNavy;
 
   /// Action blue — CTA, progress arcs, chips, interactive only.
-  static const Color actionBlue = Color(0xFF0165FC);
+  static const Color actionBlue = NuvoColors.actionBlue;
 
   /// Legacy name kept as alias of [actionBlue].
   static const Color royalBlue = actionBlue;
 
   /// Clean soft-white page background.
-  static const Color pageIce = Color(0xFFFDFEFF);
+  static const Color pageIce = NuvoColors.page;
 
   /// Page background alias.
   static const Color background = pageIce;
 
   /// Card surface — only interactive surfaces.
-  static const Color card = Color(0xFFFDFEFF);
+  static const Color card = NuvoColors.surface;
 
   // ── Semantic colors ────────────────────────────────────────────────────────
 
@@ -78,44 +82,36 @@ final class NuvoTokens {
   // ── Radii ──────────────────────────────────────────────────────────────────
 
   static const double radius12 = 12;
+  static const double radius18 = NuvoRadii.md;
   static const double radius20 = 20;
+  static const double radius24 = NuvoRadii.button;
+  static const double radius26 = NuvoRadii.lg;
   static const double radius28 = 28;
-  static const double radiusPill = 999;
+  static const double radius32 = NuvoRadii.hero;
+  static const double radiusPill = NuvoRadii.pill;
 
   // ── Shadows ────────────────────────────────────────────────────────────────
 
+  /// Compact hard offset.
+  static const List<BoxShadow> hardSmall = AppShadows.hardSmall;
+
+  /// Standard hard offset.
+  static const List<BoxShadow> hardMedium = AppShadows.hardMedium;
+
+  /// Hero hard offset.
+  static const List<BoxShadow> hardLarge = AppShadows.hardLarge;
+
   /// Compact soft lift.
-  static const List<BoxShadow> hardShadow3 = [
-    BoxShadow(
-      color: Color(0x1207152C),
-      blurRadius: 10,
-      spreadRadius: -4,
-      offset: Offset(0, 3),
-    ),
-  ];
+  static const List<BoxShadow> hardShadow3 = AppShadows.hardShadow3;
 
   /// Standard soft lift.
-  static const List<BoxShadow> hardShadow4 = [
-    BoxShadow(
-      color: Color(0x1407152C),
-      blurRadius: 14,
-      spreadRadius: -5,
-      offset: Offset(0, 5),
-    ),
-  ];
+  static const List<BoxShadow> hardShadow4 = AppShadows.hardShadow4;
 
   /// Hero soft lift.
-  static const List<BoxShadow> hardShadow5 = [
-    BoxShadow(
-      color: Color(0x1607152C),
-      blurRadius: 20,
-      spreadRadius: -7,
-      offset: Offset(0, 8),
-    ),
-  ];
+  static const List<BoxShadow> hardShadow5 = AppShadows.hardShadow5;
 
   /// Default interactive elevation.
-  static const List<BoxShadow> hardShadow = hardShadow4;
+  static const List<BoxShadow> hardShadow = hardMedium;
 
   /// Shadow 1 — legacy soft cards (prefer hardShadow*).
   static List<BoxShadow> get shadow1 => hardShadow3;
@@ -140,18 +136,17 @@ final class NuvoTokens {
 
   // ── Border ─────────────────────────────────────────────────────────────────
 
-  static const Color borderColor = Color(0x3307152C);
-  static const double borderWidth = 1;
-  static const double borderInkWidth = 1;
+  static const Color borderColor = NuvoColors.border;
+  static const double borderWidth = 1.25;
+  static const double borderInkWidth = 2;
 
-  static Border get borderInk =>
-      Border.all(color: inkNavy, width: borderInkWidth);
+  static Border get borderInk => NuvoBorders.brand;
 
-  static Border get borderAction => Border.all(color: actionBlue, width: 1.5);
+  static Border get borderAction => NuvoBorders.action;
 
-  // ── Typography scale (Inter) ───────────────────────────────────────────────
+  // ── Typography scale (Manrope) ─────────────────────────────────────────────
 
-  static const String fontFamily = 'Inter';
+  static const String fontFamily = 'Manrope';
 
   static const double type40 = 40;
   static const double type32 = 32;

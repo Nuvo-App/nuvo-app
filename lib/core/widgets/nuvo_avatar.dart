@@ -100,7 +100,7 @@ class NuvoAvatar extends StatelessWidget {
         _clamp(initials),
         style: TextStyle(
           fontSize: (size * 0.36).clamp(7.0, 20.0),
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           color: textColor ?? NuvoColors.navy,
           height: 1.0,
         ),
@@ -114,7 +114,7 @@ class NuvoAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: bgColor ?? NuvoColors.navy.withValues(alpha: 0.09),
+        color: bgColor ?? NuvoColors.panel,
         border: borderColor != null
             ? Border.all(color: borderColor!, width: borderWidth)
             : null,
@@ -160,9 +160,7 @@ class NuvoCompetitorAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderColor = switch (role) {
       NuvoCompetitorAvatarRole.currentUser => NuvoColors.blue,
-      NuvoCompetitorAvatarRole.leader => NuvoColors.gold.withValues(
-        alpha: 0.86,
-      ),
+      NuvoCompetitorAvatarRole.leader => NuvoColors.gold,
       NuvoCompetitorAvatarRole.standard => NuvoColors.white,
     };
     final borderWidth = role == NuvoCompetitorAvatarRole.currentUser
@@ -227,9 +225,10 @@ class NuvoAvatarStack extends StatelessWidget {
 
     if (totalSlots == 0) return const SizedBox.shrink();
 
-    final overlap = (size * 0.28).clamp(8.0, 12.0);
+    final overlap = (size * 0.32).clamp(8.0, 13.0);
     final stepWidth = size - overlap;
     final stackWidth = size + stepWidth * (totalSlots - 1);
+    final ringWidth = size <= NuvoAvatarSizes.xs ? 1.5 : 2.0;
 
     return SizedBox(
       width: stackWidth,
@@ -243,12 +242,10 @@ class NuvoAvatarStack extends StatelessWidget {
                 initials: avatars[i].initials,
                 photoUrl: avatars[i].photoUrl,
                 size: size,
-                bgColor: NuvoColors.navy.withValues(
-                  alpha: (0.75 - i * 0.12).clamp(0.2, 0.75),
-                ),
+                bgColor: nuvoAvatarColorFor(avatars[i].initials),
                 textColor: NuvoColors.white,
                 borderColor: borderColor,
-                borderWidth: 2,
+                borderWidth: ringWidth,
               ),
             ),
           if (overflow)
@@ -259,15 +256,15 @@ class NuvoAvatarStack extends StatelessWidget {
                 height: size,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: NuvoColors.trackBg,
-                  border: Border.all(color: borderColor, width: 2),
+                  color: NuvoColors.panel,
+                  border: Border.all(color: borderColor, width: ringWidth),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   '+${total - visibleCount}',
                   style: TextStyle(
                     fontSize: (size * 0.3).clamp(6.0, 10.0),
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     color: NuvoColors.navy,
                     height: 1.0,
                   ),

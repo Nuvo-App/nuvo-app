@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
+import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceScoringRule } from '../domain/raceActivities';
 import { assertSubmissionCompatible, configFromBody, type RaceConfig } from '../domain/raceValidation';
 import { applyVerifiedSubmission } from '../domain/raceScoring';
@@ -408,6 +409,10 @@ racesRouter.post('/join-code', async (c) => {
   const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
   if (!code) return c.json(badRequest('Invite code is required'), 400);
 
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before joining a race' }, 403);
+  }
+
   const invite = await c.env.DB.prepare(
     `SELECT * FROM race_invites WHERE invite_code = ? AND status = 'active'
      AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`
@@ -439,6 +444,11 @@ racesRouter.get('/', async (c) => {
 // POST /races
 racesRouter.post('/', async (c) => {
   const userId = c.get('userId');
+
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before creating a race' }, 403);
+  }
+
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
 
@@ -615,7 +625,13 @@ racesRouter.post('/:id/join', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before joining a race' }, 403);
+  }
   if (race.visibility === 'private') return c.json(badRequest('Use an invite code to join this race'), 403);
+  if (race.visibility === 'public_demo' && !race.public_join_enabled) {
+    return c.json(badRequest('Joining is not enabled for this public race'), 403);
+  }
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, race) });
@@ -624,6 +640,11 @@ racesRouter.post('/:id/join', async (c) => {
 // POST /races/:id/participants
 racesRouter.post('/:id/participants', async (c) => {
   const userId = c.get('userId');
+
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before adding race participants' }, 403);
+  }
+
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
@@ -648,6 +669,11 @@ racesRouter.post('/:id/participants', async (c) => {
 // POST /races/:id/members (new endpoint, same as /participants)
 racesRouter.post('/:id/members', async (c) => {
   const userId = c.get('userId');
+
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before adding race members' }, 403);
+  }
+
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
@@ -714,6 +740,11 @@ racesRouter.post('/:id/invite-code', async (c) => {
 // POST /races/:id/move-log
 racesRouter.post('/:id/move-log', async (c) => {
   const userId = c.get('userId');
+
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before submitting proof' }, 403);
+  }
+
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);

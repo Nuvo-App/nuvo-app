@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/count_up_text.dart';
@@ -19,6 +19,9 @@ import '../../races/presentation/race_controller.dart';
 const _kProfileBorder = NuvoColors.border;
 const _kProfileTextMuted = NuvoColors.muted;
 
+const _kPrivacyUrl = 'https://getnuvo.net/privacy';
+const _kTermsUrl = 'https://getnuvo.net/terms';
+
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -27,6 +30,48 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This will permanently delete your Nuvo account and log you out on all devices. '
+          'This action cannot be undone from the app.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: NuvoColors.danger),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(authControllerProvider.notifier).deleteAccount();
+      if (mounted) context.go('/welcome');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not delete account. Try again.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
@@ -120,8 +165,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         stops: [0, 0.42, 1],
                       ),
                       borderRadius: BorderRadius.circular(NuvoRadii.hero),
-                      border: Border.all(color: NuvoColors.border),
-                      boxShadow: AppShadows.surfaceShadow,
+                      border: Border.all(color: NuvoColors.navy, width: 2),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: NuvoColors.navy,
+                          blurRadius: 0,
+                          offset: Offset(4, 4),
+                        ),
+                      ],
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -242,6 +293,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     String? uid,
     BuildContext context,
   ) {
+    final races = raceState.races.take(6).toList();
+    final activeRaces = races.where(raceIsActive).toList();
+    final finishedRaces = races.where(raceIsCompleted).toList();
+    final otherRaces = races
+        .where((race) => !raceIsActive(race) && !raceIsCompleted(race))
+        .toList();
+
     return [
       // Race history
       const _SectionLabel(label: 'Race history'),
@@ -262,15 +320,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           'Start your first race to build your history.',
           style: AppTextStyles.bodyMedium.copyWith(color: _kProfileTextMuted),
         )
-      else
-        for (final race in raceState.races.take(6)) ...[
-          _ProfileRaceRow(
-            race: race,
-            userId: uid,
-            onTap: () => context.push('/race/${race.id}'),
-          ),
-          const SizedBox(height: 6),
+      else ...[
+        if (activeRaces.isNotEmpty) ...[
+          const _SubsectionLabel(label: 'Active'),
+          const SizedBox(height: 8),
+          _ProfileRaceGroup(races: activeRaces, userId: uid),
         ],
+        if (finishedRaces.isNotEmpty) ...[
+          SizedBox(height: activeRaces.isEmpty ? 0 : 14),
+          const _SubsectionLabel(label: 'Finished'),
+          const SizedBox(height: 8),
+          _ProfileRaceGroup(races: finishedRaces, userId: uid),
+        ],
+        if (otherRaces.isNotEmpty) ...[
+          SizedBox(
+            height: activeRaces.isEmpty && finishedRaces.isEmpty ? 0 : 14,
+          ),
+          const _SubsectionLabel(label: 'Other'),
+          const SizedBox(height: 8),
+          _ProfileRaceGroup(races: otherRaces, userId: uid),
+        ],
+      ],
 
       const SizedBox(height: 24),
 
@@ -279,7 +349,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       const SizedBox(height: 12),
       _AccountRow(
         icon: Icons.badge_rounded,
-        label: 'Crew pass',
+        label: 'Member pass',
         onTap: () => context.go('/pass'),
       ),
       const SizedBox(height: 8),
@@ -294,6 +364,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         label: 'Sign out',
         isDanger: true,
         onTap: () => ref.read(authControllerProvider.notifier).logout(),
+      ),
+      const SizedBox(height: 8),
+      _AccountRow(
+        icon: Icons.delete_outline_rounded,
+        label: 'Delete account',
+        isDanger: true,
+        onTap: _confirmDeleteAccount,
+      ),
+      const SizedBox(height: 24),
+
+      // Legal
+      const _SectionLabel(label: 'Legal'),
+      const SizedBox(height: 12),
+      _AccountRow(
+        icon: Icons.policy_rounded,
+        label: 'Privacy Policy',
+        onTap: () => _openUrl(_kPrivacyUrl),
+      ),
+      const SizedBox(height: 8),
+      _AccountRow(
+        icon: Icons.description_rounded,
+        label: 'Terms of Service',
+        onTap: () => _openUrl(_kTermsUrl),
       ),
     ];
   }
@@ -354,6 +447,60 @@ class _HeaderDivider extends StatelessWidget {
   );
 }
 
+class _SubsectionLabel extends StatelessWidget {
+  const _SubsectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: AppTextStyles.labelMedium.copyWith(
+        color: NuvoColors.textMuted,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _ProfileRaceGroup extends StatelessWidget {
+  const _ProfileRaceGroup({required this.races, this.userId});
+
+  final List<Race> races;
+  final String? userId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1.25),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < races.length; i++) ...[
+            _ProfileRaceRow(
+              race: races[i],
+              userId: userId,
+              onTap: () => context.push('/race/${races[i].id}'),
+            ),
+            if (i < races.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 64,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 // ── Profile race row ──────────────────────────────────────────────────────────
 
 class _ProfileRaceRow extends StatelessWidget {
@@ -381,12 +528,13 @@ class _ProfileRaceRow extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 78),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        decoration: BoxDecoration(
-          color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: NuvoBorders.quiet,
-        ),
+        color: isComplete
+            ? NuvoColors.success.withValues(alpha: 0.05)
+            : isActive
+            ? NuvoColors.surface
+            : NuvoColors.panel,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

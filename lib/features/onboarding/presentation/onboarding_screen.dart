@@ -1,13 +1,18 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/presentation/auth_controller.dart';
+
+const _kPrivacyUrl = 'https://getnuvo.net/privacy';
+const _kTermsUrl = 'https://getnuvo.net/terms';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -20,8 +25,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _usernameController;
   bool _privateStats = true;
+  bool _termsAccepted = false;
   bool _loading = false;
   String? _error;
+
+  Future<void> _openLegalUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   void initState() {
@@ -48,23 +61,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _continue() async {
+    if (!_termsAccepted) {
+      setState(() => _error = 'Please accept the Terms of Service to continue.');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .saveProfile(
-            fullName: _nameController.text.trim(),
-            username: _usernameController.text.trim().toLowerCase(),
-            privateProfile: _privateStats,
-          );
+      final controller = ref.read(authControllerProvider.notifier);
+      await controller.acceptTerms();
+      await controller.saveProfile(
+        fullName: _nameController.text.trim(),
+        username: _usernameController.text.trim().toLowerCase(),
+        privateProfile: _privateStats,
+      );
       if (mounted) context.go('/onboarding/member-pass');
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Could not save profile. Please try again.';
+          _error = e is Exception ? e.toString() : 'Could not save profile. Please try again.';
           _loading = false;
         });
       }
@@ -251,7 +268,55 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       ),
                     ],
 
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox.adaptive(
+                          value: _termsAccepted,
+                          activeColor: NuvoColors.blue,
+                          onChanged: (value) => setState(() => _termsAccepted = value ?? false),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8, right: 8),
+                            child: RichText(
+                              text: TextSpan(
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
+                                children: [
+                                  const TextSpan(text: 'I agree to the '),
+                                  TextSpan(
+                                    text: 'Terms of Service',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: NuvoColors.blue,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () => _openLegalUrl(_kTermsUrl),
+                                  ),
+                                  const TextSpan(text: ' and '),
+                                  TextSpan(
+                                    text: 'Privacy Policy',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: NuvoColors.blue,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () => _openLegalUrl(_kPrivacyUrl),
+                                  ),
+                                  const TextSpan(text: '.'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
 
                     NuvoPrimaryButton(
                       label: 'Continue',

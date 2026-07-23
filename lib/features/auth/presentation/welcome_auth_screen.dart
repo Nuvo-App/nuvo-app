@@ -1,8 +1,10 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
@@ -34,6 +36,13 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
   _AuthMode _mode = _AuthMode.signup;
   bool _googleLoading = false;
   String? _googleError;
+
+  Future<void> _openLegalUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   void _toggleMode() {
     setState(() {
@@ -230,12 +239,36 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
 
                   // Terms — always in view
                   Center(
-                    child: Text(
-                      'By continuing you agree to our Terms & Privacy Policy.',
+                    child: RichText(
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.muted.withValues(alpha: 0.65),
-                        height: 1.5,
+                      text: TextSpan(
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.muted.withValues(alpha: 0.65),
+                          height: 1.5,
+                        ),
+                        children: [
+                          const TextSpan(text: 'By continuing you agree to our '),
+                          TextSpan(
+                            text: 'Terms',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: NuvoColors.blue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _openLegalUrl('https://getnuvo.net/terms'),
+                          ),
+                          const TextSpan(text: ' & '),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: NuvoColors.blue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () => _openLegalUrl('https://getnuvo.net/privacy'),
+                          ),
+                          const TextSpan(text: '.'),
+                        ],
                       ),
                     ),
                   ),

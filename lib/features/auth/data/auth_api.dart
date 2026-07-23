@@ -144,6 +144,9 @@ class AuthApi {
   Future<void> deleteAccount(String accessToken) =>
       _delete('/auth/account', accessToken: accessToken);
 
+  Future<void> acceptTerms(String accessToken) =>
+      _post('/auth/terms', {}, accessToken: accessToken);
+
   // ── Profile ───────────────────────────────────────────────────────────────
 
   Future<void> saveProfile(

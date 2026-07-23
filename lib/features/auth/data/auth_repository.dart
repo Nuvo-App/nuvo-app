@@ -69,6 +69,8 @@ class AuthRepository {
 
   Future<AuthUser> getMe() => _withRefresh(_api.getMe);
 
+  Future<void> acceptTerms() => _withRefresh(_api.acceptTerms);
+
   // ── Profile ───────────────────────────────────────────────────────────────
 
   Future<void> saveProfile({

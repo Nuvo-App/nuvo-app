@@ -251,16 +251,12 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 ),
                 if (_results.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  for (final result in _results)
-                    _UserRow(
-                      user: result,
-                      added: _isCrew(result),
-                      loading: _adding.contains(result.id),
-                      actionLabel: _isCrew(result) ? 'In crew' : 'Add',
-                      onPressed: _isCrew(result) || _adding.contains(result.id)
-                          ? null
-                          : () => _addCrew(result),
-                    ),
+                  _SearchResultList(
+                    results: _results,
+                    isCrew: _isCrew,
+                    isAdding: (user) => _adding.contains(user.id),
+                    onAdd: _addCrew,
+                  ),
                 ] else if (_searchController.text.trim().length >= 2 &&
                     !_searching) ...[
                   const SizedBox(height: 16),
@@ -676,7 +672,7 @@ class _CrewList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return _PeopleSurface(
       children: [
         for (var i = 0; i < members.length; i++)
           _UserRow(
@@ -686,6 +682,58 @@ class _CrewList extends StatelessWidget {
             isLast: i == members.length - 1,
           ),
       ],
+    );
+  }
+}
+
+class _SearchResultList extends StatelessWidget {
+  const _SearchResultList({
+    required this.results,
+    required this.isCrew,
+    required this.isAdding,
+    required this.onAdd,
+  });
+
+  final List<PublicUser> results;
+  final bool Function(PublicUser user) isCrew;
+  final bool Function(PublicUser user) isAdding;
+  final ValueChanged<PublicUser> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PeopleSurface(
+      children: [
+        for (var i = 0; i < results.length; i++)
+          _UserRow(
+            user: results[i],
+            added: isCrew(results[i]),
+            loading: isAdding(results[i]),
+            actionLabel: isCrew(results[i]) ? 'In crew' : 'Add',
+            onPressed: isCrew(results[i]) || isAdding(results[i])
+                ? null
+                : () => onAdd(results[i]),
+            isLast: i == results.length - 1,
+          ),
+      ],
+    );
+  }
+}
+
+class _PeopleSurface extends StatelessWidget {
+  const _PeopleSurface({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1.25),
+      ),
+      child: Column(children: children),
     );
   }
 }

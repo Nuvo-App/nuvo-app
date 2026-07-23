@@ -79,6 +79,14 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<bool> checkUsername(String username) => _repo.checkUsername(username);
 
+  Future<void> acceptTerms() async {
+    await _repo.acceptTerms();
+    final user = await _repo.getMe();
+    if (mounted) {
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
+  }
+
   Future<void> completeOnboarding() async {
     await _repo.completeOnboarding();
     final user = await _repo.getMe();
