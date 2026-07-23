@@ -20,6 +20,7 @@ export interface UserRow {
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
+  terms_accepted_at: string | null;
   // Demo World Mode — added in migration 0006. Default 0 / null.
   demo_world_enabled: number;
   demo_world_seed: string | null;
@@ -120,6 +121,7 @@ export interface RaceRow {
   completed_at?: string | null;
   status: string;
   visibility: string;
+  public_join_enabled: number;
   start_at: string | null;
   end_at: string | null;
   created_at: string;
@@ -172,4 +174,24 @@ export interface MoveLogRow {
   new_rank?: number | null;
   race_completed?: number | null;
   created_at: string;
+}
+
+export interface BlockedUserRow {
+  id: string;
+  user_id: string;
+  blocked_user_id: string;
+  created_at: string;
+}
+
+export interface ReportRow {
+  id: string;
+  reporter_user_id: string;
+  target_type: string;
+  target_id: string;
+  reason: string | null;
+  status: string;
+  reviewed_by: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }

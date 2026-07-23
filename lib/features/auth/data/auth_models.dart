@@ -5,6 +5,7 @@ class AuthUser {
   final String? username;
   final bool onboardingComplete;
   final bool hasMemberPass;
+  final bool termsAccepted;
   final String? profilePhotoUrl;
 
   const AuthUser({
@@ -14,6 +15,7 @@ class AuthUser {
     this.username,
     required this.onboardingComplete,
     required this.hasMemberPass,
+    required this.termsAccepted,
     this.profilePhotoUrl,
   });
 
@@ -24,6 +26,7 @@ class AuthUser {
     username: json['username'] as String?,
     onboardingComplete: json['onboardingComplete'] as bool? ?? false,
     hasMemberPass: json['hasMemberPass'] as bool? ?? false,
+    termsAccepted: json['termsAccepted'] as bool? ?? false,
     profilePhotoUrl:
         (json['profilePhotoUrl'] ??
                 json['profile_photo_url'] ??
@@ -37,6 +40,7 @@ class AuthUser {
     String? username,
     bool? onboardingComplete,
     bool? hasMemberPass,
+    bool? termsAccepted,
     String? profilePhotoUrl,
     bool clearPhoto = false,
   }) => AuthUser(
@@ -46,6 +50,7 @@ class AuthUser {
     username: username ?? this.username,
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     hasMemberPass: hasMemberPass ?? this.hasMemberPass,
+    termsAccepted: termsAccepted ?? this.termsAccepted,
     profilePhotoUrl: clearPhoto
         ? null
         : (profilePhotoUrl ?? this.profilePhotoUrl),

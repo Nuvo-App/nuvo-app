@@ -8,6 +8,7 @@ import { racesRouter } from './routes/races';
 import { arenaRouter } from './routes/arena';
 import { usersRouter } from './routes/users';
 import { crewRouter } from './routes/crew';
+import { reportsRouter } from './routes/reports';
 import { requireAuth } from './lib/jwt';
 import { ALLOWED_WEB_ORIGINS } from './lib/response';
 
@@ -57,6 +58,9 @@ app.route('/pass', passRouter);
 // ── Social routes ─────────────────────────────────────────────────────────────
 app.route('/users', usersRouter);
 app.route('/crew', crewRouter);
+
+// ── Reporting and safety routes ───────────────────────────────────────────────
+app.route('/reports', reportsRouter);
 
 // ── Race routes ───────────────────────────────────────────────────────────────
 app.route('/races', racesRouter);

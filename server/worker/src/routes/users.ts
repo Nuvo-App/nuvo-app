@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
+import { canViewFullProfile, isBlocked } from '../lib/privacy';
 
 export const usersRouter = new Hono<AppEnv>();
 
@@ -21,7 +22,7 @@ usersRouter.get('/search', async (c) => {
 
   const like = `%${q}%`;
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id
+    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
@@ -33,6 +34,7 @@ usersRouter.get('/search', async (c) => {
          OR LOWER(COALESCE(p.full_name, '')) LIKE ?
          OR LOWER(SUBSTR(COALESCE(u.primary_email, ''), 1, INSTR(COALESCE(u.primary_email, ''), '@') - 1)) LIKE ?
        )
+       AND u.id NOT IN (SELECT blocked_user_id FROM blocked_users WHERE user_id = ?)
      ORDER BY
        CASE
          WHEN LOWER(COALESCE(p.username, '')) = ? THEN 0
@@ -42,25 +44,44 @@ usersRouter.get('/search', async (c) => {
        p.full_name COLLATE NOCASE ASC
      LIMIT 10`,
   )
-    .bind(userId, like, like, like, like, q, q)
+    .bind(userId, like, like, like, like, userId, q, q)
     .all<{
       id: string;
       primary_email: string | null;
       full_name: string | null;
       username: string | null;
       avatar_url: string | null;
+      private_profile: number;
       member_id: string | null;
     }>();
 
-  return c.json({
-    ok: true,
-    users: rows.results.map((row) => ({
-      id: row.id,
-      displayName: row.full_name ?? row.username ?? 'Nuvo member',
-      username: row.username,
-      memberId: row.member_id,
-      initials: initialsFor(row.full_name, row.username, row.primary_email),
-      profilePhotoUrl: row.avatar_url,
-    })),
-  });
+  const users = await Promise.all(
+    rows.results.map(async (row) => {
+      const isBlockedBy = await isBlocked(c.env.DB, row.id, userId);
+      const visible = isBlockedBy ? false : await canViewFullProfile(c.env.DB, userId, row.id);
+      if (visible) {
+        return {
+          id: row.id,
+          displayName: row.full_name ?? row.username ?? 'Nuvo member',
+          username: row.username,
+          memberId: row.member_id,
+          initials: initialsFor(row.full_name, row.username, row.primary_email),
+          profilePhotoUrl: row.avatar_url,
+          isPrivate: Boolean(row.private_profile),
+        };
+      }
+      // Minimal card for private profiles.
+      return {
+        id: row.id,
+        displayName: 'Private User',
+        username: row.username,
+        memberId: row.member_id,
+        initials: initialsFor(row.username, row.username, null),
+        profilePhotoUrl: null,
+        isPrivate: true,
+      };
+    }),
+  );
+
+  return c.json({ ok: true, users });
 });

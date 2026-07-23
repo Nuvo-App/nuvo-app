@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
@@ -148,10 +150,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 128),
+                  padding: EdgeInsets.fromLTRB(
+                    18,
+                    22,
+                    18,
+                    NuvoBottomNav.bottomPadding(context) + 16,
+                  ),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      if (activeBoard != null)
+                      if (activeBoard != null) ...[
                         AnimatedSize(
                           duration: const Duration(milliseconds: 250),
                           curve: Curves.easeOutCubic,
@@ -175,8 +182,17 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             onOpen: () => _openBoard(context, activeBoard),
                           ),
                         ),
+                        const SizedBox(height: 18),
+                        _LeaderboardPreview(
+                          board: activeBoard,
+                          isLoading: _isLoadingBoardDetail,
+                          currentUserPhotoUrl: user?.profilePhotoUrl,
+                          currentUserInitials: initials,
+                          onOpen: () => _openBoard(context, activeBoard),
+                        ),
+                      ],
                       if (allBoards.length > 1) ...[
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 18),
                         _RaceChipRow(
                           boards: allBoards,
                           selectedId: resolvedId,
@@ -184,16 +200,14 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         ),
                       ],
                       if (otherBoards.isNotEmpty) ...[
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 26),
                         const _SectionLabel(label: 'More races'),
-                        const SizedBox(height: 14),
-                        for (final board in otherBoards) ...[
-                          _CompactBoardRow(
-                            board: board,
-                            onTap: () => _onChipTap(board, snapshot, user?.id),
-                          ),
-                          const SizedBox(height: 10),
-                        ],
+                        const SizedBox(height: 10),
+                        _MoreRacesBoard(
+                          boards: otherBoards,
+                          onTap: (board) =>
+                              _onChipTap(board, snapshot, user?.id),
+                        ),
                       ],
                       if (snapshot.activity.isNotEmpty) ...[
                         const SizedBox(height: 34),
@@ -523,28 +537,16 @@ class _FocusBoardCard extends StatelessWidget {
     }).toList();
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
-          stops: [0, 0.38, 1],
-        ),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: [
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: const [
           BoxShadow(
-            color: NuvoColors.blue.withValues(alpha: 0.10),
-            blurRadius: 34,
-            spreadRadius: -18,
-            offset: const Offset(0, 18),
-          ),
-          BoxShadow(
-            color: NuvoColors.navy.withValues(alpha: 0.07),
-            blurRadius: 18,
-            spreadRadius: -12,
-            offset: const Offset(0, 8),
+            color: NuvoColors.navy,
+            blurRadius: 0,
+            offset: Offset(4, 4),
           ),
         ],
       ),
@@ -560,26 +562,17 @@ class _FocusBoardCard extends StatelessWidget {
                 minHeight: 3,
               ),
             ),
-          if (isLoading) const SizedBox(height: 18),
+          if (isLoading) const SizedBox(height: 14),
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 7,
+                  horizontal: 10,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: isResult ? NuvoColors.success : NuvoColors.blue,
                   borderRadius: BorderRadius.circular(99),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isResult ? NuvoColors.success : NuvoColors.blue)
-                          .withValues(alpha: 0.20),
-                      blurRadius: 12,
-                      spreadRadius: -6,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -608,11 +601,11 @@ class _FocusBoardCard extends StatelessWidget {
               if (board.proofLabel case final proof?)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 6,
+                    horizontal: 8,
+                    vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoColors.surface.withValues(alpha: 0.90),
+                    color: NuvoColors.icyBlue,
                     borderRadius: BorderRadius.circular(99),
                     border: Border.all(color: NuvoColors.border),
                   ),
@@ -637,7 +630,7 @@ class _FocusBoardCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           Hero(
             tag: 'race-title-${board.id}',
             child: Material(
@@ -646,9 +639,9 @@ class _FocusBoardCard extends StatelessWidget {
                 board.title,
                 style: AppTextStyles.headlineLarge.copyWith(
                   color: NuvoColors.navy,
-                  fontSize: 28,
-                  height: 1.08,
-                  letterSpacing: -0.7,
+                  fontSize: 26,
+                  height: 1.06,
+                  letterSpacing: 0,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -663,19 +656,19 @@ class _FocusBoardCard extends StatelessWidget {
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           if (!isResult && !isLoading)
             Row(
               children: [
                 RaceRing(
                   progress: pct / 100,
                   centerValue: '$pct%',
-                  size: 128,
-                  strokeWidth: 11,
+                  size: 104,
+                  strokeWidth: 9,
                   delay: const Duration(milliseconds: 160),
                   racers: ringRacers,
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -694,23 +687,27 @@ class _FocusBoardCard extends StatelessWidget {
                         style: AppTextStyles.titleLarge.copyWith(
                           color: NuvoColors.navy,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(99),
                         child: LinearProgressIndicator(
                           value: pct.clamp(0, 100) / 100,
-                          minHeight: 7,
+                          minHeight: 6,
                           color: NuvoColors.actionBlue,
                           backgroundColor: NuvoColors.trackBg,
                         ),
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 6),
                       Text(
                         board.progressLabel,
                         style: AppTextStyles.bodySmall.copyWith(
                           color: NuvoColors.textMuted,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -725,8 +722,8 @@ class _FocusBoardCard extends StatelessWidget {
                   '$pct%',
                   style: AppTextStyles.displayMedium.copyWith(
                     color: NuvoColors.navy,
-                    fontSize: 46,
-                    letterSpacing: -1.5,
+                    fontSize: 42,
+                    letterSpacing: 0,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -741,97 +738,41 @@ class _FocusBoardCard extends StatelessWidget {
                 ),
               ],
             ),
-          if (board.chaseCopy case final chase?) ...[
-            const SizedBox(height: 12),
-            Text(
-              chase,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.textMuted,
-              ),
-            ),
-          ],
-          if (board.miniLeaderboard.isNotEmpty) ...[
-            const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          if (board.chaseCopy != null || board.miniLeaderboard.isNotEmpty)
             Row(
               children: [
-                NuvoAvatarStack(
-                  avatars: board.miniLeaderboard.map((row) {
-                    final initials = row.isCurrentUser
-                        ? (currentUserInitials ?? _initials(row.label))
-                        : _initials(row.label);
-                    final photo = row.isCurrentUser
-                        ? (currentUserPhotoUrl ?? row.profilePhotoUrl)
-                        : row.profilePhotoUrl;
-                    return (initials: initials, photoUrl: photo);
-                  }).toList(),
-                  total: board.racerCount ?? board.miniLeaderboard.length,
-                  size: 25,
-                  max: 4,
-                  borderColor: NuvoColors.surface,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  '${board.racerCount ?? board.miniLeaderboard.length} on the start line',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 26),
-          Row(
-            children: [
-              Text(
-                'Leaderboard',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: NuvoColors.navy,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              if (board.daysLeft != null)
-                Text(
-                  '${board.daysLeft} days left',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.textMuted,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              color: NuvoColors.icyBlue,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: NuvoColors.border),
-            ),
-            child: Column(
-              children: [
-                if (isLoading)
-                  ..._buildSkeletonRows()
-                else
-                  for (var i = 0; i < board.miniLeaderboard.length; i++) ...[
-                    _LeaderboardRow(
-                      rank: i + 1,
-                      label: board.miniLeaderboard[i].label,
-                      value: board.miniLeaderboard[i].value,
-                      isCurrentUser: board.miniLeaderboard[i].isCurrentUser,
-                      photoUrl: board.miniLeaderboard[i].isCurrentUser
-                          ? (currentUserPhotoUrl ??
-                                board.miniLeaderboard[i].profilePhotoUrl)
-                          : board.miniLeaderboard[i].profilePhotoUrl,
-                      initialsOverride: board.miniLeaderboard[i].isCurrentUser
-                          ? currentUserInitials
-                          : null,
+                Expanded(
+                  child: Text(
+                    board.chaseCopy ??
+                        '${board.racerCount ?? board.miniLeaderboard.length} on the start line',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.textMuted,
                     ),
-                    if (i < board.miniLeaderboard.length - 1)
-                      const SizedBox(height: 3),
-                  ],
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (board.miniLeaderboard.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  NuvoAvatarStack(
+                    avatars: board.miniLeaderboard.map((row) {
+                      final initials = row.isCurrentUser
+                          ? (currentUserInitials ?? _initials(row.label))
+                          : _initials(row.label);
+                      final photo = row.isCurrentUser
+                          ? (currentUserPhotoUrl ?? row.profilePhotoUrl)
+                          : row.profilePhotoUrl;
+                      return (initials: initials, photoUrl: photo);
+                    }).toList(),
+                    total: board.racerCount ?? board.miniLeaderboard.length,
+                    size: 24,
+                    max: 4,
+                    borderColor: NuvoColors.surface,
+                  ),
+                ],
               ],
             ),
-          ),
           const SizedBox(height: 18),
           isResult
               ? NuvoOutlineButton(
@@ -868,6 +809,133 @@ class _FocusBoardCard extends StatelessWidget {
         if (i < 2) const SizedBox(height: 8),
       ],
     ];
+  }
+}
+
+// ── Leaderboard preview ──────────────────────────────────────────────────────
+
+class _LeaderboardPreview extends StatelessWidget {
+  const _LeaderboardPreview({
+    required this.board,
+    required this.isLoading,
+    required this.onOpen,
+    this.currentUserPhotoUrl,
+    this.currentUserInitials,
+  });
+
+  final ArenaBoard board;
+  final bool isLoading;
+  final VoidCallback onOpen;
+  final String? currentUserPhotoUrl;
+  final String? currentUserInitials;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewIndexes = _leaderboardPreviewIndexes(board.miniLeaderboard);
+
+    if (!isLoading && previewIndexes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const _SectionLabel(label: 'Leaderboard'),
+            const Spacer(),
+            if (board.daysLeft != null) ...[
+              Text(
+                '${board.daysLeft} days left',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: NuvoColors.textMuted,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onOpen,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Text(
+                  'View all',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.actionBlue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          decoration: BoxDecoration(
+            color: NuvoColors.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: NuvoColors.border, width: 1.25),
+          ),
+          child: Column(
+            children: [
+              if (isLoading)
+                ..._FocusBoardCard._buildSkeletonRows()
+              else
+                for (var i = 0; i < previewIndexes.length; i++) ...[
+                  _LeaderboardRow(
+                    rank: previewIndexes[i] + 1,
+                    label: board.miniLeaderboard[previewIndexes[i]].label,
+                    value: board.miniLeaderboard[previewIndexes[i]].value,
+                    isCurrentUser:
+                        board.miniLeaderboard[previewIndexes[i]].isCurrentUser,
+                    photoUrl:
+                        board.miniLeaderboard[previewIndexes[i]].isCurrentUser
+                        ? (currentUserPhotoUrl ??
+                              board
+                                  .miniLeaderboard[previewIndexes[i]]
+                                  .profilePhotoUrl)
+                        : board
+                              .miniLeaderboard[previewIndexes[i]]
+                              .profilePhotoUrl,
+                    initialsOverride:
+                        board.miniLeaderboard[previewIndexes[i]].isCurrentUser
+                        ? currentUserInitials
+                        : null,
+                  ),
+                  if (i < previewIndexes.length - 1)
+                    const Divider(
+                      height: 5,
+                      thickness: 1,
+                      color: NuvoColors.divider,
+                    ),
+                ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static List<int> _leaderboardPreviewIndexes(
+    List<ArenaMiniLeaderboardRow> rows,
+  ) {
+    final selected = <int>[];
+
+    void addIndex(int index) {
+      if (index >= 0 && index < rows.length && !selected.contains(index)) {
+        selected.add(index);
+      }
+    }
+
+    addIndex(0);
+    addIndex(rows.indexWhere((row) => row.isCurrentUser));
+
+    for (var i = 0; i < rows.length && selected.length < 3; i++) {
+      addIndex(i);
+    }
+
+    return selected.take(3).toList();
   }
 }
 
@@ -908,12 +976,12 @@ class _LeaderboardRow extends StatelessWidget {
         : _initials(label);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: isCurrentUser
           ? BoxDecoration(
-              color: NuvoColors.panel,
+              color: NuvoColors.icyBlue,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NuvoColors.border),
             )
           : null,
       child: Row(
@@ -1021,7 +1089,7 @@ class _RaceChipRow extends StatelessWidget {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       clipBehavior: Clip.none,
-      padding: const EdgeInsets.only(top: 2, bottom: 6, right: 4),
+      padding: const EdgeInsets.only(top: 1, bottom: 4, right: 4),
       child: Row(
         children: [
           for (final b in boards) ...[
@@ -1030,7 +1098,7 @@ class _RaceChipRow extends StatelessWidget {
               selected: b.id == selectedId,
               onTap: () => onTap(b),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
           ],
         ],
       ),
@@ -1054,25 +1122,65 @@ class _RaceChip extends StatelessWidget {
     return PressableScale(
       onTap: onTap,
       scale: 0.97,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? NuvoColors.navy : NuvoColors.surface,
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(
-            color: selected ? NuvoColors.navy : NuvoColors.border,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 168, minHeight: 40),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? NuvoColors.navy : NuvoColors.surface,
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: selected ? NuvoColors.navy : NuvoColors.border,
+              width: selected ? 1.5 : 1.25,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            board.title,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: selected ? NuvoColors.surface : NuvoColors.navy,
+              fontWeight: FontWeight.w700,
+              height: 1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
-        child: Text(
-          board.title,
-          style: AppTextStyles.labelMedium.copyWith(
-            color: selected ? NuvoColors.surface : NuvoColors.navy,
-            fontWeight: FontWeight.w600,
-          ),
-          maxLines: 1,
-        ),
+      ),
+    );
+  }
+}
+
+class _MoreRacesBoard extends StatelessWidget {
+  const _MoreRacesBoard({required this.boards, required this.onTap});
+
+  final List<ArenaBoard> boards;
+  final ValueChanged<ArenaBoard> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1.25),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < boards.length; i++) ...[
+            _CompactBoardRow(board: boards[i], onTap: () => onTap(boards[i])),
+            if (i < boards.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 76,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
       ),
     );
   }
@@ -1088,36 +1196,38 @@ class _CompactBoardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = board.progressPercent ?? 0;
     final accent = board.isResult ? NuvoColors.success : NuvoColors.blue;
+    final isImportant = !board.isResult && progress >= 80;
 
     return PressableScale(
       onTap: onTap,
       scale: 0.985,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
-        decoration: BoxDecoration(
-          color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: NuvoColors.border),
-        ),
+        constraints: BoxConstraints(minHeight: board.isResult ? 70 : 76),
+        color: isImportant ? NuvoColors.icyBlue : NuvoColors.surface,
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.10),
+                color: board.isResult
+                    ? NuvoColors.success.withValues(alpha: 0.10)
+                    : NuvoColors.icyBlue,
                 shape: BoxShape.circle,
+                border: Border.all(color: accent.withValues(alpha: 0.18)),
               ),
               alignment: Alignment.center,
               child: Text(
                 '$progress%',
                 style: AppTextStyles.labelMedium.copyWith(
                   color: accent,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
                 ),
               ),
             ),
-            const SizedBox(width: 13),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1127,15 +1237,17 @@ class _CompactBoardRow extends StatelessWidget {
                     style: AppTextStyles.titleMedium.copyWith(
                       color: NuvoColors.navy,
                       fontWeight: FontWeight.w700,
+                      height: 1.15,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
-                    board.boardContext,
+                    board.isResult ? 'Finished' : board.boardContext,
                     style: AppTextStyles.bodySmall.copyWith(
                       color: NuvoColors.textMuted,
+                      height: 1.25,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1144,6 +1256,23 @@ class _CompactBoardRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
+            if (board.myRank != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: NuvoColors.panel,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+                child: Text(
+                  _ordinal(board.myRank!),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             const Icon(
               Icons.arrow_forward_ios_rounded,
               color: NuvoColors.textDim,

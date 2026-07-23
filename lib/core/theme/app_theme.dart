@@ -67,14 +67,14 @@ abstract final class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: NuvoColors.surface,
-        elevation: 0.6,
+        elevation: 0,
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          side: const BorderSide(color: NuvoColors.border),
+          side: const BorderSide(color: NuvoColors.border, width: 1),
         ),
-        shadowColor: NuvoColors.blue.withValues(alpha: 0.12),
+        shadowColor: Colors.transparent,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -91,10 +91,10 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: NuvoColors.icyBlue,
+        fillColor: NuvoColors.surface,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 15,
+          horizontal: 18,
+          vertical: 16,
         ),
         hintStyle: AppTextStyles.bodyMedium.copyWith(
           color: NuvoColors.textMuted,
@@ -104,9 +104,9 @@ abstract final class AppTheme {
         helperStyle: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         border: _inputBorder(NuvoColors.border),
         enabledBorder: _inputBorder(NuvoColors.border),
-        focusedBorder: _inputBorder(NuvoColors.blue, width: 1.5),
+        focusedBorder: _inputBorder(NuvoColors.blue, width: 2),
         errorBorder: _inputBorder(NuvoColors.danger),
-        focusedErrorBorder: _inputBorder(NuvoColors.danger, width: 1.5),
+        focusedErrorBorder: _inputBorder(NuvoColors.danger, width: 2),
         floatingLabelStyle: AppTextStyles.labelMedium.copyWith(
           color: NuvoColors.blue,
         ),
@@ -115,35 +115,35 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: NuvoColors.blue,
           foregroundColor: NuvoColors.white,
-          disabledBackgroundColor: NuvoColors.paleSlate.withValues(alpha: 0.38),
-          disabledForegroundColor: NuvoColors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          textStyle: AppTextStyles.labelLarge,
+          disabledBackgroundColor: NuvoColors.disabledSurface,
+          disabledForegroundColor: NuvoColors.disabledText,
+          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
+          textStyle: AppTextStyles.buttonLabel,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            borderRadius: BorderRadius.circular(NuvoRadii.button),
           ),
-          elevation: 0.5,
-          shadowColor: NuvoColors.blue.withValues(alpha: 0.10),
+          elevation: 0,
+          shadowColor: Colors.transparent,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: NuvoColors.navy,
-          backgroundColor: NuvoColors.inkWash,
-          side: const BorderSide(color: NuvoColors.border),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          textStyle: AppTextStyles.labelLarge,
+          backgroundColor: NuvoColors.surface,
+          side: const BorderSide(color: NuvoColors.navy, width: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
+          textStyle: AppTextStyles.buttonLabel,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            borderRadius: BorderRadius.circular(NuvoRadii.button),
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: NuvoColors.blue,
-          textStyle: AppTextStyles.labelLarge,
+          textStyle: AppTextStyles.buttonLabel,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NuvoRadii.sm),
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
         ),
       ),
@@ -155,7 +155,7 @@ abstract final class AppTheme {
         secondaryLabelStyle: AppTextStyles.labelMedium.copyWith(
           color: NuvoColors.blue,
         ),
-        side: const BorderSide(color: NuvoColors.border),
+        side: const BorderSide(color: NuvoColors.border, width: 1.25),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
         ),
@@ -209,7 +209,7 @@ abstract final class AppTheme {
         backgroundColor: NuvoColors.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        shadowColor: NuvoColors.blue.withValues(alpha: 0.12),
+        shadowColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           side: const BorderSide(color: NuvoColors.border),

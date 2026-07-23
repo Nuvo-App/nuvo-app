@@ -3,6 +3,7 @@ import type { AppEnv, MediaObjectRow, ProfileRow } from '../types';
 import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
 import { normalizeUsername, isValidUsername } from '../lib/validation';
+import { hasAcceptedTerms } from '../lib/terms';
 
 export const profileRouter = new Hono<AppEnv>();
 
@@ -176,9 +177,17 @@ profileRouter.get('/me', async (c) => {
 });
 
 // POST /profile/photo/upload-url
+async function deleteR2Object(r2: R2Bucket, objectKey: string) {
+  try { await r2.delete(objectKey); } catch { /* ignore R2 errors */ }
+}
+
 profileRouter.post('/photo/upload-url', async (c) => {
   console.log('PROFILE_UPLOAD_URL_ROUTE_HIT');
   const userId = c.get('userId');
+
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before uploading a profile photo' }, 403);
+  }
 
   let body: { fileName?: unknown; contentType?: unknown };
   try {
@@ -245,6 +254,17 @@ profileRouter.post('/', async (c) => {
     return c.json({ ok: false, error: 'Invalid request body' }, 400);
   }
 
+  const isPersonalUpdate =
+    typeof body.fullName === 'string' ||
+    typeof body.username === 'string' ||
+    typeof body.privateProfile === 'boolean' ||
+    body.profilePhotoUrl !== undefined ||
+    body.avatarUrl !== undefined;
+
+  if (isPersonalUpdate && !(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before creating a profile' }, 403);
+  }
+
   // Build update fields dynamically to avoid clobbering untouched columns
   const fields: string[] = ['updated_at = CURRENT_TIMESTAMP'];
   const bindings: unknown[] = [];
@@ -290,6 +310,26 @@ profileRouter.post('/', async (c) => {
     typeof body.avatarUrl === 'string'
   ) {
     const photoUrl = (body.profilePhotoUrl ?? body.avatarUrl) as string | null;
+
+    // Delete any previous R2 object when the avatar is changed or removed.
+    const oldProfile = await c.env.DB.prepare('SELECT avatar_object_key FROM profiles WHERE user_id = ?')
+      .bind(userId)
+      .first<{ avatar_object_key: string | null }>();
+    const oldKey = oldProfile?.avatar_object_key;
+    if (oldKey) {
+      // Find the object key; if the new photo is the same object, do not delete it.
+      const newKeyFromUrl = photoUrl
+        ? (await c.env.DB.prepare('SELECT object_key FROM media_objects WHERE public_url = ? AND owner_user_id = ?')
+            .bind(photoUrl, userId)
+            .first<{ object_key: string }>())?.object_key
+        : null;
+      if (oldKey !== newKeyFromUrl) {
+        await deleteR2Object(c.env.PROFILE_PHOTOS, oldKey);
+        await c.env.DB.prepare('UPDATE media_objects SET status = \'deleted\', deleted_at = CURRENT_TIMESTAMP WHERE object_key = ?')
+          .bind(oldKey).run();
+      }
+    }
+
     fields.push('avatar_url = ?');
     bindings.push(photoUrl);
 

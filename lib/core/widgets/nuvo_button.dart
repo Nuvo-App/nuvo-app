@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'pressable_scale.dart';
@@ -32,11 +33,7 @@ Widget _buttonContent({
         child: Text(
           label,
           overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.labelLarge.copyWith(
-            color: textColor,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.1,
-          ),
+          style: AppTextStyles.buttonLabel.copyWith(color: textColor),
         ),
       ),
       if (icon != null) ...[
@@ -55,34 +52,99 @@ Widget _buttonShell({
   required double radius,
   required Color color,
   Color? borderColor,
+  double borderWidth = 2,
   bool expand = false,
   List<BoxShadow>? shadows,
 }) {
-  final button = PressableScale(
-    onTap: enabled ? onTap : null,
-    scale: 0.975,
-    child: AnimatedOpacity(
-      duration: const Duration(milliseconds: 180),
-      opacity: enabled ? 1 : 0.45,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
-        width: expand ? double.infinity : null,
-        height: height,
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(radius),
-          border: borderColor == null ? null : Border.all(color: borderColor),
-          boxShadow: shadows,
-        ),
-        child: child,
-      ),
-    ),
+  final button = _PhysicalButtonShell(
+    onTap: onTap,
+    enabled: enabled,
+    height: height,
+    radius: radius,
+    color: color,
+    borderColor: borderColor,
+    borderWidth: borderWidth,
+    expand: expand,
+    shadows: shadows,
+    child: child,
   );
 
   return expand ? SizedBox(width: double.infinity, child: button) : button;
+}
+
+class _PhysicalButtonShell extends StatefulWidget {
+  const _PhysicalButtonShell({
+    required this.child,
+    required this.onTap,
+    required this.enabled,
+    required this.height,
+    required this.radius,
+    required this.color,
+    required this.borderWidth,
+    this.borderColor,
+    this.expand = false,
+    this.shadows,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final double height;
+  final double radius;
+  final Color color;
+  final Color? borderColor;
+  final double borderWidth;
+  final bool expand;
+  final List<BoxShadow>? shadows;
+
+  @override
+  State<_PhysicalButtonShell> createState() => _PhysicalButtonShellState();
+}
+
+class _PhysicalButtonShellState extends State<_PhysicalButtonShell> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (!widget.enabled || _pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pressedOffset = _pressed ? 4.0 : 0.0;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.enabled ? widget.onTap : null,
+      onTapDown: (_) => _setPressed(true),
+      onTapCancel: () => _setPressed(false),
+      onTapUp: (_) => _setPressed(false),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 120),
+        opacity: widget.enabled ? 1 : 0.58,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          transform: Matrix4.translationValues(pressedOffset, pressedOffset, 0),
+          width: widget.expand ? double.infinity : null,
+          height: widget.height,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.color,
+            borderRadius: BorderRadius.circular(widget.radius),
+            border: widget.borderColor == null
+                ? null
+                : Border.all(
+                    color: widget.borderColor!,
+                    width: widget.borderWidth,
+                  ),
+            boxShadow: _pressed ? null : widget.shadows,
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
 }
 
 class NuvoPrimaryButton extends StatelessWidget {
@@ -109,25 +171,17 @@ class NuvoPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
     return _buttonShell(
-      height: small ? 44 : 54,
-      radius: small ? 16 : 18,
-      color: enabled ? NuvoColors.actionBlue : NuvoColors.paleSlate,
-      shadows: enabled
-          ? [
-              BoxShadow(
-                color: NuvoColors.actionBlue.withValues(alpha: 0.16),
-                blurRadius: 18,
-                spreadRadius: -8,
-                offset: const Offset(0, 8),
-              ),
-            ]
-          : null,
+      height: small ? 46 : 56,
+      radius: small ? NuvoRadii.md : NuvoRadii.button,
+      color: enabled ? NuvoColors.actionBlue : NuvoColors.disabledSurface,
+      borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
+      shadows: enabled ? AppShadows.hardMedium : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
         label: label,
-        textColor: NuvoColors.white,
+        textColor: enabled ? NuvoColors.white : NuvoColors.disabledText,
         icon: icon,
         leadingWidget: leadingWidget,
         loading: loading,
@@ -172,11 +226,11 @@ class NuvoOutlineButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     return _buttonShell(
-      height: small ? 44 : 54,
-      radius: small ? 16 : 18,
+      height: small ? 46 : 56,
+      radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoColors.surface,
-      borderColor: NuvoColors.border,
-      shadows: enabled ? AppShadows.hardShadow3 : null,
+      borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
+      shadows: enabled ? AppShadows.hardSmall : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -212,9 +266,9 @@ class NuvoGhostButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     return _buttonShell(
-      height: small ? 40 : 48,
-      radius: 16,
-      color: NuvoColors.panel.withValues(alpha: 0.72),
+      height: small ? 42 : 50,
+      radius: small ? NuvoRadii.md : NuvoRadii.button,
+      color: Colors.transparent,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -250,9 +304,9 @@ class NuvoDangerButton extends StatelessWidget {
     final enabled = onPressed != null && !loading;
     return _buttonShell(
       height: small ? 44 : 54,
-      radius: small ? 16 : 18,
+      radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoColors.danger.withValues(alpha: 0.09),
-      borderColor: NuvoColors.danger.withValues(alpha: 0.22),
+      borderColor: NuvoColors.danger,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -282,8 +336,8 @@ class NuvoBackButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: AppShadows.hardShadow3,
+          border: Border.all(color: NuvoColors.navy, width: 2),
+          boxShadow: AppShadows.hardSmall,
         ),
         child: const Icon(
           Icons.arrow_back_rounded,
@@ -318,10 +372,9 @@ class NuvoIconAction extends StatelessWidget {
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: NuvoColors.panelLight,
           shape: BoxShape.circle,
-          border: Border.all(color: NuvoColors.border),
-          boxShadow: AppShadows.hardShadow3,
+          border: Border.all(color: NuvoColors.border, width: 1.25),
         ),
         child: Stack(
           alignment: Alignment.center,

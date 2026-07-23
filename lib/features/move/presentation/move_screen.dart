@@ -6,7 +6,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/animations.dart' hide PressableScale;
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -45,6 +44,16 @@ class MoveScreen extends ConsumerWidget {
         .expand((r) => r.recentProofs.map((p) => (race: r, proof: p)))
         .take(10)
         .toList();
+    void openVerification(Race race) {
+      debugLogCameraVerificationDecision(
+        race,
+        resolveCameraVerification(race),
+        routeAction: 'move_screen_to_submit_proof',
+      );
+      context.push('/race/${race.id}/proof').then((_) {
+        ref.read(raceControllerProvider.notifier).loadRaces();
+      });
+    }
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
@@ -77,28 +86,20 @@ class MoveScreen extends ConsumerWidget {
             else if (readyRaces.isEmpty && completedRaces.isEmpty)
               _EmptyState(onStart: () => context.push('/races/new'))
             else if (readyRaces.isNotEmpty) ...[
-              const _SectionLabel(label: 'Ready to move'),
-              const SizedBox(height: 10),
-              for (var i = 0; i < readyRaces.length; i++) ...[
-                FadeSlideIn(
-                  delay: Duration(milliseconds: 60 * i),
-                  child: _RaceLogRow(
-                    race: readyRaces[i],
-                    userId: uid,
-                    onLog: () {
-                      final race = readyRaces[i];
-                      debugLogCameraVerificationDecision(
-                        race,
-                        resolveCameraVerification(race),
-                        routeAction: 'move_screen_to_submit_proof',
-                      );
-                      context.push('/race/${race.id}/proof').then((_) {
-                        ref.read(raceControllerProvider.notifier).loadRaces();
-                      });
-                    },
-                  ),
+              _ReadyNowModule(
+                race: readyRaces.first,
+                userId: uid,
+                onVerify: () => openVerification(readyRaces.first),
+              ),
+              if (readyRaces.length > 1) ...[
+                const SizedBox(height: 20),
+                const _SectionLabel(label: 'Ready to move'),
+                const SizedBox(height: 10),
+                _MoveRaceGroup(
+                  races: readyRaces.skip(1).toList(),
+                  userId: uid,
+                  onVerify: openVerification,
                 ),
-                const SizedBox(height: 6),
               ],
             ],
 
@@ -113,8 +114,7 @@ class MoveScreen extends ConsumerWidget {
               const SizedBox(height: 20),
               const _SectionLabel(label: 'Recent moves'),
               const SizedBox(height: 10),
-              for (final entry in recentMoves)
-                _RecentMoveRow(proof: entry.proof, race: entry.race),
+              _RecentMoveGroup(entries: recentMoves),
             ],
           ],
         ),
@@ -168,7 +168,7 @@ class _MoveHero extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Choose a race, then submit proof.',
+                      'Choose a race, then verify your move.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -266,16 +266,161 @@ class _CompletedSectionState extends State<_CompletedSection> {
         ),
         if (_expanded) ...[
           const SizedBox(height: 12),
-          for (var i = 0; i < widget.completedRaces.length; i++) ...[
-            _RaceLogRow(
-              race: widget.completedRaces[i],
-              userId: widget.uid,
-              onLog: () {},
-            ),
-            const SizedBox(height: 8),
-          ],
+          _MoveRaceGroup(
+            races: widget.completedRaces,
+            userId: widget.uid,
+            onVerify: (_) {},
+          ),
         ],
       ],
+    );
+  }
+}
+
+// ── Ready now module ──────────────────────────────────────────────────────────
+
+class _ReadyNowModule extends StatelessWidget {
+  const _ReadyNowModule({
+    required this.race,
+    required this.onVerify,
+    this.userId,
+  });
+
+  final Race race;
+  final String? userId;
+  final VoidCallback onVerify;
+
+  @override
+  Widget build(BuildContext context) {
+    final myPart = userId != null ? race.participantFor(userId!) : null;
+    final pct = myPart?.progressPercent ?? 0;
+    final others = race.participants
+        .where((p) => p.userId != userId)
+        .take(3)
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: NuvoColors.icyBlue,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: NuvoColors.actionBlue.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: const BoxDecoration(
+              color: NuvoColors.navy,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$pct%',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  race.displayTitle,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        others.isEmpty
+                            ? 'Solo race · make the next move'
+                            : '${race.participantCount} racers · move the leaderboard',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.textMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (others.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      NuvoAvatarStack(
+                        avatars: others
+                            .map(
+                              (p) => (
+                                initials: p.displayName,
+                                photoUrl: p.profilePhotoUrl,
+                              ),
+                            )
+                            .toList(),
+                        total: race.participantCount,
+                        size: 22,
+                        max: 3,
+                        borderColor: NuvoColors.icyBlue,
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          _VerifyAction(onTap: onVerify),
+        ],
+      ),
+    );
+  }
+}
+
+class _MoveRaceGroup extends StatelessWidget {
+  const _MoveRaceGroup({
+    required this.races,
+    required this.onVerify,
+    this.userId,
+  });
+
+  final List<Race> races;
+  final String? userId;
+  final ValueChanged<Race> onVerify;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1.25),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < races.length; i++) ...[
+            _RaceLogRow(
+              race: races[i],
+              userId: userId,
+              onLog: () => onVerify(races[i]),
+            ),
+            if (i < races.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 72,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -323,12 +468,11 @@ class _RaceLogRow extends StatelessWidget {
     return PressableScale(
       onTap: isComplete ? null : onLog,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: NuvoBorders.quiet,
-        ),
+        constraints: const BoxConstraints(minHeight: 76),
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        color: isComplete
+            ? NuvoColors.success.withValues(alpha: 0.05)
+            : NuvoColors.surface,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -344,23 +488,7 @@ class _RaceLogRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 if (!isComplete)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.blue,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      'Verify',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: NuvoColors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  )
+                  _VerifyAction(onTap: onLog)
                 else
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -420,6 +548,34 @@ class _RaceLogRow extends StatelessWidget {
   }
 }
 
+class _VerifyAction extends StatelessWidget {
+  const _VerifyAction({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: NuvoColors.actionBlue,
+          borderRadius: BorderRadius.circular(NuvoRadii.pill),
+          border: Border.all(color: NuvoColors.navy, width: 1.5),
+        ),
+        child: Text(
+          'Verify',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: NuvoColors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Participant pill ──────────────────────────────────────────────────────────
 
 class _ParticipantPill extends StatelessWidget {
@@ -453,6 +609,38 @@ class _ParticipantPill extends StatelessWidget {
 }
 
 // ── Recent move row ───────────────────────────────────────────────────────────
+
+class _RecentMoveGroup extends StatelessWidget {
+  const _RecentMoveGroup({required this.entries});
+
+  final List<({Race race, RaceProof proof})> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: NuvoColors.border, width: 1.25),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < entries.length; i++) ...[
+            _RecentMoveRow(proof: entries[i].proof, race: entries[i].race),
+            if (i < entries.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 64,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _RecentMoveRow extends StatelessWidget {
   const _RecentMoveRow({required this.proof, required this.race});
@@ -493,13 +681,8 @@ class _RecentMoveRow extends StatelessWidget {
         : '?';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: NuvoBorders.quiet,
-      ),
+      color: NuvoColors.surface,
       child: Row(
         children: [
           Stack(
