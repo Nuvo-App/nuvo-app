@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/nuvo_preview_style.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
@@ -75,11 +76,12 @@ class NuvoRaceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     final progress = progressPercent;
     final center = rankLabel.replaceFirst('#', '');
     final showHeader = badgeLabel != null || progress != null;
-    final borderColor = isComplete ? NuvoColors.success : NuvoColors.inkNavy;
-    const accentBlue = NuvoColors.actionBlue;
+    final borderColor = isComplete ? NuvoColors.success : visual.border;
+    final accentBlue = visual.action;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -89,9 +91,9 @@ class NuvoRaceHero extends StatelessWidget {
         NuvoTokens.space16,
       ),
       decoration: BoxDecoration(
-        color: NuvoTokens.card,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: borderColor, width: 2),
+        color: visual.hero,
+        borderRadius: BorderRadius.circular(visual.heroRadius),
+        border: Border.all(color: borderColor),
         boxShadow: AppShadows.hardShadow5,
       ),
       child: Column(
@@ -114,7 +116,7 @@ class NuvoRaceHero extends StatelessWidget {
             Text(
               title!,
               style: AppTextStyles.headlineMedium.copyWith(
-                color: NuvoColors.navy,
+                color: visual.onHero,
                 letterSpacing: 0,
               ),
               maxLines: 2,
@@ -127,7 +129,11 @@ class NuvoRaceHero extends StatelessWidget {
             const SizedBox(height: NuvoTokens.space4),
             Text(
               contextLine!,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: visual.darkHero
+                    ? visual.onHero.withValues(alpha: 0.68)
+                    : visual.mutedInk,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -154,7 +160,9 @@ class NuvoRaceHero extends StatelessWidget {
             decoration: BoxDecoration(
               color: isComplete
                   ? NuvoColors.success.withValues(alpha: 0.08)
-                  : NuvoColors.panel,
+                  : visual.darkHero
+                  ? visual.onHero.withValues(alpha: 0.08)
+                  : visual.surfaceMuted,
               borderRadius: BorderRadius.circular(NuvoRadii.sm),
               border: Border.all(
                 color: isComplete
@@ -183,7 +191,7 @@ class NuvoRaceHero extends StatelessWidget {
                                 ? 'Finish line crossed.'
                                 : 'Make your next move.'),
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: NuvoColors.navy,
+                          color: visual.onHero,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -192,7 +200,9 @@ class NuvoRaceHero extends StatelessWidget {
                       Text(
                         subcopy,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: visual.darkHero
+                              ? visual.onHero.withValues(alpha: 0.68)
+                              : visual.mutedInk,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

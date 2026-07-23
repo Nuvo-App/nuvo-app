@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
-import '../theme/app_geometry.dart';
+import '../design/nuvo_preview_style.dart';
 import '../theme/app_shadows.dart';
 import 'pressable_scale.dart';
 
@@ -26,18 +25,14 @@ class NuvoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     Widget card = Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.card, NuvoColors.card],
-          stops: [0, 0.34, 1],
-        ),
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        color: visual.surface,
+        borderRadius: BorderRadius.circular(visual.cardRadius),
         border: Border.all(
-          color: borderColor ?? NuvoColors.border,
+          color: borderColor ?? visual.border,
           width: borderWidth,
         ),
         boxShadow: elevated ? AppShadows.surfaceShadow : null,

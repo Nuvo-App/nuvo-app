@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../design/nuvo_preview_style.dart';
 import '../../data/models/user_profile.dart';
 import '../constants/asset_paths.dart';
 import '../theme/app_colors.dart';
@@ -26,16 +27,17 @@ class MemberPassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     if (dark) return _buildDark(context);
 
     return Container(
       padding: EdgeInsets.all(compact ? 18 : 22),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: visual.surface,
         borderRadius: BorderRadius.circular(
-          compact ? NuvoRadii.lg : NuvoRadii.hero,
+          compact ? visual.cardRadius : visual.heroRadius,
         ),
-        border: NuvoBorders.quiet,
+        border: Border.all(color: visual.border),
         boxShadow: compact ? null : AppShadows.heroShadow,
       ),
       child: Column(
@@ -53,7 +55,7 @@ class MemberPassCard extends StatelessWidget {
               Text(
                 'NUVO PASS',
                 style: AppTextStyles.brandLabel.copyWith(
-                  color: NuvoColors.navy,
+                  color: visual.ink,
                   fontSize: 13,
                 ),
               ),
@@ -84,14 +86,14 @@ class MemberPassCard extends StatelessWidget {
           Text(
             profile.name,
             style: AppTextStyles.headlineLarge.copyWith(
-              color: NuvoColors.navy,
+              color: visual.ink,
               fontSize: compact ? 22 : 28,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             profile.username,
-            style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.labelLarge.copyWith(color: visual.mutedInk),
           ),
           SizedBox(height: compact ? 20 : 28),
           Center(

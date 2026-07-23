@@ -256,7 +256,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final hasPhoto = photoUrl != null || _pendingImageBytes != null;
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [

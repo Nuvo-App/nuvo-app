@@ -143,7 +143,7 @@ class _FirstRaceScreenState extends ConsumerState<FirstRaceScreen> {
     final selectedRace = _starterRaces[_selected];
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child:
             ListView(

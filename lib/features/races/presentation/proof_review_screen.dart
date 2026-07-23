@@ -121,9 +121,9 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     final user = ref.watch(authControllerProvider).user;
 
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: NuvoColors.page,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -131,7 +131,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     final proof = _proof;
     if (race == null || proof == null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: NuvoErrorState(
             message: _error ?? 'Move not found.',
@@ -143,7 +143,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
 
     if (race.creatorId != user?.id) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: NuvoErrorState(
             message: 'Only the race creator can review moves.',
@@ -154,7 +154,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child:
             ListView(

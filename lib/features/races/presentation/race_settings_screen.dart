@@ -220,15 +220,15 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     final isCameraRace = eligibility?.isCameraVerifiable == true;
 
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: NuvoColors.page,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_race == null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: NuvoErrorState(
             message: _error ?? 'Race settings could not load.',
@@ -240,7 +240,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
 
     if (!isOwner) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: NuvoErrorState(
             message: 'Only the race creator can edit race settings.',
@@ -251,7 +251,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),

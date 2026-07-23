@@ -66,7 +66,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     final race = _race;
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       bottomNavigationBar: _bottomBar(race),
       body: SafeArea(
         child:

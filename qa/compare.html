@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Nuvo visual comparison</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #e9edf3;
+      color: #07152c;
+      font: 600 14px/1.3 -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(6, 390px);
+      gap: 16px;
+      align-items: start;
+    }
+    figure { margin: 0; }
+    figcaption { height: 34px; padding: 0 0 10px; }
+    img {
+      display: block;
+      width: 390px;
+      height: 844px;
+      object-fit: fill;
+      background: white;
+      box-shadow: 0 10px 28px rgba(7, 21, 44, .12);
+    }
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <figure>
+      <figcaption>Starting Line · source</figcaption>
+      <img src="source-starting-line.png" alt="">
+    </figure>
+    <figure>
+      <figcaption>Starting Line · implementation</figcaption>
+      <img src="chrome-arena-starting-line-390x844.png" alt="">
+    </figure>
+    <figure>
+      <figcaption>Trackside · source</figcaption>
+      <img src="source-trackside.png" alt="">
+    </figure>
+    <figure>
+      <figcaption>Trackside · implementation</figcaption>
+      <img src="chrome-arena-trackside-390x844.png" alt="">
+    </figure>
+    <figure>
+      <figcaption>Crew Momentum · source</figcaption>
+      <img src="source-crew-momentum.png" alt="">
+    </figure>
+    <figure>
+      <figcaption>Crew Momentum · implementation</figcaption>
+      <img src="chrome-arena-crew-momentum-390x844.png" alt="">
+    </figure>
+  </div>
+</body>
+</html>

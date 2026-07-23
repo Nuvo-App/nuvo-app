@@ -169,7 +169,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final stepIndex = _steps.indexOf(_step);
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
       resizeToAvoidBottomInset: true,
       body: SafeArea(

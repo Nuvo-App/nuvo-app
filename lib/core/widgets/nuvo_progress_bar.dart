@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../design/nuvo_preview_style.dart';
 
 class NuvoProgressBar extends StatelessWidget {
   const NuvoProgressBar({
@@ -18,24 +18,28 @@ class NuvoProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     final clamped = value.clamp(0.0, 1.0);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: clamped),
-      duration: const Duration(milliseconds: 700),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 700),
       curve: Curves.easeOutCubic,
       builder: (context, animated, _) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(height),
           child: Container(
             height: height,
-            color: trackColor ?? NuvoColors.softBlue,
+            color: trackColor ?? visual.surfaceMuted,
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
               widthFactor: animated,
               child: Container(
                 decoration: BoxDecoration(
-                  color: color ?? NuvoColors.blue,
+                  color: color ?? visual.action,
                   borderRadius: BorderRadius.circular(height),
                 ),
               ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../design/nuvo_preview_style.dart';
 import 'app_colors.dart';
 import 'app_geometry.dart';
 import 'app_text_styles.dart';
@@ -16,30 +17,34 @@ abstract final class AppTheme {
     systemNavigationBarIconBrightness: Brightness.dark,
   );
 
-  static ThemeData light() {
+  static ThemeData light({
+    NuvoPreviewStyle style = NuvoPreviewStyle.startingLine,
+  }) {
+    final visual = NuvoVisualTheme.forStyle(style);
     final colorScheme =
         ColorScheme.fromSeed(
-          seedColor: NuvoColors.blue,
+          seedColor: visual.action,
           brightness: Brightness.light,
         ).copyWith(
-          primary: NuvoColors.blue,
+          primary: visual.action,
           onPrimary: NuvoColors.white,
-          secondary: NuvoColors.navy,
+          secondary: visual.ink,
           onSecondary: NuvoColors.white,
-          tertiary: NuvoColors.aqua,
+          tertiary: visual.accent,
           error: NuvoColors.danger,
-          surface: NuvoColors.surface,
-          onSurface: NuvoColors.navy,
-          surfaceContainerHighest: NuvoColors.panel,
-          outline: NuvoColors.border,
+          surface: visual.surface,
+          onSurface: visual.ink,
+          surfaceContainerHighest: visual.surfaceMuted,
+          outline: visual.border,
         );
 
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: NuvoColors.page,
-      canvasColor: NuvoColors.page,
+      scaffoldBackgroundColor: visual.page,
+      canvasColor: visual.page,
       colorScheme: colorScheme,
+      extensions: [visual],
       visualDensity: VisualDensity.adaptivePlatformDensity,
       splashFactory: InkRipple.splashFactory,
       fontFamily: GoogleFonts.manrope().fontFamily,
@@ -66,35 +71,33 @@ abstract final class AppTheme {
         labelSmall: AppTextStyles.labelSmall,
       ),
       cardTheme: CardThemeData(
-        color: NuvoColors.surface,
-        elevation: 0,
+        color: visual.surface,
+        elevation: 0.6,
         margin: EdgeInsets.zero,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          side: const BorderSide(color: NuvoColors.border, width: 1),
+          side: BorderSide(color: visual.border),
         ),
-        shadowColor: Colors.transparent,
+        shadowColor: visual.ink.withValues(alpha: 0.10),
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
-        foregroundColor: NuvoColors.navy,
+        foregroundColor: visual.ink,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         systemOverlayStyle: overlay,
-        titleTextStyle: AppTextStyles.titleLarge.copyWith(
-          color: NuvoColors.navy,
-        ),
-        iconTheme: const IconThemeData(color: NuvoColors.navy),
+        titleTextStyle: AppTextStyles.titleLarge.copyWith(color: visual.ink),
+        iconTheme: IconThemeData(color: visual.ink),
         surfaceTintColor: Colors.transparent,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: NuvoColors.surface,
+        fillColor: visual.surfaceMuted,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
+          horizontal: 16,
+          vertical: 15,
         ),
         hintStyle: AppTextStyles.bodyMedium.copyWith(
           color: NuvoColors.textMuted,
@@ -103,85 +106,85 @@ abstract final class AppTheme {
         errorStyle: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
         helperStyle: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         border: _inputBorder(NuvoColors.border),
-        enabledBorder: _inputBorder(NuvoColors.border),
-        focusedBorder: _inputBorder(NuvoColors.blue, width: 2),
+        enabledBorder: _inputBorder(visual.border),
+        focusedBorder: _inputBorder(visual.action, width: 1.5),
         errorBorder: _inputBorder(NuvoColors.danger),
-        focusedErrorBorder: _inputBorder(NuvoColors.danger, width: 2),
+        focusedErrorBorder: _inputBorder(NuvoColors.danger, width: 1.5),
         floatingLabelStyle: AppTextStyles.labelMedium.copyWith(
-          color: NuvoColors.blue,
+          color: visual.action,
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: NuvoColors.blue,
+          backgroundColor: visual.action,
           foregroundColor: NuvoColors.white,
-          disabledBackgroundColor: NuvoColors.disabledSurface,
-          disabledForegroundColor: NuvoColors.disabledText,
-          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
-          textStyle: AppTextStyles.buttonLabel,
+          disabledBackgroundColor: NuvoColors.paleSlate.withValues(alpha: 0.38),
+          disabledForegroundColor: NuvoColors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NuvoRadii.button),
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
-          elevation: 0,
-          shadowColor: Colors.transparent,
+          elevation: 0.5,
+          shadowColor: visual.ink.withValues(alpha: 0.10),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: NuvoColors.navy,
-          backgroundColor: NuvoColors.surface,
-          side: const BorderSide(color: NuvoColors.navy, width: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
-          textStyle: AppTextStyles.buttonLabel,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(NuvoRadii.button),
-          ),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: NuvoColors.blue,
-          textStyle: AppTextStyles.buttonLabel,
+          foregroundColor: visual.ink,
+          backgroundColor: visual.surfaceMuted,
+          side: BorderSide(color: visual.border),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          textStyle: AppTextStyles.labelLarge,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
         ),
       ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: visual.action,
+          textStyle: AppTextStyles.labelLarge,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(NuvoRadii.sm),
+          ),
+        ),
+      ),
       chipTheme: ChipThemeData(
-        backgroundColor: NuvoColors.surface,
-        selectedColor: NuvoColors.icyBlue,
-        disabledColor: NuvoColors.panel,
+        backgroundColor: visual.surface,
+        selectedColor: visual.surfaceMuted,
+        disabledColor: visual.surfaceMuted,
         labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
         secondaryLabelStyle: AppTextStyles.labelMedium.copyWith(
-          color: NuvoColors.blue,
+          color: visual.action,
         ),
-        side: const BorderSide(color: NuvoColors.border, width: 1.25),
+        side: BorderSide(color: visual.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       ),
-      dividerTheme: const DividerThemeData(
-        color: NuvoColors.divider,
+      dividerTheme: DividerThemeData(
+        color: visual.border,
         thickness: 1,
         space: 1,
       ),
       sliderTheme: SliderThemeData(
-        activeTrackColor: NuvoColors.blue,
-        inactiveTrackColor: NuvoColors.trackBg,
-        thumbColor: NuvoColors.blue,
-        overlayColor: NuvoColors.blue.withValues(alpha: 0.12),
-        valueIndicatorColor: NuvoColors.navy,
+        activeTrackColor: visual.action,
+        inactiveTrackColor: visual.surfaceMuted,
+        thumbColor: visual.action,
+        overlayColor: visual.action.withValues(alpha: 0.12),
+        valueIndicatorColor: visual.ink,
         valueIndicatorTextStyle: AppTextStyles.labelMedium.copyWith(
           color: NuvoColors.white,
         ),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: NuvoColors.blue,
-        linearTrackColor: NuvoColors.trackBg,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: visual.action,
+        linearTrackColor: visual.surfaceMuted,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: NuvoColors.navy,
+        backgroundColor: visual.ink,
         contentTextStyle: AppTextStyles.bodyMedium.copyWith(
           color: NuvoColors.white,
         ),
@@ -192,33 +195,33 @@ abstract final class AppTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: NuvoColors.surface,
+        backgroundColor: visual.surface,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: NuvoColors.surface,
+        modalBackgroundColor: visual.surface,
         showDragHandle: true,
-        dragHandleColor: NuvoColors.borderStrong,
+        dragHandleColor: visual.border,
         elevation: 0,
         modalElevation: 0,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           side: BorderSide(color: NuvoColors.border),
         ),
-        shadowColor: NuvoColors.navy.withValues(alpha: 0.10),
+        shadowColor: visual.ink.withValues(alpha: 0.10),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: NuvoColors.surface,
+        backgroundColor: visual.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        shadowColor: Colors.transparent,
+        shadowColor: visual.ink.withValues(alpha: 0.12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          side: const BorderSide(color: NuvoColors.border),
+          side: BorderSide(color: visual.border),
         ),
       ),
     );
   }
 
-  static ThemeData dark() => light();
+  static ThemeData dark() => light(style: NuvoPreviewStyle.trackside);
 
   static OutlineInputBorder _inputBorder(Color color, {double width = 1}) =>
       OutlineInputBorder(

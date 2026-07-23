@@ -80,7 +80,7 @@ class _OnboardingMemberPassScreenState
 
     if (_error != null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: NuvoErrorState(message: _error!, onRetry: _fetchPass),
         ),
@@ -88,7 +88,7 @@ class _OnboardingMemberPassScreenState
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child:
             ListView(
