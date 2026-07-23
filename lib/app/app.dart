@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/design/nuvo_preview_controller.dart';
+import '../core/design/nuvo_preview_style.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
+import '../features/shell/presentation/main_shell.dart';
 import 'router.dart';
 
 class NuvoApp extends ConsumerWidget {
@@ -12,17 +15,38 @@ class NuvoApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final style = ref.watch(activeNuvoPreviewStyleProvider);
+    final visual = NuvoVisualTheme.forStyle(style);
+    const visualQa = bool.fromEnvironment('NUVO_VISUAL_QA');
     final app = MaterialApp.router(
       title: 'Nuvo',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: AppTheme.light(style: style),
       routerConfig: ref.watch(routerProvider),
       builder: _appBuilder,
     );
+    final qaApp = MaterialApp(
+      title: 'Nuvo visual QA',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light(style: style),
+      home: const ConferenceVisualQaScreen(),
+      builder: _appBuilder,
+    );
+
+    final overlay = AppTheme.overlay.copyWith(
+      statusBarIconBrightness: visual.darkHero
+          ? Brightness.light
+          : Brightness.dark,
+      statusBarBrightness: visual.darkHero ? Brightness.dark : Brightness.light,
+      systemNavigationBarColor: visual.navigation,
+      systemNavigationBarIconBrightness: visual.darkHero
+          ? Brightness.light
+          : Brightness.dark,
+    );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppTheme.overlay,
-      child: app,
+      value: overlay,
+      child: visualQa ? qaApp : app,
     );
   }
 }

@@ -1,24 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/design/nuvo_preview_controller.dart';
+import '../../../core/design/nuvo_preview_style.dart';
 import '../../../core/widgets/bottom_nav.dart';
+import '../../../core/widgets/preview_style_chooser.dart';
 import '../../arena/presentation/arena_screen_fixed.dart';
 import '../../compete/presentation/compete_screen_fixed.dart';
 import '../../move/presentation/move_screen.dart';
 import '../../pass/presentation/pass_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+/// Compile-time-only visual QA surface. Production routing never references
+/// this widget.
+class ConferenceVisualQaScreen extends ConsumerWidget {
+  const ConferenceVisualQaScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedStyle = ref.watch(nuvoPreviewStyleProvider);
+    if (selectedStyle == null) {
+      return PreviewStyleChooser(
+        onSelected: (style) =>
+            ref.read(nuvoPreviewStyleProvider.notifier).select(style),
+      );
+    }
+
+    final visual = NuvoVisualTheme.of(context);
+    return Scaffold(
+      backgroundColor: visual.page,
+      body: const ArenaStylePreview(),
+      bottomNavigationBar: NuvoBottomNav(currentIndex: 0, onTap: (_) {}),
+    );
+  }
+}
+
+class _MainShellState extends ConsumerState<MainShell> {
   int _currentIndex = 0;
 
   // Maps nav index → shell route path.
@@ -64,9 +91,19 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedStyle = ref.watch(nuvoPreviewStyleProvider);
+    if (selectedStyle == null) {
+      return PreviewStyleChooser(
+        onSelected: (style) {
+          ref.read(nuvoPreviewStyleProvider.notifier).select(style);
+        },
+      );
+    }
+
+    final visual = NuvoVisualTheme.of(context);
     return Scaffold(
-      backgroundColor: NuvoColors.page,
-      extendBody: true,
+      backgroundColor: visual.page,
+      extendBody: false,
       body: Stack(
         fit: StackFit.expand,
         children: [

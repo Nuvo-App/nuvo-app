@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -113,7 +114,7 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
     final username = _usernameController.text.trim();
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child:
             ListView(
@@ -156,104 +157,141 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Avatar preview
-                    Center(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 86,
-                        height: 86,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _nameController.text.trim().isEmpty
-                              ? NuvoColors.panel
-                              : NuvoColors.blue,
-                          boxShadow: [
-                            BoxShadow(
-                              color: NuvoColors.blue.withValues(alpha: 0.18),
-                              blurRadius: 18,
-                              offset: const Offset(0, 8),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+                      decoration: BoxDecoration(
+                        color: NuvoColors.surface,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: NuvoColors.border),
+                        boxShadow: AppShadows.surfaceShadow,
+                      ),
+                      child: Column(
+                        children: [
+                          // The avatar is the focal point of the identity card.
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            width: 92,
+                            height: 92,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _nameController.text.trim().isEmpty
+                                  ? NuvoColors.panel
+                                  : NuvoColors.blue,
+                              border: Border.all(
+                                color: NuvoColors.white,
+                                width: 4,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: NuvoColors.blue.withValues(
+                                    alpha: _nameController.text.trim().isEmpty
+                                        ? 0.05
+                                        : 0.10,
+                                  ),
+                                  blurRadius: 18,
+                                  spreadRadius: -7,
+                                  offset: const Offset(0, 8),
+                                ),
+                                BoxShadow(
+                                  color: NuvoColors.navy.withValues(
+                                    alpha: 0.10,
+                                  ),
+                                  blurRadius: 8,
+                                  spreadRadius: -4,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              _initials,
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                color: NuvoColors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+
+                          NuvoTextInput(
+                            controller: _nameController,
+                            label: 'FULL NAME',
+                            hint: 'Your name',
+                            textCapitalization: TextCapitalization.words,
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          const SizedBox(height: 20),
+
+                          NuvoTextInput(
+                            controller: _usernameController,
+                            label: 'USERNAME',
+                            hint: 'pick a handle',
+                            prefixIcon: Padding(
+                              padding: const EdgeInsets.only(left: 14),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: 1,
+                                child: Text(
+                                  '@',
+                                  style: AppTextStyles.bodyMedium,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          if (_usernameChecking)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Checking availability…',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
+                              ),
+                            )
+                          else if (username.length >= 3)
+                            Row(
+                              children: [
+                                Icon(
+                                  _usernameAvailable == true
+                                      ? Icons.check_circle_rounded
+                                      : Icons.cancel_rounded,
+                                  color: _usernameAvailable == true
+                                      ? NuvoColors.success
+                                      : NuvoColors.danger,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _usernameAvailable == true
+                                      ? '@$username is available'
+                                      : '@$username is taken',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: _usernameAvailable == true
+                                        ? NuvoColors.success
+                                        : NuvoColors.danger,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                          if (_error != null) ...[
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                _error!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.danger,
+                                ),
+                              ),
                             ),
                           ],
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          _initials,
-                          style: AppTextStyles.headlineMedium.copyWith(
-                            color: NuvoColors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    NuvoTextInput(
-                      controller: _nameController,
-                      label: 'FULL NAME',
-                      hint: 'Your name',
-                      textCapitalization: TextCapitalization.words,
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 20),
-
-                    NuvoTextInput(
-                      controller: _usernameController,
-                      label: 'USERNAME',
-                      hint: 'pick a handle',
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 14),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: 1,
-                          child: Text('@', style: AppTextStyles.bodyMedium),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    if (_usernameChecking)
-                      Text(
-                        'Checking availability…',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
-                        ),
-                      )
-                    else if (username.length >= 3) ...[
-                      Row(
-                        children: [
-                          Icon(
-                            _usernameAvailable == true
-                                ? Icons.check_circle_rounded
-                                : Icons.cancel_rounded,
-                            color: _usernameAvailable == true
-                                ? NuvoColors.success
-                                : NuvoColors.danger,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _usernameAvailable == true
-                                ? '@$username is available'
-                                : '@$username is taken',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: _usernameAvailable == true
-                                  ? NuvoColors.success
-                                  : NuvoColors.danger,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
                         ],
                       ),
-                    ],
-
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _error!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
-                        ),
-                      ),
-                    ],
+                    ),
 
                     const SizedBox(height: 32),
 

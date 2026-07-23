@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../design/nuvo_preview_style.dart';
 import '../theme/app_text_styles.dart';
 
 /// Pill chip used for category filters and tags — light theme.
@@ -20,18 +20,20 @@ class NuvoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor ?? NuvoColors.actionBlue;
-    final bgColor = selected
-        ? accent.withValues(alpha: 0.10)
-        : NuvoColors.white;
-    final border = selected ? accent : NuvoColors.border;
-    final textColor = selected ? accent : NuvoColors.navy;
+    final visual = NuvoVisualTheme.of(context);
+    final accent = accentColor ?? visual.action;
+    final bgColor = selected ? accent.withValues(alpha: 0.10) : visual.surface;
+    final border = selected ? accent : visual.border;
+    final textColor = selected ? accent : visual.ink;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: bgColor,

@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import 'auth_controller.dart';
@@ -93,7 +92,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
         : 'New to Nuvo? Create an account';
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -323,62 +322,6 @@ class _BrandMark extends StatelessWidget {
   }
 }
 
-class _StartLineChip extends StatelessWidget {
-  const _StartLineChip({this.label = 'START LINE OPEN'});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: NuvoColors.border, width: 1.1),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.navy,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _LoopStrip extends StatelessWidget {
-  const _LoopStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    const steps = ['Finish line', 'Crew', 'Proof', 'Leaderboard'];
-    return Wrap(
-      spacing: 7,
-      runSpacing: 7,
-      children: [
-        for (final step in steps)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: step == 'Proof' ? NuvoColors.icyBlue : NuvoColors.surface,
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: NuvoColors.border),
-            ),
-            child: Text(
-              step,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: step == 'Proof' ? NuvoColors.blue : NuvoColors.navy,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
 class _HeroBlock extends StatelessWidget {
   const _HeroBlock({super.key, required this.isSignup});
 
@@ -390,8 +333,6 @@ class _HeroBlock extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _StartLineChip(),
-          const SizedBox(height: 16),
           RichText(
             text: TextSpan(
               style: AppTextStyles.displayMedium.copyWith(
@@ -411,16 +352,12 @@ class _HeroBlock extends StatelessWidget {
             'Pick a finish line, pull in your crew, and submit proof to move the leaderboard.',
             style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
           ),
-          const SizedBox(height: 16),
-          const _LoopStrip(),
         ],
       );
     } else {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _StartLineChip(label: 'BACK IN THE ARENA'),
-          const SizedBox(height: 16),
           RichText(
             text: TextSpan(
               style: AppTextStyles.displayMedium,
@@ -453,7 +390,7 @@ class _ProductPreviewCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: NuvoColors.border),
       ),
       padding: const EdgeInsets.all(18),
@@ -498,20 +435,11 @@ class _ProductPreviewCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Active status pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0x2216C784),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0x5516C784)),
-                ),
-                child: Text(
-                  'Live',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.navy,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Text(
+                'LIVE',
+                style: AppTextStyles.labelUppercase(
+                  9,
+                  color: NuvoColors.success,
                 ),
               ),
             ],
@@ -581,9 +509,7 @@ class _ProductPreviewCard extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: NuvoColors.blue,
-                  borderRadius: BorderRadius.circular(999),
-                  border: NuvoBorders.action,
-                  boxShadow: AppShadows.actionShadow,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   'Submit proof',

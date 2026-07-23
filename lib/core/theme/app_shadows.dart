@@ -3,44 +3,65 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 
 abstract final class AppShadows {
-  static const Color _hardColor = NuvoColors.navy;
-
-  /// Solid offset shadow for compact controls.
-  static const List<BoxShadow> hardSmall = [
-    BoxShadow(color: _hardColor, blurRadius: 0, offset: Offset(3, 3)),
-  ];
-
-  /// Solid offset shadow for branded hero/action accents.
-  static const List<BoxShadow> hardMedium = [
-    BoxShadow(color: _hardColor, blurRadius: 0, offset: Offset(5, 5)),
-  ];
-
-  /// Maximum solid offset shadow for rare oversized hero surfaces.
-  static const List<BoxShadow> hardLarge = [
-    BoxShadow(color: _hardColor, blurRadius: 0, offset: Offset(7, 7)),
-  ];
-
-  /// Rare ambient separation for sheets/dialogs where hard offset is too loud.
-  static const List<BoxShadow> softSubtle = [
+  /// Restrained two-stage elevation for premium floating surfaces.
+  ///
+  /// Both layers stay neutral so elevation never competes with Nuvo's blue
+  /// action color.
+  static const List<BoxShadow> surfaceShadow = [
     BoxShadow(
-      color: Color(0x1407152D),
-      blurRadius: 18,
-      spreadRadius: -10,
-      offset: Offset(0, 8),
+      color: Color(0x1207152C),
+      blurRadius: 24,
+      spreadRadius: -12,
+      offset: Offset(0, 12),
+    ),
+    BoxShadow(
+      color: Color(0x0F07152C),
+      blurRadius: 7,
+      spreadRadius: -3,
+      offset: Offset(0, 3),
     ),
   ];
 
-  /// Branded lift for premium floating surfaces.
-  static const List<BoxShadow> surfaceShadow = hardLarge;
+  /// Compact lift for rows, chips, and controls.
+  static const List<BoxShadow> hardShadow3 = [
+    BoxShadow(
+      color: Color(0x0F07152C),
+      blurRadius: 8,
+      spreadRadius: -4,
+      offset: Offset(0, 3),
+    ),
+  ];
 
-  /// Legacy compact lift for rows, chips, and controls.
-  static const List<BoxShadow> hardShadow3 = hardSmall;
+  /// Quiet lift for buttons, lanes, and standard cards.
+  static const List<BoxShadow> hardShadow4 = [
+    BoxShadow(
+      color: Color(0x1207152C),
+      blurRadius: 13,
+      spreadRadius: -6,
+      offset: Offset(0, 6),
+    ),
+  ];
 
-  /// Legacy standard lift; ordinary cards and rows stay clean by default.
-  static const List<BoxShadow> hardShadow4 = hardMedium;
+  /// Soft depth for hero and focus surfaces.
+  static const List<BoxShadow> hardShadow5 = [
+    BoxShadow(
+      color: Color(0x1407152C),
+      blurRadius: 20,
+      spreadRadius: -9,
+      offset: Offset(0, 10),
+    ),
+    BoxShadow(
+      color: Color(0x0D07152C),
+      blurRadius: 6,
+      spreadRadius: -3,
+      offset: Offset(0, 3),
+    ),
+  ];
 
-  /// Legacy hero lift, reduced to the calibrated branded shadow.
-  static const List<BoxShadow> hardShadow5 = hardLarge;
+  // Compatibility names used by screens introduced on the remote branch.
+  static const List<BoxShadow> hardSmall = hardShadow3;
+  static const List<BoxShadow> hardMedium = hardShadow4;
+  static const List<BoxShadow> hardLarge = hardShadow5;
 
   // Primary interactive elevation (buttons, action cards).
   static const List<BoxShadow> actionShadow = hardShadow4;
@@ -54,17 +75,24 @@ abstract final class AppShadows {
   // Default card elevation.
   static const List<BoxShadow> card = hardShadow4;
 
-  // Lower lift for the global navigation dock.
-  static const List<BoxShadow> dockShadow = softSubtle;
+  // The global navigation dock uses the same neutral elevation language.
+  static const List<BoxShadow> dockShadow = surfaceShadow;
 
-  static const List<BoxShadow> sheetShadow = softSubtle;
+  static const List<BoxShadow> sheetShadow = [
+    BoxShadow(
+      color: Color(0x1407152C),
+      blurRadius: 28,
+      spreadRadius: -10,
+      offset: Offset(0, -6),
+    ),
+  ];
 
-  // Soft blue glow for focused/active elements
+  // Quiet brand emphasis reserved for focused/active elements.
   static List<BoxShadow> brandGlow({double intensity = 1}) => [
     BoxShadow(
-      color: AppColors.primary.withValues(alpha: 0.10 * intensity),
-      blurRadius: 14 * intensity,
-      offset: const Offset(0, 4),
+      color: AppColors.primary.withValues(alpha: 0.07 * intensity),
+      blurRadius: 12 * intensity,
+      offset: const Offset(0, 3),
     ),
   ];
 

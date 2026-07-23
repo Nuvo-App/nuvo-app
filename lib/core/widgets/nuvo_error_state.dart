@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/nuvo_preview_style.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
@@ -17,6 +18,7 @@ class NuvoErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -27,7 +29,7 @@ class NuvoErrorState extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: NuvoColors.white,
+                color: visual.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.md),
                 border: Border.all(color: NuvoColors.danger, width: 2),
               ),
@@ -46,7 +48,7 @@ class NuvoErrorState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               message,
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodyMedium.copyWith(color: visual.mutedInk),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),

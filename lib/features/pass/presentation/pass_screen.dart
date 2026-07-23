@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/design/nuvo_preview_style.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -196,13 +197,14 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     final user = ref.watch(authControllerProvider).user;
     final profile = _buildProfile(user);
     final races = ref.watch(raceControllerProvider).races;
     final closest = user == null ? null : _closestCrewRace(races, user.id);
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -237,7 +239,11 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               // ── Content ──────────────────────────────────────────────────
               else ...[
                 // ── Member pass (hero) ───────────────────────────────────
-                MemberPassCard(profile: profile, compact: true, dark: true),
+                MemberPassCard(
+                  profile: profile,
+                  compact: true,
+                  dark: visual.style != NuvoPreviewStyle.crewMomentum,
+                ),
                 const SizedBox(height: 20),
 
                 // ── Find people ──────────────────────────────────────────

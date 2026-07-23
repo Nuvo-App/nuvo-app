@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/nuvo_preview_style.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
@@ -26,11 +27,12 @@ class NuvoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     return Scaffold(
-      backgroundColor: backgroundColor ?? NuvoColors.page,
+      backgroundColor: backgroundColor ?? visual.page,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       body: DecoratedBox(
-        decoration: BoxDecoration(color: backgroundColor ?? NuvoColors.page),
+        decoration: BoxDecoration(color: backgroundColor ?? visual.page),
         child: Column(
           children: [
             ?topBar,
@@ -67,6 +69,7 @@ class NuvoTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     final top = MediaQuery.paddingOf(context).top;
     return Container(
       color: backgroundColor ?? Colors.transparent,
@@ -75,9 +78,9 @@ class NuvoTopBar extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 52),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: visual.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.inkNavy, width: 2),
+          border: Border.all(color: visual.border),
           boxShadow: AppShadows.hardShadow3,
         ),
         child: Row(

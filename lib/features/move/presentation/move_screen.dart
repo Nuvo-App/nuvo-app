@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/nuvo_preview_style.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -56,7 +57,7 @@ class MoveScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
@@ -131,12 +132,13 @@ class _MoveHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
+        color: visual.hero,
+        borderRadius: BorderRadius.circular(visual.heroRadius),
+        border: Border.all(color: visual.border),
         boxShadow: AppShadows.hardShadow4,
       ),
       child: Column(
@@ -160,7 +162,7 @@ class _MoveHero extends StatelessWidget {
                     Text(
                       'Move',
                       style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
+                        color: visual.onHero,
                         height: 1.05,
                         fontSize: 32,
                         letterSpacing: -0.9,
@@ -170,7 +172,9 @@ class _MoveHero extends StatelessWidget {
                     Text(
                       'Choose a race, then verify your move.',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
+                        color: visual.darkHero
+                            ? visual.onHero.withValues(alpha: 0.68)
+                            : visual.mutedInk,
                       ),
                     ),
                   ],
@@ -184,14 +188,16 @@ class _MoveHero extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoColors.panel,
+                    color: visual.darkHero
+                        ? visual.onHero.withValues(alpha: 0.10)
+                        : visual.surfaceMuted,
                     borderRadius: BorderRadius.circular(NuvoRadii.pill),
                     border: NuvoBorders.quiet,
                   ),
                   child: Text(
                     '$readyCount ready',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.navy,
+                      color: visual.onHero,
                       fontWeight: FontWeight.w800,
                     ),
                   ),

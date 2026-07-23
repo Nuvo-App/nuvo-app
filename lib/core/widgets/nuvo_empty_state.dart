@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../design/nuvo_preview_style.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_button.dart';
@@ -23,6 +23,7 @@ class NuvoEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -33,11 +34,11 @@ class NuvoEmptyState extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: NuvoColors.white,
+                color: visual.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: Border.all(color: NuvoColors.inkNavy, width: 2),
+                border: Border.all(color: visual.border),
               ),
-              child: Icon(icon, size: 22, color: NuvoColors.actionBlue),
+              child: Icon(icon, size: 22, color: visual.action),
             ),
             const SizedBox(height: 16),
             Text(
@@ -48,7 +49,7 @@ class NuvoEmptyState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               body,
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodyMedium.copyWith(color: visual.mutedInk),
               textAlign: TextAlign.center,
             ),
             if (ctaLabel != null && onCta != null) ...[

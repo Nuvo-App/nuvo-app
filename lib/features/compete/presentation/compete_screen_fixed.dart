@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/design/nuvo_preview_style.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -48,7 +49,7 @@ class CompeteScreen extends ConsumerWidget {
         .toList();
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -230,18 +231,14 @@ class _CompeteHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visual = NuvoVisualTheme.of(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(22, 22, 22, 0),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
-          stops: [0, 0.42, 1],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
+        color: visual.hero,
+        borderRadius: BorderRadius.circular(visual.heroRadius),
+        border: Border.all(color: visual.border),
         boxShadow: AppShadows.surfaceShadow,
       ),
       child: Column(
@@ -263,7 +260,9 @@ class _CompeteHero extends StatelessWidget {
                     ? 'A fresh start line'
                     : '$finishedCount ${finishedCount == 1 ? 'race' : 'races'} finished',
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
+                  color: visual.darkHero
+                      ? visual.onHero.withValues(alpha: 0.68)
+                      : visual.mutedInk,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -279,7 +278,7 @@ class _CompeteHero extends StatelessWidget {
                     Text(
                       'Compete',
                       style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
+                        color: visual.onHero,
                         height: 1.05,
                         fontSize: 32,
                         letterSpacing: -0.9,

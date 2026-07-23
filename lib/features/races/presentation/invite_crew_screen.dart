@@ -183,15 +183,15 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: NuvoColors.page,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_race == null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: SafeArea(
           child: NuvoErrorState(
             message: _error ?? 'Invite details could not load.',
@@ -202,7 +202,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child:
             ListView(
