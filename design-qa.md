@@ -1,161 +1,172 @@
-# Nuvo three visual modes — design QA
+# Nuvo approved-mode replication — design QA
 
-## Evidence
+## Scope and visual truth
 
-- Source visual truth:
-  - `qa/source-starting-line.png` — 853 × 1844 px
-  - `qa/source-trackside.png` — 853 × 1844 px
-  - `qa/source-crew-momentum.png` — 853 × 1844 px
-- Final Flutter-rendered implementation:
-  - `qa/final-starting-line-390x844.png` — 390 × 844 px
-  - `qa/final-trackside-390x844.png` — 390 × 844 px
-  - `qa/final-crew-momentum-390x844.png` — 390 × 844 px
-  - `qa/final-mode-selector-390x844.png` — 390 × 844 px
-- Source-versus-final comparisons:
-  - `qa/comparison-starting-line-390x844.png`
-  - `qa/comparison-trackside-390x844.png`
-  - `qa/comparison-crew-momentum-390x844.png`
-- Transparent overlays:
-  - `qa/overlay-starting-line-390x844.png`
-  - `qa/overlay-trackside-390x844.png`
-  - `qa/overlay-crew-momentum-390x844.png`
-- Enhanced difference images:
-  - `qa/difference-starting-line-390x844.png`
-  - `qa/difference-trackside-390x844.png`
-  - `qa/difference-crew-momentum-390x844.png`
+The newly supplied comparison images supersede the earlier inferred Trackside
+and Crew Momentum references. In each comparison, only the left 390 × 844 panel
+is approved; the right panel is the rejected implementation.
 
-## Normalization
+Approved source crops:
 
-- Target viewport: 390 × 844 logical pixels.
-- Implementation density: 1 device pixel per logical pixel.
-- Each 853 × 1844 source was downsampled to 390 × 844 with a high-quality
-  Lanczos filter before comparison.
-- Source and implementation aspect ratios differ by less than 0.2%.
-- State: active race, 65 / 100 progress, four race participants in the graphic,
-  top-three standings, recent activity, and Submit proof as the primary action.
-- The fixed QA data is compile-time-only. Production continues to use real race,
-  participant, progress, avatar, and activity data.
+- `qa/trackside_approved_source.png` — 390 × 844
+- `qa/crew_momentum_approved_source.png` — 390 × 844
+- `qa/source-starting-line.png` — the previously approved Starting Line source
 
-## Required fidelity surfaces
+Final Flutter captures:
 
-- Fonts and typography: Manrope is used throughout. The final hierarchy matches
-  the references' large score numerals, strong race title, compact uppercase
-  labels, tabular values, and restrained navigation labels.
-- Spacing and layout rhythm: the three full-view comparisons confirm matching
-  content order, primary margins, dark/light section proportions, graphic
-  placement, leaderboard density, button placement, and persistent navigation.
-- Colors and visual tokens: Starting Line uses bright neutral white, Trackside
-  uses the deep navy race environment and electric-blue course, and Crew
-  Momentum uses warm off-white with blue, ochre, and sage crew accents.
-- Image and asset fidelity: the existing transparent Nuvo mark is used directly.
-  Production uses real participant photos when supplied by application data and
-  the existing initials fallback otherwise. The fixed QA fixture intentionally
-  exercises that honest fallback instead of inventing profile images.
-- Copy and content: the selector says “Choose your Arena” and “Pick how you want
-  to view the race.” Arena copy uses race, crew, progress, leaderboard, finish
-  line, and Submit proof language.
-- Accessibility and interaction: selector choices expose button semantics,
-  progress graphics expose text equivalents, actions remain at least 48 logical
-  pixels high, mode choice opens immediately, and reduced-motion behavior is
-  preserved by the existing shared motion system.
+- `qa/final-mode-selector-approved-390x844.png`
+- `qa/final-starting-line-approved-390x844.png`
+- `qa/final-trackside-approved-390x844.png`
+- `qa/final-crew-momentum-approved-390x844.png`
 
-## Full-view findings
+Exact source measurements are recorded in:
 
-- Starting Line matches the source's open editorial hierarchy, split blue/ink
-  score, remaining-distance copy, horizontal marker track, checkered finish,
-  full-width squared action, flat standings, activity, and light navigation.
-- Trackside matches the source's continuous navy upper environment, compact
-  identity header, centered score, large multi-lane course, crew markers with
-  ranks, narrower squared action, hard navy-to-white boundary, standings,
-  activity, and dark navigation.
-- Crew Momentum matches the source's warm open composition, compact divided
-  header, central score, four-person orbit, counterclockwise blue progress path,
-  squared action, dense standings, activity, and light navigation.
+- `qa/measurement-trackside.md`
+- `qa/measurement-crew-momentum.md`
 
-Focused region captures were not required because the source and final screens
-are available in normalized native-size pairs and every important label,
-graphic, button edge, avatar marker, divider, and navigation item is legible.
-The overlay and difference images provide the focused geometry evidence.
+## Comparison evidence
+
+Trackside:
+
+- `qa/final-trackside-approved-side-by-side.png`
+- `qa/final-trackside-approved-overlay-50.png`
+- `qa/final-trackside-approved-difference.png`
+
+Crew Momentum:
+
+- `qa/final-crew-momentum-approved-side-by-side.png`
+- `qa/final-crew-momentum-approved-overlay-50.png`
+- `qa/final-crew-momentum-approved-difference.png`
+
+The side-by-sides preserve each source and implementation at native 390 × 844,
+so the full view keeps typography, dividers, avatars, progress paths, buttons,
+standings, activity, and navigation readable. Separate focused crops were not
+needed.
+
+## Normalized state
+
+- Viewport: 390 × 844 logical pixels at 1 device pixel per logical pixel.
+- Race: First to 100 Pushups.
+- Current progress: 65 / 100.
+- Trackside standings: You 65, Alex R. 48, Maya L. 31.
+- Crew Momentum standings: You 65, Alex 58, Jordan 42.
+- Primary action: Submit proof.
+- The fixed state is compile-time visual-QA data only. Production data flow,
+  race actions, routing, authentication, and backend contracts are unchanged.
+
+## Fidelity review
+
+### Trackside
+
+- The full-width navy race environment ends at y=465, matching the approved
+  hard transition to the standings surface.
+- Logo, Arena label, hierarchy, split score, remaining copy, five-lane
+  elliptical course, three crew positions, and 241 × 52 action match the
+  measured source structure.
+- The standings, activity row, and 74-pixel dark navigation use the approved
+  vertical density and content.
+- The course is a purpose-built painter because it is a scalable progress
+  visualization, not a substituted image asset.
+
+### Crew Momentum
+
+- Warm open canvas, divided header, race title, 184-pixel progress orbit,
+  four participant positions, score badges, ranks, chase copy, and 344 × 44
+  action match the approved composition.
+- The active path sweeps clockwise from the upper-right to the lower-left.
+- Open standings, stacked activity copy, and 69-pixel light navigation match
+  the approved source structure.
+
+### Starting Line and selector
+
+- Starting Line remains available and unchanged as the third visual mode.
+- The post-login visual selector still exposes Starting Line, Trackside, and
+  Crew Momentum before entering Arena.
 
 ## Comparison history
 
-### Pass 1
+### Trackside pass 1
 
-- P1 — Trackside still resembled the rejected implementation: light outer
-  header, rounded dark card, and generic percentage ring.
-- P1 — Crew Momentum still resembled the rejected implementation: enclosing
-  card, generic percentage ring, and no open portrait orbit.
-- P2 — Starting Line lacked split score color, source lockup, recent activity,
-  and a checkered finish.
+- P1 — The rejected generic ring was replaced by the approved full-width
+  multi-lane course.
+- P2 — The dark environment, hard section boundary, and source-sized action
+  were established.
 
-Fixes:
+### Trackside pass 2
 
-- Replaced Trackside with a full-width navy environment and custom multi-lane
-  course using real participant positions and avatar data.
-- Replaced Crew Momentum with an open four-position crew orbit.
-- Added the source lockup, split score, finish-line track, flat standings, and
-  source hierarchy to Starting Line.
+- P2 — Course depth, score hierarchy, lane count, and marker positions were
+  measured against the approved crop and corrected.
+- P2 — The standings state was corrected to 65 / 48 / 31.
 
-### Pass 2
+### Trackside pass 3
 
-- P2 — Trackside's goal text rendered with the wrong optical weight and its
-  course sat too low.
-- P2 — Crew Momentum showed only three members and its blue arc ran in the
-  opposite direction.
-- P2 — The temporary QA selector miniature overflowed its frame by five pixels.
+- P2 — Active-path endpoints, avatar centers, row heights, progress bars,
+  activity spacing, and navigation height were tightened.
 
-Fixes:
+### Trackside final pass
 
-- Corrected the Trackside score weight and moved the course behind the score.
-- Added a fourth participant, enlarged the crew composition, and reversed the
-  progress sweep.
-- Tightened the Trackside selector miniature.
+- Evidence: `qa/final-trackside-approved-side-by-side.png`.
+- No actionable P0, P1, or P2 layout finding remains.
 
-### Pass 3
+### Crew Momentum pass 1
 
-- P2 — Trackside crew markers were inside the lanes rather than seated on the
-  course edge.
-- P2 — Crew standings were too tall to keep recent activity above navigation.
-- P2 — Source buttons were squared while the implementation remained pill-like.
+- P1 — The rejected generic ring/card treatment was replaced with the approved
+  open four-person orbit.
+- P2 — Header, title, action, standings, and activity were placed against the
+  source measurements.
 
-Fixes:
+### Crew Momentum pass 2
 
-- Repositioned Trackside markers and adjusted the course depth.
-- Added a dense Crew Momentum standings treatment.
-- Added a mode-source action with restrained six-pixel radii and matched the
-  narrower Trackside action width.
+- P2 — Orbit diameter, arc direction, portrait centers, score badges, rank
+  labels, and chase copy were corrected.
 
-### Final pass
+### Crew Momentum pass 3
 
-- Evidence: all three `qa/comparison-*-390x844.png` files.
-- No actionable P0, P1, or P2 visual findings remain.
+- P2 — Button position, row density, progress bars, activity wrapping, and
+  navigation height were tightened.
 
-## Remaining acceptable differences
+### Crew Momentum final pass
 
-- QA participants without supplied photos render the production initials
-  fallback. Real profile photos appear when the backend provides them.
-- Source portraits and names are examples; production keeps real names, ranks,
-  progress, and activity.
-- Bottom-navigation icons use the app's existing Cupertino icon set rather than
-  copying the source artwork.
-- Starting Line's top lockup is slightly more compact before the physical
-  device safe area is applied.
+- Evidence: `qa/final-crew-momentum-approved-side-by-side.png`.
+- No actionable P0, P1, or P2 layout finding remains.
 
-## Runtime and interaction verification
+## Remaining visible differences
 
-- `flutter analyze --no-fatal-infos`: exit 0, no findings.
-- `flutter test`: exit 0, all 90 tests passed.
-- Deterministic Flutter render: all four 390 × 844 capture tests passed.
-- Physical iPhone: debug build signed, installed, and launched successfully on
-  `Shresh’s iPhone` (`00008110-001079C12183401E`).
-- Authentication behavior was exercised on launch: the existing expired
-  session correctly returned to the unchanged sign-in flow.
-- iOS Simulator could not run because the locked Google ML Kit pods do not
-  support the Apple Silicon iOS 26 simulator architecture. No dependency or
-  protected native-file change was made to bypass that baseline constraint.
-- The local web QA build is served on port 7360. Automated Chrome inspection was
-  unavailable because the ChatGPT Chrome Extension connection could not be
-  established, so no final Chrome-console claim is made.
+- P3 / asset blocker — the approved source uses specific portrait photographs
+  that are not present in the repository or supplied attachments. The QA
+  fixture therefore shows the existing initials fallback. Production already
+  renders each member's real `profilePhotoUrl` when available. The source
+  portraits were not extracted from screenshots or fabricated.
+- P3 — the exact source font files were not supplied. The implementation uses
+  the app's existing Manrope family, producing small optical differences in
+  character width and rasterization.
+- P3 — Flutter web and the raster source use different text antialiasing, most
+  visible in small uppercase labels and navigation captions.
+- P3 — Crew Momentum's row dividers retain the stable Flutter inset rather than
+  forcing the final few pixels with an overflow layout.
+
+These are documented constraints, not hidden claims of pixel identity.
+
+## Interaction and runtime verification
+
+- Mode selector: all three choices were opened in Chrome at 390 × 844.
+- Primary actions and production routing remain wired through the existing
+  callbacks; the compile-time QA surface intentionally uses no-op callbacks.
+- Final Chrome render completed without a new console error after the final hot
+  restart. A transient overflow experiment produced errors during iteration and
+  was reverted before the final captures.
+- `flutter analyze --no-fatal-infos`: passed with no issues.
+- `flutter test`: passed, all 92 tests.
+- `git diff --check`: passed.
+
+## Protected areas
+
+No authentication, AI Motion Proof, motion validator, camera/ML bridge,
+dependency, backend, race API, race repository, or race controller file was
+edited for this task.
+
+`ios/Runner.xcodeproj/project.pbxproj` was already modified in the working tree
+before this task and was preserved without edits.
 
 ## Final result
 
