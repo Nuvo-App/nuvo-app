@@ -126,7 +126,11 @@ class ArenaStylePreview extends StatelessWidget {
     final participants = trackside
         ? [_participants[0], _participants[1], _participants[3]]
         : _participants;
-    final horizontal = visual.style == NuvoPreviewStyle.trackside ? 0.0 : 22.0;
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final designInset = math.max(0.0, (viewportWidth - 390) / 2);
+    final horizontal = visual.style == NuvoPreviewStyle.trackside
+        ? 0.0
+        : designInset + 22.0;
     return SafeArea(
       bottom: false,
       child: ListView(
@@ -221,9 +225,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final otherBoards = allBoards
         .where((board) => board.id != resolvedId)
         .toList();
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final designInset = math.max(0.0, (viewportWidth - 390) / 2);
     final focusPadding = visual.style == NuvoPreviewStyle.trackside
         ? const EdgeInsets.fromLTRB(0, 0, 0, 128)
-        : const EdgeInsets.fromLTRB(22, 0, 22, 128);
+        : EdgeInsets.fromLTRB(designInset + 22, 0, designInset + 22, 128);
     return Scaffold(
       backgroundColor: visual.page,
       body: SafeArea(
@@ -1168,153 +1174,156 @@ class _TracksideFocusBoard extends StatelessWidget {
     final score = _ProgressScore.parse(board.progressLabel, fallback: pct);
     return Column(
       children: [
-        AspectRatio(
-          aspectRatio: 390 / 465,
+        SizedBox(
+          height: 465,
+          width: double.infinity,
           child: ColoredBox(
             color: visual.hero,
-            child: FittedBox(
-              fit: BoxFit.fill,
-              child: SizedBox(
-                width: 390,
-                height: 465,
-                child: Stack(
-                  children: [
-                    Positioned(
-                      left: 25,
-                      right: 25,
-                      top: 29,
-                      child: _NuvoLockup(
-                        inverse: true,
-                        trailing: 'ARENA',
-                        trailingColor: visual.action,
-                        markSize: 24,
-                        brandFontSize: 10.5,
-                        brandLetterSpacing: 3,
-                        trailingFontSize: 9,
-                      ),
-                    ),
-                    Positioned(
-                      top: 78,
-                      left: 0,
-                      right: 0,
-                      child: Text(
-                        'Your next move',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: visual.onHero,
-                          fontSize: 27,
-                          fontWeight: FontWeight.w800,
-                          height: 1.05,
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: 390,
+                  height: 465,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 25,
+                        right: 25,
+                        top: 29,
+                        child: _NuvoLockup(
+                          inverse: true,
+                          trailing: 'ARENA',
+                          trailingColor: visual.action,
+                          markSize: 24,
+                          brandFontSize: 10.5,
+                          brandLetterSpacing: 3,
+                          trailingFontSize: 9,
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: 116,
-                      left: 40,
-                      right: 40,
-                      child: Text(
-                        board.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: visual.onHero.withValues(alpha: 0.72),
-                          fontSize: 14,
-                          height: 1,
+                      Positioned(
+                        top: 78,
+                        left: 0,
+                        right: 0,
+                        child: Text(
+                          'Your next move',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.headlineLarge.copyWith(
+                            color: visual.onHero,
+                            fontSize: 27,
+                            fontWeight: FontWeight.w800,
+                            height: 1.05,
+                          ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: 153,
-                      left: 0,
-                      right: 0,
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: score.current,
-                              style: AppTextStyles.number(
-                                56,
-                                color: visual.action,
-                                weight: FontWeight.w700,
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' / ',
-                              style: AppTextStyles.number(
-                                56,
-                                color: visual.onHero.withValues(alpha: 0.62),
-                                weight: FontWeight.w500,
-                              ),
-                            ),
-                            TextSpan(
-                              text: score.goal,
-                              style: AppTextStyles.number(
-                                56,
-                                color: visual.onHero,
-                                weight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                      Positioned(
+                        top: 116,
+                        left: 40,
+                        right: 40,
+                        child: Text(
+                          board.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: visual.onHero.withValues(alpha: 0.72),
+                            fontSize: 14,
+                            height: 1,
+                          ),
                         ),
-                        textAlign: TextAlign.center,
                       ),
-                    ),
-                    Positioned(
-                      top: 233,
-                      left: 0,
-                      right: 0,
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${score.remaining}',
-                              style: AppTextStyles.titleMedium.copyWith(
-                                color: visual.action,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 18,
-                                height: 1,
+                      Positioned(
+                        top: 153,
+                        left: 0,
+                        right: 0,
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: score.current,
+                                style: AppTextStyles.number(
+                                  56,
+                                  color: visual.action,
+                                  weight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                            TextSpan(
-                              text: ' to the finish line',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: visual.onHero.withValues(alpha: 0.78),
-                                fontSize: 14,
-                                height: 1,
+                              TextSpan(
+                                text: ' / ',
+                                style: AppTextStyles.number(
+                                  56,
+                                  color: visual.onHero.withValues(alpha: 0.62),
+                                  weight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                              TextSpan(
+                                text: score.goal,
+                                style: AppTextStyles.number(
+                                  56,
+                                  color: visual.onHero,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
                       ),
-                    ),
-                    Positioned(
-                      left: 22,
-                      top: 176,
-                      width: 346,
-                      height: 180,
-                      child: _TracksideRaceCourse(
-                        progress: pct / 100,
-                        racers: ringRacers,
+                      Positioned(
+                        top: 233,
+                        left: 0,
+                        right: 0,
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '${score.remaining}',
+                                style: AppTextStyles.titleMedium.copyWith(
+                                  color: visual.action,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 18,
+                                  height: 1,
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' to the finish line',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: visual.onHero.withValues(alpha: 0.78),
+                                  fontSize: 14,
+                                  height: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ),
-                    Positioned(
-                      left: 74,
-                      top: 389,
-                      width: 241,
-                      child: board.isResult
-                          ? NuvoOutlineButton(
-                              label: 'Open board',
-                              expand: true,
-                              onPressed: onOpen,
-                            )
-                          : _SourceActionButton(
-                              label: board.primaryActionLabel,
-                              onTap: onLogMove,
-                            ),
-                    ),
-                  ],
+                      Positioned(
+                        left: 22,
+                        top: 176,
+                        width: 346,
+                        height: 180,
+                        child: _TracksideRaceCourse(
+                          progress: pct / 100,
+                          racers: ringRacers,
+                        ),
+                      ),
+                      Positioned(
+                        left: 74,
+                        top: 389,
+                        width: 241,
+                        child: board.isResult
+                            ? NuvoOutlineButton(
+                                label: 'Open board',
+                                expand: true,
+                                onPressed: onOpen,
+                              )
+                            : _SourceActionButton(
+                                label: board.primaryActionLabel,
+                                onTap: onLogMove,
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1322,71 +1331,80 @@ class _TracksideFocusBoard extends StatelessWidget {
         ),
         Container(
           height: 305,
+          width: double.infinity,
           color: visual.surface,
-          padding: const EdgeInsets.fromLTRB(25, 21, 25, 0),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'CREW STANDINGS',
-                    style: AppTextStyles.labelUppercase(
-                      10,
-                      color: visual.mutedInk,
+          child: Center(
+            child: SizedBox(
+              width: 390,
+              height: 305,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(25, 21, 25, 0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'CREW STANDINGS',
+                          style: AppTextStyles.labelUppercase(
+                            10,
+                            color: visual.mutedInk,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'VIEW ALL',
+                          style: AppTextStyles.labelUppercase(
+                            9,
+                            color: visual.action,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'VIEW ALL',
-                    style: AppTextStyles.labelUppercase(
-                      9,
-                      color: visual.action,
+                    const SizedBox(height: 8),
+                    _FlatLeaderboard(
+                      board: board,
+                      isLoading: isLoading,
+                      currentUserPhotoUrl: currentUserPhotoUrl,
+                      currentUserInitials: currentUserInitials,
+                      title: 'Crew standings',
+                      contentPadding: EdgeInsets.zero,
+                      showTitle: false,
+                      highlightCurrentUser: false,
+                      showProgressLines: true,
+                      rowHeight: 54,
+                      dividerHeight: 1,
+                      avatarSize: 40,
+                      rankWidth: 12,
+                      rankAvatarGap: 20,
+                      avatarLabelGap: 14,
+                      progressLineWidth: 70,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _FlatLeaderboard(
-                board: board,
-                isLoading: isLoading,
-                currentUserPhotoUrl: currentUserPhotoUrl,
-                currentUserInitials: currentUserInitials,
-                title: 'Crew standings',
-                contentPadding: EdgeInsets.zero,
-                showTitle: false,
-                highlightCurrentUser: false,
-                showProgressLines: true,
-                rowHeight: 54,
-                dividerHeight: 1,
-                avatarSize: 40,
-                rankWidth: 12,
-                rankAvatarGap: 20,
-                avatarLabelGap: 14,
-                progressLineWidth: 70,
-              ),
-              if (board.isDemo) ...[
-                const SizedBox(height: 8),
-                Divider(height: 1, color: visual.border),
-                const SizedBox(height: 13),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'RECENT ACTIVITY',
-                    style: AppTextStyles.labelUppercase(
-                      10,
-                      color: visual.mutedInk,
-                    ),
-                  ),
+                    if (board.isDemo) ...[
+                      const SizedBox(height: 8),
+                      Divider(height: 1, color: visual.border),
+                      const SizedBox(height: 13),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'RECENT ACTIVITY',
+                          style: AppTextStyles.labelUppercase(
+                            10,
+                            color: visual.mutedInk,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      const _SourceActivityRow(
+                        initials: 'ML',
+                        text: 'Maya L. submitted 20 pushups',
+                        name: 'Maya L.',
+                        detail: 'submitted 20 pushups',
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 7),
-                const _SourceActivityRow(
-                  initials: 'ML',
-                  text: 'Maya L. submitted 20 pushups',
-                  name: 'Maya L.',
-                  detail: 'submitted 20 pushups',
-                ),
-              ],
-            ],
+              ),
+            ),
           ),
         ),
       ],

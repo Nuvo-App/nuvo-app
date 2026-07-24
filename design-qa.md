@@ -18,6 +18,7 @@ Final Flutter captures:
 - `qa/final-starting-line-approved-390x844.png`
 - `qa/final-trackside-approved-390x844.png`
 - `qa/final-crew-momentum-approved-390x844.png`
+- `qa/pass4-trackside-430x844.png` — corrected wider-iPhone render
 
 Exact source measurements are recorded in:
 
@@ -46,6 +47,9 @@ needed.
 ## Normalized state
 
 - Viewport: 390 × 844 logical pixels at 1 device pixel per logical pixel.
+- Wider-iPhone verification viewport: 430 × 844 logical pixels at 1 device
+  pixel per logical pixel. The full-bleed surfaces remain 430 pixels wide while
+  the approved composition is centered at its native 390-pixel width.
 - Race: First to 100 Pushups.
 - Current progress: 65 / 100.
 - Trackside standings: You 65, Alex R. 48, Maya L. 31.
@@ -108,6 +112,23 @@ needed.
 - Evidence: `qa/final-trackside-approved-side-by-side.png`.
 - No actionable P0, P1, or P2 layout finding remains.
 
+### Trackside real-device correction pass
+
+- P1 — On a wider iPhone, the 390 × 465 hero was being enlarged to the full
+  device width by `AspectRatio` plus `BoxFit.fill`. This made the hero roughly
+  10% too tall, enlarged every heading and marker, compressed the standings
+  below it, and produced the deformed screen reported from the physical phone.
+- Fix — The navy hero and white standings remain full bleed, but their content
+  now stays at the approved 390-pixel design width and 465 / 305 pixel heights.
+  The bottom-navigation content is also capped at 390 pixels instead of
+  spreading across the wider device.
+- Post-fix evidence: `qa/pass4-trackside-430x844.png`.
+- Normalized comparison evidence:
+  `qa/pass4-trackside-side-by-side.png`. Its implementation half is the centered
+  390-pixel crop from the 430-pixel browser render.
+- Result — the wider viewport preserves the approved outline, formatting,
+  density, and section proportions without horizontal or vertical deformation.
+
 ### Crew Momentum pass 1
 
 - P1 — The rejected generic ring/card treatment was replaced with the approved
@@ -155,6 +176,8 @@ These are documented constraints, not hidden claims of pixel identity.
 - Final Chrome render completed without a new console error after the final hot
   restart. A transient overflow experiment produced errors during iteration and
   was reverted before the final captures.
+- Wider-iPhone Trackside rendering was verified at 430 × 844 after the
+  responsive correction.
 - `flutter analyze --no-fatal-infos`: passed with no issues.
 - `flutter test`: passed, all 92 tests.
 - `git diff --check`: passed.
