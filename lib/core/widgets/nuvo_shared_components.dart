@@ -600,6 +600,7 @@ class NuvoTextInput extends StatelessWidget {
     this.autofocus = false,
     this.enabled = true,
     this.prefixIcon,
+    this.obscureText = false,
   });
 
   final TextEditingController controller;
@@ -615,6 +616,7 @@ class NuvoTextInput extends StatelessWidget {
   final bool autofocus;
   final bool enabled;
   final Widget? prefixIcon;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -635,6 +637,7 @@ class NuvoTextInput extends StatelessWidget {
           maxLines: maxLines,
           autofocus: autofocus,
           enabled: enabled,
+          obscureText: obscureText,
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
           decoration: InputDecoration(
             hintText: hint,

@@ -19,6 +19,7 @@ class EmailStartScreen extends ConsumerStatefulWidget {
 
 class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
   final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _loading = false;
   String? _error;
 
@@ -26,16 +27,24 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
   void initState() {
     super.initState();
     _emailController.addListener(() => setState(() {}));
+    _passwordController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
-  bool get _canSubmit =>
-      _emailController.text.trim().contains('@') && !_loading;
+  bool get _isReviewerEmail =>
+      _emailController.text.trim().toLowerCase() == 'testing@getnuvo.net';
+
+  bool get _canSubmit {
+    if (_loading || !_emailController.text.trim().contains('@')) return false;
+    if (_isReviewerEmail) return _passwordController.text.isNotEmpty;
+    return true;
+  }
 
   Future<void> _submit() async {
     final email = _emailController.text.trim().toLowerCase();
@@ -44,13 +53,22 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       _error = null;
     });
     try {
-      await ref.read(authControllerProvider.notifier).startEmailAuth(email);
-      if (mounted) context.push('/auth/verify', extra: email);
+      if (_isReviewerEmail) {
+        await ref
+            .read(authControllerProvider.notifier)
+            .signInReviewer(email, _passwordController.text);
+        return;
+      } else {
+        await ref.read(authControllerProvider.notifier).startEmailAuth(email);
+        if (mounted) context.push('/auth/verify', extra: email);
+      }
     } catch (e) {
       debugPrint('[EmailStart] startEmailAuth failed (${e.runtimeType}): $e');
       if (mounted) {
         setState(() {
-          _error = 'Could not send code. Please try again.';
+          _error = _isReviewerEmail
+              ? 'Invalid review credentials.'
+              : 'Could not send code. Please try again.';
           _loading = false;
         });
       }
@@ -99,6 +117,16 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                               keyboardType: TextInputType.emailAddress,
                               onChanged: (_) => setState(() => _error = null),
                             ),
+                            if (_isReviewerEmail) ...[
+                              const SizedBox(height: 14),
+                              NuvoTextInput(
+                                controller: _passwordController,
+                                label: 'Reviewer password',
+                                hint: 'Password',
+                                obscureText: true,
+                                onChanged: (_) => setState(() => _error = null),
+                              ),
+                            ],
                             if (_error != null) ...[
                               const SizedBox(height: 10),
                               Text(
@@ -125,7 +153,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: NuvoPrimaryButton(
-                label: 'Send code',
+                label: _isReviewerEmail ? 'Sign in' : 'Send code',
                 icon: Icons.arrow_forward_rounded,
                 expand: true,
                 loading: _loading,
