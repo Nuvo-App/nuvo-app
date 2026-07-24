@@ -7,10 +7,6 @@ import '../../../core/design/nuvo_preview_style.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/preview_style_chooser.dart';
 import '../../arena/presentation/arena_screen_fixed.dart';
-import '../../compete/presentation/compete_screen_fixed.dart';
-import '../../move/presentation/move_screen.dart';
-import '../../pass/presentation/pass_screen.dart';
-import '../../profile/presentation/profile_screen.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.child});
@@ -57,14 +53,6 @@ class _MainShellState extends ConsumerState<MainShell> {
     '/profile', // 4 Profile
   ];
 
-  static const _pages = [
-    ArenaScreen(),
-    CompeteScreen(),
-    MoveScreen(),
-    PassScreen(),
-    ProfileScreen(),
-  ];
-
   int _indexFor(String location) {
     if (location.startsWith('/compete')) return 1;
     if (location.startsWith('/move')) return 2;
@@ -85,7 +73,6 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   void _onNavTap(int index) {
     if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
     context.go(_paths[index]);
   }
 
@@ -104,34 +91,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     return Scaffold(
       backgroundColor: visual.page,
       extendBody: false,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          for (var index = 0; index < _pages.length; index++)
-            IgnorePointer(
-              ignoring: index != _currentIndex,
-              child: ExcludeSemantics(
-                excluding: index != _currentIndex,
-                child: TickerMode(
-                  enabled: index == _currentIndex,
-                  child: AnimatedSlide(
-                    offset: index == _currentIndex
-                        ? Offset.zero
-                        : Offset(index < _currentIndex ? -0.025 : 0.025, 0),
-                    duration: const Duration(milliseconds: 360),
-                    curve: Curves.easeOutCubic,
-                    child: AnimatedOpacity(
-                      opacity: index == _currentIndex ? 1 : 0,
-                      duration: const Duration(milliseconds: 280),
-                      curve: Curves.easeOutCubic,
-                      child: RepaintBoundary(child: _pages[index]),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+      body: RepaintBoundary(child: widget.child),
       bottomNavigationBar: NuvoBottomNav(
         currentIndex: _currentIndex,
         onTap: _onNavTap,
