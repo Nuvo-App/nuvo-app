@@ -60,6 +60,13 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> signInReviewer(String email, String password) async {
+    final user = await _repo.signInReviewer(email, password);
+    if (mounted) {
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
+  }
+
   Future<void> saveProfile({
     String? fullName,
     String? username,
