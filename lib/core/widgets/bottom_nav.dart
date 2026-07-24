@@ -46,15 +46,20 @@ class NuvoBottomNav extends StatelessWidget {
             color: visual.navigation,
             border: Border(top: BorderSide(color: visual.border)),
           ),
-          child: Row(
-            children: [
-              for (var index = 0; index < _items.length; index++)
-                _NavButton(
-                  item: _items[index],
-                  selected: currentIndex == index,
-                  onTap: () => _tap(index),
-                ),
-            ],
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 390),
+              child: Row(
+                children: [
+                  for (var index = 0; index < _items.length; index++)
+                    _NavButton(
+                      item: _items[index],
+                      selected: currentIndex == index,
+                      onTap: () => _tap(index),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
