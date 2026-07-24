@@ -128,6 +128,14 @@ class AuthApi {
     return AuthResponse.fromJson(json);
   }
 
+  Future<AuthResponse> signInReviewer(String email, String password) async {
+    final json = await _post('/auth/reviewer', {
+      'email': email,
+      'password': password,
+    });
+    return AuthResponse.fromJson(json);
+  }
+
   Future<String> refreshSession(String refreshToken) async {
     final json = await _post('/auth/refresh', {'refreshToken': refreshToken});
     return json['accessToken'] as String;
