@@ -5,6 +5,7 @@ export type AppEnv = {
     RESEND_API_KEY: string;
     RESEND_FROM_EMAIL: string;
     JWT_SECRET: string;
+    REVIEWER_PASSWORD_HASH?: string;
     API_BASE_URL: string;
     PROFILE_PHOTOS: R2Bucket;
   };
