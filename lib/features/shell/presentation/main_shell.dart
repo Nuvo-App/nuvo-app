@@ -35,7 +35,26 @@ class ConferenceVisualQaScreen extends ConsumerWidget {
     final visual = NuvoVisualTheme.of(context);
     return Scaffold(
       backgroundColor: visual.page,
-      body: const ArenaStylePreview(),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.black,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: const Text(
+              'QA PREVIEW — NOT LIVE DATA',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          const Expanded(child: ArenaStylePreview()),
+        ],
+      ),
       bottomNavigationBar: NuvoBottomNav(currentIndex: 0, onTap: (_) {}),
     );
   }

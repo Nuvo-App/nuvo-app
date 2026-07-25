@@ -148,6 +148,7 @@ class ArenaActivity {
     this.raceTitle,
     required this.timeLabel,
     required this.type,
+    this.actorPhotoUrl,
   });
 
   final String id;
@@ -157,6 +158,7 @@ class ArenaActivity {
   final String timeLabel;
   final String
   type; // 'proof_submitted' | 'joined' | 'leader_changed' | 'finished' | 'waiting'
+  final String? actorPhotoUrl;
 
   factory ArenaActivity.fromJson(Map<String, dynamic> json) => ArenaActivity(
     id: json['id'] as String,
@@ -165,5 +167,6 @@ class ArenaActivity {
     raceTitle: json['raceTitle'] as String?,
     timeLabel: json['timeLabel'] as String? ?? '',
     type: json['type'] as String? ?? 'proof_submitted',
+    actorPhotoUrl: json['actorPhotoUrl'] as String?,
   );
 }

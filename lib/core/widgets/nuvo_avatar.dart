@@ -38,6 +38,7 @@ class NuvoAvatar extends StatelessWidget {
     this.textColor,
     this.borderColor,
     this.borderWidth = 1.5,
+    this.useIconFallback = false,
   });
 
   final String initials;
@@ -51,6 +52,11 @@ class NuvoAvatar extends StatelessWidget {
   final Color? textColor;
   final Color? borderColor;
   final double borderWidth;
+
+  /// When true, the no-photo fallback renders a generic person-silhouette
+  /// icon instead of text initials. Defaults to false everywhere so existing
+  /// callers keep the initials fallback unchanged.
+  final bool useIconFallback;
 
   @override
   Widget build(BuildContext context) {
@@ -96,15 +102,21 @@ class NuvoAvatar extends StatelessWidget {
 
   Widget _fallback() => _circle(
     child: Center(
-      child: Text(
-        _clamp(initials),
-        style: TextStyle(
-          fontSize: (size * 0.36).clamp(7.0, 20.0),
-          fontWeight: FontWeight.w800,
-          color: textColor ?? NuvoColors.navy,
-          height: 1.0,
-        ),
-      ),
+      child: useIconFallback
+          ? Icon(
+              Icons.person_rounded,
+              size: (size * 0.6).clamp(10.0, 40.0),
+              color: textColor ?? NuvoColors.navy,
+            )
+          : Text(
+              _clamp(initials),
+              style: TextStyle(
+                fontSize: (size * 0.36).clamp(7.0, 20.0),
+                fontWeight: FontWeight.w800,
+                color: textColor ?? NuvoColors.navy,
+                height: 1.0,
+              ),
+            ),
     ),
   );
 
