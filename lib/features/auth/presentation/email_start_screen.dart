@@ -38,7 +38,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
   }
 
   bool get _isReviewerEmail =>
-      _emailController.text.trim().toLowerCase() == 'testing@getnuvo.net';
+      _emailController.text.trim().toLowerCase() == 'team@getnuvo.net';
 
   bool get _canSubmit {
     if (_loading || !_emailController.text.trim().contains('@')) return false;
@@ -121,7 +121,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                               const SizedBox(height: 14),
                               NuvoTextInput(
                                 controller: _passwordController,
-                                label: 'Reviewer password',
+                                label: 'Password',
                                 hint: 'Password',
                                 obscureText: true,
                                 onChanged: (_) => setState(() => _error = null),

@@ -394,7 +394,7 @@ authRouter.post('/reviewer', async (c) => {
   const INVALID = { ok: false, error: 'Invalid review credentials' } as const;
 
   if (
-    email !== 'testing@getnuvo.net' ||
+    email !== 'team@getnuvo.net' ||
     !password ||
     !expectedHash ||
     (await hashValue(password)) !== expectedHash
@@ -408,9 +408,9 @@ authRouter.post('/reviewer', async (c) => {
     `UPDATE users
      SET status = 'active',
          terms_accepted_at = COALESCE(terms_accepted_at, CURRENT_TIMESTAMP),
-         demo_world_enabled = 1,
-         demo_world_seed = COALESCE(demo_world_seed, 'google-review-2026'),
-         demo_world_variant = COALESCE(demo_world_variant, 'summer_v1'),
+         demo_world_enabled = 0,
+         demo_world_seed = NULL,
+         demo_world_variant = NULL,
          last_login_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
@@ -444,7 +444,7 @@ authRouter.post('/reviewer', async (c) => {
          (id, user_id, provider, provider_user_id, email, email_verified, display_name, avatar_url, created_at)
        VALUES (?, ?, 'reviewer', ?, ?, 1, 'Nuvo Review', NULL, CURRENT_TIMESTAMP)`,
     )
-      .bind(generateId(), user.id, 'testing@getnuvo.net', email)
+      .bind(generateId(), user.id, 'team@getnuvo.net', email)
       .run();
   }
 
