@@ -37,12 +37,11 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     super.dispose();
   }
 
-  String get _normalizedEmail => _emailController.text.trim().toLowerCase();
-
-  bool get _isReviewerEmail => _normalizedEmail == 'testing@getnuvo.net';
+  bool get _isReviewerEmail =>
+      _emailController.text.trim().toLowerCase() == 'team@getnuvo.net';
 
   bool get _canSubmit {
-    if (_loading || !_normalizedEmail.contains('@')) return false;
+    if (_loading || !_emailController.text.trim().contains('@')) return false;
     if (_isReviewerEmail) return _passwordController.text.isNotEmpty;
     return true;
   }
@@ -59,10 +58,10 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
             .read(authControllerProvider.notifier)
             .signInReviewer(email, _passwordController.text);
         return;
+      } else {
+        await ref.read(authControllerProvider.notifier).startEmailAuth(email);
+        if (mounted) context.push('/auth/verify', extra: email);
       }
-
-      await ref.read(authControllerProvider.notifier).startEmailAuth(email);
-      if (mounted) context.push('/auth/verify', extra: email);
     } catch (e) {
       debugPrint('[EmailStart] auth submit failed (${e.runtimeType}): $e');
       if (mounted) {
@@ -122,7 +121,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                               const SizedBox(height: 14),
                               NuvoTextInput(
                                 controller: _passwordController,
-                                label: 'Reviewer password',
+                                label: 'Password',
                                 hint: 'Password',
                                 obscureText: true,
                                 onChanged: (_) => setState(() => _error = null),
