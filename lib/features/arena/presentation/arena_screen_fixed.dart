@@ -117,6 +117,13 @@ class ArenaStylePreview extends StatelessWidget {
       joinedAt: '2026-07-23T00:00:00Z',
     ),
   ];
+  static const _activity = ArenaActivity(
+    id: 'preview-activity',
+    actorName: 'Maya L.',
+    text: 'Maya L. submitted 20 pushups',
+    timeLabel: '2m ago',
+    type: 'proof_submitted',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +151,7 @@ class ArenaStylePreview extends StatelessWidget {
               currentUserId: 'preview-you',
               currentUserInitials: 'SP',
               participants: participants,
+              activity: _activity,
               onLogMove: _noop,
               onOpen: _noop,
             ),
@@ -295,7 +303,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             currentUserInitials: initials,
                             participants:
                                 _scoreCenterParticipants ??
-                                cameraRaceById[activeBoard.id]?.participants,
+                                serverRankedParticipants(
+                                  cameraRaceById[activeBoard.id]!,
+                                ),
+                            activity: snapshot.activity.isEmpty
+                                ? null
+                                : snapshot.activity.first,
                             onLogMove: () => _handlePrimaryAction(
                               context,
                               activeBoard,
@@ -386,7 +399,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       }
       setState(() {
         _scoreCenterBoard = _boardFromRace(race, userId);
-        _scoreCenterParticipants = race.participants;
+        _scoreCenterParticipants = serverRankedParticipants(race);
         _isLoadingBoardDetail = false;
       });
     } catch (_) {
@@ -523,6 +536,7 @@ class _FocusBoardCard extends StatelessWidget {
     this.currentUserPhotoUrl,
     this.currentUserInitials,
     this.participants,
+    this.activity,
   });
 
   final ArenaBoard board;
@@ -533,6 +547,7 @@ class _FocusBoardCard extends StatelessWidget {
   final String? currentUserPhotoUrl;
   final String? currentUserInitials;
   final List<RaceParticipant>? participants;
+  final ArenaActivity? activity;
 
   @override
   Widget build(BuildContext context) {
@@ -573,6 +588,7 @@ class _FocusBoardCard extends StatelessWidget {
         onOpen: onOpen,
         currentUserPhotoUrl: currentUserPhotoUrl,
         currentUserInitials: currentUserInitials,
+        activity: activity,
       );
     }
     if (visual.style == NuvoPreviewStyle.crewMomentum) {
@@ -1157,6 +1173,7 @@ class _TracksideFocusBoard extends StatelessWidget {
     required this.onOpen,
     this.currentUserPhotoUrl,
     this.currentUserInitials,
+    this.activity,
   });
 
   final ArenaBoard board;
@@ -1166,16 +1183,25 @@ class _TracksideFocusBoard extends StatelessWidget {
   final VoidCallback onOpen;
   final String? currentUserPhotoUrl;
   final String? currentUserInitials;
+  final ArenaActivity? activity;
 
   @override
   Widget build(BuildContext context) {
     final visual = NuvoVisualTheme.of(context);
     final pct = board.progressPercent ?? 0;
     final score = _ProgressScore.parse(board.progressLabel, fallback: pct);
+    final screenSize = MediaQuery.sizeOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final availableBoardHeight =
+        screenSize.height - viewPadding.top - viewPadding.bottom - 74;
+    final layoutScale = math.min(
+      1.0,
+      math.max(0.0, availableBoardHeight) / 770,
+    );
     return Column(
       children: [
         SizedBox(
-          height: 465,
+          height: 465 * layoutScale,
           width: double.infinity,
           child: ColoredBox(
             color: visual.hero,
@@ -1330,78 +1356,93 @@ class _TracksideFocusBoard extends StatelessWidget {
           ),
         ),
         Container(
-          height: 305,
+          height: 305 * layoutScale,
           width: double.infinity,
           color: visual.surface,
           child: Center(
-            child: SizedBox(
-              width: 390,
-              height: 305,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(25, 21, 25, 0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'CREW STANDINGS',
-                          style: AppTextStyles.labelUppercase(
-                            10,
-                            color: visual.mutedInk,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: SizedBox(
+                width: 390,
+                height: 305,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(25, 21, 25, 0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'CREW STANDINGS',
+                            style: AppTextStyles.labelUppercase(
+                              10,
+                              color: visual.mutedInk,
+                            ),
+                          ),
+                          const Spacer(),
+                          Semantics(
+                            button: true,
+                            label: 'View full crew standings',
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: onOpen,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Text(
+                                  'VIEW ALL',
+                                  style: AppTextStyles.labelUppercase(
+                                    9,
+                                    color: visual.action,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _FlatLeaderboard(
+                        board: board,
+                        isLoading: isLoading,
+                        currentUserPhotoUrl: currentUserPhotoUrl,
+                        currentUserInitials: currentUserInitials,
+                        title: 'Crew standings',
+                        contentPadding: EdgeInsets.zero,
+                        showTitle: false,
+                        highlightCurrentUser: false,
+                        showProgressLines: true,
+                        rowHeight: 54,
+                        dividerHeight: 1,
+                        avatarSize: 40,
+                        rankWidth: 12,
+                        rankAvatarGap: 20,
+                        avatarLabelGap: 14,
+                        progressLineWidth: 70,
+                      ),
+                      if (activity != null) ...[
+                        const SizedBox(height: 8),
+                        Divider(height: 1, color: visual.border),
+                        const SizedBox(height: 13),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'RECENT ACTIVITY',
+                            style: AppTextStyles.labelUppercase(
+                              10,
+                              color: visual.mutedInk,
+                            ),
                           ),
                         ),
-                        const Spacer(),
-                        Text(
-                          'VIEW ALL',
-                          style: AppTextStyles.labelUppercase(
-                            9,
-                            color: visual.action,
-                          ),
+                        const SizedBox(height: 7),
+                        _SourceActivityRow(
+                          initials: _initials(activity!.actorName),
+                          text: activity!.text,
+                          timeLabel: activity!.timeLabel,
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    _FlatLeaderboard(
-                      board: board,
-                      isLoading: isLoading,
-                      currentUserPhotoUrl: currentUserPhotoUrl,
-                      currentUserInitials: currentUserInitials,
-                      title: 'Crew standings',
-                      contentPadding: EdgeInsets.zero,
-                      showTitle: false,
-                      highlightCurrentUser: false,
-                      showProgressLines: true,
-                      rowHeight: 54,
-                      dividerHeight: 1,
-                      avatarSize: 40,
-                      rankWidth: 12,
-                      rankAvatarGap: 20,
-                      avatarLabelGap: 14,
-                      progressLineWidth: 70,
-                    ),
-                    if (board.isDemo) ...[
-                      const SizedBox(height: 8),
-                      Divider(height: 1, color: visual.border),
-                      const SizedBox(height: 13),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'RECENT ACTIVITY',
-                          style: AppTextStyles.labelUppercase(
-                            10,
-                            color: visual.mutedInk,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      const _SourceActivityRow(
-                        initials: 'ML',
-                        text: 'Maya L. submitted 20 pushups',
-                        name: 'Maya L.',
-                        detail: 'submitted 20 pushups',
-                      ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -1698,11 +1739,8 @@ class _TracksideRaceCourse extends StatelessWidget {
           'Race track. Your progress is ${(progress * 100).round()} percent.',
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final placements = <Offset>[
-            Offset(constraints.maxWidth * 0.50, 161),
-            Offset(constraints.maxWidth * 0.17, 104),
-            Offset(constraints.maxWidth * 0.83, 104),
-          ];
+          final reduceMotion = MediaQuery.disableAnimationsOf(context);
+          const targetSlots = <double>[0, -1, 1];
           return Stack(
             clipBehavior: Clip.none,
             children: [
@@ -1710,15 +1748,76 @@ class _TracksideRaceCourse extends StatelessWidget {
                 child: CustomPaint(painter: _TracksideCoursePainter(progress)),
               ),
               for (var i = 0; i < visible.length; i++)
-                Positioned(
-                  left: placements[i].dx - 17,
-                  top: placements[i].dy - 17,
-                  child: _TrackRacerMarker(racer: visible[i], rank: i + 1),
+                Positioned.fill(
+                  child: _AnimatedTrackRacerMarker(
+                    key: ValueKey(visible[i].id),
+                    racer: visible[i],
+                    rank: i + 1,
+                    targetSlot: targetSlots[i],
+                    trackWidth: constraints.maxWidth,
+                    reduceMotion: reduceMotion,
+                  ),
                 ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _AnimatedTrackRacerMarker extends StatelessWidget {
+  const _AnimatedTrackRacerMarker({
+    super.key,
+    required this.racer,
+    required this.rank,
+    required this.targetSlot,
+    required this.trackWidth,
+    required this.reduceMotion,
+  });
+
+  final RingRacer racer;
+  final int rank;
+  final double targetSlot;
+  final double trackWidth;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 620);
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: targetSlot),
+      duration: duration,
+      curve: Curves.easeInOutCubic,
+      builder: (context, slot, _) {
+        // The three source positions lie on the shallow lower track edge.
+        // Interpolating this parabola keeps rank changes on that edge instead
+        // of sending members through the center of the course.
+        final centerX = trackWidth * 0.50;
+        final x = centerX + (trackWidth * 0.33 * slot);
+        final y = 161 - (57 * slot * slot);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: x - 17,
+              top: y - 17,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.84, end: 1),
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                builder: (context, entry, child) => Opacity(
+                  opacity: entry,
+                  child: Transform.scale(scale: entry, child: child),
+                ),
+                child: _TrackRacerMarker(racer: racer, rank: rank),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -2056,6 +2155,7 @@ class _SourceActivityRow extends StatelessWidget {
     this.stacked = false,
     this.avatarSize = 28,
     this.gap = 10,
+    this.timeLabel = '2m ago',
   });
 
   final String initials;
@@ -2065,6 +2165,7 @@ class _SourceActivityRow extends StatelessWidget {
   final bool stacked;
   final double avatarSize;
   final double gap;
+  final String timeLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -2131,7 +2232,7 @@ class _SourceActivityRow extends StatelessWidget {
                 ),
         ),
         Text(
-          '2m ago',
+          timeLabel,
           style: AppTextStyles.labelSmall.copyWith(color: visual.mutedInk),
         ),
       ],
