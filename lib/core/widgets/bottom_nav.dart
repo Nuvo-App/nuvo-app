@@ -6,12 +6,18 @@ import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 
+const _kTrackNavy = Color(0xFF071B35);
+const _kTrackActiveBlue = Color(0xFF2F7CFF);
+
 class NuvoBottomNav extends StatelessWidget {
   const NuvoBottomNav({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.isDark = false,
   });
+
+  final bool isDark;
 
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -52,6 +58,28 @@ class NuvoBottomNav extends StatelessWidget {
     final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
     final dockBottom = safeBottom + bottomGap + _shadowReserve;
 
+    if (isDark) {
+      return Container(
+        height: _occupiedHeight(safeBottom),
+        color: _kTrackNavy,
+        padding: EdgeInsets.only(bottom: safeBottom),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (var index = 0; index < _items.length; index++)
+              _NavButton(
+                item: _items[index],
+                selected: currentIndex == index,
+                isPrimary: false,
+                isDark: true,
+                onTap: () => _tap(index),
+              ),
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
       height: _occupiedHeight(safeBottom),
       child: Align(
@@ -78,6 +106,7 @@ class NuvoBottomNav extends StatelessWidget {
                   item: _items[index],
                   selected: currentIndex == index,
                   isPrimary: index == 2,
+                  isDark: false,
                   onTap: () => _tap(index),
                 ),
             ],
@@ -105,17 +134,19 @@ class _NavButton extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.isPrimary,
+    required this.isDark,
     required this.onTap,
   });
 
   final _NavItem item;
   final bool selected;
   final bool isPrimary;
+  final bool isDark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (isPrimary) {
+    if (isPrimary && !isDark) {
       return Expanded(
         child: Center(
           child: _VerifyNavButton(item: item, selected: selected, onTap: onTap),
@@ -123,7 +154,10 @@ class _NavButton extends StatelessWidget {
       );
     }
 
-    final color = selected ? NuvoColors.blue : NuvoColors.textMuted;
+    final color = isDark
+        ? (selected ? _kTrackActiveBlue : NuvoColors.white)
+        : (selected ? NuvoColors.blue : NuvoColors.textMuted);
+    final inactiveAlpha = isDark ? 0.75 : 1.0;
 
     return Expanded(
       child: Semantics(
@@ -137,34 +171,44 @@ class _NavButton extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              constraints: const BoxConstraints(minWidth: 52, minHeight: 54),
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
-              decoration: BoxDecoration(
-                color: selected
-                    ? NuvoColors.panel
-                    : CupertinoColors.transparent,
-                borderRadius: BorderRadius.circular(NuvoRadii.md),
-                border: selected
-                    ? Border.all(
-                        color: NuvoColors.blue.withValues(alpha: 0.18),
-                        width: 1.25,
-                      )
-                    : null,
+              constraints: BoxConstraints(
+                minWidth: isDark ? 48 : 52,
+                minHeight: isDark ? 44 : 54,
               ),
+              padding: EdgeInsets.symmetric(
+                horizontal: isDark ? 4 : 7,
+                vertical: isDark ? 4 : 7,
+              ),
+              decoration: isDark
+                  ? null
+                  : BoxDecoration(
+                      color: selected ? NuvoColors.panel : CupertinoColors.transparent,
+                      borderRadius: BorderRadius.circular(NuvoRadii.md),
+                      border: selected
+                          ? Border.all(
+                              color: NuvoColors.blue.withValues(alpha: 0.18),
+                              width: 1.25,
+                            )
+                          : null,
+                    ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(item.icon, size: 24, color: color),
-                  const SizedBox(height: 4),
+                  Icon(
+                    item.icon,
+                    size: isDark ? 20 : 24,
+                    color: color.withValues(alpha: inactiveAlpha),
+                  ),
+                  SizedBox(height: isDark ? 3 : 4),
                   Text(
                     item.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textScaler: const TextScaler.linear(1),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: color,
-                      fontSize: 11,
+                      color: color.withValues(alpha: inactiveAlpha),
+                      fontSize: isDark ? 10 : 11,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                       height: 1,
                     ),
