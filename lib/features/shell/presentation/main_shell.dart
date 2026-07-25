@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/design/nuvo_preview_controller.dart';
 import '../../../core/design/nuvo_preview_style.dart';
 import '../../../core/widgets/bottom_nav.dart';
-import '../../../core/widgets/preview_style_chooser.dart';
-import '../../arena/presentation/arena_screen_fixed.dart';
+import '../../arena/presentation/arena_screen.dart';
+import '../../compete/presentation/compete_screen_fixed.dart';
+import '../../move/presentation/move_screen.dart';
+import '../../pass/presentation/pass_screen.dart';
+import '../../profile/presentation/profile_screen.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.child});
@@ -87,7 +90,19 @@ class _MainShellState extends ConsumerState<MainShell> {
     final newIndex = _indexFor(location);
     if (newIndex != _currentIndex) {
       _currentIndex = newIndex;
+      _updateSystemUI();
+    } else if (ModalRoute.of(context)?.isFirst == true) {
+      _updateSystemUI();
     }
+  }
+
+  void _updateSystemUI() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: _currentIndex == 0
+          ? [SystemUiOverlay.bottom]
+          : SystemUiOverlay.values,
+    );
   }
 
   void _onNavTap(int index) {
@@ -114,7 +129,17 @@ class _MainShellState extends ConsumerState<MainShell> {
       bottomNavigationBar: NuvoBottomNav(
         currentIndex: _currentIndex,
         onTap: _onNavTap,
+        isDark: _currentIndex == 0,
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    super.dispose();
   }
 }

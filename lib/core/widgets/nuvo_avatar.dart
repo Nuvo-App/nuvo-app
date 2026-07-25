@@ -33,6 +33,7 @@ class NuvoAvatar extends StatelessWidget {
     required this.size,
     this.localBytes,
     this.photoUrl,
+    this.photoAsset,
     this.onTap,
     this.bgColor,
     this.textColor,
@@ -47,6 +48,7 @@ class NuvoAvatar extends StatelessWidget {
   /// Raw bytes of a locally-picked/cropped image. Takes priority over [photoUrl].
   final Uint8List? localBytes;
   final String? photoUrl;
+  final String? photoAsset;
   final VoidCallback? onTap;
   final Color? bgColor;
   final Color? textColor;
@@ -74,6 +76,7 @@ class NuvoAvatar extends StatelessWidget {
       );
     } else {
       final url = photoUrl;
+      final asset = photoAsset;
       if (url != null && url.isNotEmpty) {
         child = CachedNetworkImage(
           imageUrl: url,
@@ -88,6 +91,17 @@ class NuvoAvatar extends StatelessWidget {
           ),
           placeholder: (_, _) => _fallback(),
           errorWidget: (_, _, _) => _fallback(),
+        );
+      } else if (asset != null && asset.isNotEmpty) {
+        child = _circle(
+          child: Image.asset(
+            asset,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            errorBuilder: (context, error, stackTrace) => _fallback(),
+          ),
         );
       } else {
         child = _fallback();
