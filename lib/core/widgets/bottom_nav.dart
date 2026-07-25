@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
@@ -23,6 +24,7 @@ class NuvoBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const double _surfaceHeight = 76;
+  static const double _darkHeight = 75;
   static const double _horizontalMargin = 16;
   static const double _topReserve = 8;
   static const double _bottomGapNoInset = 10;
@@ -45,11 +47,11 @@ class NuvoBottomNav extends StatelessWidget {
   }
 
   static const _items = [
-    _NavItem(icon: CupertinoIcons.bolt_fill, label: 'Arena'),
-    _NavItem(icon: CupertinoIcons.flag_fill, label: 'Compete'),
-    _NavItem(icon: CupertinoIcons.camera_fill, label: 'Verify'),
-    _NavItem(icon: CupertinoIcons.person_2_fill, label: 'Crew'),
-    _NavItem(icon: CupertinoIcons.person_fill, label: 'Profile'),
+    _NavItem(asset: 'assets/branding/nuvoappicon.png', label: 'Arena'),
+    _NavItem(icon: Icons.emoji_events_outlined, label: 'Compete'),
+    _NavItem(icon: Icons.verified_outlined, label: 'Verify'),
+    _NavItem(icon: Icons.group_outlined, label: 'Crew'),
+    _NavItem(icon: Icons.person_outline, label: 'Profile'),
   ];
 
   @override
@@ -60,7 +62,7 @@ class NuvoBottomNav extends StatelessWidget {
 
     if (isDark) {
       return Container(
-        height: _occupiedHeight(safeBottom),
+        height: _darkHeight,
         color: _kTrackNavy,
         padding: EdgeInsets.only(bottom: safeBottom),
         child: Row(
@@ -123,9 +125,10 @@ class NuvoBottomNav extends StatelessWidget {
 }
 
 class _NavItem {
-  const _NavItem({required this.icon, required this.label});
+  const _NavItem({this.icon, this.asset, required this.label});
 
-  final IconData icon;
+  final IconData? icon;
+  final String? asset;
   final String label;
 }
 
@@ -157,7 +160,8 @@ class _NavButton extends StatelessWidget {
     final color = isDark
         ? (selected ? _kTrackActiveBlue : NuvoColors.white)
         : (selected ? NuvoColors.blue : NuvoColors.textMuted);
-    final inactiveAlpha = isDark ? 0.75 : 1.0;
+    final alpha = selected ? 1.0 : (isDark ? 0.75 : 1.0);
+    final labelColor = color.withValues(alpha: alpha);
 
     return Expanded(
       child: Semantics(
@@ -172,8 +176,8 @@ class _NavButton extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
               constraints: BoxConstraints(
-                minWidth: isDark ? 48 : 52,
-                minHeight: isDark ? 44 : 54,
+                minWidth: isDark ? 44 : 52,
+                minHeight: isDark ? 36 : 54,
               ),
               padding: EdgeInsets.symmetric(
                 horizontal: isDark ? 4 : 7,
@@ -195,19 +199,27 @@ class _NavButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    item.icon,
-                    size: isDark ? 20 : 24,
-                    color: color.withValues(alpha: inactiveAlpha),
-                  ),
-                  SizedBox(height: isDark ? 3 : 4),
+                  if (item.asset != null)
+                    Image.asset(
+                      item.asset!,
+                      height: isDark ? 20 : 24,
+                      color: labelColor,
+                      colorBlendMode: BlendMode.srcIn,
+                    )
+                  else
+                    Icon(
+                      item.icon!,
+                      size: isDark ? 20 : 24,
+                      color: labelColor,
+                    ),
+                  SizedBox(height: isDark ? 2 : 4),
                   Text(
                     item.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textScaler: const TextScaler.linear(1),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: color.withValues(alpha: inactiveAlpha),
+                      color: labelColor,
                       fontSize: isDark ? 10 : 11,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                       height: 1,

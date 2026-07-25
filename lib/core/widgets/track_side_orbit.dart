@@ -187,6 +187,9 @@ class _OrbitPainter extends CustomPainter {
   static const _baselineCX = 173.0;
   static const _baselineCY = 85.0;
 
+  static const _startAngle = 2.20;
+  static const _maxSweep = 3.95;
+
   @override
   void paint(Canvas canvas, Size size) {
     final a = _baselineA * scale;
@@ -225,12 +228,12 @@ class _OrbitPainter extends CustomPainter {
       height: b * 2,
     );
 
-    // Start at the left side of the ellipse and sweep counter-clockwise
-    // so the blue path runs along the lower/front edge and up the right side.
+    // Begin on the lower-left, sweep counter-clockwise across the bottom
+    // and up the right side. Max sweep caps the arc before it wraps.
     canvas.drawArc(
       outerRect,
-      math.pi,
-      -2 * math.pi * progress,
+      _startAngle,
+      -_maxSweep * progress,
       false,
       active,
     );
@@ -298,7 +301,8 @@ class _OrbitMarkerState extends State<_OrbitMarker>
   @override
   Widget build(BuildContext context) {
     final s = widget.scale;
-    final portraitSize = 44.0 * s;
+    final portraitSize =
+        (widget.participant.rank == 1 ? 38.0 : 32.0) * s;
     final isUser = widget.participant.isCurrentUser;
 
     return AnimatedPositioned(
