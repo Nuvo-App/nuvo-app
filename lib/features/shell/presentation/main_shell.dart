@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -53,7 +54,19 @@ class _MainShellState extends State<MainShell> {
     final newIndex = _indexFor(location);
     if (newIndex != _currentIndex) {
       _currentIndex = newIndex;
+      _updateSystemUI();
+    } else if (ModalRoute.of(context)?.isFirst == true) {
+      _updateSystemUI();
     }
+  }
+
+  void _updateSystemUI() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: _currentIndex == 0
+          ? [SystemUiOverlay.bottom]
+          : SystemUiOverlay.values,
+    );
   }
 
   void _onNavTap(int index) {
@@ -101,5 +114,14 @@ class _MainShellState extends State<MainShell> {
         isDark: _currentIndex == 0,
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    super.dispose();
   }
 }

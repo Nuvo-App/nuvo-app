@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/track_side_orbit.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -26,7 +25,9 @@ const _kDarkProgress = Color(0xFF414A59);
 const bool _kPreviewMode = bool.fromEnvironment('NUVO_TRACKSIDE_PREVIEW');
 
 class ArenaScreen extends ConsumerStatefulWidget {
-  const ArenaScreen({super.key});
+  const ArenaScreen({super.key, this.preview = false});
+
+  final bool preview;
 
   @override
   ConsumerState<ArenaScreen> createState() => _ArenaScreenState();
@@ -42,9 +43,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final raceState = ref.watch(raceControllerProvider);
     final width = MediaQuery.of(context).size.width;
     final scale = width / 390.0;
-    final bottomPad = NuvoBottomNav.bottomPadding(context);
+    final bottomPad = 75.0 * scale;
 
-    final snapshot = _kPreviewMode
+    final snapshot = widget.preview || _kPreviewMode
         ? _previewSnapshot()
         : arenaState.snapshot ??
             const ArenaSnapshot(mode: 'real', headerPulse: '');
@@ -226,12 +227,13 @@ class _TrackSideHero extends StatelessWidget {
             top: 31 * scale,
             child: Image.asset(
               'assets/branding/nuvo_logo.png',
-              height: 24 * scale,
+              height: 28 * scale,
+              errorBuilder: (context, error, stackTrace) => SizedBox(height: 28 * scale),
             ),
           ),
           Positioned(
             right: 26 * scale,
-            top: 31 * scale,
+            top: 34 * scale,
             child: Text(
               'ARENA',
               style: AppTextStyles.labelSmall.copyWith(
@@ -393,26 +395,37 @@ class _HeroBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: _kNavy,
-        gradient: RadialGradient(
-          center: Alignment(1.2, -0.8),
-          radius: 0.8,
-          colors: [Color(0xFF0E2E5C), _kNavy],
-          stops: [0.0, 0.9],
-        ),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.center,
-            radius: 1.1,
-            colors: [
-              _kNavy.withValues(alpha: 1),
-              _kNavy.withValues(alpha: 0.5),
-            ],
+      color: _kNavy,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(0.75, -0.55),
+                radius: 0.9,
+                colors: [
+                  const Color(0xFF123A6D).withValues(alpha: 1),
+                  _kNavy,
+                ],
+                stops: const [0.0, 0.85],
+              ),
+            ),
           ),
-        ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment.center,
+                radius: 1.15,
+                colors: [
+                  _kNavy.withValues(alpha: 0.0),
+                  _kNavy,
+                ],
+                stops: const [0.55, 1.0],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -440,11 +453,12 @@ class _StandingsAndActivityPanel extends StatelessWidget {
 
     return Container(
       color: _kWarmWhite,
+      height: (844 - 464 - 75) * scale,
       padding: EdgeInsets.fromLTRB(
         26 * scale,
+        16 * scale,
         26 * scale,
-        26 * scale,
-        20 * scale,
+        10 * scale,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -475,7 +489,7 @@ class _StandingsAndActivityPanel extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 18 * scale),
+          SizedBox(height: 8 * scale),
           for (var i = 0; i < rows.length; i++) ...[
             _StandingRow(
               scale: scale,
@@ -484,19 +498,13 @@ class _StandingsAndActivityPanel extends StatelessWidget {
               myUserId: myUserId,
             ),
             if (i < rows.length - 1)
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: 10 * scale),
-                child: Divider(
-                  height: 1 * scale,
-                  thickness: 0.5 * scale,
-                  color: _kSeparator,
-                  endIndent: 0,
-                  indent: 0,
-                ),
+              Container(
+                height: 0.5 * scale,
+                color: _kSeparator,
               ),
           ],
           if (firstActivity != null) ...[
-            SizedBox(height: 30 * scale),
+            const Spacer(),
             Text(
               'RECENT ACTIVITY',
               style: AppTextStyles.labelSmall.copyWith(
@@ -506,7 +514,7 @@ class _StandingsAndActivityPanel extends StatelessWidget {
                 letterSpacing: 1.2,
               ),
             ),
-            SizedBox(height: 12 * scale),
+            SizedBox(height: 6 * scale),
             _ActivityRow(scale: scale, activity: firstActivity, myUserId: myUserId),
           ],
         ],
@@ -533,43 +541,27 @@ class _StandingRow extends StatelessWidget {
     final isUser = row.isCurrentUser || row.label == 'You';
     final displayName = isUser ? 'You' : row.label;
     final parts = row.value.split('/').map((s) => s.trim()).toList();
-    final valueLabel = parts.length == 2 ? '${parts[0]} / ${parts[1]}' : row.value;
     final valueNum = int.tryParse(parts.first) ?? 0;
-    final totalNum = parts.length > 1 ? int.tryParse(parts[1]) ?? 100 : 100;
+    final totalPart = parts.length > 1 ? parts[1] : '100';
+    final totalLabel = totalPart.replaceAll(RegExp(r'[^0-9]'), '');
+    final valueLabel = parts.length == 2 ? '${parts[0]} / $totalLabel' : row.value;
+    final totalNum = int.tryParse(totalLabel) ?? 100;
     final progress = totalNum == 0 ? 0.0 : valueNum / totalNum;
 
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 6 * scale),
+      padding: EdgeInsets.symmetric(vertical: 1 * scale),
       child: Row(
         children: [
           SizedBox(
             width: 24 * scale,
-            child: isUser
-                ? Container(
-                    width: 20 * scale,
-                    height: 20 * scale,
-                    decoration: const BoxDecoration(
-                      color: _kBlue,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      '$rank',
-                      style: TextStyle(
-                        fontSize: 9 * scale,
-                        fontWeight: FontWeight.w800,
-                        color: _kWhite,
-                      ),
-                    ),
-                  )
-                : Text(
-                    '$rank',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: _kMutedText,
-                      fontSize: 13 * scale,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
+            child: Text(
+              '$rank',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: isUser ? _kBlue : _kMutedText,
+                fontSize: 13 * scale,
+                fontWeight: isUser ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
           ),
           SizedBox(width: 8 * scale),
           NuvoAvatar(
