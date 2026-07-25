@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
-import { generateDemoSnapshot } from '../lib/demoArenaWorld';
 import type { ArenaBoard, ArenaSnapshot, ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
 import { activityForId, normalizeMetric } from '../domain/raceActivities';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
@@ -115,43 +114,6 @@ function buildRowSubtitle(
 arenaRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const db = c.env.DB;
-
-  // Read demo flags (added in migration 0006 — columns may not exist on older DBs).
-  let demoEnabled = false;
-  let demoSeed: string | null = null;
-  let demoVariant = 'summer_v1';
-
-  try {
-    const userRow = await db
-      .prepare(
-        'SELECT demo_world_enabled, demo_world_seed, demo_world_variant FROM users WHERE id = ?',
-      )
-      .bind(userId)
-      .first<{ demo_world_enabled: number; demo_world_seed: string | null; demo_world_variant: string | null }>();
-
-    if (!userRow) {
-      return c.json({ ok: false, error: 'User not found' }, 404);
-    }
-    demoEnabled = Boolean(userRow.demo_world_enabled);
-    demoSeed = userRow.demo_world_seed;
-    demoVariant = userRow.demo_world_variant ?? 'summer_v1';
-  } catch {
-    // Migration 0006 not yet applied — verify user exists then fall through to real mode.
-    const exists = await db
-      .prepare('SELECT id FROM users WHERE id = ?')
-      .bind(userId)
-      .first<{ id: string }>();
-    if (!exists) return c.json({ ok: false, error: 'User not found' }, 404);
-  }
-
-  // ── Demo mode ─────────────────────────────────────────────────────────────
-
-  if (demoEnabled) {
-    const snapshot = generateDemoSnapshot(userId, demoSeed, demoVariant);
-    return c.json({ ok: true, snapshot });
-  }
-
-  // ── Real mode ─────────────────────────────────────────────────────────────
 
   const snapshot = await buildRealSnapshot(db, userId);
   return c.json({ ok: true, snapshot });
