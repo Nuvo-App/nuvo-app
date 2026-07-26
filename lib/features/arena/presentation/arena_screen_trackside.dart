@@ -35,6 +35,7 @@ class ArenaScreen extends ConsumerStatefulWidget {
 
 class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   String? _selectedParticipantId;
+  var _selectedBoardIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -48,11 +49,18 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final snapshot = widget.preview || _kPreviewMode
         ? _previewSnapshot()
         : arenaState.snapshot ??
-            const ArenaSnapshot(mode: 'real', headerPulse: '');
+              const ArenaSnapshot(mode: 'real', headerPulse: '');
     final cameraRaceById = {for (final race in raceState.races) race.id: race};
 
-    final activeBoard = snapshot.focusBoard ??
-        (snapshot.liveBoards.isNotEmpty ? snapshot.liveBoards.first : null);
+    final boards = <ArenaBoard>[
+      if (snapshot.focusBoard != null) snapshot.focusBoard!,
+      ...snapshot.liveBoards,
+      ...snapshot.results,
+    ];
+    final selectedIndex = boards.isEmpty
+        ? 0
+        : _selectedBoardIndex.clamp(0, boards.length - 1);
+    final activeBoard = boards.isEmpty ? null : boards[selectedIndex];
     final race = activeBoard != null ? cameraRaceById[activeBoard.id] : null;
 
     if (activeBoard == null) {
@@ -62,8 +70,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final myUserId = user?.id ?? '';
     final participants = race?.participants ?? [];
     final myPart = participants.where((p) => p.userId == myUserId).firstOrNull;
-    final totalGoal = race?.targetValue ?? _parseGoal(activeBoard);
-    final currentValue = myPart?.progressValue ?? 0;
+    final progressParts = _parseValue(activeBoard.progressLabel);
+    final totalGoal = race?.targetValue ?? progressParts.$2;
+    final currentValue = myPart?.progressValue ?? progressParts.$1;
     final currentRank = myPart?.rank ?? activeBoard.myRank ?? 1;
     final orbitParticipants = _buildOrbitParticipants(
       participants: participants,
@@ -83,13 +92,30 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             children: [
               _TrackSideHero(
                 scale: scale,
+                raceIndex: selectedIndex,
+                raceCount: boards.length,
                 totalGoal: totalGoal,
                 currentValue: currentValue,
                 currentRank: currentRank,
+                subtitle: activeBoard.boardContext.isNotEmpty
+                    ? activeBoard.boardContext
+                    : 'First to $totalGoal Pushups',
                 participants: orbitParticipants,
                 selectedId: _selectedParticipantId,
                 onParticipantTap: (id) =>
                     setState(() => _selectedParticipantId = id),
+                onPreviousRace: selectedIndex > 0
+                    ? () => setState(() {
+                        _selectedBoardIndex = selectedIndex - 1;
+                        _selectedParticipantId = null;
+                      })
+                    : null,
+                onNextRace: selectedIndex < boards.length - 1
+                    ? () => setState(() {
+                        _selectedBoardIndex = selectedIndex + 1;
+                        _selectedParticipantId = null;
+                      })
+                    : null,
                 onSubmit: () => _handlePrimaryAction(activeBoard, race),
               ),
               _StandingsAndActivityPanel(
@@ -128,7 +154,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             );
           }).toList();
 
-    final ranked = [...source]..sort((a, b) {
+    final ranked = [...source]
+      ..sort((a, b) {
         final ra = a.rank ?? 0;
         final rb = b.rank ?? 0;
         if (ra == 0 && rb == 0) return b.progressValue - a.progressValue;
@@ -156,11 +183,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final b = parts.length > 1 ? parts[1] ?? 100 : 100;
     final pct = b == 0 ? 0 : ((a / b) * 100).round();
     return (a, pct);
-  }
-
-  int _parseGoal(ArenaBoard board) {
-    final match = RegExp(r'(\d+)').firstMatch(board.progressLabel);
-    return int.tryParse(match?.group(1) ?? '') ?? 100;
   }
 
   void _handlePrimaryAction(ArenaBoard board, Race? race) {
@@ -194,22 +216,32 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
 class _TrackSideHero extends StatelessWidget {
   const _TrackSideHero({
     required this.scale,
+    required this.raceIndex,
+    required this.raceCount,
     required this.totalGoal,
     required this.currentValue,
     required this.currentRank,
+    required this.subtitle,
     required this.participants,
     this.selectedId,
     this.onParticipantTap,
+    this.onPreviousRace,
+    this.onNextRace,
     required this.onSubmit,
   });
 
   final double scale;
+  final int raceIndex;
+  final int raceCount;
   final int totalGoal;
   final int currentValue;
   final int currentRank;
+  final String subtitle;
   final List<TrackSideOrbitParticipant> participants;
   final String? selectedId;
   final ValueChanged<String>? onParticipantTap;
+  final VoidCallback? onPreviousRace;
+  final VoidCallback? onNextRace;
   final VoidCallback onSubmit;
 
   @override
@@ -217,7 +249,7 @@ class _TrackSideHero extends StatelessWidget {
     final remaining = (totalGoal - currentValue).clamp(0, totalGoal);
 
     return SizedBox(
-      height: 464 * scale,
+      height: 500 * scale,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -228,26 +260,42 @@ class _TrackSideHero extends StatelessWidget {
             child: Image.asset(
               'assets/branding/nuvo_logo.png',
               height: 28 * scale,
-              errorBuilder: (context, error, stackTrace) => SizedBox(height: 28 * scale),
+              errorBuilder: (context, error, stackTrace) =>
+                  SizedBox(height: 28 * scale),
             ),
           ),
           Positioned(
             right: 26 * scale,
             top: 34 * scale,
-            child: Text(
-              'ARENA',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: _kBlue,
-                fontSize: 12 * scale,
-                letterSpacing: 1.6,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'ARENA',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: _kBlue,
+                    fontSize: 12 * scale,
+                    letterSpacing: 1.6,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (raceCount > 1) ...[
+                  SizedBox(height: 12 * scale),
+                  _RaceSwitcher(
+                    scale: scale,
+                    index: raceIndex,
+                    count: raceCount,
+                    onPrevious: onPreviousRace,
+                    onNext: onNextRace,
+                  ),
+                ],
+              ],
             ),
           ),
           Positioned(
             left: 0,
             right: 0,
-            top: 83 * scale,
+            top: 94 * scale,
             child: Text(
               'Your next move',
               textAlign: TextAlign.center,
@@ -261,10 +309,12 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 119 * scale,
+            top: 132 * scale,
             child: Text(
-              'First to $totalGoal Pushups',
+              subtitle,
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: _kMuted,
                 fontSize: 15 * scale,
@@ -275,7 +325,7 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 155 * scale,
+            top: 168 * scale,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -313,7 +363,7 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 234 * scale,
+            top: 242 * scale,
             child: Text.rich(
               TextSpan(
                 children: [
@@ -339,22 +389,28 @@ class _TrackSideHero extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: 22 * scale,
-            top: 176 * scale,
-            child: TrackSideOrbit(
-              scale: scale,
-              totalGoal: totalGoal,
-              currentUserValue: currentValue,
-              currentUserRank: currentRank,
-              participants: participants,
-              selectedParticipantId: selectedId,
-              onParticipantTap: onParticipantTap,
+            left: -30 * scale,
+            top: 274 * scale,
+            child: ClipRect(
+              child: SizedBox(
+                height: 138 * scale,
+                width: 450 * scale,
+                child: TrackSideOrbit(
+                  scale: scale * 0.72,
+                  totalGoal: totalGoal,
+                  currentUserValue: currentValue,
+                  currentUserRank: currentRank,
+                  participants: participants,
+                  selectedParticipantId: selectedId,
+                  onParticipantTap: onParticipantTap,
+                ),
+              ),
             ),
           ),
           Positioned(
             left: 0,
             right: 0,
-            top: 389 * scale,
+            top: 424 * scale,
             child: Center(
               child: GestureDetector(
                 onTap: onSubmit,
@@ -404,10 +460,7 @@ class _HeroBackground extends StatelessWidget {
               gradient: RadialGradient(
                 center: const Alignment(0.75, -0.55),
                 radius: 0.9,
-                colors: [
-                  const Color(0xFF123A6D).withValues(alpha: 1),
-                  _kNavy,
-                ],
+                colors: [const Color(0xFF123A6D).withValues(alpha: 1), _kNavy],
                 stops: const [0.0, 0.85],
               ),
             ),
@@ -417,15 +470,97 @@ class _HeroBackground extends StatelessWidget {
               gradient: RadialGradient(
                 center: Alignment.center,
                 radius: 1.15,
-                colors: [
-                  _kNavy.withValues(alpha: 0.0),
-                  _kNavy,
-                ],
+                colors: [_kNavy.withValues(alpha: 0.0), _kNavy],
                 stops: const [0.55, 1.0],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _RaceSwitcher extends StatelessWidget {
+  const _RaceSwitcher({
+    required this.scale,
+    required this.index,
+    required this.count,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final double scale;
+  final int index;
+  final int count;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 33 * scale,
+      constraints: BoxConstraints(minWidth: 118 * scale),
+      decoration: BoxDecoration(
+        color: const Color(0x1A1264FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0x663D7BFF)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RaceSwitchButton(
+            scale: scale,
+            icon: Icons.chevron_left_rounded,
+            onPressed: onPrevious,
+          ),
+          SizedBox(
+            width: 48 * scale,
+            child: Text(
+              '${index + 1} / $count',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: const Color(0xFFE8F1FF),
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          _RaceSwitchButton(
+            scale: scale,
+            icon: Icons.chevron_right_rounded,
+            onPressed: onNext,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RaceSwitchButton extends StatelessWidget {
+  const _RaceSwitchButton({
+    required this.scale,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final double scale;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 33 * scale,
+      height: 33 * scale,
+      child: IconButton(
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        iconSize: 21 * scale,
+        color: onPressed == null
+            ? const Color(0x557D8CA3)
+            : const Color(0xFFF4F8FF),
+        icon: Icon(icon),
       ),
     );
   }
@@ -453,7 +588,7 @@ class _StandingsAndActivityPanel extends StatelessWidget {
 
     return Container(
       color: _kWarmWhite,
-      height: (844 - 464 - 75) * scale,
+      constraints: BoxConstraints(minHeight: (844 - 500 - 75) * scale),
       padding: EdgeInsets.fromLTRB(
         26 * scale,
         16 * scale,
@@ -498,13 +633,10 @@ class _StandingsAndActivityPanel extends StatelessWidget {
               myUserId: myUserId,
             ),
             if (i < rows.length - 1)
-              Container(
-                height: 0.5 * scale,
-                color: _kSeparator,
-              ),
+              Container(height: 0.5 * scale, color: _kSeparator),
           ],
           if (firstActivity != null) ...[
-            const Spacer(),
+            SizedBox(height: 24 * scale),
             Text(
               'RECENT ACTIVITY',
               style: AppTextStyles.labelSmall.copyWith(
@@ -515,7 +647,11 @@ class _StandingsAndActivityPanel extends StatelessWidget {
               ),
             ),
             SizedBox(height: 6 * scale),
-            _ActivityRow(scale: scale, activity: firstActivity, myUserId: myUserId),
+            _ActivityRow(
+              scale: scale,
+              activity: firstActivity,
+              myUserId: myUserId,
+            ),
           ],
         ],
       ),
@@ -544,7 +680,9 @@ class _StandingRow extends StatelessWidget {
     final valueNum = int.tryParse(parts.first) ?? 0;
     final totalPart = parts.length > 1 ? parts[1] : '100';
     final totalLabel = totalPart.replaceAll(RegExp(r'[^0-9]'), '');
-    final valueLabel = parts.length == 2 ? '${parts[0]} / $totalLabel' : row.value;
+    final valueLabel = parts.length == 2
+        ? '${parts[0]} / $totalLabel'
+        : row.value;
     final totalNum = int.tryParse(totalLabel) ?? 100;
     final progress = totalNum == 0 ? 0.0 : valueNum / totalNum;
 
@@ -771,6 +909,68 @@ ArenaSnapshot _previewSnapshot() {
         ),
       ],
     ),
+    liveBoards: [
+      ArenaBoard(
+        id: 'preview-squats',
+        source: 'real',
+        title: 'Squats',
+        progressLabel: '28 / 60',
+        boardContext: 'First to 60 Squats',
+        primaryActionLabel: 'Submit proof',
+        primaryActionType: 'submit_proof',
+        progressPercent: 47,
+        racerCount: 3,
+        isResult: false,
+        myRank: 2,
+        miniLeaderboard: [
+          ArenaMiniLeaderboardRow(
+            label: 'Riley Pace',
+            value: '34 / 60',
+            isCurrentUser: false,
+          ),
+          ArenaMiniLeaderboardRow(
+            label: 'You',
+            value: '28 / 60',
+            isCurrentUser: true,
+          ),
+          ArenaMiniLeaderboardRow(
+            label: 'Jordan',
+            value: '19 / 60',
+            isCurrentUser: false,
+          ),
+        ],
+      ),
+      ArenaBoard(
+        id: 'preview-lunges',
+        source: 'real',
+        title: 'Lunges',
+        progressLabel: '0 / 40',
+        boardContext: 'First to 40 Lunges',
+        primaryActionLabel: 'Submit proof',
+        primaryActionType: 'submit_proof',
+        progressPercent: 0,
+        racerCount: 3,
+        isResult: false,
+        myRank: 3,
+        miniLeaderboard: [
+          ArenaMiniLeaderboardRow(
+            label: 'Jordan',
+            value: '15 / 40',
+            isCurrentUser: false,
+          ),
+          ArenaMiniLeaderboardRow(
+            label: 'Maya Sprint',
+            value: '8 / 40',
+            isCurrentUser: false,
+          ),
+          ArenaMiniLeaderboardRow(
+            label: 'You',
+            value: '0 / 40',
+            isCurrentUser: true,
+          ),
+        ],
+      ),
+    ],
     activity: [
       ArenaActivity(
         id: 'preview-1',
