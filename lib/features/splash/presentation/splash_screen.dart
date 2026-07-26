@@ -79,7 +79,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
-  void _tryNavigate() {
+  Future<void> _tryNavigate() async {
     if (_navigated || !_animationDone) return;
     final authState = ref.read(authControllerProvider);
     if (authState.status == AuthStatus.loading) return;
@@ -87,9 +87,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _navigated = true;
     final user = authState.user;
     if (user != null) {
-      context.go(
-        user.onboardingComplete ? '/arena' : '/onboarding/create-identity',
-      );
+      if (user.onboardingComplete) {
+        context.go('/arena');
+        return;
+      }
+      await ref.read(authControllerProvider.notifier).sessionExpired();
+      if (mounted) context.go('/welcome');
     } else {
       context.go('/welcome');
     }
