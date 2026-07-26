@@ -388,7 +388,11 @@ authRouter.post('/reviewer', async (c) => {
     return c.json({ ok: false, error: 'Invalid request body' }, 400);
   }
 
-  const email = normalizeEmail(typeof body.email === 'string' ? body.email : '');
+  const requestedEmail = normalizeEmail(typeof body.email === 'string' ? body.email : '');
+  const email =
+    requestedEmail === 'testing@getnuvo' || requestedEmail === 'testing@getnuvo.net'
+      ? 'team@getnuvo.net'
+      : requestedEmail;
   const password = typeof body.password === 'string' ? body.password : '';
   const expectedHash = c.env.REVIEWER_PASSWORD_HASH;
   const INVALID = { ok: false, error: 'Invalid review credentials' } as const;
