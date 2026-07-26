@@ -56,7 +56,8 @@ class RouterNotifier extends ChangeNotifier {
       loc.startsWith('/profile') ||
       loc.startsWith('/race/') ||
       loc.startsWith('/races/') ||
-      loc.startsWith('/proof/');
+      loc.startsWith('/proof/') ||
+      loc.startsWith('/onboarding/');
 
   // /welcome and /auth/* — before onboarding begins
   bool _isAuthPreOnboarding(String loc) =>
