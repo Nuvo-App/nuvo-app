@@ -37,17 +37,21 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     super.dispose();
   }
 
+  String get _normalizedEmail => _emailController.text.trim().toLowerCase();
+
   bool get _isReviewerEmail =>
-      _emailController.text.trim().toLowerCase() == 'team@getnuvo.net';
+      _normalizedEmail == 'team@getnuvo.net' ||
+      _normalizedEmail == 'testing@getnuvo.net' ||
+      _normalizedEmail == 'testing@getnuvo';
 
   bool get _canSubmit {
-    if (_loading || !_emailController.text.trim().contains('@')) return false;
+    if (_loading || !_normalizedEmail.contains('@')) return false;
     if (_isReviewerEmail) return _passwordController.text.isNotEmpty;
     return true;
   }
 
   Future<void> _submit() async {
-    final email = _emailController.text.trim().toLowerCase();
+    final email = _normalizedEmail;
     setState(() {
       _loading = true;
       _error = null;
@@ -56,7 +60,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       if (_isReviewerEmail) {
         await ref
             .read(authControllerProvider.notifier)
-            .signInReviewer(email, _passwordController.text);
+            .signInReviewer('team@getnuvo.net', _passwordController.text);
         return;
       } else {
         await ref.read(authControllerProvider.notifier).startEmailAuth(email);
