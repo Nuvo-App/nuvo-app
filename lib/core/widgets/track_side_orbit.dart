@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 
 import 'nuvo_avatar.dart';
 
@@ -59,17 +60,19 @@ class TrackSideOrbit extends StatefulWidget {
 class _TrackSideOrbitState extends State<TrackSideOrbit>
     with TickerProviderStateMixin {
   late final AnimationController _progressController;
+  late final AnimationController _rotationController;
   double _fromProgress = 0;
   double _toProgress = 0;
+  double _rotation = 0;
   bool _hasInitialized = false;
 
-  static const _baselineOrbitWidth = 346.0;
-  static const _baselineOrbitHeight = 170.0;
+  static const _baselineOrbitWidth = 500.0;
+  static const _baselineOrbitHeight = 190.0;
 
-  static const _rankCenters = <int, Offset>{
-    1: Offset(173.0, 161.0),
-    2: Offset(58.0, 101.0),
-    3: Offset(286.0, 101.0),
+  static const _rankAngles = <int, double>{
+    1: math.pi / 2,
+    2: math.pi * 0.84,
+    3: math.pi * 0.16,
   };
 
   @override
@@ -81,6 +84,11 @@ class _TrackSideOrbitState extends State<TrackSideOrbit>
       duration: const Duration(milliseconds: 320),
       value: _toProgress,
     );
+    _rotationController = AnimationController.unbounded(vsync: this)
+      ..value = _rotation
+      ..addListener(() {
+        setState(() => _rotation = _rotationController.value);
+      });
   }
 
   @override
@@ -104,6 +112,7 @@ class _TrackSideOrbitState extends State<TrackSideOrbit>
 
   @override
   void dispose() {
+    _rotationController.dispose();
     _progressController.dispose();
     super.dispose();
   }
@@ -131,8 +140,40 @@ class _TrackSideOrbitState extends State<TrackSideOrbit>
   double get _s => widget.scale;
 
   Offset _pointForParticipant(TrackSideOrbitParticipant p) {
-    final base = _rankCenters[p.rank] ?? const Offset(173.0, 161.0);
-    return base * _s;
+    const center = Offset(_baselineOrbitWidth / 2, 64);
+    final angle = (_rankAngles[p.rank] ?? math.pi / 2) + _rotation;
+    final rx = _baselineOrbitWidth * 0.47;
+    final ry = _baselineOrbitHeight * 0.42;
+    return Offset(
+          center.dx + math.cos(angle) * rx,
+          center.dy + math.sin(angle) * ry,
+        ) *
+        _s;
+  }
+
+  double _depthForParticipant(TrackSideOrbitParticipant p) {
+    final angle = (_rankAngles[p.rank] ?? math.pi / 2) + _rotation;
+    return ((math.sin(angle) + 1) / 2).clamp(0.0, 1.0);
+  }
+
+  void _startRotate(DragStartDetails details) {
+    _rotationController.stop();
+  }
+
+  void _rotate(DragUpdateDetails details) {
+    final delta = details.primaryDelta;
+    if (delta == null) return;
+    _rotationController.value = _rotation - delta / (260 * _s);
+  }
+
+  void _endRotate(DragEndDetails details) {
+    if (MediaQuery.of(context).disableAnimations) return;
+    final velocity = details.primaryVelocity;
+    if (velocity == null || velocity.abs() < 80) return;
+    final angularVelocity = -velocity / (760 * _s);
+    _rotationController.animateWith(
+      FrictionSimulation(1.1, _rotation, angularVelocity),
+    );
   }
 
   @override
@@ -144,51 +185,72 @@ class _TrackSideOrbitState extends State<TrackSideOrbit>
     final orbitHeight = _baselineOrbitHeight * _s;
     final reduced = MediaQuery.of(context).disableAnimations;
 
-    return SizedBox(
-      width: orbitWidth,
-      height: orbitHeight + 44 * _s,
-      child: AnimatedBuilder(
-        animation: _progressController,
-        builder: (context, _) {
-          final progress = _animatedProgressValue;
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              CustomPaint(
-                size: Size(orbitWidth, orbitHeight),
-                painter: _OrbitPainter(progress: progress, scale: _s),
-              ),
-              for (final p in visible)
-                _OrbitMarker(
-                  key: ValueKey(p.id),
-                  participant: p,
-                  point: _pointForParticipant(p),
-                  scale: _s,
-                  selected: widget.selectedParticipantId == p.id,
-                  reducedMotion: reduced,
-                  onTap: () => widget.onParticipantTap?.call(p.id),
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: _startRotate,
+      onHorizontalDragUpdate: _rotate,
+      onHorizontalDragEnd: _endRotate,
+      child: SizedBox(
+        width: orbitWidth,
+        height: orbitHeight + 38 * _s,
+        child: AnimatedBuilder(
+          animation: _progressController,
+          builder: (context, _) {
+            final progress = _animatedProgressValue;
+            final depthSorted = [...visible]
+              ..sort(
+                (a, b) =>
+                    _depthForParticipant(a).compareTo(_depthForParticipant(b)),
+              );
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CustomPaint(
+                  size: Size(orbitWidth, orbitHeight),
+                  painter: _OrbitPainter(
+                    progress: progress,
+                    scale: _s,
+                    rotation: _rotation,
+                  ),
                 ),
-            ],
-          );
-        },
+                for (final p in depthSorted)
+                  _OrbitMarker(
+                    key: ValueKey(p.id),
+                    participant: p,
+                    point: _pointForParticipant(p),
+                    depth: _depthForParticipant(p),
+                    scale: _s,
+                    selected: widget.selectedParticipantId == p.id,
+                    reducedMotion: reduced,
+                    onTap: () => widget.onParticipantTap?.call(p.id),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 }
 
 class _OrbitPainter extends CustomPainter {
-  _OrbitPainter({required this.progress, required this.scale});
+  _OrbitPainter({
+    required this.progress,
+    required this.scale,
+    required this.rotation,
+  });
 
   final double progress;
   final double scale;
+  final double rotation;
 
-  static const _baselineA = 173.0;
-  static const _baselineB = 85.0;
-  static const _baselineCX = 173.0;
-  static const _baselineCY = 85.0;
+  static const _baselineA = 235.0;
+  static const _baselineB = 80.0;
+  static const _baselineCX = 250.0;
+  static const _baselineCY = 64.0;
 
-  static const _startAngle = 2.20;
-  static const _maxSweep = 3.95;
+  static const _startAngle = 2.72;
+  static const _maxSweep = 4.58;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -213,12 +275,25 @@ class _OrbitPainter extends CustomPainter {
       canvas.drawOval(rect, rear);
     }
 
-    if (progress <= 0) return;
+    final shadow = Paint()
+      ..color = Colors.black.withValues(alpha: 0.28)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 14 * scale
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 10 * scale)
+      ..isAntiAlias = true;
+
+    final rim = Paint()
+      ..color = const Color(0xFF10294A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 13 * scale
+      ..strokeCap = StrokeCap.round
+      ..isAntiAlias = true;
 
     final active = Paint()
       ..color = _kBlue
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 7.5 * scale
+      ..strokeWidth = 13 * scale
       ..strokeCap = StrokeCap.round
       ..isAntiAlias = true;
 
@@ -228,20 +303,21 @@ class _OrbitPainter extends CustomPainter {
       height: b * 2,
     );
 
-    // Begin on the lower-left, sweep counter-clockwise across the bottom
-    // and up the right side. Max sweep caps the arc before it wraps.
-    canvas.drawArc(
-      outerRect,
-      _startAngle,
-      -_maxSweep * progress,
-      false,
-      active,
-    );
+    final start = _startAngle + rotation;
+    canvas.save();
+    canvas.translate(0, 9 * scale);
+    canvas.drawArc(outerRect, start, -_maxSweep, false, shadow);
+    canvas.restore();
+    canvas.drawArc(outerRect, start, -_maxSweep, false, rim);
+    if (progress <= 0) return;
+    canvas.drawArc(outerRect, start, -_maxSweep * progress, false, active);
   }
 
   @override
   bool shouldRepaint(covariant _OrbitPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.scale != scale;
+      oldDelegate.progress != progress ||
+      oldDelegate.scale != scale ||
+      oldDelegate.rotation != rotation;
 }
 
 class _OrbitMarker extends StatefulWidget {
@@ -249,6 +325,7 @@ class _OrbitMarker extends StatefulWidget {
     super.key,
     required this.participant,
     required this.point,
+    required this.depth,
     required this.scale,
     required this.selected,
     required this.reducedMotion,
@@ -257,6 +334,7 @@ class _OrbitMarker extends StatefulWidget {
 
   final TrackSideOrbitParticipant participant;
   final Offset point;
+  final double depth;
   final double scale;
   final bool selected;
   final bool reducedMotion;
@@ -301,8 +379,8 @@ class _OrbitMarkerState extends State<_OrbitMarker>
   @override
   Widget build(BuildContext context) {
     final s = widget.scale;
-    final portraitSize =
-        (widget.participant.rank == 1 ? 38.0 : 32.0) * s;
+    final baseSize = widget.participant.rank == 1 ? 34.0 : 29.0;
+    final portraitSize = (baseSize + 10 * widget.depth) * s;
     final isUser = widget.participant.isCurrentUser;
 
     return AnimatedPositioned(
@@ -316,7 +394,7 @@ class _OrbitMarkerState extends State<_OrbitMarker>
         animation: _selectionController,
         builder: (context, child) {
           final t = _selectionController.value;
-          final scale = 1.0 + t * 0.08;
+          final scale = 0.88 + widget.depth * 0.16 + t * 0.06;
           final ringColor = isUser ? _kBlue : _kWhite;
           final ringWidth = isUser ? 3.0 * s : 2.0 * s;
 
@@ -337,15 +415,21 @@ class _OrbitMarkerState extends State<_OrbitMarker>
                       height: portraitSize + 4 * s,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        boxShadow: t > 0.01
-                            ? [
-                                BoxShadow(
-                                  color: _kBlue.withValues(alpha: 0.45 * t),
-                                  blurRadius: 12 * s,
-                                  spreadRadius: 2 * s,
-                                ),
-                              ]
-                            : null,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: 0.14 + 0.18 * widget.depth,
+                            ),
+                            blurRadius: (7 + 8 * widget.depth) * s,
+                            offset: Offset(0, (4 + 5 * widget.depth) * s),
+                          ),
+                          if (t > 0.01)
+                            BoxShadow(
+                              color: _kBlue.withValues(alpha: 0.45 * t),
+                              blurRadius: 12 * s,
+                              spreadRadius: 2 * s,
+                            ),
+                        ],
                       ),
                     ),
                     NuvoAvatar(
