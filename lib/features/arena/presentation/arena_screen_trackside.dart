@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/track_side_orbit.dart';
+import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
@@ -36,15 +38,40 @@ class ArenaScreen extends ConsumerStatefulWidget {
 class _ArenaScreenState extends ConsumerState<ArenaScreen> {
   String? _selectedParticipantId;
   var _selectedBoardIndex = 0;
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _selectedBoardIndex);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: [SystemUiOverlay.bottom],
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
     final arenaState = ref.watch(arenaControllerProvider);
     final raceState = ref.watch(raceControllerProvider);
-    final width = MediaQuery.of(context).size.width;
-    final scale = width / 390.0;
+    final viewport = MediaQuery.sizeOf(context);
+    final scale = viewport.width / 390.0;
     final bottomPad = 75.0 * scale;
+    final canvasHeight = viewport.height > 844.0 * scale
+        ? viewport.height
+        : 844.0 * scale;
+    final panelMinHeight = canvasHeight - 464.0 * scale - bottomPad;
 
     final snapshot = widget.preview || _kPreviewMode
         ? _previewSnapshot()
@@ -74,60 +101,138 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final totalGoal = race?.targetValue ?? progressParts.$2;
     final currentValue = myPart?.progressValue ?? progressParts.$1;
     final currentRank = myPart?.rank ?? activeBoard.myRank ?? 1;
-    final orbitParticipants = _buildOrbitParticipants(
-      participants: participants,
-      miniLeaderboard: activeBoard.miniLeaderboard,
-      myUserId: myUserId,
-    );
+    final pageChildren = List<Widget>.generate(boards.length, (index) {
+      final board = boards[index];
+      final boardRace = cameraRaceById[board.id];
+      final boardParticipants = boardRace?.participants ?? [];
+      final boardParts = _parseValue(board.progressLabel);
+      final boardTotalGoal = boardRace?.targetValue ?? boardParts.$2;
+      final boardMyPart =
+          boardParticipants.where((p) => p.userId == myUserId).firstOrNull;
+      final boardCurrentValue = boardMyPart?.progressValue ?? boardParts.$1;
+      final boardCurrentRank = boardMyPart?.rank ?? board.myRank ?? 1;
+      final boardOrbitParticipants = _buildOrbitParticipants(
+        participants: boardParticipants,
+        miniLeaderboard: board.miniLeaderboard,
+        myUserId: myUserId,
+      );
+      return TrackSideOrbit(
+        scale: scale,
+        totalGoal: boardTotalGoal,
+        currentUserValue: boardCurrentValue,
+        currentUserRank: boardCurrentRank,
+        participants: boardOrbitParticipants,
+        selectedParticipantId:
+            selectedIndex == index ? _selectedParticipantId : null,
+        onParticipantTap: (id) => setState(() {
+          _selectedParticipantId = id;
+        }),
+      );
+    });
 
     return Scaffold(
+      key: TrackSideLayoutKeys.arenaScreen,
       backgroundColor: _kNavy,
       body: SafeArea(
         top: false,
         bottom: false,
-        child: SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (trackSideLayoutDiagnosticsEnabled) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                TrackSideLayoutDiagnostics.report({
+                  ...TrackSideLayoutDiagnostics.viewData(context),
+                  'arenaScreenConstraints': constraints.toString(),
+                  'trackSideCanvasConstraints':
+                      'minHeight=${constraints.maxHeight > canvasHeight ? constraints.maxHeight.toStringAsFixed(1) : canvasHeight.toStringAsFixed(1)}',
+                  'widthScale': scale.toStringAsFixed(4),
+                  'baselineCanvasHeight': (844.0 * scale).toStringAsFixed(1),
+                  'calculatedCanvasHeight': canvasHeight.toStringAsFixed(1),
+                  'calculatedHeroHeight': (464.0 * scale).toStringAsFixed(1),
+                  'calculatedPanelMinHeight': panelMinHeight.toStringAsFixed(1),
+                  'calculatedNavigationHeight':
+                      (75.0 * scale + MediaQuery.paddingOf(context).bottom).toStringAsFixed(1),
+                  'calculatedBottomReserve': bottomPad.toStringAsFixed(1),
+                  'arenaScreen': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.arenaScreen,
+                  ),
+                  'trackSideCanvas': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.canvas,
+                  ),
+                  'hero': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.hero,
+                  ),
+                  'whitePanel': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.panel,
+                  ),
+                  'recentActivity': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.recentActivity,
+                  ),
+                  'navigationBackground': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.navigation,
+                  ),
+                  'navigationIconRow': TrackSideLayoutDiagnostics.box(
+                    TrackSideLayoutKeys.navigationRow,
+                  ),
+                });
+              });
+            }
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                key: TrackSideLayoutKeys.canvas,
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight > canvasHeight
+                      ? constraints.maxHeight
+                      : canvasHeight,
+                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               _TrackSideHero(
                 scale: scale,
+                pageController: _pageController,
+                pageCount: boards.length,
+                pageBuilder: (index) => pageChildren[index],
+                onPageChanged: (index) => setState(() {
+                  _selectedBoardIndex = index;
+                  _selectedParticipantId = null;
+                }),
                 raceIndex: selectedIndex,
                 raceCount: boards.length,
+                racerCount: activeBoard.racerCount ?? 0,
                 totalGoal: totalGoal,
                 currentValue: currentValue,
                 currentRank: currentRank,
-                subtitle: activeBoard.boardContext.isNotEmpty
-                    ? activeBoard.boardContext
-                    : 'First to $totalGoal Pushups',
-                participants: orbitParticipants,
-                selectedId: _selectedParticipantId,
-                onParticipantTap: (id) =>
-                    setState(() => _selectedParticipantId = id),
+                subtitle: 'First to $totalGoal Pushups',
                 onPreviousRace: selectedIndex > 0
-                    ? () => setState(() {
-                        _selectedBoardIndex = selectedIndex - 1;
-                        _selectedParticipantId = null;
-                      })
+                    ? () => _pageController.previousPage(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                        )
                     : null,
                 onNextRace: selectedIndex < boards.length - 1
-                    ? () => setState(() {
-                        _selectedBoardIndex = selectedIndex + 1;
-                        _selectedParticipantId = null;
-                      })
+                    ? () => _pageController.nextPage(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                        )
                     : null,
                 onSubmit: () => _handlePrimaryAction(activeBoard, race),
               ),
               _StandingsAndActivityPanel(
                 scale: scale,
+                minHeight: panelMinHeight,
                 board: activeBoard,
                 race: race,
                 myUserId: myUserId,
                 activity: snapshot.activity,
               ),
-              SizedBox(height: bottomPad),
-            ],
-          ),
+                  SizedBox(height: bottomPad),
+                ],
+              ),
+            ),
+            );
+          },
         ),
       ),
     );
@@ -142,13 +247,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         ? participants
         : miniLeaderboard.map((r) {
             final parts = _parseValue(r.value);
+            final total = parts.$2;
+            final progressPercent =
+                total == 0 ? 0 : ((parts.$1 / total) * 100).round();
             return RaceParticipant(
               id: r.label,
               userId: r.isCurrentUser ? myUserId : r.label,
               displayName: r.label,
               progressValue: parts.$1,
-              progressPercent: parts.$2,
-              rank: 0,
+              progressPercent: progressPercent,
               joinedAt: '',
               profilePhotoUrl: r.profilePhotoUrl,
             );
@@ -181,8 +288,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final parts = value.split('/').map((s) => int.tryParse(s.trim())).toList();
     final a = parts.isNotEmpty ? parts[0] ?? 0 : 0;
     final b = parts.length > 1 ? parts[1] ?? 100 : 100;
-    final pct = b == 0 ? 0 : ((a / b) * 100).round();
-    return (a, pct);
+    return (a, b);
   }
 
   void _handlePrimaryAction(ArenaBoard board, Race? race) {
@@ -216,30 +322,34 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
 class _TrackSideHero extends StatelessWidget {
   const _TrackSideHero({
     required this.scale,
+    required this.pageController,
+    required this.pageCount,
+    required this.pageBuilder,
+    required this.onPageChanged,
     required this.raceIndex,
     required this.raceCount,
+    required this.racerCount,
     required this.totalGoal,
     required this.currentValue,
     required this.currentRank,
     required this.subtitle,
-    required this.participants,
-    this.selectedId,
-    this.onParticipantTap,
-    this.onPreviousRace,
-    this.onNextRace,
+    required this.onPreviousRace,
+    required this.onNextRace,
     required this.onSubmit,
   });
 
   final double scale;
+  final PageController pageController;
+  final int pageCount;
+  final Widget Function(int index) pageBuilder;
+  final ValueChanged<int> onPageChanged;
   final int raceIndex;
   final int raceCount;
+  final int racerCount;
   final int totalGoal;
   final int currentValue;
   final int currentRank;
   final String subtitle;
-  final List<TrackSideOrbitParticipant> participants;
-  final String? selectedId;
-  final ValueChanged<String>? onParticipantTap;
   final VoidCallback? onPreviousRace;
   final VoidCallback? onNextRace;
   final VoidCallback onSubmit;
@@ -249,7 +359,8 @@ class _TrackSideHero extends StatelessWidget {
     final remaining = (totalGoal - currentValue).clamp(0, totalGoal);
 
     return SizedBox(
-      height: 500 * scale,
+      key: TrackSideLayoutKeys.hero,
+      height: 464 * scale,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -257,45 +368,69 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 26 * scale,
             top: 31 * scale,
-            child: Image.asset(
-              'assets/branding/nuvo_logo.png',
-              height: 28 * scale,
-              errorBuilder: (context, error, stackTrace) =>
-                  SizedBox(height: 28 * scale),
-            ),
-          ),
-          Positioned(
-            right: 26 * scale,
-            top: 34 * scale,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  'ARENA',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: _kBlue,
-                    fontSize: 12 * scale,
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w700,
+                SizedBox(
+                  width: 20 * scale,
+                  height: 20 * scale,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      maxWidth: 40 * scale,
+                      maxHeight: 40 * scale,
+                      child: Image.asset(
+                        'assets/branding/trans.png',
+                        height: 40 * scale,
+                        errorBuilder: (context, error, stackTrace) =>
+                            SizedBox(height: 20 * scale),
+                      ),
+                    ),
                   ),
                 ),
-                if (raceCount > 1) ...[
-                  SizedBox(height: 12 * scale),
-                  _RaceSwitcher(
-                    scale: scale,
-                    index: raceIndex,
-                    count: raceCount,
-                    onPrevious: onPreviousRace,
-                    onNext: onNextRace,
+                SizedBox(width: 7 * scale),
+                Text(
+                  'NUVO',
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: _kWhite,
+                    fontSize: 11 * scale,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.8,
+                    height: 1.0,
                   ),
-                ],
+                ),
               ],
             ),
           ),
           Positioned(
+            right: 26 * scale,
+            top: 38 * scale,
+            child: Text(
+              'ARENA',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: _kBlue,
+                fontSize: 12 * scale,
+                letterSpacing: 1.6,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (raceCount > 1)
+            Positioned(
+              right: 12 * scale,
+              top: 54 * scale,
+              child: _RaceSwitcher(
+                scale: scale,
+                index: raceIndex,
+                count: raceCount,
+                racerCount: racerCount,
+                onPrevious: onPreviousRace,
+                onNext: onNextRace,
+              ),
+            ),
+          Positioned(
             left: 0,
             right: 0,
-            top: 94 * scale,
+            top: 83 * scale,
             child: Text(
               'Your next move',
               textAlign: TextAlign.center,
@@ -309,7 +444,7 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 132 * scale,
+            top: 119 * scale,
             child: Text(
               subtitle,
               textAlign: TextAlign.center,
@@ -325,7 +460,7 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 168 * scale,
+            top: 155 * scale,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -340,14 +475,16 @@ class _TrackSideHero extends StatelessWidget {
                     height: 1.0,
                   ),
                 ),
+                SizedBox(width: 7 * scale),
                 Text(
-                  ' / ',
+                  '/',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: _kMuted,
                     fontSize: 24 * scale,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
+                SizedBox(width: 8 * scale),
                 Text(
                   '$totalGoal',
                   style: AppTextStyles.displayLarge.copyWith(
@@ -363,7 +500,7 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 242 * scale,
+            top: 234 * scale,
             child: Text.rich(
               TextSpan(
                 children: [
@@ -389,28 +526,21 @@ class _TrackSideHero extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: -30 * scale,
-            top: 274 * scale,
-            child: ClipRect(
-              child: SizedBox(
-                height: 138 * scale,
-                width: 450 * scale,
-                child: TrackSideOrbit(
-                  scale: scale * 0.72,
-                  totalGoal: totalGoal,
-                  currentUserValue: currentValue,
-                  currentUserRank: currentRank,
-                  participants: participants,
-                  selectedParticipantId: selectedId,
-                  onParticipantTap: onParticipantTap,
-                ),
-              ),
+            left: 22 * scale,
+            top: 176 * scale,
+            width: 346 * scale,
+            height: 200 * scale,
+            child: PageView.builder(
+              controller: pageController,
+              onPageChanged: onPageChanged,
+              itemCount: pageCount,
+              itemBuilder: (context, index) => pageBuilder(index),
             ),
           ),
           Positioned(
             left: 0,
             right: 0,
-            top: 424 * scale,
+            top: 389 * scale,
             child: Center(
               child: GestureDetector(
                 onTap: onSubmit,
@@ -430,7 +560,7 @@ class _TrackSideHero extends StatelessWidget {
                     'Submit proof',
                     style: AppTextStyles.bodyLarge.copyWith(
                       color: _kWhite,
-                      fontSize: 16 * scale,
+                      fontSize: 14 * scale,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -458,10 +588,13 @@ class _HeroBackground extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
-                center: const Alignment(0.75, -0.55),
-                radius: 0.9,
-                colors: [const Color(0xFF123A6D).withValues(alpha: 1), _kNavy],
-                stops: const [0.0, 0.85],
+                center: const Alignment(0.0, 1.0),
+                radius: 1.35,
+                colors: [
+                  const Color(0xFF154E91).withValues(alpha: 0.38),
+                  _kNavy,
+                ],
+                stops: const [0.0, 0.70],
               ),
             ),
           ),
@@ -486,6 +619,7 @@ class _RaceSwitcher extends StatelessWidget {
     required this.scale,
     required this.index,
     required this.count,
+    required this.racerCount,
     required this.onPrevious,
     required this.onNext,
   });
@@ -493,45 +627,61 @@ class _RaceSwitcher extends StatelessWidget {
   final double scale;
   final int index;
   final int count;
+  final int racerCount;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 33 * scale,
-      constraints: BoxConstraints(minWidth: 118 * scale),
-      decoration: BoxDecoration(
-        color: const Color(0x1A1264FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0x663D7BFF)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _RaceSwitchButton(
-            scale: scale,
-            icon: Icons.chevron_left_rounded,
-            onPressed: onPrevious,
-          ),
-          SizedBox(
-            width: 48 * scale,
-            child: Text(
+    final width = 88 * scale;
+    final height = 28 * scale;
+    return Semantics(
+      label: 'Race ${index + 1} of $count, $racerCount participants',
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _kBlue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8 * scale),
+                  border: Border.all(color: _kBlue.withValues(alpha: 0.18)),
+                ),
+              ),
+            ),
+            Text(
               '${index + 1} / $count',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyMedium.copyWith(
                 color: const Color(0xFFE8F1FF),
-                fontSize: 12 * scale,
+                fontSize: 11 * scale,
                 fontWeight: FontWeight.w800,
               ),
             ),
-          ),
-          _RaceSwitchButton(
-            scale: scale,
-            icon: Icons.chevron_right_rounded,
-            onPressed: onNext,
-          ),
-        ],
+            Positioned(
+              left: -4 * scale,
+              top: -8 * scale,
+              child: _RaceSwitchButton(
+                scale: scale,
+                icon: Icons.chevron_left_rounded,
+                onPressed: onPrevious,
+              ),
+            ),
+            Positioned(
+              right: -4 * scale,
+              top: -8 * scale,
+              child: _RaceSwitchButton(
+                scale: scale,
+                icon: Icons.chevron_right_rounded,
+                onPressed: onNext,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -550,17 +700,22 @@ class _RaceSwitchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 33 * scale,
-      height: 33 * scale,
-      child: IconButton(
-        onPressed: onPressed,
-        padding: EdgeInsets.zero,
-        iconSize: 21 * scale,
-        color: onPressed == null
-            ? const Color(0x557D8CA3)
-            : const Color(0xFFF4F8FF),
-        icon: Icon(icon),
+    final color = onPressed == null
+        ? const Color(0x557D8CA3)
+        : const Color(0xFFF4F8FF);
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.translucent,
+      child: SizedBox(
+        width: 44.0 * scale,
+        height: 44.0 * scale,
+        child: Center(
+          child: Icon(
+            icon,
+            size: 18 * scale,
+            color: color,
+          ),
+        ),
       ),
     );
   }
@@ -569,6 +724,7 @@ class _RaceSwitchButton extends StatelessWidget {
 class _StandingsAndActivityPanel extends StatelessWidget {
   const _StandingsAndActivityPanel({
     required this.scale,
+    required this.minHeight,
     required this.board,
     this.race,
     required this.myUserId,
@@ -576,6 +732,7 @@ class _StandingsAndActivityPanel extends StatelessWidget {
   });
 
   final double scale;
+  final double minHeight;
   final ArenaBoard board;
   final Race? race;
   final String myUserId;
@@ -587,11 +744,12 @@ class _StandingsAndActivityPanel extends StatelessWidget {
     final firstActivity = activity.isNotEmpty ? activity.first : null;
 
     return Container(
+      key: TrackSideLayoutKeys.panel,
       color: _kWarmWhite,
-      constraints: BoxConstraints(minHeight: (844 - 500 - 75) * scale),
+      constraints: BoxConstraints(minHeight: minHeight),
       padding: EdgeInsets.fromLTRB(
         26 * scale,
-        16 * scale,
+        26 * scale,
         26 * scale,
         10 * scale,
       ),
@@ -624,7 +782,7 @@ class _StandingsAndActivityPanel extends StatelessWidget {
               ),
             ],
           ),
-          SizedBox(height: 8 * scale),
+          SizedBox(height: 16 * scale),
           for (var i = 0; i < rows.length; i++) ...[
             _StandingRow(
               scale: scale,
@@ -633,26 +791,53 @@ class _StandingsAndActivityPanel extends StatelessWidget {
               myUserId: myUserId,
             ),
             if (i < rows.length - 1)
-              Container(height: 0.5 * scale, color: _kSeparator),
-          ],
-          if (firstActivity != null) ...[
-            SizedBox(height: 24 * scale),
-            Text(
-              'RECENT ACTIVITY',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: _kMutedText,
-                fontSize: 11 * scale,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
+              Container(
+                height: 16 * scale,
+                alignment: Alignment.center,
+                child: Divider(height: 1, color: _kSeparator.withValues(alpha: 0.65)),
               ),
-            ),
-            SizedBox(height: 6 * scale),
-            _ActivityRow(
-              scale: scale,
-              activity: firstActivity,
-              myUserId: myUserId,
-            ),
           ],
+          SizedBox(height: 30 * scale),
+          KeyedSubtree(
+            key: TrackSideLayoutKeys.recentActivity,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'RECENT ACTIVITY',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: _kMutedText,
+                    fontSize: 11 * scale,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                SizedBox(height: 12 * scale),
+                if (firstActivity != null)
+                  _ActivityRow(
+                    scale: scale,
+                    activity: firstActivity,
+                    myUserId: myUserId,
+                  )
+                else
+                  SizedBox(
+                    height: 28 * scale,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'No proof submitted yet',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: _kMutedText,
+                          fontSize: 14 * scale,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
