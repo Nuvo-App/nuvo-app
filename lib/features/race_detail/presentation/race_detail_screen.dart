@@ -323,7 +323,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         ? 'Start another race'
         : eligibility.isCameraVerifiable
         ? 'Verify now'
-        : 'Unsupported';
+        : 'AI Motion Proof unavailable';
     final onPrimary = _busy
         ? null
         : canJoin
@@ -373,6 +373,20 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                     ? () => context.push('/race/${race.id}/settings')
                     : null,
               ),
+
+              if (raceIsActive(race) && isParticipant && !myRaceComplete) ...[
+                const SizedBox(height: 12),
+                _NextProofCard(
+                  canVerify: canVerify,
+                  proofLabel: eligibility.movementDefinition?.title,
+                  progressLabel: myPart == null
+                      ? 'No progress yet'
+                      : raceProgressLabel(race, myPart),
+                  targetLabel: race.targetValue == null
+                      ? null
+                      : raceTargetLabel(race),
+                ),
+              ],
 
               if (raceIsActive(race) && !eligibility.isCameraVerifiable) ...[
                 const SizedBox(height: 12),
@@ -467,7 +481,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               const SizedBox(height: 12),
               if (race.recentProofs.isEmpty)
                 Text(
-                  'No moves logged yet.',
+                  'No moves yet. Submit proof to make the first board move.',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: NuvoColors.muted,
                   ),
@@ -733,11 +747,52 @@ class _RaceSummaryCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 18),
-          NuvoPrimaryButton(
-            label: primaryLabel,
-            expand: true,
-            loading: loading,
-            onPressed: onPrimary,
+          if (onPrimary != null || loading)
+            NuvoPrimaryButton(
+              label: primaryLabel,
+              expand: true,
+              loading: loading,
+              onPressed: onPrimary,
+            )
+          else
+            _PrimaryUnavailableState(label: primaryLabel),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryUnavailableState extends StatelessWidget {
+  const _PrimaryUnavailableState({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: NuvoColors.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: NuvoColors.textMuted,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.textMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -766,6 +821,96 @@ class _StatusPill extends StatelessWidget {
           color: color,
           fontWeight: FontWeight.w800,
         ),
+      ),
+    );
+  }
+}
+
+class _NextProofCard extends StatelessWidget {
+  const _NextProofCard({
+    required this.canVerify,
+    required this.progressLabel,
+    this.proofLabel,
+    this.targetLabel,
+  });
+
+  final bool canVerify;
+  final String progressLabel;
+  final String? proofLabel;
+  final String? targetLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = canVerify
+        ? 'Ready for the next proof'
+        : 'Proof is not camera-ready';
+    final body = canVerify
+        ? 'Open AI Motion Proof, get a clean count, and Nuvo will move the leaderboard.'
+        : 'This race is still visible, but AI Motion Proof cannot verify this movement.';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: canVerify
+            ? NuvoColors.success.withValues(alpha: 0.08)
+            : NuvoColors.icyBlue,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(
+          color: canVerify
+              ? NuvoColors.success.withValues(alpha: 0.28)
+              : NuvoColors.border,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: canVerify ? NuvoColors.success : NuvoColors.navy,
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+            ),
+            child: Icon(
+              canVerify ? Icons.camera_alt_rounded : Icons.info_rounded,
+              color: NuvoColors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  body,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusPill(label: progressLabel),
+                    if (targetLabel != null)
+                      _StatusPill(label: 'Finish line $targetLabel'),
+                    if (proofLabel != null) _StatusPill(label: proofLabel!),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -825,7 +970,7 @@ class _RacePulseModule extends StatelessWidget {
                 Text(
                   chaseCopy ??
                       (recentMoveCount == 0
-                          ? 'Waiting for the next move.'
+                          ? 'Board is waiting for the first proof.'
                           : '$recentMoveCount recent ${recentMoveCount == 1 ? 'move' : 'moves'}.'),
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: NuvoColors.navy,

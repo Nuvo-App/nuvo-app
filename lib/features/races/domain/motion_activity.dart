@@ -5,18 +5,39 @@ enum MotionActivityType {
   lunges('lunges'),
   highKnees('high_knees'),
   armRaises('arm_raises'),
-  plankHold('plank_hold');
+  plankHold('plank_hold'),
+  universalAi('universal_ai');
 
   const MotionActivityType(this.backendValue);
 
   final String backendValue;
 
   static MotionActivityType? fromBackendValue(String? value) {
+    final normalized = _normalizeBackendValue(value);
     for (final type in MotionActivityType.values) {
-      if (type.backendValue == value) return type;
+      if (type.backendValue == normalized) return type;
     }
-    return null;
+    return switch (normalized) {
+      'pushup' || 'pushups' || 'push_up' => MotionActivityType.pushUps,
+      'jumping_jack' || 'jumpingjacks' => MotionActivityType.jumpingJacks,
+      'squat' => MotionActivityType.squats,
+      'lunge' => MotionActivityType.lunges,
+      'high_knee' => MotionActivityType.highKnees,
+      'arm_raise' => MotionActivityType.armRaises,
+      'plank' => MotionActivityType.plankHold,
+      'nuvo_ai' || 'custom_ai' || 'anything' => MotionActivityType.universalAi,
+      _ => null,
+    };
   }
+}
+
+String? _normalizeBackendValue(String? value) {
+  if (value == null) return null;
+  return value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\s-]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_');
 }
 
 enum RaceMetric {

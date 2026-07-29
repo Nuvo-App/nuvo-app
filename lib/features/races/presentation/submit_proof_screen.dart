@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
@@ -103,11 +104,16 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              NuvoPrimaryButton(
-                label: 'Begin',
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: NuvoColors.white,
+              borderRadius: BorderRadius.circular(NuvoRadii.lg),
+              border: Border.all(color: NuvoColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: NuvoPrimaryButton(
+                label: 'Start AI Motion Proof',
                 icon: Icons.camera_alt_rounded,
                 expand: true,
                 onPressed: () {
@@ -116,16 +122,14 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
                     eligibility,
                     routeAction: 'submit_proof_to_camera',
                   );
-                  context.push('/race/${widget.raceId}/proof/ai-motion');
+                  final path =
+                      eligibility.movementType == MotionActivityType.universalAi
+                      ? '/race/${widget.raceId}/proof/universal-ai'
+                      : '/race/${widget.raceId}/proof/ai-motion';
+                  context.push(path);
                 },
               ),
-              const SizedBox(height: 10),
-              NuvoGhostButton(
-                label: 'Back to race',
-                expand: true,
-                onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
-              ),
-            ],
+            ),
           ),
         ),
       );
@@ -165,40 +169,14 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     final eligibility = resolveCameraVerification(race);
     return [
       _backRow(),
-      const SizedBox(height: 24),
-
-      Text(
-        'Submit proof',
-        style: AppTextStyles.headlineLarge.copyWith(
-          fontSize: 32,
-          letterSpacing: -0.9,
-        ),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        race.displayTitle,
-        style: AppTextStyles.titleMedium,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-      if (eligibility.isCameraVerifiable) ...[
-        const SizedBox(height: 4),
-        Text(
-          'Camera counts and verifies automatically.',
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-        ),
-      ] else ...[
-        const SizedBox(height: 4),
-        Text(
-          eligibility.unsupportedMessage,
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-        ),
-      ],
-
-      const SizedBox(height: 24),
+      const SizedBox(height: 18),
+      _ProofHero(race: race, eligibility: eligibility),
+      const SizedBox(height: 16),
+      if (eligibility.isCameraVerifiable) _ReadinessStrip(race: race),
+      if (eligibility.isCameraVerifiable) const SizedBox(height: 16),
 
       if (eligibility.isCameraVerifiable)
-        _MoveCheckCard(race: race, eligibility: eligibility)
+        _AiMotionProofCard(race: race, eligibility: eligibility)
       else
         _UnsupportedVerificationCard(message: eligibility.unsupportedMessage),
     ];
@@ -209,10 +187,96 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   );
 }
 
-// ── MoveCheck card ────────────────────────────────────────────────────────────
+class _ProofHero extends StatelessWidget {
+  const _ProofHero({required this.race, required this.eligibility});
 
-class _MoveCheckCard extends StatelessWidget {
-  const _MoveCheckCard({required this.race, required this.eligibility});
+  final Race race;
+  final CameraVerificationEligibility eligibility;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Step to the line',
+            style: AppTextStyles.headlineLarge.copyWith(
+              color: NuvoColors.white,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            race.displayTitle,
+            style: AppTextStyles.titleMedium.copyWith(
+              color: NuvoColors.white,
+              fontWeight: FontWeight.w900,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            eligibility.isCameraVerifiable
+                ? 'Nuvo watches the movement live. Clean proof turns into a board move.'
+                : eligibility.unsupportedMessage,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.72),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadinessStrip extends StatelessWidget {
+  const _ReadinessStrip({required this.race});
+
+  final Race race;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = race.targetValue == null ? null : raceTargetLabel(race);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: NuvoColors.success.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.success.withValues(alpha: 0.26)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt_rounded, color: NuvoColors.success, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              target == null
+                  ? 'Live count is hot. Every clean move becomes race progress.'
+                  : 'Live count is hot. Clean moves push you toward $target.',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── AI Motion Proof card ──────────────────────────────────────────────────────
+
+class _AiMotionProofCard extends StatelessWidget {
+  const _AiMotionProofCard({required this.race, required this.eligibility});
   final Race race;
   final CameraVerificationEligibility eligibility;
 
@@ -227,6 +291,7 @@ class _MoveCheckCard extends StatelessWidget {
     MotionActivityType.jumpingJacks => Icons.accessibility_new_rounded,
     MotionActivityType.squats => Icons.person_outline_rounded,
     MotionActivityType.lunges => Icons.directions_walk_rounded,
+    MotionActivityType.universalAi => Icons.auto_awesome_rounded,
     _ => Icons.person_outline_rounded,
   };
 
@@ -236,6 +301,7 @@ class _MoveCheckCard extends StatelessWidget {
     MotionActivityType.jumpingJacks => 'Full body · leave room for arms',
     MotionActivityType.squats => 'Full body centered in frame',
     MotionActivityType.lunges => 'Full body · lower body visible',
+    MotionActivityType.universalAi => 'Action visible · steady phone',
     _ => 'Full body inside frame',
   };
 
@@ -280,6 +346,13 @@ class _MoveCheckCard extends StatelessWidget {
           ],
         ),
 
+        const SizedBox(height: 14),
+        _ProofPulse(
+          label: eligibility.movementDefinition?.isHold == true
+              ? 'Hold steady. Nuvo counts valid seconds.'
+              : 'Move clean. Watch the +1 hit the screen.',
+        ),
+
         const SizedBox(height: 20),
 
         // Framing illustration — just corner brackets + instruction text
@@ -320,6 +393,44 @@ class _MoveCheckCard extends StatelessWidget {
             const SizedBox(height: 8),
         ],
       ],
+    );
+  }
+}
+
+class _ProofPulse extends StatelessWidget {
+  const _ProofPulse({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.flash_on_rounded,
+            color: NuvoColors.success,
+            size: 19,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

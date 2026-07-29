@@ -112,6 +112,69 @@ async function getProfileName(db: D1Database, userId: string): Promise<string | 
   return row?.full_name ?? null;
 }
 
+async function tableExists(db: D1Database, table: string): Promise<boolean> {
+  const row = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .bind(table)
+    .first<{ name: string }>();
+  return Boolean(row);
+}
+
+async function raceMembersHasPersonId(db: D1Database): Promise<boolean> {
+  const columns = await db.prepare('PRAGMA table_info(race_members)').all<{ name: string }>();
+  return columns.results.some((column) => column.name === 'person_id');
+}
+
+async function ensurePersonForUser(
+  db: D1Database,
+  userId: string,
+  displayName: string | null,
+): Promise<string | null> {
+  if (!(await tableExists(db, 'people'))) return null;
+
+  const existing = await db.prepare('SELECT id FROM people WHERE user_id = ? LIMIT 1')
+    .bind(userId)
+    .first<{ id: string }>();
+  if (existing?.id) return existing.id;
+
+  await db.prepare(
+    `INSERT OR IGNORE INTO people
+       (id, person_key, user_id, display_name, username, is_demo, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NULL, 0, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+  ).bind(userId, `user:${userId}`, userId, displayName ?? 'Nuvo Racer').run();
+  return userId;
+}
+
+async function raceMemberInsert(
+  db: D1Database,
+  params: {
+    id: string;
+    raceId: string;
+    userId: string;
+    role: string;
+    cachedDisplayName?: string | null;
+    personId?: string | null;
+  },
+): Promise<D1PreparedStatement> {
+  if (await raceMembersHasPersonId(db)) {
+    return db.prepare(
+      `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at, cached_display_name)
+       VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
+    ).bind(
+      params.id,
+      params.raceId,
+      params.userId,
+      params.personId ?? params.userId,
+      params.role,
+      params.cachedDisplayName ?? null,
+    );
+  }
+
+  return db.prepare(
+    `INSERT INTO race_members (id, race_id, user_id, role, status, joined_at, cached_display_name)
+     VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
+  ).bind(params.id, params.raceId, params.userId, params.role, params.cachedDisplayName ?? null);
+}
+
 function raceConfigFromRow(race: RaceRow): RaceConfig | null {
   const activityId = normalizeActivityId(race.activity_id ?? race.movement_type);
   const activity = activityForId(activityId);
@@ -140,10 +203,15 @@ async function ensureMember(db: D1Database, raceId: string, userId: string, role
   const existing = await db.prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string }>();
   if (existing) return;
   const displayName = await getProfileName(db, userId);
-  await db.prepare(
-    `INSERT INTO race_members (id, race_id, user_id, role, status, joined_at, cached_display_name)
-     VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
-  ).bind(generateId(), raceId, userId, role, displayName).run();
+  const personId = await ensurePersonForUser(db, userId, displayName);
+  await (await raceMemberInsert(db, {
+    id: generateId(),
+    raceId,
+    userId,
+    role,
+    cachedDisplayName: displayName,
+    personId,
+  })).run();
 }
 
 async function ensureProgress(db: D1Database, raceId: string, userId: string): Promise<void> {
@@ -442,6 +510,107 @@ function badRequest(error: string) {
   return { ok: false, error };
 }
 
+function extractJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(trimmed.slice(start, end + 1));
+    return parsed && typeof parsed === 'object'
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function booleanFromAi(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return ['true', 'yes', '1'].includes(value.toLowerCase());
+  if (typeof value === 'number') return value > 0;
+  return false;
+}
+
+function stringFromAi(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function numberFromAi(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || Number.isNaN(value)) return fallback;
+  return Math.max(0, Math.min(1, value));
+}
+
+// POST /races/join-code
+racesRouter.post('/proof-rule', async (c) => {
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
+
+  const actionName = stringOrNull(body.actionName);
+  const unit = stringOrNull(body.unit) ?? actionName;
+  const positiveImageBase64 = stringOrNull(body.positiveImageBase64);
+  const negativeImageBase64 = stringOrNull(body.negativeImageBase64);
+  const negativeNote = stringOrNull(body.negativeNote) ?? '';
+  const imageMimeType = stringOrNull(body.imageMimeType) ?? 'image/jpeg';
+
+  if (!actionName) return c.json(badRequest('actionName is required'), 400);
+  if (!positiveImageBase64) return c.json(badRequest('positiveImageBase64 is required'), 400);
+  if (!imageMimeType.startsWith('image/')) return c.json(badRequest('imageMimeType must be an image type'), 400);
+  if (positiveImageBase64.length > 2_800_000) return c.json(badRequest('positiveImageBase64 is too large'), 413);
+  if (negativeImageBase64 && negativeImageBase64.length > 2_800_000) {
+    return c.json(badRequest('negativeImageBase64 is too large'), 413);
+  }
+
+  const image = positiveImageBase64.startsWith('data:')
+    ? positiveImageBase64
+    : `data:${imageMimeType};base64,${positiveImageBase64}`;
+  const messages = [
+    {
+      role: 'system',
+      content:
+        'You build Nuvo AI Motion Proof rules from user-taught examples. Return only compact JSON. ' +
+        'Schema: {"unit":string,"countRule":string,"rejectRule":string,"framingTip":string,"promptText":string,"confidenceThreshold":number}. ' +
+        'The promptText must instruct a vision model to return activityDetected, actionComplete, confidence, and summary. Keep each string concise.',
+    },
+    {
+      role: 'user',
+      content:
+        `The user wants Nuvo to count: ${actionName}. Unit: ${unit}. ` +
+        `Negative/reject note: ${negativeNote || 'Do not count partial, repeated, or unrelated actions.'} ` +
+        `A reject example ${negativeImageBase64 ? 'was provided by the app as a separate sampled frame' : 'was not provided'}. ` +
+        'Use the image as one positive example of what should count. Build a strict rejectRule for near-misses.',
+    },
+  ];
+
+  const aiResponse = await c.env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+    messages,
+    image,
+    max_tokens: 260,
+    temperature: 0,
+  }) as { response?: string } | string;
+
+  const rawText = typeof aiResponse === 'string' ? aiResponse : aiResponse.response ?? '';
+  const parsed = extractJsonObject(rawText) ?? {};
+  const fallbackPrompt =
+    `Count one ${unit} only when this rule is satisfied: ${actionName}. ` +
+    'Return actionComplete only for one clean completed count.';
+  const confidenceThreshold = numberFromAi(parsed.confidenceThreshold, 0.72);
+
+  return c.json({
+    ok: true,
+    rule: {
+      version: 'nuvo-universal-rule-v1',
+      unit: stringFromAi(parsed.unit) || unit,
+      countRule: stringFromAi(parsed.countRule) || `Count one clean ${actionName}.`,
+      rejectRule: stringFromAi(parsed.rejectRule) || 'Reject partial, repeated, or unrelated actions.',
+      framingTip: stringFromAi(parsed.framingTip) || 'Keep the full action visible.',
+      promptText: stringFromAi(parsed.promptText) || fallbackPrompt,
+      confidenceThreshold,
+    },
+    raw: rawText.slice(0, 500),
+  });
+});
+
 // POST /races/join-code
 racesRouter.post('/join-code', async (c) => {
   const userId = c.get('userId');
@@ -515,6 +684,16 @@ racesRouter.post('/', async (c) => {
   const visibility = typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility) ? body.visibility : 'private';
   const startAt = config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
   const endAt = config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
+  const displayName = await getProfileName(c.env.DB, userId);
+  const personId = await ensurePersonForUser(c.env.DB, userId, displayName);
+  const memberInsert = await raceMemberInsert(c.env.DB, {
+    id: generateId(),
+    raceId,
+    userId,
+    role: 'creator',
+    cachedDisplayName: displayName,
+    personId,
+  });
 
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -546,10 +725,7 @@ racesRouter.post('/', async (c) => {
       startAt,
       endAt,
     ),
-    c.env.DB.prepare(
-      `INSERT INTO race_members (id, race_id, user_id, role, status, joined_at)
-       VALUES (?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP)`
-    ).bind(generateId(), raceId, userId),
+    memberInsert,
     c.env.DB.prepare(
       `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
        VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
@@ -892,6 +1068,92 @@ racesRouter.patch('/:id/progress/:userId', async (c) => {
   await recomputeRanks(c.env.DB, race.id);
 
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+});
+
+// POST /races/:id/proof - legacy endpoint, maps to move_logs.
+racesRouter.post('/:id/proof/vision-observation', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') {
+    return c.json(badRequest('Race is not active'), 400);
+  }
+
+  const member = await c.env.DB.prepare(
+    "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'"
+  ).bind(race.id, userId).first<{ id: string }>();
+  if (!member) return c.json(badRequest('Only race participants can submit proof'), 403);
+
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
+
+  const observationId = stringOrNull(body.observationId) ?? generateId();
+  const proofPrompt = stringOrNull(body.prompt);
+  const activityId = stringOrNull(body.activityId) ?? race.activity_id ?? race.movement_type ?? 'universal_activity';
+  const imageBase64 = stringOrNull(body.imageBase64);
+  const imageMimeType = stringOrNull(body.imageMimeType) ?? 'image/jpeg';
+  if (!proofPrompt) return c.json(badRequest('prompt is required'), 400);
+  if (!imageBase64) return c.json(badRequest('imageBase64 is required'), 400);
+  if (!imageMimeType.startsWith('image/')) return c.json(badRequest('imageMimeType must be an image type'), 400);
+  if (imageBase64.length > 2_800_000) return c.json(badRequest('imageBase64 is too large'), 413);
+
+  const image = imageBase64.startsWith('data:')
+    ? imageBase64
+    : `data:${imageMimeType};base64,${imageBase64}`;
+
+  const messages = [
+    {
+      role: 'system',
+      content:
+        'You are Nuvo AI Motion Proof. Return only compact JSON. Do not include markdown. ' +
+        'Schema: {"activityDetected":boolean,"actionComplete":boolean,"confidence":number,"summary":string}. ' +
+        'activityDetected means the requested activity is visible. actionComplete means exactly one countable unit happened in this sampled frame/window. ' +
+        'confidence must be between 0 and 1. summary must be under 90 characters.',
+    },
+    {
+      role: 'user',
+      content:
+        `Race: ${race.title}. Activity id: ${activityId}. Proof rule: ${proofPrompt}. ` +
+        'Analyze this sampled camera frame for one live proof observation.',
+    },
+  ];
+
+  const aiResponse = await c.env.AI.run('@cf/meta/llama-3.2-11b-vision-instruct', {
+    messages,
+    image,
+    max_tokens: 180,
+    temperature: 0,
+  }) as { response?: string } | string;
+
+  const rawText = typeof aiResponse === 'string' ? aiResponse : aiResponse.response ?? '';
+  const parsed = extractJsonObject(rawText);
+  if (!parsed) {
+    return c.json({
+      ok: true,
+      observation: {
+        observationId,
+        activityId,
+        activityDetected: false,
+        actionComplete: false,
+        confidence: 0,
+        summary: 'Nuvo could not read that frame.',
+        raw: rawText.slice(0, 500),
+      },
+    });
+  }
+
+  const confidence = confidenceOrNull(parsed.confidence) ?? 0;
+  return c.json({
+    ok: true,
+    observation: {
+      observationId,
+      activityId,
+      activityDetected: booleanFromAi(parsed.activityDetected),
+      actionComplete: booleanFromAi(parsed.actionComplete),
+      confidence,
+      summary: stringFromAi(parsed.summary).slice(0, 90) || 'Nuvo read the frame.',
+    },
+  });
 });
 
 // POST /races/:id/proof - legacy endpoint, maps to move_logs.

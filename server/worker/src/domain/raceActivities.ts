@@ -1,8 +1,8 @@
-export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold';
+export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'universal_ai';
 export type RaceMetric = 'reps' | 'seconds';
 export type RaceFormat = 'first_to_goal' | 'most_in_window' | 'best_attempt' | 'timed_attempt';
 export type RaceScoringRule = 'cumulative_sum' | 'maximum_attempt';
-export type VerificationMethod = 'camera_pose';
+export type VerificationMethod = 'camera_pose' | 'cloudflare_vision';
 export type RaceRecurrence = 'none' | 'daily' | 'weekly';
 
 export interface RaceActivityDefinition {
@@ -97,6 +97,21 @@ export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
     availability: 'supported',
     instructions: ['Use a side view.', 'Keep your whole body visible.', 'Keep your body straight.'],
   },
+  {
+    id: 'universal_ai',
+    displayName: 'Nuvo AI',
+    aliases: ['nuvo ai', 'anything', 'custom ai', 'universal ai'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'universal_vision_v1',
+    verificationMethod: 'cloudflare_vision',
+    cameraOrientation: 'front_or_angle',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [3, 6, 10, 20, 50],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep the action visible.', 'Move one clean count at a time.', 'Let Nuvo read the frame.'],
+  },
 ];
 
 export function activityForId(id: string | null | undefined): RaceActivityDefinition | undefined {
@@ -109,7 +124,8 @@ export function normalizeActivityId(value: string | null | undefined): RaceActiv
   if (normalized === 'pushups' || normalized === 'push_up') return 'push_ups';
   if (normalized === 'plank' || normalized === 'plank_hold') return 'plank_hold';
   if (normalized === 'jumping_jack') return 'jumping_jacks';
-  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold'].includes(normalized)) {
+  if (normalized === 'nuvo_ai' || normalized === 'custom_ai' || normalized === 'anything') return 'universal_ai';
+  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold', 'universal_ai'].includes(normalized)) {
     return normalized as RaceActivityId;
   }
   return undefined;
@@ -126,7 +142,8 @@ export function normalizeMetric(value: string | null | undefined, activity?: Rac
     normalized === 'push ups' ||
     normalized === 'jumping jacks' ||
     normalized === 'squats' ||
-    normalized === 'lunges'
+    normalized === 'lunges' ||
+    normalized === 'actions'
   ) return 'reps';
   return undefined;
 }

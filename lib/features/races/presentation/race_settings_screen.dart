@@ -252,9 +252,31 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: NuvoColors.white,
+              borderRadius: BorderRadius.circular(NuvoRadii.lg),
+              border: Border.all(color: NuvoColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: NuvoPrimaryButton(
+                label: _saving ? 'Saving changes' : 'Save changes',
+                icon: Icons.check_rounded,
+                expand: true,
+                loading: _saving,
+                onPressed: _saving ? null : _save,
+              ),
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 128),
           children: [
             Align(
               alignment: Alignment.centerLeft,
@@ -262,22 +284,17 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                 onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
               ),
             ),
-            const SizedBox(height: 18),
-            Text(
-              'Race settings',
-              style: AppTextStyles.headlineLarge.copyWith(
-                fontSize: 32,
-                letterSpacing: -0.9,
-              ),
+            const SizedBox(height: 14),
+            _SettingsHero(
+              title: _titleController.text.trim().isEmpty
+                  ? 'Race settings'
+                  : _titleController.text.trim(),
+              isCameraRace: isCameraRace,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Tune the start line, finish line, move rules, and lifecycle.',
-              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-            ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 14),
             _Section(
-              title: 'Basic details',
+              title: 'Race setup',
+              subtitle: 'Keep the name, finish line, and proof rules obvious.',
               children: [
                 _Input(controller: _titleController, label: 'Title'),
                 _Input(
@@ -286,63 +303,59 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                   maxLines: 3,
                 ),
                 _Input(controller: _categoryController, label: 'Category'),
+                if (isCameraRace) ...[
+                  _MovementSummary(eligibility: eligibility!),
+                  _Input(
+                    controller: _targetController,
+                    label: 'Finish line',
+                    hint: _targetHint(eligibility),
+                    keyboardType: TextInputType.number,
+                  ),
+                  _Input(
+                    controller: _startLineController,
+                    label: 'Start line',
+                    hint: 'Add start date',
+                  ),
+                  _Input(
+                    controller: _finishLineController,
+                    label: 'Finish date',
+                    hint: 'Add finish date',
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _Input(
+                          controller: _targetController,
+                          label: 'Finish line',
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _Input(
+                          controller: _unitController,
+                          label: 'Unit',
+                        ),
+                      ),
+                    ],
+                  ),
+                  _Input(
+                    controller: _startLineController,
+                    label: 'Start line',
+                    hint: 'Add start date',
+                  ),
+                  _Input(
+                    controller: _finishLineController,
+                    label: 'Finish date',
+                    hint: 'Add finish date',
+                  ),
+                ],
               ],
             ),
             _Section(
-              title: 'Goal',
-              children: isCameraRace
-                  ? [
-                      _MovementSummary(eligibility: eligibility!),
-                      _Input(
-                        controller: _targetController,
-                        label: 'Target',
-                        hint: _targetHint(eligibility),
-                        keyboardType: TextInputType.number,
-                      ),
-                      _Input(
-                        controller: _startLineController,
-                        label: 'Start',
-                        hint: 'Add start date',
-                      ),
-                      _Input(
-                        controller: _finishLineController,
-                        label: 'Finish',
-                        hint: 'Add finish date',
-                      ),
-                    ]
-                  : [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _Input(
-                              controller: _targetController,
-                              label: 'Target value',
-                              keyboardType: TextInputType.number,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _Input(
-                              controller: _unitController,
-                              label: 'Unit',
-                            ),
-                          ),
-                        ],
-                      ),
-                      _Input(
-                        controller: _startLineController,
-                        label: 'Start',
-                        hint: 'Add start date',
-                      ),
-                      _Input(
-                        controller: _finishLineController,
-                        label: 'Finish',
-                        hint: 'Add finish date',
-                      ),
-                    ],
-            ),
-            _Section(
               title: 'Rules',
+              subtitle: 'Short rules reduce arguments after the race starts.',
               children: [
                 _Input(
                   controller: _rulesController,
@@ -356,6 +369,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             if (!isCameraRace)
               _Section(
                 title: 'Moves',
+                subtitle: 'Only supported proof methods should be selectable.',
                 children: [
                   _Menu(
                     label: 'Move method',
@@ -367,6 +381,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
               ),
             _Section(
               title: 'Visibility',
+              subtitle: 'Choose who can get to the start line.',
               children: [
                 _Menu(
                   label: 'Who can join',
@@ -381,32 +396,28 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
               ],
             ),
             if (_error != null) ...[
-              Text(
-                _error!,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.danger,
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: NuvoColors.danger.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  border: Border.all(
+                    color: NuvoColors.danger.withValues(alpha: 0.28),
+                  ),
+                ),
+                child: Text(
+                  _error!,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.danger,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
             ],
-            NuvoPrimaryButton(
-              label: 'Save changes',
-              icon: Icons.check_rounded,
-              expand: true,
-              loading: _saving,
-              onPressed: _saving ? null : _save,
-            ),
-            const SizedBox(height: 12),
-            NuvoOutlineButton(
-              label: 'Back to race',
-              expand: true,
-              onPressed: _saving
-                  ? null
-                  : () => context.go('/race/${widget.raceId}'),
-            ),
-            const SizedBox(height: 26),
             _Section(
               title: 'Lifecycle',
+              subtitle: 'Use these only when the race should leave the board.',
               children: [
                 NuvoGhostButton(
                   label: 'Archive race',
@@ -473,21 +484,100 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
+  const _Section({required this.title, required this.children, this.subtitle});
 
   final String title;
+  final String? subtitle;
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTextStyles.titleLarge),
+          Text(
+            title,
+            style: AppTextStyles.titleLarge.copyWith(
+              color: NuvoColors.navy,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 3),
+            Text(
+              subtitle!,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.textMuted,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           ...children.expand((child) => [child, const SizedBox(height: 12)]),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsHero extends StatelessWidget {
+  const _SettingsHero({required this.title, required this.isCameraRace});
+
+  final String title;
+  final bool isCameraRace;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Race settings',
+            style: AppTextStyles.headlineLarge.copyWith(
+              color: NuvoColors.white,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.titleMedium.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.78),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: NuvoColors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(NuvoRadii.pill),
+              border: Border.all(
+                color: NuvoColors.white.withValues(alpha: 0.14),
+              ),
+            ),
+            child: Text(
+              isCameraRace ? 'AI Motion Proof race' : 'Manual proof race',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -122,7 +122,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         style: AppTextStyles.headlineLarge.copyWith(
                           color: NuvoColors.navy,
                           fontSize: 32,
-                          letterSpacing: -0.9,
+                          letterSpacing: 0,
                         ),
                       ),
                       const Spacer(),
@@ -302,7 +302,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     return [
       // Race history
-      const _SectionLabel(label: 'Race history'),
+      const _SectionLabel(
+        label: 'Race record',
+        sublabel: 'Your proof, finish lines, and board movement.',
+      ),
       const SizedBox(height: 12),
 
       if (raceState.loading && raceState.races.isEmpty)
@@ -316,10 +319,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         )
       else if (raceState.races.isEmpty)
-        Text(
-          'Start your first race to build your history.',
-          style: AppTextStyles.bodyMedium.copyWith(color: _kProfileTextMuted),
-        )
+        _ProfileEmptyRaceRecord(onStart: () => context.go('/compete'))
       else ...[
         if (activeRaces.isNotEmpty) ...[
           const _SubsectionLabel(label: 'Active'),
@@ -345,7 +345,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       const SizedBox(height: 24),
 
       // Account
-      const _SectionLabel(label: 'Account'),
+      const _SectionLabel(
+        label: 'Account',
+        sublabel: 'Identity and app controls.',
+      ),
       const SizedBox(height: 12),
       _AccountRow(
         icon: Icons.badge_rounded,
@@ -375,7 +378,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       const SizedBox(height: 24),
 
       // Legal
-      const _SectionLabel(label: 'Legal'),
+      const _SectionLabel(label: 'Legal', sublabel: 'The quiet paperwork.'),
       const SizedBox(height: 12),
       _AccountRow(
         icon: Icons.policy_rounded,
@@ -459,6 +462,75 @@ class _SubsectionLabel extends StatelessWidget {
       style: AppTextStyles.labelMedium.copyWith(
         color: NuvoColors.textMuted,
         fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _ProfileEmptyRaceRecord extends StatelessWidget {
+  const _ProfileEmptyRaceRecord({required this.onStart});
+
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onStart,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        decoration: BoxDecoration(
+          color: NuvoColors.navy,
+          borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          border: Border.all(color: NuvoColors.navy, width: 2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: NuvoColors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+                border: Border.all(
+                  color: NuvoColors.white.withValues(alpha: 0.14),
+                ),
+              ),
+              child: const Icon(
+                Icons.flag_rounded,
+                color: NuvoColors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No race record yet',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: NuvoColors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Start one race and your proof history shows here.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.white.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: NuvoColors.white,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -764,18 +836,34 @@ class _AccountRow extends StatelessWidget {
 // ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
+  const _SectionLabel({required this.label, this.sublabel});
   final String label;
+  final String? sublabel;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.titleMedium.copyWith(
-        color: NuvoColors.navy,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: NuvoColors.navy,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+        ),
+        if (sublabel != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            sublabel!,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -8,6 +8,7 @@ export type AppEnv = {
     REVIEWER_PASSWORD_HASH?: string;
     API_BASE_URL: string;
     PROFILE_PHOTOS: R2Bucket;
+    AI: Ai;
   };
   Variables: {
     userId: string;

@@ -210,7 +210,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
           child: ListView(
             padding: EdgeInsets.fromLTRB(
               20,
-              18,
+              16,
               20,
               NuvoBottomNav.bottomPadding(context),
             ),
@@ -221,7 +221,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 onShare: _sharePass,
                 onCopy: _copyId,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
               // ── Loading ──────────────────────────────────────────────────
               if (_loading)
@@ -238,10 +238,13 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               else ...[
                 // ── Member pass (hero) ───────────────────────────────────
                 MemberPassCard(profile: profile, compact: true, dark: true),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
                 // ── Find people ──────────────────────────────────────────
-                const _SectionLabel(label: 'Find people'),
+                const _SectionLabel(
+                  label: 'Add crew',
+                  sublabel: 'Search once. Race together later.',
+                ),
                 const SizedBox(height: 12),
                 NuvoSearchField(
                   controller: _searchController,
@@ -266,13 +269,19 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
                 // ── Your crew ────────────────────────────────────────────
                 if (closest != null) ...[
-                  const _SectionLabel(label: 'Closest race'),
+                  const _SectionLabel(
+                    label: 'Closest race',
+                    sublabel: 'The tightest board between you and crew.',
+                  ),
                   const SizedBox(height: 12),
                   _ClosestRaceCard(closest: closest),
                   const SizedBox(height: 20),
                 ],
 
-                const _SectionLabel(label: 'Your crew'),
+                const _SectionLabel(
+                  label: 'Your crew',
+                  sublabel: 'People you can pull into the next start line.',
+                ),
                 const SizedBox(height: 12),
                 if (_crew.isEmpty)
                   const _EmptyNote(
@@ -292,18 +301,34 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 // ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
+  const _SectionLabel({required this.label, this.sublabel});
   final String label;
+  final String? sublabel;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.titleMedium.copyWith(
-        color: NuvoColors.navy,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: NuvoColors.navy,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+        ),
+        if (sublabel != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            sublabel!,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -483,15 +508,10 @@ class _CrewHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
-          stops: [0, 0.42, 1],
-        ),
+        color: NuvoColors.navy,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: AppShadows.surfaceShadow,
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardShadow4,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,8 +532,8 @@ class _CrewHeader extends StatelessWidget {
                     ? 'Your start line is open'
                     : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                  fontWeight: FontWeight.w600,
+                  color: NuvoColors.white.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
@@ -529,17 +549,17 @@ class _CrewHeader extends StatelessWidget {
                     Text(
                       'Crew',
                       style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
+                        color: NuvoColors.white,
                         height: 1.05,
                         fontSize: 32,
-                        letterSpacing: -0.9,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'The people you want at the start line.',
+                      'Share your pass, build your crew, then race them.',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
+                        color: NuvoColors.white.withValues(alpha: 0.72),
                       ),
                     ),
                   ],

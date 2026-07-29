@@ -101,6 +101,26 @@ const motionActivityDefinitions = [
       'Keep your body straight.',
     ],
   ),
+  MotionActivityDefinition(
+    type: MotionActivityType.universalAi,
+    title: 'Anything with Nuvo AI',
+    metric: RaceMetric.reps,
+    suggestedTargets: [3, 6, 10, 20, 50],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['nuvo ai', 'custom ai', 'anything', 'universal ai'],
+    proofLabel: 'actions',
+    cameraInstruction: 'Keep the action visible',
+    instructions: [
+      'Name the race after what Nuvo should count.',
+      'Keep the action visible.',
+      'Move one clean count at a time.',
+    ],
+  ),
 ];
 
 const supportedMotionActivityTypes = {
@@ -109,7 +129,11 @@ const supportedMotionActivityTypes = {
   MotionActivityType.jumpingJacks,
   MotionActivityType.plankHold,
   MotionActivityType.lunges,
+  MotionActivityType.universalAi,
 };
+
+bool isUniversalVisionMotionActivity(MotionActivityDefinition? definition) =>
+    definition != null && definition.type == MotionActivityType.universalAi;
 
 bool isCameraVerifiedMotionActivity(MotionActivityDefinition? definition) =>
     definition != null &&
@@ -167,6 +191,10 @@ MotionActivityDefinition? _inferSupportedMotionActivity(
   }
   if (RegExp(r'(^|[^a-z])planks?([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.plankHold);
+  }
+  if (RegExp(r'(^|[^a-z])nuvo\s+ai([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])anything([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.universalAi);
   }
   return null;
 }

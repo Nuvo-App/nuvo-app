@@ -263,6 +263,8 @@ class RaceController extends StateNotifier<RaceState> {
           : [race, ...state.races],
     );
   }
+
+  void upsertRace(Race race) => _upsertRace(race);
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────

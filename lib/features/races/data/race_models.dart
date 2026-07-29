@@ -151,6 +151,7 @@ class Race {
       'squats',
       'lunges',
       'plank_hold',
+      'universal_ai',
     };
     final activity = activityId ?? aiActivityType;
     return isAiMotionRace && activity != null && supported.contains(activity);

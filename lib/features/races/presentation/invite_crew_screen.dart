@@ -206,51 +206,86 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                   children: [
                     NuvoBackButton(
                       onPressed: () =>
                           safePopOrGo(context, '/race/${widget.raceId}'),
                     ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Pull in your crew',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _race!.title,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Add by username'),
-                    const SizedBox(height: 10),
-                    NuvoSearchField(
-                      controller: _searchController,
-                      hint: 'Search username or member ID',
-                      searching: _searching,
-                      onChanged: _onSearchChanged,
-                    ),
+                    const SizedBox(height: 14),
+                    _InviteHero(raceTitle: _race!.title),
+                    const SizedBox(height: 14),
+                    _InviteCodeCard(code: _inviteCode),
                     const SizedBox(height: 12),
-                    for (final user in _results)
-                      _InviteUserRow(
-                        user: user,
-                        added: _isInRace(user.id),
-                        loading: _adding.contains(user.id),
-                        onPressed: () => _addToRace(user),
+                    if (_inviteCode == null)
+                      NuvoPrimaryButton(
+                        label: 'Create invite code',
+                        icon: Icons.key_rounded,
+                        expand: true,
+                        loading: _generating,
+                        onPressed: _generating ? null : _createCode,
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: NuvoPrimaryButton(
+                              label: 'Copy code',
+                              icon: Icons.copy_rounded,
+                              small: true,
+                              expand: true,
+                              onPressed: _copyCode,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: NuvoOutlineButton(
+                              label: 'Share',
+                              icon: Icons.ios_share_rounded,
+                              small: true,
+                              expand: true,
+                              onPressed: () => Share.share(_shareText),
+                            ),
+                          ),
+                        ],
                       ),
-                    if (_results.isEmpty &&
-                        _searchController.text.trim().length >= 2 &&
-                        !_searching)
-                      const _SmallPanel(
-                        text: 'No matching Nuvo members found.',
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: NuvoColors.white,
+                        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+                        border: Border.all(color: NuvoColors.border),
                       ),
-                    const SizedBox(height: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _SectionLabel(label: 'Add by username'),
+                          const SizedBox(height: 10),
+                          NuvoSearchField(
+                            controller: _searchController,
+                            hint: 'Search username or member ID',
+                            searching: _searching,
+                            onChanged: _onSearchChanged,
+                          ),
+                          const SizedBox(height: 12),
+                          for (final user in _results)
+                            _InviteUserRow(
+                              user: user,
+                              added: _isInRace(user.id),
+                              loading: _adding.contains(user.id),
+                              onPressed: () => _addToRace(user),
+                            ),
+                          if (_results.isEmpty &&
+                              _searchController.text.trim().length >= 2 &&
+                              !_searching)
+                            const _SmallPanel(
+                              text: 'No matching Nuvo members found.',
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
                     const _SectionLabel(label: 'Your crew'),
                     const SizedBox(height: 10),
                     if (_crew.isEmpty)
@@ -266,34 +301,6 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                           loading: _adding.contains(user.id),
                           onPressed: () => _addToRace(user),
                         ),
-                    const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Invite code'),
-                    const SizedBox(height: 10),
-                    _InviteCodeCard(code: _inviteCode),
-                    const SizedBox(height: 14),
-                    if (_inviteCode == null)
-                      NuvoPrimaryButton(
-                        label: 'Create invite code',
-                        icon: Icons.key_rounded,
-                        expand: true,
-                        loading: _generating,
-                        onPressed: _generating ? null : _createCode,
-                      )
-                    else ...[
-                      NuvoPrimaryButton(
-                        label: 'Copy code',
-                        icon: Icons.copy_rounded,
-                        expand: true,
-                        onPressed: _copyCode,
-                      ),
-                      const SizedBox(height: 12),
-                      NuvoOutlineButton(
-                        label: 'Share race',
-                        icon: Icons.ios_share_rounded,
-                        expand: true,
-                        onPressed: () => Share.share(_shareText),
-                      ),
-                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(
@@ -308,6 +315,44 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                 .animate()
                 .fadeIn(duration: 220.ms, curve: Curves.easeOut)
                 .slideY(begin: 0.03, end: 0, duration: 260.ms),
+      ),
+    );
+  }
+}
+
+class _InviteHero extends StatelessWidget {
+  const _InviteHero({required this.raceTitle});
+
+  final String raceTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pull in your crew',
+            style: AppTextStyles.headlineLarge.copyWith(
+              color: NuvoColors.white,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            raceTitle,
+            style: AppTextStyles.titleMedium.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.78),
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,29 +15,7 @@ import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
 import 'create_race_screen.dart';
 import 'race_controller.dart';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-void _dismissKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
-
-String _secondsDisplay(int s) {
-  if (s < 60) return '$s seconds';
-  final m = s ~/ 60;
-  final rem = s % 60;
-  return rem == 0 ? '$m min' : '$m min $rem sec';
-}
-
-// ── Step enum ─────────────────────────────────────────────────────────────────
-
-enum _Step { name, activity, goal, racers, review }
-
-// ── Provider ──────────────────────────────────────────────────────────────────
-
-final _composerDraftProvider = StateProvider.autoDispose<RaceDraft>(
-  (ref) => draftForActivity(motionActivityDefinitions.first),
-);
-
-// ── Screen ────────────────────────────────────────────────────────────────────
+import 'teach_nuvo_screen.dart';
 
 class RaceComposerScreen extends ConsumerStatefulWidget {
   const RaceComposerScreen({super.key, this.prefill});
@@ -50,73 +27,139 @@ class RaceComposerScreen extends ConsumerStatefulWidget {
 }
 
 class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
-  final _pageController = PageController();
-  _Step _step = _Step.name;
+  late RaceDraft _draft;
+  late final TextEditingController _targetController;
+  late final TextEditingController _customActionController;
   bool _loading = false;
   String? _error;
-
-  static const _steps = _Step.values;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final prefill = widget.prefill;
-      if (prefill != null) {
-        final parsed = draftFromIdea(prefill.idea);
-        if (parsed != null) {
-          ref.read(_composerDraftProvider.notifier).state = parsed;
-        }
-      }
-    });
+    _draft = _initialDraft();
+    _targetController = TextEditingController(text: '${_draft.targetValue}');
+    _customActionController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    _targetController.dispose();
+    _customActionController.dispose();
     super.dispose();
   }
 
-  void _goToStep(_Step target) {
-    _dismissKeyboard();
-    final idx = _steps.indexOf(target);
-    setState(() => _step = target);
-    _pageController.animateToPage(
-      idx,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+  RaceDraft _initialDraft() {
+    final idea = widget.prefill?.idea;
+    if (idea != null) {
+      final parsed = draftFromIdea(idea);
+      if (parsed != null) return parsed;
+    }
+    return draftForActivity(motionActivityDefinitions.first);
+  }
+
+  void _setDraft(RaceDraft draft) {
+    setState(() {
+      _draft = draft;
+      _error = null;
+    });
+    if (_targetController.text != '${draft.targetValue}') {
+      _targetController.text = '${draft.targetValue}';
+    }
+  }
+
+  void _setActivity(MotionActivityDefinition activity) {
+    final nextTarget = _draft.targetValue.clamp(1, 99999);
+    final customAction = _cleanCustomAction();
+    _setDraft(
+      _draft.copyWith(
+        title:
+            activity.type == MotionActivityType.universalAi &&
+                customAction.isNotEmpty
+            ? 'First to $nextTarget $customAction'
+            : null,
+        activity: activity,
+        metric: activity.metric,
+        format: activity.supportedFormats.contains(_draft.format)
+            ? _draft.format
+            : RaceFormat.firstToGoal,
+        targetValue: nextTarget,
+        hasCustomName:
+            activity.type == MotionActivityType.universalAi &&
+            customAction.isNotEmpty,
+      ),
     );
   }
 
-  void _advance() {
-    final idx = _steps.indexOf(_step);
-    if (idx < _steps.length - 1) {
-      _goToStep(_steps[idx + 1]);
-    }
+  void _setTarget(int value) {
+    final clamped = value.clamp(1, 99999);
+    final customAction = _cleanCustomAction();
+    _setDraft(
+      _draft.copyWith(
+        title:
+            _draft.activity.type == MotionActivityType.universalAi &&
+                customAction.isNotEmpty
+            ? 'First to $clamped $customAction'
+            : null,
+        targetValue: clamped,
+        hasCustomName:
+            _draft.activity.type == MotionActivityType.universalAi &&
+            customAction.isNotEmpty,
+      ),
+    );
   }
 
-  void _retreat() {
-    final idx = _steps.indexOf(_step);
-    if (idx > 0) {
-      _goToStep(_steps[idx - 1]);
-    } else {
-      _dismissKeyboard();
-      safePopOrGo(context, '/compete');
-    }
+  void _setVisibility(String visibility) {
+    _setDraft(_draft.copyWith(visibility: visibility));
+  }
+
+  String _cleanCustomAction() => _customActionController.text
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .toLowerCase();
+
+  void _setCustomAction(String value) {
+    if (_draft.activity.type != MotionActivityType.universalAi) return;
+    final action = value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    _setDraft(
+      _draft.copyWith(
+        title: action.isEmpty ? null : 'First to ${_draft.targetValue} $action',
+        hasCustomName: action.isNotEmpty,
+      ),
+    );
   }
 
   Future<void> _startRace() async {
-    if (_loading) return; // guard against double-tap
-    _dismissKeyboard();
-    final draft = ref.read(_composerDraftProvider);
-    if (draft.targetValue <= 0) {
-      setState(() => _error = 'Enter a target greater than 0.');
+    if (_loading) return;
+    final target = int.tryParse(_targetController.text.trim());
+    if (target == null || target <= 0) {
+      setState(() => _error = 'Enter a finish line greater than 0.');
       return;
     }
+    final customAction = _cleanCustomAction();
+    if (_draft.activity.type == MotionActivityType.universalAi &&
+        customAction.isEmpty) {
+      setState(() => _error = 'Tell Nuvo what to count.');
+      return;
+    }
+    final draft = _draft.copyWith(
+      title: _draft.activity.type == MotionActivityType.universalAi
+          ? 'First to $target $customAction'
+          : null,
+      targetValue: target,
+      hasCustomName: _draft.activity.type == MotionActivityType.universalAi,
+    );
     setState(() {
-      _loading = true;
+      _draft = draft;
       _error = null;
     });
+    if (draft.activity.type == MotionActivityType.universalAi) {
+      context.push(
+        '/races/teach-nuvo',
+        extra: TeachNuvoArgs(draft: draft, actionName: customAction),
+      );
+      return;
+    }
+    setState(() => _loading = true);
     try {
       final payload = draft.toCreatePayload();
       final race = await ref
@@ -141,84 +184,107 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           );
       if (!mounted) return;
       final wantsInvite = draft.visibility == 'invite_code';
-      if (wantsInvite) {
-        context.go('/race/${race.id}/invite');
-      } else {
-        context.go('/race/${race.id}');
-      }
+      context.go(wantsInvite ? '/race/${race.id}/invite' : '/race/${race.id}');
     } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _error = 'Something went wrong. Try again.';
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = 'Race could not start. Try again.';
+        _loading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final draft = ref.watch(_composerDraftProvider);
-    final stepIndex = _steps.indexOf(_step);
+    final isInvite = _draft.visibility == 'invite_code';
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _ComposerTopBar(
-              stepIndex: stepIndex,
-              totalSteps: _steps.length,
-              onBack: _loading ? null : _retreat,
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: NuvoColors.white,
+              borderRadius: BorderRadius.circular(NuvoRadii.lg),
+              border: Border.all(color: NuvoColors.border),
             ),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _NamePage(
-                    draft: draft,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                  ),
-                  _ActivityPage(
-                    draft: draft,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                  ),
-                  _GoalPage(
-                    draft: draft,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                  ),
-                  _RacersPage(
-                    draft: draft,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
-                  ),
-                  _ReviewPage(
-                    draft: draft,
-                    loading: _loading,
-                    error: _error,
-                    onStart: _startRace,
-                    onEditStep: _goToStep,
-                  ),
-                ],
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: NuvoPrimaryButton(
+                label: _loading ? 'Starting race' : 'Start race',
+                icon: Icons.flag_rounded,
+                expand: true,
+                loading: _loading,
+                onPressed: _loading ? null : _startRace,
               ),
             ),
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+          children: [
+            NuvoBackButton(onPressed: () => safePopOrGo(context, '/compete')),
+            const SizedBox(height: 14),
+            _ComposerHero(draft: _draft),
+            const SizedBox(height: 16),
+            _ComposerSection(
+              icon: Icons.directions_run_rounded,
+              title: 'Activity',
+              subtitle: 'Pick the move. Nuvo watches for clean progress.',
+              child: _ActivityPicker(
+                selected: _draft.activity,
+                onSelected: _setActivity,
+              ),
+            ),
+            if (_draft.activity.type == MotionActivityType.universalAi) ...[
+              const SizedBox(height: 14),
+              _ComposerSection(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Nuvo AI counts',
+                subtitle: 'Name the action. Nuvo reads sampled camera frames.',
+                child: _CustomActionEditor(
+                  controller: _customActionController,
+                  onChanged: _setCustomAction,
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            _ComposerSection(
+              icon: Icons.flag_rounded,
+              title: 'Finish line',
+              subtitle: 'Make it loud enough to chase, small enough to start.',
+              child: _FinishLineEditor(
+                draft: _draft,
+                controller: _targetController,
+                onTargetChanged: _setTarget,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ComposerSection(
+              icon: Icons.group_add_rounded,
+              title: 'Crew',
+              subtitle: 'Race solo now or pull people to the start line.',
+              child: _CrewModePicker(
+                inviteCrew: isInvite,
+                onChanged: (invite) =>
+                    _setVisibility(invite ? 'invite_code' : 'private'),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _RaceSummary(draft: _draft),
+            if (_error != null) ...[
+              const SizedBox(height: 14),
+              _ErrorBox(message: _error!),
+            ],
           ],
         ),
       ),
@@ -226,158 +292,518 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   }
 }
 
-// ── Top bar ───────────────────────────────────────────────────────────────────
+class _ComposerHero extends StatelessWidget {
+  const _ComposerHero({required this.draft});
 
-class _ComposerTopBar extends StatelessWidget {
-  const _ComposerTopBar({
-    required this.stepIndex,
-    required this.totalSteps,
-    required this.onBack,
-  });
-
-  final int stepIndex;
-  final int totalSteps;
-  final VoidCallback? onBack;
+  final RaceDraft draft;
 
   @override
   Widget build(BuildContext context) {
-    final progress = (stepIndex + 1) / totalSteps;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+    final unit = draft.metric == RaceMetric.seconds
+        ? 'seconds'
+        : draft.activity.proofLabel;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Text(
+            'Build the board',
+            style: AppTextStyles.headlineLarge.copyWith(
+              color: NuvoColors.white,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Set the finish line. Nuvo counts the proof. The leaderboard moves when you do.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.72),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              NuvoBackButton(onPressed: onBack ?? () {}),
-              const Spacer(),
-              Text(
-                '${stepIndex + 1} of $totalSteps',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                ),
+              _HeroPill(label: draft.activity.title),
+              _HeroPill(label: '${draft.targetValue} $unit'),
+              _HeroPill(
+                label: draft.visibility == 'invite_code'
+                    ? 'Pull in crew'
+                    : 'Start solo',
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _ProgressLine(progress: progress),
         ],
       ),
     );
   }
 }
 
-class _ProgressLine extends StatelessWidget {
-  const _ProgressLine({required this.progress});
-  final double progress;
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: NuvoColors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        border: Border.all(color: NuvoColors.white.withValues(alpha: 0.16)),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.labelMedium.copyWith(
+          color: NuvoColors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _ComposerSection extends StatelessWidget {
+  const _ComposerSection({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: NuvoColors.panelLight,
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  border: Border.all(color: NuvoColors.border),
+                ),
+                child: Icon(icon, color: NuvoColors.navy, size: 19),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: NuvoColors.navy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityPicker extends StatelessWidget {
+  const _ActivityPicker({required this.selected, required this.onSelected});
+
+  final MotionActivityDefinition selected;
+  final ValueChanged<MotionActivityDefinition> onSelected;
+
+  static const _icons = {
+    MotionActivityType.pushUps: Icons.fitness_center_rounded,
+    MotionActivityType.squats: Icons.person_outline_rounded,
+    MotionActivityType.jumpingJacks: Icons.accessibility_new_rounded,
+    MotionActivityType.lunges: Icons.directions_walk_rounded,
+    MotionActivityType.highKnees: Icons.directions_run_rounded,
+    MotionActivityType.armRaises: Icons.sports_gymnastics_rounded,
+    MotionActivityType.plankHold: Icons.timer_outlined,
+    MotionActivityType.universalAi: Icons.auto_awesome_rounded,
+  };
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final total = constraints.maxWidth;
-        return SizedBox(
-          height: 3,
-          child: Stack(
-            children: [
-              Container(
-                width: total,
-                decoration: BoxDecoration(
-                  color: NuvoColors.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 360),
-                curve: Curves.easeOutCubic,
-                width: total * progress,
-                decoration: BoxDecoration(
-                  color: NuvoColors.actionBlue,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ],
+        final twoColumns = constraints.maxWidth >= 380;
+        return GridView.builder(
+          itemCount: motionActivityDefinitions.length,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: twoColumns ? 2 : 1,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: twoColumns ? 2.85 : 4.8,
           ),
+          itemBuilder: (context, index) {
+            final activity = motionActivityDefinitions[index];
+            return _ActivityOption(
+              activity: activity,
+              selected: selected.type == activity.type,
+              icon: _icons[activity.type] ?? Icons.sports_rounded,
+              onTap: () => onSelected(activity),
+            );
+          },
         );
       },
     );
   }
 }
 
-// ── Shared page chrome ────────────────────────────────────────────────────────
-
-class _PageShell extends StatelessWidget {
-  const _PageShell({
-    required this.question,
-    required this.support,
-    required this.body,
-    required this.ctaLabel,
-    required this.onCta,
-    this.ctaEnabled = true,
+class _ActivityOption extends StatelessWidget {
+  const _ActivityOption({
+    required this.activity,
+    required this.selected,
+    required this.icon,
+    required this.onTap,
   });
 
-  final String question;
-  final String support;
-  final Widget body;
-  final String ctaLabel;
-  final VoidCallback onCta;
-  final bool ctaEnabled;
+  final MotionActivityDefinition activity;
+  final bool selected;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      semanticLabel: 'Choose ${activity.title}',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? NuvoColors.actionBlue.withValues(alpha: 0.08)
+              : NuvoColors.white,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: Border.all(
+            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+            width: selected ? 2 : 1.25,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+              size: 21,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                activity.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+                ),
+              ),
+            ),
+            if (selected) ...[
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: NuvoColors.actionBlue,
+                size: 18,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomActionEditor extends StatelessWidget {
+  const _CustomActionEditor({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      textInputAction: TextInputAction.done,
+      textCapitalization: TextCapitalization.words,
+      onChanged: onChanged,
+      style: AppTextStyles.titleMedium.copyWith(
+        color: NuvoColors.navy,
+        fontWeight: FontWeight.w800,
+      ),
+      decoration: InputDecoration(
+        hintText: 'basketball shots, free throws, clean passes...',
+        hintStyle: AppTextStyles.bodyMedium.copyWith(
+          color: NuvoColors.textMuted,
+        ),
+        filled: true,
+        fillColor: NuvoColors.panelLight,
+        prefixIcon: const Icon(
+          Icons.bolt_rounded,
+          color: NuvoColors.actionBlue,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.actionBlue, width: 2),
+        ),
+      ),
+    );
+  }
+}
+
+class _FinishLineEditor extends StatelessWidget {
+  const _FinishLineEditor({
+    required this.draft,
+    required this.controller,
+    required this.onTargetChanged,
+  });
+
+  final RaceDraft draft;
+  final TextEditingController controller;
+  final ValueChanged<int> onTargetChanged;
+
+  int get _target => int.tryParse(controller.text.trim()) ?? draft.targetValue;
+
+  void _setTarget(int value) {
+    final clamped = value.clamp(1, 99999);
+    controller.text = '$clamped';
+    controller.selection = TextSelection.collapsed(
+      offset: controller.text.length,
+    );
+    onTargetChanged(clamped);
+  }
+
+  int get _step {
+    if (_target < 10) return 1;
+    if (_target < 100) return 5;
+    if (_target < 1000) return 25;
+    return 100;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final unit = draft.metric == RaceMetric.seconds
+        ? 'seconds'
+        : draft.activity.proofLabel;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                      question,
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
-                        height: 1.1,
-                      ),
-                    )
-                    .animate()
-                    .fadeIn(duration: 220.ms)
-                    .slideY(
-                      begin: 0.06,
-                      end: 0,
-                      duration: 260.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
-                const SizedBox(height: 8),
-                Text(
-                  support,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.muted,
+        Row(
+          children: [
+            _StepButton(
+              icon: Icons.remove_rounded,
+              label: 'Decrease finish line',
+              onTap: () => _setTarget(_target - _step),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: NuvoColors.panelLight,
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  border: Border.all(color: NuvoColors.border),
+                ),
+                child: TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(5),
+                  ],
+                  onChanged: (value) {
+                    final parsed = int.tryParse(value);
+                    if (parsed != null && parsed > 0) onTargetChanged(parsed);
+                  },
+                  style: AppTextStyles.displaySmall.copyWith(
+                    color: NuvoColors.navy,
+                    height: 1.08,
                   ),
-                ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
-                const SizedBox(height: 32),
-                body
-                    .animate(delay: 60.ms)
-                    .fadeIn(duration: 220.ms)
-                    .slideY(
-                      begin: 0.04,
-                      end: 0,
-                      duration: 240.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
-              ],
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            _StepButton(
+              icon: Icons.add_rounded,
+              label: 'Increase finish line',
+              onTap: () => _setTarget(_target + _step),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            unit,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: NuvoColors.muted,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: NuvoPrimaryButton(
-            label: ctaLabel,
-            expand: true,
-            onPressed: ctaEnabled ? onCta : null,
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final target in draft.activity.suggestedTargets.take(4))
+              _TargetChip(
+                label: '$target',
+                selected: _target == target,
+                onTap: () => _setTarget(target),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StepButton extends StatelessWidget {
+  const _StepButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      semanticLabel: label,
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: NuvoColors.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: NuvoColors.border),
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, color: NuvoColors.navy, size: 22),
+      ),
+    );
+  }
+}
+
+class _TargetChip extends StatelessWidget {
+  const _TargetChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      semanticLabel: 'Set finish line to $label',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? NuvoColors.actionBlue : NuvoColors.panelLight,
+          borderRadius: BorderRadius.circular(NuvoRadii.pill),
+          border: Border.all(
+            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.labelLarge.copyWith(
+            color: selected ? NuvoColors.white : NuvoColors.navy,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CrewModePicker extends StatelessWidget {
+  const _CrewModePicker({required this.inviteCrew, required this.onChanged});
+
+  final bool inviteCrew;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _CrewModeOption(
+            label: 'Pull in crew',
+            icon: Icons.group_add_rounded,
+            selected: inviteCrew,
+            onTap: () => onChanged(true),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _CrewModeOption(
+            label: 'Start solo',
+            icon: Icons.person_rounded,
+            selected: !inviteCrew,
+            onTap: () => onChanged(false),
           ),
         ),
       ],
@@ -385,207 +811,191 @@ class _PageShell extends StatelessWidget {
   }
 }
 
-// ── Step 1: Name ──────────────────────────────────────────────────────────────
-
-class _NamePage extends StatefulWidget {
-  const _NamePage({
-    required this.draft,
-    required this.onDraftChanged,
-    required this.onNext,
+class _CrewModeOption extends StatelessWidget {
+  const _CrewModeOption({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
   });
-  final RaceDraft draft;
-  final ValueChanged<RaceDraft> onDraftChanged;
-  final VoidCallback onNext;
 
-  @override
-  State<_NamePage> createState() => _NamePageState();
-}
-
-class _NamePageState extends State<_NamePage> {
-  late final TextEditingController _ctrl;
-  late final FocusNode _focusNode;
-  // Tracks whether the user has manually deviated from the generated title
-  bool _hasCustomName = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _hasCustomName = widget.draft.hasCustomName;
-    _ctrl = TextEditingController(text: widget.draft.resolvedTitle);
-    _focusNode = FocusNode();
-  }
-
-  @override
-  void didUpdateWidget(_NamePage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // When draft is changed externally (e.g. activity/goal change updates the
-    // generated title), sync the text field only if the name is not custom.
-    if (!widget.draft.hasCustomName) {
-      final newTitle = widget.draft.resolvedTitle;
-      if (_ctrl.text != newTitle) {
-        _ctrl.text = newTitle;
-        _hasCustomName = false;
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _onTextChanged(String value) {
-    setState(() {});
-    // Mark as custom only when the user's text differs from the generated title
-    final isGenerated =
-        value.trim() ==
-        generatedTitle(widget.draft.activity, widget.draft.targetValue);
-    _hasCustomName = !isGenerated;
-    widget.onDraftChanged(
-      widget.draft.copyWith(title: value, hasCustomName: _hasCustomName),
-    );
-  }
-
-  void _commit() {
-    final text = _ctrl.text.trim();
-    if (text.isEmpty) return;
-    _focusNode.unfocus();
-    widget.onDraftChanged(
-      widget.draft.copyWith(title: text, hasCustomName: _hasCustomName),
-    );
-    widget.onNext();
-  }
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return _PageShell(
-      question: 'Name your race.',
-      support: 'Give your crew something worth chasing.',
-      ctaLabel: 'Choose activity',
-      onCta: _commit,
-      ctaEnabled: _ctrl.text.trim().isNotEmpty,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _LargeTextField(
-            controller: _ctrl,
-            focusNode: _focusNode,
-            hint: 'First to 100 Pushups',
-            onChanged: _onTextChanged,
-            onSubmitted: (_) => _commit(),
+    return PressableScale(
+      onTap: onTap,
+      semanticLabel: label,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected
+              ? NuvoColors.actionBlue.withValues(alpha: 0.08)
+              : NuvoColors.white,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: Border.all(
+            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+            width: selected ? 2 : 1.25,
           ),
-          const SizedBox(height: 20),
-          if (_ctrl.text.trim().isNotEmpty) ...[
-            Text(
-              'RACE PREVIEW',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.muted,
-                letterSpacing: 0.8,
-                fontWeight: FontWeight.w800,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 19,
+              color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            _RaceNamePreview(name: _ctrl.text.trim()),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _LargeTextField extends StatelessWidget {
-  const _LargeTextField({
-    required this.controller,
-    required this.focusNode,
-    required this.hint,
-    required this.onChanged,
-    this.onSubmitted,
-  });
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String hint;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<String>? onSubmitted;
+class _RaceSummary extends StatelessWidget {
+  const _RaceSummary({required this.draft});
+
+  final RaceDraft draft;
 
   @override
   Widget build(BuildContext context) {
+    final crew = draft.visibility == 'invite_code'
+        ? 'Invite crew'
+        : 'Start solo';
+    final unit = draft.metric == RaceMetric.seconds
+        ? 'seconds'
+        : draft.activity.proofLabel;
+    final launchLine = draft.visibility == 'invite_code'
+        ? 'Invite code opens next. Your crew can jump in fast.'
+        : 'Solo start. You can pull in your crew after the board is live.';
+
     return Container(
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: NuvoColors.navy,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: NuvoColors.inkNavy,
-            blurRadius: 0,
-            offset: Offset(3, 3),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            draft.resolvedTitle,
+            style: AppTextStyles.titleLarge.copyWith(
+              color: NuvoColors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _RaceVoiceLine(
+            text: draft.metric == RaceMetric.seconds
+                ? 'Hold steady. Every valid second pushes the board.'
+                : 'Every clean rep becomes a visible board move.',
+          ),
+          const SizedBox(height: 12),
+          const _SummaryRow(
+            icon: Icons.verified_rounded,
+            label: 'Proof',
+            value: 'AI Motion Proof',
+          ),
+          _SummaryRow(
+            icon: Icons.flag_rounded,
+            label: 'Finish line',
+            value: '${draft.targetValue} $unit',
+          ),
+          _SummaryRow(icon: Icons.group_rounded, label: 'Crew', value: crew),
+          const SizedBox(height: 12),
+          Text(
+            launchLine,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.68),
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        onChanged: onChanged,
-        onSubmitted: onSubmitted,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.done,
-        style: AppTextStyles.titleLarge.copyWith(
-          color: NuvoColors.navy,
-          fontSize: 22,
-          height: 1.3,
-        ),
-        maxLines: 2,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: AppTextStyles.titleLarge.copyWith(
-            color: NuvoColors.muted.withValues(alpha: 0.5),
-            fontSize: 22,
-          ),
-          border: InputBorder.none,
-          isDense: true,
-          contentPadding: EdgeInsets.zero,
-        ),
       ),
     );
   }
 }
 
-class _RaceNamePreview extends StatelessWidget {
-  const _RaceNamePreview({required this.name});
-  final String name;
+class _RaceVoiceLine extends StatelessWidget {
+  const _RaceVoiceLine({required this.text});
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: NuvoColors.actionBlue.withValues(alpha: 0.06),
+        color: NuvoColors.success.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(
-          color: NuvoColors.actionBlue.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: NuvoColors.success.withValues(alpha: 0.34)),
       ),
       child: Row(
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: NuvoColors.actionBlue,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
+          const Icon(Icons.bolt_rounded, color: NuvoColors.success, size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
-              name,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.navy,
+              text,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: NuvoColors.white.withValues(alpha: 0.75), size: 18),
+          const SizedBox(width: 9),
+          Text(
+            '$label: ',
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.white.withValues(alpha: 0.62),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.white,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -596,942 +1006,23 @@ class _RaceNamePreview extends StatelessWidget {
   }
 }
 
-// ── Step 2: Activity ──────────────────────────────────────────────────────────
+class _ErrorBox extends StatelessWidget {
+  const _ErrorBox({required this.message});
 
-class _ActivityPage extends StatelessWidget {
-  const _ActivityPage({
-    required this.draft,
-    required this.onDraftChanged,
-    required this.onNext,
-  });
-  final RaceDraft draft;
-  final ValueChanged<RaceDraft> onDraftChanged;
-  final VoidCallback onNext;
-
-  static const _activityIcons = {
-    MotionActivityType.pushUps: Icons.fitness_center_rounded,
-    MotionActivityType.squats: Icons.person_outline_rounded,
-    MotionActivityType.jumpingJacks: Icons.accessibility_new_rounded,
-    MotionActivityType.lunges: Icons.directions_walk_rounded,
-    MotionActivityType.plankHold: Icons.timer_outlined,
-  };
-
-  static const _activityDescriptions = {
-    MotionActivityType.pushUps: 'Counted in reps',
-    MotionActivityType.squats: 'Counted in reps',
-    MotionActivityType.jumpingJacks: 'Counted in reps',
-    MotionActivityType.lunges: 'Counted in reps',
-    MotionActivityType.plankHold: 'Counted in seconds',
-  };
-
-  void _select(MotionActivityDefinition activity) {
-    // Determine target: keep current if the new activity supports it,
-    // otherwise reset to the new activity's default.
-    final currentTarget = draft.targetValue;
-    final keepTarget =
-        activity.suggestedTargets.contains(currentTarget) ||
-        // allow arbitrary targets that are reasonable for the new activity
-        (currentTarget >= 1 && currentTarget <= 99999);
-    onDraftChanged(
-      draft.copyWith(
-        activity: activity,
-        metric: activity.metric,
-        // Title regenerates automatically via resolvedTitle unless custom
-        targetValue: keepTarget ? currentTarget : activity.defaultTarget,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _PageShell(
-      question: 'What are you competing in?',
-      support: 'Camera verifies every rep.',
-      ctaLabel: 'Set the finish line',
-      onCta: onNext,
-      body: Column(
-        children: [
-          for (final activity in motionActivityDefinitions) ...[
-            _ActivityTile(
-              activity: activity,
-              icon: _activityIcons[activity.type] ?? Icons.sports_rounded,
-              description:
-                  _activityDescriptions[activity.type] ?? activity.unit,
-              selected: draft.activity.type == activity.type,
-              onTap: () => _select(activity),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({
-    required this.activity,
-    required this.icon,
-    required this.description,
-    required this.selected,
-    required this.onTap,
-  });
-  final MotionActivityDefinition activity;
-  final IconData icon;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
-              : NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
-            width: selected ? 2 : 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: selected
-                    ? NuvoColors.actionBlue.withValues(alpha: 0.12)
-                    : NuvoColors.panel,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.title,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected) ...[
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.check_circle_rounded,
-                color: NuvoColors.actionBlue,
-                size: 20,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Step 3: Goal ──────────────────────────────────────────────────────────────
-
-class _GoalPage extends StatefulWidget {
-  const _GoalPage({
-    required this.draft,
-    required this.onDraftChanged,
-    required this.onNext,
-  });
-  final RaceDraft draft;
-  final ValueChanged<RaceDraft> onDraftChanged;
-  final VoidCallback onNext;
-
-  @override
-  State<_GoalPage> createState() => _GoalPageState();
-}
-
-class _GoalPageState extends State<_GoalPage> {
-  late int _target;
-  bool _editing = false;
-  late final TextEditingController _editCtrl;
-  late final FocusNode _editFocus;
-
-  @override
-  void initState() {
-    super.initState();
-    _target = widget.draft.targetValue;
-    _editCtrl = TextEditingController();
-    _editFocus = FocusNode();
-    _editFocus.addListener(() {
-      if (!_editFocus.hasFocus) {
-        _commitEdit();
-      }
-    });
-  }
-
-  @override
-  void didUpdateWidget(_GoalPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Sync local target when draft changes from outside (e.g. activity reset)
-    if (widget.draft.targetValue != _target && !_editing) {
-      setState(() => _target = widget.draft.targetValue);
-    }
-  }
-
-  @override
-  void dispose() {
-    _editCtrl.dispose();
-    _editFocus.dispose();
-    super.dispose();
-  }
-
-  void _setTarget(int value) {
-    final clamped = value.clamp(1, 99999);
-    setState(() => _target = clamped);
-    widget.onDraftChanged(widget.draft.copyWith(targetValue: clamped));
-  }
-
-  void _startEdit() {
-    setState(() {
-      _editing = true;
-      _editCtrl.text = '$_target';
-      _editCtrl.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: _editCtrl.text.length,
-      );
-    });
-    _editFocus.requestFocus();
-  }
-
-  void _commitEdit() {
-    final parsed = int.tryParse(_editCtrl.text.trim());
-    if (parsed != null && parsed > 0) {
-      _setTarget(parsed);
-    }
-    if (mounted) {
-      setState(() => _editing = false);
-    }
-  }
-
-  void _increment() => _setTarget(_target + _stepSize);
-  void _decrement() => _setTarget((_target - _stepSize).clamp(1, 99999));
-
-  int get _stepSize {
-    if (_target < 10) return 1;
-    if (_target < 100) return 5;
-    if (_target < 1000) return 25;
-    return 100;
-  }
-
-  String get _winStatement {
-    final activity = widget.draft.activity.title.toLowerCase();
-    final isSeconds = widget.draft.metric == RaceMetric.seconds;
-    final valueLabel = isSeconds ? _secondsDisplay(_target) : '$_target';
-    return 'First person to reach $valueLabel verified $activity wins.';
-  }
-
-  String get _displayTarget {
-    if (widget.draft.metric == RaceMetric.seconds) {
-      return _secondsDisplay(_target);
-    }
-    return '$_target';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final activity = widget.draft.activity;
-    final isSeconds = widget.draft.metric == RaceMetric.seconds;
-
-    return _PageShell(
-      question: 'Set the finish line.',
-      support: 'How many ${activity.metric.label} to win?',
-      ctaLabel: 'Invite racers',
-      onCta: widget.onNext,
-      body: Column(
-        children: [
-          // ── Big tappable number ──────────────────────────────────────────
-          _GoalDisplay(
-            displayValue: _displayTarget,
-            unitLabel: isSeconds
-                ? activity.title.toUpperCase()
-                : activity.metric.label.toUpperCase(),
-            editing: _editing,
-            editCtrl: _editCtrl,
-            editFocus: _editFocus,
-            onTapNumber: _startEdit,
-            onCommitEdit: _commitEdit,
-            onIncrement: _increment,
-            onDecrement: _decrement,
-          ),
-          const SizedBox(height: 24),
-
-          // ── Suggested values ─────────────────────────────────────────────
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final t in activity.suggestedTargets.take(4))
-                _SuggestedTarget(
-                  value: isSeconds ? _secondsDisplay(t) : '$t',
-                  selected: _target == t,
-                  onTap: () {
-                    _dismissKeyboard();
-                    setState(() => _editing = false);
-                    _setTarget(t);
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // ── Win statement ────────────────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: NuvoColors.panel,
-              borderRadius: BorderRadius.circular(NuvoRadii.md),
-            ),
-            child: Text(
-              _winStatement,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.navy,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _GoalDisplay extends StatelessWidget {
-  const _GoalDisplay({
-    required this.displayValue,
-    required this.unitLabel,
-    required this.editing,
-    required this.editCtrl,
-    required this.editFocus,
-    required this.onTapNumber,
-    required this.onCommitEdit,
-    required this.onIncrement,
-    required this.onDecrement,
-  });
-  final String displayValue;
-  final String unitLabel;
-  final bool editing;
-  final TextEditingController editCtrl;
-  final FocusNode editFocus;
-  final VoidCallback onTapNumber;
-  final VoidCallback onCommitEdit;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: NuvoColors.inkNavy,
-            blurRadius: 0,
-            offset: Offset(4, 4),
-          ),
-        ],
+        color: NuvoColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.danger.withValues(alpha: 0.28)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _StepButton(icon: Icons.remove_rounded, onTap: onDecrement),
-          GestureDetector(
-            onTap: onTapNumber,
-            child: Column(
-              children: [
-                if (editing)
-                  SizedBox(
-                    width: 120,
-                    child: TextField(
-                      controller: editCtrl,
-                      focusNode: editFocus,
-                      keyboardType: TextInputType.number,
-                      textInputAction: TextInputAction.done,
-                      textAlign: TextAlign.center,
-                      onSubmitted: (_) => onCommitEdit(),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(5),
-                      ],
-                      style: AppTextStyles.displaySmall.copyWith(
-                        color: NuvoColors.actionBlue,
-                        letterSpacing: -2,
-                      ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-                  )
-                else
-                  Text(
-                    displayValue,
-                    style: AppTextStyles.displaySmall.copyWith(
-                      color: NuvoColors.navy,
-                      letterSpacing: -2,
-                    ),
-                  ),
-                const SizedBox(height: 4),
-                Text(
-                  editing ? 'tap done to confirm' : unitLabel,
-                  style: AppTextStyles.labelUppercase(
-                    12,
-                    color: editing ? NuvoColors.actionBlue : NuvoColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _StepButton(icon: Icons.add_rounded, onTap: onIncrement),
-        ],
-      ),
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: NuvoColors.panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.border, width: 1.5),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: NuvoColors.navy, size: 22),
-      ),
-    );
-  }
-}
-
-class _SuggestedTarget extends StatelessWidget {
-  const _SuggestedTarget({
-    required this.value,
-    required this.selected,
-    required this.onTap,
-  });
-  final String value;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? NuvoColors.actionBlue : NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.pill),
-          border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
-            width: 1.5,
-          ),
-        ),
-        child: Text(
-          value,
-          style: AppTextStyles.labelLarge.copyWith(
-            color: selected ? NuvoColors.white : NuvoColors.navy,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Step 4: Racers ────────────────────────────────────────────────────────────
-
-class _RacersPage extends StatefulWidget {
-  const _RacersPage({
-    required this.draft,
-    required this.onDraftChanged,
-    required this.onNext,
-  });
-  final RaceDraft draft;
-  final ValueChanged<RaceDraft> onDraftChanged;
-  final VoidCallback onNext;
-
-  @override
-  State<_RacersPage> createState() => _RacersPageState();
-}
-
-class _RacersPageState extends State<_RacersPage> {
-  // Initialise from draft visibility so back/forward preserves the choice
-  late bool _inviteCrew;
-
-  @override
-  void initState() {
-    super.initState();
-    _inviteCrew = widget.draft.visibility == 'invite_code';
-  }
-
-  @override
-  void didUpdateWidget(_RacersPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _inviteCrew = widget.draft.visibility == 'invite_code';
-  }
-
-  void _setInvite(bool value) {
-    setState(() => _inviteCrew = value);
-    widget.onDraftChanged(
-      widget.draft.copyWith(visibility: value ? 'invite_code' : 'private'),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _PageShell(
-      question: 'Who are you racing with?',
-      support: 'Pull in your crew or start solo.',
-      ctaLabel: 'Review race',
-      onCta: widget.onNext,
-      body: Column(
-        children: [
-          _RacerOption(
-            title: 'Pull in your crew',
-            subtitle: 'Invite link opens right after race starts.',
-            icon: Icons.group_add_rounded,
-            selected: _inviteCrew,
-            onTap: () => _setInvite(true),
-          ),
-          const SizedBox(height: 12),
-          _RacerOption(
-            title: 'Start solo',
-            subtitle: 'Race yourself first. Invite anytime.',
-            icon: Icons.person_rounded,
-            selected: !_inviteCrew,
-            onTap: () => _setInvite(false),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RacerOption extends StatelessWidget {
-  const _RacerOption({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
-              : NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
-            width: selected ? 2 : 1.5,
-          ),
-        ),
-        child: Row(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: selected
-                    ? NuvoColors.actionBlue.withValues(alpha: 0.12)
-                    : NuvoColors.panel,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
-                color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected)
-              const Icon(
-                Icons.check_circle_rounded,
-                color: NuvoColors.actionBlue,
-                size: 20,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Step 5: Review ────────────────────────────────────────────────────────────
-
-class _ReviewPage extends StatelessWidget {
-  const _ReviewPage({
-    required this.draft,
-    required this.loading,
-    required this.error,
-    required this.onStart,
-    required this.onEditStep,
-  });
-  final RaceDraft draft;
-  final bool loading;
-  final String? error;
-  final VoidCallback onStart;
-  final ValueChanged<_Step> onEditStep;
-
-  String get _finishLineLabel {
-    final isSeconds = draft.metric == RaceMetric.seconds;
-    final valueLabel = isSeconds
-        ? _secondsDisplay(draft.targetValue)
-        : '${draft.targetValue}';
-    return '$valueLabel ${draft.activity.metric.label}';
-  }
-
-  String get _winSubtitle {
-    final isSeconds = draft.metric == RaceMetric.seconds;
-    final valueLabel = isSeconds
-        ? _secondsDisplay(draft.targetValue)
-        : '${draft.targetValue}';
-    return 'First to $valueLabel verified ${draft.activity.metric.label} wins.';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isInvite = draft.visibility == 'invite_code';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Tapping title returns to Name
-                GestureDetector(
-                  onTap: () => onEditStep(_Step.name),
-                  child: Text(
-                    draft.resolvedTitle,
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: NuvoColors.navy,
-                      height: 1.1,
-                    ),
-                  ).animate().fadeIn(duration: 220.ms),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _winSubtitle,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: NuvoColors.muted,
-                  ),
-                ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
-                const SizedBox(height: 32),
-
-                _RacePathVisual(
-                  targetLabel: _finishLineLabel,
-                ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
-
-                const SizedBox(height: 32),
-
-                // Verification/activity — tap returns to Activity
-                _ReviewDetail(
-                  icon: Icons.verified_rounded,
-                  label: 'Camera verified',
-                  sub: '${draft.activity.title} · ${draft.metric.label}',
-                  onTap: () => onEditStep(_Step.activity),
-                ),
-                const SizedBox(height: 10),
-                // Finish line — tap returns to Goal
-                _ReviewDetail(
-                  icon: Icons.flag_rounded,
-                  label: _finishLineLabel,
-                  sub: 'Tap to change finish line',
-                  onTap: () => onEditStep(_Step.goal),
-                ),
-                const SizedBox(height: 10),
-                // Crew mode — tap returns to Racers
-                _ReviewDetail(
-                  icon: isInvite ? Icons.group_rounded : Icons.person_rounded,
-                  label: isInvite ? 'Invite crew' : 'Start solo',
-                  sub: isInvite
-                      ? 'Invite link opens after race starts'
-                      : 'Race yourself first',
-                  onTap: () => onEditStep(_Step.racers),
-                ),
-
-                if (error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.danger.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(NuvoRadii.md),
-                      border: Border.all(
-                        color: NuvoColors.danger.withValues(alpha: 0.28),
-                      ),
-                    ),
-                    child: Text(
-                      error!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.danger,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: NuvoPrimaryButton(
-            label: 'Start race',
-            icon: Icons.flag_rounded,
-            expand: true,
-            loading: loading,
-            onPressed: loading ? null : onStart,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _RacePathVisual extends StatelessWidget {
-  const _RacePathVisual({required this.targetLabel});
-  final String targetLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        boxShadow: const [
-          BoxShadow(
-            color: NuvoColors.inkNavy,
-            blurRadius: 0,
-            offset: Offset(4, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'START',
-                style: TextStyle(
-                  color: NuvoColors.actionBlue,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: CustomPaint(
-                  size: const Size(double.infinity, 16),
-                  painter: _RaceLinePainter(),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.flag_rounded,
-                color: NuvoColors.success,
-                size: 20,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            targetLabel,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Finish line',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RaceLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.22)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    const dashWidth = 8.0;
-    const dashGap = 6.0;
-    var x = 0.0;
-    final y = size.height / 2;
-
-    while (x < size.width) {
-      canvas.drawLine(
-        Offset(x, y),
-        Offset((x + dashWidth).clamp(0, size.width), y),
-        paint,
-      );
-      x += dashWidth + dashGap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _ReviewDetail extends StatelessWidget {
-  const _ReviewDetail({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final String sub;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: NuvoColors.panel,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: NuvoColors.navy, size: 17),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.navy,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  sub,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (onTap != null)
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: NuvoColors.muted,
-              size: 18,
-            ),
-        ],
+      child: Text(
+        message,
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
       ),
     );
   }
