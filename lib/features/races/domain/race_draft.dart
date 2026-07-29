@@ -60,7 +60,9 @@ class RaceDraft {
 
   Map<String, dynamic> toCreatePayload() => {
     'title': resolvedTitle,
-    'description': '${activity.title} race verified by camera.',
+    'description': activity.type == MotionActivityType.universalAi
+        ? 'Nuvo AI universal proof: Count one clean action for this race: $resolvedTitle.'
+        : '${activity.title} race verified by camera.',
     'category': 'fitness',
     'goalType': format.backendValue,
     'targetValue': targetValue,

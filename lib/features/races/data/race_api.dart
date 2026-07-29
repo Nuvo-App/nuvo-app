@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import '../../auth/data/auth_api.dart';
 import 'ai_motion_models.dart';
 import 'race_models.dart';
+import 'universal_proof_rule.dart';
+import 'vision_observation_models.dart';
 
 const _kApiBase = String.fromEnvironment(
   'NUVO_API_BASE_URL',
@@ -250,6 +252,88 @@ class RaceApi {
       ),
     );
     return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  Future<Race> submitUniversalAiProof(
+    String token,
+    String raceId, {
+    required String clientSubmissionId,
+    required String activityType,
+    required String metric,
+    required int value,
+    required int targetValue,
+    required double confidence,
+    required String verificationStatus,
+    required String verificationSummary,
+    required int framesAnalyzed,
+    required int validSignalFrames,
+    required int durationMs,
+    required String validatorVersion,
+  }) async {
+    final json = await _post('/races/$raceId/proof', token, {
+      'proofType': 'ai_motion',
+      'clientSubmissionId': clientSubmissionId,
+      'activityType': activityType,
+      'metric': metric,
+      'note': 'AI Motion Proof: $value actions detected.',
+      'value': value,
+      'targetValue': targetValue,
+      'detectedValue': value,
+      'confidence': confidence,
+      'verificationStatus': verificationStatus,
+      'verificationSummary': verificationSummary,
+      'framesAnalyzed': framesAnalyzed,
+      'validPoseFrames': validSignalFrames,
+      'durationMs': durationMs,
+      'validatorVersion': validatorVersion,
+    });
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  Future<VisionObservation> analyzeVisionObservation(
+    String token,
+    String raceId, {
+    required String observationId,
+    required String activityId,
+    required String prompt,
+    required String imageBase64,
+    String imageMimeType = 'image/jpeg',
+  }) async {
+    final json = await _post('/races/$raceId/proof/vision-observation', token, {
+      'observationId': observationId,
+      'activityId': activityId,
+      'prompt': prompt,
+      'imageBase64': imageBase64,
+      'imageMimeType': imageMimeType,
+    });
+    return VisionObservation.fromJson(
+      json['observation'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<UniversalProofRule> buildUniversalProofRule(
+    String token, {
+    required String actionName,
+    required String unit,
+    required String positiveImageBase64,
+    String? negativeImageBase64,
+    String? negativeNote,
+    String imageMimeType = 'image/jpeg',
+  }) async {
+    final body = <String, dynamic>{
+      'actionName': actionName,
+      'unit': unit,
+      'positiveImageBase64': positiveImageBase64,
+      'imageMimeType': imageMimeType,
+    };
+    if (negativeImageBase64 != null && negativeImageBase64.trim().isNotEmpty) {
+      body['negativeImageBase64'] = negativeImageBase64.trim();
+    }
+    if (negativeNote != null && negativeNote.trim().isNotEmpty) {
+      body['negativeNote'] = negativeNote.trim();
+    }
+    final json = await _post('/races/proof-rule', token, body);
+    return UniversalProofRule.fromJson(json['rule'] as Map<String, dynamic>);
   }
 
   Future<Race> archiveRace(String token, String id) async {

@@ -60,15 +60,15 @@ class MoveScreen extends ConsumerWidget {
       body: SafeArea(
         child: ListView(
           padding: EdgeInsets.fromLTRB(
-            22,
-            22,
-            22,
+            20,
+            16,
+            20,
             NuvoBottomNav.bottomPadding(context),
           ),
           children: [
             // ── Hero ─────────────────────────────────────────────────────────
             _MoveHero(readyCount: readyRaces.length),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
 
             // ── Ready to move ────────────────────────────────────────────────
             if (raceState.loading &&
@@ -93,7 +93,10 @@ class MoveScreen extends ConsumerWidget {
               ),
               if (readyRaces.length > 1) ...[
                 const SizedBox(height: 20),
-                const _SectionLabel(label: 'Ready to move'),
+                const _SectionLabel(
+                  label: 'More races ready',
+                  sublabel: 'One clean proof moves each board.',
+                ),
                 const SizedBox(height: 10),
                 _MoveRaceGroup(
                   races: readyRaces.skip(1).toList(),
@@ -112,7 +115,10 @@ class MoveScreen extends ConsumerWidget {
             // ── Recent moves ─────────────────────────────────────────────────
             if (recentMoves.isNotEmpty) ...[
               const SizedBox(height: 20),
-              const _SectionLabel(label: 'Recent moves'),
+              const _SectionLabel(
+                label: 'Recent board moves',
+                sublabel: 'Proof that already changed the race.',
+              ),
               const SizedBox(height: 10),
               _RecentMoveGroup(entries: recentMoves),
             ],
@@ -134,9 +140,9 @@ class _MoveHero extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: NuvoColors.navy,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: NuvoColors.navy, width: 2),
         boxShadow: AppShadows.hardShadow4,
       ),
       child: Column(
@@ -148,7 +154,7 @@ class _MoveHero extends StatelessWidget {
                 width: 4,
                 height: 58,
                 decoration: BoxDecoration(
-                  color: NuvoColors.blue,
+                  color: readyCount > 0 ? NuvoColors.success : NuvoColors.blue,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -160,17 +166,19 @@ class _MoveHero extends StatelessWidget {
                     Text(
                       'Move',
                       style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
+                        color: NuvoColors.white,
                         height: 1.05,
                         fontSize: 32,
-                        letterSpacing: -0.9,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Choose a race, then verify your move.',
+                      readyCount == 0
+                          ? 'Start a race and Nuvo will guide your next proof.'
+                          : 'Nuvo found your next proof. Hit verify and move the board.',
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
+                        color: NuvoColors.white.withValues(alpha: 0.72),
                       ),
                     ),
                   ],
@@ -184,14 +192,16 @@ class _MoveHero extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoColors.panel,
+                    color: NuvoColors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                    border: NuvoBorders.quiet,
+                    border: Border.all(
+                      color: NuvoColors.white.withValues(alpha: 0.16),
+                    ),
                   ),
                   child: Text(
                     '$readyCount ready',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.navy,
+                      color: NuvoColors.white,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -428,18 +438,34 @@ class _MoveRaceGroup extends StatelessWidget {
 // ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
+  const _SectionLabel({required this.label, this.sublabel});
   final String label;
+  final String? sublabel;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.titleMedium.copyWith(
-        color: NuvoColors.navy,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: NuvoColors.navy,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+        ),
+        if (sublabel != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            sublabel!,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -795,10 +821,10 @@ class _EmptyState extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        Text('No active races yet.', style: AppTextStyles.titleLarge),
+        Text('No race is waiting yet.', style: AppTextStyles.titleLarge),
         const SizedBox(height: 6),
         Text(
-          'Start a race to begin logging moves.',
+          'Start one race and this screen becomes your proof launcher.',
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         ),
         const SizedBox(height: 20),

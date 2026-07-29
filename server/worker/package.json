@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "repair-live-schema": "node scripts/repair-live-schema.mjs",
+    "repair-local-schema": "node scripts/repair-live-schema.mjs --local",
     "typecheck": "tsc --noEmit",
     "test": "rm -rf .tmp-test-dist && tsc --module commonjs --moduleResolution node --outDir .tmp-test-dist --noEmit false && node --test test/*.test.mjs"
   },

@@ -13,5 +13,8 @@ migrations_dir = "migrations"
 binding = "PROFILE_PHOTOS"
 bucket_name = "nuvor2"
 
+[ai]
+binding = "AI"
+
 [vars]
 RESEND_FROM_EMAIL = "no-reply@getnuvo.net"

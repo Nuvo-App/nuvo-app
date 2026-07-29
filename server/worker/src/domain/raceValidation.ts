@@ -79,7 +79,7 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
     targetValue,
     attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
-    verificationMethod: 'camera_pose',
+    verificationMethod: activity.verificationMethod,
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
     startsAt: stringValue(body, 'startsAt', 'startLineAt') ?? null,
     endsAt: stringValue(body, 'endsAt', 'finishLineAt') ?? null,

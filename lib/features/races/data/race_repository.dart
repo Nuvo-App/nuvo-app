@@ -3,6 +3,8 @@ import '../../auth/data/secure_token_store.dart';
 import 'ai_motion_models.dart';
 import 'race_api.dart';
 import 'race_models.dart';
+import 'universal_proof_rule.dart';
+import 'vision_observation_models.dart';
 
 class RaceRepository {
   RaceRepository(this._api, this._store, this._authApi);
@@ -158,6 +160,77 @@ class RaceRepository {
       result: result,
       clientSubmissionId: clientSubmissionId,
       metric: metric,
+    ),
+  );
+
+  Future<VisionObservation> analyzeVisionObservation(
+    String raceId, {
+    required String observationId,
+    required String activityId,
+    required String prompt,
+    required String imageBase64,
+    String imageMimeType = 'image/jpeg',
+  }) => _withRefresh(
+    (token) => _api.analyzeVisionObservation(
+      token,
+      raceId,
+      observationId: observationId,
+      activityId: activityId,
+      prompt: prompt,
+      imageBase64: imageBase64,
+      imageMimeType: imageMimeType,
+    ),
+  );
+
+  Future<Race> submitUniversalAiProof(
+    String raceId, {
+    required String clientSubmissionId,
+    required String activityType,
+    required String metric,
+    required int value,
+    required int targetValue,
+    required double confidence,
+    required String verificationStatus,
+    required String verificationSummary,
+    required int framesAnalyzed,
+    required int validSignalFrames,
+    required int durationMs,
+    required String validatorVersion,
+  }) => _withRefresh(
+    (token) => _api.submitUniversalAiProof(
+      token,
+      raceId,
+      clientSubmissionId: clientSubmissionId,
+      activityType: activityType,
+      metric: metric,
+      value: value,
+      targetValue: targetValue,
+      confidence: confidence,
+      verificationStatus: verificationStatus,
+      verificationSummary: verificationSummary,
+      framesAnalyzed: framesAnalyzed,
+      validSignalFrames: validSignalFrames,
+      durationMs: durationMs,
+      validatorVersion: validatorVersion,
+    ),
+  );
+
+  Future<UniversalProofRule> buildUniversalProofRule({
+    required String actionName,
+    required String unit,
+    required String positiveImageBase64,
+    String? negativeImageBase64,
+    String? negativeNote,
+    String imageMimeType = 'image/jpeg',
+  }) => _withRefresh(
+    (token) => _api.buildUniversalProofRule(
+      token,
+      actionName: actionName,
+      unit: unit,
+      positiveImageBase64: positiveImageBase64,
+      negativeImageBase64: negativeImageBase64,
+      negativeNote: negativeNote,
+      imageMimeType: imageMimeType,
     ),
   );
 

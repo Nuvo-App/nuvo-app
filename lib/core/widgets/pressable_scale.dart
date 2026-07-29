@@ -5,11 +5,13 @@ class PressableScale extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.semanticLabel,
     this.scale = 0.96,
   });
 
   final Widget child;
   final VoidCallback? onTap;
+  final String? semanticLabel;
   final double scale;
 
   @override
@@ -51,19 +53,28 @@ class _PressableScaleState extends State<PressableScale>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: _onPress,
-      onTapCancel: _onRelease,
-      onTapUp: (_) => _onRelease(),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (_, child) => Transform.scale(
-          scale: 1.0 - (1.0 - widget.scale) * _ctrl.value,
-          child: child,
+    final enabled = widget.onTap != null;
+    return Semantics(
+      button: enabled,
+      enabled: enabled,
+      label: widget.semanticLabel,
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onTapDown: _onPress,
+          onTapCancel: _onRelease,
+          onTapUp: (_) => _onRelease(),
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, child) => Transform.scale(
+              scale: 1.0 - (1.0 - widget.scale) * _ctrl.value,
+              child: child,
+            ),
+            child: widget.child,
+          ),
         ),
-        child: widget.child,
       ),
     );
   }

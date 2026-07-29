@@ -16,9 +16,11 @@ class NuvoBottomNav extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     this.isDark = false,
+    this.rowKey,
   });
 
   final bool isDark;
+  final Key? rowKey;
 
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -47,9 +49,9 @@ class NuvoBottomNav extends StatelessWidget {
   }
 
   static const _items = [
-    _NavItem(asset: 'assets/branding/nuvoappicon.png', label: 'Arena'),
+    _NavItem(asset: 'assets/branding/trans.png', label: 'Arena'),
     _NavItem(icon: Icons.emoji_events_outlined, label: 'Compete'),
-    _NavItem(icon: Icons.verified_outlined, label: 'Verify'),
+    _NavItem(icon: Icons.gpp_good_outlined, label: 'Verify'),
     _NavItem(icon: Icons.group_outlined, label: 'Crew'),
     _NavItem(icon: Icons.person_outline, label: 'Profile'),
   ];
@@ -62,10 +64,11 @@ class NuvoBottomNav extends StatelessWidget {
 
     if (isDark) {
       return Container(
-        height: _darkHeight,
+        height: _darkHeight + safeBottom,
         color: _kTrackNavy,
         padding: EdgeInsets.only(bottom: safeBottom),
         child: Row(
+          key: rowKey,
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -199,10 +202,27 @@ class _NavButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (item.asset != null)
+                  if (item.asset != null && isDark)
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: ClipRect(
+                        child: OverflowBox(
+                          maxWidth: 48,
+                          maxHeight: 48,
+                          child: Image.asset(
+                            item.asset!,
+                            height: 48,
+                            color: labelColor,
+                            colorBlendMode: BlendMode.srcIn,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (item.asset != null)
                     Image.asset(
                       item.asset!,
-                      height: isDark ? 20 : 24,
+                      height: 24,
                       color: labelColor,
                       colorBlendMode: BlendMode.srcIn,
                     )

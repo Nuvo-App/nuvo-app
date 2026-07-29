@@ -29,6 +29,8 @@ import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
 import '../features/races/presentation/board_moved_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
+import '../features/races/presentation/teach_nuvo_screen.dart';
+import '../features/races/presentation/universal_ai_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
@@ -211,6 +213,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/races/teach-nuvo',
+        pageBuilder: (_, state) => _cameraPage(
+          state,
+          state.extra is TeachNuvoArgs
+              ? TeachNuvoScreen(args: state.extra! as TeachNuvoArgs)
+              : const RaceComposerScreen(),
+        ),
+      ),
+      GoRoute(
         path: '/races/join',
         pageBuilder: (_, state) => _authPage(state, const JoinRaceScreen()),
       ),
@@ -254,6 +265,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => _cameraPage(
           state,
           AiMotionProofScreen(raceId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/race/:id/proof/universal-ai',
+        pageBuilder: (_, state) => _cameraPage(
+          state,
+          UniversalAiProofScreen(raceId: state.pathParameters['id']!),
         ),
       ),
       GoRoute(

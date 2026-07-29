@@ -27,16 +27,24 @@ enum AiMotionActivity {
     AiMotionActivity.lunges => 'lunges',
   };
 
-  static AiMotionActivity fromBackendValue(String value) => switch (value) {
-    'squats' => AiMotionActivity.squats,
-    'high_knees' => AiMotionActivity.highKnees,
-    'arm_raises' => AiMotionActivity.armRaises,
-    'plank_hold' => AiMotionActivity.plankHold,
-    'push_ups' || 'pushups' => AiMotionActivity.pushUps,
-    'lunges' || 'lunge' => AiMotionActivity.lunges,
-    _ => AiMotionActivity.pushUps,
-  };
+  static AiMotionActivity fromBackendValue(String value) =>
+      switch (_normalizeBackendValue(value)) {
+        'jumping_jacks' || 'jumping_jack' => AiMotionActivity.jumpingJacks,
+        'squats' || 'squat' => AiMotionActivity.squats,
+        'high_knees' || 'high_knee' => AiMotionActivity.highKnees,
+        'arm_raises' || 'arm_raise' => AiMotionActivity.armRaises,
+        'plank_hold' || 'plank' => AiMotionActivity.plankHold,
+        'push_ups' || 'pushup' || 'pushups' => AiMotionActivity.pushUps,
+        'lunges' || 'lunge' => AiMotionActivity.lunges,
+        _ => AiMotionActivity.pushUps,
+      };
 }
+
+String _normalizeBackendValue(String value) => value
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp(r'[\s-]+'), '_')
+    .replaceAll(RegExp(r'_+'), '_');
 
 enum AiMotionProofStatus {
   setup,
