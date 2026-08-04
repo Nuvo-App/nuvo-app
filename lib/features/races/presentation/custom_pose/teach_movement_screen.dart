@@ -824,6 +824,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           Text('attempts: ${_flow.acceptedCount + _flow.rejectedDemonstrations.length}'),
           Text('accepted: ${accepted.map((d) => d.index).toList()}'),
           Text('rejected: ${rejected.map((d) => d.rejectionReason).toList()}'),
+          Text('body: ${_flow.debugBodyInfo}'),
           Text('similarity: ${_flow.lastSimilarity?.toStringAsFixed(2) ?? '-'}'),
           Text('last rejection: ${_flow.lastRejection ?? '-'}'),
           Text('build failure: ${_flow.lastBuildFailure ?? '-'}'),

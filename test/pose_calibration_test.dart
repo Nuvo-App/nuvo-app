@@ -1263,6 +1263,139 @@ void main() {
       expect(capture.lastExampleRejected, isFalse);
     });
 
+    test('upper body only is treated as visible', () {
+      final capture = SingleSessionTeachingCapture();
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      final fullBody = normalizer.normalize(neutralStandingPose());
+      final empty = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'nose',
+            'leftShoulder',
+            'rightShoulder',
+            'leftElbow',
+            'rightElbow',
+            'leftWrist',
+            'rightWrist',
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      final oneRandom = normalizer.normalize(
+        neutralStandingPose(missing: const {
+          'leftShoulder',
+          'rightShoulder',
+          'leftElbow',
+          'rightElbow',
+          'leftWrist',
+          'rightWrist',
+          'leftHip',
+          'rightHip',
+          'leftKnee',
+          'rightKnee',
+          'leftAnkle',
+          'rightAnkle',
+        }),
+      );
+
+      expect(capture.isBodyVisiblePose(upperBody), isTrue);
+      expect(capture.isBodyVisiblePose(fullBody), isTrue);
+      expect(capture.isBodyVisiblePose(empty), isFalse);
+      expect(capture.isBodyVisiblePose(oneRandom), isFalse);
+    });
+
+    test('body visibility does not flicker off after one bad frame', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      final empty = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'nose',
+            'leftShoulder',
+            'rightShoulder',
+            'leftElbow',
+            'rightElbow',
+            'leftWrist',
+            'rightWrist',
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+
+      for (var i = 0; i < 2; i++) {
+        capture.addFrame(upperBody, now.add(Duration(milliseconds: 100 * i)));
+      }
+      expect(capture.bodyVisible, isTrue);
+
+      capture.addFrame(empty, now.add(const Duration(milliseconds: 300)));
+      expect(capture.bodyVisible, isTrue);
+
+      capture.addFrame(empty, now.add(const Duration(milliseconds: 400)));
+      expect(capture.bodyVisible, isFalse);
+    });
+
+    test('upper-body only can start recording', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(upperBody, now.add(Duration(milliseconds: 100 * i)));
+      }
+
+      expect(capture.startPose, isNotNull);
+      expect(capture.bodyVisible, isTrue);
+      capture.startRecordingExample();
+      expect(capture.isRecording, isTrue);
+    });
+
     test('static full-body clip is rejected', () {
       var now = DateTime.utc(2026, 1, 1);
       final capture = SingleSessionTeachingCapture(now: () => now);
