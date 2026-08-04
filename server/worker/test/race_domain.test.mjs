@@ -16,6 +16,7 @@ const { computeCompetitionRanks } = require('../.tmp-test-dist/domain/raceRankin
 const {
   assertSubmissionCompatible,
   configFromBody,
+  customConfigFromBody,
 } = require('../.tmp-test-dist/domain/raceValidation.js');
 
 // ── Scoring: arbitrary targets ─────────────────────────────────────────────────
@@ -197,6 +198,71 @@ test('validation rejects zero and negative targets', () => {
 
   const negative = configFromBody({ activityId: 'push_ups', metric: 'reps', format: 'first_to_goal', targetValue: -5 });
   assert.ok('error' in negative, 'negative target must be rejected');
+});
+
+test('custom verifier validation accepts bounded custom race config', () => {
+  const spec = {
+    version: 1,
+    verifierType: 'custom_pose_sequence',
+    movementName: 'Overhead knee touch',
+    measurementType: 'count',
+    startPose: { landmarks: { nose: { x: 0, y: 0, visibility: 1 } } },
+    completionPose: { landmarks: { nose: { x: 0.1, y: 0.1, visibility: 1 } } },
+    completionStrategy: 'completionAtTerminalPose',
+    canonicalSequence: [{
+      position: 0,
+      features: {
+        hip_angle: {
+          value: 0.5,
+          confidence: 0.9,
+          reliability: 0.8,
+          allowedVariation: 0.2,
+          contributingDemonstrationCount: 3,
+          kind: 'angle',
+        },
+      },
+    }],
+    requiredFeatureIds: ['hip_angle'],
+    activeFeatureIds: ['hip_angle'],
+    sequenceSimilarityThreshold: 0.6,
+    completionSimilarityThreshold: 0.65,
+    resetSimilarityThreshold: 0.55,
+    minimumValidFeatureRatio: 0.7,
+    minimumVisibility: 0.5,
+    cooldownMs: 600,
+    expectedSequenceFrameCount: 1,
+  };
+
+  const config = customConfigFromBody({
+    title: 'Office ladder',
+    targetValue: 10,
+    verifierType: 'custom_pose_sequence',
+    verifierVersion: 1,
+    customActivityName: 'Overhead knee touch',
+    verifierSpec: spec,
+  });
+
+  assert.equal('error' in config, false);
+  assert.equal(config.verifierType, 'custom_pose_sequence');
+  assert.equal(config.verifierVersion, 1);
+  assert.equal(config.metric, 'reps');
+  assert.equal(config.verificationMethod, 'ai');
+  assert.equal(config.targetValue, 10);
+});
+
+test('custom verifier validation rejects preset activity impersonation', () => {
+  const config = customConfigFromBody({
+    title: 'Office ladder',
+    targetValue: 10,
+    activityId: 'push_ups',
+    verifierType: 'custom_pose_sequence',
+    verifierVersion: 1,
+    customActivityName: 'Overhead knee touch',
+    verifierSpec: {},
+  });
+
+  assert.equal('error' in config, true);
+  assert.equal(config.error, 'Custom races cannot use a preset activity.');
 });
 
 test('submission compatibility validates activity and metric', () => {

@@ -116,6 +116,10 @@ export interface RaceRow {
   attempt_duration_seconds?: number | null;
   attempt_limit?: number | null;
   verification_method?: string | null;
+  verifier_type?: string | null;
+  verifier_version?: number | null;
+  verifier_spec_json?: string | null;
+  custom_activity_name?: string | null;
   timezone?: string | null;
   recurrence?: string | null;
   winner_user_id?: string | null;

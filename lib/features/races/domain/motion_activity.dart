@@ -12,8 +12,14 @@ enum MotionActivityType {
   final String backendValue;
 
   static MotionActivityType? fromBackendValue(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == 'pushups' || normalized == 'push ups') {
+      return MotionActivityType.pushUps;
+    }
+    if (normalized == 'lunge') return MotionActivityType.lunges;
+    if (normalized == 'plank') return MotionActivityType.plankHold;
     for (final type in MotionActivityType.values) {
-      if (type.backendValue == value) return type;
+      if (type.backendValue == normalized) return type;
     }
     return null;
   }

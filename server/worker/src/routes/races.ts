@@ -5,7 +5,14 @@ import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceScoringRule } from '../domain/raceActivities';
-import { assertSubmissionCompatible, configFromBody, type RaceConfig } from '../domain/raceValidation';
+import {
+  CUSTOM_VERIFIER_TYPE,
+  PRESET_VERIFIER_TYPE,
+  assertSubmissionCompatible,
+  configFromBody,
+  customConfigFromBody,
+  type RaceConfig,
+} from '../domain/raceValidation';
 import { applyVerifiedSubmission } from '../domain/raceScoring';
 import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
@@ -101,6 +108,24 @@ function mapVerificationTypeToProofRequirement(type: string): string {
 function parseMetadata(json: string | null): Record<string, unknown> {
   if (!json) return {};
   try { return JSON.parse(json) as Record<string, unknown>; } catch { return {}; }
+}
+
+function parsedVerifierSpec(race: RaceRow): { spec: Record<string, unknown> | null; invalidReason: string | null } {
+  if (race.verifier_type !== CUSTOM_VERIFIER_TYPE) {
+    return { spec: null, invalidReason: null };
+  }
+  if (!race.verifier_spec_json) {
+    return { spec: null, invalidReason: 'Custom verifier spec is missing.' };
+  }
+  try {
+    const parsed = JSON.parse(race.verifier_spec_json) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { spec: null, invalidReason: 'Custom verifier spec is invalid.' };
+    }
+    return { spec: parsed as Record<string, unknown>, invalidReason: null };
+  } catch {
+    return { spec: null, invalidReason: 'Custom verifier spec is invalid.' };
+  }
 }
 
 async function getRace(db: D1Database, raceId: string): Promise<RaceRow | null> {
@@ -340,6 +365,8 @@ async function buildRaceResponse(
 
   const proofRequirement = mapVerificationTypeToProofRequirement(race.verification_type);
   const config = raceConfigFromRow(race);
+  const verifier = parsedVerifierSpec(race);
+  const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
 
   return {
@@ -349,18 +376,23 @@ async function buildRaceResponse(
     description: race.description,
     category: '',
     goalType: mapRaceTypeToGoalType(race.race_type),
-    activityId: config?.activityId ?? normalizeActivityId(race.activity_id ?? race.movement_type) ?? null,
-    metric: config?.metric ?? normalizeMetric(race.metric ?? race.target_unit, config ? activityForId(config.activityId) : undefined) ?? null,
+    activityId: isCustomVerifier ? null : config?.activityId ?? normalizeActivityId(race.activity_id ?? race.movement_type) ?? null,
+    metric: isCustomVerifier ? 'reps' : config?.metric ?? normalizeMetric(race.metric ?? race.target_unit, config ? activityForId(config.activityId) : undefined) ?? null,
     format: config?.format ?? 'first_to_goal',
     scoringRule: config?.scoringRule ?? 'cumulative_sum',
     attemptDurationSeconds: race.attempt_duration_seconds ?? null,
     attemptLimit: race.attempt_limit ?? null,
     verificationMethod: race.verification_method ?? (race.verification_type === 'movecheck' ? 'camera_pose' : race.verification_type),
+    verifierType: race.verifier_type ?? PRESET_VERIFIER_TYPE,
+    verifierVersion: race.verifier_version ?? null,
+    verifierSpec: verifier.spec,
+    verifierInvalidReason: verifier.invalidReason,
+    customActivityName: race.custom_activity_name ?? null,
     timezone: race.timezone ?? 'America/New_York',
     recurrence: race.recurrence ?? 'none',
     targetValue: race.target_value,
     unit: race.target_unit,
-    aiActivityType: race.movement_type,
+    aiActivityType: isCustomVerifier ? null : race.movement_type,
     targetUnit: race.target_unit,
     proofMode: proofRequirement,
     status: effectiveStatus,
@@ -499,49 +531,60 @@ racesRouter.post('/', async (c) => {
 
   const raceTypeRaw = typeof body.goalType === 'string' ? body.goalType : 'manual';
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
-  const verificationType = mapProofRequirementToVerificationType(verificationRaw);
-  const structuredConfig = configFromBody(body);
-  if (verificationType === 'movecheck' && 'error' in structuredConfig) {
+  const customConfig = customConfigFromBody(body);
+  if (customConfig && 'error' in customConfig) {
+    return c.json(badRequest(customConfig.error), 400);
+  }
+  const isCustomConfig = Boolean(customConfig);
+  const verificationType = isCustomConfig ? 'movecheck' : mapProofRequirementToVerificationType(verificationRaw);
+  const structuredConfig = isCustomConfig ? null : configFromBody(body);
+  if (!isCustomConfig && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
     return c.json(badRequest(structuredConfig.error), 400);
   }
 
   const raceId = generateId();
   const description = stringOrNull(body.description) ?? null;
-  const config = 'error' in structuredConfig ? null : structuredConfig;
+  const config = structuredConfig && !('error' in structuredConfig) ? structuredConfig : null;
+  const custom = customConfig && !('error' in customConfig) ? customConfig : null;
   const raceType = config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
-  const targetValue = config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
-  const targetUnit = config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
-  const movementType = config?.activityId ?? stringOrNull(body.aiActivityType) ?? null;
+  const targetValue = custom?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
+  const targetUnit = custom?.metric ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
+  const movementType = custom ? null : config?.activityId ?? stringOrNull(body.aiActivityType) ?? null;
   const visibility = typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility) ? body.visibility : 'private';
-  const startAt = config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
-  const endAt = config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
+  const startAt = custom?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
+  const endAt = custom?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
   await c.env.DB.batch([
     c.env.DB.prepare(
       `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
         target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-        attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at,
+        attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
+        timezone, recurrence, status, visibility, start_at, end_at,
         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
     ).bind(
       raceId,
       userId,
       title,
       description,
-      raceType,
+      custom?.format ?? raceType,
       movementType,
       verificationType,
       targetValue,
       targetUnit,
-      config?.activityId ?? normalizeActivityId(movementType),
-      config?.metric ?? normalizeMetric(targetUnit, activityForId(normalizeActivityId(movementType))),
-      config?.format ?? raceType,
-      config?.scoringRule ?? 'cumulative_sum',
-      config?.attemptDurationSeconds ?? null,
-      config?.attemptLimit ?? null,
-      config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType),
-      config?.timezone ?? 'America/New_York',
-      config?.recurrence ?? 'none',
+      custom ? null : config?.activityId ?? normalizeActivityId(movementType),
+      custom?.metric ?? config?.metric ?? normalizeMetric(targetUnit, activityForId(normalizeActivityId(movementType))),
+      custom?.format ?? config?.format ?? raceType,
+      custom?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum',
+      custom?.attemptDurationSeconds ?? config?.attemptDurationSeconds ?? null,
+      custom?.attemptLimit ?? config?.attemptLimit ?? null,
+      custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType),
+      custom?.verifierType ?? PRESET_VERIFIER_TYPE,
+      custom?.verifierVersion ?? null,
+      custom?.verifierSpecJson ?? null,
+      custom?.customActivityName ?? null,
+      custom?.timezone ?? config?.timezone ?? 'America/New_York',
+      custom?.recurrence ?? config?.recurrence ?? 'none',
       visibility,
       startAt,
       endAt,
@@ -899,6 +942,9 @@ racesRouter.post('/:id/proof', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
+  if (race.verifier_type === CUSTOM_VERIFIER_TYPE) {
+    return c.json(badRequest('Custom proof submission is not supported yet.'), 400);
+  }
   const config = raceConfigFromRow(race);
   if (!config) return c.json(badRequest('Race is missing activity configuration'), 400);
   const member = await c.env.DB.prepare(

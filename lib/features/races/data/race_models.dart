@@ -1,3 +1,5 @@
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+
 class Race {
   const Race({
     required this.id,
@@ -18,6 +20,11 @@ class Race {
     this.attemptDurationSeconds,
     this.attemptLimit,
     this.verificationMethod = 'camera_pose',
+    this.verifierType = 'preset_pose',
+    this.verifierVersion,
+    this.customVerifierSpec,
+    this.customActivityName,
+    this.verifierInvalidReason,
     this.timezone = 'America/New_York',
     this.recurrence = 'none',
     required this.status,
@@ -57,6 +64,11 @@ class Race {
   final int? attemptDurationSeconds;
   final int? attemptLimit;
   final String verificationMethod;
+  final String verifierType;
+  final int? verifierVersion;
+  final CustomPoseVerifierSpec? customVerifierSpec;
+  final String? customActivityName;
+  final String? verifierInvalidReason;
   final String timezone;
   final String recurrence;
   final String status;
@@ -77,74 +89,91 @@ class Race {
   final List<RaceFinalStanding> finalStandings;
   final RaceSubmissionResult? submissionResult;
 
-  factory Race.fromJson(Map<String, dynamic> json) => Race(
-    id: json['id'] as String,
-    creatorId: json['creatorId'] as String,
-    title: json['title'] as String,
-    description: json['description'] as String?,
-    category: json['category'] as String?,
-    goalType: json['goalType'] as String? ?? 'manual',
-    targetValue: json['targetValue'] as int?,
-    unit: json['unit'] as String?,
-    aiActivityType: json['aiActivityType'] as String?,
-    targetUnit: json['targetUnit'] as String?,
-    proofMode: json['proofMode'] as String?,
-    activityId:
-        json['activityId'] as String? ?? json['aiActivityType'] as String?,
-    metric:
-        json['metric'] as String? ??
-        json['targetUnit'] as String? ??
-        json['unit'] as String?,
-    format: json['format'] as String? ?? 'first_to_goal',
-    scoringRule: json['scoringRule'] as String? ?? 'cumulative_sum',
-    attemptDurationSeconds: json['attemptDurationSeconds'] as int?,
-    attemptLimit: json['attemptLimit'] as int?,
-    verificationMethod: json['verificationMethod'] as String? ?? 'camera_pose',
-    timezone: json['timezone'] as String? ?? 'America/New_York',
-    recurrence: json['recurrence'] as String? ?? 'none',
-    status: json['status'] as String? ?? 'active',
-    storedStatus: json['storedStatus'] as String?,
-    winnerUserId: json['winnerUserId'] as String?,
-    completedAt: json['completedAt'] as String?,
-    startLineAt: json['startLineAt'] as String?,
-    finishLineAt: json['finishLineAt'] as String?,
-    rules: json['rules'] as String?,
-    proofRequirement: json['proofRequirement'] as String? ?? 'manual',
-    proofReviewMode: json['proofReviewMode'] as String? ?? 'auto_accept',
-    visibility: json['visibility'] as String? ?? 'private',
-    inviteCode: json['inviteCode'] as String?,
-    createdAt: json['createdAt'] as String,
-    updatedAt: json['updatedAt'] as String,
-    participants:
-        (json['participants'] as List<dynamic>?)
-            ?.map((p) => RaceParticipant.fromJson(p as Map<String, dynamic>))
-            .toList() ??
-        [],
-    recentProofs:
-        (json['recentProofs'] as List<dynamic>?)
-            ?.map((p) => RaceProof.fromJson(p as Map<String, dynamic>))
-            .toList() ??
-        [],
-    finalStandings:
-        (json['finalStandings'] as List<dynamic>?)
-            ?.map((p) => RaceFinalStanding.fromJson(p as Map<String, dynamic>))
-            .toList() ??
-        [],
-    submissionResult: json['submissionResult'] is Map<String, dynamic>
-        ? RaceSubmissionResult.fromJson(
-            json['submissionResult'] as Map<String, dynamic>,
-          )
-        : null,
-  );
+  factory Race.fromJson(Map<String, dynamic> json) {
+    final verifierType = json['verifierType'] as String? ?? 'preset_pose';
+    final parsedCustomSpec = _decodeCustomVerifierSpec(json, verifierType);
+    return Race(
+      id: json['id'] as String,
+      creatorId: json['creatorId'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String?,
+      category: json['category'] as String?,
+      goalType: json['goalType'] as String? ?? 'manual',
+      targetValue: json['targetValue'] as int?,
+      unit: json['unit'] as String?,
+      aiActivityType: json['aiActivityType'] as String?,
+      targetUnit: json['targetUnit'] as String?,
+      proofMode: json['proofMode'] as String?,
+      activityId:
+          json['activityId'] as String? ?? json['aiActivityType'] as String?,
+      metric:
+          json['metric'] as String? ??
+          json['targetUnit'] as String? ??
+          json['unit'] as String?,
+      format: json['format'] as String? ?? 'first_to_goal',
+      scoringRule: json['scoringRule'] as String? ?? 'cumulative_sum',
+      attemptDurationSeconds: json['attemptDurationSeconds'] as int?,
+      attemptLimit: json['attemptLimit'] as int?,
+      verificationMethod:
+          json['verificationMethod'] as String? ?? 'camera_pose',
+      verifierType: verifierType,
+      verifierVersion: json['verifierVersion'] as int?,
+      customVerifierSpec: parsedCustomSpec.spec,
+      customActivityName: json['customActivityName'] as String?,
+      verifierInvalidReason:
+          json['verifierInvalidReason'] as String? ?? parsedCustomSpec.error,
+      timezone: json['timezone'] as String? ?? 'America/New_York',
+      recurrence: json['recurrence'] as String? ?? 'none',
+      status: json['status'] as String? ?? 'active',
+      storedStatus: json['storedStatus'] as String?,
+      winnerUserId: json['winnerUserId'] as String?,
+      completedAt: json['completedAt'] as String?,
+      startLineAt: json['startLineAt'] as String?,
+      finishLineAt: json['finishLineAt'] as String?,
+      rules: json['rules'] as String?,
+      proofRequirement: json['proofRequirement'] as String? ?? 'manual',
+      proofReviewMode: json['proofReviewMode'] as String? ?? 'auto_accept',
+      visibility: json['visibility'] as String? ?? 'private',
+      inviteCode: json['inviteCode'] as String?,
+      createdAt: json['createdAt'] as String,
+      updatedAt: json['updatedAt'] as String,
+      participants:
+          (json['participants'] as List<dynamic>?)
+              ?.map((p) => RaceParticipant.fromJson(p as Map<String, dynamic>))
+              .toList() ??
+          [],
+      recentProofs:
+          (json['recentProofs'] as List<dynamic>?)
+              ?.map((p) => RaceProof.fromJson(p as Map<String, dynamic>))
+              .toList() ??
+          [],
+      finalStandings:
+          (json['finalStandings'] as List<dynamic>?)
+              ?.map(
+                (p) => RaceFinalStanding.fromJson(p as Map<String, dynamic>),
+              )
+              .toList() ??
+          [],
+      submissionResult: json['submissionResult'] is Map<String, dynamic>
+          ? RaceSubmissionResult.fromJson(
+              json['submissionResult'] as Map<String, dynamic>,
+            )
+          : null,
+    );
+  }
 
   int get participantCount => participants.length;
 
   bool get isAiMotionRace =>
       proofRequirement == 'ai_check' ||
       proofMode == 'ai_check' ||
-      verificationMethod == 'camera_pose';
+      verificationMethod == 'camera_pose' ||
+      verificationMethod == 'ai';
+
+  bool get isCustomVerifierRace => verifierType == customPoseVerifierType;
 
   bool get isSupportedAiMotionRace {
+    if (isCustomVerifierRace) return false;
     const supported = {
       'push_ups',
       'jumping_jacks',
@@ -182,6 +211,42 @@ class Race {
 
   bool isParticipant(String userId) =>
       participants.any((participant) => participant.userId == userId);
+}
+
+class _DecodedCustomVerifierSpec {
+  const _DecodedCustomVerifierSpec({this.spec, this.error});
+
+  final CustomPoseVerifierSpec? spec;
+  final String? error;
+}
+
+_DecodedCustomVerifierSpec _decodeCustomVerifierSpec(
+  Map<String, dynamic> json,
+  String verifierType,
+) {
+  if (verifierType != customPoseVerifierType) {
+    return const _DecodedCustomVerifierSpec();
+  }
+  final rawSpec = json['verifierSpec'];
+  if (rawSpec == null) {
+    return const _DecodedCustomVerifierSpec(
+      error: 'Custom verifier spec is missing.',
+    );
+  }
+  if (rawSpec is! Map<String, dynamic>) {
+    return const _DecodedCustomVerifierSpec(
+      error: 'Custom verifier spec is invalid.',
+    );
+  }
+  try {
+    return _DecodedCustomVerifierSpec(
+      spec: CustomPoseVerifierSpec.fromJson(rawSpec),
+    );
+  } catch (_) {
+    return const _DecodedCustomVerifierSpec(
+      error: 'Custom verifier spec is invalid.',
+    );
+  }
 }
 
 class PublicUser {

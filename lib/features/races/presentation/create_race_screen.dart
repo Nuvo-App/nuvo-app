@@ -12,6 +12,7 @@ import '../../auth/data/auth_api.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
+import 'custom_pose/learned_custom_movement_provider.dart';
 import 'race_controller.dart';
 
 class RaceCreatePrefill {
@@ -53,16 +54,27 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
   bool _loading = false;
   bool _inviteCrew = false;
   String? _error;
+  bool _isCustom = false;
+  LearnedCustomMovement? _customMovement;
 
   @override
   void initState() {
     super.initState();
-    final idea = widget.prefill?.idea ?? _quickStarts.first;
-    _ideaController = TextEditingController(text: idea);
-    _draft =
-        draftFromIdea(idea) ??
-        draftForActivity(motionActivityDefinitions.first);
-    _targetController = TextEditingController(text: '${_draft.targetValue}');
+    final learned = ref.read(learnedCustomMovementProvider);
+    if (learned != null) {
+      _isCustom = true;
+      _customMovement = learned;
+      _ideaController = TextEditingController(text: learned.movementName);
+      _draft = draftForActivity(motionActivityDefinitions.first);
+      _targetController = TextEditingController(text: '10');
+    } else {
+      final idea = widget.prefill?.idea ?? _quickStarts.first;
+      _ideaController = TextEditingController(text: idea);
+      _draft =
+          draftFromIdea(idea) ??
+          draftForActivity(motionActivityDefinitions.first);
+      _targetController = TextEditingController(text: '${_draft.targetValue}');
+    }
   }
 
   @override
@@ -112,6 +124,52 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             : activity.defaultTarget,
       ),
     );
+  }
+
+  Future<void> _createCustomRace() async {
+    final movement = _customMovement;
+    if (movement == null) return;
+    final title = _ideaController.text.trim();
+    if (title.isEmpty) {
+      setState(() => _error = 'Race title is required.');
+      return;
+    }
+    final target = int.tryParse(_targetController.text.trim());
+    if (target == null || target <= 0) {
+      setState(() => _error = 'Enter a valid target.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .createCustomRace(
+            title: title,
+            targetValue: target,
+            customActivityName: movement.movementName,
+            verifierSpec: movement.verifierSpec,
+          );
+      if (!mounted) return;
+      ref.read(learnedCustomMovementProvider.notifier).state = null;
+      context.go(_inviteCrew ? '/race/${race.id}/invite' : '/race/${race.id}');
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Something went wrong. Try again.';
+          _loading = false;
+        });
+      }
+    }
   }
 
   Future<void> _createRace() async {
@@ -184,40 +242,46 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Describe it, then review the details before the start line.',
+              _isCustom
+                  ? 'Review the details before the start line.'
+                  : 'Describe it, then review the details before the start line.',
               style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 22),
             NuvoTextInput(
               controller: _ideaController,
-              label: 'Race idea',
-              hint: 'First to 100 pushups',
+              label: _isCustom ? 'Race title' : 'Race idea',
+              hint: _isCustom
+                  ? (_customMovement?.movementName ?? 'Movement race')
+                  : 'First to 100 pushups',
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: NuvoGhostButton(
-                label: 'Review idea',
-                small: true,
-                onPressed: _parseIdea,
+            if (!_isCustom)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: NuvoGhostButton(
+                  label: 'Review idea',
+                  small: true,
+                  onPressed: _parseIdea,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const _SectionTitle('Quick starts'),
-            const SizedBox(height: 10),
-            for (final quickStart in _quickStarts) ...[
-              _ChoiceRow(
-                label: quickStart,
-                selected:
-                    quickStart.toLowerCase() == _draft.title.toLowerCase(),
-                onTap: () => _setDraft(draftFromIdea(quickStart)!),
-              ),
-            ],
-            const SizedBox(height: 26),
-            const _SectionTitle('Activity'),
-            const SizedBox(height: 10),
-            Wrap(
+            if (!_isCustom) ...[
+              const SizedBox(height: 24),
+              const _SectionTitle('Quick starts'),
+              const SizedBox(height: 10),
+              for (final quickStart in _quickStarts) ...[
+                _ChoiceRow(
+                  label: quickStart,
+                  selected:
+                      quickStart.toLowerCase() == _draft.title.toLowerCase(),
+                  onTap: () => _setDraft(draftFromIdea(quickStart)!),
+                ),
+              ],
+              const SizedBox(height: 26),
+              const _SectionTitle('Activity'),
+              const SizedBox(height: 10),
+              Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
@@ -294,27 +358,59 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             ),
             const SizedBox(height: 24),
             _ReviewBlock(draft: _draft, target: _targetController.text),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _error!,
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.danger,
+              ),
+            ),
+          ],
+          if (_isCustom) ...[
+            const SizedBox(height: 26),
+            const _SectionTitle('Goal'),
+            const SizedBox(height: 10),
+            NuvoTextInput(
+              controller: _targetController,
+              label: 'Target reps',
+              keyboardType: TextInputType.number,
+              hint: '10',
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 26),
+            const _SectionTitle('Racers'),
+            const SizedBox(height: 10),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: _inviteCrew,
+              onChanged: (value) => setState(() => _inviteCrew = value),
+              title: Text('Pull in your crew', style: AppTextStyles.bodyMedium),
+              subtitle: Text(
+                _inviteCrew
+                    ? 'Create an invite code after setup.'
+                    : 'Start solo.',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.danger,
+                  color: NuvoColors.muted,
                 ),
               ),
-            ],
+            ),
           ],
+        ],
         ).animate().fadeIn(duration: 240.ms).slideY(begin: 0.03, end: 0),
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
           child: NuvoPrimaryButton(
-            label: 'Create race',
+            label: _isCustom ? 'Create race with this movement' : 'Create race',
             icon: Icons.flag_rounded,
             expand: true,
             loading: _loading,
-            onPressed: _loading ? null : _createRace,
+            onPressed: _loading
+                ? null
+                : (_isCustom ? _createCustomRace : _createRace),
           ),
         ),
       ),

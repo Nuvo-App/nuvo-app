@@ -40,15 +40,42 @@ class CameraVerificationEligibility {
 }
 
 CameraVerificationEligibility resolveCameraVerification(Race race) {
-  final explicit = _supportedActivityFromBackendValue(
-    race.activityId ?? race.aiActivityType,
-  );
+  if (race.isCustomVerifierRace) {
+    return CameraVerificationEligibility(
+      raceId: race.id,
+      raceTitle: race.title,
+      isCameraVerifiable: false,
+      movementType: null,
+      source: CameraVerificationSource.unresolved,
+      preferredCameraView: null,
+      instructions: const [],
+      reason: 'custom_verifier_proof_not_enabled',
+      unsupportedMessage:
+          'Custom AI Motion Proof is not available for this race yet.',
+    );
+  }
+
+  final explicitValue = race.activityId ?? race.aiActivityType;
+  final explicit = _supportedActivityFromBackendValue(explicitValue);
   if (explicit != null) {
     return _eligible(
       race,
       explicit,
       CameraVerificationSource.explicitField,
       'explicit_supported_activity',
+    );
+  }
+
+  if (explicitValue?.isNotEmpty == true) {
+    return CameraVerificationEligibility(
+      raceId: race.id,
+      raceTitle: race.title,
+      isCameraVerifiable: false,
+      movementType: null,
+      source: CameraVerificationSource.unresolved,
+      preferredCameraView: null,
+      instructions: const [],
+      reason: 'unsupported_explicit_activity',
     );
   }
 
@@ -66,9 +93,6 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
     );
   }
 
-  final explicitUnsupported = race.aiActivityType?.isNotEmpty == true
-      ? 'unsupported_explicit_activity'
-      : 'no_supported_movement';
   return CameraVerificationEligibility(
     raceId: race.id,
     raceTitle: race.title,
@@ -77,7 +101,7 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
     source: CameraVerificationSource.unresolved,
     preferredCameraView: null,
     instructions: const [],
-    reason: explicitUnsupported,
+    reason: 'no_supported_movement',
   );
 }
 

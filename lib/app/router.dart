@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +29,7 @@ import '../features/races/presentation/join_race_screen.dart';
 import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
 import '../features/races/presentation/board_moved_screen.dart';
+import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
@@ -113,8 +115,11 @@ Page<void> _tabPage(GoRouterState state, Widget child) =>
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
+  const debugInitialLocation = String.fromEnvironment('NUVO_INITIAL_LOCATION');
   final router = GoRouter(
-    initialLocation: '/splash',
+    initialLocation: kDebugMode && debugInitialLocation.isNotEmpty
+        ? debugInitialLocation
+        : '/splash',
     refreshListenable: notifier,
     redirect: notifier.redirect,
     routes: [
@@ -213,6 +218,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/races/join',
         pageBuilder: (_, state) => _authPage(state, const JoinRaceScreen()),
+      ),
+      GoRoute(
+        path: '/internal/teach-movement',
+        pageBuilder: (_, state) => _cameraPage(
+          state,
+          TeachMovementScreen(
+            seedReadyFixture:
+                kDebugMode && state.uri.queryParameters['fixture'] == 'ready',
+          ),
+        ),
       ),
       GoRoute(
         path: '/race/:id',

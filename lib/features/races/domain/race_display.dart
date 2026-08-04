@@ -11,12 +11,14 @@ const _completedRaceStatuses = {
 };
 
 MotionActivityDefinition? raceActivityDefinition(Race race) =>
-    resolveRaceMotionActivity(
-      aiActivityType: race.activityId ?? race.aiActivityType,
-      title: race.title,
-      unit: race.unit,
-      targetUnit: race.targetUnit,
-    );
+    race.isCustomVerifierRace
+    ? null
+    : resolveRaceMotionActivity(
+        aiActivityType: race.activityId ?? race.aiActivityType,
+        title: race.title,
+        unit: race.unit,
+        targetUnit: race.targetUnit,
+      );
 
 RaceMetric raceMetric(Race race) {
   final parsed = RaceMetric.fromBackendValue(race.metric ?? race.targetUnit);
@@ -29,6 +31,11 @@ RaceMetric raceMetric(Race race) {
 String raceMetricLabel(Race race) => raceMetric(race).label;
 
 String raceActivityTitle(Race race) {
+  if (race.isCustomVerifierRace) {
+    final name =
+        race.customActivityName ?? race.customVerifierSpec?.movementName;
+    if (name != null && name.trim().isNotEmpty) return name.trim();
+  }
   final activity = raceActivityDefinition(race);
   if (activity != null) return activity.title;
   final raw = race.activityId ?? race.aiActivityType ?? race.unit ?? 'race';
