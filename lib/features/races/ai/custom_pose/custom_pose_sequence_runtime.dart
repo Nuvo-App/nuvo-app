@@ -124,7 +124,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     _departedAfterReturnCount = true;
     _startedAt = null;
     _lastFrameAt = null;
-    _guidance = 'Step back';
+    _guidance = 'Step into frame';
     _failureReason = '';
     _state = _indexedSequence.isEmpty
         ? CustomPoseRuntimeState.invalid
@@ -192,7 +192,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
 
   void _handleMissingOrInvalid(NormalizedPose pose) {
     _missingFeatureGraceCount++;
-    _guidance = pose.isValid ? 'Keep your full body visible' : 'Step back';
+    _guidance = pose.isValid ? 'Step into frame' : 'Step into frame';
     if (_missingFeatureGraceCount > customPoseMissingFeatureGraceFrames) {
       _invalidateAttempt('missing_required_features');
     }
@@ -772,6 +772,33 @@ class CustomPoseRuntimeResult {
     'invalidAttemptCount': invalidAttemptCount,
     if (finalFailureReason != null) 'finalFailureReason': finalFailureReason,
   };
+
+  Map<String, dynamic> toProofPayload({required String clientSubmissionId}) => {
+    'proofType': 'ai_motion',
+    'clientSubmissionId': clientSubmissionId,
+    'client_submission_id': clientSubmissionId,
+    'verifierType': verifierType,
+    'verifierVersion': verifierVersion,
+    'activityType': movementName,
+    'metric': 'reps',
+    'note': 'AI custom motion proof: $count $movementName detected.',
+    'value': count,
+    'targetValue': target,
+    'detectedValue': count,
+    'confidence': confidence,
+    'verificationStatus': verificationStatus,
+    'verificationSummary': isVerified
+        ? 'Nuvo verified $count $movementName.'
+        : 'Nuvo did not verify a complete $movementName.',
+    'framesAnalyzed': framesAnalyzed,
+    'validPoseFrames': validFrames,
+    'durationMs': durationMs,
+    'validatorVersion': 'nuvo-custom-pose-v$verifierVersion',
+    'measurementType': measurementType,
+    'completionEvents': completionEvents,
+    'invalidAttemptCount': invalidAttemptCount,
+    if (finalFailureReason != null) 'finalFailureReason': finalFailureReason,
+  };
 }
 
 class CustomPoseVerifierReadiness {
@@ -830,7 +857,7 @@ class _FrameQuality {
   final double visibility;
 
   bool get hasRequiredSetup =>
-      requiredCoverage >= 0.55 && activeCoverage >= 0.55 && visibility >= 0.35;
+      requiredCoverage >= 0.40 && activeCoverage >= 0.40 && visibility >= 0.30;
 }
 
 String _string(Object? value, String field) {

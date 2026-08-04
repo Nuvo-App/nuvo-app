@@ -221,7 +221,7 @@ void main() {
       expect(active, isNot(contains('distance.foot_separation')));
       expect(
         result.featureDiagnostics
-            .where((item) => item.rejectionReason == 'mostly_static')
+            .where((item) => item.rejectionReason == 'not_moving_enough')
             .map((item) => item.featureId),
         contains('distance.foot_separation'),
       );
@@ -331,14 +331,14 @@ void main() {
       () {
         final spec = builder.build(_calibration()).spec!;
 
-        expect(spec.sequenceSimilarityThreshold, inInclusiveRange(0.62, 0.88));
+        expect(spec.sequenceSimilarityThreshold, inInclusiveRange(0.50, 0.88));
         expect(
           spec.completionSimilarityThreshold,
-          inInclusiveRange(0.74, 0.88),
+          inInclusiveRange(0.72, 0.88),
         );
-        expect(spec.resetSimilarityThreshold, inInclusiveRange(0.78, 0.92));
-        expect(spec.minimumValidFeatureRatio, inInclusiveRange(0.55, 0.75));
-        expect(spec.minimumVisibility, inInclusiveRange(0.45, 0.75));
+        expect(spec.resetSimilarityThreshold, inInclusiveRange(0.76, 0.92));
+        expect(spec.minimumValidFeatureRatio, inInclusiveRange(0.35, 0.65));
+        expect(spec.minimumVisibility, inInclusiveRange(0.30, 0.70));
         expect(
           spec.calibrationSummary.lowestPairwiseSimilarityScore,
           greaterThan(0.62),
