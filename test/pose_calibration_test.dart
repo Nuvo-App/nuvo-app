@@ -1229,6 +1229,65 @@ void main() {
       expect(capture.savedExampleCount, 2);
       expect(capture.canLearn, isTrue);
     });
+
+    test('short quick wave is accepted as a valid example', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      final wavePoses = [
+        neutralStandingPose(),
+        wavePose(dx: 0.05),
+        wavePose(dx: 0.0),
+        neutralStandingPose(),
+      ];
+      for (var i = 0; i < wavePoses.length; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePoses[i]),
+          start.add(Duration(milliseconds: 50 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(
+          start.add(const Duration(milliseconds: 250)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.lastExampleRejected, isFalse);
+    });
+
+    test('static full-body clip is rejected', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 30; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 67 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(seconds: 2)));
+
+      expect(capture.savedExampleCount, 0);
+      expect(capture.lastExampleRejected, isTrue);
+    });
   });
 }
 

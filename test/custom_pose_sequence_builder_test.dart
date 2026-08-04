@@ -227,6 +227,21 @@ void main() {
       );
     });
 
+    test('two short wave demonstrations build a valid verifier spec', () {
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _shortWavePoses()),
+            _demo(2, poses: _shortWavePoses(dx: 0.01)),
+          ],
+          requiredDemonstrations: 2,
+        ),
+      );
+
+      expect(result.succeeded, isTrue, reason: result.failureReason);
+      expect(result.spec, isNotNull);
+    });
+
     test('missing features and noisy inconsistent features are rejected', () {
       final missing = builder.build(
         _calibration(
@@ -421,6 +436,7 @@ CustomPoseCalibration _calibration({
   NormalizedPose? startPose,
   List<PoseDemonstration>? demos,
   CalibrationQuality? quality,
+  int requiredDemonstrations = 3,
 }) {
   final start =
       startPose ?? const PoseNormalizer().normalize(neutralStandingPose());
@@ -431,6 +447,7 @@ CustomPoseCalibration _calibration({
         startPose: start,
         startPoseStability: 1,
         demonstrations: demonstrations,
+        requiredDemonstrations: requiredDemonstrations,
       );
   return CustomPoseCalibration(
     schemaVersion: poseCalibrationSchemaVersion,
@@ -515,6 +532,16 @@ List<NormalizedPose> _oppositeTerminalPoses() {
     normalizer.normalize(rightArmRaisedPose()),
     normalizer.normalize(rightArmRaisedPose()),
     normalizer.normalize(rightArmRaisedPose()),
+  ];
+}
+
+List<NormalizedPose> _shortWavePoses({double dx = 0}) {
+  const normalizer = PoseNormalizer();
+  return [
+    normalizer.normalize(neutralStandingPose(dx: dx)),
+    normalizer.normalize(leftArmRaisedPose(dx: dx)),
+    normalizer.normalize(leftArmRaisedPose(dx: dx)),
+    normalizer.normalize(neutralStandingPose(dx: dx)),
   ];
 }
 

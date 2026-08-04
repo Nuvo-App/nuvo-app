@@ -145,9 +145,10 @@ class CustomPoseSequenceBuilder {
         calibration.startPose.validFeatureCount == 0) {
       throw const PoseDataFormatException('invalid_start_pose');
     }
-    if (calibration.demonstrations.length != 3) {
+    if (calibration.demonstrations.length < 2 ||
+        calibration.demonstrations.length > 3) {
       throw const PoseDataFormatException(
-        'requires_exactly_three_demonstrations',
+        'requires_two_or_three_demonstrations',
       );
     }
     for (final demo in calibration.demonstrations) {
@@ -194,7 +195,10 @@ class CustomPoseSequenceBuilder {
     final startScores = frames
         .map((frame) => similarity.compare(startPose, frame.pose).similarity)
         .toList(growable: false);
-    final departed = startScores.indexWhere((score) => score < 0.86);
+    // Require a clearer departure (0.97) than what counts as a return (0.98)
+    // so small waves can depart without a terminal pose being forced to count
+    // as a return.
+    final departed = startScores.indexWhere((score) => score < 0.97);
     if (departed < 0) {
       throw PoseDataFormatException('demo_${demo.index}_static_capture');
     }
@@ -203,7 +207,7 @@ class CustomPoseSequenceBuilder {
     var resetSuffixStart = frames.length;
     var suffixCount = 0;
     for (var i = frames.length - 1; i >= startIndex; i--) {
-      if (startScores[i] >= 0.90) {
+      if (startScores[i] >= 0.98) {
         suffixCount++;
         resetSuffixStart = i;
       } else {
@@ -216,18 +220,18 @@ class CustomPoseSequenceBuilder {
     if (suffixCount >= 2) {
       returnedToStart = true;
       endExclusive = resetSuffixStart + 1;
-    } else if (startScores.last >= 0.88 && departed < frames.length - 2) {
+    } else if (startScores.last >= 0.98 && departed < frames.length - 2) {
       returnedToStart = true;
     }
     final trimmed = frames.sublist(startIndex, endExclusive);
-    if (trimmed.length < 4) {
+    if (trimmed.length < 3) {
       throw PoseDataFormatException(
         'demo_${demo.index}_too_short_after_trimming',
       );
     }
     final activeScores = startScores.sublist(startIndex, endExclusive);
     final minStartSimilarity = activeScores.reduce(math.min);
-    if (minStartSimilarity > 0.90) {
+    if (minStartSimilarity > 0.995) {
       throw PoseDataFormatException('demo_${demo.index}_no_clear_movement');
     }
     return _CleanedDemonstration(
@@ -259,7 +263,7 @@ class CustomPoseSequenceBuilder {
         .where(isKnownPoseFeatureId)
         .toSet();
     for (final demo in demos) {
-      ids.removeWhere((id) => _coverage(demo.frames, id) < 0.82);
+      ids.removeWhere((id) => _coverage(demo.frames, id) < 0.70);
     }
     return (ids.toList()..sort()).toList(growable: false);
   }
@@ -303,11 +307,11 @@ class CustomPoseSequenceBuilder {
       final consistency = _amplitudeConsistency(amplitudes);
       final movementThreshold = _movementThreshold(start.kind);
       String? rejectionReason;
-      if (minCoverage < 0.82) {
+      if (minCoverage < 0.70) {
         rejectionReason = 'low_coverage';
       } else if (averageAmplitude < movementThreshold) {
         rejectionReason = 'mostly_static';
-      } else if (consistency < 0.45) {
+      } else if (consistency < 0.35) {
         rejectionReason = 'inconsistent_motion';
       }
       if (rejectionReason == null) {
@@ -416,9 +420,9 @@ class CustomPoseSequenceBuilder {
     String? failure;
     if (activeFeatureIds.length < 2) {
       failure = 'too_few_active_features';
-    } else if (lowest < 0.62) {
+    } else if (lowest < 0.60) {
       failure = 'inconsistent_demonstrations';
-    } else if (overall < 0.70) {
+    } else if (overall < 0.65) {
       failure = 'low_overall_consistency';
     }
     return CustomPoseConsistencyResult(
@@ -499,7 +503,7 @@ class CustomPoseSequenceBuilder {
     List<_CleanedDemonstration> demos,
   ) {
     final returned = demos.where((demo) => demo.returnedToStart).length;
-    if (returned == 3) {
+    if (returned == demos.length) {
       return CustomPoseCompletionStrategy.completionAfterSequenceReturn;
     }
     if (returned == 0) {
@@ -564,7 +568,7 @@ class CustomPoseSequenceBuilder {
     CustomPoseConsistencyResult consistency,
     _ActiveFeatureSelection selection,
   ) {
-    final sequence = (consistency.lowestPairScore - 0.08).clamp(0.62, 0.88);
+    final sequence = (consistency.lowestPairScore - 0.08).clamp(0.55, 0.88);
     final completion = (0.76 + calibration.quality.startPoseStability * 0.08)
         .clamp(0.74, 0.88);
     final reset = (0.78 + calibration.quality.startPoseStability * 0.10).clamp(
@@ -647,7 +651,7 @@ class CustomPoseSequenceBuilder {
   }
 
   double _amplitudeConsistency(List<double> values) {
-    if (values.length < 3) return 0;
+    if (values.length < 2) return 0;
     final maxValue = values.reduce(math.max);
     final minValue = values.reduce(math.min);
     if (maxValue <= 0) return 0;
@@ -656,10 +660,10 @@ class CustomPoseSequenceBuilder {
 
   double _movementThreshold(String kind) {
     return switch (kind) {
-      'coord' => 0.22,
-      'angle' => 0.10,
-      'distance' => 0.16,
-      _ => 0.22,
+      'coord' => 0.15,
+      'angle' => 0.08,
+      'distance' => 0.12,
+      _ => 0.15,
     };
   }
 
