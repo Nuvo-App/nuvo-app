@@ -5,6 +5,7 @@ import 'package:nuvo/features/races/ai/custom_pose/normalized_pose.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_calibration_flow.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_calibration_models.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_calibration_quality.dart';
+
 import 'package:nuvo/features/races/ai/custom_pose/pose_demonstration_capture.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_sequence_frame.dart';
@@ -137,6 +138,25 @@ void main() {
       expect(update.status, StablePoseCaptureStatus.failed);
       expect(update.message, isNotEmpty);
     });
+
+    test('captures with the new default stability settings', () {
+      final capture = StablePoseCapture();
+      final start = DateTime.utc(2026);
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      final update = capture.addFrame(
+        normalizer.normalize(neutralStandingPose()),
+        start.add(const Duration(milliseconds: 600)),
+      );
+
+      expect(update.captured, isTrue);
+      expect(update.pose, isNotNull);
+      expect(update.stableFrameCount, greaterThanOrEqualTo(6));
+    });
   });
 
   group('PoseDemonstrationCapture', () {
@@ -209,6 +229,7 @@ void main() {
         );
 
         final interrupted = PoseDemonstrationCapture(index: 1)..start(start);
+        interrupted.addFrame(normalizer.normalize(neutralStandingPose()), start);
         interrupted.interrupt();
         expect(
           interrupted
@@ -325,33 +346,450 @@ void main() {
     });
   });
 
-  group('PoseCalibrationFlow', () {
-    test('validates movement name and progresses through summary', () {
-      final flow = PoseCalibrationFlow(now: () => DateTime.utc(2026, 1, 1));
+  group('SingleSessionTeachingCapture', () {
+    test('set movement name captures start pose', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      expect(capture.setMovementName('Arms overhead'), isNull);
+      expect(capture.stage, TeachMovementStage.startPose);
 
-      expect(flow.setMovementName(''), isNotNull);
-      expect(flow.setMovementName('Cross-body tap'), isNull);
-      expect(flow.stage, TeachMovementStage.setup);
-      flow.beginStartPose();
-      flow.setStartPose(
-        normalizer.normalize(neutralStandingPose()),
-        stability: 1,
-      );
-      expect(flow.stage, TeachMovementStage.demonstration);
-      flow.setDemonstration(_demo(1));
-      expect(flow.nextDemonstrationIndex, 2);
-      flow.setDemonstration(_demo(2));
-      flow.setDemonstration(_demo(3));
-      expect(flow.stage, TeachMovementStage.summary);
-      expect(flow.buildCalibration(), isNotNull);
-      flow.retryDemonstration(2);
-      expect(flow.stage, TeachMovementStage.demonstration);
-      expect(flow.nextDemonstrationIndex, 2);
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      expect(capture.startPose, isNotNull);
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+      expect(capture.movementName, 'Arms overhead');
     });
 
-    test('does not expose publish behavior', () {
-      final flow = PoseCalibrationFlow();
-      expect(flow.buildCalibration(), isNull);
+    test('manual recording starts and stops an example', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+
+      now = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      expect(capture.stage, TeachMovementStage.recording);
+
+      for (var i = 0; i < 2; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 120 * i)),
+        );
+      }
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose()),
+          now.add(Duration(milliseconds: 120 * (2 + i))),
+        );
+      }
+
+      now = now.add(const Duration(milliseconds: 960));
+      capture.stopRecordingExample();
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+      expect(capture.acceptedCount, 1);
+      expect(capture.message, contains('saved'));
+    });
+
+    test('two valid manual examples build a real verifier spec', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(
+        now: () => now,
+        buildDelay: Duration.zero,
+      );
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      const repGap = Duration(milliseconds: 1500);
+      for (var rep = 0; rep < 2; rep++) {
+        final repStart = now.add(
+          Duration(seconds: 1, milliseconds: rep * repGap.inMilliseconds),
+        );
+        capture.startRecordingExample();
+        for (var i = 0; i < 2; i++) {
+          capture.addFrame(
+            normalizer.normalize(neutralStandingPose()),
+            repStart.add(Duration(milliseconds: 120 * i)),
+          );
+        }
+        for (var i = 0; i < 6; i++) {
+          capture.addFrame(
+            normalizer.normalize(armsOverheadPose()),
+            repStart.add(Duration(milliseconds: 120 * (2 + i))),
+          );
+        }
+        capture.stopRecordingExampleAt(repStart.add(const Duration(milliseconds: 960)));
+      }
+
+      capture.buildWhenReady();
+
+      expect(capture.stage, TeachMovementStage.learned);
+      expect(capture.verifierSpec, isNotNull);
+      expect(capture.verifierSpec?.movementName, 'Arms overhead');
+    });
+
+    test('a wave-style movement can be captured and learned', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(
+        now: () => now,
+        buildDelay: Duration.zero,
+      );
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      const repGap = Duration(milliseconds: 1500);
+      for (var rep = 0; rep < 3; rep++) {
+        final repStart = now.add(
+          Duration(seconds: 1, milliseconds: rep * repGap.inMilliseconds),
+        );
+        capture.startRecordingExample();
+        for (var i = 0; i < 2; i++) {
+          capture.addFrame(
+            normalizer.normalize(neutralStandingPose()),
+            repStart.add(Duration(milliseconds: 120 * i)),
+          );
+        }
+        for (var i = 0; i < 6; i++) {
+          capture.addFrame(
+            normalizer.normalize(wavePose()),
+            repStart.add(Duration(milliseconds: 120 * (2 + i))),
+          );
+        }
+        capture.stopRecordingExampleAt(repStart.add(const Duration(milliseconds: 960)));
+      }
+
+      capture.buildWhenReady();
+      expect(capture.stage, TeachMovementStage.learned);
+      expect(capture.verifierSpec, isNotNull);
+      expect(capture.verifierSpec?.movementName, 'Wave');
+    });
+
+    test('too-short manual recording is rejected', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 2; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose()),
+          start.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 200)));
+      expect(capture.acceptedCount, 0);
+      expect(capture.rejectedDemonstrations, isNotEmpty);
+      expect(capture.message, contains('short'));
+    });
+
+    test('static manual recording is rejected', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 600)));
+      expect(capture.acceptedCount, 0);
+      expect(capture.rejectedDemonstrations, isNotEmpty);
+      expect(capture.message, contains('clear movement'));
+    });
+
+    test('name persists through restart', () {
+      final capture = SingleSessionTeachingCapture(
+        now: () => DateTime.utc(2026, 1, 1),
+      );
+      capture.setMovementName('Wave');
+      expect(capture.movementName, 'Wave');
+      capture.restart();
+      expect(capture.movementName, 'Wave');
+      expect(capture.stage, isNot(TeachMovementStage.name));
+    });
+
+    test('resetToCapture keeps movement name and start pose', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final startPose = capture.startPose;
+      expect(startPose, isNotNull);
+
+      capture.startRecordingExample();
+      for (var i = 0; i < 4; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose()),
+          now.add(Duration(seconds: 1, milliseconds: 120 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(now.add(const Duration(seconds: 2)));
+
+      capture.resetToCapture();
+      expect(capture.movementName, 'Wave');
+      expect(capture.startPose, startPose);
+      expect(capture.acceptedDemonstrations, isEmpty);
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+    });
+
+    test('can remove the last accepted example and continue', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(
+        now: () => now,
+        buildDelay: Duration.zero,
+      );
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      const repGap = Duration(milliseconds: 1500);
+      for (var rep = 0; rep < 3; rep++) {
+        final repStart = now.add(
+          Duration(seconds: 1, milliseconds: rep * repGap.inMilliseconds),
+        );
+        capture.startRecordingExample();
+        for (var i = 0; i < 6; i++) {
+          capture.addFrame(
+            normalizer.normalize(armsOverheadPose()),
+            repStart.add(Duration(milliseconds: 120 * i)),
+          );
+        }
+        capture.stopRecordingExampleAt(repStart.add(const Duration(milliseconds: 720)));
+      }
+
+      expect(capture.acceptedCount, 3);
+      capture.removeLastAccepted();
+      expect(capture.acceptedCount, 2);
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+      expect(capture.movementName, 'Arms overhead');
+    });
+
+    test('can clear examples and keep the name and start pose', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose()),
+          start.add(Duration(milliseconds: 120 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 720)));
+
+      final startPose = capture.startPose;
+      expect(capture.acceptedCount, 1);
+      capture.clearExamples();
+      expect(capture.acceptedCount, 0);
+      expect(capture.movementName, 'Arms overhead');
+      expect(capture.startPose, startPose);
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+    });
+
+    test('can reteach start pose without changing the name', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      expect(capture.startPose, isNotNull);
+      capture.resetStartPose();
+      expect(capture.startPose, isNull);
+      expect(capture.movementName, 'Arms overhead');
+      expect(capture.stage, TeachMovementStage.startPose);
+    });
+  });
+
+  group('SingleSessionTeachingCapture UI state', () {
+    test('initially shows Record example 1 and cannot learn', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+      expect(capture.savedExampleCount, 0);
+      expect(capture.requiredExampleCount, 2);
+      expect(capture.canLearn, isFalse);
+      expect(capture.message, 'Record example 1');
+    });
+
+    test('while recording shows Recording…', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      capture.startRecordingExample();
+      expect(capture.isRecording, isTrue);
+      expect(capture.message, 'Recording…');
+    });
+
+    test('after one saved example cannot learn and prompts for example 2', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose(dx: 0.01 * i)),
+          start.add(Duration(milliseconds: 120 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 720)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.canLearn, isFalse);
+      expect(capture.lastExampleRejected, isFalse);
+      expect(capture.canRecordExtraExample, isFalse);
+      expect(capture.message, 'Example 1 saved');
+    });
+
+    test('after two saved examples can learn and allows a third', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      const repGap = Duration(milliseconds: 1500);
+      for (var rep = 0; rep < 2; rep++) {
+        final repStart = now.add(
+          Duration(seconds: 1, milliseconds: rep * repGap.inMilliseconds),
+        );
+        capture.startRecordingExample();
+        for (var i = 0; i < 6; i++) {
+          capture.addFrame(
+            normalizer.normalize(armsOverheadPose(dx: 0.01 * i)),
+            repStart.add(Duration(milliseconds: 120 * i)),
+          );
+        }
+        capture.stopRecordingExampleAt(repStart.add(const Duration(milliseconds: 720)));
+      }
+
+      expect(capture.savedExampleCount, 2);
+      expect(capture.canLearn, isTrue);
+      expect(capture.canRecordExtraExample, isTrue);
+      expect(capture.message, 'Example 2 saved');
+    });
+
+    test('a rejected example surfaces lastExampleRejected and asks to record again', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      capture.addFrame(
+        normalizer.normalize(armsOverheadPose()),
+        start.add(const Duration(milliseconds: 50)),
+      );
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 100)));
+
+      expect(capture.savedExampleCount, 0);
+      expect(capture.lastExampleRejected, isTrue);
+      expect(capture.message, contains('Record it again'));
     });
   });
 }
@@ -377,3 +815,5 @@ PoseDemonstration _demo(int index, {bool accepted = true}) {
     rejectionReason: accepted ? null : 'low_valid_frame_ratio',
   );
 }
+
+

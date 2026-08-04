@@ -514,21 +514,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         const SizedBox(height: 12),
         _cameraPreviewCard(showPreview),
         const SizedBox(height: 16),
-        _instructionText(),
+        Text(
+          _flow.message,
+          style: AppTextStyles.titleMedium,
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 12),
         _progressDots(),
         const SizedBox(height: 8),
         _progressText(),
-        const SizedBox(height: 14),
-        Text(
-          _flow.message,
-          style: AppTextStyles.bodyLarge,
-          textAlign: TextAlign.center,
-        ),
         const SizedBox(height: 20),
         _cameraActionButton(),
         const SizedBox(height: 12),
-        _captureControls(),
+        _secondaryActionButton(),
         if (kDebugMode) ...[
           const SizedBox(height: 14),
           _debugPanel(),
@@ -585,12 +583,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final showResetStart = _flow.startPose != null &&
         (stage == TeachMovementStage.readyToRecord ||
             stage == TeachMovementStage.recording);
-    final canRecordThird = _flow.acceptedCount == 2 &&
-        stage == TeachMovementStage.readyToRecord;
-    if (!canRemoveLast &&
-        !canClear &&
-        !showResetStart &&
-        !canRecordThird) {
+    if (!canRemoveLast && !canClear && !showResetStart) {
       return const SizedBox.shrink();
     }
     return Wrap(
@@ -601,8 +594,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         if (canClear) _smallButton('Clear examples', _clearExamples),
         if (showResetStart)
           _smallButton('Reteach start pose', _resetStartPose),
-        if (canRecordThird)
-          _smallButton('Record example 3', _flow.startRecordingExample),
       ],
     );
   }
@@ -612,7 +603,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       onPressed: onPressed,
       child: Text(
         label,
-        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.white),
+        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
       ),
     );
   }
@@ -666,22 +657,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  Widget _instructionText() {
-    final stage = _flow.stage;
-    final text = switch (stage) {
-      TeachMovementStage.startPose => 'Hold still in your starting position.',
-      TeachMovementStage.readyToRecord => 'Record an example',
-      TeachMovementStage.recording => 'Recording…',
-      TeachMovementStage.building => 'Learning your movement…',
-      _ => '',
-    };
-    return Text(
-      text,
-      style: AppTextStyles.titleMedium,
-      textAlign: TextAlign.center,
-    );
-  }
-
   Widget _progressDots() {
     final filled = _flow.acceptedCount;
     final dots = List.generate(3, (index) {
@@ -711,21 +686,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         onPressed: null,
       );
     }
-    if (stage == TeachMovementStage.readyToRecord) {
-      final count = _flow.acceptedCount;
-      if (count >= 2) {
-        return NuvoPrimaryButton(
-          label: 'Learn movement',
-          expand: true,
-          onPressed: _flow.canLearn ? _flow.buildWhenReady : null,
-        );
-      }
-      return NuvoPrimaryButton(
-        label: 'Record example ${count + 1}',
-        expand: true,
-        onPressed: _cameraReady ? _flow.startRecordingExample : null,
-      );
-    }
     if (stage == TeachMovementStage.recording) {
       return NuvoPrimaryButton(
         label: 'Stop',
@@ -736,10 +696,65 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if (stage == TeachMovementStage.building) {
       return const Center(child: CircularProgressIndicator());
     }
+    if (stage == TeachMovementStage.readyToRecord) {
+      if (_flow.lastExampleRejected) {
+        return NuvoPrimaryButton(
+          label: 'Record again',
+          expand: true,
+          onPressed: _cameraReady ? _flow.startRecordingExample : null,
+        );
+      }
+      final count = _flow.savedExampleCount;
+      if (count < _flow.requiredExampleCount) {
+        return NuvoPrimaryButton(
+          label: 'Record example ${count + 1}',
+          expand: true,
+          onPressed: _cameraReady ? _flow.startRecordingExample : null,
+        );
+      }
+      return NuvoPrimaryButton(
+        label: 'Learn movement',
+        expand: true,
+        onPressed: _flow.canLearn ? _flow.buildWhenReady : null,
+      );
+    }
     return NuvoOutlineButton(
       label: 'Start over',
       expand: true,
       onPressed: _restart,
+    );
+  }
+
+  Widget _secondaryActionButton() {
+    if (_flow.stage != TeachMovementStage.readyToRecord) {
+      return const SizedBox.shrink();
+    }
+    final NuvoOutlineButton? extra;
+    if (_flow.lastExampleRejected &&
+        _flow.savedExampleCount >= _flow.requiredExampleCount) {
+      extra = NuvoOutlineButton(
+        label: 'Learn movement',
+        expand: true,
+        onPressed: _flow.canLearn ? _flow.buildWhenReady : null,
+      );
+    } else if (_flow.canRecordExtraExample) {
+      extra = NuvoOutlineButton(
+        label: 'Record one more',
+        expand: true,
+        onPressed: _cameraReady ? _flow.startRecordingExample : null,
+      );
+    } else {
+      extra = null;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (extra != null) ...[
+          extra,
+          const SizedBox(height: 8),
+        ],
+        _captureControls(),
+      ],
     );
   }
 
