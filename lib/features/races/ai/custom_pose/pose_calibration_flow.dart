@@ -11,6 +11,8 @@ import 'pose_similarity.dart';
 
 import 'stable_pose_capture.dart';
 
+enum MovementScope { upperBody, lowerBody, fullBody, auto }
+
 enum TeachMovementStage {
   name,
   setup,
@@ -31,16 +33,19 @@ class SingleSessionTeachingCapture {
     this._onChanged,
     CustomPoseSequenceBuilder? builder,
     this.buildDelay = const Duration(milliseconds: _buildDelayMs),
+    MovementScope? scope,
   })  : _now = now ?? DateTime.now,
         _startSimilarity = startSimilarity ??
             const PoseSimilarity(minValidFeatureRatio: 0.35),
-        _builder = builder ?? const CustomPoseSequenceBuilder();
+        _builder = builder ?? const CustomPoseSequenceBuilder(),
+        movementScope = scope ?? MovementScope.auto;
 
   final DateTime Function() _now;
   final PoseSimilarity _startSimilarity;
   final void Function()? _onChanged;
   final CustomPoseSequenceBuilder _builder;
   final Duration buildDelay;
+  MovementScope movementScope;
 
   final _stableCapture = StablePoseCapture(
     lowCoverageMessage: 'Keep your upper body in frame.',
@@ -140,28 +145,47 @@ class SingleSessionTeachingCapture {
     final hasLeftShoulder = _hasLandmark(pose, 'leftShoulder');
     final hasRightShoulder = _hasLandmark(pose, 'rightShoulder');
     final hasBothShoulders = hasLeftShoulder && hasRightShoulder;
-
     final hasLeftArm = hasLeftShoulder &&
         _hasLandmark(pose, 'leftElbow') &&
         _hasLandmark(pose, 'leftWrist');
     final hasRightArm = hasRightShoulder &&
         _hasLandmark(pose, 'rightElbow') &&
         _hasLandmark(pose, 'rightWrist');
-
-    final hasCore = _hasLandmark(pose, 'leftHip') &&
-        _hasLandmark(pose, 'rightHip');
-
     final upperBody = hasBothShoulders && (hasLeftArm || hasRightArm);
-    final coreBody = hasBothShoulders && hasCore;
 
-    if (upperBody || coreBody) return true;
+    final hasLeftHip = _hasLandmark(pose, 'leftHip');
+    final hasRightHip = _hasLandmark(pose, 'rightHip');
+    final hasBothHips = hasLeftHip && hasRightHip;
+    final hasLeftLeg = hasLeftHip &&
+        _hasLandmark(pose, 'leftKnee') &&
+        _hasLandmark(pose, 'leftAnkle');
+    final hasRightLeg = hasRightHip &&
+        _hasLandmark(pose, 'rightKnee') &&
+        _hasLandmark(pose, 'rightAnkle');
+    final lowerBody = hasBothHips && (hasLeftLeg || hasRightLeg);
 
-    if (!hasBothShoulders) {
-      reason?.write('both shoulders not visible');
-    } else if (!hasLeftArm && !hasRightArm && !hasCore) {
-      reason?.write('needs one full arm or both hips');
+    final fullBody = hasBothShoulders &&
+        hasBothHips &&
+        ((hasLeftArm && hasLeftLeg) || (hasRightArm && hasRightLeg));
+
+    switch (movementScope) {
+      case MovementScope.upperBody:
+        if (upperBody) return true;
+        reason?.write('upper body: both shoulders + one full arm');
+        return false;
+      case MovementScope.lowerBody:
+        if (lowerBody) return true;
+        reason?.write('lower body: both hips + one full leg');
+        return false;
+      case MovementScope.fullBody:
+        if (fullBody) return true;
+        reason?.write('full body: shoulders, hips and limbs on one side');
+        return false;
+      case MovementScope.auto:
+        if (upperBody || fullBody) return true;
+        reason?.write('upper body or full body needed');
+        return false;
     }
-    return false;
   }
 
   bool _hasLandmark(NormalizedPose pose, String id) =>
@@ -192,22 +216,36 @@ class SingleSessionTeachingCapture {
         ? 0.0
         : pose.validFeatureCount / pose.features.values.length;
     _debugBodyInfo =
+        'scope: ${movementScope.name} | '
         'valid: ${pose.validLandmarkCount} | '
         'coverage: ${coverage.toStringAsFixed(2)} | '
         'shoulders: ${(_hasLandmark(pose, 'leftShoulder') && _hasLandmark(pose, 'rightShoulder'))} | '
         'elbows: ${(_hasLandmark(pose, 'leftElbow') && _hasLandmark(pose, 'rightElbow'))} | '
         'wrists: ${(_hasLandmark(pose, 'leftWrist') && _hasLandmark(pose, 'rightWrist'))} | '
         'hips: ${(_hasLandmark(pose, 'leftHip') && _hasLandmark(pose, 'rightHip'))} | '
+        'knees: ${(_hasLandmark(pose, 'leftKnee') && _hasLandmark(pose, 'rightKnee'))} | '
+        'ankles: ${(_hasLandmark(pose, 'leftAnkle') && _hasLandmark(pose, 'rightAnkle'))} | '
         'gate: $_bodyVisible (raw $rawVisible) | '
         'reason: $_bodyGateReason';
   }
 
   bool _isBodyPrompt(String value) {
-    return value == _bodyPromptMessage() ||
-        value == 'Keep your upper body in frame.';
+    return value == _bodyPromptMessage() || value == _trackingLostMessage();
   }
 
-  String _bodyPromptMessage() => 'Step into frame';
+  String _bodyPromptMessage() {
+    return switch (movementScope) {
+      MovementScope.lowerBody => 'Show your legs.',
+      _ => 'Step into frame',
+    };
+  }
+
+  String _trackingLostMessage() {
+    return switch (movementScope) {
+      MovementScope.lowerBody => 'Show your legs.',
+      _ => 'Keep your upper body in frame.',
+    };
+  }
 
   String? setMovementName(String value) {
     final error = validateMovementName(value);
@@ -236,7 +274,12 @@ class SingleSessionTeachingCapture {
     _updateBodyVisibility(pose, rawVisible, reason.toString());
 
     if (_stage == TeachMovementStage.startPose) {
-      _addStartPoseFrame(pose, now);
+      if (rawVisible) {
+        _addStartPoseFrame(pose, now);
+      } else {
+        _message = _bodyPromptMessage();
+        _notify();
+      }
       return;
     }
 
@@ -253,11 +296,11 @@ class SingleSessionTeachingCapture {
           final result = _startSimilarity.compare(_startPose!, pose);
           _lastSimilarity = result.isValid ? result.similarity : 0.0;
         }
-        if (_message == 'Keep your upper body in frame.') {
+        if (_message == _trackingLostMessage()) {
           _message = 'Recording…';
         }
       } else {
-        _message = 'Keep your upper body in frame.';
+        _message = _trackingLostMessage();
       }
       _notify();
       return;
@@ -586,7 +629,7 @@ class SingleSessionTeachingCapture {
     if (_stage == TeachMovementStage.readyToRecord) {
       _message = _bodyPromptMessage();
     } else if (_stage == TeachMovementStage.recording) {
-      _message = 'Keep your upper body in frame.';
+      _message = _trackingLostMessage();
     }
     _notify();
   }
