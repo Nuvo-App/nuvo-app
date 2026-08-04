@@ -398,7 +398,7 @@ void main() {
       capture.stopRecordingExample();
       expect(capture.stage, TeachMovementStage.readyToRecord);
       expect(capture.acceptedCount, 1);
-      expect(capture.message, contains('saved'));
+      expect(capture.message, contains('Record example 2'));
     });
 
     test('two valid manual examples build a real verifier spec', () {
@@ -731,7 +731,7 @@ void main() {
       expect(capture.canLearn, isFalse);
       expect(capture.lastExampleRejected, isFalse);
       expect(capture.canRecordExtraExample, isFalse);
-      expect(capture.message, 'Example 1 saved');
+      expect(capture.message, 'Record example 2');
     });
 
     test('after two saved examples can learn and allows a third', () {
@@ -764,7 +764,7 @@ void main() {
       expect(capture.savedExampleCount, 2);
       expect(capture.canLearn, isTrue);
       expect(capture.canRecordExtraExample, isTrue);
-      expect(capture.message, 'Example 2 saved');
+      expect(capture.message, 'Ready to learn');
     });
 
     test('a rejected example surfaces lastExampleRejected and asks to record again', () {
@@ -971,6 +971,89 @@ void main() {
 
       expect(capture.savedExampleCount, 2);
       expect(capture.canLearn, isTrue);
+    });
+
+    test('markFrameMissing clears bodyVisible and prompts to step into frame', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      expect(capture.bodyVisible, isTrue);
+      expect(capture.canRecordNextExample, isTrue);
+
+      capture.markFrameMissing();
+
+      expect(capture.bodyVisible, isFalse);
+      expect(capture.canRecordNextExample, isFalse);
+      expect(capture.message, contains('Step into frame'));
+    });
+
+    test('one saved example shows Record example 2 and cannot learn', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 5; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePose(dx: 0.01 * i)),
+          start.add(Duration(milliseconds: 50 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(
+          start.add(const Duration(milliseconds: 250)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.canLearn, isFalse);
+      expect(capture.lastExampleRejected, isFalse);
+      expect(capture.canRecordNextExample, isTrue);
+      expect(capture.message, contains('Record example 2'));
+    });
+
+    test('rejected example shows Record again and cannot learn', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 5; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 50 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(
+          start.add(const Duration(milliseconds: 250)));
+
+      expect(capture.savedExampleCount, 0);
+      expect(capture.rejectedDemonstrations.length, 1);
+      expect(capture.lastExampleRejected, isTrue);
+      expect(capture.canLearn, isFalse);
+      expect(capture.canRecordNextExample, isTrue);
+      expect(capture.message, contains('Record it again'));
     });
   });
 }

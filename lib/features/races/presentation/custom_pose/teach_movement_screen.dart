@@ -175,7 +175,13 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         camera: camera,
         deviceOrientation: orientation,
       );
-      if (!mounted || _disposed || frame == null) return;
+      if (!mounted || _disposed) return;
+      if (frame == null) {
+        _latestFrame = null;
+        _flow.markFrameMissing();
+        if (mounted) setState(() {});
+        return;
+      }
       final pose = _normalizer.normalize(frame);
       _flow.addFrame(pose, frame.createdAt);
       _latestFrame = _flow.isBodyVisiblePose(pose) ? frame : null;
@@ -219,10 +225,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     await _cameraController?.dispose();
     _cameraController = null;
     _cameraReady = false;
+    _latestFrame = null;
+    _flow.markFrameMissing();
   }
 
   void _setCameraError(String message) {
     if (!mounted || _disposed) return;
+    _latestFrame = null;
+    _flow.markFrameMissing();
     setState(() {
       _cameraReady = false;
       _cameraBusy = false;
@@ -734,14 +744,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       return const SizedBox.shrink();
     }
     final NuvoOutlineButton? extra;
-    if (_flow.lastExampleRejected &&
-        _flow.savedExampleCount >= _flow.requiredExampleCount) {
-      extra = NuvoOutlineButton(
-        label: 'Learn movement',
-        expand: true,
-        onPressed: _flow.canLearn ? _flow.buildWhenReady : null,
-      );
-    } else if (_flow.canRecordExtraExample) {
+    if (_flow.canRecordExtraExample && !_flow.lastExampleRejected) {
       extra = NuvoOutlineButton(
         label: 'Record one more',
         expand: true,
@@ -898,7 +901,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       'Movement incomplete' => 'Try again',
       'Return to your starting position' => 'Keep going',
       'Keep your full body visible' => 'Keep your full body visible',
-      _ => guidance,
+      _ => 'Ready',
     };
   }
 }

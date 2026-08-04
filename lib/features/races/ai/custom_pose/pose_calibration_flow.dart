@@ -246,7 +246,7 @@ class SingleSessionTeachingCapture {
     _accepted.add(demo);
     _lastRejection = null;
     _lastBuildFailure = null;
-    _message = _exampleSavedMessage(_accepted.length);
+    _message = _exampleInstruction(_accepted.length);
     _notify();
   }
 
@@ -336,15 +336,6 @@ class SingleSessionTeachingCapture {
       0 => 'Record example 1',
       1 => 'Record example 2',
       _ => 'Ready to learn',
-    };
-  }
-
-  String _exampleSavedMessage(int count) {
-    return switch (count) {
-      1 => 'Example 1 saved',
-      2 => 'Example 2 saved',
-      3 => 'Example 3 saved',
-      _ => 'Example saved',
     };
   }
 
@@ -475,6 +466,19 @@ class SingleSessionTeachingCapture {
       _message = 'Recording stopped. Try again.';
       _notify();
     }
+  }
+
+  /// Called when no pose frame arrives (camera lost, pose detector returns
+  /// null, etc.) so stale body-visible state is not shown to the user.
+  void markFrameMissing() {
+    _bodyVisible = false;
+    _lastSimilarity = null;
+    if (_stage == TeachMovementStage.readyToRecord) {
+      _message = _bodyPromptMessage();
+    } else if (_stage == TeachMovementStage.recording) {
+      _message = 'Nuvo lost track. Hold still where Nuvo can see you.';
+    }
+    _notify();
   }
 
   void _notify() {
