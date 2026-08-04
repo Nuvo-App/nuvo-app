@@ -250,6 +250,17 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       e.code == 'CameraAccessDeniedWithoutPrompt' ||
       e.code == 'CameraAccessRestricted';
 
+  Future<void> _switchCamera() async {
+    if (_cameraBusy || _cameras.length < 2) return;
+    final current = _selectedCamera;
+    final next = _cameras.firstWhere(
+      (camera) => camera.lensDirection != current?.lensDirection,
+      orElse: () => _cameras.first,
+    );
+    if (next == current) return;
+    await _initializeCamera(camera: next);
+  }
+
   void _startRecording() {
     _clipTimer?.cancel();
     _flow.startRecordingExample();
@@ -689,6 +700,26 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
                 painter: _PoseSkeletonPainter(frame: _latestFrame),
               ),
             ),
+            if (_cameras.length > 1)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: GestureDetector(
+                  onTap: _switchCamera,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: NuvoColors.navy.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.flip_camera_ios,
+                      color: NuvoColors.white,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
