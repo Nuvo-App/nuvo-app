@@ -11,10 +11,12 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
+import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
 import 'create_race_screen.dart';
+import 'custom_pose/learned_custom_movement_provider.dart';
 import 'race_controller.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -50,7 +52,7 @@ class RaceComposerScreen extends ConsumerStatefulWidget {
 }
 
 class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
-  final _pageController = PageController();
+  late final PageController _pageController;
   _Step _step = _Step.name;
   bool _loading = false;
   String? _error;
@@ -60,15 +62,35 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final prefill = widget.prefill;
-      if (prefill != null) {
-        final parsed = draftFromIdea(prefill.idea);
-        if (parsed != null) {
-          ref.read(_composerDraftProvider.notifier).state = parsed;
+    final learned = ref.read(learnedCustomMovementProvider);
+    if (learned != null) {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: motionActivityDefinitions.first,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: learned.movementName,
+        verifierSpec: learned.verifierSpec,
+      );
+      _step = _Step.review;
+      _pageController = PageController(
+        initialPage: _steps.indexOf(_Step.review),
+      );
+      ref.read(_composerDraftProvider.notifier).state = draft;
+    } else {
+      _pageController = PageController();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final prefill = widget.prefill;
+        if (prefill != null) {
+          final parsed = draftFromIdea(prefill.idea);
+          if (parsed != null) {
+            ref.read(_composerDraftProvider.notifier).state = parsed;
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   @override
@@ -118,28 +140,43 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       _error = null;
     });
     try {
-      final payload = draft.toCreatePayload();
-      final race = await ref
-          .read(raceControllerProvider.notifier)
-          .createRace(
-            title: payload['title'] as String,
-            description: payload['description'] as String,
-            category: payload['category'] as String,
-            goalType: payload['goalType'] as String,
-            targetValue: payload['targetValue'] as int,
-            unit: payload['unit'] as String,
-            proofRequirement: payload['proofRequirement'] as String,
-            proofReviewMode: payload['proofReviewMode'] as String,
-            visibility: payload['visibility'] as String,
-            aiActivityType: payload['aiActivityType'] as String,
-            activityId: payload['activityId'] as String,
-            metric: payload['metric'] as String,
-            format: payload['format'] as String,
-            recurrence: payload['recurrence'] as String,
-            targetUnit: payload['targetUnit'] as String,
-            proofMode: payload['proofMode'] as String,
-          );
+      final Race race;
+      if (draft.isCustom) {
+        race = await ref
+            .read(raceControllerProvider.notifier)
+            .createCustomRace(
+              title: draft.resolvedTitle,
+              targetValue: draft.targetValue,
+              customActivityName: draft.customActivityName!,
+              verifierSpec: draft.verifierSpec!,
+            );
+      } else {
+        final payload = draft.toCreatePayload();
+        race = await ref
+            .read(raceControllerProvider.notifier)
+            .createRace(
+              title: payload['title'] as String,
+              description: payload['description'] as String,
+              category: payload['category'] as String,
+              goalType: payload['goalType'] as String,
+              targetValue: payload['targetValue'] as int,
+              unit: payload['unit'] as String,
+              proofRequirement: payload['proofRequirement'] as String,
+              proofReviewMode: payload['proofReviewMode'] as String,
+              visibility: payload['visibility'] as String,
+              aiActivityType: payload['aiActivityType'] as String,
+              activityId: payload['activityId'] as String,
+              metric: payload['metric'] as String,
+              format: payload['format'] as String,
+              recurrence: payload['recurrence'] as String,
+              targetUnit: payload['targetUnit'] as String,
+              proofMode: payload['proofMode'] as String,
+            );
+      }
       if (!mounted) return;
+      if (draft.isCustom) {
+        ref.read(learnedCustomMovementProvider.notifier).state = null;
+      }
       final wantsInvite = draft.visibility == 'invite_code';
       if (wantsInvite) {
         context.go('/race/${race.id}/invite');
@@ -440,8 +477,7 @@ class _NamePageState extends State<_NamePage> {
     setState(() {});
     // Mark as custom only when the user's text differs from the generated title
     final isGenerated =
-        value.trim() ==
-        generatedTitle(widget.draft.activity, widget.draft.targetValue);
+        value.trim() == widget.draft.generatedTitleText;
     _hasCustomName = !isGenerated;
     widget.onDraftChanged(
       widget.draft.copyWith(title: value, hasCustomName: _hasCustomName),
@@ -851,7 +887,7 @@ class _GoalPageState extends State<_GoalPage> {
   }
 
   String get _winStatement {
-    final activity = widget.draft.activity.title.toLowerCase();
+    final activity = widget.draft.displayActivityName.toLowerCase();
     final isSeconds = widget.draft.metric == RaceMetric.seconds;
     final valueLabel = isSeconds ? _secondsDisplay(_target) : '$_target';
     return 'First person to reach $valueLabel verified $activity wins.';
@@ -864,14 +900,17 @@ class _GoalPageState extends State<_GoalPage> {
     return '$_target';
   }
 
+  List<int> get _suggestedTargets => widget.draft.isCustom
+      ? const [5, 10, 25, 50]
+      : widget.draft.activity.suggestedTargets;
+
   @override
   Widget build(BuildContext context) {
-    final activity = widget.draft.activity;
     final isSeconds = widget.draft.metric == RaceMetric.seconds;
 
     return _PageShell(
       question: 'Set the finish line.',
-      support: 'How many ${activity.metric.label} to win?',
+      support: 'How many ${widget.draft.metric.label} to win?',
       ctaLabel: 'Invite racers',
       onCta: widget.onNext,
       body: Column(
@@ -880,8 +919,8 @@ class _GoalPageState extends State<_GoalPage> {
           _GoalDisplay(
             displayValue: _displayTarget,
             unitLabel: isSeconds
-                ? activity.title.toUpperCase()
-                : activity.metric.label.toUpperCase(),
+                ? widget.draft.displayActivityName.toUpperCase()
+                : widget.draft.metric.label.toUpperCase(),
             editing: _editing,
             editCtrl: _editCtrl,
             editFocus: _editFocus,
@@ -897,7 +936,7 @@ class _GoalPageState extends State<_GoalPage> {
             spacing: 10,
             runSpacing: 10,
             children: [
-              for (final t in activity.suggestedTargets.take(4))
+              for (final t in _suggestedTargets.take(4))
                 _SuggestedTarget(
                   value: isSeconds ? _secondsDisplay(t) : '$t',
                   selected: _target == t,
@@ -1267,7 +1306,7 @@ class _ReviewPage extends StatelessWidget {
     final valueLabel = isSeconds
         ? _secondsDisplay(draft.targetValue)
         : '${draft.targetValue}';
-    return '$valueLabel ${draft.activity.metric.label}';
+    return '$valueLabel ${draft.metric.label}';
   }
 
   String get _winSubtitle {
@@ -1275,7 +1314,7 @@ class _ReviewPage extends StatelessWidget {
     final valueLabel = isSeconds
         ? _secondsDisplay(draft.targetValue)
         : '${draft.targetValue}';
-    return 'First to $valueLabel verified ${draft.activity.metric.label} wins.';
+    return 'First to $valueLabel verified ${draft.displayActivityName.toLowerCase()} wins.';
   }
 
   @override
@@ -1321,8 +1360,8 @@ class _ReviewPage extends StatelessWidget {
                 _ReviewDetail(
                   icon: Icons.verified_rounded,
                   label: 'Camera verified',
-                  sub: '${draft.activity.title} · ${draft.metric.label}',
-                  onTap: () => onEditStep(_Step.activity),
+                  sub: '${draft.displayActivityName} · ${draft.metric.label}',
+                  onTap: draft.isCustom ? null : () => onEditStep(_Step.activity),
                 ),
                 const SizedBox(height: 10),
                 // Finish line — tap returns to Goal
