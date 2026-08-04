@@ -55,6 +55,7 @@ class SingleSessionTeachingCapture {
   double? _lastSimilarity;
   String? _lastRejection;
   String? _lastBuildFailure;
+  bool _bodyVisible = false;
 
   TeachMovementStage get stage => _stage;
   String get movementName => _movementName;
@@ -79,10 +80,13 @@ class SingleSessionTeachingCapture {
   bool get isReadyToRecord => _stage == TeachMovementStage.readyToRecord;
   bool get isBuilding => _stage == TeachMovementStage.building;
   bool get isLearned => _stage == TeachMovementStage.learned;
+  bool get bodyVisible => _bodyVisible;
   bool get canLearn =>
       _accepted.length >= _minAccepted && _stage != TeachMovementStage.building;
   bool get canRecordNextExample =>
-      _stage == TeachMovementStage.readyToRecord && _startPose != null;
+      _stage == TeachMovementStage.readyToRecord &&
+      _startPose != null &&
+      _bodyVisible;
   bool get canRecordExtraExample =>
       _accepted.length >= _minAccepted &&
       _accepted.length < _maxAccepted &&
@@ -101,6 +105,27 @@ class SingleSessionTeachingCapture {
   static const _maxAccepted = 3;
   static const _buildDelayMs = 600;
   static const _staticSimilarityThreshold = 0.98;
+  static const _minVisibleLandmarks = 10;
+  static const _minFeatureCoverage = 0.45;
+
+  bool isBodyVisiblePose(NormalizedPose pose) => _isBodyVisible(pose);
+
+  bool _isBodyVisible(NormalizedPose pose) {
+    if (!pose.isValid) return false;
+    if (pose.validLandmarkCount < _minVisibleLandmarks) return false;
+    if (pose.features.values.isEmpty) return false;
+    return pose.validFeatureCount / pose.features.values.length >=
+        _minFeatureCoverage;
+  }
+
+  bool _isBodyPrompt(String value) {
+    return value == _bodyPromptMessage() ||
+        value == 'Nuvo lost track. Hold still where Nuvo can see you.' ||
+        value == 'Step back so your full body is visible.';
+  }
+
+  String _bodyPromptMessage() =>
+      'Nuvo needs to see your body. Step into frame.';
 
   String? setMovementName(String value) {
     final error = validateMovementName(value);
@@ -124,18 +149,45 @@ class SingleSessionTeachingCapture {
   }
 
   void addFrame(NormalizedPose pose, DateTime now) {
+    final visible = _isBodyVisible(pose);
+    _bodyVisible = visible;
+
     if (_stage == TeachMovementStage.startPose) {
       _addStartPoseFrame(pose, now);
       return;
     }
+
+    if (_stage == TeachMovementStage.readyToRecord) {
+      _updateReadyMessage();
+      _notify();
+      return;
+    }
+
     if (_stage == TeachMovementStage.recording) {
-      _current?.addFrame(pose, now);
-      if (_startPose != null) {
-        final result = _startSimilarity.compare(_startPose!, pose);
-        _lastSimilarity = result.isValid ? result.similarity : 0.0;
+      if (visible) {
+        _current?.addFrame(pose, now);
+        if (_startPose != null) {
+          final result = _startSimilarity.compare(_startPose!, pose);
+          _lastSimilarity = result.isValid ? result.similarity : 0.0;
+        }
+        if (_message == 'Nuvo lost track. Hold still where Nuvo can see you.') {
+          _message = 'Recording…';
+        }
+      } else {
+        _message = 'Nuvo lost track. Hold still where Nuvo can see you.';
       }
       _notify();
       return;
+    }
+  }
+
+  void _updateReadyMessage() {
+    if (_bodyVisible) {
+      if (_isBodyPrompt(_message)) {
+        _message = _exampleInstruction(_accepted.length);
+      }
+    } else {
+      _message = _bodyPromptMessage();
     }
   }
 
@@ -151,10 +203,14 @@ class SingleSessionTeachingCapture {
   }
 
   void startRecordingExample() {
-    if (_stage != TeachMovementStage.readyToRecord || _startPose == null) return;
+    if (_stage != TeachMovementStage.readyToRecord ||
+        _startPose == null ||
+        !_bodyVisible) {
+      return;
+    }
     _current = PoseDemonstrationCapture(
       index: _accepted.length + _rejected.length + 1,
-      minDuration: const Duration(milliseconds: 300),
+      minDuration: const Duration(milliseconds: 250),
       minProcessedFrames: 4,
       maxDuration: const Duration(seconds: 8),
     )..start(_now());
