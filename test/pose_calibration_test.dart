@@ -688,7 +688,7 @@ void main() {
       expect(capture.message, 'Record example 1');
     });
 
-    test('while recording shows Recording…', () {
+    test('while recording shows Recording example 1… and progress', () {
       var now = DateTime.utc(2026, 1, 1);
       final capture = SingleSessionTeachingCapture(now: () => now);
       capture.setMovementName('Wave');
@@ -702,7 +702,8 @@ void main() {
 
       capture.startRecordingExample();
       expect(capture.isRecording, isTrue);
-      expect(capture.message, 'Recording…');
+      expect(capture.message, 'Recording example 1…');
+      expect(capture.recordingProgress, 0.0);
     });
 
     test('after one saved example cannot learn and prompts for example 2', () {
@@ -1054,6 +1055,179 @@ void main() {
       expect(capture.canLearn, isFalse);
       expect(capture.canRecordNextExample, isTrue);
       expect(capture.message, contains('Record it again'));
+    });
+
+    test('fixed clip records for 2 seconds and auto-saves a valid movement', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+
+      // Hold start, then lift arms for ~1 second, then hold.
+      for (var i = 0; i < 10; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      for (var i = 0; i < 10; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose(dx: 0.02 * i)),
+          start.add(Duration(milliseconds: 1000 + 50 * i)),
+        );
+      }
+      for (var i = 0; i < 10; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 1500 + 50 * i)),
+        );
+      }
+
+      capture.stopRecordingExampleAt(start.add(const Duration(seconds: 2)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.lastExampleRejected, isFalse);
+    });
+
+    test('fixed clip with no visible body rejects the example', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+
+      for (var i = 0; i < 30; i++) {
+        capture.addFrame(
+          normalizer.normalize(
+            neutralStandingPose(
+              likelihoods: const {
+                'nose': 0.0,
+                'leftShoulder': 0.0,
+                'rightShoulder': 0.0,
+                'leftElbow': 0.0,
+                'rightElbow': 0.0,
+                'leftWrist': 0.0,
+                'rightWrist': 0.0,
+                'leftHip': 0.0,
+                'rightHip': 0.0,
+                'leftKnee': 0.0,
+                'rightKnee': 0.0,
+                'leftAnkle': 0.0,
+                'rightAnkle': 0.0,
+              },
+            ),
+          ),
+          start.add(Duration(milliseconds: 67 * i)),
+        );
+      }
+
+      capture.stopRecordingExampleAt(start.add(const Duration(seconds: 2)));
+
+      expect(capture.savedExampleCount, 0);
+      expect(capture.lastExampleRejected, isTrue);
+    });
+
+    test('quick wave inside a 2-second fixed clip can save', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+
+      for (var i = 0; i < 10; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      for (var i = 0; i < 5; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePose(dx: 0.05 * i)),
+          start.add(Duration(milliseconds: 1000 + 50 * i)),
+        );
+      }
+      for (var i = 0; i < 10; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 1250 + 125 * i)),
+        );
+      }
+
+      capture.stopRecordingExampleAt(start.add(const Duration(seconds: 2)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.lastExampleRejected, isFalse);
+    });
+
+    test('two fixed-clip examples enable Learn movement', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      const repGap = Duration(milliseconds: 2500);
+      for (var rep = 0; rep < 2; rep++) {
+        final repStart = now.add(
+          Duration(seconds: 1, milliseconds: rep * repGap.inMilliseconds),
+        );
+        capture.startRecordingExample();
+
+        for (var i = 0; i < 10; i++) {
+          capture.addFrame(
+            normalizer.normalize(neutralStandingPose()),
+            repStart.add(Duration(milliseconds: 100 * i)),
+          );
+        }
+        for (var i = 0; i < 10; i++) {
+          capture.addFrame(
+            normalizer.normalize(armsOverheadPose(dx: 0.02 * i)),
+            repStart.add(Duration(milliseconds: 1000 + 50 * i)),
+          );
+        }
+        for (var i = 0; i < 10; i++) {
+          capture.addFrame(
+            normalizer.normalize(neutralStandingPose()),
+            repStart.add(Duration(milliseconds: 1500 + 50 * i)),
+          );
+        }
+
+        capture.stopRecordingExampleAt(
+            repStart.add(const Duration(seconds: 2)));
+      }
+
+      expect(capture.savedExampleCount, 2);
+      expect(capture.canLearn, isTrue);
     });
   });
 }
