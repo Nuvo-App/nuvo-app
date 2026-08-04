@@ -57,7 +57,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   CustomPoseRuntimeResult? _customTestResult;
   CustomPoseVerifierSpec? _debugSpec;
   NuvoPoseFrame? _latestFrame;
+  DateTime? _lastVisibleFrameAt;
+  Timer? _uiUpdateTimer;
   static const int _testTarget = 1;
+  static const int _skeletonHoldMs = 400;
+  static const int _uiThrottleMs = 100;
   bool _learnedWrittenToProvider = false;
   Timer? _clipTimer;
 
@@ -179,15 +183,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         deviceOrientation: orientation,
       );
       if (!mounted || _disposed) return;
+      final now = DateTime.now();
       if (frame == null) {
-        _latestFrame = null;
         _flow.markFrameMissing();
-        if (mounted) setState(() {});
+        _expireSkeletonIfNeeded(now);
+        _requestSetState();
         return;
       }
       final pose = _normalizer.normalize(frame);
       _flow.addFrame(pose, frame.createdAt);
-      _latestFrame = _flow.isBodyVisiblePose(pose) ? frame : null;
+      if (_flow.isBodyVisiblePose(pose)) {
+        _latestFrame = frame;
+        _lastVisibleFrameAt = now;
+      } else {
+        _expireSkeletonIfNeeded(now);
+      }
       if (_testingVerifier) {
         final update = _customRuntime?.update(frame);
         _customUpdate = update?.customPoseUpdate;
@@ -195,15 +205,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           _completeVerifierTest();
         }
       }
-      setState(() {});
+      _requestSetState();
     } on CameraImageConversionException catch (e) {
       _flow.message = e.message;
+      _latestFrame = null;
+      _lastVisibleFrameAt = null;
       await _stopImageStream();
-      if (mounted) setState(() {});
+      _requestSetState();
     } catch (_) {
       _flow.message = 'Pose detection failed. Try again.';
+      _latestFrame = null;
+      _lastVisibleFrameAt = null;
       await _stopImageStream();
-      if (mounted) setState(() {});
+      _requestSetState();
     }
   }
 
@@ -229,20 +243,46 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _cameraController = null;
     _cameraReady = false;
     _latestFrame = null;
+    _lastVisibleFrameAt = null;
+    _uiUpdateTimer?.cancel();
+    _uiUpdateTimer = null;
     _clipTimer?.cancel();
     _clipTimer = null;
     _flow.markFrameMissing();
   }
 
+  void _requestSetState() {
+    if (_disposed || !mounted) return;
+    if (_uiUpdateTimer?.isActive == true) return;
+    _uiUpdateTimer = Timer(const Duration(milliseconds: _uiThrottleMs), () {
+      _uiUpdateTimer = null;
+      if (mounted && !_disposed) setState(() {});
+    });
+  }
+
   void _setCameraError(String message) {
     if (!mounted || _disposed) return;
     _latestFrame = null;
+    _lastVisibleFrameAt = null;
     _flow.markFrameMissing();
     setState(() {
       _cameraReady = false;
       _cameraBusy = false;
       _flow.message = message;
     });
+  }
+
+  void _expireSkeletonIfNeeded(DateTime now) {
+    final last = _lastVisibleFrameAt;
+    if (last == null) {
+      _latestFrame = null;
+    _lastVisibleFrameAt = null;
+      return;
+    }
+    if (now.difference(last).inMilliseconds > _skeletonHoldMs) {
+      _latestFrame = null;
+      _lastVisibleFrameAt = null;
+    }
   }
 
   bool _isPermissionError(CameraException e) =>
@@ -263,10 +303,25 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _startRecording() {
     _clipTimer?.cancel();
+    _clipTimer = null;
     _flow.startRecordingExample();
-    _clipTimer = Timer(_flow.clipDuration, () {
-      if (mounted) _flow.stopRecordingExample();
-    });
+    _clipTimer = Timer.periodic(const Duration(milliseconds: 100), _checkClip);
+  }
+
+  void _checkClip(Timer timer) {
+    final started = _flow.clipStartedAt;
+    final processed = _flow.liveProcessedFrameCount;
+    final minProcessed = _flow.liveMinProcessedFrameCount;
+    if (started == null || processed == null || minProcessed == null) return;
+    final elapsed = DateTime.now().difference(started);
+    final minDuration = _flow.clipDuration;
+    final maxWait = _flow.maxClipWait;
+    if ((elapsed >= minDuration && processed >= minProcessed) ||
+        elapsed >= maxWait) {
+      _clipTimer?.cancel();
+      _clipTimer = null;
+      _flow.stopRecordingExample();
+    }
   }
 
   void _cancelRecording() {
@@ -300,7 +355,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         learnedAt: DateTime.now(),
       );
     }
-    if (mounted) setState(() {});
+    _requestSetState();
   }
 
   void _restart() {
@@ -320,6 +375,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _learnedWrittenToProvider = false;
     ref.read(learnedCustomMovementProvider.notifier).state = null;
     _latestFrame = null;
+    _lastVisibleFrameAt = null;
     _ensureCameraStream();
     setState(() {});
   }
@@ -342,6 +398,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _learnedWrittenToProvider = false;
     ref.read(learnedCustomMovementProvider.notifier).state = null;
     _latestFrame = null;
+    _lastVisibleFrameAt = null;
     _stopCamera();
     setState(() {});
   }
@@ -349,6 +406,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   void _resetStartPose() {
     _flow.resetStartPose();
     _latestFrame = null;
+    _lastVisibleFrameAt = null;
     _ensureCameraStream();
     setState(() {});
   }
@@ -696,8 +754,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           children: [
             CameraPreview(controller),
             Positioned.fill(
-              child: CustomPaint(
-                painter: _PoseSkeletonPainter(frame: _latestFrame),
+              child: Transform.scale(
+                scaleX: _selectedCamera?.lensDirection ==
+                        CameraLensDirection.front
+                    ? -1.0
+                    : 1.0,
+                alignment: Alignment.center,
+                child: CustomPaint(
+                  painter: _PoseSkeletonPainter(frame: _latestFrame),
+                ),
               ),
             ),
             if (_cameras.length > 1)

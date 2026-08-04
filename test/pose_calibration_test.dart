@@ -515,6 +515,7 @@ void main() {
       }
 
       final start = now.add(const Duration(seconds: 1));
+      now = start;
       capture.startRecordingExample();
       for (var i = 0; i < 2; i++) {
         capture.addFrame(
@@ -522,7 +523,7 @@ void main() {
           start.add(Duration(milliseconds: 100 * i)),
         );
       }
-      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 200)));
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 150)));
       expect(capture.acceptedCount, 0);
       expect(capture.rejectedDemonstrations, isNotEmpty);
       expect(capture.message, contains('short'));
@@ -551,7 +552,7 @@ void main() {
       capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 600)));
       expect(capture.acceptedCount, 0);
       expect(capture.rejectedDemonstrations, isNotEmpty);
-      expect(capture.message, contains('too still'));
+      expect(capture.message, contains('did not move enough'));
     });
 
     test('name persists through restart', () {
@@ -565,7 +566,7 @@ void main() {
       expect(capture.stage, isNot(TeachMovementStage.name));
     });
 
-    test('resetToCapture keeps movement name and start pose', () {
+    test('resetToCapture keeps movement name and resets start pose', () {
       var now = DateTime.utc(2026, 1, 1);
       final capture = SingleSessionTeachingCapture(now: () => now);
       capture.setMovementName('Wave');
@@ -587,12 +588,11 @@ void main() {
       }
       capture.stopRecordingExampleAt(start.add(const Duration(seconds: 1)));
 
-      final startPose = capture.startPose;
-      expect(startPose, isNotNull);
+      expect(capture.startPose, isNotNull);
 
       capture.resetToCapture();
       expect(capture.movementName, 'Wave');
-      expect(capture.startPose, startPose);
+      expect(capture.startPose, isNull);
       expect(capture.acceptedDemonstrations, isEmpty);
       expect(capture.stage, TeachMovementStage.readyToRecord);
     });
@@ -634,7 +634,7 @@ void main() {
       expect(capture.movementName, 'Arms overhead');
     });
 
-    test('can clear examples and keep the name and start pose', () {
+    test('can clear examples and keep the name but reset start pose', () {
       var now = DateTime.utc(2026, 1, 1);
       final capture = SingleSessionTeachingCapture(now: () => now);
       capture.setMovementName('Arms overhead');
@@ -655,12 +655,12 @@ void main() {
       }
       capture.stopRecordingExampleAt(now.add(const Duration(milliseconds: 960)));
 
-      final startPose = capture.startPose;
+      expect(capture.startPose, isNotNull);
       expect(capture.acceptedCount, 1);
       capture.clearExamples();
       expect(capture.acceptedCount, 0);
       expect(capture.movementName, 'Arms overhead');
-      expect(capture.startPose, startPose);
+      expect(capture.startPose, isNull);
       expect(capture.stage, TeachMovementStage.readyToRecord);
     });
 
@@ -690,6 +690,61 @@ void main() {
       expect(capture.startPose, isNull);
       expect(capture.movementName, 'Arms overhead');
       expect(capture.stage, TeachMovementStage.readyToRecord);
+    });
+
+    test('too few processed frames shows a friendly message', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      now = start;
+      capture.startRecordingExample();
+      for (var i = 0; i < 2; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePose()),
+          start.add(Duration(milliseconds: 120 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(seconds: 1)));
+
+      expect(capture.acceptedCount, 0);
+      expect(capture.lastExampleRejected, isTrue);
+      expect(capture.message, contains('trouble'));
+    });
+
+    test('start pose is computed from the first valid frame window', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      final start = now.add(const Duration(seconds: 1));
+      now = start;
+      capture.startRecordingExample();
+      for (var i = 0; i < 4; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePose()),
+          start.add(Duration(milliseconds: 120 * i)),
+        );
+      }
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          start.add(Duration(milliseconds: 120 * (4 + i))),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(seconds: 1)));
+
+      expect(capture.startPose, isNotNull);
+      expect(capture.rejectedDemonstrations, isEmpty);
+      expect(capture.acceptedCount, 1);
     });
   });
 
@@ -968,7 +1023,7 @@ void main() {
 
       expect(capture.savedExampleCount, 0);
       expect(capture.lastExampleRejected, isTrue);
-      expect(capture.message, contains('hard to read'));
+      expect(capture.message, contains('couldn\'t read'));
     });
 
     test('three short waves make Learn movement available', () {
