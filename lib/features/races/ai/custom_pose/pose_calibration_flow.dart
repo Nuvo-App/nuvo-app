@@ -46,6 +46,8 @@ class SingleSessionTeachingCapture {
   final List<PoseDemonstration> _rejected = [];
   PoseDemonstrationCapture? _current;
   NormalizedPose? _startPose;
+  final List<NormalizedPose> _startPoseSamples = [];
+  bool _startPoseLocked = false;
   String _movementName = '';
   String _message = '';
   CustomPoseBuildResult? _buildResult;
@@ -83,6 +85,10 @@ class SingleSessionTeachingCapture {
   bool get isBuilding => _stage == TeachMovementStage.building;
   bool get isLearned => _stage == TeachMovementStage.learned;
   Duration get clipDuration => _clipDuration;
+  Duration get maxClipWait => _maxClipWait;
+  DateTime? get clipStartedAt => _clipStartedAt;
+  int? get liveProcessedFrameCount => _current?.processedFrameCount;
+  int? get liveMinProcessedFrameCount => _current?.minProcessedFrames;
   double get recordingProgress {
     if (_clipStartedAt == null) return 0.0;
     final elapsed =
@@ -115,6 +121,7 @@ class SingleSessionTeachingCapture {
   static const _staticSimilarityThreshold = 0.95;
   static const _bodyHysteresisFrames = 2;
   static const _clipDuration = Duration(seconds: 2);
+  static const _maxClipWait = Duration(seconds: 4);
 
   bool isBodyVisiblePose(NormalizedPose pose) => _isBodyVisible(pose);
 
@@ -204,8 +211,18 @@ class SingleSessionTeachingCapture {
 
     if (_stage == TeachMovementStage.recording) {
       _current?.addFrame(pose, now);
-      if (pose.isValid) {
-        _startPose ??= pose;
+      if (pose.isValid && !_startPoseLocked) {
+        _startPoseSamples.add(pose);
+        if (_startPoseSamples.length >= 2) {
+          try {
+            _startPose = const PoseAverager().average(_startPoseSamples);
+          } on PoseDataFormatException {
+            _startPose = _startPoseSamples.first;
+          }
+          _startPoseLocked = true;
+        } else if (_startPoseSamples.length == 1) {
+          _startPose = _startPoseSamples.first;
+        }
       }
       if (pose.isValid && _startPose != null) {
         final result = _startSimilarity.compare(_startPose!, pose);
@@ -221,6 +238,10 @@ class SingleSessionTeachingCapture {
       return;
     }
     _clipStartedAt = _now();
+    if (_startPose == null) {
+      _startPoseSamples.clear();
+      _startPoseLocked = false;
+    }
     final index = _accepted.length + _rejected.length + 1;
     _current = PoseDemonstrationCapture(
       index: index,
@@ -367,31 +388,31 @@ class SingleSessionTeachingCapture {
   }
 
   String _translatedRejection(String? reason) {
-    if (reason == null) return 'That one was too hard to read. Record it again.';
+    if (reason == null) return 'Nuvo had trouble reading that one. Record it again.';
     if (reason == 'too_short' || reason.endsWith('too_short_after_trimming')) {
       return 'That one was too short. Record it again.';
     }
     if (reason == 'too_long') return 'That one was too long. Keep it under 8 seconds.';
     if (reason == 'too_few_processed_frames') {
-      return 'That one was too short. Record it again.';
+      return 'Nuvo had trouble reading that one. Record it again.';
     }
     if (reason == 'static_capture') {
-      return 'That one was too still. Record it again.';
+      return 'That one did not move enough. Record it again.';
     }
     if (reason == 'low_valid_frame_ratio' ||
-        reason.endsWith('low_feature_coverage') ||
+        reason == 'low_feature_coverage' ||
         reason == 'low_shared_feature_coverage') {
-      return 'That one was too hard to read. Record it again.';
+      return 'Nuvo couldn\'t read that one. Record it again.';
     }
     if (reason == 'capture_interrupted') {
-      return 'That one was too hard to read. Record it again.';
+      return 'Nuvo lost track. Record that one again.';
     }
-    return 'That one was too hard to read. Record it again.';
+    return 'Nuvo had trouble reading that one. Record it again.';
   }
 
   String _translatedFailure(String? reason) {
     if (reason != null && reason.contains('static_capture')) {
-      return 'That one was too still. Record it again.';
+      return 'That one did not move enough. Record it again.';
     }
     return switch (reason) {
       'no_active_features' => 'That one was too hard to read. Record it again.',
@@ -409,6 +430,14 @@ class SingleSessionTeachingCapture {
 
   void removeLastAccepted() {
     if (_accepted.isNotEmpty) _accepted.removeLast();
+    if (_accepted.isNotEmpty) {
+      _startPose = _accepted.first.frames.firstOrNull?.pose;
+      _startPoseLocked = true;
+    } else {
+      _startPose = null;
+      _startPoseSamples.clear();
+      _startPoseLocked = false;
+    }
     _buildResult = null;
     _verifierSpec = null;
     _lastBuildFailure = null;
@@ -419,6 +448,9 @@ class SingleSessionTeachingCapture {
   }
 
   void clearExamples() {
+    _startPose = null;
+    _startPoseSamples.clear();
+    _startPoseLocked = false;
     _accepted.clear();
     _rejected.clear();
     _current = null;
@@ -434,6 +466,8 @@ class SingleSessionTeachingCapture {
 
   void resetStartPose() {
     _startPose = null;
+    _startPoseSamples.clear();
+    _startPoseLocked = false;
     _accepted.clear();
     _rejected.clear();
     _current = null;
@@ -446,6 +480,9 @@ class SingleSessionTeachingCapture {
   }
 
   void restart() {
+    _startPose = null;
+    _startPoseSamples.clear();
+    _startPoseLocked = false;
     _accepted.clear();
     _rejected.clear();
     _current = null;
@@ -465,6 +502,8 @@ class SingleSessionTeachingCapture {
   void resetToName() {
     _movementName = '';
     _startPose = null;
+    _startPoseSamples.clear();
+    _startPoseLocked = false;
     _accepted.clear();
     _rejected.clear();
     _current = null;

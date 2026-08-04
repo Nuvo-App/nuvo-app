@@ -29,6 +29,7 @@ class PoseDemonstrationCapture {
 
   bool get isRecording => _startedAt != null && !_interrupted;
   int get processedFrameCount => _processedFrameCount;
+  int get minProcessedFrameCount => minProcessedFrames;
   int get storedFrameCount => _frames.length;
 
   void start(DateTime now) {
