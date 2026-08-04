@@ -42,7 +42,9 @@ class SingleSessionTeachingCapture {
   final CustomPoseSequenceBuilder _builder;
   final Duration buildDelay;
 
-  final _stableCapture = StablePoseCapture();
+  final _stableCapture = StablePoseCapture(
+    lowCoverageMessage: 'Keep your upper body in frame.',
+  );
   final List<PoseDemonstration> _accepted = [];
   final List<PoseDemonstration> _rejected = [];
   PoseDemonstrationCapture? _current;
@@ -72,6 +74,8 @@ class SingleSessionTeachingCapture {
     _message = value;
     _notify();
   }
+
+  String get debugBodyInfo => _debugBodyInfo;
 
   int get acceptedCount => _accepted.length;
   int get savedExampleCount => _accepted.length;
@@ -113,28 +117,97 @@ class SingleSessionTeachingCapture {
   static const _maxAccepted = 3;
   static const _buildDelayMs = 600;
   static const _staticSimilarityThreshold = 0.95;
-  static const _minVisibleLandmarks = 10;
-  static const _minFeatureCoverage = 0.45;
+  static const _bodyHysteresisFrames = 2;
   static const _clipDuration = Duration(seconds: 2);
 
   bool isBodyVisiblePose(NormalizedPose pose) => _isBodyVisible(pose);
 
-  bool _isBodyVisible(NormalizedPose pose) {
-    if (!pose.isValid) return false;
-    if (pose.validLandmarkCount < _minVisibleLandmarks) return false;
-    if (pose.features.values.isEmpty) return false;
-    return pose.validFeatureCount / pose.features.values.length >=
-        _minFeatureCoverage;
+  String _bodyGateReason = '';
+  int _consecutiveVisible = 0;
+  int _consecutiveInvisible = 0;
+  String _debugBodyInfo = '';
+
+  bool _isBodyVisible(NormalizedPose pose, {StringBuffer? reason}) {
+    if (!pose.isValid) {
+      reason?.write(pose.invalidReason ?? 'pose invalid');
+      return false;
+    }
+    if (pose.validLandmarkCount < 4) {
+      reason?.write('not enough landmarks');
+      return false;
+    }
+
+    final hasLeftShoulder = _hasLandmark(pose, 'leftShoulder');
+    final hasRightShoulder = _hasLandmark(pose, 'rightShoulder');
+    final hasBothShoulders = hasLeftShoulder && hasRightShoulder;
+
+    final hasLeftArm = hasLeftShoulder &&
+        _hasLandmark(pose, 'leftElbow') &&
+        _hasLandmark(pose, 'leftWrist');
+    final hasRightArm = hasRightShoulder &&
+        _hasLandmark(pose, 'rightElbow') &&
+        _hasLandmark(pose, 'rightWrist');
+
+    final hasCore = _hasLandmark(pose, 'leftHip') &&
+        _hasLandmark(pose, 'rightHip');
+
+    final upperBody = hasBothShoulders && (hasLeftArm || hasRightArm);
+    final coreBody = hasBothShoulders && hasCore;
+
+    if (upperBody || coreBody) return true;
+
+    if (!hasBothShoulders) {
+      reason?.write('both shoulders not visible');
+    } else if (!hasLeftArm && !hasRightArm && !hasCore) {
+      reason?.write('needs one full arm or both hips');
+    }
+    return false;
+  }
+
+  bool _hasLandmark(NormalizedPose pose, String id) =>
+      pose.landmarks[id]?.valid ?? false;
+
+  void _updateBodyVisibility(NormalizedPose pose, bool rawVisible, String reason) {
+    _bodyGateReason = reason;
+
+    if (rawVisible) {
+      _consecutiveVisible++;
+      _consecutiveInvisible = 0;
+    } else {
+      _consecutiveInvisible++;
+      _consecutiveVisible = 0;
+    }
+
+    if (_bodyVisible) {
+      if (_consecutiveInvisible >= _bodyHysteresisFrames) {
+        _bodyVisible = false;
+      }
+    } else {
+      if (_consecutiveVisible >= _bodyHysteresisFrames) {
+        _bodyVisible = true;
+      }
+    }
+
+    final coverage = pose.features.values.isEmpty
+        ? 0.0
+        : pose.validFeatureCount / pose.features.values.length;
+    _debugBodyInfo =
+        'valid: ${pose.validLandmarkCount} | '
+        'coverage: ${coverage.toStringAsFixed(2)} | '
+        'shoulders: ${(_hasLandmark(pose, 'leftShoulder') && _hasLandmark(pose, 'rightShoulder'))} | '
+        'elbows: ${(_hasLandmark(pose, 'leftElbow') && _hasLandmark(pose, 'rightElbow'))} | '
+        'wrists: ${(_hasLandmark(pose, 'leftWrist') && _hasLandmark(pose, 'rightWrist'))} | '
+        'hips: ${(_hasLandmark(pose, 'leftHip') && _hasLandmark(pose, 'rightHip'))} | '
+        'gate: $_bodyVisible (raw $rawVisible) | '
+        'reason: $_bodyGateReason';
   }
 
   bool _isBodyPrompt(String value) {
     return value == _bodyPromptMessage() ||
-        value == 'Nuvo lost track. Hold still where Nuvo can see you.' ||
-        value == 'Step back so your full body is visible.';
+        value == 'Keep your upper body in frame.';
   }
 
-  String _bodyPromptMessage() =>
-      'Nuvo needs to see your body. Step into frame.';
+  String _bodyPromptMessage() => 'Step into frame';
 
   String? setMovementName(String value) {
     final error = validateMovementName(value);
@@ -158,8 +231,9 @@ class SingleSessionTeachingCapture {
   }
 
   void addFrame(NormalizedPose pose, DateTime now) {
-    final visible = _isBodyVisible(pose);
-    _bodyVisible = visible;
+    final reason = StringBuffer();
+    final rawVisible = _isBodyVisible(pose, reason: reason);
+    _updateBodyVisibility(pose, rawVisible, reason.toString());
 
     if (_stage == TeachMovementStage.startPose) {
       _addStartPoseFrame(pose, now);
@@ -173,17 +247,17 @@ class SingleSessionTeachingCapture {
     }
 
     if (_stage == TeachMovementStage.recording) {
-      if (visible) {
+      if (rawVisible) {
         _current?.addFrame(pose, now);
         if (_startPose != null) {
           final result = _startSimilarity.compare(_startPose!, pose);
           _lastSimilarity = result.isValid ? result.similarity : 0.0;
         }
-        if (_message == 'Nuvo lost track. Hold still where Nuvo can see you.') {
+        if (_message == 'Keep your upper body in frame.') {
           _message = 'Recording…';
         }
       } else {
-        _message = 'Nuvo lost track. Hold still where Nuvo can see you.';
+        _message = 'Keep your upper body in frame.';
       }
       _notify();
       return;
@@ -374,10 +448,12 @@ class SingleSessionTeachingCapture {
     if (reason == 'static_capture') {
       return 'That one didn\'t show a clear movement. Record it again.';
     }
-    if (reason == 'low_valid_frame_ratio' ||
-        reason.endsWith('low_feature_coverage') ||
+    if (reason == 'low_valid_frame_ratio') {
+      return 'Nuvo lost track. Record that one again.';
+    }
+    if (reason.endsWith('low_feature_coverage') ||
         reason == 'low_shared_feature_coverage') {
-      return 'Step back so your full body is visible.';
+      return 'Keep your upper body in frame.';
     }
     if (reason == 'capture_interrupted') {
       return 'We didn\'t get a clear example. Try recording again.';
@@ -453,6 +529,9 @@ class SingleSessionTeachingCapture {
     _lastRejection = null;
     _lastBuildFailure = null;
     _lastSimilarity = null;
+    _bodyVisible = false;
+    _consecutiveVisible = 0;
+    _consecutiveInvisible = 0;
     _stage = _startPose == null
         ? TeachMovementStage.startPose
         : TeachMovementStage.readyToRecord;
@@ -474,6 +553,9 @@ class SingleSessionTeachingCapture {
     _lastRejection = null;
     _lastBuildFailure = null;
     _lastSimilarity = null;
+    _bodyVisible = false;
+    _consecutiveVisible = 0;
+    _consecutiveInvisible = 0;
     _stage = TeachMovementStage.name;
     _message = '';
     _notify();
@@ -496,11 +578,15 @@ class SingleSessionTeachingCapture {
   /// null, etc.) so stale body-visible state is not shown to the user.
   void markFrameMissing() {
     _bodyVisible = false;
+    _consecutiveVisible = 0;
+    _consecutiveInvisible = 0;
+    _bodyGateReason = 'no frame';
     _lastSimilarity = null;
+    _debugBodyInfo = 'gate: false (no frame)';
     if (_stage == TeachMovementStage.readyToRecord) {
       _message = _bodyPromptMessage();
     } else if (_stage == TeachMovementStage.recording) {
-      _message = 'Nuvo lost track. Hold still where Nuvo can see you.';
+      _message = 'Keep your upper body in frame.';
     }
     _notify();
   }

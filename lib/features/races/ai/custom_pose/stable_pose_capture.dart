@@ -26,17 +26,19 @@ class StablePoseCaptureUpdate {
 
 class StablePoseCapture {
   StablePoseCapture({
-    this.requiredStableFrames = 8,
-    this.timeout = const Duration(milliseconds: 2500),
-    this.minFeatureCoverage = 0.55,
-    this.stabilityThreshold = 0.92,
-    this._similarity = const PoseSimilarity(minValidFeatureRatio: 0.55),
+    this.requiredStableFrames = 6,
+    this.timeout = const Duration(milliseconds: 5000),
+    this.minFeatureCoverage = 0.35,
+    this.lowCoverageMessage = 'Step back so your full body is visible.',
+    this.stabilityThreshold = 0.88,
+    this._similarity = const PoseSimilarity(minValidFeatureRatio: 0.35),
     this._averager = const PoseAverager(minPoseCount: 4),
   });
 
   final int requiredStableFrames;
   final Duration timeout;
   final double minFeatureCoverage;
+  final String lowCoverageMessage;
   final double stabilityThreshold;
   final PoseSimilarity _similarity;
   final PoseAverager _averager;
@@ -60,7 +62,7 @@ class StablePoseCapture {
         status: StablePoseCaptureStatus.collecting,
         stableFrameCount: 0,
         elapsed: elapsed,
-        message: 'Step back so your full body is visible.',
+        message: lowCoverageMessage,
       );
     }
     if (_stableWindow.isNotEmpty) {
@@ -93,7 +95,7 @@ class StablePoseCapture {
         status: StablePoseCaptureStatus.captured,
         stableFrameCount: _stableWindow.length,
         elapsed: elapsed,
-        message: 'Start pose captured.',
+        message: 'Starting pose found.',
         pose: averaged,
         stability: 1,
       );
