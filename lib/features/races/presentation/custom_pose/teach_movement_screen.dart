@@ -59,6 +59,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   NuvoPoseFrame? _latestFrame;
   static const int _testTarget = 1;
   bool _learnedWrittenToProvider = false;
+  Timer? _clipTimer;
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
@@ -87,6 +88,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _stopCamera();
     _poseDetector.dispose();
     _customRuntime?.dispose();
+    _clipTimer?.cancel();
+    _clipTimer = null;
     super.dispose();
   }
 
@@ -226,6 +229,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _cameraController = null;
     _cameraReady = false;
     _latestFrame = null;
+    _clipTimer?.cancel();
+    _clipTimer = null;
     _flow.markFrameMissing();
   }
 
@@ -245,6 +250,20 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       e.code == 'CameraAccessDeniedWithoutPrompt' ||
       e.code == 'CameraAccessRestricted';
 
+  void _startRecording() {
+    _clipTimer?.cancel();
+    _flow.startRecordingExample();
+    _clipTimer = Timer(_flow.clipDuration, () {
+      if (mounted) _flow.stopRecordingExample();
+    });
+  }
+
+  void _cancelRecording() {
+    _clipTimer?.cancel();
+    _clipTimer = null;
+    _flow.cancelRecordingExample();
+  }
+
   Future<void> _submitName() async {
     final error = _flow.setMovementName(_nameController.text);
     if (error != null) {
@@ -258,6 +277,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _onFlowChanged() {
+    if (_flow.stage != TeachMovementStage.recording) {
+      _clipTimer?.cancel();
+      _clipTimer = null;
+    }
     final spec = _effectiveSpec;
     if (spec != null && !_learnedWrittenToProvider) {
       _learnedWrittenToProvider = true;
@@ -533,6 +556,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _progressDots(),
         const SizedBox(height: 8),
         _progressText(),
+        const SizedBox(height: 16),
+        _recordingProgress(),
         const SizedBox(height: 20),
         _cameraActionButton(),
         const SizedBox(height: 12),
@@ -701,9 +726,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     if (stage == TeachMovementStage.recording) {
       return NuvoPrimaryButton(
-        label: 'Stop',
+        label: 'Cancel',
         expand: true,
-        onPressed: _flow.stopRecordingExample,
+        onPressed: _cancelRecording,
       );
     }
     if (stage == TeachMovementStage.building) {
@@ -715,7 +740,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         return NuvoPrimaryButton(
           label: 'Record again',
           expand: true,
-          onPressed: canRecord ? _flow.startRecordingExample : null,
+          onPressed: canRecord ? _startRecording : null,
         );
       }
       final count = _flow.savedExampleCount;
@@ -723,7 +748,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         return NuvoPrimaryButton(
           label: 'Record example ${count + 1}',
           expand: true,
-          onPressed: canRecord ? _flow.startRecordingExample : null,
+          onPressed: canRecord ? _startRecording : null,
         );
       }
       return NuvoPrimaryButton(
@@ -739,6 +764,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  Widget _recordingProgress() {
+    if (_flow.stage != TeachMovementStage.recording) {
+      return const SizedBox.shrink();
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(NuvoRadii.md),
+      child: LinearProgressIndicator(
+        value: _flow.recordingProgress,
+        minHeight: 6,
+        backgroundColor: NuvoColors.navy,
+        valueColor: const AlwaysStoppedAnimation<Color>(NuvoColors.white),
+      ),
+    );
+  }
+
   Widget _secondaryActionButton() {
     if (_flow.stage != TeachMovementStage.readyToRecord) {
       return const SizedBox.shrink();
@@ -749,7 +789,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         label: 'Record one more',
         expand: true,
         onPressed: (_cameraReady && _flow.canRecordNextExample)
-            ? _flow.startRecordingExample
+            ? _startRecording
             : null,
       );
     } else {

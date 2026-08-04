@@ -56,6 +56,7 @@ class SingleSessionTeachingCapture {
   String? _lastRejection;
   String? _lastBuildFailure;
   bool _bodyVisible = false;
+  DateTime? _clipStartedAt;
 
   TeachMovementStage get stage => _stage;
   String get movementName => _movementName;
@@ -80,6 +81,13 @@ class SingleSessionTeachingCapture {
   bool get isReadyToRecord => _stage == TeachMovementStage.readyToRecord;
   bool get isBuilding => _stage == TeachMovementStage.building;
   bool get isLearned => _stage == TeachMovementStage.learned;
+  Duration get clipDuration => _clipDuration;
+  double get recordingProgress {
+    if (_clipStartedAt == null) return 0.0;
+    final elapsed =
+        _now().difference(_clipStartedAt!).inMilliseconds;
+    return (elapsed / _clipDuration.inMilliseconds).clamp(0.0, 1.0);
+  }
   bool get bodyVisible => _bodyVisible;
   bool get canLearn =>
       _accepted.length >= _minAccepted && _stage != TeachMovementStage.building;
@@ -107,6 +115,7 @@ class SingleSessionTeachingCapture {
   static const _staticSimilarityThreshold = 0.98;
   static const _minVisibleLandmarks = 10;
   static const _minFeatureCoverage = 0.45;
+  static const _clipDuration = Duration(seconds: 2);
 
   bool isBodyVisiblePose(NormalizedPose pose) => _isBodyVisible(pose);
 
@@ -208,21 +217,34 @@ class SingleSessionTeachingCapture {
         !_bodyVisible) {
       return;
     }
+    _clipStartedAt = _now();
+    final index = _accepted.length + _rejected.length + 1;
     _current = PoseDemonstrationCapture(
-      index: _accepted.length + _rejected.length + 1,
+      index: index,
       minDuration: const Duration(milliseconds: 250),
       minProcessedFrames: 4,
       maxDuration: const Duration(seconds: 8),
-    )..start(_now());
+    )..start(_clipStartedAt!);
     _stage = TeachMovementStage.recording;
-    _message = 'Recording…';
+    _message = 'Recording example $index…';
     _notify();
   }
 
   void stopRecordingExample() => stopRecordingExampleAt(_now());
 
+  void cancelRecordingExample() {
+    if (_stage != TeachMovementStage.recording) return;
+    _clipStartedAt = null;
+    _current = null;
+    _lastRejection = null;
+    _stage = TeachMovementStage.readyToRecord;
+    _message = _exampleInstruction(_accepted.length);
+    _notify();
+  }
+
   void stopRecordingExampleAt(DateTime at) {
     if (_stage != TeachMovementStage.recording || _current == null) return;
+    _clipStartedAt = null;
     final demo = _current!.finish(at);
     _current = null;
     _stage = TeachMovementStage.readyToRecord;
@@ -459,9 +481,10 @@ class SingleSessionTeachingCapture {
   void resetToCapture() => restart();
 
   void markInterrupted() {
+    _clipStartedAt = null;
     _current?.interrupt();
+    _current = null;
     if (_stage == TeachMovementStage.recording) {
-      _current = null;
       _stage = TeachMovementStage.readyToRecord;
       _message = 'Recording stopped. Try again.';
       _notify();
