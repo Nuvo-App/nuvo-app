@@ -1,5 +1,6 @@
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
 import 'race_api.dart';
 import 'race_models.dart';
@@ -84,6 +85,21 @@ class RaceRepository {
       recurrence: recurrence,
       targetUnit: targetUnit,
       proofMode: proofMode,
+    ),
+  );
+
+  Future<Race> createCustomRace({
+    required String title,
+    required int targetValue,
+    required String customActivityName,
+    required CustomPoseVerifierSpec verifierSpec,
+  }) => _withRefresh(
+    (token) => _api.createCustomRace(
+      token,
+      title: title,
+      targetValue: targetValue,
+      customActivityName: customActivityName,
+      verifierSpec: verifierSpec,
     ),
   );
 

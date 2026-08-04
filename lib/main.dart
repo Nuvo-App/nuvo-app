@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +8,10 @@ import 'core/theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kDebugMode) {
+    debugPrint('NUVO DEBUG BUILD MARKER: stage6-custom-verifier-live');
+    debugPrint('NUVO DEBUG ENTRYPOINT: lib/main.dart');
+  }
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   // Dark status bar icons globally — icy-white backgrounds need this.
   SystemChrome.setSystemUIOverlayStyle(AppTheme.overlay);

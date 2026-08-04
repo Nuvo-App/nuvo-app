@@ -18,8 +18,8 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../ai/camera_image_converter.dart';
-import '../ai/motion_validators.dart';
 import '../ai/pose_detector_service.dart';
+import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity_catalog.dart';
@@ -39,10 +39,8 @@ class AiMotionProofScreen extends ConsumerStatefulWidget {
 class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     with WidgetsBindingObserver {
   final _poseDetector = PoseDetectorService();
-  final NuvoVerifyEngine _engine = NuvoVerifyEngine(
-    movement: supportedMovementDefinitions.first,
-    target: 1,
-  );
+  final _runtimeResolver = const VerifierRuntimeResolver();
+  VerifierRuntime _runtime = PresetPoseVerifierRuntime.defaultRuntime();
 
   AiMotionActivity _activity = AiMotionActivity.pushUps;
   String _metric = 'reps';
@@ -82,6 +80,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         eligibility,
         routeAction: 'ai_motion_screen_loaded',
       );
+      if (!eligibility.isCameraVerifiable) {
+        setState(() {
+          _status = AiMotionProofStatus.unsupportedMovement;
+          _message = eligibility.unsupportedMessage;
+        });
+        return;
+      }
       final raceTarget = race.targetValue;
       final alreadyDone = myPart?.progressValue ?? 0;
       final target = race.format == 'first_to_goal'
@@ -89,23 +94,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ? (raceTarget - alreadyDone).clamp(1, raceTarget)
                 : eligibility.movementDefinition?.defaultTarget ?? 1)
           : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
-      final definition = _movementDefinitionForEligibility(eligibility);
-      if (definition == null) {
+      final resolution = _runtimeResolver.resolve(eligibility: eligibility);
+      if (!resolution.canCreateRuntime) {
         setState(() {
           _status = AiMotionProofStatus.unsupportedMovement;
           _message = eligibility.unsupportedMessage;
         });
         return;
       }
+      final runtime = resolution.createRuntime(target: target);
       setState(() {
-        _activity = definition.activity;
+        _runtime = runtime;
+        _activity = runtime.movement.activity;
         _metric =
             race.metric ??
             eligibility.movementDefinition?.metric.backendValue ??
             'reps';
         _raceTotalBefore = myPart?.progressValue ?? 0;
         _raceTargetValue = race.targetValue;
-        _engine.selectMovement(definition, target);
       });
       // Skip redundant pre-camera panel — go straight to camera
       _initializeCamera();
@@ -115,19 +121,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _message = 'Race details could not load. Start when ready.';
       });
     }
-  }
-
-  MovementDefinition? _movementDefinitionForEligibility(
-    CameraVerificationEligibility eligibility,
-  ) {
-    final activity = eligibility.movementDefinition;
-    if (!eligibility.isCameraVerifiable || activity == null) return null;
-    for (final definition in supportedMovementDefinitions) {
-      if (definition.activity.backendValue == activity.type.backendValue) {
-        return definition;
-      }
-    }
-    return null;
   }
 
   @override
@@ -235,12 +228,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
-    _engine.start();
+    _runtime.start();
     _elapsed = Duration.zero;
     _debugFrameCount = 0;
     _debugLog(
-      'verificationStarted movement=${_engine.movement.type.name} '
-      'mode=camera target=${_engine.targetValue}',
+      'verificationStarted movement=${_runtime.movement.type.name} '
+      'mode=camera target=${_runtime.targetValue}',
     );
     setState(() {
       _status = AiMotionProofStatus.recording;
@@ -282,7 +275,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       );
       if (_disposed || _status != AiMotionProofStatus.recording) return;
       if (frame == null) return;
-      final output = _engine.update(frame);
+      final output = _runtime.update(frame);
       _debugFrameCount++;
       if (_debugFrameCount == 1 || _debugFrameCount % 15 == 0) {
         _debugLog(
@@ -319,13 +312,22 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await _stopImageStream();
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
-    final result = _engine.finish();
+    final verifierResult = _runtime.finish();
+    final result = verifierResult.aiMotionResult;
+    if (result == null) {
+      if (!mounted) return;
+      setState(() {
+        _status = AiMotionProofStatus.unsupportedMovement;
+        _message = 'This movement cannot be submitted as proof yet.';
+      });
+      return;
+    }
     _debugLog(
-      'verificationFinished movement=${_engine.movement.type.name} '
+      'verificationFinished movement=${_runtime.movement.type.name} '
       'value=${result.detectedReps} '
       'confidence=${result.confidence.toStringAsFixed(2)} '
       'status=${result.verificationStatus} '
-      'failedRule=${_engine.failedRuleReason.isEmpty ? 'none' : _engine.failedRuleReason}',
+      'failedRule=${_runtime.failedRuleReason.isEmpty ? 'none' : _runtime.failedRuleReason}',
     );
     if (!mounted) return;
     setState(() {
@@ -448,9 +450,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _status == AiMotionProofStatus.submitting ||
       _status == AiMotionProofStatus.submitted;
 
-  int get _targetValue => _engine.targetValue;
+  int get _targetValue => _runtime.targetValue;
 
-  int get _currentValue => _engine.currentValue;
+  int get _currentValue => _runtime.currentValue;
 
   String get _targetLabel {
     final definition = motionActivityForBackendValue(_activity.backendValue);
@@ -1007,7 +1009,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Widget _visibilityPill() {
     final recording = _status == AiMotionProofStatus.recording;
-    final visible = _engine.fullBodyVisible;
+    final visible = _runtime.fullBodyVisible;
     final targetReached = _currentValue >= _targetValue;
 
     final label = recording && targetReached

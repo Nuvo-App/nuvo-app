@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart';
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
 import 'race_models.dart';
 
@@ -172,6 +173,33 @@ class RaceApi {
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;
     final json = await _post('/races', token, body);
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  Future<Race> createCustomRace(
+    String token, {
+    required String title,
+    required int targetValue,
+    required String customActivityName,
+    required CustomPoseVerifierSpec verifierSpec,
+  }) async {
+    final json = await _post('/races', token, {
+      'title': title,
+      'goalType': 'first_to_goal',
+      'targetValue': targetValue,
+      'unit': 'reps',
+      'targetUnit': 'reps',
+      'metric': 'reps',
+      'proofRequirement': 'ai_check',
+      'proofReviewMode': 'auto_accept',
+      'proofMode': 'ai_check',
+      'verificationMethod': 'ai',
+      'visibility': 'private',
+      'verifierType': customPoseVerifierType,
+      'verifierVersion': customPoseVerifierSpecSchemaVersion,
+      'customActivityName': customActivityName,
+      'verifierSpec': verifierSpec.toJson(),
+    });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 

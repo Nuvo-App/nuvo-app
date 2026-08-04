@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../data/ai_motion_models.dart';
 import '../data/race_api.dart';
 import '../data/race_models.dart';
@@ -84,6 +85,24 @@ class RaceController extends StateNotifier<RaceState> {
       recurrence: recurrence,
       targetUnit: targetUnit,
       proofMode: proofMode,
+    );
+    if (mounted) {
+      state = state.copyWith(races: [race, ...state.races]);
+    }
+    return race;
+  }
+
+  Future<Race> createCustomRace({
+    required String title,
+    required int targetValue,
+    required String customActivityName,
+    required CustomPoseVerifierSpec verifierSpec,
+  }) async {
+    final race = await _repo.createCustomRace(
+      title: title,
+      targetValue: targetValue,
+      customActivityName: customActivityName,
+      verifierSpec: verifierSpec,
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);

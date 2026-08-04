@@ -147,6 +147,27 @@ void main() {
       expect(raceProgressLabel(race, me), '12 reps');
     });
 
+    test('custom verifier race uses custom movement name and reps target', () {
+      const race = Race(
+        id: 'race-custom',
+        creatorId: 'user-a',
+        title: 'Office ladder',
+        goalType: 'first_to_goal',
+        targetValue: 10,
+        unit: 'reps',
+        metric: 'reps',
+        verifierType: 'custom_pose_sequence',
+        customActivityName: 'Overhead knee touch',
+        status: 'active',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      );
+
+      expect(raceActivityDefinition(race), isNull);
+      expect(raceActivityTitle(race), 'Overhead knee touch');
+      expect(raceTargetLabel(race), '10 reps');
+    });
+
     test('null participant returns default progress label', () {
       final race = makeRace(status: 'active');
       expect(raceProgressLabel(race, null), 'Submit your first proof');
@@ -329,5 +350,30 @@ void main() {
         expect(race.activityId, 'push_ups');
       },
     );
+
+    test('Race.fromJson keeps custom verifier decode failures explicit', () {
+      final race = Race.fromJson({
+        'id': 'custom-1',
+        'creatorId': 'user-a',
+        'title': 'Office ladder',
+        'goalType': 'first_to_goal',
+        'targetValue': 10,
+        'unit': 'reps',
+        'metric': 'reps',
+        'verificationMethod': 'ai',
+        'verifierType': 'custom_pose_sequence',
+        'verifierVersion': 1,
+        'customActivityName': 'Overhead knee touch',
+        'verifierSpec': {'version': 1},
+        'status': 'active',
+        'createdAt': '2026-01-01T00:00:00Z',
+        'updatedAt': '2026-01-01T00:00:00Z',
+      });
+
+      expect(race.isAiMotionRace, isTrue);
+      expect(race.isSupportedAiMotionRace, isFalse);
+      expect(race.customVerifierSpec, isNull);
+      expect(race.verifierInvalidReason, isNotNull);
+    });
   });
 }

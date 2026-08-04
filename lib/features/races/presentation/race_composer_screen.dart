@@ -662,6 +662,13 @@ class _ActivityPage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
+          const SizedBox(height: 6),
+          NuvoSecondaryButton(
+            label: 'Teach a movement',
+            icon: Icons.video_camera_front_rounded,
+            expand: true,
+            onPressed: () => context.push('/internal/teach-movement'),
+          ),
         ],
       ),
     );
