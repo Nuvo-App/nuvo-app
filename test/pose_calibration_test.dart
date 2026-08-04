@@ -791,6 +791,187 @@ void main() {
       expect(capture.lastExampleRejected, isTrue);
       expect(capture.message, contains('Record it again'));
     });
+
+    test('body not visible blocks recording and shows step prompt', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      expect(capture.bodyVisible, isTrue);
+      expect(capture.canRecordNextExample, isTrue);
+
+      for (var i = 0; i < 5; i++) {
+        capture.addFrame(
+          normalizer.normalize(
+            neutralStandingPose(
+              likelihoods: const {
+                'nose': 0.0,
+                'leftShoulder': 0.0,
+                'rightShoulder': 0.0,
+                'leftElbow': 0.0,
+                'rightElbow': 0.0,
+                'leftWrist': 0.0,
+                'rightWrist': 0.0,
+                'leftHip': 0.0,
+                'rightHip': 0.0,
+                'leftKnee': 0.0,
+                'rightKnee': 0.0,
+                'leftAnkle': 0.0,
+                'rightAnkle': 0.0,
+              },
+            ),
+          ),
+          now.add(Duration(seconds: 1, milliseconds: 100 * i)),
+        );
+      }
+
+      expect(capture.bodyVisible, isFalse);
+      expect(capture.canRecordNextExample, isFalse);
+      expect(capture.message, contains('Step into frame'));
+
+      capture.startRecordingExample();
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+    });
+
+    test('partial body is not treated as a visible body', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(
+            neutralStandingPose(
+              missing: const {
+                'leftShoulder',
+                'rightShoulder',
+                'leftElbow',
+                'rightElbow',
+                'leftWrist',
+                'rightWrist',
+                'leftHip',
+                'rightHip',
+              },
+            ),
+          ),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      expect(capture.stage, isNot(TeachMovementStage.readyToRecord));
+      expect(capture.bodyVisible, isFalse);
+    });
+
+    test('short valid wave-style example is accepted', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 5; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePose(dx: 0.01 * i)),
+          start.add(Duration(milliseconds: 50 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 250)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.lastExampleRejected, isFalse);
+      expect(capture.canLearn, isFalse);
+    });
+
+    test('recording with no valid pose frames is rejected', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      for (var i = 0; i < 10; i++) {
+        capture.addFrame(
+          normalizer.normalize(
+            neutralStandingPose(
+              likelihoods: const {
+                'nose': 0.0,
+                'leftShoulder': 0.0,
+                'rightShoulder': 0.0,
+                'leftElbow': 0.0,
+                'rightElbow': 0.0,
+                'leftWrist': 0.0,
+                'rightWrist': 0.0,
+                'leftHip': 0.0,
+                'rightHip': 0.0,
+                'leftKnee': 0.0,
+                'rightKnee': 0.0,
+                'leftAnkle': 0.0,
+                'rightAnkle': 0.0,
+              },
+            ),
+          ),
+          start.add(Duration(milliseconds: 40 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 400)));
+
+      expect(capture.savedExampleCount, 0);
+      expect(capture.lastExampleRejected, isTrue);
+      expect(capture.message, contains('short'));
+    });
+
+    test('two short waves make Learn movement available', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+
+      const repGap = Duration(milliseconds: 1500);
+      for (var rep = 0; rep < 2; rep++) {
+        final repStart = now.add(
+          Duration(seconds: 1, milliseconds: rep * repGap.inMilliseconds),
+        );
+        capture.startRecordingExample();
+        for (var i = 0; i < 5; i++) {
+          capture.addFrame(
+            normalizer.normalize(wavePose(dx: 0.01 * i)),
+            repStart.add(Duration(milliseconds: 50 * i)),
+          );
+        }
+        capture.stopRecordingExampleAt(
+            repStart.add(const Duration(milliseconds: 250)));
+      }
+
+      expect(capture.savedExampleCount, 2);
+      expect(capture.canLearn, isTrue);
+    });
   });
 }
 

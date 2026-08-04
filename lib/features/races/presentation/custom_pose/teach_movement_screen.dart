@@ -176,9 +176,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         deviceOrientation: orientation,
       );
       if (!mounted || _disposed || frame == null) return;
-      _latestFrame = frame;
       final pose = _normalizer.normalize(frame);
       _flow.addFrame(pose, frame.createdAt);
+      _latestFrame = _flow.isBodyVisiblePose(pose) ? frame : null;
       if (_testingVerifier) {
         final update = _customRuntime?.update(frame);
         _customUpdate = update?.customPoseUpdate;
@@ -540,7 +540,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       TeachMovementStage.setup => ('Ready to start', NuvoColors.muted),
       TeachMovementStage.countdown => ('Get ready', NuvoColors.muted),
       TeachMovementStage.startPose => ('Waiting for start', NuvoColors.muted),
-      TeachMovementStage.readyToRecord => ('Ready', NuvoColors.white),
+      TeachMovementStage.readyToRecord => (
+          _flow.bodyVisible ? 'Ready' : 'Step into frame',
+          _flow.bodyVisible ? NuvoColors.white : NuvoColors.danger
+        ),
       TeachMovementStage.recording => ('Recording', NuvoColors.white),
       TeachMovementStage.building => ('Learning', NuvoColors.muted),
       _ => ('', NuvoColors.muted),
@@ -697,11 +700,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (stage == TeachMovementStage.readyToRecord) {
+      final canRecord = _cameraReady && _flow.canRecordNextExample;
       if (_flow.lastExampleRejected) {
         return NuvoPrimaryButton(
           label: 'Record again',
           expand: true,
-          onPressed: _cameraReady ? _flow.startRecordingExample : null,
+          onPressed: canRecord ? _flow.startRecordingExample : null,
         );
       }
       final count = _flow.savedExampleCount;
@@ -709,7 +713,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         return NuvoPrimaryButton(
           label: 'Record example ${count + 1}',
           expand: true,
-          onPressed: _cameraReady ? _flow.startRecordingExample : null,
+          onPressed: canRecord ? _flow.startRecordingExample : null,
         );
       }
       return NuvoPrimaryButton(
@@ -741,7 +745,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       extra = NuvoOutlineButton(
         label: 'Record one more',
         expand: true,
-        onPressed: _cameraReady ? _flow.startRecordingExample : null,
+        onPressed: (_cameraReady && _flow.canRecordNextExample)
+            ? _flow.startRecordingExample
+            : null,
       );
     } else {
       extra = null;

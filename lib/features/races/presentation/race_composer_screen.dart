@@ -135,6 +135,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       setState(() => _error = 'Enter a target greater than 0.');
       return;
     }
+    if (draft.isCustom &&
+        (draft.verifierSpec == null || draft.customActivityName == null)) {
+      setState(() => _error = 'No learned movement found. Teach a movement first.');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
