@@ -1421,6 +1421,163 @@ void main() {
       expect(capture.savedExampleCount, 0);
       expect(capture.lastExampleRejected, isTrue);
     });
+
+    test('lower-body scope requires lower-body landmarks', () {
+      final capture = SingleSessionTeachingCapture()
+        ..movementScope = MovementScope.lowerBody;
+
+      final lowerBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'nose',
+            'leftShoulder',
+            'rightShoulder',
+            'leftElbow',
+            'rightElbow',
+            'leftWrist',
+            'rightWrist',
+          },
+        ),
+      );
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+
+      expect(capture.isBodyVisiblePose(lowerBody), isTrue);
+      expect(capture.isBodyVisiblePose(upperBody), isFalse);
+    });
+
+    test('full-body scope requires fuller coverage', () {
+      final capture = SingleSessionTeachingCapture()
+        ..movementScope = MovementScope.fullBody;
+
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      final fullBody = normalizer.normalize(neutralStandingPose());
+
+      expect(capture.isBodyVisiblePose(upperBody), isFalse);
+      expect(capture.isBodyVisiblePose(fullBody), isTrue);
+    });
+
+    test('auto scope accepts upper-body wave without legs', () {
+      final capture = SingleSessionTeachingCapture();
+
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      final fullBody = normalizer.normalize(neutralStandingPose());
+      final empty = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'nose',
+            'leftShoulder',
+            'rightShoulder',
+            'leftElbow',
+            'rightElbow',
+            'leftWrist',
+            'rightWrist',
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+
+      expect(capture.isBodyVisiblePose(upperBody), isTrue);
+      expect(capture.isBodyVisiblePose(fullBody), isTrue);
+      expect(capture.isBodyVisiblePose(empty), isFalse);
+    });
+
+    test('short wave can be recorded and learned with upper-body visibility', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Wave');
+
+      final upperBody = normalizer.normalize(
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      );
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(upperBody, now.add(Duration(milliseconds: 100 * i)));
+      }
+
+      final start = now.add(const Duration(seconds: 1));
+      capture.startRecordingExample();
+      final wavePoses = [
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+        wavePose(dx: 0.05),
+        wavePose(dx: 0.0),
+        neutralStandingPose(
+          missing: const {
+            'leftHip',
+            'rightHip',
+            'leftKnee',
+            'rightKnee',
+            'leftAnkle',
+            'rightAnkle',
+          },
+        ),
+      ];
+      for (var i = 0; i < wavePoses.length; i++) {
+        capture.addFrame(
+          normalizer.normalize(wavePoses[i]),
+          start.add(Duration(milliseconds: 50 * i)),
+        );
+      }
+      capture.stopRecordingExampleAt(
+          start.add(const Duration(milliseconds: 250)));
+
+      expect(capture.savedExampleCount, 1);
+      expect(capture.lastExampleRejected, isFalse);
+    });
   });
 }
 
