@@ -36,9 +36,19 @@ class RaceDraft {
   final CustomPoseVerifierSpec? verifierSpec;
 
   bool get isCustom =>
-      verifierSpec != null &&
-      customActivityName != null &&
-      customActivityName!.isNotEmpty;
+      customActivityName != null && customActivityName!.isNotEmpty;
+
+  /// True when the draft has everything required to start the race.
+  /// For custom drafts, no preset activityId is required.
+  bool get isValidToCreate {
+    if (resolvedTitle.trim().isEmpty) return false;
+    if (targetValue <= 0) return false;
+    if (isCustom) {
+      return verifierSpec != null &&
+          customActivityName!.isNotEmpty;
+    }
+    return activity.type.backendValue.isNotEmpty;
+  }
 
   /// Activity name to show in review pages (preset or custom).
   String get displayActivityName =>
@@ -82,10 +92,16 @@ class RaceDraft {
     );
   }
 
-  Map<String, dynamic> toCreatePayload() => {
-    'title': resolvedTitle,
-    'description': '${activity.title} race verified by camera.',
-    'category': 'fitness',
+  Map<String, dynamic> toCreatePayload() {
+    if (isCustom) {
+      throw UnsupportedError(
+        'Custom races must be created with createCustomRace, not toCreatePayload.',
+      );
+    }
+    return {
+      'title': resolvedTitle,
+      'description': '${activity.title} race verified by camera.',
+      'category': 'fitness',
     'goalType': format.backendValue,
     'targetValue': targetValue,
     'unit': metric.backendValue,
@@ -100,6 +116,7 @@ class RaceDraft {
     'aiActivityType': activity.type.backendValue,
     'visibility': visibility,
   };
+  }
 }
 
 RaceDraft? draftFromIdea(String idea) {
