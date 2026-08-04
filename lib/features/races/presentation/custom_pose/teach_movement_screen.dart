@@ -587,8 +587,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       TeachMovementStage.countdown => ('Get ready', NuvoColors.muted),
       TeachMovementStage.startPose => ('Waiting for start', NuvoColors.muted),
       TeachMovementStage.readyToRecord => (
-          _flow.bodyVisible ? 'Ready' : 'Step into frame',
-          _flow.bodyVisible ? NuvoColors.white : NuvoColors.danger
+          'Ready',
+          NuvoColors.white
         ),
       TeachMovementStage.recording => ('Recording', NuvoColors.white),
       TeachMovementStage.building => ('Learning', NuvoColors.muted),
@@ -612,7 +612,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _progressText() {
     final accepted = _flow.acceptedCount;
-    const needed = 2;
+    final needed = _flow.requiredExampleCount;
     return Text(
       '$accepted of $needed examples saved',
       style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
