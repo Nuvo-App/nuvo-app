@@ -48,6 +48,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   String? _nameError;
   bool _cameraReady = false;
   bool _cameraBusy = false;
+  bool _imageStreamStarting = false;
   bool _disposed = false;
   bool _testingVerifier = false;
   bool _cameraInterruptedDuringTest = false;
@@ -115,10 +116,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Future<void> _initializeCamera({CameraDescription? camera}) async {
-    if (_cameraBusy) return;
-    setState(() {
-      _cameraBusy = true;
-    });
+    if (_cameraBusy || _disposed) return;
+    _cameraBusy = true;
     try {
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
@@ -127,6 +126,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       }
       final selected = camera ?? _preferredCamera(_cameras);
       _selectedCamera = selected;
+      await _stopImageStream();
       await _cameraController?.dispose();
       final controller = CameraController(
         selected,
@@ -142,7 +142,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       if (!mounted || _disposed) return;
       setState(() {
         _cameraReady = true;
-        _cameraBusy = false;
       });
       await _startImageStream();
     } on CameraException catch (e) {
@@ -153,6 +152,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
     } catch (_) {
       _setCameraError("Camera couldn't start. Try again.");
+    } finally {
+      _cameraBusy = false;
     }
   }
 
@@ -161,13 +162,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final camera = _selectedCamera;
     if (controller == null ||
         camera == null ||
+        _imageStreamStarting ||
         !controller.value.isInitialized ||
         controller.value.isStreamingImages) {
       return;
     }
-    await controller.startImageStream((image) {
-      _handleFrame(image, camera, controller.value.deviceOrientation);
-    });
+    _imageStreamStarting = true;
+    try {
+      await controller.startImageStream((image) {
+        _handleFrame(image, camera, controller.value.deviceOrientation);
+      });
+    } finally {
+      _imageStreamStarting = false;
+    }
   }
 
   Future<void> _handleFrame(
@@ -230,18 +237,29 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Future<void> _stopImageStream() async {
     final controller = _cameraController;
-    if (controller != null &&
-        controller.value.isInitialized &&
-        controller.value.isStreamingImages) {
+    if (controller == null ||
+        !controller.value.isInitialized ||
+        !controller.value.isStreamingImages) {
+      return;
+    }
+    try {
       await controller.stopImageStream();
+    } on CameraException catch (_) {
+      // The stream may already be stopped or the controller may be closing.
     }
   }
 
   Future<void> _stopCamera() async {
     await _stopImageStream();
-    await _cameraController?.dispose();
+    try {
+      await _cameraController?.dispose();
+    } on CameraException catch (_) {
+      // Already disposed or controller failed.
+    }
     _cameraController = null;
     _cameraReady = false;
+    _cameraBusy = false;
+    _imageStreamStarting = false;
     _latestFrame = null;
     _lastVisibleFrameAt = null;
     _uiUpdateTimer?.cancel();
@@ -267,7 +285,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _flow.markFrameMissing();
     setState(() {
       _cameraReady = false;
-      _cameraBusy = false;
       _flow.message = message;
     });
   }
@@ -276,7 +293,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final last = _lastVisibleFrameAt;
     if (last == null) {
       _latestFrame = null;
-    _lastVisibleFrameAt = null;
+      _lastVisibleFrameAt = null;
       return;
     }
     if (now.difference(last).inMilliseconds > _skeletonHoldMs) {
@@ -298,6 +315,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       orElse: () => _cameras.first,
     );
     if (next == current) return;
+    await _stopCamera();
     await _initializeCamera(camera: next);
   }
 
