@@ -1,111 +1,427 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'custom_pose_sequence_builder.dart';
+import 'custom_pose_verifier_spec.dart';
 import 'normalized_pose.dart';
 import 'pose_calibration_models.dart';
 import 'pose_calibration_quality.dart';
+import 'pose_demonstration_capture.dart';
+import 'pose_similarity.dart';
 
-enum TeachMovementStage { name, setup, startPose, demonstration, summary }
+import 'stable_pose_capture.dart';
 
-class PoseCalibrationFlow {
-  PoseCalibrationFlow({DateTime Function()? now}) : _now = now ?? DateTime.now;
+enum TeachMovementStage {
+  name,
+  setup,
+  countdown,
+  startPose,
+  readyToRecord,
+  recording,
+  capturing,
+  building,
+  learned,
+  failed,
+}
+
+class SingleSessionTeachingCapture {
+  SingleSessionTeachingCapture({
+    DateTime Function()? now,
+    PoseSimilarity? startSimilarity,
+    this._onChanged,
+    CustomPoseSequenceBuilder? builder,
+    this.buildDelay = const Duration(milliseconds: _buildDelayMs),
+  })  : _now = now ?? DateTime.now,
+        _startSimilarity = startSimilarity ??
+            const PoseSimilarity(minValidFeatureRatio: 0.35),
+        _builder = builder ?? const CustomPoseSequenceBuilder();
 
   final DateTime Function() _now;
-  String _movementName = '';
+  final PoseSimilarity _startSimilarity;
+  final void Function()? _onChanged;
+  final CustomPoseSequenceBuilder _builder;
+  final Duration buildDelay;
+
+  final _stableCapture = StablePoseCapture();
+  final List<PoseDemonstration> _accepted = [];
+  final List<PoseDemonstration> _rejected = [];
+  PoseDemonstrationCapture? _current;
   NormalizedPose? _startPose;
-  double _startPoseStability = 0;
-  final Map<int, PoseDemonstration> _demonstrations = {};
-  bool _interrupted = false;
+  String _movementName = '';
+  String _message = '';
+  CustomPoseBuildResult? _buildResult;
+  CustomPoseVerifierSpec? _verifierSpec;
+  TeachMovementStage _stage = TeachMovementStage.name;
+  double? _lastSimilarity;
+  String? _lastRejection;
+  String? _lastBuildFailure;
 
-  TeachMovementStage stage = TeachMovementStage.name;
-
+  TeachMovementStage get stage => _stage;
   String get movementName => _movementName;
   NormalizedPose? get startPose => _startPose;
-  List<PoseDemonstration> get demonstrations => List.unmodifiable([
-    for (var i = 1; i <= 3; i++)
-      if (_demonstrations[i] != null) _demonstrations[i]!,
-  ]);
-  int get nextDemonstrationIndex {
-    for (var i = 1; i <= 3; i++) {
-      if (_demonstrations[i]?.accepted != true) return i;
-    }
-    return 3;
+  List<PoseDemonstration> get acceptedDemonstrations =>
+      List.unmodifiable(_accepted);
+  List<PoseDemonstration> get rejectedDemonstrations =>
+      List.unmodifiable(_rejected);
+  CustomPoseBuildResult? get buildResult => _buildResult;
+  CustomPoseVerifierSpec? get verifierSpec => _verifierSpec;
+  String get message => _message;
+  set message(String value) {
+    _message = value;
+    _notify();
   }
+
+  int get acceptedCount => _accepted.length;
+  int get savedExampleCount => _accepted.length;
+  int get requiredExampleCount => _minAccepted;
+  int get maxExampleCount => _maxAccepted;
+  bool get isRecording => _stage == TeachMovementStage.recording;
+  bool get isReadyToRecord => _stage == TeachMovementStage.readyToRecord;
+  bool get isBuilding => _stage == TeachMovementStage.building;
+  bool get isLearned => _stage == TeachMovementStage.learned;
+  bool get canLearn =>
+      _accepted.length >= _minAccepted && _stage != TeachMovementStage.building;
+  bool get canRecordNextExample =>
+      _stage == TeachMovementStage.readyToRecord && _startPose != null;
+  bool get canRecordExtraExample =>
+      _accepted.length >= _minAccepted &&
+      _accepted.length < _maxAccepted &&
+      _stage == TeachMovementStage.readyToRecord;
+  bool get lastExampleRejected =>
+      _lastRejection != null && _stage == TeachMovementStage.readyToRecord;
+  bool get hasBuildFailure =>
+      _lastBuildFailure != null && _stage == TeachMovementStage.readyToRecord;
+  double? get lastSimilarity => _lastSimilarity;
+  String? get lastRejection => _lastRejection;
+  String? get lastBuildFailure => _lastBuildFailure;
+  String? get lastBuildFailureMessage =>
+      _lastBuildFailure == null ? null : _translatedFailure(_lastBuildFailure);
+
+  static const _minAccepted = 2;
+  static const _maxAccepted = 3;
+  static const _buildDelayMs = 600;
+  static const _staticSimilarityThreshold = 0.98;
 
   String? setMovementName(String value) {
     final error = validateMovementName(value);
     if (error != null) return error;
     _movementName = value.trim();
-    stage = TeachMovementStage.setup;
+    _startPoseCapture();
     return null;
   }
 
-  void beginStartPose() {
-    stage = TeachMovementStage.startPose;
+  void _startPoseCapture() {
+    _stage = TeachMovementStage.startPose;
+    _stableCapture.reset();
+    _message = 'Hold still in your starting position.';
+    _notify();
   }
 
-  void setStartPose(NormalizedPose pose, {required double stability}) {
-    if (!pose.isValid) {
-      throw const PoseDataFormatException('Start pose must be valid.');
+  void _beginReadyToRecord() {
+    _stage = TeachMovementStage.readyToRecord;
+    _message = _exampleInstruction(0);
+    _notify();
+  }
+
+  void addFrame(NormalizedPose pose, DateTime now) {
+    if (_stage == TeachMovementStage.startPose) {
+      _addStartPoseFrame(pose, now);
+      return;
     }
-    _startPose = pose;
-    _startPoseStability = stability.clamp(0.0, 1.0);
-    stage = TeachMovementStage.demonstration;
-  }
-
-  void setDemonstration(PoseDemonstration demonstration) {
-    if (demonstration.index < 1 || demonstration.index > 3) {
-      throw const PoseDataFormatException('Demonstration index must be 1-3.');
+    if (_stage == TeachMovementStage.recording) {
+      _current?.addFrame(pose, now);
+      if (_startPose != null) {
+        final result = _startSimilarity.compare(_startPose!, pose);
+        _lastSimilarity = result.isValid ? result.similarity : 0.0;
+      }
+      _notify();
+      return;
     }
-    _demonstrations[demonstration.index] = demonstration;
-    stage = _demonstrations.values.where((demo) => demo.accepted).length == 3
-        ? TeachMovementStage.summary
-        : TeachMovementStage.demonstration;
   }
 
-  void retryDemonstration(int index) {
-    _demonstrations.remove(index);
-    stage = TeachMovementStage.demonstration;
+  void _addStartPoseFrame(NormalizedPose pose, DateTime now) {
+    final update = _stableCapture.addFrame(pose, now);
+    if (update.captured && update.pose != null) {
+      _startPose = update.pose;
+      _beginReadyToRecord();
+    } else {
+      _message = update.message;
+      _notify();
+    }
   }
 
-  void markInterrupted() {
-    _interrupted = true;
+  void startRecordingExample() {
+    if (_stage != TeachMovementStage.readyToRecord || _startPose == null) return;
+    _current = PoseDemonstrationCapture(
+      index: _accepted.length + _rejected.length + 1,
+      minDuration: const Duration(milliseconds: 300),
+      minProcessedFrames: 4,
+      maxDuration: const Duration(seconds: 8),
+    )..start(_now());
+    _stage = TeachMovementStage.recording;
+    _message = 'Recording…';
+    _notify();
+  }
+
+  void stopRecordingExample() => stopRecordingExampleAt(_now());
+
+  void stopRecordingExampleAt(DateTime at) {
+    if (_stage != TeachMovementStage.recording || _current == null) return;
+    final demo = _current!.finish(at);
+    _current = null;
+    _stage = TeachMovementStage.readyToRecord;
+
+    if (!demo.accepted) {
+      _rejected.add(demo);
+      _lastRejection = demo.rejectionReason;
+      _message = _translatedRejection(demo.rejectionReason);
+      _notify();
+      return;
+    }
+
+    if (_isTooStatic(demo)) {
+      _rejected.add(_rejectedDemo(demo, 'static_capture'));
+      _lastRejection = 'static_capture';
+      _message = _translatedRejection('static_capture');
+      _notify();
+      return;
+    }
+
+    _accepted.add(demo);
+    _lastRejection = null;
+    _lastBuildFailure = null;
+    _message = _exampleSavedMessage(_accepted.length);
+    _notify();
+  }
+
+  void buildWhenReady() {
+    if (_accepted.length < _minAccepted) return;
+    _stage = TeachMovementStage.building;
+    _lastRejection = null;
+    _lastBuildFailure = null;
+    _message = 'Learning your movement…';
+    _notify();
+    if (buildDelay == Duration.zero) {
+      _runBuild();
+    } else {
+      Timer(buildDelay, _runBuild);
+    }
+  }
+
+  void _runBuild() {
+    _tryBuild();
+    if (_buildResult?.succeeded == true) {
+      _verifierSpec = _buildResult!.spec;
+      _stage = TeachMovementStage.learned;
+      _message = 'Movement learned.';
+    } else {
+      _lastBuildFailure = _buildResult?.failureReason;
+      _stage = _accepted.length >= _maxAccepted
+          ? TeachMovementStage.failed
+          : TeachMovementStage.readyToRecord;
+      _message = _translatedFailure(_buildResult?.failureReason);
+    }
+    _notify();
+  }
+
+  void _tryBuild() {
+    if (_startPose == null || _accepted.length < _minAccepted) return;
+    final calibration = CustomPoseCalibration(
+      schemaVersion: poseCalibrationSchemaVersion,
+      movementName: _movementName,
+      startPose: _startPose!,
+      demonstrations: _accepted,
+      quality: evaluateCalibrationQuality(
+        startPose: _startPose!,
+        startPoseStability: 1,
+        demonstrations: _accepted,
+        requiredDemonstrations: _accepted.length,
+      ),
+      metadata: CalibrationCaptureMetadata(
+        capturedAtIso8601: _now().toUtc().toIso8601String(),
+        cameraLensDirection: 'back',
+        orientation: 'portraitUp',
+        normalizerVersion: 'stage2-v1',
+        deviceNote: 'manual_recording',
+      ),
+    );
+    _buildResult = _builder.build(calibration);
+  }
+
+  bool _isTooStatic(PoseDemonstration demo) {
+    final start = _startPose;
+    if (start == null || demo.frames.length < 4) return true;
+    final similarity = const PoseSimilarity(minValidFeatureRatio: 0.35);
+    var minSimilarity = 1.0;
+    for (final frame in demo.frames) {
+      final result = similarity.compare(start, frame.pose);
+      if (!result.isValid) continue;
+      minSimilarity = math.min(minSimilarity, result.similarity);
+    }
+    return minSimilarity > _staticSimilarityThreshold;
+  }
+
+  PoseDemonstration _rejectedDemo(PoseDemonstration demo, String reason) {
+    return PoseDemonstration(
+      index: demo.index,
+      frames: const [],
+      durationMs: demo.durationMs,
+      processedFrameCount: demo.processedFrameCount,
+      validFrameCount: demo.validFrameCount,
+      validFrameRatio: demo.validFrameRatio,
+      averageVisibility: demo.averageVisibility,
+      accepted: false,
+      rejectionReason: reason,
+    );
+  }
+
+  String _exampleInstruction(int savedCount) {
+    return switch (savedCount) {
+      0 => 'Record example 1',
+      1 => 'Record example 2',
+      _ => 'Ready to learn',
+    };
+  }
+
+  String _exampleSavedMessage(int count) {
+    return switch (count) {
+      1 => 'Example 1 saved',
+      2 => 'Example 2 saved',
+      3 => 'Example 3 saved',
+      _ => 'Example saved',
+    };
+  }
+
+  String _translatedRejection(String? reason) {
+    if (reason == null) return 'That one wasn\'t clear. Record it again.';
+    if (reason == 'too_short' || reason.endsWith('too_short_after_trimming')) {
+      return 'That one was too short. Record it again.';
+    }
+    if (reason == 'too_long') return 'That one was too long. Keep it under 8 seconds.';
+    if (reason == 'too_few_processed_frames') {
+      return 'That one was too short. Record it again.';
+    }
+    if (reason == 'static_capture') {
+      return 'That one didn\'t show a clear movement. Record it again.';
+    }
+    if (reason == 'low_valid_frame_ratio' ||
+        reason.endsWith('low_feature_coverage') ||
+        reason == 'low_shared_feature_coverage') {
+      return 'Step back so your full body is visible.';
+    }
+    if (reason == 'capture_interrupted') {
+      return 'We didn\'t get a clear example. Try recording again.';
+    }
+    return 'That one wasn\'t clear. Record it again.';
+  }
+
+  String _translatedFailure(String? reason) {
+    if (reason != null && reason.contains('static_capture')) {
+      return 'That didn\'t show a clear movement. Record it again.';
+    }
+    return switch (reason) {
+      'no_active_features' => 'Make the movement larger and try again.',
+      'inconsistent_demonstrations' => 'Repeat the same movement each time.',
+      'low_overall_consistency' => 'Repeat the same movement each time.',
+      'ambiguous_completion_strategy' =>
+          'Do the same movement and end in the same position each time.',
+      'low_shared_feature_coverage' || 'low_feature_coverage' =>
+          'Step back so your full body is visible.',
+      _ => 'We didn\'t get a clear example. Try again.',
+    };
+  }
+
+  void removeLastAccepted() {
+    if (_accepted.isNotEmpty) _accepted.removeLast();
+    _buildResult = null;
+    _verifierSpec = null;
+    _lastBuildFailure = null;
+    _lastRejection = null;
+    _stage = _startPose == null
+        ? TeachMovementStage.startPose
+        : TeachMovementStage.readyToRecord;
+    _message = _exampleInstruction(_accepted.length);
+    _notify();
+  }
+
+  void clearExamples() {
+    _accepted.clear();
+    _rejected.clear();
+    _current = null;
+    _buildResult = null;
+    _verifierSpec = null;
+    _lastRejection = null;
+    _lastBuildFailure = null;
+    _lastSimilarity = null;
+    _stage = _startPose == null
+        ? TeachMovementStage.startPose
+        : TeachMovementStage.readyToRecord;
+    _message = _exampleInstruction(0);
+    _notify();
+  }
+
+  void resetStartPose() {
+    _startPose = null;
+    _stableCapture.reset();
+    _accepted.clear();
+    _rejected.clear();
+    _current = null;
+    _buildResult = null;
+    _verifierSpec = null;
+    _lastRejection = null;
+    _lastBuildFailure = null;
+    _lastSimilarity = null;
+    _startPoseCapture();
   }
 
   void restart() {
-    _movementName = '';
-    _startPose = null;
-    _startPoseStability = 0;
-    _demonstrations.clear();
-    _interrupted = false;
-    stage = TeachMovementStage.name;
+    _accepted.clear();
+    _rejected.clear();
+    _current = null;
+    _buildResult = null;
+    _verifierSpec = null;
+    _lastRejection = null;
+    _lastBuildFailure = null;
+    _lastSimilarity = null;
+    _stage = _startPose == null
+        ? TeachMovementStage.startPose
+        : TeachMovementStage.readyToRecord;
+    _message = _startPose == null
+        ? 'Hold still in your starting position.'
+        : _exampleInstruction(0);
+    _notify();
   }
 
-  CalibrationQuality quality() => evaluateCalibrationQuality(
-    startPose: _startPose,
-    startPoseStability: _startPoseStability,
-    demonstrations: demonstrations,
-    interrupted: _interrupted,
-  );
+  void resetToName() {
+    _movementName = '';
+    _startPose = null;
+    _stableCapture.reset();
+    _accepted.clear();
+    _rejected.clear();
+    _current = null;
+    _buildResult = null;
+    _verifierSpec = null;
+    _lastRejection = null;
+    _lastBuildFailure = null;
+    _lastSimilarity = null;
+    _stage = TeachMovementStage.name;
+    _message = '';
+    _notify();
+  }
 
-  CustomPoseCalibration? buildCalibration({
-    String cameraLensDirection = 'back',
-    String orientation = 'portraitUp',
-    String deviceNote = 'internal_mvp',
-  }) {
-    final start = _startPose;
-    if (start == null) return null;
-    final q = quality();
-    return CustomPoseCalibration(
-      schemaVersion: poseCalibrationSchemaVersion,
-      movementName: _movementName,
-      startPose: start,
-      demonstrations: demonstrations,
-      quality: q,
-      metadata: CalibrationCaptureMetadata(
-        capturedAtIso8601: _now().toUtc().toIso8601String(),
-        cameraLensDirection: cameraLensDirection,
-        orientation: orientation,
-        normalizerVersion: 'stage2-v1',
-        deviceNote: deviceNote,
-      ),
-    );
+  void resetToCapture() => restart();
+
+  void markInterrupted() {
+    _current?.interrupt();
+    if (_stage == TeachMovementStage.recording) {
+      _current = null;
+      _stage = TeachMovementStage.readyToRecord;
+      _message = 'Recording stopped. Try again.';
+      _notify();
+    }
+  }
+
+  void _notify() {
+    _onChanged?.call();
   }
 }
