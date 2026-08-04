@@ -9,7 +9,7 @@ import 'pose_calibration_quality.dart';
 import 'pose_demonstration_capture.dart';
 import 'pose_similarity.dart';
 
-import 'stable_pose_capture.dart';
+
 
 enum TeachMovementStage {
   name,
@@ -42,9 +42,6 @@ class SingleSessionTeachingCapture {
   final CustomPoseSequenceBuilder _builder;
   final Duration buildDelay;
 
-  final _stableCapture = StablePoseCapture(
-    lowCoverageMessage: 'Step into frame.',
-  );
   final List<PoseDemonstration> _accepted = [];
   final List<PoseDemonstration> _rejected = [];
   PoseDemonstrationCapture? _current;
@@ -97,8 +94,7 @@ class SingleSessionTeachingCapture {
       _accepted.length >= _minAccepted && _stage != TeachMovementStage.building;
   bool get canRecordNextExample =>
       _stage == TeachMovementStage.readyToRecord &&
-      _startPose != null &&
-      _bodyVisible;
+      _accepted.length < _maxAccepted;
   bool get canRecordExtraExample =>
       _accepted.length >= _minAccepted &&
       _accepted.length < _maxAccepted &&
@@ -113,7 +109,7 @@ class SingleSessionTeachingCapture {
   String? get lastBuildFailureMessage =>
       _lastBuildFailure == null ? null : _translatedFailure(_lastBuildFailure);
 
-  static const _minAccepted = 2;
+  static const _minAccepted = 3;
   static const _maxAccepted = 3;
   static const _buildDelayMs = 600;
   static const _staticSimilarityThreshold = 0.95;
@@ -179,27 +175,14 @@ class SingleSessionTeachingCapture {
         'reason: $_bodyGateReason';
   }
 
-  bool _isBodyPrompt(String value) {
-    return value == _bodyPromptMessage() || value == 'Step into frame.';
-  }
-
-  String _bodyPromptMessage() => 'Step into frame';
-
   String _recordingLostMessage() => 'Nuvo is watching';
 
   String? setMovementName(String value) {
     final error = validateMovementName(value);
     if (error != null) return error;
     _movementName = value.trim();
-    _startPoseCapture();
+    _beginReadyToRecord();
     return null;
-  }
-
-  void _startPoseCapture() {
-    _stage = TeachMovementStage.startPose;
-    _stableCapture.reset();
-    _message = 'Hold still in your starting position.';
-    _notify();
   }
 
   void _beginReadyToRecord() {
@@ -213,24 +196,17 @@ class SingleSessionTeachingCapture {
     final rawVisible = _isBodyVisible(pose, reason: reason);
     _updateBodyVisibility(pose, rawVisible, reason.toString());
 
-    if (_stage == TeachMovementStage.startPose) {
-      if (rawVisible) {
-        _addStartPoseFrame(pose, now);
-      } else {
-        _message = _bodyPromptMessage();
-        _notify();
-      }
-      return;
-    }
-
     if (_stage == TeachMovementStage.readyToRecord) {
-      _updateReadyMessage();
+      _message = _exampleInstruction(_accepted.length);
       _notify();
       return;
     }
 
     if (_stage == TeachMovementStage.recording) {
       _current?.addFrame(pose, now);
+      if (pose.isValid) {
+        _startPose ??= pose;
+      }
       if (pose.isValid && _startPose != null) {
         final result = _startSimilarity.compare(_startPose!, pose);
         _lastSimilarity = result.isValid ? result.similarity : 0.0;
@@ -240,31 +216,8 @@ class SingleSessionTeachingCapture {
     }
   }
 
-  void _updateReadyMessage() {
-    if (_bodyVisible) {
-      if (_isBodyPrompt(_message)) {
-        _message = _exampleInstruction(_accepted.length);
-      }
-    } else {
-      _message = _bodyPromptMessage();
-    }
-  }
-
-  void _addStartPoseFrame(NormalizedPose pose, DateTime now) {
-    final update = _stableCapture.addFrame(pose, now);
-    if (update.captured && update.pose != null) {
-      _startPose = update.pose;
-      _beginReadyToRecord();
-    } else {
-      _message = update.message;
-      _notify();
-    }
-  }
-
   void startRecordingExample() {
-    if (_stage != TeachMovementStage.readyToRecord ||
-        _startPose == null ||
-        !_bodyVisible) {
+    if (_stage != TeachMovementStage.readyToRecord) {
       return;
     }
     _clipStartedAt = _now();
@@ -408,7 +361,8 @@ class SingleSessionTeachingCapture {
     return switch (savedCount) {
       0 => 'Record the movement',
       1 => 'Do one more',
-      _ => 'Do one more',
+      2 => 'Do one more',
+      _ => 'Learn movement',
     };
   }
 
@@ -459,9 +413,7 @@ class SingleSessionTeachingCapture {
     _verifierSpec = null;
     _lastBuildFailure = null;
     _lastRejection = null;
-    _stage = _startPose == null
-        ? TeachMovementStage.startPose
-        : TeachMovementStage.readyToRecord;
+    _stage = TeachMovementStage.readyToRecord;
     _message = _exampleInstruction(_accepted.length);
     _notify();
   }
@@ -475,16 +427,13 @@ class SingleSessionTeachingCapture {
     _lastRejection = null;
     _lastBuildFailure = null;
     _lastSimilarity = null;
-    _stage = _startPose == null
-        ? TeachMovementStage.startPose
-        : TeachMovementStage.readyToRecord;
+    _stage = TeachMovementStage.readyToRecord;
     _message = _exampleInstruction(0);
     _notify();
   }
 
   void resetStartPose() {
     _startPose = null;
-    _stableCapture.reset();
     _accepted.clear();
     _rejected.clear();
     _current = null;
@@ -493,7 +442,7 @@ class SingleSessionTeachingCapture {
     _lastRejection = null;
     _lastBuildFailure = null;
     _lastSimilarity = null;
-    _startPoseCapture();
+    _beginReadyToRecord();
   }
 
   void restart() {
@@ -508,19 +457,14 @@ class SingleSessionTeachingCapture {
     _bodyVisible = false;
     _consecutiveVisible = 0;
     _consecutiveInvisible = 0;
-    _stage = _startPose == null
-        ? TeachMovementStage.startPose
-        : TeachMovementStage.readyToRecord;
-    _message = _startPose == null
-        ? 'Hold still in your starting position.'
-        : _exampleInstruction(0);
+    _stage = TeachMovementStage.readyToRecord;
+    _message = _exampleInstruction(0);
     _notify();
   }
 
   void resetToName() {
     _movementName = '';
     _startPose = null;
-    _stableCapture.reset();
     _accepted.clear();
     _rejected.clear();
     _current = null;
@@ -560,7 +504,7 @@ class SingleSessionTeachingCapture {
     _lastSimilarity = null;
     _debugBodyInfo = 'gate: false (no frame)';
     if (_stage == TeachMovementStage.readyToRecord) {
-      _message = _bodyPromptMessage();
+      _message = _exampleInstruction(_accepted.length);
     } else if (_stage == TeachMovementStage.recording) {
       _message = _recordingLostMessage();
     }
