@@ -190,15 +190,15 @@ class CustomPoseSequenceBuilder {
     NormalizedPose startPose,
     PoseDemonstration demo,
   ) {
-    final similarity = const PoseSimilarity(minValidFeatureRatio: 0.35);
+    final similarity = const PoseSimilarity(minValidFeatureRatio: 0.30);
     final frames = demo.frames.where((frame) => frame.pose.isValid).toList();
     final startScores = frames
         .map((frame) => similarity.compare(startPose, frame.pose).similarity)
         .toList(growable: false);
-    // Require a clearer departure (0.97) than what counts as a return (0.98)
-    // so small waves can depart without a terminal pose being forced to count
-    // as a return.
-    final departed = startScores.indexWhere((score) => score < 0.97);
+    // Smaller departures (0.94) are accepted so short quick waves still count
+    // as movement, while the 0.98 return threshold keeps completion detection
+    // strict.
+    final departed = startScores.indexWhere((score) => score < 0.94);
     if (departed < 0) {
       throw PoseDataFormatException('demo_${demo.index}_static_capture');
     }
@@ -231,7 +231,8 @@ class CustomPoseSequenceBuilder {
     }
     final activeScores = startScores.sublist(startIndex, endExclusive);
     final minStartSimilarity = activeScores.reduce(math.min);
-    if (minStartSimilarity > 0.995) {
+    final hasDeparture = minStartSimilarity < 0.94;
+    if (!hasDeparture) {
       throw PoseDataFormatException('demo_${demo.index}_no_clear_movement');
     }
     return _CleanedDemonstration(
@@ -263,7 +264,7 @@ class CustomPoseSequenceBuilder {
         .where(isKnownPoseFeatureId)
         .toSet();
     for (final demo in demos) {
-      ids.removeWhere((id) => _coverage(demo.frames, id) < 0.70);
+      ids.removeWhere((id) => _coverage(demo.frames, id) < 0.60);
     }
     return (ids.toList()..sort()).toList(growable: false);
   }
@@ -273,11 +274,11 @@ class CustomPoseSequenceBuilder {
     List<_CleanedDemonstration> demos,
     List<String> requiredFeatureIds,
   ) {
-    final active = <String>[];
+    final candidates = <_ActiveFeatureCandidate>[];
     final diagnostics = <PoseFeatureSelectionDiagnostic>[];
     for (final id in requiredFeatureIds) {
       final start = startPose.features.values[id];
-      if (start == null || !start.valid || start.confidence < 0.45) {
+      if (start == null || !start.valid || start.confidence < 0.30) {
         diagnostics.add(
           PoseFeatureSelectionDiagnostic.rejected(
             featureId: id,
@@ -305,39 +306,39 @@ class CustomPoseSequenceBuilder {
       final minCoverage = coverage.isEmpty ? 0.0 : coverage.reduce(math.min);
       final averageAmplitude = _average(amplitudes);
       final consistency = _amplitudeConsistency(amplitudes);
-      final movementThreshold = _movementThreshold(start.kind);
-      String? rejectionReason;
-      if (minCoverage < 0.70) {
-        rejectionReason = 'low_coverage';
-      } else if (averageAmplitude < movementThreshold) {
-        rejectionReason = 'mostly_static';
-      } else if (consistency < 0.35) {
-        rejectionReason = 'inconsistent_motion';
-      }
-      if (rejectionReason == null) {
-        active.add(id);
-        diagnostics.add(
-          PoseFeatureSelectionDiagnostic.selected(
-            featureId: id,
-            coverage: minCoverage,
+      final movementThreshold = _movementThreshold(start.kind) * 0.6;
+      final signalToNoise = averageAmplitude * consistency * minCoverage;
+      final selected = minCoverage >= 0.40 &&
+          averageAmplitude >= movementThreshold &&
+          consistency >= 0.20;
+      diagnostics.add(
+        PoseFeatureSelectionDiagnostic(
+          featureId: id,
+          coverage: minCoverage,
+          amplitude: averageAmplitude,
+          consistency: consistency,
+          selected: selected,
+          rejectionReason: selected ? null : 'not_moving_enough',
+        ),
+      );
+      if (selected) {
+        candidates.add(
+          _ActiveFeatureCandidate(
+            id: id,
+            score: signalToNoise,
             amplitude: averageAmplitude,
             consistency: consistency,
-          ),
-        );
-      } else {
-        diagnostics.add(
-          PoseFeatureSelectionDiagnostic.rejected(
-            featureId: id,
             coverage: minCoverage,
-            amplitude: averageAmplitude,
-            consistency: consistency,
-            reason: rejectionReason,
           ),
         );
       }
     }
+    // Pick the most reliable moving features, capped to avoid overfitting to
+    // a single noisy part. Cap at 12.
+    candidates.sort((a, b) => b.score.compareTo(a.score));
+    final active = candidates.take(12).map((c) => c.id).toList(growable: false);
     return _ActiveFeatureSelection(
-      activeFeatureIds: (active..sort()).toList(growable: false),
+      activeFeatureIds: active,
       diagnostics: diagnostics,
     );
   }
@@ -420,9 +421,9 @@ class CustomPoseSequenceBuilder {
     String? failure;
     if (activeFeatureIds.length < 2) {
       failure = 'too_few_active_features';
-    } else if (lowest < 0.60) {
+    } else if (lowest < 0.55) {
       failure = 'inconsistent_demonstrations';
-    } else if (overall < 0.65) {
+    } else if (overall < 0.60) {
       failure = 'low_overall_consistency';
     }
     return CustomPoseConsistencyResult(
@@ -506,10 +507,7 @@ class CustomPoseSequenceBuilder {
     if (returned == demos.length) {
       return CustomPoseCompletionStrategy.completionAfterSequenceReturn;
     }
-    if (returned == 0) {
-      return CustomPoseCompletionStrategy.completionAtTerminalPose;
-    }
-    throw const PoseDataFormatException('ambiguous_completion_strategy');
+    return CustomPoseCompletionStrategy.completionAtTerminalPose;
   }
 
   NormalizedPose _completionPose(
@@ -568,20 +566,20 @@ class CustomPoseSequenceBuilder {
     CustomPoseConsistencyResult consistency,
     _ActiveFeatureSelection selection,
   ) {
-    final sequence = (consistency.lowestPairScore - 0.08).clamp(0.55, 0.88);
-    final completion = (0.76 + calibration.quality.startPoseStability * 0.08)
-        .clamp(0.74, 0.88);
-    final reset = (0.78 + calibration.quality.startPoseStability * 0.10).clamp(
-      0.78,
+    final sequence = (consistency.lowestPairScore - 0.08).clamp(0.50, 0.88);
+    final completion = (0.74 + calibration.quality.startPoseStability * 0.08)
+        .clamp(0.72, 0.88);
+    final reset = (0.76 + calibration.quality.startPoseStability * 0.10).clamp(
+      0.76,
       0.92,
     );
-    final validRatio = (0.55 + selection.activeFeatureIds.length / 100).clamp(
-      0.55,
-      0.75,
+    final validRatio = (0.35 + selection.activeFeatureIds.length / 100).clamp(
+      0.35,
+      0.65,
     );
     final visibility = calibration.quality.averagePoseCoverage.clamp(
-      0.45,
-      0.75,
+      0.30,
+      0.70,
     );
     return _GeneratedThresholds(
       sequenceSimilarity: sequence.toDouble(),
@@ -806,6 +804,22 @@ class _CleanedDemonstration {
   final List<PoseSequenceFrame> frames;
   final bool returnedToStart;
   final double minimumStartSimilarity;
+}
+
+class _ActiveFeatureCandidate {
+  const _ActiveFeatureCandidate({
+    required this.id,
+    required this.score,
+    required this.amplitude,
+    required this.consistency,
+    required this.coverage,
+  });
+
+  final String id;
+  final double score;
+  final double amplitude;
+  final double consistency;
+  final double coverage;
 }
 
 class _ActiveFeatureSelection {
