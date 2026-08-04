@@ -344,6 +344,23 @@ void main() {
       expect(result.finalFailureReason, 'target_not_met');
     });
   });
+
+  group('mismatched movement', () {
+    test('single-side raise does not count as overhead movement', () {
+      final runtime = _runtime(_terminalSpec())..start();
+
+      _play(runtime, [
+        _neutral(),
+        _neutral(),
+        _neutral(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+      ]);
+
+      expect(runtime.currentValue, 0);
+    });
+  });
 }
 
 CustomPoseSequenceRuntime _runtime(CustomPoseVerifierSpec spec) {

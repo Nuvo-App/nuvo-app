@@ -112,7 +112,7 @@ class SingleSessionTeachingCapture {
   static const _minAccepted = 2;
   static const _maxAccepted = 3;
   static const _buildDelayMs = 600;
-  static const _staticSimilarityThreshold = 0.98;
+  static const _staticSimilarityThreshold = 0.95;
   static const _minVisibleLandmarks = 10;
   static const _minFeatureCoverage = 0.45;
   static const _clipDuration = Duration(seconds: 2);
@@ -221,8 +221,9 @@ class SingleSessionTeachingCapture {
     final index = _accepted.length + _rejected.length + 1;
     _current = PoseDemonstrationCapture(
       index: index,
-      minDuration: const Duration(milliseconds: 250),
+      minDuration: const Duration(milliseconds: 200),
       minProcessedFrames: 4,
+      minValidFrameRatio: 0.55,
       maxDuration: const Duration(seconds: 8),
     )..start(_clipStartedAt!);
     _stage = TeachMovementStage.recording;
@@ -328,7 +329,7 @@ class SingleSessionTeachingCapture {
 
   bool _isTooStatic(PoseDemonstration demo) {
     final start = _startPose;
-    if (start == null || demo.frames.length < 4) return true;
+    if (start == null || demo.frames.length < 3) return true;
     final similarity = const PoseSimilarity(minValidFeatureRatio: 0.35);
     var minSimilarity = 1.0;
     for (final frame in demo.frames) {
