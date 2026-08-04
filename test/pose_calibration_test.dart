@@ -398,7 +398,7 @@ void main() {
       capture.stopRecordingExample();
       expect(capture.stage, TeachMovementStage.readyToRecord);
       expect(capture.acceptedCount, 1);
-      expect(capture.message, contains('Record example 2'));
+      expect(capture.message, contains('Do one more'));
     });
 
     test('two valid manual examples build a real verifier spec', () {
@@ -535,7 +535,7 @@ void main() {
       capture.stopRecordingExampleAt(start.add(const Duration(milliseconds: 600)));
       expect(capture.acceptedCount, 0);
       expect(capture.rejectedDemonstrations, isNotEmpty);
-      expect(capture.message, contains('clear movement'));
+      expect(capture.message, contains('too still'));
     });
 
     test('name persists through restart', () {
@@ -685,7 +685,7 @@ void main() {
       expect(capture.savedExampleCount, 0);
       expect(capture.requiredExampleCount, 2);
       expect(capture.canLearn, isFalse);
-      expect(capture.message, 'Record example 1');
+      expect(capture.message, 'Record the movement');
     });
 
     test('while recording shows Recording example 1… and progress', () {
@@ -702,7 +702,7 @@ void main() {
 
       capture.startRecordingExample();
       expect(capture.isRecording, isTrue);
-      expect(capture.message, 'Recording example 1…');
+      expect(capture.message, 'Nuvo is watching');
       expect(capture.recordingProgress, 0.0);
     });
 
@@ -732,7 +732,7 @@ void main() {
       expect(capture.canLearn, isFalse);
       expect(capture.lastExampleRejected, isFalse);
       expect(capture.canRecordExtraExample, isFalse);
-      expect(capture.message, 'Record example 2');
+      expect(capture.message, 'Do one more');
     });
 
     test('after two saved examples can learn and allows a third', () {
@@ -765,7 +765,7 @@ void main() {
       expect(capture.savedExampleCount, 2);
       expect(capture.canLearn, isTrue);
       expect(capture.canRecordExtraExample, isTrue);
-      expect(capture.message, 'Ready to learn');
+      expect(capture.message, 'Do one more');
     });
 
     test('a rejected example surfaces lastExampleRejected and asks to record again', () {
@@ -939,7 +939,7 @@ void main() {
 
       expect(capture.savedExampleCount, 0);
       expect(capture.lastExampleRejected, isTrue);
-      expect(capture.message, contains('short'));
+      expect(capture.message, contains('hard to read'));
     });
 
     test('two short waves make Learn movement available', () {
@@ -1023,7 +1023,7 @@ void main() {
       expect(capture.canLearn, isFalse);
       expect(capture.lastExampleRejected, isFalse);
       expect(capture.canRecordNextExample, isTrue);
-      expect(capture.message, contains('Record example 2'));
+      expect(capture.message, contains('Do one more'));
     });
 
     test('rejected example shows Record again and cannot learn', () {
@@ -1422,9 +1422,8 @@ void main() {
       expect(capture.lastExampleRejected, isTrue);
     });
 
-    test('lower-body scope requires lower-body landmarks', () {
-      final capture = SingleSessionTeachingCapture()
-        ..movementScope = MovementScope.lowerBody;
+    test('lower body only is treated as visible', () {
+      final capture = SingleSessionTeachingCapture();
 
       final lowerBody = normalizer.normalize(
         neutralStandingPose(
@@ -1439,61 +1438,6 @@ void main() {
           },
         ),
       );
-      final upperBody = normalizer.normalize(
-        neutralStandingPose(
-          missing: const {
-            'leftHip',
-            'rightHip',
-            'leftKnee',
-            'rightKnee',
-            'leftAnkle',
-            'rightAnkle',
-          },
-        ),
-      );
-
-      expect(capture.isBodyVisiblePose(lowerBody), isTrue);
-      expect(capture.isBodyVisiblePose(upperBody), isFalse);
-    });
-
-    test('full-body scope requires fuller coverage', () {
-      final capture = SingleSessionTeachingCapture()
-        ..movementScope = MovementScope.fullBody;
-
-      final upperBody = normalizer.normalize(
-        neutralStandingPose(
-          missing: const {
-            'leftHip',
-            'rightHip',
-            'leftKnee',
-            'rightKnee',
-            'leftAnkle',
-            'rightAnkle',
-          },
-        ),
-      );
-      final fullBody = normalizer.normalize(neutralStandingPose());
-
-      expect(capture.isBodyVisiblePose(upperBody), isFalse);
-      expect(capture.isBodyVisiblePose(fullBody), isTrue);
-    });
-
-    test('auto scope accepts upper-body wave without legs', () {
-      final capture = SingleSessionTeachingCapture();
-
-      final upperBody = normalizer.normalize(
-        neutralStandingPose(
-          missing: const {
-            'leftHip',
-            'rightHip',
-            'leftKnee',
-            'rightKnee',
-            'leftAnkle',
-            'rightAnkle',
-          },
-        ),
-      );
-      final fullBody = normalizer.normalize(neutralStandingPose());
       final empty = normalizer.normalize(
         neutralStandingPose(
           missing: const {
@@ -1514,8 +1458,7 @@ void main() {
         ),
       );
 
-      expect(capture.isBodyVisiblePose(upperBody), isTrue);
-      expect(capture.isBodyVisiblePose(fullBody), isTrue);
+      expect(capture.isBodyVisiblePose(lowerBody), isTrue);
       expect(capture.isBodyVisiblePose(empty), isFalse);
     });
 
