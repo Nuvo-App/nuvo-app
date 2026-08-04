@@ -131,13 +131,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     if (_loading) return; // guard against double-tap
     _dismissKeyboard();
     final draft = ref.read(_composerDraftProvider);
-    if (draft.targetValue <= 0) {
-      setState(() => _error = 'Enter a target greater than 0.');
-      return;
-    }
-    if (draft.isCustom &&
-        (draft.verifierSpec == null || draft.customActivityName == null)) {
-      setState(() => _error = 'No learned movement found. Teach a movement first.');
+    if (draft.isCustom) {
+      if (draft.verifierSpec == null || draft.customActivityName == null) {
+        setState(() => _error = 'No learned movement found. Teach a movement first.');
+        return;
+      }
+      if (draft.resolvedTitle.trim().isEmpty) {
+        setState(() => _error = 'Add a race title.');
+        return;
+      }
+      if (draft.targetValue <= 0) {
+        setState(() => _error = 'Enter a target greater than 0.');
+        return;
+      }
+    } else if (!draft.isValidToCreate) {
+      setState(() => _error = 'Choose a supported activity.');
       return;
     }
     setState(() {

@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/features/races/ai/custom_pose/custom_pose_verifier_spec.dart';
+import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+
+import 'fixtures/pose_fixtures.dart';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -12,6 +16,49 @@ final _pushups = _activity(MotionActivityType.pushUps);
 final _jacks = _activity(MotionActivityType.jumpingJacks);
 final _squats = _activity(MotionActivityType.squats);
 final _plank = _activity(MotionActivityType.plankHold);
+
+CustomPoseVerifierSpec _anySpec() {
+  final pose = const PoseNormalizer().normalize(neutralStandingPose());
+  final summary = const CustomPoseCalibrationSummary(
+    sourceCalibrationSchemaVersion: 1,
+    demonstrationCount: 2,
+    selectedActiveFeatureCount: 1,
+    requiredFeatureCount: 1,
+    canonicalSequenceLength: 1,
+    pairwiseSimilarityScores: {},
+    overallConsistencyScore: 0.7,
+    lowestPairwiseSimilarityScore: 0.7,
+    sequenceSimilarityThreshold: 0.7,
+    completionSimilarityThreshold: 0.8,
+    resetSimilarityThreshold: 0.8,
+    minimumValidFeatureRatio: 0.6,
+    minimumVisibility: 0.6,
+    cooldownMs: 500,
+    completionStrategy: CustomPoseCompletionStrategy.completionAtTerminalPose,
+    builderVersion: 'v1',
+  );
+  return CustomPoseVerifierSpec(
+    schemaVersion: 1,
+    verifierType: 'custom_pose_sequence',
+    movementName: 'wave',
+    measurementType: 'reps',
+    startPose: pose,
+    completionPose: pose,
+    completionStrategy: CustomPoseCompletionStrategy.completionAtTerminalPose,
+    canonicalSequence: const [],
+    requiredFeatureIds: const [],
+    activeFeatureIds: const [],
+    sequenceSimilarityThreshold: 0.7,
+    completionSimilarityThreshold: 0.8,
+    resetSimilarityThreshold: 0.8,
+    minimumValidFeatureRatio: 0.6,
+    minimumVisibility: 0.6,
+    cooldownMs: 500,
+    expectedSequenceFrameCount: 1,
+    calibrationSummary: summary,
+  );
+}
+
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
@@ -267,6 +314,94 @@ void main() {
       expect(payload['title'], 'First to 40 Lunges');
       expect(payload['targetValue'], 40);
       expect(payload['activityId'], 'lunges');
+    });
+  });
+
+  // ── 11. Custom movement races ───────────────────────────────────────────────
+  group('Custom movement races', () {
+    test('custom draft with verifierSpec is valid', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      expect(draft.isCustom, isTrue);
+      expect(draft.isValidToCreate, isTrue);
+      expect(draft.displayActivityName, 'wave');
+      expect(draft.resolvedTitle, 'First to 10 wave');
+    });
+
+    test('custom draft without verifierSpec is not valid', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: null,
+      );
+
+      expect(draft.isCustom, isTrue);
+      expect(draft.isValidToCreate, isFalse);
+      expect(draft.displayActivityName, 'wave');
+    });
+
+    test('toCreatePayload is blocked for custom drafts', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      expect(draft.toCreatePayload, throwsUnsupportedError);
+    });
+
+    test('preset activity validation does not run for custom drafts', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      // Even with a preset pushups activity in the draft, the custom path is
+      // valid and does not require that activity to be supported.
+      expect(draft.isValidToCreate, isTrue);
+      expect(draft.toCreatePayload, throwsUnsupportedError);
+    });
+
+    test('UI shows learned movement name in title and display', () {
+      final draft = RaceDraft(
+        title: 'My Custom Race',
+        hasCustomName: true,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 15,
+        customActivityName: 'Overhead Wave',
+        verifierSpec: _anySpec(),
+      );
+
+      expect(draft.displayActivityName, 'Overhead Wave');
+      expect(draft.resolvedTitle, 'My Custom Race');
+      expect(draft.generatedTitleText, 'First to 15 Overhead Wave');
     });
   });
 }
