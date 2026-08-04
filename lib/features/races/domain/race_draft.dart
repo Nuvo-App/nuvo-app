@@ -1,3 +1,4 @@
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 
@@ -15,6 +16,8 @@ class RaceDraft {
     this.hasCustomName = false,
     this.recurrence = RaceRecurrence.none,
     this.visibility = 'invite_code',
+    this.customActivityName,
+    this.verifierSpec,
   });
 
   final String title;
@@ -28,9 +31,26 @@ class RaceDraft {
   final RaceRecurrence recurrence;
   final String visibility;
 
+  /// Populated only for races created from a Teach Nuvo custom movement.
+  final String? customActivityName;
+  final CustomPoseVerifierSpec? verifierSpec;
+
+  bool get isCustom =>
+      verifierSpec != null &&
+      customActivityName != null &&
+      customActivityName!.isNotEmpty;
+
+  /// Activity name to show in review pages (preset or custom).
+  String get displayActivityName =>
+      isCustom ? customActivityName! : activity.title;
+
+  /// System-generated title for this draft, ignoring any manual name override.
+  String get generatedTitleText => isCustom
+      ? 'First to $targetValue $customActivityName'
+      : generatedTitle(activity, targetValue);
+
   /// The title to show everywhere. When not custom, derived from activity+target.
-  String get resolvedTitle =>
-      hasCustomName ? title : generatedTitle(activity, targetValue);
+  String get resolvedTitle => hasCustomName ? title : generatedTitleText;
 
   RaceDraft copyWith({
     String? title,
@@ -41,6 +61,8 @@ class RaceDraft {
     int? targetValue,
     RaceRecurrence? recurrence,
     String? visibility,
+    String? customActivityName,
+    CustomPoseVerifierSpec? verifierSpec,
   }) {
     final nextActivity = activity ?? this.activity;
     final nextTarget = targetValue ?? this.targetValue;
@@ -55,6 +77,8 @@ class RaceDraft {
       targetValue: nextTarget,
       recurrence: recurrence ?? this.recurrence,
       visibility: visibility ?? this.visibility,
+      customActivityName: customActivityName ?? this.customActivityName,
+      verifierSpec: verifierSpec ?? this.verifierSpec,
     );
   }
 
