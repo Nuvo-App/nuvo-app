@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
+
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -80,55 +80,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // already awarded — they never add to it or influence verification.
   int _lastCountedValue = 0;
   int _repFlashSeq = 0;
-  int _repFlashDelta = 0;
-  String _repFlashPhrase = '';
   DateTime? _repFlashAt;
-  final _phraseRandom = Random();
-  String? _lastPhrase;
   bool _targetCelebrated = false;
   int _targetCelebrationSeq = 0;
-
-  /// Rep-by-rep encouragement, picked at random so it never feels scripted.
-  static const _repPhrases = [
-    'Nice job',
-    'Good job',
-    'Keep going',
-    'Clean rep',
-    "That's it",
-    'Strong',
-    'Keep it up',
-    'Locked in',
-    'Looking good',
-    'Smooth',
-    'Dialed in',
-    'Nice and clean',
-    'Crushing it',
-    'You got this',
-    'On fire',
-    'Too easy',
-    'Boom',
-  ];
-
-  /// Louder copy for the last few reps before the finish line.
-  static const _homeStretchPhrases = [
-    'Almost there',
-    'Nearly done',
-    'Finish it',
-    'One more push',
-    'Final stretch',
-    'Almost home',
-  ];
-
-  /// Random phrase that avoids repeating the previous one back-to-back.
-  String _nextPhrase(List<String> pool) {
-    if (pool.length == 1) return pool.first;
-    String phrase;
-    do {
-      phrase = pool[_phraseRandom.nextInt(pool.length)];
-    } while (phrase == _lastPhrase);
-    _lastPhrase = phrase;
-    return phrase;
-  }
 
   /// Hold movements score in seconds, so a per-second "+1" would be noise.
   bool get _usesRepFlash =>
@@ -146,10 +100,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   void _resetRepFlash() {
     _lastCountedValue = 0;
     _repFlashSeq = 0;
-    _repFlashDelta = 0;
-    _repFlashPhrase = '';
     _repFlashAt = null;
-    _lastPhrase = null;
     _targetCelebrated = false;
     _targetCelebrationSeq = 0;
   }
@@ -435,15 +386,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // Mirror a newly awarded rep as live feedback. Reads the validator's
       // count; never modifies it.
       if (_usesRepFlash && output.count > _lastCountedValue) {
-        _repFlashDelta = output.count - _lastCountedValue;
         _lastCountedValue = output.count;
         _repFlashSeq++;
         _repFlashAt = DateTime.now();
-
-        final remaining = _targetValue - output.count;
-        _repFlashPhrase = remaining > 0 && remaining <= 3
-            ? _nextPhrase(_homeStretchPhrases)
-            : _nextPhrase(_repPhrases);
         HapticFeedback.lightImpact();
       }
       // Finish line reached — fire once per recording.
@@ -721,14 +666,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           : motionActivityForBackendValue(_activity.backendValue)?.title ??
               _activity.label;
 
-  String get _cameraInstruction =>
-      _isCustom
-          ? 'Perform ${_customMovementName ?? 'the movement'} with your whole body visible.'
-          : motionActivityForBackendValue(
-                _activity.backendValue,
-              )?.cameraInstruction ??
-              'Full body front view';
-
   /// True while a live preview is on screen. In that case the camera takes the
   /// whole screen instead of sitting in an inset card.
   bool get _isImmersiveCamera {
@@ -765,7 +702,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   NuvoBackButton(
                     onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}/proof'),
+                        safePopOrGo(context, '/race/${widget.raceId}'),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -799,18 +736,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     : _cameraPanel(),
               ),
             ),
-
-            // ── Compact status hint (camera-ready / error / processing) ──
-            if (!_isResultState &&
-                _status != AiMotionProofStatus.setup &&
-                _status != AiMotionProofStatus.recording &&
-                _status != AiMotionProofStatus.unsupportedMovement) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _statusHint(),
-              ),
-            ],
 
             const SizedBox(height: 8),
           ],
@@ -877,7 +802,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   _immersiveIconButton(
                     icon: Icons.arrow_back_rounded,
                     onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}/proof'),
+                        safePopOrGo(context, '/race/${widget.raceId}'),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1120,7 +1045,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 children: [
                   NuvoBackButton(
                     onPressed: () =>
-                        safePopOrGo(context, '/race/${widget.raceId}/proof'),
+                        safePopOrGo(context, '/race/${widget.raceId}'),
                   ),
                 ],
               ),
@@ -1339,7 +1264,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  /// "+1 · Nice job" burst shown the moment the validator awards a rep.
+  /// "+1" burst shown the moment the validator awards a rep.
   /// Keyed on [_repFlashSeq] so each counted rep replays the animation.
   Widget _repFlashOverlay() {
     const shadows = [
@@ -1347,49 +1272,32 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     ];
 
     return IgnorePointer(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '+$_repFlashDelta',
-            style: AppTextStyles.displayLarge.copyWith(
-              fontSize: 200,
-              height: 0.9,
-              color: NuvoColors.white,
-              shadows: shadows,
-            ),
+      child: Center(
+        child: Text(
+          '+1',
+          style: AppTextStyles.displayLarge.copyWith(
+            fontSize: 200,
+            height: 0.9,
+            color: NuvoColors.white,
+            shadows: shadows,
           ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-            decoration: BoxDecoration(
-              color: NuvoColors.blue,
-              borderRadius: BorderRadius.circular(NuvoRadii.pill),
-            ),
-            child: Text(
-              _repFlashPhrase,
-              style: AppTextStyles.titleLarge.copyWith(
-                color: NuvoColors.white,
-              ),
-            ),
-          ),
-        ],
-      )
-          .animate(key: ValueKey(_repFlashSeq))
-          .fadeIn(duration: 110.ms)
-          .scale(
-            begin: const Offset(0.65, 0.65),
-            end: const Offset(1, 1),
-            duration: 260.ms,
-            curve: Curves.easeOutBack,
-          )
-          .slideY(
-            begin: 0.35,
-            end: -0.35,
-            duration: 820.ms,
-            curve: Curves.easeOutCubic,
-          )
-          .fadeOut(delay: 420.ms, duration: 380.ms),
+        )
+            .animate(key: ValueKey(_repFlashSeq))
+            .fadeIn(duration: 110.ms)
+            .scale(
+              begin: const Offset(0.65, 0.65),
+              end: const Offset(1, 1),
+              duration: 260.ms,
+              curve: Curves.easeOutBack,
+            )
+            .slideY(
+              begin: 0.35,
+              end: -0.35,
+              duration: 820.ms,
+              curve: Curves.easeOutCubic,
+            )
+            .fadeOut(delay: 420.ms, duration: 380.ms),
+      ),
     );
   }
 
@@ -1434,62 +1342,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  Widget _statusHint() {
-    final title = switch (_status) {
-      AiMotionProofStatus.cameraReady =>
-        'Place your whole body inside the frame.',
-      AiMotionProofStatus.processing => 'Checking move...',
-      AiMotionProofStatus.permissionDenied => 'Camera permission needed',
-      AiMotionProofStatus.cameraError => 'Camera issue',
-      AiMotionProofStatus.submitting => 'Updating your race...',
-      AiMotionProofStatus.submitted => 'Race updated',
-      AiMotionProofStatus.needsReview => 'Try again',
-      AiMotionProofStatus.unsupportedMovement => 'Unsupported movement',
-      _ => '',
-    };
-    final body =
-        _message ??
-        switch (_status) {
-          AiMotionProofStatus.cameraReady =>
-            _activity == AiMotionActivity.plankHold
-                ? 'Hold for $_targetLabel. Camera tracks your time.'
-                : 'Camera will count $_targetLabel. Do clean reps.',
-          AiMotionProofStatus.processing => 'Checking your move…',
-          AiMotionProofStatus.permissionDenied =>
-            'Enable camera access in Settings to verify your reps.',
-          AiMotionProofStatus.cameraError => 'Try again.',
-          AiMotionProofStatus.submitting => 'Saving your move to the race.',
-          AiMotionProofStatus.submitted => 'Heading back to the race.',
-          AiMotionProofStatus.needsReview => 'Try again.',
-          AiMotionProofStatus.unsupportedMovement =>
-            'This movement cannot be camera verified yet.',
-          _ => '',
-        };
-
-    if (title.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: NuvoColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title, style: AppTextStyles.titleMedium),
-          const SizedBox(height: 2),
-          Text(
-            body,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _errorMessage(String message) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1516,7 +1368,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         NuvoOutlineButton(
           label: 'Back',
           expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}/proof'),
+          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
         ),
       ],
       AiMotionProofStatus.cameraReady => [
@@ -1636,7 +1488,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return 'This movement cannot be camera verified yet.';
     }
     if (_status == AiMotionProofStatus.processing) return 'Starting camera...';
-    return 'Place your whole body inside the frame.\n$_cameraInstruction.';
+    return 'Step into frame.';
   }
 
   String _formatElapsed(Duration duration) {
