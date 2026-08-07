@@ -26,7 +26,7 @@ import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity_catalog.dart';
-import 'board_moved_screen.dart';
+
 import 'custom_pose/pose_skeleton_overlay.dart';
 import 'race_controller.dart';
 
@@ -576,7 +576,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       try {
         final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
         _clientSubmissionId = clientSubmissionId;
-        final race = await ref
+        await ref
             .read(raceControllerProvider.notifier)
             .submitCustomPoseProof(
               widget.raceId,
@@ -585,20 +585,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             );
         if (!mounted) return;
         setState(() => _status = AiMotionProofStatus.submitted);
-        final submission = race.submissionResult;
-        context.go(
-          '/race/${widget.raceId}/board-moved',
-          extra: BoardMovedArgs(
-            raceId: widget.raceId,
-            raceName: race.title,
-            value: submission?.verifiedValue ?? result.count,
-            unit: race.metric ?? _metric,
-            status: result.verificationStatus,
-            rankBefore: submission?.previousRank,
-            rankAfter: submission?.newRank,
-            peoplePassed: submission?.peoplePassed,
-          ),
-        );
+        context.go('/race/${widget.raceId}');
       } on ApiException catch (e) {
         if (!mounted) return;
         setState(() {
@@ -624,7 +611,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     try {
       final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
       _clientSubmissionId = clientSubmissionId;
-      final race = await ref
+      await ref
           .read(raceControllerProvider.notifier)
           .submitAiMotionProof(
             widget.raceId,
@@ -634,20 +621,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           );
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);
-      final submission = race.submissionResult;
-      context.go(
-        '/race/${widget.raceId}/board-moved',
-        extra: BoardMovedArgs(
-          raceId: widget.raceId,
-          raceName: race.title,
-          value: submission?.verifiedValue ?? result.detectedReps,
-          unit: race.metric ?? _metric,
-          status: result.verificationStatus,
-          rankBefore: submission?.previousRank,
-          rankAfter: submission?.newRank,
-          peoplePassed: submission?.peoplePassed,
-        ),
-      );
+      context.go('/race/${widget.raceId}');
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -995,25 +969,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget _targetReachedOverlay() {
     return IgnorePointer(
       child: Align(
-        alignment: const Alignment(0, -0.35),
+        alignment: Alignment.center,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
           decoration: BoxDecoration(
-            color: NuvoColors.success,
-            borderRadius: BorderRadius.circular(NuvoRadii.pill),
+            color: NuvoColors.success.withValues(alpha: 0.88),
+            borderRadius: BorderRadius.circular(NuvoRadii.hero),
             boxShadow: AppShadows.hardMedium,
           ),
-          child: Row(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.emoji_events_rounded,
-                color: NuvoColors.white,
-                size: 26,
-              ),
-              const SizedBox(width: 10),
               Text(
-                'Finish line reached',
+                '$_currentValue / $_targetValue',
+                style: AppTextStyles.displayLarge.copyWith(
+                  color: NuvoColors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'FINISH LINE',
                 style: AppTextStyles.titleLarge.copyWith(
                   color: NuvoColors.white,
                 ),
