@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -18,6 +19,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../ai/camera_image_converter.dart';
+import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/pose_detector_service.dart';
 import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
@@ -52,12 +54,46 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   CameraDescription? _selectedCamera;
   AiMotionProofStatus _status = AiMotionProofStatus.setup;
   AiMotionResult? _result;
+  CustomPoseRuntimeResult? _customResult;
+  bool _isCustom = false;
+  String? _customMovementName;
+  CustomPoseRuntimeUpdate? _customUpdate;
   String? _message;
   bool _disposed = false;
   Timer? _recordingTimer;
   Duration _elapsed = Duration.zero;
   int _debugFrameCount = 0;
   bool _autoSubmitScheduled = false;
+
+  // ── Live rep feedback ───────────────────────────────────────────────────────
+  // Purely presentational. These only ever mirror the count the validator has
+  // already awarded — they never add to it or influence verification.
+  int _lastCountedValue = 0;
+  int _repFlashSeq = 0;
+  int _repFlashDelta = 0;
+  String _repFlashPhrase = '';
+
+  /// Rep-by-rep encouragement. Rotates deterministically by rep number so the
+  /// copy feels varied without flickering between frames.
+  static const _repPhrases = [
+    'Nice job',
+    'Clean rep',
+    "That's it",
+    'Strong',
+    'Keep it up',
+    'Locked in',
+  ];
+
+  /// Hold movements score in seconds, so a per-second "+1" would be noise.
+  bool get _usesRepFlash =>
+      _isCustom || _activity != AiMotionActivity.plankHold;
+
+  void _resetRepFlash() {
+    _lastCountedValue = 0;
+    _repFlashSeq = 0;
+    _repFlashDelta = 0;
+    _repFlashPhrase = '';
+  }
 
   @override
   void initState() {
@@ -89,12 +125,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       }
       final raceTarget = race.targetValue;
       final alreadyDone = myPart?.progressValue ?? 0;
-      final target = race.format == 'first_to_goal'
+      final isCustom = race.isCustomVerifierRace;
+      final target = isCustom
+          ? (raceTarget != null && raceTarget > 0
+                ? (raceTarget - alreadyDone).clamp(1, raceTarget)
+                : 1)
+          : race.format == 'first_to_goal'
           ? (raceTarget != null && raceTarget > 0
                 ? (raceTarget - alreadyDone).clamp(1, raceTarget)
                 : eligibility.movementDefinition?.defaultTarget ?? 1)
           : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
-      final resolution = _runtimeResolver.resolve(eligibility: eligibility);
+      final resolution = _runtimeResolver.resolve(
+        eligibility: eligibility,
+        explicitVerifierType:
+            isCustom ? VerifierType.customPoseSequence.id : null,
+      );
       if (!resolution.canCreateRuntime) {
         setState(() {
           _status = AiMotionProofStatus.unsupportedMovement;
@@ -102,14 +147,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         });
         return;
       }
-      final runtime = resolution.createRuntime(target: target);
+      final VerifierRuntime runtime;
+      if (isCustom) {
+        runtime = resolution.createRuntime(
+          target: target,
+          customSpec: race.customVerifierSpec!,
+        );
+      } else {
+        runtime = resolution.createRuntime(target: target);
+      }
       setState(() {
         _runtime = runtime;
-        _activity = runtime.movement.activity;
-        _metric =
-            race.metric ??
-            eligibility.movementDefinition?.metric.backendValue ??
-            'reps';
+        _isCustom = isCustom;
+        _customMovementName = isCustom ? race.customActivityName : null;
+        _customUpdate = null;
+        _result = null;
+        _customResult = null;
+        if (!isCustom) {
+          _activity = runtime.movement.activity;
+        }
+        _metric = race.metric ?? 'reps';
         _raceTotalBefore = myPart?.progressValue ?? 0;
         _raceTargetValue = race.targetValue;
       });
@@ -231,9 +288,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _runtime.start();
     _elapsed = Duration.zero;
     _debugFrameCount = 0;
+    _resetRepFlash();
     _debugLog(
-      'verificationStarted movement=${_runtime.movement.type.name} '
-      'mode=camera target=${_runtime.targetValue}',
+      _isCustom
+          ? 'verificationStarted custom=${_customMovementName ?? 'custom'} '
+            'mode=camera target=${_runtime.targetValue}'
+          : 'verificationStarted movement=${_runtime.movement.type.name} '
+            'mode=camera target=${_runtime.targetValue}',
     );
     setState(() {
       _status = AiMotionProofStatus.recording;
@@ -276,15 +337,34 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       if (_disposed || _status != AiMotionProofStatus.recording) return;
       if (frame == null) return;
       final output = _runtime.update(frame);
+      if (_isCustom) {
+        _customUpdate = output.customPoseUpdate;
+      }
+      // Mirror a newly awarded rep as live feedback. Reads the validator's
+      // count; never modifies it.
+      if (_usesRepFlash && output.count > _lastCountedValue) {
+        _repFlashDelta = output.count - _lastCountedValue;
+        _lastCountedValue = output.count;
+        _repFlashSeq++;
+        _repFlashPhrase = _repPhrases[output.count % _repPhrases.length];
+        HapticFeedback.lightImpact();
+      }
       _debugFrameCount++;
       if (_debugFrameCount == 1 || _debugFrameCount % 15 == 0) {
         _debugLog(
-          'validatorState=${output.validatorState} '
-          'movement=${output.selectedMovement.type.name} '
-          'count=${output.count} holdSeconds=${output.holdSeconds} '
-          'confidence=${output.confidence.toStringAsFixed(2)} '
-          'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
-          'debug=${output.debugValues}',
+          _isCustom
+              ? 'validatorState=${output.validatorState} '
+                'custom=${_customMovementName ?? 'custom'} '
+                'count=${output.count} '
+                'confidence=${output.confidence.toStringAsFixed(2)} '
+                'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
+                'debug=${output.debugValues}'
+              : 'validatorState=${output.validatorState} '
+                'movement=${output.selectedMovement.type.name} '
+                'count=${output.count} holdSeconds=${output.holdSeconds} '
+                'confidence=${output.confidence.toStringAsFixed(2)} '
+                'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
+                'debug=${output.debugValues}',
         );
       }
       if (mounted) setState(() {});
@@ -313,6 +393,35 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
     final verifierResult = _runtime.finish();
+    if (_isCustom) {
+      final result = verifierResult.customPoseResult;
+      if (result == null) {
+        if (!mounted) return;
+        setState(() {
+          _status = AiMotionProofStatus.unsupportedMovement;
+          _message = 'This custom movement cannot be submitted as proof yet.';
+        });
+        return;
+      }
+      _debugLog(
+        'verificationFinished custom=${_customMovementName ?? 'custom'} '
+        'value=${result.count} '
+        'confidence=${result.confidence.toStringAsFixed(2)} '
+        'status=${result.verificationStatus} '
+        'failedRule=${_runtime.failedRuleReason.isEmpty ? 'none' : _runtime.failedRuleReason}',
+      );
+      if (!mounted) return;
+      setState(() {
+        _customResult = result;
+        _result = null;
+        _status = result.isVerified
+            ? AiMotionProofStatus.aiVerified
+            : AiMotionProofStatus.aiFailed;
+        _message = null;
+      });
+      if (result.isVerified) _scheduleAutoSubmit();
+      return;
+    }
     final result = verifierResult.aiMotionResult;
     if (result == null) {
       if (!mounted) return;
@@ -352,6 +461,55 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Future<void> _submitVerifiedProof() async {
+    if (_isCustom) {
+      final result = _customResult;
+      if (result == null || !result.isVerified) return;
+      setState(() {
+        _status = AiMotionProofStatus.submitting;
+        _message = null;
+      });
+      try {
+        final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
+        _clientSubmissionId = clientSubmissionId;
+        final race = await ref
+            .read(raceControllerProvider.notifier)
+            .submitCustomPoseProof(
+              widget.raceId,
+              result: result,
+              clientSubmissionId: clientSubmissionId,
+            );
+        if (!mounted) return;
+        setState(() => _status = AiMotionProofStatus.submitted);
+        final submission = race.submissionResult;
+        context.go(
+          '/race/${widget.raceId}/board-moved',
+          extra: BoardMovedArgs(
+            raceId: widget.raceId,
+            raceName: race.title,
+            value: submission?.verifiedValue ?? result.count,
+            unit: race.metric ?? _metric,
+            status: result.verificationStatus,
+            rankBefore: submission?.previousRank,
+            rankAfter: submission?.newRank,
+            peoplePassed: submission?.peoplePassed,
+          ),
+        );
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _status = AiMotionProofStatus.aiVerified;
+          _message = e.message;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _status = AiMotionProofStatus.aiVerified;
+          _message = 'Verified proof could not be submitted. Try again.';
+        });
+      }
+      return;
+    }
+
     final result = _result;
     if (result == null || !result.isVerified) return;
     setState(() {
@@ -405,10 +563,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await _stopImageStream();
     setState(() {
       _result = null;
+      _customResult = null;
+      _customUpdate = null;
       _message = null;
       _elapsed = Duration.zero;
       _autoSubmitScheduled = false;
       _clientSubmissionId = null;
+      _resetRepFlash();
       _status = _cameraController?.value.isInitialized == true
           ? AiMotionProofStatus.cameraReady
           : AiMotionProofStatus.setup;
@@ -455,12 +616,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int get _currentValue => _runtime.currentValue;
 
   String get _targetLabel {
+    if (_isCustom) return '$_targetValue reps';
     final definition = motionActivityForBackendValue(_activity.backendValue);
     return definition?.targetLabel(_targetValue) ??
         '$_targetValue ${_activity.label}';
   }
 
   String get _counterLabel {
+    if (_isCustom) return '$_currentValue / $_targetValue';
     final definition = motionActivityForBackendValue(_activity.backendValue);
     return definition?.counterLabel(_currentValue, _targetValue) ??
         '$_currentValue / $_targetValue';
@@ -469,8 +632,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String get _raceTotalLabel {
     final total = _raceTotalBefore + _currentValue;
     final target = _raceTargetValue;
-    final definition = motionActivityForBackendValue(_activity.backendValue);
-    final metricLabel = definition?.metric.label ?? _metric;
+    final metricLabel = _isCustom
+        ? _metric
+        : motionActivityForBackendValue(_activity.backendValue)?.metric.label ??
+            _metric;
     if (target != null && target > 0) {
       return '$total / $target $metricLabel race total';
     }
@@ -478,17 +643,33 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   String get _movementTitle =>
-      motionActivityForBackendValue(_activity.backendValue)?.title ??
-      _activity.label;
+      _isCustom
+          ? (_customMovementName ?? 'Custom movement')
+          : motionActivityForBackendValue(_activity.backendValue)?.title ??
+              _activity.label;
 
   String get _cameraInstruction =>
-      motionActivityForBackendValue(
-        _activity.backendValue,
-      )?.cameraInstruction ??
-      'Full body front view';
+      _isCustom
+          ? 'Perform ${_customMovementName ?? 'the movement'} with your whole body visible.'
+          : motionActivityForBackendValue(
+                _activity.backendValue,
+              )?.cameraInstruction ??
+              'Full body front view';
+
+  /// True while a live preview is on screen. In that case the camera takes the
+  /// whole screen instead of sitting in an inset card.
+  bool get _isImmersiveCamera {
+    final controller = _cameraController;
+    return controller != null &&
+        controller.value.isInitialized &&
+        (_status == AiMotionProofStatus.cameraReady ||
+            _status == AiMotionProofStatus.recording);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isImmersiveCamera) return _immersiveCameraScaffold();
+
     return Scaffold(
       backgroundColor: NuvoColors.page,
       bottomNavigationBar: SafeArea(
@@ -573,6 +754,116 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
+  /// Edge-to-edge camera. Every control floats over the preview so the
+  /// movement being verified gets the entire screen.
+  Widget _immersiveCameraScaffold() {
+    final controller = _cameraController!;
+    final recording = _status == AiMotionProofStatus.recording;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _cameraPreview(controller),
+
+          // Scrims so floating controls stay legible over any background.
+          const IgnorePointer(child: _EdgeScrim(fromTop: true, extent: 200)),
+          const IgnorePointer(child: _EdgeScrim(fromTop: false, extent: 320)),
+
+          if (!recording)
+            Positioned.fill(child: IgnorePointer(child: _bodyGuideOverlay())),
+
+          // Rep burst sits dead centre of the full screen.
+          if (recording && _repFlashSeq > 0)
+            Positioned.fill(
+              child: IgnorePointer(child: Center(child: _repFlashOverlay())),
+            ),
+
+          // Top controls.
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Row(
+                children: [
+                  _immersiveIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    onPressed: () =>
+                        safePopOrGo(context, '/race/${widget.raceId}/proof'),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _pill(
+                        recording ? _raceTotalLabel : 'Goal: $_targetLabel',
+                        color: recording
+                            ? (_currentValue >= _targetValue
+                                  ? NuvoColors.success
+                                  : NuvoColors.danger)
+                            : NuvoColors.blue,
+                      ),
+                    ),
+                  ),
+                  _visibilityPill(),
+                  if (_cameras.length > 1 && !recording) ...[
+                    const SizedBox(width: 8),
+                    _immersiveIconButton(
+                      icon: Icons.cameraswitch_rounded,
+                      onPressed: _toggleCamera,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          if (kDebugMode && _isCustom && recording)
+            Positioned(
+              left: 14,
+              right: 14,
+              top: 110,
+              child: _customDebugOverlay(),
+            ),
+
+          // Bottom HUD + actions.
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (recording) ...[
+                      _recordingHud(),
+                      const SizedBox(height: 12),
+                    ],
+                    ..._actions(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _immersiveIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton.filled(
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black.withValues(alpha: 0.45),
+        foregroundColor: NuvoColors.white,
+      ),
+      icon: Icon(icon),
+    );
+  }
+
   Widget _loadingPanel() {
     return Container(
       decoration: BoxDecoration(
@@ -653,7 +944,38 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             Positioned.fill(child: IgnorePointer(child: _bodyGuideOverlay())),
           if (_status == AiMotionProofStatus.recording)
             Positioned(left: 14, right: 14, bottom: 14, child: _recordingHud()),
+          if (_status == AiMotionProofStatus.recording && _repFlashSeq > 0)
+            Positioned(left: 0, right: 0, bottom: 92, child: _repFlashOverlay()),
+          if (kDebugMode && _isCustom && _status == AiMotionProofStatus.recording)
+            Positioned(left: 14, right: 14, top: 80, child: _customDebugOverlay()),
         ],
+      ),
+    );
+  }
+
+  Widget _customDebugOverlay() {
+    final update = _customUpdate;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+      ),
+      child: DefaultTextStyle(
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('state: ${update?.state.name ?? '--'}'),
+            Text('count: ${update?.count ?? 0} / ${update?.target ?? _targetValue}'),
+            Text('sequence: ${(update?.sequenceProgress ?? 0).toStringAsFixed(2)}'),
+            Text('similarity: ${(update?.currentSimilarity ?? 0).toStringAsFixed(2)}'),
+            Text('valid features: ${(update?.validFeatureRatio ?? 0).toStringAsFixed(2)}'),
+            if (update?.failureReason != null)
+              Text('reset: ${update!.failureReason}', style: const TextStyle(color: NuvoColors.danger)),
+          ],
+        ),
       ),
     );
   }
@@ -698,6 +1020,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // Premium verified result panel.
   Widget _resultPanel() {
     final result = _result;
+    final customResult = _customResult;
     final isVerified =
         _status == AiMotionProofStatus.aiVerified ||
         _status == AiMotionProofStatus.submitting ||
@@ -731,7 +1054,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     .fadeIn(duration: 200.ms, curve: Curves.easeOut),
                 const SizedBox(height: 14),
                 Text(
-                      '+${_countedLabel(result)}',
+                      _isCustom
+                          ? '+${_customCountedLabel(customResult)}'
+                          : '+${_countedLabel(result)}',
                       style: AppTextStyles.displayMedium.copyWith(
                         color: NuvoColors.white,
                       ),
@@ -763,7 +1088,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
 
     // Failed / coaching state.
-    final detected = result?.detectedReps ?? 0;
+    final detected = _isCustom
+        ? (customResult?.count ?? 0)
+        : (result?.detectedReps ?? 0);
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.icyBlue,
@@ -794,7 +1121,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               Text('Try again', style: AppTextStyles.headlineLarge),
               const SizedBox(height: 8),
               Text(
-                _activity == AiMotionActivity.plankHold
+                _isCustom
+                    ? 'Detected $detected clean ${customResult?.movementName ?? _customMovementName ?? 'reps'} out of $_targetValue.'
+                    : _activity == AiMotionActivity.plankHold
                     ? 'Counted $detected valid seconds out of $_targetValue.'
                     : 'Detected $detected clean ${_activity.label} out of $_targetValue.',
                 style: AppTextStyles.bodyLarge.copyWith(
@@ -814,6 +1143,52 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           ),
         ),
       ),
+    );
+  }
+
+  /// "+1 · Nice job" burst shown the moment the validator awards a rep.
+  /// Keyed on [_repFlashSeq] so each counted rep replays the animation.
+  Widget _repFlashOverlay() {
+    const shadows = [
+      Shadow(color: Color(0xB3000000), blurRadius: 18, offset: Offset(0, 3)),
+    ];
+
+    return IgnorePointer(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '+$_repFlashDelta',
+            style: AppTextStyles.displayLarge.copyWith(
+              fontSize: 104,
+              color: NuvoColors.white,
+              shadows: shadows,
+            ),
+          ),
+          Text(
+            _repFlashPhrase,
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: NuvoColors.white,
+              shadows: shadows,
+            ),
+          ),
+        ],
+      )
+          .animate(key: ValueKey(_repFlashSeq))
+          .fadeIn(duration: 110.ms)
+          .scale(
+            begin: const Offset(0.65, 0.65),
+            end: const Offset(1, 1),
+            duration: 260.ms,
+            curve: Curves.easeOutBack,
+          )
+          .slideY(
+            begin: 0.35,
+            end: -0.35,
+            duration: 820.ms,
+            curve: Curves.easeOutCubic,
+          )
+          .fadeOut(delay: 420.ms, duration: 380.ms),
     );
   }
 
@@ -1067,6 +1442,43 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _ => _activity.label,
     };
     return '$value $unit';
+  }
+
+  String _customCountedLabel(CustomPoseRuntimeResult? result) {
+    final value = result?.count ?? _targetValue;
+    return '$value ${result?.movementName ?? _customMovementName ?? 'reps'}';
+  }
+}
+
+/// Top/bottom gradient scrim that keeps floating controls readable over the
+/// live camera feed.
+class _EdgeScrim extends StatelessWidget {
+  const _EdgeScrim({required this.fromTop, required this.extent});
+
+  final bool fromTop;
+  final double extent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: fromTop ? Alignment.topCenter : Alignment.bottomCenter,
+      child: SizedBox(
+        height: extent,
+        width: double.infinity,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: fromTop ? Alignment.topCenter : Alignment.bottomCenter,
+              end: fromTop ? Alignment.bottomCenter : Alignment.topCenter,
+              colors: [
+                Colors.black.withValues(alpha: fromTop ? 0.62 : 0.78),
+                Colors.black.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -99,11 +99,29 @@ function hasOnlyFiniteNumbers(value: unknown): boolean {
   return true;
 }
 
+function validatePoseFeatureVector(value: unknown): boolean {
+  const vector = recordValue(value);
+  const values = recordValue(vector?.values);
+  if (!values || Object.keys(values).length === 0) return false;
+  return Object.values(values).every((raw) => {
+    const feature = recordValue(raw);
+    return Boolean(
+      feature &&
+      finiteNumber(feature.value) &&
+      ratio(feature.confidence) &&
+      typeof feature.valid === 'boolean' &&
+      typeof feature.kind === 'string' &&
+      feature.kind.length > 0,
+    );
+  });
+}
+
 function validatePoseObject(value: unknown): boolean {
   const pose = recordValue(value);
   if (!pose) return false;
   const landmarks = recordValue(pose.landmarks);
-  return Boolean(landmarks && Object.keys(landmarks).length > 0);
+  if (landmarks && Object.keys(landmarks).length > 0) return true;
+  return validatePoseFeatureVector(pose.features);
 }
 
 function validateTemplateFrame(value: unknown): boolean {
@@ -153,6 +171,32 @@ function validateCustomVerifierSpec(spec: Record<string, unknown>, customActivit
   const active = stringList(spec.activeFeatureIds);
   if (!required || required.length === 0 || !active || active.length === 0) {
     return 'Custom verifier must include active and required features.';
+  }
+  if (new Set(active).size !== active.length || new Set(required).size !== required.length) {
+    return 'Custom verifier contains duplicate feature ids.';
+  }
+  const activeSet = new Set(active);
+  if (!required.every((id) => activeSet.has(id))) {
+    return 'Custom verifier required features must also be active.';
+  }
+  let previousPosition = -1;
+  for (const rawFrame of sequence) {
+    const frame = recordValue(rawFrame);
+    const position = typeof frame?.position === 'number' ? frame.position : -1;
+    if (position <= previousPosition) return 'Custom verifier sequence positions must increase.';
+    previousPosition = position;
+    const features = recordValue(frame?.features);
+    if (!features) return 'Custom verifier sequence is invalid.';
+    if (!Object.keys(features).every((id) => activeSet.has(id))) {
+      return 'Custom verifier sequence uses inactive features.';
+    }
+  }
+  if (sequence.length > 1) {
+    const first = recordValue(sequence[0]);
+    const last = recordValue(sequence[sequence.length - 1]);
+    if (first?.position !== 0 || last?.position !== 1) {
+      return 'Custom verifier sequence must include start and finish frames.';
+    }
   }
   const thresholds = [
     spec.sequenceSimilarityThreshold,

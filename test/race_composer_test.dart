@@ -1,9 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
+import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/presentation/race_composer_screen.dart';
 
 import 'fixtures/pose_fixtures.dart';
 
@@ -56,6 +58,20 @@ CustomPoseVerifierSpec _anySpec() {
     cooldownMs: 500,
     expectedSequenceFrameCount: 1,
     calibrationSummary: summary,
+  );
+}
+
+Race _race({required String title}) {
+  return Race(
+    id: 'race_1',
+    creatorId: 'user_1',
+    title: title,
+    goalType: 'first_to_goal',
+    targetValue: 10,
+    unit: 'reps',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   );
 }
 
@@ -387,6 +403,27 @@ void main() {
       expect(draft.toCreatePayload, throwsUnsupportedError);
     });
 
+    test('switching from custom to preset clears verifier state', () {
+      final custom = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      final preset = custom.asPreset(activity: _jacks, targetValue: 25);
+
+      expect(preset.isCustom, isFalse);
+      expect(preset.customActivityName, isNull);
+      expect(preset.verifierSpec, isNull);
+      expect(preset.isValidToCreate, isTrue);
+      expect(preset.toCreatePayload()['activityId'], 'jumping_jacks');
+    });
+
     test('UI shows learned movement name in title and display', () {
       final draft = RaceDraft(
         title: 'My Custom Race',
@@ -402,6 +439,114 @@ void main() {
       expect(draft.displayActivityName, 'Overhead Wave');
       expect(draft.resolvedTitle, 'My Custom Race');
       expect(draft.generatedTitleText, 'First to 15 Overhead Wave');
+    });
+
+    test('composer custom draft calls createCustomRace', () async {
+      final spec = _anySpec();
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 12,
+        customActivityName: 'Overhead Wave',
+        verifierSpec: spec,
+      );
+      var customCalled = false;
+      var presetCalled = false;
+
+      final race = await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace:
+            ({
+              required title,
+              required targetValue,
+              required customActivityName,
+              required verifierSpec,
+            }) async {
+              customCalled = true;
+              expect(title, 'First to 12 Overhead Wave');
+              expect(targetValue, 12);
+              expect(customActivityName, 'Overhead Wave');
+              expect(verifierSpec, same(spec));
+              return _race(title: title);
+            },
+        createRace:
+            ({
+              required title,
+              description,
+              category,
+              goalType = 'manual',
+              targetValue,
+              unit,
+              proofRequirement,
+              proofReviewMode,
+              visibility,
+              aiActivityType,
+              activityId,
+              metric,
+              format,
+              recurrence,
+              targetUnit,
+              proofMode,
+            }) async {
+              presetCalled = true;
+              return _race(title: title);
+            },
+      );
+
+      expect(race.title, 'First to 12 Overhead Wave');
+      expect(customCalled, isTrue);
+      expect(presetCalled, isFalse);
+    });
+
+    test('composer preset draft calls createRace', () async {
+      final draft = draftForActivity(_jacks).copyWith(targetValue: 30);
+      var customCalled = false;
+      var presetCalled = false;
+
+      final race = await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace:
+            ({
+              required title,
+              required targetValue,
+              required customActivityName,
+              required verifierSpec,
+            }) async {
+              customCalled = true;
+              return _race(title: title);
+            },
+        createRace:
+            ({
+              required title,
+              description,
+              category,
+              goalType = 'manual',
+              targetValue,
+              unit,
+              proofRequirement,
+              proofReviewMode,
+              visibility,
+              aiActivityType,
+              activityId,
+              metric,
+              format,
+              recurrence,
+              targetUnit,
+              proofMode,
+            }) async {
+              presetCalled = true;
+              expect(title, 'First to 30 Jumping Jacks');
+              expect(activityId, 'jumping_jacks');
+              return _race(title: title);
+            },
+      );
+
+      expect(race.title, 'First to 30 Jumping Jacks');
+      expect(customCalled, isFalse);
+      expect(presetCalled, isTrue);
     });
   });
 }

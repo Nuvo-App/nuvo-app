@@ -1,5 +1,6 @@
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
+import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
 import 'race_api.dart';
@@ -174,6 +175,19 @@ class RaceRepository {
       result: result,
       clientSubmissionId: clientSubmissionId,
       metric: metric,
+    ),
+  );
+
+  Future<Race> submitCustomPoseProof(
+    String raceId, {
+    required CustomPoseRuntimeResult result,
+    required String clientSubmissionId,
+  }) => _withRefresh(
+    (token) => _api.submitCustomPoseProof(
+      token,
+      raceId,
+      result: result,
+      clientSubmissionId: clientSubmissionId,
     ),
   );
 

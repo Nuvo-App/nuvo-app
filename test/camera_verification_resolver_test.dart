@@ -143,12 +143,12 @@ void main() {
       expect(eligibility.reason, 'unsupported_explicit_activity');
     });
 
-    test('custom verifier races do not route to preset proof', () {
+    test('custom verifier with missing spec is not verifiable', () {
       final eligibility = resolveCameraVerification(
         const Race(
           id: 'race-custom',
           creatorId: 'user-1',
-          title: 'First to 10 Pushups',
+          title: 'First to 10 Overhead knee touch',
           goalType: 'first_to_goal',
           targetValue: 10,
           unit: 'reps',
@@ -166,7 +166,88 @@ void main() {
 
       expect(eligibility.isCameraVerifiable, isFalse);
       expect(eligibility.movementType, isNull);
-      expect(eligibility.reason, 'custom_verifier_proof_not_enabled');
+      expect(eligibility.source, CameraVerificationSource.unresolved);
+      expect(eligibility.reason, 'unsupported_custom_verifier_version');
+    });
+
+    test('custom verifier with unsupported version is not verifiable', () {
+      final eligibility = resolveCameraVerification(
+        const Race(
+          id: 'race-custom',
+          creatorId: 'user-1',
+          title: 'First to 10 Overhead knee touch',
+          goalType: 'first_to_goal',
+          targetValue: 10,
+          unit: 'reps',
+          metric: 'reps',
+          proofRequirement: 'ai_check',
+          proofMode: 'ai_check',
+          verificationMethod: 'ai',
+          verifierType: 'custom_pose_sequence',
+          verifierVersion: 99,
+          customActivityName: 'Overhead knee touch',
+          status: 'active',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        ),
+      );
+
+      expect(eligibility.isCameraVerifiable, isFalse);
+      expect(eligibility.reason, 'unsupported_custom_verifier_version');
+    });
+
+    test('custom verifier with invalid stored spec is not verifiable', () {
+      final eligibility = resolveCameraVerification(
+        const Race(
+          id: 'race-custom',
+          creatorId: 'user-1',
+          title: 'First to 10 Overhead knee touch',
+          goalType: 'first_to_goal',
+          targetValue: 10,
+          unit: 'reps',
+          metric: 'reps',
+          proofRequirement: 'ai_check',
+          proofMode: 'ai_check',
+          verificationMethod: 'ai',
+          verifierType: 'custom_pose_sequence',
+          verifierVersion: 1,
+          customActivityName: 'Overhead knee touch',
+          verifierInvalidReason: 'Custom verifier spec is invalid.',
+          status: 'active',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        ),
+      );
+
+      expect(eligibility.isCameraVerifiable, isFalse);
+      expect(eligibility.reason, 'invalid_custom_verifier_spec');
+    });
+
+    test('custom verifier does not fall back to preset activity inference', () {
+      final eligibility = resolveCameraVerification(
+        const Race(
+          id: 'race-custom',
+          creatorId: 'user-1',
+          title: 'First to 10 Pushups',
+          goalType: 'first_to_goal',
+          targetValue: 10,
+          unit: 'reps',
+          metric: 'reps',
+          proofRequirement: 'ai_check',
+          proofMode: 'ai_check',
+          verificationMethod: 'ai',
+          verifierType: 'custom_pose_sequence',
+          verifierVersion: 1,
+          customActivityName: 'Pushup-like custom',
+          status: 'active',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        ),
+      );
+
+      expect(eligibility.isCameraVerifiable, isFalse);
+      expect(eligibility.movementType, isNull);
+      expect(eligibility.reason, 'missing_custom_verifier_spec');
     });
   });
 }

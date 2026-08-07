@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
@@ -17,12 +18,48 @@ import '../../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
 import '../../ai/custom_pose/pose_calibration_flow.dart';
-import '../../ai/custom_pose/pose_normalizer.dart';
-import '../../ai/pose_detector_service.dart';
+import '../../ai/custom_pose/pose_stream_controller.dart';
 import '../../data/ai_motion_models.dart';
 import 'learned_custom_movement_provider.dart';
 
+const bool kNuvoDiagnosticsEnabled = bool.fromEnvironment('NUVO_DIAGNOSTICS');
 const _debugFixtureFeatureId = 'angle.left_hip';
+
+@visibleForTesting
+class SkeletonFrameHold {
+  SkeletonFrameHold({required this.holdDuration});
+
+  final Duration holdDuration;
+  NuvoPoseFrame? _frame;
+  DateTime? _lastVisibleAt;
+
+  NuvoPoseFrame? get frame => _frame;
+  DateTime? get lastVisibleAt => _lastVisibleAt;
+
+  void show(NuvoPoseFrame frame, DateTime now) {
+    _frame = frame;
+    _lastVisibleAt = now;
+  }
+
+  bool expire(DateTime now) {
+    final last = _lastVisibleAt;
+    if (last == null) {
+      final changed = _frame != null;
+      clear();
+      return changed;
+    }
+    if (now.difference(last) > holdDuration) {
+      clear();
+      return true;
+    }
+    return false;
+  }
+
+  void clear() {
+    _frame = null;
+    _lastVisibleAt = null;
+  }
+}
 
 class TeachMovementScreen extends ConsumerStatefulWidget {
   const TeachMovementScreen({super.key, this.seedReadyFixture = false});
@@ -40,8 +77,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   final _raceTitleController = TextEditingController();
   final _raceTargetController = TextEditingController(text: '10');
   late final SingleSessionTeachingCapture _flow;
-  final _poseDetector = PoseDetectorService();
-  final _normalizer = const PoseNormalizer();
+  final _poseStream = PoseStreamController();
   CameraController? _cameraController;
   List<CameraDescription> _cameras = const [];
   CameraDescription? _selectedCamera;
@@ -57,24 +93,25 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   CustomPoseRuntimeUpdate? _customUpdate;
   CustomPoseRuntimeResult? _customTestResult;
   CustomPoseVerifierSpec? _debugSpec;
-  NuvoPoseFrame? _latestFrame;
-  DateTime? _lastVisibleFrameAt;
+  final List<Map<String, dynamic>> _runtimeDiagnostics = [];
   Timer? _uiUpdateTimer;
+  Timer? _skeletonExpiryTimer;
   static const int _testTarget = 1;
-  static const int _skeletonHoldMs = 400;
+  static const int _skeletonHoldMs = 900;
   static const int _uiThrottleMs = 100;
+  final _skeletonHold = SkeletonFrameHold(
+    holdDuration: const Duration(milliseconds: _skeletonHoldMs),
+  );
   bool _learnedWrittenToProvider = false;
-  Timer? _clipTimer;
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
+  bool get _showDiagnostics => kDebugMode || kNuvoDiagnosticsEnabled;
 
   @override
   void initState() {
     super.initState();
-    _flow = SingleSessionTeachingCapture(
-      onChanged: _onFlowChanged,
-    );
+    _flow = SingleSessionTeachingCapture(onChanged: _onFlowChanged);
     WidgetsBinding.instance.addObserver(this);
     if (kDebugMode && widget.seedReadyFixture) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -91,10 +128,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _raceTitleController.dispose();
     _raceTargetController.dispose();
     _stopCamera();
-    _poseDetector.dispose();
+    _poseStream.dispose();
     _customRuntime?.dispose();
-    _clipTimer?.cancel();
-    _clipTimer = null;
+    _skeletonExpiryTimer?.cancel();
     super.dispose();
   }
 
@@ -126,6 +162,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       }
       final selected = camera ?? _preferredCamera(_cameras);
       _selectedCamera = selected;
+      _syncCaptureDeviceInfo(selected);
       await _stopImageStream();
       await _cameraController?.dispose();
       final controller = CameraController(
@@ -184,30 +221,37 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   ) async {
     if (_disposed || !_cameraReady) return;
     try {
-      final frame = await _poseDetector.processCameraImage(
+      final update = await _poseStream.processCameraImage(
         image: image,
         camera: camera,
         deviceOrientation: orientation,
       );
       if (!mounted || _disposed) return;
       final now = DateTime.now();
-      if (frame == null) {
+      if (update.skipped) {
+        _expireSkeletonIfNeeded(now);
+        _requestSetState();
+        return;
+      }
+      final frame = update.frame;
+      final pose = update.pose;
+      if (frame == null || pose == null) {
         _flow.markFrameMissing();
         _expireSkeletonIfNeeded(now);
         _requestSetState();
         return;
       }
-      final pose = _normalizer.normalize(frame);
       _flow.addFrame(pose, frame.createdAt);
       if (_flow.isBodyVisiblePose(pose)) {
-        _latestFrame = frame;
-        _lastVisibleFrameAt = now;
+        _skeletonHold.show(frame, now);
+        _scheduleSkeletonExpiry();
       } else {
         _expireSkeletonIfNeeded(now);
       }
       if (_testingVerifier) {
         final update = _customRuntime?.update(frame);
         _customUpdate = update?.customPoseUpdate;
+        _recordRuntimeDiagnostic(_customUpdate);
         if (_customUpdate?.completed == true && _customTestResult == null) {
           _completeVerifierTest();
         }
@@ -215,14 +259,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _requestSetState();
     } on CameraImageConversionException catch (e) {
       _flow.message = e.message;
-      _latestFrame = null;
-      _lastVisibleFrameAt = null;
+      _skeletonHold.clear();
       await _stopImageStream();
       _requestSetState();
     } catch (_) {
       _flow.message = 'Pose detection failed. Try again.';
-      _latestFrame = null;
-      _lastVisibleFrameAt = null;
+      _skeletonHold.clear();
       await _stopImageStream();
       _requestSetState();
     }
@@ -260,12 +302,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _cameraReady = false;
     _cameraBusy = false;
     _imageStreamStarting = false;
-    _latestFrame = null;
-    _lastVisibleFrameAt = null;
+    _poseStream.reset();
+    _skeletonHold.clear();
     _uiUpdateTimer?.cancel();
     _uiUpdateTimer = null;
-    _clipTimer?.cancel();
-    _clipTimer = null;
+    _skeletonExpiryTimer?.cancel();
+    _skeletonExpiryTimer = null;
     _flow.markFrameMissing();
   }
 
@@ -280,8 +322,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _setCameraError(String message) {
     if (!mounted || _disposed) return;
-    _latestFrame = null;
-    _lastVisibleFrameAt = null;
+    _skeletonHold.clear();
     _flow.markFrameMissing();
     setState(() {
       _cameraReady = false;
@@ -290,16 +331,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _expireSkeletonIfNeeded(DateTime now) {
-    final last = _lastVisibleFrameAt;
-    if (last == null) {
-      _latestFrame = null;
-      _lastVisibleFrameAt = null;
-      return;
-    }
-    if (now.difference(last).inMilliseconds > _skeletonHoldMs) {
-      _latestFrame = null;
-      _lastVisibleFrameAt = null;
-    }
+    _skeletonHold.expire(now);
+  }
+
+  void _scheduleSkeletonExpiry() {
+    _skeletonExpiryTimer?.cancel();
+    _skeletonExpiryTimer = Timer(
+      const Duration(milliseconds: _skeletonHoldMs + 20),
+      () {
+        if (_disposed || !mounted) return;
+        _expireSkeletonIfNeeded(DateTime.now());
+        _requestSetState();
+      },
+    );
   }
 
   bool _isPermissionError(CameraException e) =>
@@ -320,31 +364,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _startRecording() {
-    _clipTimer?.cancel();
-    _clipTimer = null;
     _flow.startRecordingExample();
-    _clipTimer = Timer.periodic(const Duration(milliseconds: 100), _checkClip);
   }
 
-  void _checkClip(Timer timer) {
-    final started = _flow.clipStartedAt;
-    final processed = _flow.liveProcessedFrameCount;
-    final minProcessed = _flow.liveMinProcessedFrameCount;
-    if (started == null || processed == null || minProcessed == null) return;
-    final elapsed = DateTime.now().difference(started);
-    final minDuration = _flow.clipDuration;
-    final maxWait = _flow.maxClipWait;
-    if ((elapsed >= minDuration && processed >= minProcessed) ||
-        elapsed >= maxWait) {
-      _clipTimer?.cancel();
-      _clipTimer = null;
-      _flow.stopRecordingExample();
-    }
+  void _finishRecording() {
+    _flow.stopRecordingExample();
   }
 
   void _cancelRecording() {
-    _clipTimer?.cancel();
-    _clipTimer = null;
     _flow.cancelRecordingExample();
   }
 
@@ -361,17 +388,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _onFlowChanged() {
-    if (_flow.stage != TeachMovementStage.recording) {
-      _clipTimer?.cancel();
-      _clipTimer = null;
-    }
     final spec = _effectiveSpec;
     if (spec != null && !_learnedWrittenToProvider) {
       _learnedWrittenToProvider = true;
-      ref.read(learnedCustomMovementProvider.notifier).state = LearnedCustomMovement(
-        verifierSpec: spec,
-        learnedAt: DateTime.now(),
-      );
+      ref.read(learnedCustomMovementProvider.notifier).state =
+          LearnedCustomMovement(verifierSpec: spec, learnedAt: DateTime.now());
     }
     _requestSetState();
   }
@@ -384,6 +405,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customRuntime = null;
     _customUpdate = null;
     _customTestResult = null;
+    _runtimeDiagnostics.clear();
 
     _testingVerifier = false;
 
@@ -392,8 +414,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _debugSpec = null;
     _learnedWrittenToProvider = false;
     ref.read(learnedCustomMovementProvider.notifier).state = null;
-    _latestFrame = null;
-    _lastVisibleFrameAt = null;
+    _skeletonHold.clear();
     _ensureCameraStream();
     setState(() {});
   }
@@ -407,6 +428,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customRuntime = null;
     _customUpdate = null;
     _customTestResult = null;
+    _runtimeDiagnostics.clear();
 
     _testingVerifier = false;
 
@@ -415,16 +437,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _debugSpec = null;
     _learnedWrittenToProvider = false;
     ref.read(learnedCustomMovementProvider.notifier).state = null;
-    _latestFrame = null;
-    _lastVisibleFrameAt = null;
+    _skeletonHold.clear();
     _stopCamera();
     setState(() {});
   }
 
   void _resetStartPose() {
     _flow.resetStartPose();
-    _latestFrame = null;
-    _lastVisibleFrameAt = null;
+    _skeletonHold.clear();
     _ensureCameraStream();
     setState(() {});
   }
@@ -442,6 +462,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customRuntime = null;
     _customUpdate = null;
     _customTestResult = null;
+    _runtimeDiagnostics.clear();
     _ensureCameraStream();
     setState(() {});
   }
@@ -457,10 +478,13 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   void _startVerifierTest() async {
     final spec = _effectiveSpec;
     if (spec == null || _testingVerifier) return;
-    final runtime = CustomPoseSequenceRuntime(spec: spec, target: _testTarget)..start();
+    final runtime = CustomPoseSequenceRuntime(spec: spec, target: _testTarget)
+      ..start();
     _customRuntime?.dispose();
     _customRuntime = runtime;
     _customUpdate = runtime.lastUpdate;
+    _runtimeDiagnostics.clear();
+    _recordRuntimeDiagnostic(_customUpdate);
     _customTestResult = null;
 
     _cameraInterruptedDuringTest = false;
@@ -523,10 +547,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _debugReadyFixture = true;
     _debugSpec = spec;
     _learnedWrittenToProvider = true;
-    ref.read(learnedCustomMovementProvider.notifier).state = LearnedCustomMovement(
-      verifierSpec: spec,
-      learnedAt: DateTime.now(),
-    );
+    ref.read(learnedCustomMovementProvider.notifier).state =
+        LearnedCustomMovement(verifierSpec: spec, learnedAt: DateTime.now());
     setState(() {
       _customTestResult = result;
     });
@@ -551,7 +573,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             const SizedBox(height: 20),
             if (_testingVerifier)
               _testingStep()
-            else if (_flow.stage == TeachMovementStage.name && !_debugReadyFixture)
+            else if (_flow.stage == TeachMovementStage.name &&
+                !_debugReadyFixture)
               _nameStep()
             else if (_flow.stage == TeachMovementStage.learned ||
                 _flow.stage == TeachMovementStage.failed ||
@@ -616,10 +639,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           expand: true,
           onPressed: _stopVerifierTest,
         ),
-        if (kDebugMode) ...[
-          const SizedBox(height: 12),
-          _debugPanel(),
-        ],
+        if (_showDiagnostics) ...[const SizedBox(height: 12), _debugPanel()],
       ],
     );
   }
@@ -643,16 +663,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _progressDots(),
         const SizedBox(height: 8),
         _progressText(),
-        const SizedBox(height: 16),
-        _recordingProgress(),
         const SizedBox(height: 20),
         _cameraActionButton(),
         const SizedBox(height: 12),
         _secondaryActionButton(),
-        if (kDebugMode) ...[
-          const SizedBox(height: 14),
-          _debugPanel(),
-        ],
+        if (_showDiagnostics) ...[const SizedBox(height: 14), _debugPanel()],
       ],
     );
   }
@@ -662,10 +677,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       TeachMovementStage.setup => ('Ready to start', NuvoColors.muted),
       TeachMovementStage.countdown => ('Get ready', NuvoColors.muted),
       TeachMovementStage.startPose => ('Waiting for start', NuvoColors.muted),
-      TeachMovementStage.readyToRecord => (
-          'Ready',
-          NuvoColors.white
-        ),
+      TeachMovementStage.readyToRecord => ('Ready', NuvoColors.white),
       TeachMovementStage.recording => ('Recording', NuvoColors.white),
       TeachMovementStage.building => ('Learning', NuvoColors.muted),
       _ => ('', NuvoColors.muted),
@@ -698,14 +710,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _captureControls() {
     final stage = _flow.stage;
-    final canRemoveLast = _flow.acceptedCount > 0 &&
+    final canRemoveLast =
+        _flow.acceptedCount > 0 &&
         (stage == TeachMovementStage.readyToRecord ||
             stage == TeachMovementStage.recording);
-    final canClear = (_flow.acceptedCount > 0 ||
-            _flow.rejectedDemonstrations.isNotEmpty) &&
+    final canClear =
+        (_flow.acceptedCount > 0 || _flow.rejectedDemonstrations.isNotEmpty) &&
         (stage == TeachMovementStage.readyToRecord ||
             stage == TeachMovementStage.recording);
-    final showResetStart = _flow.startPose != null &&
+    final showResetStart =
+        _flow.startPose != null &&
         (stage == TeachMovementStage.readyToRecord ||
             stage == TeachMovementStage.recording);
     if (!canRemoveLast && !canClear && !showResetStart) {
@@ -717,8 +731,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       children: [
         if (canRemoveLast) _smallButton('Remove last', _removeLastAccepted),
         if (canClear) _smallButton('Clear examples', _clearExamples),
-        if (showResetStart)
-          _smallButton('Reteach start pose', _resetStartPose),
+        if (showResetStart) _smallButton('Reteach start pose', _resetStartPose),
       ],
     );
   }
@@ -746,9 +759,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           ? _cameraPreview(controller)
           : Center(
               child: Text(
-                _flow.message.isNotEmpty
-                    ? _flow.message
-                    : 'Starting camera...',
+                _flow.message.isNotEmpty ? _flow.message : 'Starting camera...',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: NuvoColors.white,
                 ),
@@ -772,14 +783,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           children: [
             CameraPreview(controller),
             Positioned.fill(
-              child: Transform.scale(
-                scaleX: _selectedCamera?.lensDirection ==
-                        CameraLensDirection.front
-                    ? -1.0
-                    : 1.0,
-                alignment: Alignment.center,
-                child: CustomPaint(
-                  painter: _PoseSkeletonPainter(frame: _latestFrame),
+              child: CustomPaint(
+                painter: _PoseSkeletonPainter(
+                  frame: _skeletonHold.frame,
+                  sourceSize: Size(previewSize.height, previewSize.width),
+                  mirrorX: PoseSkeletonPreviewTransform.shouldMirrorX(
+                    lensDirection: _selectedCamera?.lensDirection,
+                    platform: defaultTargetPlatform,
+                  ),
                 ),
               ),
             ),
@@ -823,10 +834,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         ),
       );
     });
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: dots,
-    );
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: dots);
   }
 
   Widget _cameraActionButton() {
@@ -840,9 +848,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     if (stage == TeachMovementStage.recording) {
       return NuvoPrimaryButton(
-        label: 'Cancel',
+        label: 'Stop',
         expand: true,
-        onPressed: _cancelRecording,
+        onPressed: _finishRecording,
       );
     }
     if (stage == TeachMovementStage.building) {
@@ -878,22 +886,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  Widget _recordingProgress() {
-    if (_flow.stage != TeachMovementStage.recording) {
-      return const SizedBox.shrink();
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(NuvoRadii.md),
-      child: LinearProgressIndicator(
-        value: _flow.recordingProgress,
-        minHeight: 6,
-        backgroundColor: NuvoColors.navy,
-        valueColor: const AlwaysStoppedAnimation<Color>(NuvoColors.white),
-      ),
-    );
-  }
-
   Widget _secondaryActionButton() {
+    if (_flow.stage == TeachMovementStage.recording) {
+      return NuvoOutlineButton(
+        label: 'Cancel recording',
+        expand: true,
+        onPressed: _cancelRecording,
+      );
+    }
     if (_flow.stage != TeachMovementStage.readyToRecord) {
       return const SizedBox.shrink();
     }
@@ -912,13 +912,111 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (extra != null) ...[
-          extra,
-          const SizedBox(height: 8),
-        ],
+        if (extra != null) ...[extra, const SizedBox(height: 8)],
         _captureControls(),
       ],
     );
+  }
+
+  void _syncCaptureDeviceInfo(CameraDescription camera) {
+    _flow.setCaptureDeviceInfo(
+      cameraLensDirection: camera.lensDirection.name,
+      orientation: 'portraitUp',
+      deviceNote: '${Platform.operatingSystem}_${defaultTargetPlatform.name}',
+    );
+  }
+
+  void _recordRuntimeDiagnostic(CustomPoseRuntimeUpdate? update) {
+    if (!_showDiagnostics || update == null) return;
+    final next = update.toDiagnosticsJson();
+    final previous = _runtimeDiagnostics.isEmpty
+        ? null
+        : _runtimeDiagnostics.last;
+    final previousProgress =
+        (previous?['sequenceProgress'] as num?)?.toDouble() ?? -1;
+    final shouldRecord =
+        previous == null ||
+        previous['state'] != next['state'] ||
+        previous['count'] != next['count'] ||
+        previous['currentTemplateIndex'] != next['currentTemplateIndex'] ||
+        previous['frameNoAdvanceReason'] != next['frameNoAdvanceReason'] ||
+        (previousProgress - update.sequenceProgress).abs() >= 0.01;
+    if (!shouldRecord) return;
+    if (_runtimeDiagnostics.length >= 160) {
+      _runtimeDiagnostics.removeAt(0);
+    }
+    _runtimeDiagnostics.add(next);
+  }
+
+  Map<String, dynamic> _debugMovementReport() {
+    return {
+      'generatedAtIso8601': DateTime.now().toUtc().toIso8601String(),
+      'teaching': _flow.debugReport(),
+      'test': {
+        'testing': _testingVerifier,
+        'cameraInterruptedDuringTest': _cameraInterruptedDuringTest,
+        if (_customUpdate != null)
+          'latestUpdate': _customUpdate!.toDiagnosticsJson(),
+        'runtimeTrace': List.unmodifiable(_runtimeDiagnostics),
+        if (_customTestResult != null) 'result': _customTestResult!.toJson(),
+      },
+      'mirror': _mirrorDiagnostics(),
+    };
+  }
+
+  Map<String, dynamic> _mirrorDiagnostics() {
+    final camera = _selectedCamera;
+    final controller = _cameraController;
+    final previewSize = controller?.value.previewSize;
+    final mirrorX = PoseSkeletonPreviewTransform.shouldMirrorX(
+      lensDirection: camera?.lensDirection,
+      platform: defaultTargetPlatform,
+    );
+    final frame = _skeletonHold.frame;
+    Map<String, dynamic>? wristPosition(String id) {
+      final point = frame?.points[id];
+      if (point == null || previewSize == null) return null;
+      final screen = PoseSkeletonCoordinateMapper.map(
+        point: point,
+        sourceSize: Size(previewSize.height, previewSize.width),
+        canvasSize: Size(previewSize.height, previewSize.width),
+        mirrorX: mirrorX,
+      );
+      return {
+        'x': double.parse(screen.dx.toStringAsFixed(2)),
+        'y': double.parse(screen.dy.toStringAsFixed(2)),
+      };
+    }
+
+    return {
+      'cameraLensDirection': camera?.lensDirection.name ?? 'unknown',
+      'platform': defaultTargetPlatform.name,
+      'previewMirrorDecision': mirrorX,
+      'skeletonXMirrored': mirrorX,
+      'sampleLeftWristScreenPosition': wristPosition('leftWrist'),
+      'sampleRightWristScreenPosition': wristPosition('rightWrist'),
+      'frontCameraPreviewAndSkeletonAgree':
+          camera?.lensDirection == CameraLensDirection.front
+          ? mirrorX ==
+                PoseSkeletonPreviewTransform.shouldMirrorX(
+                  lensDirection: CameraLensDirection.front,
+                  platform: defaultTargetPlatform,
+                )
+          : true,
+    };
+  }
+
+  Future<void> _copyDebugReport() async {
+    if (!_showDiagnostics) return;
+    final pretty = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(_debugMovementReport());
+    debugPrint(pretty, wrapWidth: 1024);
+    await Clipboard.setData(ClipboardData(text: pretty));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Debug report copied.')));
   }
 
   Widget _debugPanel() {
@@ -935,13 +1033,23 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         children: [
           Text('DEBUG', style: AppTextStyles.bodySmall),
           Text('stage: ${_flow.stage.name}'),
-          Text('attempts: ${_flow.acceptedCount + _flow.rejectedDemonstrations.length}'),
+          Text(
+            'attempts: ${_flow.acceptedCount + _flow.rejectedDemonstrations.length}',
+          ),
           Text('accepted: ${accepted.map((d) => d.index).toList()}'),
           Text('rejected: ${rejected.map((d) => d.rejectionReason).toList()}'),
           Text('body: ${_flow.debugBodyInfo}'),
-          Text('similarity: ${_flow.lastSimilarity?.toStringAsFixed(2) ?? '-'}'),
+          Text(
+            'similarity: ${_flow.lastSimilarity?.toStringAsFixed(2) ?? '-'}',
+          ),
           Text('last rejection: ${_flow.lastRejection ?? '-'}'),
           Text('build failure: ${_flow.lastBuildFailure ?? '-'}'),
+          const SizedBox(height: 8),
+          NuvoOutlineButton(
+            label: 'Copy debug report',
+            expand: true,
+            onPressed: _copyDebugReport,
+          ),
         ],
       ),
     );
@@ -952,23 +1060,17 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final movementName = _flow.movementName;
     final testResult = _customTestResult;
     final canUseMovement = spec != null;
-    final testLabel = testResult == null
-        ? 'Test movement'
-        : 'Test again';
+    final testLabel = testResult == null ? 'Test movement' : 'Test again';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          movementName,
-          style: AppTextStyles.titleLarge,
-        ),
+        Text(movementName, style: AppTextStyles.titleLarge),
         const SizedBox(height: 8),
-        if (_flow.stage == TeachMovementStage.learned || _debugReadyFixture) ...[
+        if (_flow.stage == TeachMovementStage.learned ||
+            _debugReadyFixture) ...[
           Text(
             'Movement learned',
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.success,
-            ),
+            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.success),
           ),
           const SizedBox(height: 16),
           if (testResult != null) ...[
@@ -992,9 +1094,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         ] else ...[
           Text(
             _flow.message,
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.danger,
-            ),
+            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.danger),
           ),
         ],
         const SizedBox(height: 14),
@@ -1009,6 +1109,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           expand: true,
           onPressed: _changeName,
         ),
+        if (_showDiagnostics) ...[const SizedBox(height: 12), _debugPanel()],
       ],
     );
   }
@@ -1018,7 +1119,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: matched ? NuvoColors.success.withValues(alpha: 0.08) : NuvoColors.danger.withValues(alpha: 0.08),
+        color: matched
+            ? NuvoColors.success.withValues(alpha: 0.08)
+            : NuvoColors.danger.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(NuvoRadii.md),
       ),
       child: Text(
@@ -1037,7 +1140,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     context.push('/races/new');
   }
 
-  String _nuvoTestStatus({CustomPoseRuntimeUpdate? update, CustomPoseRuntimeResult? result}) {
+  String _nuvoTestStatus({
+    CustomPoseRuntimeUpdate? update,
+    CustomPoseRuntimeResult? result,
+  }) {
     if (result != null) {
       return result.isVerified ? 'Matched' : 'Try again';
     }
@@ -1045,10 +1151,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final state = update?.state;
     if (guidance == null) return 'Ready';
     return switch (guidance) {
-      'Ready' => (state == CustomPoseRuntimeState.matchingSequence ||
-              state == CustomPoseRuntimeState.completionCandidate)
-          ? 'Keep going'
-          : 'Ready',
+      'Ready' =>
+        (state == CustomPoseRuntimeState.matchingSequence ||
+                state == CustomPoseRuntimeState.completionCandidate)
+            ? 'Keep going'
+            : 'Ready',
       'Step back' => 'Move into position',
       'Move into the starting position' => 'Move into position',
       'Hold the starting position' => 'Ready',
@@ -1062,9 +1169,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 }
 
 class _PoseSkeletonPainter extends CustomPainter {
-  _PoseSkeletonPainter({this.frame});
+  _PoseSkeletonPainter({
+    this.frame,
+    required this.sourceSize,
+    required this.mirrorX,
+  });
 
   final NuvoPoseFrame? frame;
+  final Size sourceSize;
+  final bool mirrorX;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1080,8 +1193,12 @@ class _PoseSkeletonPainter extends CustomPainter {
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
 
-    Offset toOffset(NuvoPosePoint point) =>
-        Offset(point.x * size.width, point.y * size.height);
+    Offset toOffset(NuvoPosePoint point) => PoseSkeletonCoordinateMapper.map(
+      point: point,
+      canvasSize: size,
+      sourceSize: sourceSize,
+      mirrorX: mirrorX,
+    );
 
     for (final pair in _skeletonBones) {
       final a = points[pair.a];
@@ -1099,7 +1216,58 @@ class _PoseSkeletonPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PoseSkeletonPainter old) =>
-      old.frame != frame;
+      old.frame != frame ||
+      old.sourceSize != sourceSize ||
+      old.mirrorX != mirrorX;
+}
+
+@visibleForTesting
+class PoseSkeletonCoordinateMapper {
+  const PoseSkeletonCoordinateMapper._();
+
+  static Offset map({
+    required NuvoPosePoint point,
+    required Size canvasSize,
+    required Size sourceSize,
+    required bool mirrorX,
+  }) {
+    if (canvasSize.isEmpty || sourceSize.isEmpty) return Offset.zero;
+    final sourceAspect = sourceSize.width / sourceSize.height;
+    final canvasAspect = canvasSize.width / canvasSize.height;
+    final scale = canvasAspect > sourceAspect
+        ? canvasSize.width / sourceSize.width
+        : canvasSize.height / sourceSize.height;
+    final fittedWidth = sourceSize.width * scale;
+    final fittedHeight = sourceSize.height * scale;
+    final cropX = (fittedWidth - canvasSize.width) / 2;
+    final cropY = (fittedHeight - canvasSize.height) / 2;
+    final normalizedX = mirrorX ? 1 - point.x : point.x;
+    return Offset(
+      normalizedX * sourceSize.width * scale - cropX,
+      point.y * sourceSize.height * scale - cropY,
+    );
+  }
+}
+
+@visibleForTesting
+class PoseSkeletonPreviewTransform {
+  const PoseSkeletonPreviewTransform._();
+
+  static bool shouldMirrorX({
+    required CameraLensDirection? lensDirection,
+    required TargetPlatform platform,
+  }) {
+    if (lensDirection != CameraLensDirection.front) return false;
+
+    // iOS camera_avfoundation mirrors the front capture connection before the
+    // frame reaches both CameraPreview and ML Kit. Mirroring here again swaps
+    // the visible left/right sides of the skeleton.
+    if (platform == TargetPlatform.iOS) return false;
+
+    // Android CameraX mirrors front previews in Dart for the displayed texture,
+    // while the image stream landmarks remain in camera-image coordinates.
+    return platform == TargetPlatform.android;
+  }
 }
 
 class _Bone {

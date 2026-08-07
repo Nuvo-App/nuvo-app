@@ -4,7 +4,7 @@ import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
-import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceScoringRule } from '../domain/raceActivities';
+import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
 import {
   CUSTOM_VERIFIER_TYPE,
   PRESET_VERIFIER_TYPE,
@@ -161,14 +161,29 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
   };
 }
 
+// The live race_members table keeps a legacy person_id column that is NOT NULL and
+// references people(id). Every member row must therefore resolve to a people row.
+async function ensurePersonId(db: D1Database, userId: string): Promise<string> {
+  const existing = await db.prepare('SELECT id FROM people WHERE user_id = ?').bind(userId).first<{ id: string }>();
+  if (existing) return existing.id;
+  const personId = generateId();
+  const displayName = await getProfileName(db, userId);
+  await db.prepare(
+    `INSERT INTO people (id, person_key, user_id, display_name, created_at, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+  ).bind(personId, `user-${userId}`, userId, displayName ?? 'Racer').run();
+  return personId;
+}
+
 async function ensureMember(db: D1Database, raceId: string, userId: string, role = 'racer'): Promise<void> {
   const existing = await db.prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string }>();
   if (existing) return;
   const displayName = await getProfileName(db, userId);
+  const personId = await ensurePersonId(db, userId);
   await db.prepare(
-    `INSERT INTO race_members (id, race_id, user_id, role, status, joined_at, cached_display_name)
-     VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
-  ).bind(generateId(), raceId, userId, role, displayName).run();
+    `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at, cached_display_name)
+     VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
+  ).bind(generateId(), raceId, userId, personId, role, displayName).run();
 }
 
 async function ensureProgress(db: D1Database, raceId: string, userId: string): Promise<void> {
@@ -229,14 +244,46 @@ interface SubmissionResult {
   winnerUserId: string | null;
 }
 
+interface RaceScoringConfig {
+  metric: RaceMetric;
+  format: RaceFormat;
+  scoringRule: RaceScoringRule;
+  targetValue: number | null;
+}
+
 async function rankForUser(db: D1Database, raceId: string, userId: string): Promise<number | null> {
   const ranked = await rankedScores(db, raceId);
   return ranked.find((row) => row.user_id === userId)?.rank ?? null;
 }
 
+function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
+  const presetConfig = raceConfigFromRow(race);
+  if (presetConfig) {
+    return {
+      metric: presetConfig.metric,
+      format: presetConfig.format,
+      scoringRule: presetConfig.scoringRule,
+      targetValue: presetConfig.targetValue,
+    };
+  }
+  if (race.verifier_type !== CUSTOM_VERIFIER_TYPE) return null;
+  const targetValue = positiveIntOrNull(race.target_value) ?? null;
+  if (targetValue == null) return null;
+  const metric = normalizeMetric(race.metric ?? race.target_unit ?? 'reps', undefined);
+  if (!metric) return null;
+  const format = (((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as unknown) as RaceFormat;
+  const scoringRule = ((race.scoring_rule ?? 'cumulative_sum') as unknown) as RaceScoringRule;
+  return {
+    metric,
+    format,
+    scoringRule,
+    targetValue,
+  };
+}
+
 async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<SubmissionResult> {
-  const config = raceConfigFromRow(race);
-  if (!config) throw new Error('Race is missing activity configuration');
+  const scoring = raceScoringConfigFromRow(race);
+  if (!scoring) throw new Error('Race is missing activity configuration');
   const increment = Math.max(0, Math.floor(value));
   if (increment <= 0) throw new Error('Verified value must be greater than 0');
 
@@ -248,11 +295,11 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
   const current = progress?.progress_value ?? 0;
   const previousRank = await rankForUser(db, race.id, userId);
   const scored = applyVerifiedSubmission({
-    format: config.format,
-    scoringRule: config.scoringRule,
+    format: scoring.format,
+    scoringRule: scoring.scoringRule,
     previousScore: current,
     submissionValue: increment,
-    targetValue: config.targetValue,
+    targetValue: scoring.targetValue,
   });
   const completedAt = scored.completed && !progress?.completed_at
     ? new Date().toISOString()
@@ -365,6 +412,7 @@ async function buildRaceResponse(
 
   const proofRequirement = mapVerificationTypeToProofRequirement(race.verification_type);
   const config = raceConfigFromRow(race);
+  const scoring = raceScoringConfigFromRow(race);
   const verifier = parsedVerifierSpec(race);
   const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
@@ -377,9 +425,9 @@ async function buildRaceResponse(
     category: '',
     goalType: mapRaceTypeToGoalType(race.race_type),
     activityId: isCustomVerifier ? null : config?.activityId ?? normalizeActivityId(race.activity_id ?? race.movement_type) ?? null,
-    metric: isCustomVerifier ? 'reps' : config?.metric ?? normalizeMetric(race.metric ?? race.target_unit, config ? activityForId(config.activityId) : undefined) ?? null,
-    format: config?.format ?? 'first_to_goal',
-    scoringRule: config?.scoringRule ?? 'cumulative_sum',
+    metric: isCustomVerifier ? scoring?.metric ?? 'reps' : config?.metric ?? normalizeMetric(race.metric ?? race.target_unit, config ? activityForId(config.activityId) : undefined) ?? null,
+    format: scoring?.format ?? 'first_to_goal',
+    scoringRule: scoring?.scoringRule ?? 'cumulative_sum',
     attemptDurationSeconds: race.attempt_duration_seconds ?? null,
     attemptLimit: race.attempt_limit ?? null,
     verificationMethod: race.verification_method ?? (race.verification_type === 'movecheck' ? 'camera_pose' : race.verification_type),
@@ -554,45 +602,89 @@ racesRouter.post('/', async (c) => {
   const startAt = custom?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
   const endAt = custom?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
+  const raceFormat = custom?.format ?? config?.format ?? raceType;
+  const raceActivityId = custom ? null : config?.activityId ?? normalizeActivityId(movementType);
+  const raceMetric = custom?.metric ?? config?.metric ?? normalizeMetric(targetUnit, activityForId(normalizeActivityId(movementType)));
+  const raceScoringRule = custom?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum';
+  const raceAttemptDurationSeconds = custom?.attemptDurationSeconds ?? config?.attemptDurationSeconds ?? null;
+  const raceAttemptLimit = custom?.attemptLimit ?? config?.attemptLimit ?? null;
+  const raceVerificationMethod = custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType);
+  const raceTimezone = custom?.timezone ?? config?.timezone ?? 'America/New_York';
+  const raceRecurrence = custom?.recurrence ?? config?.recurrence ?? 'none';
+
+  const raceStmt = custom
+    ? c.env.DB.prepare(
+        `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
+          target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
+          attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
+          timezone, recurrence, status, visibility, start_at, end_at,
+          created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      ).bind(
+        raceId,
+        userId,
+        title,
+        description,
+        raceFormat,
+        movementType,
+        verificationType,
+        targetValue,
+        targetUnit,
+        raceActivityId,
+        raceMetric,
+        raceFormat,
+        raceScoringRule,
+        raceAttemptDurationSeconds,
+        raceAttemptLimit,
+        raceVerificationMethod,
+        custom.verifierType,
+        custom.verifierVersion,
+        custom.verifierSpecJson,
+        custom.customActivityName,
+        raceTimezone,
+        raceRecurrence,
+        visibility,
+        startAt,
+        endAt,
+      )
+    : c.env.DB.prepare(
+        `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
+          target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
+          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at,
+          created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      ).bind(
+        raceId,
+        userId,
+        title,
+        description,
+        raceFormat,
+        movementType,
+        verificationType,
+        targetValue,
+        targetUnit,
+        raceActivityId,
+        raceMetric,
+        raceFormat,
+        raceScoringRule,
+        raceAttemptDurationSeconds,
+        raceAttemptLimit,
+        raceVerificationMethod,
+        raceTimezone,
+        raceRecurrence,
+        visibility,
+        startAt,
+        endAt,
+      );
+
+  const creatorPersonId = await ensurePersonId(c.env.DB, userId);
+
   await c.env.DB.batch([
+    raceStmt,
     c.env.DB.prepare(
-      `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
-        target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-        attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-        timezone, recurrence, status, visibility, start_at, end_at,
-        created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).bind(
-      raceId,
-      userId,
-      title,
-      description,
-      custom?.format ?? raceType,
-      movementType,
-      verificationType,
-      targetValue,
-      targetUnit,
-      custom ? null : config?.activityId ?? normalizeActivityId(movementType),
-      custom?.metric ?? config?.metric ?? normalizeMetric(targetUnit, activityForId(normalizeActivityId(movementType))),
-      custom?.format ?? config?.format ?? raceType,
-      custom?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum',
-      custom?.attemptDurationSeconds ?? config?.attemptDurationSeconds ?? null,
-      custom?.attemptLimit ?? config?.attemptLimit ?? null,
-      custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType),
-      custom?.verifierType ?? PRESET_VERIFIER_TYPE,
-      custom?.verifierVersion ?? null,
-      custom?.verifierSpecJson ?? null,
-      custom?.customActivityName ?? null,
-      custom?.timezone ?? config?.timezone ?? 'America/New_York',
-      custom?.recurrence ?? config?.recurrence ?? 'none',
-      visibility,
-      startAt,
-      endAt,
-    ),
-    c.env.DB.prepare(
-      `INSERT INTO race_members (id, race_id, user_id, role, status, joined_at)
-       VALUES (?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP)`
-    ).bind(generateId(), raceId, userId),
+      `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at)
+       VALUES (?, ?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP)`
+    ).bind(generateId(), raceId, userId, creatorPersonId),
     c.env.DB.prepare(
       `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
        VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
@@ -942,11 +1034,11 @@ racesRouter.post('/:id/proof', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.verifier_type === CUSTOM_VERIFIER_TYPE) {
-    return c.json(badRequest('Custom proof submission is not supported yet.'), 400);
-  }
   const config = raceConfigFromRow(race);
-  if (!config) return c.json(badRequest('Race is missing activity configuration'), 400);
+  const scoring = raceScoringConfigFromRow(race);
+  if (!scoring || (!config && race.verifier_type !== CUSTOM_VERIFIER_TYPE)) {
+    return c.json(badRequest('Race is missing activity configuration'), 400);
+  }
   const member = await c.env.DB.prepare(
     "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'"
   ).bind(race.id, userId).first<{ id: string }>();
@@ -957,6 +1049,8 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const proofType = typeof body.proofType === 'string' ? body.proofType : 'manual';
   const isAiMotion = proofType === 'ai_motion';
+  const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  if (isCustom && !isAiMotion) return c.json(badRequest('Custom races require AI Motion Proof'), 400);
   const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
   if (isAiMotion && !clientSubmissionId) return c.json(badRequest('clientSubmissionId is required'), 400);
   if (clientSubmissionId) {
@@ -991,8 +1085,10 @@ racesRouter.post('/:id/proof', async (c) => {
   await ensureProgress(c.env.DB, race.id, userId);
 
   const activityType = isAiMotion ? stringOrNull(body.activityType) : race.movement_type;
-  const metric = isAiMotion ? normalizeMetric(stringOrNull(body.metric) ?? stringOrNull(body.unit), activityForId(config.activityId)) : config.metric;
-  const compatibilityError = isAiMotion ? assertSubmissionCompatible(config, activityType ?? null, metric ?? null) : null;
+  const metric = isAiMotion
+    ? (isCustom ? normalizeMetric(stringOrNull(body.metric) ?? stringOrNull(body.unit) ?? 'reps', undefined) : normalizeMetric(stringOrNull(body.metric) ?? stringOrNull(body.unit), config ? activityForId(config.activityId) : undefined))
+    : scoring.metric;
+  const compatibilityError = isAiMotion && !isCustom && config ? assertSubmissionCompatible(config, activityType ?? null, metric ?? null) : null;
   if (compatibilityError) return c.json(badRequest(compatibilityError), 400);
   const detectedValue = isAiMotion ? nonNegativeIntOrNull(body.detectedValue) ?? increment : null;
   const targetValue = isAiMotion ? positiveIntOrNull(body.targetValue) ?? null : null;
@@ -1001,12 +1097,44 @@ racesRouter.post('/:id/proof', async (c) => {
   const framesAnalyzed = isAiMotion ? nonNegativeIntOrNull(body.framesAnalyzed) ?? null : null;
   const validPoseFrames = isAiMotion ? nonNegativeIntOrNull(body.validPoseFrames) ?? null : null;
   const durationMs = isAiMotion ? nonNegativeIntOrNull(body.durationMs) ?? null : null;
+  const completionEvents = isCustom ? nonNegativeIntOrNull(body.completionEvents) ?? null : null;
+  const invalidAttemptCount = isCustom ? nonNegativeIntOrNull(body.invalidAttemptCount) ?? null : null;
+  const measurementType = isCustom ? stringOrNull(body.measurementType) ?? null : null;
 
   const aiStatus = typeof body.verificationStatus === 'string' ? body.verificationStatus : '';
+  if (isCustom && aiStatus !== 'custom_verified' && aiStatus !== 'custom_failed') {
+    return c.json(badRequest('Custom proof verificationStatus is required.'), 400);
+  }
+  const bodyVerifierType = isCustom ? stringOrNull(body.verifierType) : null;
+  const bodyVerifierVersion = isCustom ? body.verifierVersion : null;
+  if (isCustom && bodyVerifierType !== race.verifier_type) {
+    return c.json(badRequest('Verifier type does not match race.'), 400);
+  }
+  if (isCustom && (typeof bodyVerifierVersion !== 'number' || bodyVerifierVersion !== race.verifier_version)) {
+    return c.json(badRequest('Verifier version does not match race.'), 400);
+  }
+  if (isCustom && metric !== 'reps') {
+    return c.json(badRequest('Custom proof metric must be reps.'), 400);
+  }
+  if (isCustom && measurementType !== 'count') {
+    return c.json(badRequest('Custom proof measurement type must be count.'), 400);
+  }
+  if (isCustom && activityType !== race.custom_activity_name) {
+    return c.json(badRequest('Custom proof movement does not match race.'), 400);
+  }
+  if (isCustom && detectedValue !== increment) {
+    return c.json(badRequest('Custom proof detected value must match value.'), 400);
+  }
+  if (isCustom && completionEvents !== null && completionEvents < increment) {
+    return c.json(badRequest('Custom proof completion events must cover value.'), 400);
+  }
+  if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
+    return c.json(badRequest('Custom proof valid frames cannot exceed analyzed frames.'), 400);
+  }
   let moveStatus: string;
   if (isAiMotion) {
-    if (aiStatus === 'ai_verified') moveStatus = 'verified';
-    else if (aiStatus === 'ai_failed') moveStatus = 'rejected';
+    if (aiStatus === 'ai_verified' || aiStatus === 'custom_verified') moveStatus = 'verified';
+    else if (aiStatus === 'ai_failed' || aiStatus === 'custom_failed') moveStatus = 'rejected';
     else moveStatus = 'pending';
   } else {
     moveStatus = 'verified';
@@ -1018,6 +1146,13 @@ racesRouter.post('/:id/proof', async (c) => {
     target_value: targetValue,
     frames_analyzed: framesAnalyzed,
     valid_pose_frames: validPoseFrames,
+    ...(isCustom ? {
+      completion_events: completionEvents,
+      invalid_attempt_count: invalidAttemptCount,
+      measurement_type: measurementType,
+      verifier_type: bodyVerifierType,
+      verifier_version: bodyVerifierVersion,
+    } : {}),
   });
 
   const summary = stringOrNull(body.verificationSummary) ??
@@ -1039,7 +1174,7 @@ racesRouter.post('/:id/proof', async (c) => {
     isAiMotion ? 'movecheck' : 'manual',
     activityType,
     normalizeActivityId(activityType),
-    metric ?? config.metric,
+    metric ?? scoring.metric,
     increment,
     race.target_unit,
     moveStatus,

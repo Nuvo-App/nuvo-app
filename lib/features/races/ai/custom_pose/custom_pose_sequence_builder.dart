@@ -37,6 +37,10 @@ class CustomPoseSequenceBuilder {
       if (activeSelection.activeFeatureIds.isEmpty) {
         return CustomPoseBuildResult.failure('no_active_features');
       }
+      final requiredActiveFeatureIds = _selectRequiredActiveFeatures(
+        activeSelection.activeFeatureIds,
+        activeSelection.diagnostics,
+      );
       final resampled = cleaned
           .map(
             (demo) => _resample(
@@ -81,7 +85,7 @@ class CustomPoseSequenceBuilder {
         completionPose: completionPose,
         completionStrategy: completionStrategy,
         canonicalSequence: canonical,
-        requiredFeatureIds: activeSelection.activeFeatureIds,
+        requiredFeatureIds: requiredActiveFeatureIds,
         activeFeatureIds: activeSelection.activeFeatureIds,
         sequenceSimilarityThreshold: thresholds.sequenceSimilarity,
         completionSimilarityThreshold: thresholds.completionSimilarity,
@@ -94,7 +98,7 @@ class CustomPoseSequenceBuilder {
           sourceCalibrationSchemaVersion: calibration.schemaVersion,
           demonstrationCount: calibration.demonstrations.length,
           selectedActiveFeatureCount: activeSelection.activeFeatureIds.length,
-          requiredFeatureCount: activeSelection.activeFeatureIds.length,
+          requiredFeatureCount: requiredActiveFeatureIds.length,
           canonicalSequenceLength: canonical.length,
           pairwiseSimilarityScores: consistency.pairwiseScores,
           overallConsistencyScore: consistency.overallScore,
@@ -308,7 +312,8 @@ class CustomPoseSequenceBuilder {
       final consistency = _amplitudeConsistency(amplitudes);
       final movementThreshold = _movementThreshold(start.kind) * 0.6;
       final signalToNoise = averageAmplitude * consistency * minCoverage;
-      final selected = minCoverage >= 0.40 &&
+      final selected =
+          minCoverage >= 0.40 &&
           averageAmplitude >= movementThreshold &&
           consistency >= 0.20;
       diagnostics.add(
@@ -336,11 +341,47 @@ class CustomPoseSequenceBuilder {
     // Pick the most reliable moving features, capped to avoid overfitting to
     // a single noisy part. Cap at 12.
     candidates.sort((a, b) => b.score.compareTo(a.score));
-    final active = candidates.take(12).map((c) => c.id).toList(growable: false);
+    final armDominant = _isArmDominant(candidates);
+    final eligible = armDominant
+        ? candidates.where((candidate) => !_isFaceOrHeadFeature(candidate.id))
+        : candidates;
+    final active = eligible.take(12).map((c) => c.id).toList(growable: false);
     return _ActiveFeatureSelection(
       activeFeatureIds: active,
       diagnostics: diagnostics,
     );
+  }
+
+  List<String> _selectRequiredActiveFeatures(
+    List<String> activeFeatureIds,
+    List<PoseFeatureSelectionDiagnostic> diagnostics,
+  ) {
+    if (activeFeatureIds.isEmpty) return const [];
+    final activeSet = activeFeatureIds.toSet();
+    final selected =
+        diagnostics
+            .where(
+              (diagnostic) =>
+                  diagnostic.selected &&
+                  activeSet.contains(diagnostic.featureId),
+            )
+            .toList(growable: false)
+          ..sort((a, b) => b.amplitude.compareTo(a.amplitude));
+    final armDominant = selected.any(
+      (diagnostic) => _isArmHandOrShoulderFeature(diagnostic.featureId),
+    );
+    final eligible = armDominant
+        ? selected.where(
+            (diagnostic) => !_isFaceOrHeadFeature(diagnostic.featureId),
+          )
+        : selected;
+    final required = eligible
+        .where((diagnostic) => diagnostic.coverage >= 0.70)
+        .take(8)
+        .map((diagnostic) => diagnostic.featureId)
+        .toList(growable: false);
+    if (required.isNotEmpty) return required;
+    return selected.take(1).map((diagnostic) => diagnostic.featureId).toList();
   }
 
   List<_SampledFrame> _resample(
@@ -723,6 +764,25 @@ class CustomPoseBuildResult {
   final String? failureReason;
   final List<PoseFeatureSelectionDiagnostic> featureDiagnostics;
   final CustomPoseConsistencyResult? consistency;
+
+  List<PoseFeatureSelectionDiagnostic> get selectedFeatureDiagnostics =>
+      featureDiagnostics
+          .where((diagnostic) => diagnostic.selected)
+          .toList(growable: false)
+        ..sort((a, b) => b.amplitude.compareTo(a.amplitude));
+
+  Map<String, dynamic> toDiagnosticsJson() => {
+    'succeeded': succeeded,
+    if (failureReason != null) 'failureReason': failureReason,
+    'activeFeatures': selectedFeatureDiagnostics
+        .map((diagnostic) => diagnostic.toJson())
+        .toList(),
+    'rejectedFeatures': featureDiagnostics
+        .where((diagnostic) => !diagnostic.selected)
+        .map((diagnostic) => diagnostic.toJson())
+        .toList(),
+    if (consistency != null) 'consistency': consistency!.toJson(),
+  };
 }
 
 class PoseFeatureSelectionDiagnostic {
@@ -774,6 +834,16 @@ class PoseFeatureSelectionDiagnostic {
   final double consistency;
   final bool selected;
   final String? rejectionReason;
+
+  Map<String, dynamic> toJson() => {
+    'featureId': featureId,
+    'bodyPart': poseFeatureBodyPart(featureId),
+    'coverage': _jsonDouble(coverage),
+    'amplitude': _jsonDouble(amplitude),
+    'consistency': _jsonDouble(consistency),
+    'selected': selected,
+    if (rejectionReason != null) 'rejectionReason': rejectionReason,
+  };
 }
 
 class CustomPoseConsistencyResult {
@@ -790,6 +860,81 @@ class CustomPoseConsistencyResult {
   final double lowestPairScore;
   final bool accepted;
   final String? failureReason;
+
+  Map<String, dynamic> toJson() => {
+    'pairwiseScores': pairwiseScores.map(
+      (key, value) => MapEntry(key, _jsonDouble(value)),
+    ),
+    'overallScore': _jsonDouble(overallScore),
+    'lowestPairScore': _jsonDouble(lowestPairScore),
+    'accepted': accepted,
+    if (failureReason != null) 'failureReason': failureReason,
+  };
+}
+
+String poseFeatureBodyPart(String featureId) {
+  if (_isFaceOrHeadFeature(featureId)) return 'face/head';
+  if (featureId.contains('leftWrist')) return 'left wrist';
+  if (featureId.contains('rightWrist')) return 'right wrist';
+  if (featureId.contains('leftElbow')) return 'left elbow';
+  if (featureId.contains('rightElbow')) return 'right elbow';
+  if (_isHandFeature(featureId)) return 'hands';
+  if (featureId.contains('Shoulder') || featureId.contains('shoulder')) {
+    return 'shoulders';
+  }
+  if (featureId.contains('Hip') || featureId.contains('hip')) return 'hips';
+  if (featureId.contains('Knee') || featureId.contains('knee')) return 'knees';
+  if (featureId.contains('Ankle') || featureId.contains('ankle')) {
+    return 'ankles';
+  }
+  return 'other';
+}
+
+bool _isArmDominant(List<_ActiveFeatureCandidate> candidates) {
+  if (candidates.isEmpty) return false;
+  final top = candidates.take(math.min(8, candidates.length)).toList();
+  final armScore = top
+      .where((candidate) => _isArmHandOrShoulderFeature(candidate.id))
+      .fold<double>(0, (sum, candidate) => sum + candidate.score);
+  final faceScore = top
+      .where((candidate) => _isFaceOrHeadFeature(candidate.id))
+      .fold<double>(0, (sum, candidate) => sum + candidate.score);
+  return armScore > 0 && armScore >= faceScore;
+}
+
+bool _isArmHandOrShoulderFeature(String featureId) {
+  return featureId.contains('Wrist') ||
+      featureId.contains('wrist') ||
+      featureId.contains('Elbow') ||
+      featureId.contains('elbow') ||
+      featureId.contains('Shoulder') ||
+      featureId.contains('shoulder') ||
+      _isHandFeature(featureId);
+}
+
+bool _isHandFeature(String featureId) {
+  return featureId.contains('Pinky') ||
+      featureId.contains('pinky') ||
+      featureId.contains('Index') ||
+      featureId.contains('index') ||
+      featureId.contains('Thumb') ||
+      featureId.contains('thumb') ||
+      featureId.contains('hand_');
+}
+
+bool _isFaceOrHeadFeature(String featureId) {
+  return featureId.contains('nose') ||
+      featureId.contains('Eye') ||
+      featureId.contains('eye') ||
+      featureId.contains('Ear') ||
+      featureId.contains('ear') ||
+      featureId.contains('Mouth') ||
+      featureId.contains('mouth');
+}
+
+double _jsonDouble(double value) {
+  if (!value.isFinite) return 0;
+  return double.parse(value.toStringAsFixed(4));
 }
 
 class _CleanedDemonstration {

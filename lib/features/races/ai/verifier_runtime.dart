@@ -161,7 +161,9 @@ class VerifierRuntimeResolution {
   final String reason;
 
   bool get canCreateRuntime =>
-      type == VerifierType.presetPose && presetMovement != null;
+      (type == VerifierType.presetPose && presetMovement != null) ||
+      (type == VerifierType.customPoseSequence &&
+          eligibility?.customVerifierSpec != null);
 
   VerifierRuntime createRuntime({
     required int target,

@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -11,6 +14,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
@@ -21,6 +25,8 @@ import 'race_controller.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const bool kNuvoDiagnosticsEnabled = bool.fromEnvironment('NUVO_DIAGNOSTICS');
+
 void _dismissKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
 
 String _secondsDisplay(int s) {
@@ -28,6 +34,69 @@ String _secondsDisplay(int s) {
   final m = s ~/ 60;
   final rem = s % 60;
   return rem == 0 ? '$m min' : '$m min $rem sec';
+}
+
+typedef ComposerCustomRaceCreator =
+    Future<Race> Function({
+      required String title,
+      required int targetValue,
+      required String customActivityName,
+      required CustomPoseVerifierSpec verifierSpec,
+    });
+
+typedef ComposerPresetRaceCreator =
+    Future<Race> Function({
+      required String title,
+      String? description,
+      String? category,
+      String goalType,
+      int? targetValue,
+      String? unit,
+      String? proofRequirement,
+      String? proofReviewMode,
+      String? visibility,
+      String? aiActivityType,
+      String? activityId,
+      String? metric,
+      String? format,
+      String? recurrence,
+      String? targetUnit,
+      String? proofMode,
+    });
+
+@visibleForTesting
+Future<Race> createRaceForComposerDraft({
+  required RaceDraft draft,
+  required ComposerCustomRaceCreator createCustomRace,
+  required ComposerPresetRaceCreator createRace,
+}) {
+  if (draft.isCustom) {
+    return createCustomRace(
+      title: draft.resolvedTitle,
+      targetValue: draft.targetValue,
+      customActivityName: draft.customActivityName!,
+      verifierSpec: draft.verifierSpec!,
+    );
+  }
+  final payload = draft.toCreatePayload();
+  return createRace(
+    title: payload['title'] as String,
+    description: payload['description'] as String,
+    category: payload['category'] as String,
+    goalType: payload['goalType'] as String,
+    targetValue: payload['targetValue'] as int,
+    unit: payload['unit'] as String,
+    proofRequirement: payload['proofRequirement'] as String,
+    proofReviewMode: payload['proofReviewMode'] as String,
+    visibility: payload['visibility'] as String,
+    aiActivityType: payload['aiActivityType'] as String,
+    activityId: payload['activityId'] as String,
+    metric: payload['metric'] as String,
+    format: payload['format'] as String,
+    recurrence: payload['recurrence'] as String,
+    targetUnit: payload['targetUnit'] as String,
+    proofMode: payload['proofMode'] as String,
+  );
 }
 
 // ── Step enum ─────────────────────────────────────────────────────────────────
@@ -56,6 +125,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   _Step _step = _Step.name;
   bool _loading = false;
   String? _error;
+  bool _learnedProviderPresentOnInit = false;
+  String? _lastApiError;
+  String _lastCreatePathUsed = 'none';
 
   static const _steps = _Step.values;
 
@@ -63,6 +135,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   void initState() {
     super.initState();
     final learned = ref.read(learnedCustomMovementProvider);
+    _learnedProviderPresentOnInit = learned != null;
     if (learned != null) {
       final draft = RaceDraft(
         title: '',
@@ -131,21 +204,34 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     if (_loading) return; // guard against double-tap
     _dismissKeyboard();
     final draft = ref.read(_composerDraftProvider);
+    _lastCreatePathUsed = draft.isCustom ? 'custom' : 'preset';
     if (draft.isCustom) {
       if (draft.verifierSpec == null || draft.customActivityName == null) {
-        setState(() => _error = 'No learned movement found. Teach a movement first.');
+        setState(() {
+          _error = 'No learned movement found. Teach a movement first.';
+          _lastApiError = null;
+        });
         return;
       }
       if (draft.resolvedTitle.trim().isEmpty) {
-        setState(() => _error = 'Add a race title.');
+        setState(() {
+          _error = 'Add a race title.';
+          _lastApiError = null;
+        });
         return;
       }
       if (draft.targetValue <= 0) {
-        setState(() => _error = 'Enter a target greater than 0.');
+        setState(() {
+          _error = 'Enter a target greater than 0.';
+          _lastApiError = null;
+        });
         return;
       }
     } else if (!draft.isValidToCreate) {
-      setState(() => _error = 'Choose a supported activity.');
+      setState(() {
+        _error = 'Choose a supported activity.';
+        _lastApiError = null;
+      });
       return;
     }
     setState(() {
@@ -153,39 +239,12 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       _error = null;
     });
     try {
-      final Race race;
-      if (draft.isCustom) {
-        race = await ref
-            .read(raceControllerProvider.notifier)
-            .createCustomRace(
-              title: draft.resolvedTitle,
-              targetValue: draft.targetValue,
-              customActivityName: draft.customActivityName!,
-              verifierSpec: draft.verifierSpec!,
-            );
-      } else {
-        final payload = draft.toCreatePayload();
-        race = await ref
-            .read(raceControllerProvider.notifier)
-            .createRace(
-              title: payload['title'] as String,
-              description: payload['description'] as String,
-              category: payload['category'] as String,
-              goalType: payload['goalType'] as String,
-              targetValue: payload['targetValue'] as int,
-              unit: payload['unit'] as String,
-              proofRequirement: payload['proofRequirement'] as String,
-              proofReviewMode: payload['proofReviewMode'] as String,
-              visibility: payload['visibility'] as String,
-              aiActivityType: payload['aiActivityType'] as String,
-              activityId: payload['activityId'] as String,
-              metric: payload['metric'] as String,
-              format: payload['format'] as String,
-              recurrence: payload['recurrence'] as String,
-              targetUnit: payload['targetUnit'] as String,
-              proofMode: payload['proofMode'] as String,
-            );
-      }
+      final controller = ref.read(raceControllerProvider.notifier);
+      final race = await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace: controller.createCustomRace,
+        createRace: controller.createRace,
+      );
       if (!mounted) return;
       if (draft.isCustom) {
         ref.read(learnedCustomMovementProvider.notifier).state = null;
@@ -200,6 +259,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       if (mounted) {
         setState(() {
           _error = e.message;
+          _lastApiError = e.message;
           _loading = false;
         });
       }
@@ -207,10 +267,59 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       if (mounted) {
         setState(() {
           _error = 'Something went wrong. Try again.';
+          _lastApiError = _error;
           _loading = false;
         });
       }
     }
+  }
+
+  String? _draftValidationError(RaceDraft draft) {
+    if (draft.resolvedTitle.trim().isEmpty) return 'missing_title';
+    if (draft.targetValue <= 0) return 'invalid_target';
+    if (draft.isCustom) {
+      if (draft.customActivityName == null ||
+          draft.customActivityName!.isEmpty) {
+        return 'missing_custom_activity_name';
+      }
+      if (draft.verifierSpec == null) return 'missing_verifier_spec';
+      return null;
+    }
+    if (!draft.isValidToCreate) return 'unsupported_activity';
+    return null;
+  }
+
+  Map<String, dynamic> _raceComposerDebugReport(RaceDraft draft) => {
+    'providerPresentOnInit': _learnedProviderPresentOnInit,
+    'providerPresentNow': ref.read(learnedCustomMovementProvider) != null,
+    'step': _step.name,
+    'draft': {
+      'isCustom': draft.isCustom,
+      'customActivityName': draft.customActivityName,
+      'verifierSpecPresent': draft.verifierSpec != null,
+      'isValidToCreate': draft.isValidToCreate,
+      'resolvedTitle': draft.resolvedTitle,
+      'targetValue': draft.targetValue,
+      'visibility': draft.visibility,
+    },
+    'validationError': _draftValidationError(draft),
+    'screenError': _error,
+    'lastApiError': _lastApiError,
+    'createPathUsed': _lastCreatePathUsed,
+    'primaryButtonDisabled': _loading,
+  };
+
+  Future<void> _copyRaceComposerDebugReport(RaceDraft draft) async {
+    if (!(kDebugMode || kNuvoDiagnosticsEnabled)) return;
+    final pretty = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(_raceComposerDebugReport(draft));
+    debugPrint(pretty, wrapWidth: 1024);
+    await Clipboard.setData(ClipboardData(text: pretty));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Debug report copied.')));
   }
 
   @override
@@ -265,6 +374,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                     error: _error,
                     onStart: _startRace,
                     onEditStep: _goToStep,
+                    showDiagnostics: kDebugMode || kNuvoDiagnosticsEnabled,
+                    onCopyDiagnostics: () =>
+                        _copyRaceComposerDebugReport(draft),
                   ),
                 ],
               ),
@@ -489,8 +601,7 @@ class _NamePageState extends State<_NamePage> {
   void _onTextChanged(String value) {
     setState(() {});
     // Mark as custom only when the user's text differs from the generated title
-    final isGenerated =
-        value.trim() == widget.draft.generatedTitleText;
+    final isGenerated = value.trim() == widget.draft.generatedTitleText;
     _hasCustomName = !isGenerated;
     widget.onDraftChanged(
       widget.draft.copyWith(title: value, hasCustomName: _hasCustomName),
@@ -682,10 +793,8 @@ class _ActivityPage extends StatelessWidget {
         // allow arbitrary targets that are reasonable for the new activity
         (currentTarget >= 1 && currentTarget <= 99999);
     onDraftChanged(
-      draft.copyWith(
+      draft.asPreset(
         activity: activity,
-        metric: activity.metric,
-        // Title regenerates automatically via resolvedTitle unless custom
         targetValue: keepTarget ? currentTarget : activity.defaultTarget,
       ),
     );
@@ -1307,12 +1416,16 @@ class _ReviewPage extends StatelessWidget {
     required this.error,
     required this.onStart,
     required this.onEditStep,
+    required this.showDiagnostics,
+    required this.onCopyDiagnostics,
   });
   final RaceDraft draft;
   final bool loading;
   final String? error;
   final VoidCallback onStart;
   final ValueChanged<_Step> onEditStep;
+  final bool showDiagnostics;
+  final VoidCallback onCopyDiagnostics;
 
   String get _finishLineLabel {
     final isSeconds = draft.metric == RaceMetric.seconds;
@@ -1374,7 +1487,9 @@ class _ReviewPage extends StatelessWidget {
                   icon: Icons.verified_rounded,
                   label: 'Camera verified',
                   sub: '${draft.displayActivityName} · ${draft.metric.label}',
-                  onTap: draft.isCustom ? null : () => onEditStep(_Step.activity),
+                  onTap: draft.isCustom
+                      ? null
+                      : () => onEditStep(_Step.activity),
                 ),
                 const SizedBox(height: 10),
                 // Finish line — tap returns to Goal
@@ -1412,6 +1527,14 @@ class _ReviewPage extends StatelessWidget {
                         color: NuvoColors.danger,
                       ),
                     ),
+                  ),
+                ],
+                if (showDiagnostics) ...[
+                  const SizedBox(height: 16),
+                  NuvoOutlineButton(
+                    label: 'Copy race debug',
+                    expand: true,
+                    onPressed: onCopyDiagnostics,
                   ),
                 ],
               ],

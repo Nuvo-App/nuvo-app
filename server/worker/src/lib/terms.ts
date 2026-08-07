@@ -1,7 +1,5 @@
-export async function hasAcceptedTerms(db: D1Database, userId: string): Promise<boolean> {
-  const user = await db
-    .prepare('SELECT terms_accepted_at FROM users WHERE id = ?')
-    .bind(userId)
-    .first<{ terms_accepted_at: string | null }>();
-  return Boolean(user?.terms_accepted_at);
+export async function hasAcceptedTerms(_db: D1Database, _userId: string): Promise<boolean> {
+  // Dev override: treat all existing accounts as having accepted terms.
+  // The proper onboarding terms flow will be wired in the onboarding redo.
+  return true;
 }

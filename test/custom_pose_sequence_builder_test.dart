@@ -26,7 +26,11 @@ void main() {
       expect(spec.schemaVersion, customPoseVerifierSpecSchemaVersion);
       expect(spec.canonicalSequence, hasLength(customPoseTemplateFrameCount));
       expect(spec.activeFeatureIds, isNotEmpty);
-      expect(spec.requiredFeatureIds, spec.activeFeatureIds);
+      expect(spec.requiredFeatureIds, isNotEmpty);
+      expect(
+        spec.requiredFeatureIds.every(spec.activeFeatureIds.contains),
+        isTrue,
+      );
       expect(spec.canonicalSequence.first.position, 0);
       expect(spec.canonicalSequence.last.position, 1);
       expect(() => spec.validate(), returnsNormally);
@@ -225,6 +229,14 @@ void main() {
             .map((item) => item.featureId),
         contains('distance.foot_separation'),
       );
+      final diagnostics = result.toDiagnosticsJson();
+      expect(diagnostics['activeFeatures'], isNotEmpty);
+      expect(
+        (diagnostics['activeFeatures'] as List)
+            .map((item) => item as Map<String, dynamic>)
+            .map((item) => item['featureId']),
+        contains('landmark.leftWrist.y'),
+      );
     });
 
     test('two short wave demonstrations build a valid verifier spec', () {
@@ -240,6 +252,40 @@ void main() {
 
       expect(result.succeeded, isTrue, reason: result.failureReason);
       expect(result.spec, isNotNull);
+      expect(
+        result.spec!.activeFeatureIds.where(_isFaceOrHeadFeature),
+        isEmpty,
+      );
+      expect(
+        result.spec!.requiredFeatureIds.where(_isFaceOrHeadFeature),
+        isEmpty,
+      );
+      expect(
+        result.spec!.requiredFeatureIds.length,
+        lessThanOrEqualTo(result.spec!.activeFeatureIds.length),
+      );
+      final bodyParts = result.selectedFeatureDiagnostics
+          .map((diagnostic) => poseFeatureBodyPart(diagnostic.featureId))
+          .toSet();
+      expect(bodyParts, contains(anyOf('left wrist', 'right wrist')));
+      expect(bodyParts, contains(anyOf('left elbow', 'right elbow')));
+      expect(bodyParts, contains('shoulders'));
+    });
+
+    test('static examples report no meaningful movement', () {
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _staticPoses()),
+            _demo(2, poses: _staticPoses()),
+            _demo(3, poses: _staticPoses()),
+          ],
+        ),
+      );
+
+      expect(result.succeeded, isFalse);
+      expect(result.failureReason, contains('static_capture'));
+      expect(result.toDiagnosticsJson()['succeeded'], isFalse);
     });
 
     test('missing features and noisy inconsistent features are rejected', () {
@@ -551,3 +597,7 @@ List<NormalizedPose> _staticPoses() {
 }
 
 int mathMax(int a, int b) => a > b ? a : b;
+
+bool _isFaceOrHeadFeature(String featureId) {
+  return poseFeatureBodyPart(featureId) == 'face/head';
+}

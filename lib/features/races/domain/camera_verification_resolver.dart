@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../data/race_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 
-enum CameraVerificationSource { explicitField, titleInference, unresolved }
+enum CameraVerificationSource { explicitField, titleInference, customVerifier, unresolved }
 
 enum PreferredCameraView {
   frontPreferred,
@@ -23,6 +24,7 @@ class CameraVerificationEligibility {
     required this.instructions,
     required this.reason,
     this.unsupportedMessage = 'This movement cannot be camera verified yet.',
+    this.customVerifierSpec,
   });
 
   final String raceId;
@@ -34,25 +36,17 @@ class CameraVerificationEligibility {
   final List<String> instructions;
   final String reason;
   final String unsupportedMessage;
+  final CustomPoseVerifierSpec? customVerifierSpec;
 
   MotionActivityDefinition? get movementDefinition =>
       motionActivityForType(movementType);
+
+  bool get isCustomVerifier => source == CameraVerificationSource.customVerifier;
 }
 
 CameraVerificationEligibility resolveCameraVerification(Race race) {
   if (race.isCustomVerifierRace) {
-    return CameraVerificationEligibility(
-      raceId: race.id,
-      raceTitle: race.title,
-      isCameraVerifiable: false,
-      movementType: null,
-      source: CameraVerificationSource.unresolved,
-      preferredCameraView: null,
-      instructions: const [],
-      reason: 'custom_verifier_proof_not_enabled',
-      unsupportedMessage:
-          'Custom AI Motion Proof is not available for this race yet.',
-    );
+    return _resolveCustomVerification(race);
   }
 
   final explicitValue = race.activityId ?? race.aiActivityType;
@@ -123,6 +117,94 @@ void debugLogCameraVerificationDecision(
     );
     return true;
   }());
+}
+
+CameraVerificationEligibility _resolveCustomVerification(Race race) {
+  if (race.status != 'active') {
+    return _customIneligible(race, 'race_not_active', 'This race is not active.');
+  }
+  if (race.verifierType != customPoseVerifierType) {
+    return _customIneligible(
+      race,
+      'unsupported_custom_verifier_type',
+      'This custom verifier type is not supported.',
+    );
+  }
+  if (race.verifierVersion != customPoseVerifierSpecSchemaVersion) {
+    return _customIneligible(
+      race,
+      'unsupported_custom_verifier_version',
+      'This custom verifier version is not supported.',
+    );
+  }
+  if (race.verifierInvalidReason != null) {
+    return _customIneligible(
+      race,
+      'invalid_custom_verifier_spec',
+      'The stored verifier spec could not be decoded.',
+    );
+  }
+  final spec = race.customVerifierSpec;
+  if (spec == null) {
+    return _customIneligible(
+      race,
+      'missing_custom_verifier_spec',
+      'This race is missing its verifier spec.',
+    );
+  }
+  try {
+    spec.validate();
+  } catch (_) {
+    return _customIneligible(
+      race,
+      'invalid_custom_verifier_spec',
+      'The stored verifier spec is invalid.',
+    );
+  }
+  final metric = race.metric ?? race.targetUnit ?? race.unit;
+  if (metric != 'reps' && metric != 'count') {
+    return _customIneligible(
+      race,
+      'unsupported_custom_measurement_type',
+      'This custom race uses an unsupported measurement type.',
+    );
+  }
+  return _customEligible(race, spec);
+}
+
+CameraVerificationEligibility _customEligible(
+  Race race,
+  CustomPoseVerifierSpec spec,
+) {
+  return CameraVerificationEligibility(
+    raceId: race.id,
+    raceTitle: race.title,
+    isCameraVerifiable: true,
+    movementType: null,
+    source: CameraVerificationSource.customVerifier,
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    instructions: const ['Place your whole body in frame.'],
+    reason: 'custom_verifier_resolved',
+    customVerifierSpec: spec,
+  );
+}
+
+CameraVerificationEligibility _customIneligible(
+  Race race,
+  String reason,
+  String unsupportedMessage,
+) {
+  return CameraVerificationEligibility(
+    raceId: race.id,
+    raceTitle: race.title,
+    isCameraVerifiable: false,
+    movementType: null,
+    source: CameraVerificationSource.unresolved,
+    preferredCameraView: null,
+    instructions: const [],
+    reason: reason,
+    unsupportedMessage: unsupportedMessage,
+  );
 }
 
 CameraVerificationEligibility _eligible(

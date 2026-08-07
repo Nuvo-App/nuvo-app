@@ -19,6 +19,95 @@ const {
   customConfigFromBody,
 } = require('../.tmp-test-dist/domain/raceValidation.js');
 
+function feature(value = 0.5) {
+  return {
+    value,
+    confidence: 0.9,
+    valid: true,
+    kind: 'angle',
+  };
+}
+
+function normalizedPose({ withLandmarks = true } = {}) {
+  return {
+    version: 1,
+    originX: 0,
+    originY: 0,
+    scale: 1,
+    originReference: 'hips',
+    scaleReference: 'shoulders',
+    validLandmarkCount: withLandmarks ? 1 : 0,
+    validFeatureCount: 1,
+    landmarks: withLandmarks
+      ? {
+        nose: {
+          x: 0,
+          y: 0,
+          z: 0,
+          confidence: 1,
+          valid: true,
+        },
+      }
+      : {},
+    features: {
+      version: 1,
+      values: {
+        hip_angle: feature(),
+      },
+    },
+  };
+}
+
+function customVerifierSpec(overrides = {}) {
+  return {
+    version: 1,
+    verifierType: 'custom_pose_sequence',
+    movementName: 'Overhead knee touch',
+    measurementType: 'count',
+    startPose: normalizedPose(),
+    completionPose: normalizedPose({ withLandmarks: false }),
+    completionStrategy: 'completionAtTerminalPose',
+    canonicalSequence: [
+      {
+        position: 0,
+        features: {
+          hip_angle: {
+            value: 0.5,
+            confidence: 0.9,
+            reliability: 0.8,
+            allowedVariation: 0.2,
+            contributingDemonstrationCount: 3,
+            kind: 'angle',
+          },
+        },
+      },
+      {
+        position: 1,
+        features: {
+          hip_angle: {
+            value: 0.7,
+            confidence: 0.9,
+            reliability: 0.8,
+            allowedVariation: 0.2,
+            contributingDemonstrationCount: 3,
+            kind: 'angle',
+          },
+        },
+      },
+    ],
+    requiredFeatureIds: ['hip_angle'],
+    activeFeatureIds: ['hip_angle'],
+    sequenceSimilarityThreshold: 0.6,
+    completionSimilarityThreshold: 0.65,
+    resetSimilarityThreshold: 0.55,
+    minimumValidFeatureRatio: 0.7,
+    minimumVisibility: 0.5,
+    cooldownMs: 600,
+    expectedSequenceFrameCount: 2,
+    ...overrides,
+  };
+}
+
 // ── Scoring: arbitrary targets ─────────────────────────────────────────────────
 
 test('target 6: cumulative sessions complete at or above goal', () => {
@@ -117,6 +206,20 @@ test('proof route: final standings snapshot is triggered on completion', () => {
   assert.ok(snapshotCallIdx > completionWriteIdx, 'snapshot must be called after the completion write');
 });
 
+test('custom race scoring does not impersonate a preset activity id', () => {
+  const source = readFileSync(new URL('../src/routes/races.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('function raceScoringConfigFromRow'), 'custom scoring helper must exist');
+  assert.equal(source.includes('race.verifier_type as unknown as RaceActivityId'), false);
+});
+
+test('proof route validates custom verifier proof contract', () => {
+  const source = readFileSync(new URL('../src/routes/races.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('Custom races require AI Motion Proof'));
+  assert.ok(source.includes('Custom proof movement does not match race.'));
+  assert.ok(source.includes('Custom proof detected value must match value.'));
+  assert.ok(source.includes('Custom proof valid frames cannot exceed analyzed frames.'));
+});
+
 // ── Ranking: deterministic and tied ───────────────────────────────────────────
 
 test('first-to-goal supports arbitrary cumulative targets (original)', () => {
@@ -201,37 +304,7 @@ test('validation rejects zero and negative targets', () => {
 });
 
 test('custom verifier validation accepts bounded custom race config', () => {
-  const spec = {
-    version: 1,
-    verifierType: 'custom_pose_sequence',
-    movementName: 'Overhead knee touch',
-    measurementType: 'count',
-    startPose: { landmarks: { nose: { x: 0, y: 0, visibility: 1 } } },
-    completionPose: { landmarks: { nose: { x: 0.1, y: 0.1, visibility: 1 } } },
-    completionStrategy: 'completionAtTerminalPose',
-    canonicalSequence: [{
-      position: 0,
-      features: {
-        hip_angle: {
-          value: 0.5,
-          confidence: 0.9,
-          reliability: 0.8,
-          allowedVariation: 0.2,
-          contributingDemonstrationCount: 3,
-          kind: 'angle',
-        },
-      },
-    }],
-    requiredFeatureIds: ['hip_angle'],
-    activeFeatureIds: ['hip_angle'],
-    sequenceSimilarityThreshold: 0.6,
-    completionSimilarityThreshold: 0.65,
-    resetSimilarityThreshold: 0.55,
-    minimumValidFeatureRatio: 0.7,
-    minimumVisibility: 0.5,
-    cooldownMs: 600,
-    expectedSequenceFrameCount: 1,
-  };
+  const spec = customVerifierSpec();
 
   const config = customConfigFromBody({
     title: 'Office ladder',
@@ -248,6 +321,50 @@ test('custom verifier validation accepts bounded custom race config', () => {
   assert.equal(config.metric, 'reps');
   assert.equal(config.verificationMethod, 'ai');
   assert.equal(config.targetValue, 10);
+});
+
+test('custom verifier validation accepts feature-only learned completion pose', () => {
+  const config = customConfigFromBody({
+    title: 'Office ladder',
+    targetValue: 10,
+    verifierType: 'custom_pose_sequence',
+    verifierVersion: 1,
+    customActivityName: 'Overhead knee touch',
+    verifierSpec: customVerifierSpec({
+      completionPose: normalizedPose({ withLandmarks: false }),
+    }),
+  });
+
+  assert.equal('error' in config, false);
+});
+
+test('custom verifier validation rejects inactive sequence features', () => {
+  const config = customConfigFromBody({
+    title: 'Office ladder',
+    targetValue: 10,
+    verifierType: 'custom_pose_sequence',
+    verifierVersion: 1,
+    customActivityName: 'Overhead knee touch',
+    verifierSpec: customVerifierSpec({
+      canonicalSequence: [{
+        position: 0,
+        features: {
+          other_angle: {
+            value: 0.5,
+            confidence: 0.9,
+            reliability: 0.8,
+            allowedVariation: 0.2,
+            contributingDemonstrationCount: 3,
+            kind: 'angle',
+          },
+        },
+      }],
+      expectedSequenceFrameCount: 1,
+    }),
+  });
+
+  assert.equal('error' in config, true);
+  assert.equal(config.error, 'Custom verifier sequence uses inactive features.');
 });
 
 test('custom verifier validation rejects preset activity impersonation', () => {

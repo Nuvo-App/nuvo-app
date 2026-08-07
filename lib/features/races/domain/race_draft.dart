@@ -44,8 +44,7 @@ class RaceDraft {
     if (resolvedTitle.trim().isEmpty) return false;
     if (targetValue <= 0) return false;
     if (isCustom) {
-      return verifierSpec != null &&
-          customActivityName!.isNotEmpty;
+      return verifierSpec != null && customActivityName!.isNotEmpty;
     }
     return activity.type.backendValue.isNotEmpty;
   }
@@ -92,6 +91,26 @@ class RaceDraft {
     );
   }
 
+  RaceDraft asPreset({
+    required MotionActivityDefinition activity,
+    int? targetValue,
+    bool? hasCustomName,
+    String? title,
+  }) {
+    return RaceDraft(
+      title: title ?? this.title,
+      hasCustomName: hasCustomName ?? this.hasCustomName,
+      activity: activity,
+      metric: activity.metric,
+      format: activity.supportedFormats.contains(format)
+          ? format
+          : activity.supportedFormats.first,
+      targetValue: targetValue ?? this.targetValue,
+      recurrence: recurrence,
+      visibility: visibility,
+    );
+  }
+
   Map<String, dynamic> toCreatePayload() {
     if (isCustom) {
       throw UnsupportedError(
@@ -102,20 +121,20 @@ class RaceDraft {
       'title': resolvedTitle,
       'description': '${activity.title} race verified by camera.',
       'category': 'fitness',
-    'goalType': format.backendValue,
-    'targetValue': targetValue,
-    'unit': metric.backendValue,
-    'targetUnit': metric.backendValue,
-    'activityId': activity.type.backendValue,
-    'metric': metric.backendValue,
-    'format': format.backendValue,
-    'recurrence': recurrence.backendValue,
-    'proofRequirement': 'ai_check',
-    'proofReviewMode': 'auto_accept',
-    'proofMode': 'ai_check',
-    'aiActivityType': activity.type.backendValue,
-    'visibility': visibility,
-  };
+      'goalType': format.backendValue,
+      'targetValue': targetValue,
+      'unit': metric.backendValue,
+      'targetUnit': metric.backendValue,
+      'activityId': activity.type.backendValue,
+      'metric': metric.backendValue,
+      'format': format.backendValue,
+      'recurrence': recurrence.backendValue,
+      'proofRequirement': 'ai_check',
+      'proofReviewMode': 'auto_accept',
+      'proofMode': 'ai_check',
+      'aiActivityType': activity.type.backendValue,
+      'visibility': visibility,
+    };
   }
 }
 

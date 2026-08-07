@@ -14,7 +14,7 @@ const int customPoseStableResetFrameCount = 2;
 const int customPoseMissingFeatureGraceFrames = 3;
 const int customPoseProgressTimeoutFrames = 18;
 const int customPoseBackwardToleranceFrames = 1;
-const int customPoseForwardLookaheadFrames = 4;
+const int customPoseForwardLookaheadFrames = 8;
 const double customPoseMinimumSequenceCoverage = 0.82;
 
 enum CustomPoseRuntimeState {
@@ -68,7 +68,12 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   double _completionSimilarity = 0;
   double _resetSimilarity = 0;
   double _validFeatureRatio = 0;
+  double _requiredFeatureRatio = 0;
   double _visibility = 0;
+  List<String> _missingRequiredFeatures = const [];
+  bool _mirroredComparisonUsed = false;
+  bool _frameAdvancedVerification = false;
+  String _frameNoAdvanceReason = 'not_started';
   bool _started = false;
   bool _departedAfterReturnCount = true;
   DateTime? _startedAt;
@@ -119,7 +124,12 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     _completionSimilarity = 0;
     _resetSimilarity = 0;
     _validFeatureRatio = 0;
+    _requiredFeatureRatio = 0;
     _visibility = 0;
+    _missingRequiredFeatures = const [];
+    _mirroredComparisonUsed = false;
+    _frameAdvancedVerification = false;
+    _frameNoAdvanceReason = 'waiting_for_frame';
     _started = true;
     _departedAfterReturnCount = true;
     _startedAt = null;
@@ -143,11 +153,17 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     _lastFrameAt = frame.createdAt;
     _framesAnalyzed++;
     if (_cooldownFramesRemaining > 0) _cooldownFramesRemaining--;
+    _frameAdvancedVerification = false;
+    _frameNoAdvanceReason = 'state_not_advanced';
+    _mirroredComparisonUsed = false;
 
     final pose = _normalizer.normalize(frame);
     final frameQuality = _qualityFor(pose);
     _visibility = frameQuality.visibility;
     _validFeatureRatio = frameQuality.activeCoverage;
+    _requiredFeatureRatio = frameQuality.requiredCoverage;
+    _missingRequiredFeatures = frameQuality.missingRequiredFeatures;
+    _mirroredComparisonUsed = frameQuality.usedMirroredCoverage;
     if (!pose.isValid || !frameQuality.hasRequiredSetup) {
       _handleMissingOrInvalid(pose);
       return _compatUpdate();
@@ -155,7 +171,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
 
     _validFrames++;
     _missingFeatureGraceCount = 0;
-    _resetSimilarity = _poseFeatureSimilarity(
+    _resetSimilarity = _poseFeatureSimilarityFor(
       pose.features.values,
       _spec.startPose.features.values,
       _spec.requiredFeatureIds,
@@ -193,21 +209,30 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   void _handleMissingOrInvalid(NormalizedPose pose) {
     _missingFeatureGraceCount++;
     _guidance = pose.isValid ? 'Step into frame' : 'Step into frame';
+    _frameNoAdvanceReason = pose.isValid
+        ? 'missing_required_features'
+        : (pose.invalidReason ?? 'invalid_pose');
     if (_missingFeatureGraceCount > customPoseMissingFeatureGraceFrames) {
       _invalidateAttempt('missing_required_features');
     }
   }
 
   void _handleWaitingForStart() {
-    if (_resetSimilarity >= _spec.resetSimilarityThreshold &&
-        _validFeatureRatio >= _spec.minimumValidFeatureRatio &&
-        _visibility >= _spec.minimumVisibility) {
+    final startMatched = _resetSimilarity >= _spec.resetSimilarityThreshold;
+    final enoughFeatures = _validFeatureRatio >= _spec.minimumValidFeatureRatio;
+    final enoughVisibility = _visibility >= _spec.minimumVisibility;
+    if (startMatched && enoughFeatures && enoughVisibility) {
       _stableStartFrames++;
       _guidance = _stableStartFrames >= customPoseStableStartFrameCount
           ? 'Begin the movement'
           : 'Hold the starting position';
+      _frameNoAdvanceReason =
+          _stableStartFrames >= customPoseStableStartFrameCount
+          ? 'armed'
+          : 'holding_start_pose';
       if (_stableStartFrames >= customPoseStableStartFrameCount) {
         _state = CustomPoseRuntimeState.armed;
+        _frameAdvancedVerification = true;
         _currentTemplateIndex = 0;
         _highestTemplateIndex = 0;
         _sequenceProgress = 0;
@@ -216,20 +241,28 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     } else {
       _stableStartFrames = 0;
       _guidance = 'Move into the starting position';
+      _frameNoAdvanceReason = !startMatched
+          ? 'start_similarity_below_threshold'
+          : !enoughFeatures
+          ? 'active_feature_coverage_below_threshold'
+          : 'visibility_below_threshold';
     }
   }
 
   void _handleArmed(NormalizedPose pose) {
-    final departed = _resetSimilarity < (_spec.resetSimilarityThreshold - 0.10);
+    final departed = _resetSimilarity < _spec.resetSimilarityThreshold;
     if (!departed) {
       _guidance = 'Begin the movement';
       _currentSimilarity = _matchAt(pose, 0);
+      _frameNoAdvanceReason = 'start_pose_not_departed';
       return;
     }
     if (!_departedAfterReturnCount) {
       _departedAfterReturnCount = true;
     }
     _state = CustomPoseRuntimeState.matchingSequence;
+    _frameAdvancedVerification = true;
+    _frameNoAdvanceReason = 'departed_start_pose';
     _stableStartFrames = 0;
     _handleMatching(pose);
   }
@@ -238,7 +271,8 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     final match = _bestWindowMatch(pose);
     _currentSimilarity = match.similarity;
     if (match.accepted) {
-      if (match.index > _currentTemplateIndex) {
+      final advancedIndex = match.index > _currentTemplateIndex;
+      if (advancedIndex) {
         _framesSinceProgress = 0;
       } else {
         _framesSinceProgress++;
@@ -247,9 +281,14 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       _highestTemplateIndex = math.max(_highestTemplateIndex, match.index);
       _sequenceProgress = _highestTemplateIndex / (_indexedSequence.length - 1);
       _guidance = 'Ready';
+      _frameAdvancedVerification = true;
+      _frameNoAdvanceReason = advancedIndex
+          ? 'advanced_sequence'
+          : 'matched_current_sequence_frame';
     } else {
       _framesSinceProgress++;
       _guidance = 'Movement incomplete';
+      _frameNoAdvanceReason = 'sequence_similarity_below_threshold';
     }
 
     if (_framesSinceProgress > customPoseProgressTimeoutFrames) {
@@ -268,7 +307,12 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
 
     final enoughProgress =
         _sequenceProgress >= customPoseMinimumSequenceCoverage;
-    if (!enoughProgress) return;
+    if (!enoughProgress) {
+      if (match.accepted && !(_frameNoAdvanceReason == 'advanced_sequence')) {
+        _frameNoAdvanceReason = 'sequence_progress_below_completion';
+      }
+      return;
+    }
 
     if (_spec.completionStrategy ==
         CustomPoseCompletionStrategy.completionAtTerminalPose) {
@@ -284,6 +328,11 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       _stableCompletionFrames++;
       _state = CustomPoseRuntimeState.completionCandidate;
       _guidance = 'Ready';
+      _frameAdvancedVerification = true;
+      _frameNoAdvanceReason =
+          _stableCompletionFrames >= customPoseStableCompletionFrameCount
+          ? 'counted_repetition'
+          : 'holding_completion_pose';
       if (_stableCompletionFrames >= customPoseStableCompletionFrameCount) {
         _countRepetition();
         _state = CustomPoseRuntimeState.waitingForReset;
@@ -292,6 +341,9 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       }
     } else {
       _stableCompletionFrames = 0;
+      _frameNoAdvanceReason = _cooldownFramesRemaining > 0
+          ? 'cooldown_active'
+          : 'completion_similarity_below_threshold';
     }
   }
 
@@ -302,6 +354,11 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
         _cooldownFramesRemaining == 0) {
       _stableResetFrames++;
       _guidance = 'Ready';
+      _frameAdvancedVerification = true;
+      _frameNoAdvanceReason =
+          _stableResetFrames >= customPoseStableResetFrameCount
+          ? 'counted_repetition'
+          : 'holding_return_to_start';
       if (_stableResetFrames >= customPoseStableResetFrameCount) {
         _countRepetition();
         _state = CustomPoseRuntimeState.cooldown;
@@ -311,6 +368,9 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     } else {
       _stableResetFrames = 0;
       _guidance = 'Return to your starting position';
+      _frameNoAdvanceReason = _cooldownFramesRemaining > 0
+          ? 'cooldown_active'
+          : 'return_to_start_required';
     }
   }
 
@@ -321,27 +381,38 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       _guidance = _stableResetFrames >= customPoseStableResetFrameCount
           ? 'Begin the movement'
           : 'Hold the starting position';
+      _frameNoAdvanceReason =
+          _stableResetFrames >= customPoseStableResetFrameCount
+          ? 'armed'
+          : 'holding_reset_pose';
       if (_stableResetFrames >= customPoseStableResetFrameCount) {
         _state = CustomPoseRuntimeState.armed;
+        _frameAdvancedVerification = true;
         _resetAttemptProgress();
         _stableResetFrames = 0;
       }
     } else {
       _stableResetFrames = 0;
       _guidance = 'Return to your starting position';
+      _frameNoAdvanceReason = _cooldownFramesRemaining > 0
+          ? 'cooldown_active'
+          : 'reset_similarity_below_threshold';
     }
   }
 
   void _handleCooldown(NormalizedPose pose) {
-    final departed = _resetSimilarity < (_spec.resetSimilarityThreshold - 0.10);
+    final departed = _resetSimilarity < _spec.resetSimilarityThreshold;
     if (_cooldownFramesRemaining > 0) {
       _guidance = 'Ready';
+      _frameNoAdvanceReason = 'cooldown_active';
       return;
     }
     if (!_departedAfterReturnCount && departed) {
       _departedAfterReturnCount = true;
       _state = CustomPoseRuntimeState.matchingSequence;
       _resetAttemptProgress();
+      _frameAdvancedVerification = true;
+      _frameNoAdvanceReason = 'departed_start_pose';
       _handleMatching(pose);
       return;
     }
@@ -349,6 +420,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       _state = CustomPoseRuntimeState.armed;
     }
     _guidance = 'Begin the movement';
+    _frameNoAdvanceReason = 'start_pose_not_departed';
   }
 
   _WindowMatch _bestWindowMatch(NormalizedPose pose) {
@@ -397,6 +469,19 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     Map<String, PoseFeatureValue> observed,
     Map<String, PoseTemplateFeature> template,
   ) {
+    final direct = _templateFeatureSimilarityFor(observed, template);
+    final mirrored = _templateFeatureSimilarityFor(
+      _mirroredFeatureValues(observed),
+      template,
+    );
+    if (mirrored > direct) _mirroredComparisonUsed = true;
+    return math.max(direct, mirrored);
+  }
+
+  double _templateFeatureSimilarityFor(
+    Map<String, PoseFeatureValue> observed,
+    Map<String, PoseTemplateFeature> template,
+  ) {
     var weighted = 0.0;
     var weightTotal = 0.0;
     var compared = 0;
@@ -429,6 +514,21 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   }
 
   double _poseFeatureSimilarity(
+    Map<String, PoseFeatureValue> observed,
+    Map<String, PoseFeatureValue> reference,
+    List<String> featureIds,
+  ) {
+    final direct = _poseFeatureSimilarityFor(observed, reference, featureIds);
+    final mirrored = _poseFeatureSimilarityFor(
+      _mirroredFeatureValues(observed),
+      reference,
+      featureIds,
+    );
+    if (mirrored > direct) _mirroredComparisonUsed = true;
+    return math.max(direct, mirrored);
+  }
+
+  double _poseFeatureSimilarityFor(
     Map<String, PoseFeatureValue> observed,
     Map<String, PoseFeatureValue> reference,
     List<String> featureIds,
@@ -472,6 +572,25 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       pose.features.values,
       _spec.activeFeatureIds,
     );
+    final mirrored = _mirroredFeatureValues(pose.features.values);
+    final mirroredRequiredCoverage = _coverage(
+      mirrored,
+      _spec.requiredFeatureIds,
+    );
+    final mirroredActiveCoverage = _coverage(mirrored, _spec.activeFeatureIds);
+    final useMirroredCoverage =
+        mirroredRequiredCoverage > requiredCoverage ||
+        mirroredActiveCoverage > activeCoverage;
+    final missingRequiredFeatures = _spec.requiredFeatureIds
+        .where((id) {
+          final direct = pose.features.values[id];
+          final reflected = mirrored[id];
+          final directValid = direct?.valid == true && direct!.value.isFinite;
+          final mirroredValid =
+              reflected?.valid == true && reflected!.value.isFinite;
+          return !directValid && !mirroredValid;
+        })
+        .toList(growable: false);
     final confidences = _spec.requiredFeatureIds
         .map((id) => pose.features.values[id])
         .whereType<PoseFeatureValue>()
@@ -483,9 +602,11 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
         : confidences.fold<double>(0, (sum, value) => sum + value) /
               confidences.length;
     return _FrameQuality(
-      requiredCoverage: requiredCoverage,
-      activeCoverage: activeCoverage,
+      requiredCoverage: math.max(requiredCoverage, mirroredRequiredCoverage),
+      activeCoverage: math.max(activeCoverage, mirroredActiveCoverage),
       visibility: visibility.clamp(0.0, 1.0),
+      missingRequiredFeatures: missingRequiredFeatures,
+      usedMirroredCoverage: useMirroredCoverage,
     );
   }
 
@@ -495,6 +616,38 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
         .where((id) => values[id]?.valid == true && values[id]!.value.isFinite)
         .length;
     return present / ids.length;
+  }
+
+  Map<String, PoseFeatureValue> _mirroredFeatureValues(
+    Map<String, PoseFeatureValue> values,
+  ) {
+    final mirrored = Map<String, PoseFeatureValue>.of(values);
+    for (final entry in values.entries) {
+      final id = _mirroredFeatureId(entry.key);
+      if (id == null) continue;
+      mirrored[id] = _mirroredFeatureValue(id, entry.value);
+    }
+    return mirrored;
+  }
+
+  String? _mirroredFeatureId(String id) {
+    if (id.contains('left')) return id.replaceAll('left', 'right');
+    if (id.contains('right')) return id.replaceAll('right', 'left');
+    return null;
+  }
+
+  PoseFeatureValue _mirroredFeatureValue(
+    String mirroredId,
+    PoseFeatureValue value,
+  ) {
+    final mirroredCoordinateX =
+        value.kind == 'coord' && mirroredId.endsWith('.x');
+    return PoseFeatureValue(
+      value: mirroredCoordinateX ? -value.value : value.value,
+      confidence: value.confidence,
+      valid: value.valid,
+      kind: value.kind,
+    );
   }
 
   void _countRepetition() {
@@ -512,6 +665,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   void _invalidateAttempt(String reason) {
     _invalidAttemptCount++;
     _failureReason = reason;
+    _frameNoAdvanceReason = reason;
     _state = CustomPoseRuntimeState.waitingForStart;
     _resetAttemptProgress();
     _stableStartFrames = 0;
@@ -581,7 +735,12 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       completionSimilarity: _completionSimilarity,
       resetSimilarity: _resetSimilarity,
       validFeatureRatio: _validFeatureRatio,
+      requiredFeatureRatio: _requiredFeatureRatio,
       visibility: _visibility,
+      missingRequiredFeatures: _missingRequiredFeatures,
+      mirroredComparisonUsed: _mirroredComparisonUsed,
+      frameAdvancedVerification: _frameAdvancedVerification,
+      frameNoAdvanceReason: _frameNoAdvanceReason,
       framesAnalyzed: _framesAnalyzed,
       validFrames: _validFrames,
       missingFeatureGraceCount: _missingFeatureGraceCount,
@@ -652,7 +811,12 @@ class CustomPoseRuntimeUpdate {
     required this.completionSimilarity,
     required this.resetSimilarity,
     required this.validFeatureRatio,
+    required this.requiredFeatureRatio,
     required this.visibility,
+    required this.missingRequiredFeatures,
+    required this.mirroredComparisonUsed,
+    required this.frameAdvancedVerification,
+    required this.frameNoAdvanceReason,
     required this.framesAnalyzed,
     required this.validFrames,
     required this.missingFeatureGraceCount,
@@ -672,7 +836,12 @@ class CustomPoseRuntimeUpdate {
   final double completionSimilarity;
   final double resetSimilarity;
   final double validFeatureRatio;
+  final double requiredFeatureRatio;
   final double visibility;
+  final List<String> missingRequiredFeatures;
+  final bool mirroredComparisonUsed;
+  final bool frameAdvancedVerification;
+  final String frameNoAdvanceReason;
   final int framesAnalyzed;
   final int validFrames;
   final int missingFeatureGraceCount;
@@ -688,9 +857,30 @@ class CustomPoseRuntimeUpdate {
     'completionSimilarity': completionSimilarity,
     'resetSimilarity': resetSimilarity,
     'validFeatureRatio': validFeatureRatio,
+    'requiredFeatureRatio': requiredFeatureRatio,
     'visibility': visibility,
     'missingFeatureGraceCount': missingFeatureGraceCount.toDouble(),
     'framesSinceProgress': framesSinceProgress.toDouble(),
+    'mirroredComparisonUsed': mirroredComparisonUsed ? 1 : 0,
+    'frameAdvancedVerification': frameAdvancedVerification ? 1 : 0,
+  };
+
+  Map<String, dynamic> toDiagnosticsJson() => {
+    'state': state.name,
+    'guidance': guidance,
+    'count': count,
+    'target': target,
+    'activeFeatureCoverage': validFeatureRatio,
+    'requiredFeatureCoverage': requiredFeatureRatio,
+    'sequenceProgress': sequenceProgress,
+    'currentSimilarity': currentSimilarity,
+    'completionSimilarity': completionSimilarity,
+    'resetSimilarity': resetSimilarity,
+    'missingRequiredFeatures': missingRequiredFeatures,
+    'mirroredComparisonUsed': mirroredComparisonUsed,
+    'frameAdvancedVerification': frameAdvancedVerification,
+    'frameNoAdvanceReason': frameNoAdvanceReason,
+    if (failureReason != null) 'failureReason': failureReason,
   };
 }
 
@@ -845,16 +1035,22 @@ class _FrameQuality {
     required this.requiredCoverage,
     required this.activeCoverage,
     required this.visibility,
+    required this.missingRequiredFeatures,
+    required this.usedMirroredCoverage,
   });
 
   const _FrameQuality.empty()
     : requiredCoverage = 0,
       activeCoverage = 0,
-      visibility = 0;
+      visibility = 0,
+      missingRequiredFeatures = const [],
+      usedMirroredCoverage = false;
 
   final double requiredCoverage;
   final double activeCoverage;
   final double visibility;
+  final List<String> missingRequiredFeatures;
+  final bool usedMirroredCoverage;
 
   bool get hasRequiredSetup =>
       requiredCoverage >= 0.40 && activeCoverage >= 0.40 && visibility >= 0.30;
