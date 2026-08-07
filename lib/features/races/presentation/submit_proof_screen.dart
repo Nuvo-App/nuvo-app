@@ -44,13 +44,18 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
+      final eligibility = resolveCameraVerification(race);
+      if (eligibility.isCameraVerifiable && mounted) {
+        context.go('/race/${widget.raceId}/proof/ai-motion');
+        return;
+      }
       setState(() {
         _race = race;
         _raceLoading = false;
       });
       debugLogCameraVerificationDecision(
         race,
-        resolveCameraVerification(race),
+        eligibility,
         routeAction: 'submit_proof_entry_loaded',
       );
     } catch (_) {
