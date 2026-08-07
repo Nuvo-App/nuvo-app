@@ -437,7 +437,7 @@ void validateCustomPoseVerifierSpec(CustomPoseVerifierSpec spec) {
   if (spec.cooldownMs <= 0) {
     throw const PoseDataFormatException('Cooldown must be positive.');
   }
-  if (spec.calibrationSummary.demonstrationCount != 3 ||
+  if (spec.calibrationSummary.demonstrationCount < 2 ||
       spec.calibrationSummary.selectedActiveFeatureCount !=
           spec.activeFeatureIds.length ||
       spec.calibrationSummary.requiredFeatureCount !=

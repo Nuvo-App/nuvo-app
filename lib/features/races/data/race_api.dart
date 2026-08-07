@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart';
+import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
 import 'race_models.dart';
@@ -276,6 +277,20 @@ class RaceApi {
         clientSubmissionId: clientSubmissionId,
         metric: metric,
       ),
+    );
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  Future<Race> submitCustomPoseProof(
+    String token,
+    String raceId, {
+    required CustomPoseRuntimeResult result,
+    required String clientSubmissionId,
+  }) async {
+    final json = await _post(
+      '/races/$raceId/proof',
+      token,
+      result.toProofPayload(clientSubmissionId: clientSubmissionId),
     );
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }

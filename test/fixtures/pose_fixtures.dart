@@ -102,6 +102,28 @@ NuvoPoseFrame leftArmRaisedPose({double dx = 0, double dy = 0}) {
   );
 }
 
+NuvoPoseFrame wavePose({double dx = 0, double dy = 0}) {
+  return _frame(
+    {
+      'nose': _p(0.50, 0.16),
+      'leftShoulder': _p(0.38, 0.30),
+      'rightShoulder': _p(0.62, 0.30),
+      'leftElbow': _p(0.15, 0.38),
+      'rightElbow': _p(0.85, 0.38),
+      'leftWrist': _p(0.10, 0.45),
+      'rightWrist': _p(0.90, 0.45),
+      'leftHip': _p(0.42, 0.57),
+      'rightHip': _p(0.58, 0.57),
+      'leftKnee': _p(0.43, 0.76),
+      'rightKnee': _p(0.57, 0.76),
+      'leftAnkle': _p(0.43, 0.94),
+      'rightAnkle': _p(0.57, 0.94),
+    },
+    dx: dx,
+    dy: dy,
+  );
+}
+
 NuvoPoseFrame rightArmRaisedPose({double dx = 0, double dy = 0}) {
   return _frame(
     {

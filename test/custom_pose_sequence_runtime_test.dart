@@ -118,10 +118,13 @@ void main() {
 
       var update = runtime.update(_neutral()).customPoseUpdate!;
       expect(update.state, isNot(CustomPoseRuntimeState.armed));
+      expect(update.frameNoAdvanceReason, 'holding_start_pose');
+      expect(update.requiredFeatureRatio, greaterThan(0));
 
       update = runtime.update(_neutral()).customPoseUpdate!;
       update = runtime.update(_neutral()).customPoseUpdate!;
       expect(update.state, CustomPoseRuntimeState.armed);
+      expect(update.frameAdvancedVerification, isTrue);
     });
 
     test('low feature coverage and halfway starts do not arm', () {
@@ -135,6 +138,11 @@ void main() {
         );
       }
       expect(runtime.lastUpdate.state, CustomPoseRuntimeState.waitingForStart);
+      expect(
+        runtime.lastUpdate.frameNoAdvanceReason,
+        anyOf('missing_required_features', 'missing_origin_landmarks'),
+      );
+      expect(runtime.lastUpdate.requiredFeatureRatio, 0);
 
       final halfway = _runtime(_terminalSpec())..start();
       for (var i = 0; i < 5; i++) {
@@ -142,6 +150,10 @@ void main() {
       }
       expect(halfway.lastUpdate.state, CustomPoseRuntimeState.waitingForStart);
       expect(halfway.currentValue, 0);
+      expect(
+        halfway.lastUpdate.frameNoAdvanceReason,
+        'start_similarity_below_threshold',
+      );
     });
   });
 
@@ -197,7 +209,7 @@ void main() {
       },
     );
 
-    test('left and right swapped movement does not pass distinct spec', () {
+    test('left and right mirror mismatch can still match learned wave', () {
       final runtime = _runtime(_leftArmSpec())..start();
 
       _play(runtime, [
@@ -207,9 +219,18 @@ void main() {
         rightArmRaisedPose(),
         rightArmRaisedPose(),
         rightArmRaisedPose(),
+        rightArmRaisedPose(),
       ]);
 
-      expect(runtime.currentValue, 0);
+      expect(
+        runtime.currentValue,
+        1,
+        reason:
+            '${runtime.lastUpdate.state} progress=${runtime.lastUpdate.sequenceProgress} '
+            'sim=${runtime.lastUpdate.currentSimilarity} completion=${runtime.lastUpdate.completionSimilarity} '
+            'reset=${runtime.lastUpdate.resetSimilarity} failure=${runtime.failedRuleReason}',
+      );
+      expect(runtime.lastUpdate.mirroredComparisonUsed, isTrue);
     });
   });
 
@@ -301,6 +322,10 @@ void main() {
         }
         expect(runtime.lastUpdate.sequenceProgress, progressBefore);
         expect(runtime.currentValue, 0);
+        expect(
+          runtime.lastUpdate.frameNoAdvanceReason,
+          'missing_origin_landmarks',
+        );
 
         runtime.update(
           neutralStandingPose(
@@ -308,7 +333,36 @@ void main() {
           ),
         );
         expect(runtime.failedRuleReason, 'missing_required_features');
+        expect(
+          runtime.lastUpdate.frameNoAdvanceReason,
+          anyOf('missing_required_features', 'missing_origin_landmarks'),
+        );
       },
+    );
+  });
+
+  test('learned arm movement does not require face landmarks', () {
+    final spec = _leftArmSpec();
+    expect(spec.requiredFeatureIds.where(_isFaceOrHeadFeature), isEmpty);
+    final runtime = _runtime(spec)..start();
+
+    _play(runtime, [
+      _withoutFace(_neutral()),
+      _withoutFace(_neutral()),
+      _withoutFace(_neutral()),
+      _withoutFace(leftArmRaisedPose()),
+      _withoutFace(leftArmRaisedPose()),
+      _withoutFace(leftArmRaisedPose()),
+      _withoutFace(leftArmRaisedPose()),
+    ]);
+
+    expect(
+      runtime.currentValue,
+      1,
+      reason:
+          '${runtime.lastUpdate.state} progress=${runtime.lastUpdate.sequenceProgress} '
+          'sim=${runtime.lastUpdate.currentSimilarity} completion=${runtime.lastUpdate.completionSimilarity} '
+          'reset=${runtime.lastUpdate.resetSimilarity} failure=${runtime.failedRuleReason}',
     );
   });
 
@@ -550,6 +604,27 @@ void _play(CustomPoseSequenceRuntime runtime, List<NuvoPoseFrame> frames) {
   for (final frame in frames) {
     runtime.update(frame);
   }
+}
+
+NuvoPoseFrame _withoutFace(NuvoPoseFrame frame) {
+  final points = Map<String, NuvoPosePoint>.of(frame.points)
+    ..removeWhere(_isFaceOrHeadLandmark);
+  return NuvoPoseFrame(
+    points: Map.unmodifiable(points),
+    imageWidth: frame.imageWidth,
+    imageHeight: frame.imageHeight,
+    createdAt: frame.createdAt,
+  );
+}
+
+bool _isFaceOrHeadLandmark(String id, NuvoPosePoint _) =>
+    id == 'nose' ||
+    id.contains('Eye') ||
+    id.contains('Ear') ||
+    id.contains('Mouth');
+
+bool _isFaceOrHeadFeature(String featureId) {
+  return poseFeatureBodyPart(featureId) == 'face/head';
 }
 
 NuvoPoseFrame _neutral({double dx = 0}) => neutralStandingPose(dx: dx);

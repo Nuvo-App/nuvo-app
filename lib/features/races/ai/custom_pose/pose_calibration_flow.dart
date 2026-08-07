@@ -9,8 +9,6 @@ import 'pose_calibration_quality.dart';
 import 'pose_demonstration_capture.dart';
 import 'pose_similarity.dart';
 
-
-
 enum TeachMovementStage {
   name,
   setup,
@@ -31,10 +29,10 @@ class SingleSessionTeachingCapture {
     this._onChanged,
     CustomPoseSequenceBuilder? builder,
     this.buildDelay = const Duration(milliseconds: _buildDelayMs),
-  })  : _now = now ?? DateTime.now,
-        _startSimilarity = startSimilarity ??
-            const PoseSimilarity(minValidFeatureRatio: 0.35),
-        _builder = builder ?? const CustomPoseSequenceBuilder();
+  }) : _now = now ?? DateTime.now,
+       _startSimilarity =
+           startSimilarity ?? const PoseSimilarity(minValidFeatureRatio: 0.35),
+       _builder = builder ?? const CustomPoseSequenceBuilder();
 
   final DateTime Function() _now;
   final PoseSimilarity _startSimilarity;
@@ -58,6 +56,9 @@ class SingleSessionTeachingCapture {
   String? _lastBuildFailure;
   bool _bodyVisible = false;
   DateTime? _clipStartedAt;
+  String _cameraLensDirection = 'unknown';
+  String _captureOrientation = 'portraitUp';
+  String _captureDeviceNote = 'manual_recording';
 
   TeachMovementStage get stage => _stage;
   String get movementName => _movementName;
@@ -84,17 +85,7 @@ class SingleSessionTeachingCapture {
   bool get isReadyToRecord => _stage == TeachMovementStage.readyToRecord;
   bool get isBuilding => _stage == TeachMovementStage.building;
   bool get isLearned => _stage == TeachMovementStage.learned;
-  Duration get clipDuration => _clipDuration;
-  Duration get maxClipWait => _maxClipWait;
   DateTime? get clipStartedAt => _clipStartedAt;
-  int? get liveProcessedFrameCount => _current?.processedFrameCount;
-  int? get liveMinProcessedFrameCount => _current?.minProcessedFrames;
-  double get recordingProgress {
-    if (_clipStartedAt == null) return 0.0;
-    final elapsed =
-        _now().difference(_clipStartedAt!).inMilliseconds;
-    return (elapsed / _clipDuration.inMilliseconds).clamp(0.0, 1.0);
-  }
   bool get bodyVisible => _bodyVisible;
   bool get canLearn =>
       _accepted.length >= _minAccepted && _stage != TeachMovementStage.building;
@@ -115,13 +106,77 @@ class SingleSessionTeachingCapture {
   String? get lastBuildFailureMessage =>
       _lastBuildFailure == null ? null : _translatedFailure(_lastBuildFailure);
 
+  void setCaptureDeviceInfo({
+    String? cameraLensDirection,
+    String? orientation,
+    String? deviceNote,
+  }) {
+    if (cameraLensDirection != null && cameraLensDirection.isNotEmpty) {
+      _cameraLensDirection = cameraLensDirection;
+    }
+    if (orientation != null && orientation.isNotEmpty) {
+      _captureOrientation = orientation;
+    }
+    if (deviceNote != null && deviceNote.isNotEmpty) {
+      _captureDeviceNote = deviceNote;
+    }
+  }
+
+  Map<String, dynamic> debugReport() {
+    final buildResult = _buildResult;
+    final spec = _verifierSpec ?? buildResult?.spec;
+    final selected =
+        buildResult?.selectedFeatureDiagnostics ??
+        const <PoseFeatureSelectionDiagnostic>[];
+    final requiredIds = spec?.requiredFeatureIds ?? const <String>[];
+    final activeIds = spec?.activeFeatureIds ?? const <String>[];
+    return {
+      'movementName': _movementName,
+      'stage': _stage.name,
+      'cameraLensDirection': _cameraLensDirection,
+      'exampleCount': _accepted.length,
+      'examples': _accepted.map(_demonstrationReport).toList(),
+      'rejectedExamples': _rejected.map(_demonstrationReport).toList(),
+      'startPoseFeatureCount': _startPose?.validFeatureCount ?? 0,
+      'activeFeatureIds': activeIds,
+      'requiredFeatureIds': requiredIds,
+      'activeFeaturesByBodyPart': _groupFeatureIdsByBodyPart(activeIds),
+      'topMovingFeaturesByAmplitude': selected
+          .map((diagnostic) => diagnostic.toJson())
+          .toList(),
+      'featureCoverageAcrossExamples': {
+        for (final diagnostic
+            in buildResult?.featureDiagnostics ??
+                const <PoseFeatureSelectionDiagnostic>[])
+          diagnostic.featureId: diagnostic.coverage,
+      },
+      'featureConsistencyAcrossExamples': {
+        for (final diagnostic
+            in buildResult?.featureDiagnostics ??
+                const <PoseFeatureSelectionDiagnostic>[])
+          diagnostic.featureId: diagnostic.consistency,
+      },
+      'waveBodyPartCoverage': _waveBodyPartCoverage(activeIds, requiredIds),
+      if (spec != null) ...{
+        'completionStrategy': spec.completionStrategy.name,
+        'sequenceSimilarityThreshold': spec.sequenceSimilarityThreshold,
+        'completionSimilarityThreshold': spec.completionSimilarityThreshold,
+        'resetSimilarityThreshold': spec.resetSimilarityThreshold,
+        'minimumValidFeatureRatio': spec.minimumValidFeatureRatio,
+        'minimumVisibility': spec.minimumVisibility,
+      },
+      if (buildResult != null) 'builder': buildResult.toDiagnosticsJson(),
+      if (_lastBuildFailure != null) 'lastBuildFailure': _lastBuildFailure,
+      if (_lastRejection != null) 'lastRejection': _lastRejection,
+    };
+  }
+
   static const _minAccepted = 3;
   static const _maxAccepted = 3;
   static const _buildDelayMs = 600;
   static const _staticSimilarityThreshold = 0.95;
   static const _bodyHysteresisFrames = 2;
-  static const _clipDuration = Duration(seconds: 2);
-  static const _maxClipWait = Duration(seconds: 4);
+  static const _startPoseSampleCount = 4;
 
   bool isBodyVisiblePose(NormalizedPose pose) => _isBodyVisible(pose);
 
@@ -145,7 +200,11 @@ class SingleSessionTeachingCapture {
   bool _hasLandmark(NormalizedPose pose, String id) =>
       pose.landmarks[id]?.valid ?? false;
 
-  void _updateBodyVisibility(NormalizedPose pose, bool rawVisible, String reason) {
+  void _updateBodyVisibility(
+    NormalizedPose pose,
+    bool rawVisible,
+    String reason,
+  ) {
     _bodyGateReason = reason;
 
     if (rawVisible) {
@@ -182,7 +241,7 @@ class SingleSessionTeachingCapture {
         'reason: $_bodyGateReason';
   }
 
-  String _recordingLostMessage() => 'Nuvo is watching';
+  String _recordingMessage() => 'Recording example ${_accepted.length + 1}';
 
   String? setMovementName(String value) {
     final error = validateMovementName(value);
@@ -213,15 +272,11 @@ class SingleSessionTeachingCapture {
       _current?.addFrame(pose, now);
       if (pose.isValid && !_startPoseLocked) {
         _startPoseSamples.add(pose);
-        if (_startPoseSamples.length >= 2) {
-          try {
-            _startPose = const PoseAverager().average(_startPoseSamples);
-          } on PoseDataFormatException {
-            _startPose = _startPoseSamples.first;
-          }
-          _startPoseLocked = true;
-        } else if (_startPoseSamples.length == 1) {
+        if (_startPoseSamples.length == 1) {
           _startPose = _startPoseSamples.first;
+        }
+        if (_startPoseSamples.length >= _startPoseSampleCount) {
+          _lockStartPoseFromSamples();
         }
       }
       if (pose.isValid && _startPose != null) {
@@ -245,13 +300,13 @@ class SingleSessionTeachingCapture {
     final index = _accepted.length + _rejected.length + 1;
     _current = PoseDemonstrationCapture(
       index: index,
-      minDuration: const Duration(milliseconds: 200),
+      minDuration: Duration.zero,
       minProcessedFrames: 4,
       minValidFrameRatio: 0.30,
-      maxDuration: const Duration(seconds: 8),
+      maxDuration: const Duration(minutes: 5),
     )..start(_clipStartedAt!);
     _stage = TeachMovementStage.recording;
-    _message = 'Nuvo is watching';
+    _message = _recordingMessage();
     _notify();
   }
 
@@ -273,6 +328,9 @@ class SingleSessionTeachingCapture {
     final demo = _current!.finish(at);
     _current = null;
     _stage = TeachMovementStage.readyToRecord;
+    if (!_startPoseLocked && _startPoseSamples.isNotEmpty) {
+      _lockStartPoseFromSamples();
+    }
 
     if (!demo.accepted) {
       _rejected.add(demo);
@@ -293,7 +351,7 @@ class SingleSessionTeachingCapture {
     _accepted.add(demo);
     _lastRejection = null;
     _lastBuildFailure = null;
-    _message = _exampleInstruction(_accepted.length);
+    _message = 'Example ${_accepted.length} saved';
     _notify();
   }
 
@@ -342,13 +400,23 @@ class SingleSessionTeachingCapture {
       ),
       metadata: CalibrationCaptureMetadata(
         capturedAtIso8601: _now().toUtc().toIso8601String(),
-        cameraLensDirection: 'back',
-        orientation: 'portraitUp',
+        cameraLensDirection: _cameraLensDirection,
+        orientation: _captureOrientation,
         normalizerVersion: 'stage2-v1',
-        deviceNote: 'manual_recording',
+        deviceNote: _captureDeviceNote,
       ),
     );
     _buildResult = _builder.build(calibration);
+  }
+
+  void _lockStartPoseFromSamples() {
+    if (_startPoseSamples.isEmpty) return;
+    try {
+      _startPose = const PoseAverager().average(_startPoseSamples);
+    } on PoseDataFormatException {
+      _startPose = _startPoseSamples.first;
+    }
+    _startPoseLocked = true;
   }
 
   bool _isTooStatic(PoseDemonstration demo) {
@@ -380,21 +448,25 @@ class SingleSessionTeachingCapture {
 
   String _exampleInstruction(int savedCount) {
     return switch (savedCount) {
-      0 => 'Record the movement',
-      1 => 'Do one more',
-      2 => 'Do one more',
+      0 => 'Record example 1',
+      1 => 'Record example 2',
+      2 => 'Record example 3',
       _ => 'Learn movement',
     };
   }
 
   String _translatedRejection(String? reason) {
-    if (reason == null) return 'Nuvo had trouble reading that one. Record it again.';
+    if (reason == null) {
+      return 'Nuvo had trouble reading that one. Record it again.';
+    }
     if (reason == 'too_short' || reason.endsWith('too_short_after_trimming')) {
       return 'That one was too short. Record it again.';
     }
-    if (reason == 'too_long') return 'That one was too long. Keep it under 8 seconds.';
     if (reason == 'too_few_processed_frames') {
       return 'Nuvo had trouble reading that one. Record it again.';
+    }
+    if (reason == 'no_pose') {
+      return 'Nuvo couldn\'t read that one. Record it again.';
     }
     if (reason == 'static_capture') {
       return 'That one did not move enough. Record it again.';
@@ -403,6 +475,9 @@ class SingleSessionTeachingCapture {
         reason == 'low_feature_coverage' ||
         reason == 'low_shared_feature_coverage') {
       return 'Nuvo couldn\'t read that one. Record it again.';
+    }
+    if (reason == 'non_monotonic_frames') {
+      return 'Nuvo had trouble reading that recording. Try again.';
     }
     if (reason == 'capture_interrupted') {
       return 'Nuvo lost track. Record that one again.';
@@ -417,13 +492,13 @@ class SingleSessionTeachingCapture {
     return switch (reason) {
       'no_active_features' => 'That one was too hard to read. Record it again.',
       'inconsistent_demonstrations' =>
-          'Those didn\'t match. Record the same movement each time.',
+        'Those didn\'t match. Record the same movement each time.',
       'low_overall_consistency' =>
-          'Those didn\'t match. Record the same movement each time.',
+        'Those didn\'t match. Record the same movement each time.',
       'ambiguous_completion_strategy' =>
-          'End each example in the same position.',
+        'End each example in the same position.',
       'low_shared_feature_coverage' || 'low_feature_coverage' =>
-          'That one was too hard to read. Record it again.',
+        'That one was too hard to read. Record it again.',
       _ => 'That one was too hard to read. Record it again.',
     };
   }
@@ -545,7 +620,7 @@ class SingleSessionTeachingCapture {
     if (_stage == TeachMovementStage.readyToRecord) {
       _message = _exampleInstruction(_accepted.length);
     } else if (_stage == TeachMovementStage.recording) {
-      _message = _recordingLostMessage();
+      _message = _recordingMessage();
     }
     _notify();
   }
@@ -553,4 +628,61 @@ class SingleSessionTeachingCapture {
   void _notify() {
     _onChanged?.call();
   }
+}
+
+Map<String, dynamic> _demonstrationReport(PoseDemonstration demo) => {
+  'index': demo.index,
+  'accepted': demo.accepted,
+  'frameCount': demo.frames.length,
+  'processedFrameCount': demo.processedFrameCount,
+  'validFrameCount': demo.validFrameCount,
+  'validFrameRatio': _debugDouble(demo.validFrameRatio),
+  'durationMs': demo.durationMs,
+  'averageVisibility': _debugDouble(demo.averageVisibility),
+  if (demo.rejectionReason != null) 'rejectionReason': demo.rejectionReason,
+};
+
+Map<String, List<String>> _groupFeatureIdsByBodyPart(List<String> ids) {
+  final groups = <String, List<String>>{
+    'face/head': [],
+    'left wrist': [],
+    'right wrist': [],
+    'left elbow': [],
+    'right elbow': [],
+    'shoulders': [],
+    'hips': [],
+    'knees': [],
+    'ankles': [],
+    'other': [],
+  };
+  for (final id in ids) {
+    groups.putIfAbsent(poseFeatureBodyPart(id), () => []).add(id);
+  }
+  return groups.map(
+    (key, value) => MapEntry(key, List.unmodifiable(value..sort())),
+  );
+}
+
+Map<String, dynamic> _waveBodyPartCoverage(
+  List<String> activeIds,
+  List<String> requiredIds,
+) {
+  bool hasAny(List<String> ids, String bodyPart) =>
+      ids.any((id) => poseFeatureBodyPart(id) == bodyPart);
+  final requiredLower = requiredIds.join('|').toLowerCase();
+  return {
+    'activeLeftWrist': hasAny(activeIds, 'left wrist'),
+    'activeRightWrist': hasAny(activeIds, 'right wrist'),
+    'activeLeftElbow': hasAny(activeIds, 'left elbow'),
+    'activeRightElbow': hasAny(activeIds, 'right elbow'),
+    'activeShoulders': hasAny(activeIds, 'shoulders'),
+    'requiresKnees': requiredLower.contains('knee'),
+    'requiresHips': requiredLower.contains('hip'),
+    'requiresAnkles': requiredLower.contains('ankle'),
+  };
+}
+
+double _debugDouble(double value) {
+  if (!value.isFinite) return 0;
+  return double.parse(value.toStringAsFixed(4));
 }

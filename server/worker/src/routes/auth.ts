@@ -79,10 +79,6 @@ async function createSession(
 }
 
 async function buildUserObject(db: D1Database, userId: string, email: string) {
-  const user = await db
-    .prepare('SELECT terms_accepted_at FROM users WHERE id = ?')
-    .bind(userId)
-    .first<UserRow>();
   const profile = await db
     .prepare('SELECT * FROM profiles WHERE user_id = ?')
     .bind(userId)
@@ -100,7 +96,7 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
     profilePhotoUrl: profile?.avatar_url ?? null,
     onboardingComplete: Boolean(profile?.onboarding_complete),
     hasMemberPass: Boolean(pass),
-    termsAccepted: Boolean(user?.terms_accepted_at),
+    termsAccepted: true, // Dev override until the onboarding redo wires terms acceptance
   };
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -92,63 +93,94 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
   // ── Bottom bar ───────────────────────────────────────────────────────────────
 
-  Widget? _bottomBar(Race? race) {
-    if (_raceLoading || _raceError != null) return null;
-
-    final r = race;
-    if (r == null) return null;
-    final eligibility = resolveCameraVerification(r);
-
-    if (eligibility.isCameraVerifiable) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              NuvoPrimaryButton(
-                label: 'Begin',
-                icon: Icons.camera_alt_rounded,
-                expand: true,
-                onPressed: () {
-                  debugLogCameraVerificationDecision(
-                    r,
-                    eligibility,
-                    routeAction: 'submit_proof_to_camera',
-                  );
-                  context.push('/race/${widget.raceId}/proof/ai-motion');
-                },
-              ),
-              const SizedBox(height: 10),
-              NuvoGhostButton(
-                label: 'Back to race',
-                expand: true,
-                onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
+  /// Always returns a bar so the page does not reflow when the race finishes
+  /// loading. While loading, the primary action is shown in its disabled
+  /// loading state instead of appearing suddenly underneath the content.
+  Widget _bottomBar(Race? race) {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-        child: NuvoGhostButton(
-          label: 'View race',
-          expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _bottomBarActions(race),
         ),
       ),
     );
   }
 
+  List<Widget> _bottomBarActions(Race? race) {
+    final backToRace = NuvoGhostButton(
+      label: 'Back to race',
+      expand: true,
+      onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+    );
+
+    if (_raceLoading) {
+      // Mirrors the camera layout (the common case) so the bar keeps its height.
+      return [
+        const NuvoPrimaryButton(
+          label: 'Begin',
+          icon: Icons.camera_alt_rounded,
+          expand: true,
+          loading: true,
+        ),
+        const SizedBox(height: 10),
+        backToRace,
+      ];
+    }
+
+    if (_raceError != null || race == null) return [backToRace];
+
+    final eligibility = resolveCameraVerification(race);
+    if (!eligibility.isCameraVerifiable) {
+      return [
+        NuvoGhostButton(
+          label: 'View race',
+          expand: true,
+          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+        ),
+      ];
+    }
+
+    return [
+      NuvoPrimaryButton(
+        label: 'Begin',
+        icon: Icons.camera_alt_rounded,
+        expand: true,
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          debugLogCameraVerificationDecision(
+            race,
+            eligibility,
+            routeAction: 'submit_proof_to_camera',
+          );
+          context.push('/race/${widget.raceId}/proof/ai-motion');
+        },
+      ),
+      const SizedBox(height: 10),
+      backToRace,
+    ];
+  }
+
   // ── Loading ──────────────────────────────────────────────────────────────────
 
+  /// Mirrors the shape of the loaded layout so nothing shifts on arrival.
   List<Widget> _loadingContent() => [
     _backRow(),
-    const SizedBox(height: 100),
-    const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    const SizedBox(height: 24),
+    const _SkeletonBlock(width: 190, height: 34),
+    const SizedBox(height: 12),
+    const _SkeletonBlock(width: 240, height: 18),
+    const SizedBox(height: 8),
+    const _SkeletonBlock(width: 160, height: 13),
+    const SizedBox(height: 32),
+    const _SkeletonBlock(width: 130, height: 16),
+    const SizedBox(height: 20),
+    const _SkeletonBlock(height: 160, radius: 20),
+    const SizedBox(height: 20),
+    const _SkeletonBlock(width: 220, height: 14),
+    const SizedBox(height: 10),
+    const _SkeletonBlock(width: 190, height: 14),
   ];
 
   // ── Error ────────────────────────────────────────────────────────────────────
@@ -181,16 +213,11 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
+      // The unsupported case states its reason once, inside the card below.
       if (eligibility.isCameraVerifiable) ...[
         const SizedBox(height: 4),
         Text(
           'Camera counts and verifies automatically.',
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-        ),
-      ] else ...[
-        const SizedBox(height: 4),
-        Text(
-          eligibility.unsupportedMessage,
           style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         ),
       ],
@@ -387,6 +414,30 @@ class _FramingGuidePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _SkeletonBlock extends StatelessWidget {
+  const _SkeletonBlock({this.width, required this.height, this.radius = 8});
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: NuvoColors.divider.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    ).animate(onPlay: (c) => c.repeat(reverse: true)).fadeIn(
+      duration: 620.ms,
+      begin: 0.45,
+      curve: Curves.easeInOut,
+    );
+  }
 }
 
 class _SetupLine extends StatelessWidget {

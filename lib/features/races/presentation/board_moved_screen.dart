@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -39,11 +41,19 @@ class BoardMovedArgs {
 /// the emotional payoff moment. Every number here comes from the just-
 /// submitted proof's real response (rankBefore/rankAfter/peoplePassed),
 /// never invented.
-class BoardMovedScreen extends StatelessWidget {
+class BoardMovedScreen extends StatefulWidget {
   const BoardMovedScreen({super.key, required this.raceId, required this.args});
 
   final String raceId;
   final BoardMovedArgs args;
+
+  @override
+  State<BoardMovedScreen> createState() => _BoardMovedScreenState();
+}
+
+class _BoardMovedScreenState extends State<BoardMovedScreen> {
+  String get raceId => widget.raceId;
+  BoardMovedArgs get args => widget.args;
 
   bool get _isChecked =>
       args.status == 'accepted' || args.status == 'ai_verified';
@@ -60,9 +70,46 @@ class BoardMovedScreen extends StatelessWidget {
 
   int get _spotsMoved => _movedUp ? (args.rankBefore! - args.rankAfter!) : 0;
 
+  String get _valueLabel =>
+      '${args.value}${args.unit != null ? ' ${args.unit}' : ''}';
+
+  /// Supporting line under the rank. Only ever states what the response
+  /// actually reported — never invents movement.
+  String get _rankSupportLabel {
+    if (_movedUp) {
+      final spots = 'You moved up $_spotsMoved ${_spotsMoved == 1 ? 'spot' : 'spots'}';
+      final gap = args.leaderGap ?? 0;
+      if (gap > 0) return '$spots · $gap from #${(args.rankAfter ?? 1) - 1}';
+      return spots;
+    }
+    final passed = args.peoplePassed ?? 0;
+    if (passed > 0) {
+      return 'You passed $passed ${passed == 1 ? 'person' : 'people'}';
+    }
+    return 'Holding #${args.rankAfter}';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // One-shot feedback for the payoff moment.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_isRejected) {
+        HapticFeedback.lightImpact();
+      } else if (_isPending) {
+        HapticFeedback.selectionClick();
+      } else {
+        HapticFeedback.mediumImpact();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isRejected) return _RejectedView(raceId: raceId, args: args);
+
+    final hasRank = args.rankAfter != null;
 
     return Scaffold(
       backgroundColor: NuvoColors.navy,
@@ -78,18 +125,34 @@ class BoardMovedScreen extends StatelessWidget {
                     Container(
                       width: 56,
                       height: 56,
-                      decoration: const BoxDecoration(
-                        color: NuvoColors.blue,
+                      decoration: BoxDecoration(
+                        color: _isPending
+                            ? Colors.white.withValues(alpha: 0.14)
+                            : NuvoColors.blue,
                         shape: BoxShape.circle,
                       ),
-                      child: const Center(
-                        child: NuvoIcon(
-                          NuvoIconType.check,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                      child: Center(
+                        child: _isPending
+                            ? const Icon(
+                                Icons.schedule_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              )
+                            : const NuvoIcon(
+                                NuvoIconType.check,
+                                color: Colors.white,
+                                size: 24,
+                              ),
                       ),
-                    ),
+                    )
+                        .animate()
+                        .scale(
+                          begin: const Offset(0.72, 0.72),
+                          end: const Offset(1, 1),
+                          duration: 380.ms,
+                          curve: Curves.easeOutBack,
+                        )
+                        .fadeIn(duration: 220.ms),
                     const SizedBox(height: 20),
                     Text(
                       _isPending
@@ -99,16 +162,22 @@ class BoardMovedScreen extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.7),
                         letterSpacing: 0.3,
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '${args.value}${args.unit != null ? ' ${args.unit}' : ''} completed.',
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (args.rankAfter != null) ...[
+                    ).animate(delay: 120.ms).fadeIn(duration: 260.ms),
+
+                    // The value is stated exactly once: as the hero when there
+                    // is no rank to show, otherwise as the chip below the rank.
+                    if (!hasRank) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        '$_valueLabel completed.',
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ).animate(delay: 180.ms).fadeIn(duration: 280.ms),
+                    ],
+
+                    if (hasRank) ...[
                       const SizedBox(height: 12),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -139,53 +208,56 @@ class BoardMovedScreen extends StatelessWidget {
                             ),
                           ),
                         ],
-                      ),
+                      )
+                          .animate(delay: 180.ms)
+                          .fadeIn(duration: 300.ms)
+                          .slideY(
+                            begin: 0.18,
+                            end: 0,
+                            duration: 360.ms,
+                            curve: Curves.easeOutCubic,
+                          ),
                       const SizedBox(height: 6),
                       Text(
-                        _movedUp
-                            ? "You moved up $_spotsMoved ${_spotsMoved == 1 ? 'spot' : 'spots'}"
-                                  '${(args.leaderGap ?? 0) > 0 ? ' · ${args.leaderGap} from #${(args.rankAfter ?? 1) - 1}' : ''}'
-                            : (args.peoplePassed ?? 0) > 0
-                            ? 'You passed ${args.peoplePassed} ${args.peoplePassed == 1 ? 'person' : 'people'}'
-                            : 'Updating your race...',
+                        _rankSupportLabel,
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: Colors.white.withValues(alpha: 0.72),
                         ),
                         textAlign: TextAlign.center,
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.14),
+                      ).animate(delay: 300.ms).fadeIn(duration: 280.ms),
+                      const SizedBox(height: 22),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '+${args.value}${args.unit != null ? ' ${args.unit}' : ''}',
-                            style: AppTextStyles.titleLarge.copyWith(
-                              color: Colors.white,
-                            ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.14),
                           ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Added to your total',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white.withValues(alpha: 0.66),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '+$_valueLabel',
+                              style: AppTextStyles.titleLarge.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Added to your total',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: Colors.white.withValues(alpha: 0.66),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ).animate(delay: 380.ms).fadeIn(duration: 300.ms),
+                    ],
                   ],
                 ),
               ),
