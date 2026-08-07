@@ -94,14 +94,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool get _usesRepFlash =>
       _isCustom || _activity != AiMotionActivity.plankHold;
 
-  /// True when the athlete has hit 3+ reps inside the streak window.
+  /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak =>
-      _streakCount >= 3 &&
+      _streakCount >= 2 &&
       _lastRepAt != null &&
       DateTime.now().difference(_lastRepAt!).inMilliseconds < _streakTimeoutMs;
 
   String get _streakLabel {
-    if (_streakCount < 5) return 'Streak x$_streakCount';
+    if (_streakCount < 5) return 'Keep going';
     if (_streakCount < 10) return 'Keep your streak!';
     return 'On fire!';
   }
@@ -1293,12 +1293,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  /// "+1" burst shown the moment the validator awards a rep.
+  /// "+N" burst shown the moment the validator awards a rep.
   /// Keyed on [_repFlashSeq] so each counted rep replays the animation.
   Widget _repFlashOverlay() {
     const shadows = [
       Shadow(color: Color(0xB3000000), blurRadius: 18, offset: Offset(0, 3)),
     ];
+    final inStreak = _streakCount >= 2;
 
     return IgnorePointer(
       child: Center(
@@ -1306,15 +1307,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '+1',
+              '+$_streakCount',
               style: AppTextStyles.displayLarge.copyWith(
                 fontSize: 200,
                 height: 0.9,
-                color: NuvoColors.white,
+                color: inStreak ? NuvoColors.gold : NuvoColors.white,
                 shadows: shadows,
               ),
             ),
-            if (_isOnStreak) ...[
+            if (inStreak) ...[
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -1336,20 +1337,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           ],
         )
             .animate(key: ValueKey(_repFlashSeq))
-            .fadeIn(duration: 110.ms)
-            .scale(
-              begin: const Offset(0.65, 0.65),
-              end: const Offset(1, 1),
-              duration: 260.ms,
-              curve: Curves.easeOutBack,
-            )
-            .slideY(
-              begin: 0.35,
-              end: -0.35,
-              duration: 820.ms,
-              curve: Curves.easeOutCubic,
-            )
-            .fadeOut(delay: 420.ms, duration: 380.ms),
+            .fadeOut(delay: 320.ms, duration: 220.ms),
       ),
     );
   }
