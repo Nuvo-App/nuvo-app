@@ -19,47 +19,11 @@ import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
 import '../../ai/custom_pose/pose_calibration_flow.dart';
 import '../../ai/custom_pose/pose_stream_controller.dart';
-import '../../data/ai_motion_models.dart';
 import 'learned_custom_movement_provider.dart';
+import 'pose_skeleton_overlay.dart';
 
 const bool kNuvoDiagnosticsEnabled = bool.fromEnvironment('NUVO_DIAGNOSTICS');
 const _debugFixtureFeatureId = 'angle.left_hip';
-
-@visibleForTesting
-class SkeletonFrameHold {
-  SkeletonFrameHold({required this.holdDuration});
-
-  final Duration holdDuration;
-  NuvoPoseFrame? _frame;
-  DateTime? _lastVisibleAt;
-
-  NuvoPoseFrame? get frame => _frame;
-  DateTime? get lastVisibleAt => _lastVisibleAt;
-
-  void show(NuvoPoseFrame frame, DateTime now) {
-    _frame = frame;
-    _lastVisibleAt = now;
-  }
-
-  bool expire(DateTime now) {
-    final last = _lastVisibleAt;
-    if (last == null) {
-      final changed = _frame != null;
-      clear();
-      return changed;
-    }
-    if (now.difference(last) > holdDuration) {
-      clear();
-      return true;
-    }
-    return false;
-  }
-
-  void clear() {
-    _frame = null;
-    _lastVisibleAt = null;
-  }
-}
 
 class TeachMovementScreen extends ConsumerStatefulWidget {
   const TeachMovementScreen({super.key, this.seedReadyFixture = false});
@@ -783,14 +747,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           children: [
             CameraPreview(controller),
             Positioned.fill(
-              child: CustomPaint(
-                painter: _PoseSkeletonPainter(
-                  frame: _skeletonHold.frame,
-                  sourceSize: Size(previewSize.height, previewSize.width),
-                  mirrorX: PoseSkeletonPreviewTransform.shouldMirrorX(
-                    lensDirection: _selectedCamera?.lensDirection,
-                    platform: defaultTargetPlatform,
-                  ),
+              child: PoseSkeletonOverlay(
+                frame: _skeletonHold.frame,
+                sourceSize: Size(previewSize.height, previewSize.width),
+                mirrorX: PoseSkeletonPreviewTransform.shouldMirrorX(
+                  lensDirection: _selectedCamera?.lensDirection,
+                  platform: defaultTargetPlatform,
                 ),
               ),
             ),
@@ -1167,136 +1129,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     };
   }
 }
-
-class _PoseSkeletonPainter extends CustomPainter {
-  _PoseSkeletonPainter({
-    this.frame,
-    required this.sourceSize,
-    required this.mirrorX,
-  });
-
-  final NuvoPoseFrame? frame;
-  final Size sourceSize;
-  final bool mirrorX;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final points = frame?.points;
-    if (points == null || points.isEmpty) return;
-
-    final jointPaint = Paint()
-      ..color = NuvoColors.white.withValues(alpha: 0.9)
-      ..style = PaintingStyle.fill;
-
-    final bonePaint = Paint()
-      ..color = NuvoColors.white.withValues(alpha: 0.55)
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    Offset toOffset(NuvoPosePoint point) => PoseSkeletonCoordinateMapper.map(
-      point: point,
-      canvasSize: size,
-      sourceSize: sourceSize,
-      mirrorX: mirrorX,
-    );
-
-    for (final pair in _skeletonBones) {
-      final a = points[pair.a];
-      final b = points[pair.b];
-      if (a == null || b == null) continue;
-      canvas.drawLine(toOffset(a), toOffset(b), bonePaint);
-    }
-
-    for (final entry in points.entries) {
-      final point = entry.value;
-      if (point.likelihood < 0.5) continue;
-      canvas.drawCircle(toOffset(point), 4.5, jointPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PoseSkeletonPainter old) =>
-      old.frame != frame ||
-      old.sourceSize != sourceSize ||
-      old.mirrorX != mirrorX;
-}
-
-@visibleForTesting
-class PoseSkeletonCoordinateMapper {
-  const PoseSkeletonCoordinateMapper._();
-
-  static Offset map({
-    required NuvoPosePoint point,
-    required Size canvasSize,
-    required Size sourceSize,
-    required bool mirrorX,
-  }) {
-    if (canvasSize.isEmpty || sourceSize.isEmpty) return Offset.zero;
-    final sourceAspect = sourceSize.width / sourceSize.height;
-    final canvasAspect = canvasSize.width / canvasSize.height;
-    final scale = canvasAspect > sourceAspect
-        ? canvasSize.width / sourceSize.width
-        : canvasSize.height / sourceSize.height;
-    final fittedWidth = sourceSize.width * scale;
-    final fittedHeight = sourceSize.height * scale;
-    final cropX = (fittedWidth - canvasSize.width) / 2;
-    final cropY = (fittedHeight - canvasSize.height) / 2;
-    final normalizedX = mirrorX ? 1 - point.x : point.x;
-    return Offset(
-      normalizedX * sourceSize.width * scale - cropX,
-      point.y * sourceSize.height * scale - cropY,
-    );
-  }
-}
-
-@visibleForTesting
-class PoseSkeletonPreviewTransform {
-  const PoseSkeletonPreviewTransform._();
-
-  static bool shouldMirrorX({
-    required CameraLensDirection? lensDirection,
-    required TargetPlatform platform,
-  }) {
-    if (lensDirection != CameraLensDirection.front) return false;
-
-    // iOS camera_avfoundation mirrors the front capture connection before the
-    // frame reaches both CameraPreview and ML Kit. Mirroring here again swaps
-    // the visible left/right sides of the skeleton.
-    if (platform == TargetPlatform.iOS) return false;
-
-    // Android CameraX mirrors front previews in Dart for the displayed texture,
-    // while the image stream landmarks remain in camera-image coordinates.
-    return platform == TargetPlatform.android;
-  }
-}
-
-class _Bone {
-  const _Bone(this.a, this.b);
-
-  final String a;
-  final String b;
-}
-
-const _skeletonBones = <_Bone>[
-  _Bone('leftShoulder', 'rightShoulder'),
-  _Bone('leftShoulder', 'leftElbow'),
-  _Bone('leftElbow', 'leftWrist'),
-  _Bone('rightShoulder', 'rightElbow'),
-  _Bone('rightElbow', 'rightWrist'),
-  _Bone('leftShoulder', 'leftHip'),
-  _Bone('rightShoulder', 'rightHip'),
-  _Bone('leftHip', 'rightHip'),
-  _Bone('leftHip', 'leftKnee'),
-  _Bone('leftKnee', 'leftAnkle'),
-  _Bone('rightHip', 'rightKnee'),
-  _Bone('rightKnee', 'rightAnkle'),
-  _Bone('leftWrist', 'leftThumb'),
-  _Bone('leftWrist', 'leftIndex'),
-  _Bone('leftWrist', 'leftPinky'),
-  _Bone('rightWrist', 'rightThumb'),
-  _Bone('rightWrist', 'rightIndex'),
-  _Bone('rightWrist', 'rightPinky'),
-];
 
 CustomPoseVerifierSpec _debugCustomVerifierSpec() {
   const startFeature = PoseFeatureValue(

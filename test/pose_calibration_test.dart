@@ -14,7 +14,7 @@ import 'package:nuvo/features/races/ai/custom_pose/pose_demonstration_capture.da
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_sequence_frame.dart';
 import 'package:nuvo/features/races/ai/custom_pose/stable_pose_capture.dart';
-import 'package:nuvo/features/races/presentation/custom_pose/teach_movement_screen.dart';
+import 'package:nuvo/features/races/presentation/custom_pose/pose_skeleton_overlay.dart';
 
 import 'fixtures/pose_fixtures.dart';
 
