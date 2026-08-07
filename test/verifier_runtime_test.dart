@@ -155,6 +155,113 @@ void main() {
     });
   });
 
+  group('first to goal finish-line cap', () {
+    NuvoPosePoint posePoint({required double x, required double y}) =>
+        NuvoPosePoint(x: x, y: y, z: 0, likelihood: 1);
+
+    // Closed position: wrists near body, ankles close.
+    NuvoPoseFrame closedFrame() => NuvoPoseFrame(
+      points: {
+        'leftWrist': posePoint(x: 0.45, y: 0.35),
+        'rightWrist': posePoint(x: 0.55, y: 0.35),
+        'leftShoulder': posePoint(x: 0.40, y: 0.30),
+        'rightShoulder': posePoint(x: 0.60, y: 0.30),
+        'leftHip': posePoint(x: 0.42, y: 0.50),
+        'rightHip': posePoint(x: 0.58, y: 0.50),
+        'leftAnkle': posePoint(x: 0.47, y: 0.90),
+        'rightAnkle': posePoint(x: 0.53, y: 0.90),
+      },
+      imageWidth: 100,
+      imageHeight: 100,
+      createdAt: DateTime.now(),
+    );
+
+    // Open position: wrists above shoulders, ankles wide.
+    NuvoPoseFrame openFrame() => NuvoPoseFrame(
+      points: {
+        'leftWrist': posePoint(x: 0.35, y: 0.20),
+        'rightWrist': posePoint(x: 0.65, y: 0.20),
+        'leftShoulder': posePoint(x: 0.40, y: 0.30),
+        'rightShoulder': posePoint(x: 0.60, y: 0.30),
+        'leftHip': posePoint(x: 0.42, y: 0.50),
+        'rightHip': posePoint(x: 0.58, y: 0.50),
+        'leftAnkle': posePoint(x: 0.20, y: 0.90),
+        'rightAnkle': posePoint(x: 0.80, y: 0.90),
+      },
+      imageWidth: 100,
+      imageHeight: 100,
+      createdAt: DateTime.now(),
+    );
+
+    // Cycles 6 reps worth of frames; only the first 5 may count.
+    void feedSixReps(JumpingJacksValidator validator) {
+      for (var rep = 0; rep < 6; rep++) {
+        for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+        for (var i = 0; i < 3; i++) {
+          validator.update(openFrame());
+        }
+        for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+      }
+    }
+
+    test('jumping jacks stop at the finish line', () {
+      final validator = JumpingJacksValidator(targetValue: 5);
+      validator.start();
+
+      feedSixReps(validator);
+
+      expect(validator.currentValue, 5);
+      final result = validator.finish();
+      expect(result.detectedReps, 5);
+      expect(result.targetReps, 5);
+      expect(result.verificationStatus, 'ai_verified');
+    });
+
+    test('fifth and sixth rapid reps still finish at 5 / 5', () {
+      final validator = JumpingJacksValidator(targetValue: 5);
+      validator.start();
+
+      // Reach 4 first.
+      for (var rep = 0; rep < 4; rep++) {
+        for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+        for (var i = 0; i < 3; i++) {
+          validator.update(openFrame());
+        }
+        for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+      }
+      expect(validator.currentValue, 4);
+
+      // Rep #5 and immediately rep #6 arrive in the same run of frames.
+      for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+      for (var i = 0; i < 3; i++) {
+          validator.update(openFrame());
+        }
+      for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+      for (var i = 0; i < 3; i++) {
+          validator.update(openFrame());
+        }
+      for (var i = 0; i < 3; i++) {
+          validator.update(closedFrame());
+        }
+
+      final result = validator.finish();
+      expect(result.detectedReps, 5);
+      expect(result.verificationStatus, 'ai_verified');
+    });
+  });
+
   group('proof result compatibility', () {
     test('preset proof result conversion remains unchanged', () {
       final eligibility = resolveCameraVerification(_race());

@@ -501,7 +501,7 @@ class PushupsValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.pushUps;
   @override
-  int get currentValue => _counter.count;
+  int get currentValue => math.min(_counter.count, targetValue);
   @override
   String get statusText => 'Tracking pushups';
   @override
@@ -618,7 +618,7 @@ class JumpingJacksValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.jumpingJacks;
   @override
-  int get currentValue => _counter.count;
+  int get currentValue => math.min(_counter.count, targetValue);
   @override
   String get statusText => 'Tracking motion';
   @override
@@ -668,7 +668,7 @@ class ArmRaisesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.armRaises;
   @override
-  int get currentValue => _reps;
+  int get currentValue => math.min(_reps, targetValue);
   @override
   String get statusText => 'Tracking arm raises';
   @override
@@ -730,7 +730,7 @@ class SquatsValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.squats;
   @override
-  int get currentValue => _counter.count;
+  int get currentValue => math.min(_counter.count, targetValue);
   @override
   String get statusText => 'Tracking squats';
   @override
@@ -773,7 +773,7 @@ class LungesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.lunges;
   @override
-  int get currentValue => _counter.count;
+  int get currentValue => math.min(_counter.count, targetValue);
   @override
   String get statusText => 'Tracking lunges';
   @override
@@ -828,7 +828,7 @@ class HighKneesValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.highKnees;
   @override
-  int get currentValue => _count;
+  int get currentValue => math.min(_count, targetValue);
   @override
   String get statusText => 'Tracking high knees';
   @override
@@ -885,7 +885,7 @@ class PlankHoldValidator extends _BaseValidator {
   @override
   AiMotionActivity get activity => AiMotionActivity.plankHold;
   @override
-  int get currentValue => _timer.seconds;
+  int get currentValue => math.min(_timer.seconds, targetValue);
   @override
   String get statusText => 'Tracking plank';
   @override

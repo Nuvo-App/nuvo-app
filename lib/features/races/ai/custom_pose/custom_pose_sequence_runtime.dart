@@ -91,7 +91,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   int get targetValue => target;
 
   @override
-  int get currentValue => _count;
+  int get currentValue => math.min(_count, target);
 
   @override
   bool get fullBodyVisible => _visibility >= _spec.minimumVisibility;
