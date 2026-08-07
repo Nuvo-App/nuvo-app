@@ -905,7 +905,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       color: targetReached
           ? NuvoColors.success
           : _isOnStreak
-              ? NuvoColors.gold
+              ? NuvoColors.brightGold
               : NuvoColors.white,
       glow: _skeletonGlow,
     );
@@ -1296,10 +1296,20 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// "+N" burst shown the moment the validator awards a rep.
   /// Keyed on [_repFlashSeq] so each counted rep replays the animation.
   Widget _repFlashOverlay() {
-    const shadows = [
-      Shadow(color: Color(0xB3000000), blurRadius: 18, offset: Offset(0, 3)),
-    ];
     final inStreak = _streakCount >= 2;
+    final flashColor = inStreak ? NuvoColors.brightGold : NuvoColors.white;
+    final shadows = [
+      const Shadow(
+        color: Color(0xB3000000),
+        blurRadius: 18,
+        offset: Offset(0, 3),
+      ),
+      Shadow(
+        color: NuvoColors.brightGold.withValues(alpha: 0.4),
+        blurRadius: 28,
+        offset: Offset.zero,
+      ),
+    ];
 
     return IgnorePointer(
       child: Center(
@@ -1311,26 +1321,34 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               style: AppTextStyles.displayLarge.copyWith(
                 fontSize: 200,
                 height: 0.9,
-                color: inStreak ? NuvoColors.gold : NuvoColors.white,
+                color: flashColor,
                 shadows: shadows,
               ),
             ),
             if (inStreak) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 20, 8),
                 decoration: BoxDecoration(
-                  color: NuvoColors.gold,
+                  color: NuvoColors.brightGold,
                   borderRadius: BorderRadius.circular(NuvoRadii.pill),
                 ),
-                child: Text(
-                  _streakLabel,
-                  style: AppTextStyles.titleLarge.copyWith(
-                    color: NuvoColors.navy,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.whatshot_rounded,
+                      color: NuvoColors.navy,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _streakLabel,
+                      style: AppTextStyles.titleLarge.copyWith(
+                        color: NuvoColors.navy,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

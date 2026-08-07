@@ -88,6 +88,7 @@ final class NuvoColors {
   static const Color amber = Color(0xFFB17A43);
   static const Color amberTint = Color(0xFFF4E7D8);
   static const Color gold = Color(0xFFC49A52);
+  static const Color brightGold = Color(0xFFFACC15);
   static const Color silver = Color(0xFFA8A29A);
   static const Color bronze = Color(0xFFA97752);
 
