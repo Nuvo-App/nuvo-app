@@ -84,9 +84,27 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool _targetCelebrated = false;
   int _targetCelebrationSeq = 0;
 
+  // ── Streak state ────────────────────────────────────────────────────────────
+  // Reps that land within this window of the previous rep grow the streak.
+  static const _streakTimeoutMs = 1400;
+  int _streakCount = 0;
+  DateTime? _lastRepAt;
+
   /// Hold movements score in seconds, so a per-second "+1" would be noise.
   bool get _usesRepFlash =>
       _isCustom || _activity != AiMotionActivity.plankHold;
+
+  /// True when the athlete has hit 3+ reps inside the streak window.
+  bool get _isOnStreak =>
+      _streakCount >= 3 &&
+      _lastRepAt != null &&
+      DateTime.now().difference(_lastRepAt!).inMilliseconds < _streakTimeoutMs;
+
+  String get _streakLabel {
+    if (_streakCount < 5) return 'Streak x$_streakCount';
+    if (_streakCount < 10) return 'Keep your streak!';
+    return 'On fire!';
+  }
 
   /// Short decaying pulse used to thicken the skeleton the instant a rep lands.
   double get _skeletonGlow {
@@ -103,6 +121,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _repFlashAt = null;
     _targetCelebrated = false;
     _targetCelebrationSeq = 0;
+    _streakCount = 0;
+    _lastRepAt = null;
   }
 
   void _scheduleSkeletonExpiry() {
@@ -386,9 +406,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // Mirror a newly awarded rep as live feedback. Reads the validator's
       // count; never modifies it.
       if (_usesRepFlash && output.count > _lastCountedValue) {
+        final now = DateTime.now();
+        final onStreak = _lastRepAt != null &&
+            now.difference(_lastRepAt!).inMilliseconds < _streakTimeoutMs;
+        _streakCount = onStreak ? _streakCount + 1 : 1;
+        _lastRepAt = now;
         _lastCountedValue = output.count;
         _repFlashSeq++;
-        _repFlashAt = DateTime.now();
+        _repFlashAt = now;
         HapticFeedback.lightImpact();
       }
       // Finish line reached — fire once per recording.
@@ -877,7 +902,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         lensDirection: _selectedCamera?.lensDirection,
         platform: defaultTargetPlatform,
       ),
-      color: targetReached ? NuvoColors.success : NuvoColors.white,
+      color: targetReached
+          ? NuvoColors.success
+          : _isOnStreak
+              ? NuvoColors.gold
+              : NuvoColors.white,
       glow: _skeletonGlow,
     );
   }
@@ -1273,14 +1302,38 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
     return IgnorePointer(
       child: Center(
-        child: Text(
-          '+1',
-          style: AppTextStyles.displayLarge.copyWith(
-            fontSize: 200,
-            height: 0.9,
-            color: NuvoColors.white,
-            shadows: shadows,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '+1',
+              style: AppTextStyles.displayLarge.copyWith(
+                fontSize: 200,
+                height: 0.9,
+                color: NuvoColors.white,
+                shadows: shadows,
+              ),
+            ),
+            if (_isOnStreak) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: NuvoColors.gold,
+                  borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                ),
+                child: Text(
+                  _streakLabel,
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: NuvoColors.navy,
+                  ),
+                ),
+              ),
+            ],
+          ],
         )
             .animate(key: ValueKey(_repFlashSeq))
             .fadeIn(duration: 110.ms)
