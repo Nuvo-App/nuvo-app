@@ -702,13 +702,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         '$_targetValue ${_activity.label}';
   }
 
-  String get _counterLabel {
-    if (_isCustom) return '$_currentValue / $_targetValue';
-    final definition = motionActivityForBackendValue(_activity.backendValue);
-    return definition?.counterLabel(_currentValue, _targetValue) ??
-        '$_currentValue / $_targetValue';
-  }
-
   String get _raceTotalLabel {
     final total = _raceTotalBefore + _currentValue;
     final target = _raceTargetValue;
@@ -1403,20 +1396,33 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget _recordingHud() {
     final targetReached = _currentValue >= _targetValue;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: NuvoColors.navy.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(NuvoRadii.md),
         border: Border.all(color: NuvoColors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
-            child: Text(
-              targetReached
-                  ? 'Set ready. $_raceTotalLabel'
-                  : 'Keep going. $_counterLabel',
-              style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.white),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$_currentValue / $_targetValue',
+                  style: AppTextStyles.displayLarge.copyWith(
+                    color: NuvoColors.white,
+                  ),
+                ),
+                Text(
+                  targetReached ? 'FINISH LINE' : 'KEEP GOING',
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: NuvoColors.white,
+                  ),
+                ),
+              ],
             ),
           ),
           Text(
