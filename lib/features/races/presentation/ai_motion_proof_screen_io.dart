@@ -1328,7 +1328,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             if (inStreak) ...[
               const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 8, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 10, 24, 10),
                 decoration: BoxDecoration(
                   color: NuvoColors.brightGold,
                   borderRadius: BorderRadius.circular(NuvoRadii.pill),
@@ -1339,12 +1339,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     const Icon(
                       Icons.whatshot_rounded,
                       color: NuvoColors.navy,
-                      size: 24,
+                      size: 32,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Text(
                       _streakLabel,
-                      style: AppTextStyles.titleLarge.copyWith(
+                      style: AppTextStyles.headlineLarge.copyWith(
                         color: NuvoColors.navy,
                       ),
                     ),
