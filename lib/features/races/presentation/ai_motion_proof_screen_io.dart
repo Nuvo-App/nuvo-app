@@ -102,6 +102,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     'Smooth',
     'Dialed in',
     'Nice and clean',
+    'Crushing it',
+    'You got this',
+    'On fire',
+    'Too easy',
+    'Boom',
   ];
 
   /// Louder copy for the last few reps before the finish line.
@@ -110,6 +115,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     'Nearly done',
     'Finish it',
     'One more push',
+    'Final stretch',
+    'Almost home',
   ];
 
   /// Random phrase that avoids repeating the previous one back-to-back.
@@ -1351,7 +1358,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               textAlign: TextAlign.center,
             ),
           ],
-        ),
+        )
+            .animate()
+            .fadeIn(duration: 240.ms, curve: Curves.easeOut)
+            .scale(
+              begin: const Offset(0.96, 0.96),
+              end: const Offset(1, 1),
+              duration: 280.ms,
+              curve: Curves.easeOutCubic,
+            ),
       ),
     );
   }
@@ -1370,8 +1385,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           Text(
             '+$_repFlashDelta',
             style: AppTextStyles.displayLarge.copyWith(
-              fontSize: 168,
-              height: 0.95,
+              fontSize: 200,
+              height: 0.9,
               color: NuvoColors.white,
               shadows: shadows,
             ),
