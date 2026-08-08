@@ -63,6 +63,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   int _cooldownFramesRemaining = 0;
   int _currentTemplateIndex = 0;
   int _highestTemplateIndex = 0;
+  int _bestCanonicalIndex = 0;
   double _sequenceProgress = 0;
   double _currentSimilarity = 0;
   double _completionSimilarity = 0;
@@ -119,6 +120,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
     _cooldownFramesRemaining = 0;
     _currentTemplateIndex = 0;
     _highestTemplateIndex = 0;
+    _bestCanonicalIndex = 0;
     _sequenceProgress = 0;
     _currentSimilarity = 0;
     _completionSimilarity = 0;
@@ -270,13 +272,13 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   void _handleMatching(NormalizedPose pose) {
     final match = _bestWindowMatch(pose);
     _currentSimilarity = match.similarity;
+    _bestCanonicalIndex = match.index;
     if (match.accepted) {
+      // Speed-invariant progression: a live pose that still matches the
+      // current canonical frame (slow movement) is on-track, not stalled.
+      // Only a total window miss should count toward the progress timeout.
+      _framesSinceProgress = 0;
       final advancedIndex = match.index > _currentTemplateIndex;
-      if (advancedIndex) {
-        _framesSinceProgress = 0;
-      } else {
-        _framesSinceProgress++;
-      }
       _currentTemplateIndex = math.max(_currentTemplateIndex, match.index);
       _highestTemplateIndex = math.max(_highestTemplateIndex, match.index);
       _sequenceProgress = _highestTemplateIndex / (_indexedSequence.length - 1);
@@ -677,6 +679,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
   void _resetAttemptProgress() {
     _currentTemplateIndex = 0;
     _highestTemplateIndex = 0;
+    _bestCanonicalIndex = 0;
     _sequenceProgress = 0;
     _currentSimilarity = 0;
     _completionSimilarity = 0;
@@ -731,6 +734,7 @@ class CustomPoseSequenceRuntime implements VerifierRuntime {
       completed: completed,
       sequenceProgress: _sequenceProgress,
       currentTemplateIndex: _currentTemplateIndex,
+      bestCanonicalIndex: _bestCanonicalIndex,
       currentSimilarity: _currentSimilarity,
       completionSimilarity: _completionSimilarity,
       resetSimilarity: _resetSimilarity,
@@ -807,6 +811,7 @@ class CustomPoseRuntimeUpdate {
     required this.completed,
     required this.sequenceProgress,
     required this.currentTemplateIndex,
+    required this.bestCanonicalIndex,
     required this.currentSimilarity,
     required this.completionSimilarity,
     required this.resetSimilarity,
@@ -832,6 +837,7 @@ class CustomPoseRuntimeUpdate {
   final bool completed;
   final double sequenceProgress;
   final int currentTemplateIndex;
+  final int bestCanonicalIndex;
   final double currentSimilarity;
   final double completionSimilarity;
   final double resetSimilarity;
@@ -853,6 +859,7 @@ class CustomPoseRuntimeUpdate {
   Map<String, double> get debugValues => {
     'sequenceProgress': sequenceProgress,
     'currentTemplateIndex': currentTemplateIndex.toDouble(),
+    'bestCanonicalIndex': bestCanonicalIndex.toDouble(),
     'currentSimilarity': currentSimilarity,
     'completionSimilarity': completionSimilarity,
     'resetSimilarity': resetSimilarity,
@@ -873,7 +880,9 @@ class CustomPoseRuntimeUpdate {
     'activeFeatureCoverage': validFeatureRatio,
     'requiredFeatureCoverage': requiredFeatureRatio,
     'sequenceProgress': sequenceProgress,
-    'currentSimilarity': currentSimilarity,
+    'currentCanonicalIndex': currentTemplateIndex,
+    'bestCanonicalIndex': bestCanonicalIndex,
+    'bestCanonicalSimilarity': currentSimilarity,
     'completionSimilarity': completionSimilarity,
     'resetSimilarity': resetSimilarity,
     'missingRequiredFeatures': missingRequiredFeatures,

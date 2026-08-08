@@ -531,7 +531,7 @@ void main() {
       expect(capture.setMovementName('Arms overhead'), isNull);
       expect(capture.stage, TeachMovementStage.readyToRecord);
       expect(capture.startPose, isNull);
-      expect(capture.message, 'Record example 1');
+      expect(capture.message, 'Show Nuvo the movement.');
       expect(capture.movementName, 'Arms overhead');
     });
 
@@ -1017,7 +1017,7 @@ void main() {
       expect(capture.savedExampleCount, 0);
       expect(capture.requiredExampleCount, 3);
       expect(capture.canLearn, isFalse);
-      expect(capture.message, 'Record example 1');
+      expect(capture.message, 'Show Nuvo the movement.');
     });
 
     test('while recording shows Recording example 1… and progress', () {
@@ -1034,7 +1034,7 @@ void main() {
 
       capture.startRecordingExample();
       expect(capture.isRecording, isTrue);
-      expect(capture.message, 'Recording example 1');
+      expect(capture.message, 'Recording…');
     });
 
     test('after one saved example cannot learn and prompts for example 2', () {
@@ -1182,7 +1182,7 @@ void main() {
 
       expect(capture.bodyVisible, isFalse);
       expect(capture.canRecordNextExample, isTrue);
-      expect(capture.message, 'Record example 1');
+      expect(capture.message, 'Show Nuvo the movement.');
 
       capture.startRecordingExample();
       expect(capture.stage, TeachMovementStage.recording);
@@ -1331,7 +1331,7 @@ void main() {
 
       expect(capture.bodyVisible, isFalse);
       expect(capture.canRecordNextExample, isTrue);
-      expect(capture.message, 'Record example 1');
+      expect(capture.message, 'Show Nuvo the movement.');
     });
 
     test('one saved example shows saved copy and cannot learn', () {
@@ -1859,6 +1859,188 @@ void main() {
 
         expect(capture.savedExampleCount, 1);
         expect(capture.lastExampleRejected, isFalse);
+      },
+    );
+
+    test('one continuous recording learns three repeated movements', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(
+        now: () => now,
+        buildDelay: Duration.zero,
+      );
+      capture.setMovementName('Arms overhead');
+
+      final frames = <NuvoPoseFrame>[
+        for (var i = 0; i < 4; i++) neutralStandingPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        armsOverheadPose(),
+        armsOverheadPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        armsOverheadPose(),
+        armsOverheadPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+        armsOverheadPose(),
+        armsOverheadPose(),
+        neutralStandingPose(),
+        neutralStandingPose(),
+      ];
+      capture.startContinuousRecording();
+      expect(capture.stage, TeachMovementStage.recording);
+
+      for (var i = 0; i < frames.length; i++) {
+        capture.addFrame(
+          normalizer.normalize(frames[i]),
+          now.add(Duration(milliseconds: 120 * i)),
+        );
+      }
+
+      capture.stopContinuousRecordingAt(
+        now.add(Duration(milliseconds: 120 * frames.length)),
+      );
+
+      expect(capture.acceptedCount, 3);
+      expect(capture.stage, TeachMovementStage.learned);
+      expect(capture.verifierSpec, isNotNull);
+      expect(capture.verifierSpec?.movementName, 'Arms overhead');
+      final report = capture.debugReport();
+      expect(report['continuousRecording'], isTrue);
+      expect(report['detectedRepetitionCount'], 3);
+    });
+
+    test(
+      'continuous recording asks for another recording when fewer than two repetitions are found',
+      () {
+        var now = DateTime.utc(2026, 1, 1);
+        final capture = SingleSessionTeachingCapture(now: () => now);
+        capture.setMovementName('Arms overhead');
+
+        final frames = <NuvoPoseFrame>[
+          for (var i = 0; i < 4; i++) neutralStandingPose(),
+          neutralStandingPose(),
+          neutralStandingPose(),
+          armsOverheadPose(),
+          armsOverheadPose(),
+          neutralStandingPose(),
+          neutralStandingPose(),
+        ];
+        capture.startContinuousRecording();
+
+        for (var i = 0; i < frames.length; i++) {
+          capture.addFrame(
+            normalizer.normalize(frames[i]),
+            now.add(Duration(milliseconds: 120 * i)),
+          );
+        }
+
+        capture.stopContinuousRecordingAt(
+          now.add(Duration(milliseconds: 120 * frames.length)),
+        );
+
+        expect(capture.acceptedCount, 1);
+        expect(capture.stage, TeachMovementStage.readyToRecord);
+        expect(capture.verifierSpec, isNull);
+        expect(capture.message, 'Show me that once more.');
+        final report = capture.debugReport();
+        expect(report['detectedRepetitionCount'], 1);
+      },
+    );
+
+    test('three separate recordings build automatically after the third', () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(
+        now: () => now,
+        buildDelay: Duration.zero,
+      );
+      capture.setMovementName('Arms overhead');
+
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(
+          normalizer.normalize(neutralStandingPose()),
+          now.add(Duration(milliseconds: 100 * i)),
+        );
+      }
+      expect(capture.acceptedCount, 0);
+      expect(capture.stage, TeachMovementStage.readyToRecord);
+
+      for (var rep = 0; rep < 3; rep++) {
+        now = now.add(Duration(seconds: 1, milliseconds: rep * 1500));
+        capture.startRecordingExample();
+        expect(capture.stage, TeachMovementStage.recording);
+        for (var i = 0; i < 2; i++) {
+          capture.addFrame(
+            normalizer.normalize(neutralStandingPose()),
+            now.add(Duration(milliseconds: 120 * i)),
+          );
+        }
+        for (var i = 0; i < 6; i++) {
+          capture.addFrame(
+            normalizer.normalize(armsOverheadPose(dx: 0.01 * i)),
+            now.add(Duration(milliseconds: 120 * (2 + i))),
+          );
+        }
+        capture.stopRecordingExampleAt(
+          now.add(const Duration(milliseconds: 960)),
+        );
+
+        if (rep < 2) {
+          expect(capture.acceptedCount, rep + 1);
+          expect(capture.stage, TeachMovementStage.readyToRecord);
+        }
+        now = now.add(const Duration(milliseconds: 960));
+      }
+
+      expect(capture.acceptedCount, 3);
+      expect(capture.canLearn, isTrue);
+      capture.buildWhenReady();
+      expect(capture.stage, TeachMovementStage.learned);
+      expect(capture.verifierSpec, isNotNull);
+      expect(capture.verifierSpec?.movementName, 'Arms overhead');
+    });
+
+    test(
+      'a rejected recording does not erase previously accepted recordings',
+      () {
+        var now = DateTime.utc(2026, 1, 1);
+        final capture = SingleSessionTeachingCapture(now: () => now);
+        capture.setMovementName('Arms overhead');
+
+        for (var i = 0; i < 8; i++) {
+          capture.addFrame(
+            normalizer.normalize(neutralStandingPose()),
+            now.add(Duration(milliseconds: 100 * i)),
+          );
+        }
+
+        now = now.add(const Duration(seconds: 1));
+        now = _recordWaveExample(capture, normalizer, now);
+        expect(capture.acceptedCount, 1);
+        expect(capture.stage, TeachMovementStage.readyToRecord);
+
+        now = now.add(const Duration(seconds: 1));
+        capture.startRecordingExample();
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose()),
+          now.add(const Duration(milliseconds: 50)),
+        );
+        capture.stopRecordingExampleAt(
+          now.add(const Duration(milliseconds: 100)),
+        );
+
+        expect(capture.acceptedCount, 1);
+        expect(capture.stage, TeachMovementStage.readyToRecord);
+        expect(capture.lastExampleRejected, isTrue);
+
+        now = now.add(const Duration(seconds: 1));
+        now = _recordWaveExample(capture, normalizer, now);
+        expect(capture.acceptedCount, 2);
+        expect(capture.stage, TeachMovementStage.readyToRecord);
       },
     );
   });

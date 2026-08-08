@@ -415,6 +415,138 @@ void main() {
       expect(runtime.currentValue, 0);
     });
   });
+
+  group('speed-invariant verification', () {
+    // The same learned overhead-raise spec must verify when performed at
+    // different execution speeds. The spec is built per-test from the same
+    // demonstrations; only the live playback speed changes.
+    test('normal speed verifies', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      for (var i = 0; i < 5; i++) {
+        _play(runtime, _terminalAttempt());
+      }
+      final result = runtime.customResult();
+      expect(result.isVerified, isTrue, reason: result.finalFailureReason);
+      expect(result.count, 5);
+    });
+
+    test('slow speed (held middle frames) verifies', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      for (var i = 0; i < 5; i++) {
+        _play(runtime, _terminalAttempt(holdMiddle: true));
+      }
+      final result = runtime.customResult();
+      expect(result.isVerified, isTrue, reason: result.finalFailureReason);
+      expect(result.count, 5);
+    });
+
+    test('fast speed (skipped intermediate frames) verifies', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      for (var i = 0; i < 5; i++) {
+        _play(runtime, _terminalAttempt(fast: true));
+      }
+      final result = runtime.customResult();
+      expect(result.isVerified, isTrue, reason: result.finalFailureReason);
+      expect(result.count, 5);
+    });
+
+    test(
+      'very slow speed (long hold at start) verifies without progress timeout',
+      () {
+        final runtime = _runtime(_terminalSpec())..start();
+        // Hold the start pose well beyond the old 18-frame progress timeout
+        // before beginning the movement. With speed-invariant progression,
+        // matching the current canonical frame keeps the attempt alive.
+        final attempt = <NuvoPoseFrame>[
+          for (var i = 0; i < 30; i++) _neutral(),
+          _blend(_neutral(), leftArmRaisedPose(), 0.25),
+          _blend(_neutral(), leftArmRaisedPose(), 0.50),
+          _blend(_neutral(), leftArmRaisedPose(), 0.75),
+          leftArmRaisedPose(),
+          _blend(leftArmRaisedPose(), _overhead(), 0.25),
+          _blend(leftArmRaisedPose(), _overhead(), 0.50),
+          _blend(leftArmRaisedPose(), _overhead(), 0.75),
+          _overhead(),
+          _overhead(),
+          _overhead(),
+          _overhead(),
+          for (var i = 0; i < 10; i++) _neutral(),
+        ];
+        _play(runtime, attempt);
+        expect(runtime.currentValue, greaterThan(0));
+        expect(runtime.lastUpdate.state, isNot(CustomPoseRuntimeState.invalid));
+      },
+    );
+  });
+
+  group('position variation', () {
+    // The same relative movement performed with a small normalized-pose
+    // offset (slightly different starting torso position) must still verify.
+    // The PoseNormalizer centers on hip midpoint and scales by shoulder
+    // width, so a small dx shift before normalization is mostly absorbed;
+    // a small dy shift exercises residual position tolerance.
+    test('small start-position offset verifies', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      for (var i = 0; i < 5; i++) {
+        _play(runtime, _terminalAttempt(dx: 0.02, dy: 0.02));
+      }
+      final result = runtime.customResult();
+      expect(result.isVerified, isTrue, reason: result.finalFailureReason);
+      expect(result.count, 5);
+    });
+
+    test('small proportional body-scale variation verifies', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      // scale=0.92 simulates a slightly smaller-framed performer; the
+      // normalizer divides by shoulder width so relative geometry holds.
+      final attempt = _scaledAttempt(scale: 0.92);
+      for (var i = 0; i < 5; i++) {
+        _play(runtime, attempt);
+      }
+      final result = runtime.customResult();
+      expect(result.isVerified, isTrue, reason: result.finalFailureReason);
+      expect(result.count, 5);
+    });
+  });
+
+  group('wrong movement rejection under speed tolerance', () {
+    // Speed tolerance must not admit a clearly different movement. A
+    // single-side raise played slowly must still fail against the overhead
+    // spec, and a reversed (terminal-first) attempt must not count.
+    test('slow single-side raise still does not count as overhead', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      _play(runtime, [
+        _neutral(),
+        _neutral(),
+        _neutral(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+        leftArmRaisedPose(),
+      ]);
+      expect(runtime.currentValue, 0);
+    });
+
+    test('reversed attempt (terminal pose first) does not count', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      _play(runtime, _reversedAttempt());
+      expect(runtime.currentValue, 0);
+    });
+  });
+
+  group('runtime diagnostics', () {
+    test('update exposes bestCanonicalIndex and bestCanonicalSimilarity', () {
+      final runtime = _runtime(_terminalSpec())..start();
+      _play(runtime, [_neutral(), _neutral(), _neutral()]);
+      final diag = runtime.lastUpdate.toDiagnosticsJson();
+      expect(diag, containsPair('bestCanonicalIndex', isA<int>()));
+      expect(diag, containsPair('bestCanonicalSimilarity', isA<double>()));
+      expect(diag, containsPair('currentCanonicalIndex', isA<int>()));
+    });
+  });
 }
 
 CustomPoseSequenceRuntime _runtime(CustomPoseVerifierSpec spec) {
@@ -528,41 +660,76 @@ List<NormalizedPose> _leftArmPoses({double dx = 0}) {
 
 List<NuvoPoseFrame> _terminalAttempt({
   double dx = 0,
+  double dy = 0,
   bool fast = false,
   bool slow = false,
   bool holdMiddle = false,
   bool includeReset = true,
 }) {
   final frames = <NuvoPoseFrame>[
-    _neutral(dx: dx),
-    _neutral(dx: dx),
-    _neutral(dx: dx),
-    _blend(_neutral(dx: dx), leftArmRaisedPose(dx: dx), 0.25),
-    _blend(_neutral(dx: dx), leftArmRaisedPose(dx: dx), 0.50),
-    _blend(_neutral(dx: dx), leftArmRaisedPose(dx: dx), 0.75),
-    leftArmRaisedPose(dx: dx),
-    _blend(leftArmRaisedPose(dx: dx), _overhead(dx: dx), 0.25),
-    _blend(leftArmRaisedPose(dx: dx), _overhead(dx: dx), 0.50),
-    _blend(leftArmRaisedPose(dx: dx), _overhead(dx: dx), 0.75),
-    _overhead(dx: dx),
-    _overhead(dx: dx),
-    _overhead(dx: dx),
-    _overhead(dx: dx),
+    _neutral(dx: dx, dy: dy),
+    _neutral(dx: dx, dy: dy),
+    _neutral(dx: dx, dy: dy),
+    _blend(_neutral(dx: dx, dy: dy), leftArmRaisedPose(dx: dx, dy: dy), 0.25),
+    _blend(_neutral(dx: dx, dy: dy), leftArmRaisedPose(dx: dx, dy: dy), 0.50),
+    _blend(_neutral(dx: dx, dy: dy), leftArmRaisedPose(dx: dx, dy: dy), 0.75),
+    leftArmRaisedPose(dx: dx, dy: dy),
+    _blend(leftArmRaisedPose(dx: dx, dy: dy), _overhead(dx: dx, dy: dy), 0.25),
+    _blend(leftArmRaisedPose(dx: dx, dy: dy), _overhead(dx: dx, dy: dy), 0.50),
+    _blend(leftArmRaisedPose(dx: dx, dy: dy), _overhead(dx: dx, dy: dy), 0.75),
+    _overhead(dx: dx, dy: dy),
+    _overhead(dx: dx, dy: dy),
+    _overhead(dx: dx, dy: dy),
+    _overhead(dx: dx, dy: dy),
   ];
   if (holdMiddle) {
-    frames.insertAll(4, [leftArmRaisedPose(dx: dx), leftArmRaisedPose(dx: dx)]);
+    frames.insertAll(4, [
+      leftArmRaisedPose(dx: dx, dy: dy),
+      leftArmRaisedPose(dx: dx, dy: dy),
+    ]);
   }
   if (slow) {
-    frames.insertAll(3, [_neutral(dx: dx), leftArmRaisedPose(dx: dx)]);
-    frames.add(_overhead(dx: dx));
+    frames.insertAll(3, [
+      _neutral(dx: dx, dy: dy),
+      leftArmRaisedPose(dx: dx, dy: dy),
+    ]);
+    frames.add(_overhead(dx: dx, dy: dy));
   }
   if (fast) {
     frames.removeAt(3);
   }
   if (includeReset) {
-    frames.addAll([for (var i = 0; i < 10; i++) _neutral(dx: dx)]);
+    frames.addAll([for (var i = 0; i < 10; i++) _neutral(dx: dx, dy: dy)]);
   }
   return frames;
+}
+
+List<NuvoPoseFrame> _scaledAttempt({required double scale}) {
+  // Simulate a slightly smaller-framed performer. neutralStandingPose
+  // supports a scale param that proportionally shrinks the landmark
+  // cloud around the image center; the PoseNormalizer then divides by
+  // shoulder width, so the relative geometry is preserved.
+  NuvoPoseFrame scaled(NuvoPoseFrame frame) {
+    final points = <String, NuvoPosePoint>{};
+    for (final entry in frame.points.entries) {
+      final p = entry.value;
+      points[entry.key] = NuvoPosePoint(
+        x: 0.5 + (p.x - 0.5) * scale,
+        y: 0.5 + (p.y - 0.5) * scale,
+        z: p.z,
+        likelihood: p.likelihood,
+      );
+    }
+    return NuvoPoseFrame(
+      points: points,
+      imageWidth: frame.imageWidth,
+      imageHeight: frame.imageHeight,
+      createdAt: frame.createdAt,
+    );
+  }
+
+  final base = _terminalAttempt();
+  return base.map(scaled).toList(growable: false);
 }
 
 List<NuvoPoseFrame> _partialAttempt() => [
@@ -627,9 +794,11 @@ bool _isFaceOrHeadFeature(String featureId) {
   return poseFeatureBodyPart(featureId) == 'face/head';
 }
 
-NuvoPoseFrame _neutral({double dx = 0}) => neutralStandingPose(dx: dx);
+NuvoPoseFrame _neutral({double dx = 0, double dy = 0}) =>
+    neutralStandingPose(dx: dx, dy: dy);
 
-NuvoPoseFrame _overhead({double dx = 0}) => armsOverheadPose(dx: dx);
+NuvoPoseFrame _overhead({double dx = 0, double dy = 0}) =>
+    armsOverheadPose(dx: dx, dy: dy);
 
 NuvoPoseFrame _blend(NuvoPoseFrame from, NuvoPoseFrame to, double t) {
   final points = <String, NuvoPosePoint>{};
