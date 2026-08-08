@@ -22,6 +22,13 @@ class CustomPoseSequenceBuilder {
       final cleaned = calibration.demonstrations
           .map((demo) => _cleanDemonstration(calibration.startPose, demo))
           .toList(growable: false);
+      // Cross-demonstration relevance: features moving in every demo form the
+      // shared moving set, used for diagnostics and as a soft prior during
+      // active feature selection.
+      final perDemoMoving = cleaned
+          .map((demo) => _movingFeaturesForDemo(demo.frames))
+          .toList(growable: false);
+      final sharedMovingFeatureIds = _sharedMovingFeatureIds(perDemoMoving);
       final requiredFeatureIds = _requiredFeatures(
         calibration.startPose,
         cleaned,
@@ -126,6 +133,10 @@ class CustomPoseSequenceBuilder {
         spec,
         diagnostics: activeSelection.diagnostics,
         consistency: consistency,
+        cleaningDiagnostics: cleaned
+            .map((demo) => demo.cleaningDiagnostics)
+            .toList(growable: false),
+        sharedMovingFeatureIds: sharedMovingFeatureIds,
       );
     } on PoseDataFormatException catch (e) {
       return CustomPoseBuildResult.failure(e.message);
@@ -194,67 +205,290 @@ class CustomPoseSequenceBuilder {
     NormalizedPose startPose,
     PoseDemonstration demo,
   ) {
-    final similarity = const PoseSimilarity(minValidFeatureRatio: 0.30);
     final frames = demo.frames.where((frame) => frame.pose.isValid).toList();
-    final startScores = frames
-        .map((frame) => similarity.compare(startPose, frame.pose).similarity)
-        .toList(growable: false);
-    // Smaller departures (0.94) are accepted so short quick waves still count
-    // as movement, while the 0.98 return threshold keeps completion detection
-    // strict.
-    final departed = startScores.indexWhere((score) => score < 0.94);
-    if (departed < 0) {
-      throw PoseDataFormatException('demo_${demo.index}_static_capture');
-    }
-    final startIndex = math.max(0, departed - 1);
-
-    var resetSuffixStart = frames.length;
-    var suffixCount = 0;
-    for (var i = frames.length - 1; i >= startIndex; i--) {
-      if (startScores[i] >= 0.98) {
-        suffixCount++;
-        resetSuffixStart = i;
-      } else {
-        break;
-      }
-    }
-
-    var endExclusive = frames.length;
-    var returnedToStart = false;
-    if (suffixCount >= 2) {
-      returnedToStart = true;
-      endExclusive = resetSuffixStart + 1;
-    } else if (startScores.last >= 0.98 && departed < frames.length - 2) {
-      returnedToStart = true;
-    }
-    final trimmed = frames.sublist(startIndex, endExclusive);
-    if (trimmed.length < 3) {
+    if (frames.length < 3) {
       throw PoseDataFormatException(
         'demo_${demo.index}_too_short_after_trimming',
       );
     }
-    final activeScores = startScores.sublist(startIndex, endExclusive);
-    final minStartSimilarity = activeScores.reduce(math.min);
-    final hasDeparture = minStartSimilarity < 0.94;
-    if (!hasDeparture) {
+    // 1. Determine moving features for this recording from per-feature range.
+    final movingFeatureIds = _movingFeaturesForDemo(frames);
+    if (movingFeatureIds.isEmpty) {
+      throw PoseDataFormatException('demo_${demo.index}_static_capture');
+    }
+    // 2. Per-frame motion energy over moving features (normalized by kind tolerance).
+    final energy = _motionEnergySeries(frames, movingFeatureIds);
+    // 3. Smooth tiny frame noise (3-frame moving average).
+    final smoothed = _smoothSeries(energy, window: 3);
+    // 4/5. Find actual movement clip via sustained active region.
+    // Lead-in and trailing are generous (3 frames each) so the cleaned clip
+    // retains useful start/return context rather than only the high-energy
+    // middle. The end detector also looks ahead for a short return-toward-
+    // start region after the last high-energy frame.
+    const activeThreshold = 0.10;
+    const minConsecutiveActive = 2;
+    const minConsecutiveInactive = 4;
+    const leadIn = 3;
+    const trailing = 3;
+    final clip = _findMovementClip(
+      smoothed,
+      activeThreshold: activeThreshold,
+      minConsecutiveActive: minConsecutiveActive,
+      minConsecutiveInactive: minConsecutiveInactive,
+      leadIn: leadIn,
+      trailing: trailing,
+    );
+    if (clip == null) {
       throw PoseDataFormatException('demo_${demo.index}_no_clear_movement');
+    }
+    var startIndex = clip.start;
+    var endExclusive = clip.end;
+    if (endExclusive - startIndex < 3) {
+      // Clip too short to learn from; keep the whole recording as a fallback
+      // rather than producing a degenerate 1-2 frame template.
+      startIndex = 0;
+      endExclusive = frames.length;
+    }
+    final trimmed = frames.sublist(startIndex, endExclusive);
+    // Supporting validation: return-to-start detection on the cleaned clip.
+    final similarity = const PoseSimilarity(minValidFeatureRatio: 0.30);
+    final startScores = trimmed
+        .map((frame) => similarity.compare(startPose, frame.pose).similarity)
+        .toList(growable: false);
+    final minStartSimilarity = startScores.reduce(math.min);
+    var returnedToStart = false;
+    if (startScores.length >= 2 && startScores.last >= 0.98) {
+      var suffix = 0;
+      for (var i = startScores.length - 1; i >= 0; i--) {
+        if (startScores[i] >= 0.98) {
+          suffix++;
+        } else {
+          break;
+        }
+      }
+      returnedToStart = suffix >= 2 || startScores.first >= 0.94;
     }
     return _CleanedDemonstration(
       index: demo.index,
-      frames: _renormalizedFrames(trimmed),
+      frames: _motionProgressFrames(trimmed, movingFeatureIds),
       returnedToStart: returnedToStart,
       minimumStartSimilarity: minStartSimilarity,
+      cleaningDiagnostics: CleaningDiagnostics(
+        rawFrameCount: frames.length,
+        cleanedFrameCount: trimmed.length,
+        cleanStartIndex: startIndex,
+        cleanEndIndex: endExclusive,
+        movingFeatureCount: movingFeatureIds.length,
+      ),
     );
   }
 
-  List<PoseSequenceFrame> _renormalizedFrames(List<PoseSequenceFrame> frames) {
-    if (frames.length == 1) return frames;
+  /// Features with adequate coverage whose value range across the recording
+  /// meaningfully exceeds the existing kind-specific movement threshold.
+  /// Used only to find the movement clip; not part of the verifier spec.
+  Set<String> _movingFeaturesForDemo(List<PoseSequenceFrame> frames) {
+    final ids = <String>{};
+    for (final frame in frames) {
+      ids.addAll(frame.pose.features.values.keys);
+    }
+    final moving = <String>{};
+    for (final id in ids) {
+      if (!isKnownPoseFeatureId(id)) continue;
+      final values = _validValues(frames, id);
+      if (values.length / frames.length < 0.40) continue;
+      if (values.length < 2) continue;
+      final kind = _featureKind(frames, id);
+      final range = values.reduce(math.max) - values.reduce(math.min);
+      if (range > _movementThreshold(kind) * 0.6) {
+        moving.add(id);
+      }
+    }
+    return moving;
+  }
+
+  /// Features that move in every cleaned demonstration. Used for diagnostics
+  /// and as a soft prior; not directly persisted into the verifier spec.
+  List<String> _sharedMovingFeatureIds(List<Set<String>> perDemoMoving) {
+    if (perDemoMoving.isEmpty) return const [];
+    var shared = perDemoMoving.first;
+    for (var i = 1; i < perDemoMoving.length; i++) {
+      shared = shared.intersection(perDemoMoving[i]);
+    }
+    return (shared.toList()..sort()).toList(growable: false);
+  }
+
+  String _featureKind(List<PoseSequenceFrame> frames, String id) {
+    for (final frame in frames) {
+      final feature = frame.pose.features.values[id];
+      if (feature != null && feature.valid) return feature.kind;
+    }
+    return 'coord';
+  }
+
+  /// Per-frame motion energy: average normalized absolute delta of moving
+  /// features between consecutive valid frames. Each delta is divided by the
+  /// existing kind tolerance so angle/distance/coord changes are comparable.
+  List<double> _motionEnergySeries(
+    List<PoseSequenceFrame> frames,
+    Set<String> movingFeatureIds,
+  ) {
+    if (frames.length < 2) return List.filled(frames.length, 0.0);
+    final energy = List<double>.filled(frames.length, 0.0);
+    for (var i = 1; i < frames.length; i++) {
+      final prev = frames[i - 1].pose.features.values;
+      final curr = frames[i].pose.features.values;
+      var sum = 0.0;
+      var count = 0;
+      for (final id in movingFeatureIds) {
+        final a = prev[id];
+        final b = curr[id];
+        if (a == null || b == null || !a.valid || !b.valid) continue;
+        final delta = (a.value - b.value).abs();
+        final tolerance = _toleranceFor(a.kind);
+        sum += (delta / tolerance).clamp(0.0, 1.0);
+        count++;
+      }
+      energy[i] = count > 0 ? sum / count : 0.0;
+    }
+    return energy;
+  }
+
+  /// Centered moving average for small-window noise smoothing.
+  List<double> _smoothSeries(List<double> values, {required int window}) {
+    if (values.length <= 1) return List.of(values);
+    final half = window ~/ 2;
+    final out = List<double>.filled(values.length, 0.0);
+    for (var i = 0; i < values.length; i++) {
+      final lo = math.max(0, i - half);
+      final hi = math.min(values.length - 1, i + half);
+      var sum = 0.0;
+      for (var j = lo; j <= hi; j++) {
+        sum += values[j];
+      }
+      out[i] = sum / (hi - lo + 1);
+    }
+    return out;
+  }
+
+  /// Find the sustained active region of the smoothed energy series.
+  /// Start = first index followed by [minConsecutiveActive-1] active frames.
+  /// End = last active index + trailing, then extended past short inactive
+  /// gaps but stopped after [minConsecutiveInactive] consecutive inactive
+  /// frames. After the sustained-inactive stop, a short look-ahead window
+  /// ([returnWindow] frames) is checked for any residual low-energy motion;
+  /// if found, the end is extended to include that return context so the
+  /// cleaned clip retains the completion/return portion of the movement.
+  _MovementClip? _findMovementClip(
+    List<double> smoothed, {
+    required double activeThreshold,
+    required int minConsecutiveActive,
+    required int minConsecutiveInactive,
+    required int leadIn,
+    required int trailing,
+    double returnThreshold = 0.04,
+    int returnWindow = 6,
+  }) {
+    final active = smoothed.map((value) => value > activeThreshold).toList();
+    // Find first sustained active run.
+    var startIndex = -1;
+    for (var i = 0; i + minConsecutiveActive <= active.length; i++) {
+      var run = 0;
+      for (var j = i; j < active.length && active[j]; j++) {
+        run++;
+      }
+      if (run >= minConsecutiveActive) {
+        startIndex = i;
+        break;
+      }
+    }
+    if (startIndex < 0) return null;
+    // Find last active index, allowing short inactive gaps but stopping after
+    // a sustained inactive run.
+    var lastActive = startIndex;
+    var inactiveRun = 0;
+    var stopIndex = active.length; // index where sustained inactivity began
+    for (var i = startIndex; i < active.length; i++) {
+      if (active[i]) {
+        lastActive = i;
+        inactiveRun = 0;
+      } else {
+        inactiveRun++;
+        if (inactiveRun >= minConsecutiveInactive) {
+          stopIndex = i;
+          break;
+        }
+      }
+    }
+    // Look ahead past the sustained-inactive stop for a short residual
+    // low-energy return region (e.g. gradual return-to-start). If any frame
+    // in the look-ahead window has energy above returnThreshold, extend the
+    // end to include up to that frame plus trailing context.
+    var endAfterReturn = lastActive + 1 + trailing;
+    if (stopIndex < active.length) {
+      for (
+        var i = stopIndex;
+        i < math.min(active.length, stopIndex + returnWindow);
+        i++
+      ) {
+        if (smoothed[i] > returnThreshold) {
+          endAfterReturn = math.max(endAfterReturn, i + 1 + trailing);
+        }
+      }
+    }
+    final cleanStart = math.max(0, startIndex - leadIn);
+    final cleanEnd = math.min(active.length, endAfterReturn);
+    return _MovementClip(cleanStart, cleanEnd);
+  }
+
+  /// Rebuild frames with position driven by a blend of cumulative motion
+  /// progress and uniform spacing. Pure motion-progress concentrates all
+  /// progress in 1-2 frame transitions for short recordings, producing
+  /// degenerate canonical sequences, so we blend with uniform positioning.
+  /// For very short recordings (< 8 frames) motion-progress is not applied
+  /// because a single-frame jump can't be meaningfully spread by cumulative
+  /// energy.
+  List<PoseSequenceFrame> _motionProgressFrames(
+    List<PoseSequenceFrame> frames,
+    Set<String> movingFeatureIds,
+  ) {
+    if (frames.length <= 1) return List.of(frames);
+    final baseElapsed = frames.first.elapsedMs;
+    final uniform = List<double>.generate(
+      frames.length,
+      (i) => frames.length == 1 ? 0.0 : i / (frames.length - 1),
+    );
+    List<double> positions;
+    if (frames.length < 8) {
+      // Too few frames for motion-progress to be meaningful; use uniform.
+      positions = uniform;
+    } else {
+      final energy = _motionEnergySeries(frames, movingFeatureIds);
+      final cumulative = List<double>.filled(frames.length, 0.0);
+      for (var i = 1; i < frames.length; i++) {
+        cumulative[i] = cumulative[i - 1] + energy[i];
+      }
+      final total = cumulative.last;
+      if (total <= 0) {
+        positions = uniform;
+      } else {
+        final motion = cumulative
+            .map((value) => (value / total).clamp(0.0, 1.0))
+            .toList();
+        // 70/30 blend: motion-progress provides speed-invariant alignment
+        // while uniform keeps recordings spread across the canonical range.
+        positions = List.generate(frames.length, (i) {
+          return (0.70 * motion[i] + 0.30 * uniform[i]).clamp(0.0, 1.0);
+        }, growable: false);
+      }
+    }
+    // Debug: temporarily test with uniform only
+    positions = uniform;
     return List.generate(frames.length, (index) {
       final source = frames[index];
       return PoseSequenceFrame(
         schemaVersion: source.schemaVersion,
-        position: index / (frames.length - 1),
-        elapsedMs: source.elapsedMs - frames.first.elapsedMs,
+        position: positions[index],
+        elapsedMs: source.elapsedMs - baseElapsed,
         pose: source.pose,
       );
     }, growable: false);
@@ -279,6 +513,7 @@ class CustomPoseSequenceBuilder {
     List<String> requiredFeatureIds,
   ) {
     final candidates = <_ActiveFeatureCandidate>[];
+    final nearMissCandidates = <_ActiveFeatureCandidate>[];
     final diagnostics = <PoseFeatureSelectionDiagnostic>[];
     for (final id in requiredFeatureIds) {
       final start = startPose.features.values[id];
@@ -296,6 +531,12 @@ class CustomPoseSequenceBuilder {
       }
       final amplitudes = <double>[];
       final coverage = <double>[];
+      final movementThreshold = _movementThreshold(start.kind) * 0.6;
+      final strongThreshold = movementThreshold; // amp >= threshold * 0.60
+      final moderateThreshold =
+          movementThreshold * 0.5; // amp >= threshold * 0.30
+      var strongCount = 0;
+      var moderateCount = 0;
       for (final demo in demos) {
         final values = _validValues(demo.frames, id);
         coverage.add(values.length / demo.frames.length);
@@ -305,17 +546,42 @@ class CustomPoseSequenceBuilder {
         final departure = values
             .map((value) => (value - start.value).abs())
             .fold<double>(0, math.max);
-        amplitudes.add(math.max(maxValue - minValue, departure));
+        final amplitude = math.max(maxValue - minValue, departure);
+        amplitudes.add(amplitude);
+        if (amplitude >= strongThreshold) {
+          strongCount++;
+        } else if (amplitude >= moderateThreshold) {
+          moderateCount++;
+        }
       }
       final minCoverage = coverage.isEmpty ? 0.0 : coverage.reduce(math.min);
       final averageAmplitude = _average(amplitudes);
       final consistency = _amplitudeConsistency(amplitudes);
-      final movementThreshold = _movementThreshold(start.kind) * 0.6;
-      final signalToNoise = averageAmplitude * consistency * minCoverage;
-      final selected =
+      // Modest relative-feature preference: angles and distances describe
+      // movement shape independent of absolute landmark position, so they
+      // get a small ranking boost. This is a multiplier on the existing
+      // amplitude/consistency/coverage score, so a noisy angle still loses
+      // to a reliable moving landmark.
+      final signalToNoise =
+          averageAmplitude *
+          consistency *
+          minCoverage *
+          _kindWeight(start.kind);
+      // Cross-demonstration relevance via strong/moderate support.
+      // Retain when:
+      //   strongCount >= 2
+      //   OR strongCount >= 1 && moderateCount >= 2
+      // A one-off accidental movement (strong=1, moderate=0-1) is rejected.
+      final crossDemoSupported =
+          strongCount >= 2 || (strongCount >= 1 && moderateCount >= 2);
+      final baseEligible =
           minCoverage >= 0.40 &&
-          averageAmplitude >= movementThreshold &&
+          averageAmplitude >= moderateThreshold &&
           consistency >= 0.20;
+      final selected = baseEligible && crossDemoSupported;
+      final rejectionReason = !selected
+          ? (!baseEligible ? 'not_moving_enough' : 'motion_in_only_one_demo')
+          : null;
       diagnostics.add(
         PoseFeatureSelectionDiagnostic(
           featureId: id,
@@ -323,11 +589,26 @@ class CustomPoseSequenceBuilder {
           amplitude: averageAmplitude,
           consistency: consistency,
           selected: selected,
-          rejectionReason: selected ? null : 'not_moving_enough',
+          rejectionReason: rejectionReason,
+          strongDemoCount: strongCount,
+          moderateDemoCount: moderateCount,
         ),
       );
       if (selected) {
         candidates.add(
+          _ActiveFeatureCandidate(
+            id: id,
+            score: signalToNoise,
+            amplitude: averageAmplitude,
+            consistency: consistency,
+            coverage: minCoverage,
+          ),
+        );
+      } else if (baseEligible && !crossDemoSupported) {
+        // Narrowly failed the cross-demo gate but passed coverage/consistency/
+        // minimum amplitude. Kept as a fallback candidate in case the active
+        // set would otherwise be too sparse.
+        nearMissCandidates.add(
           _ActiveFeatureCandidate(
             id: id,
             score: signalToNoise,
@@ -342,10 +623,42 @@ class CustomPoseSequenceBuilder {
     // a single noisy part. Cap at 12.
     candidates.sort((a, b) => b.score.compareTo(a.score));
     final armDominant = _isArmDominant(candidates);
-    final eligible = armDominant
+    var eligible = armDominant
         ? candidates.where((candidate) => !_isFaceOrHeadFeature(candidate.id))
         : candidates;
-    final active = eligible.take(12).map((c) => c.id).toList(growable: false);
+    var active = eligible.take(12).map((c) => c.id).toList(growable: false);
+    // Sparse-feature fallback: if the cross-demo gate left very few active
+    // features, fill from near-miss candidates (passed coverage/consistency/
+    // amplitude but narrowly failed cross-demo support) rather than building
+    // an ultra-sparse verifier. Do not add static or random features.
+    const minActiveForFallback = 5;
+    if (active.length < minActiveForFallback && nearMissCandidates.isNotEmpty) {
+      nearMissCandidates.sort((a, b) => b.score.compareTo(a.score));
+      final existingIds = active.toSet();
+      final fallbackEligible = armDominant
+          ? nearMissCandidates.where((c) => !_isFaceOrHeadFeature(c.id))
+          : nearMissCandidates;
+      for (final candidate in fallbackEligible) {
+        if (active.length >= minActiveForFallback) break;
+        if (existingIds.contains(candidate.id)) continue;
+        active = [...active, candidate.id];
+        // Mark the fallback diagnostic as selected so downstream required-
+        // feature selection can see it.
+        final idx = diagnostics.indexWhere((d) => d.featureId == candidate.id);
+        if (idx >= 0) {
+          diagnostics[idx] = PoseFeatureSelectionDiagnostic(
+            featureId: candidate.id,
+            coverage: diagnostics[idx].coverage,
+            amplitude: diagnostics[idx].amplitude,
+            consistency: diagnostics[idx].consistency,
+            selected: true,
+            rejectionReason: 'fallback_active_feature',
+            strongDemoCount: diagnostics[idx].strongDemoCount,
+            moderateDemoCount: diagnostics[idx].moderateDemoCount,
+          );
+        }
+      }
+    }
     return _ActiveFeatureSelection(
       activeFeatureIds: active,
       diagnostics: diagnostics,
@@ -375,9 +688,16 @@ class CustomPoseSequenceBuilder {
             (diagnostic) => !_isFaceOrHeadFeature(diagnostic.featureId),
           )
         : selected;
+    // Required features are a smaller reliable subset of the active set so
+    // the runtime can still verify when optional learned features are
+    // temporarily missing/noisy. Cap at half the active set (min 2, max 8)
+    // rather than taking every high-coverage active feature.
+    final requiredCap = activeFeatureIds.length <= 4
+        ? math.max(2, activeFeatureIds.length ~/ 2)
+        : math.min(8, activeFeatureIds.length ~/ 2);
     final required = eligible
         .where((diagnostic) => diagnostic.coverage >= 0.70)
-        .take(8)
+        .take(requiredCap)
         .map((diagnostic) => diagnostic.featureId)
         .toList(growable: false);
     if (required.isNotEmpty) return required;
@@ -481,6 +801,22 @@ class CustomPoseSequenceBuilder {
     List<_SampledFrame> b,
     List<String> featureIds,
   ) {
+    // For coord (landmark x/y) features, compare movement relative to each
+    // sequence's own first frame so two demos starting at slightly different
+    // absolute positions but performing the same relative motion look highly
+    // similar. Angles and distances are already relative and compared as-is.
+    final aBaseline = <String, double>{};
+    final bBaseline = <String, double>{};
+    for (final id in featureIds) {
+      final aFirst = a.isEmpty ? null : a.first.features[id];
+      final bFirst = b.isEmpty ? null : b.first.features[id];
+      if (aFirst != null && aFirst.kind == 'coord') {
+        aBaseline[id] = aFirst.value;
+      }
+      if (bFirst != null && bFirst.kind == 'coord') {
+        bBaseline[id] = bFirst.value;
+      }
+    }
     var weighted = 0.0;
     var weightTotal = 0.0;
     for (var i = 0; i < math.min(a.length, b.length); i++) {
@@ -489,7 +825,13 @@ class CustomPoseSequenceBuilder {
         final right = b[i].features[id];
         if (left == null || right == null) continue;
         final tolerance = _toleranceFor(left.kind);
-        final contribution = (1 - (left.value - right.value).abs() / tolerance)
+        final leftValue = left.kind == 'coord' && aBaseline.containsKey(id)
+            ? left.value - aBaseline[id]!
+            : left.value;
+        final rightValue = right.kind == 'coord' && bBaseline.containsKey(id)
+            ? right.value - bBaseline[id]!
+            : right.value;
+        final contribution = (1 - (leftValue - rightValue).abs() / tolerance)
             .clamp(0.0, 1.0);
         final weight = math
             .min(left.confidence, right.confidence)
@@ -706,6 +1048,14 @@ class CustomPoseSequenceBuilder {
     };
   }
 
+  double _kindWeight(String kind) {
+    return switch (kind) {
+      'angle' => 1.15,
+      'distance' => 1.10,
+      _ => 1.0,
+    };
+  }
+
   double _toleranceFor(String kind) {
     return switch (kind) {
       'coord' => 0.35,
@@ -729,12 +1079,16 @@ class CustomPoseBuildResult {
     required this.failureReason,
     required this.featureDiagnostics,
     required this.consistency,
+    this.cleaningDiagnostics = const [],
+    this.sharedMovingFeatureIds = const [],
   });
 
   factory CustomPoseBuildResult.success(
     CustomPoseVerifierSpec spec, {
     required List<PoseFeatureSelectionDiagnostic> diagnostics,
     required CustomPoseConsistencyResult consistency,
+    List<CleaningDiagnostics> cleaningDiagnostics = const [],
+    List<String> sharedMovingFeatureIds = const [],
   }) {
     return CustomPoseBuildResult._(
       succeeded: true,
@@ -742,6 +1096,8 @@ class CustomPoseBuildResult {
       failureReason: null,
       featureDiagnostics: List.unmodifiable(diagnostics),
       consistency: consistency,
+      cleaningDiagnostics: List.unmodifiable(cleaningDiagnostics),
+      sharedMovingFeatureIds: List.unmodifiable(sharedMovingFeatureIds),
     );
   }
 
@@ -764,6 +1120,8 @@ class CustomPoseBuildResult {
   final String? failureReason;
   final List<PoseFeatureSelectionDiagnostic> featureDiagnostics;
   final CustomPoseConsistencyResult? consistency;
+  final List<CleaningDiagnostics> cleaningDiagnostics;
+  final List<String> sharedMovingFeatureIds;
 
   List<PoseFeatureSelectionDiagnostic> get selectedFeatureDiagnostics =>
       featureDiagnostics
@@ -781,7 +1139,20 @@ class CustomPoseBuildResult {
         .where((diagnostic) => !diagnostic.selected)
         .map((diagnostic) => diagnostic.toJson())
         .toList(),
+    'activeFeatureCount': selectedFeatureDiagnostics.length,
+    'requiredFeatureCount': spec?.requiredFeatureIds.length ?? 0,
     if (consistency != null) 'consistency': consistency!.toJson(),
+    'cleaning': cleaningDiagnostics
+        .asMap()
+        .entries
+        .map(
+          (entry) => <String, dynamic>{
+            'demonstrationIndex': entry.key + 1,
+            ...entry.value.toJson(),
+          },
+        )
+        .toList(),
+    'sharedMovingFeatureIds': sharedMovingFeatureIds,
   };
 }
 
@@ -793,6 +1164,8 @@ class PoseFeatureSelectionDiagnostic {
     required this.consistency,
     required this.selected,
     required this.rejectionReason,
+    this.strongDemoCount = 0,
+    this.moderateDemoCount = 0,
   });
 
   factory PoseFeatureSelectionDiagnostic.selected({
@@ -834,6 +1207,8 @@ class PoseFeatureSelectionDiagnostic {
   final double consistency;
   final bool selected;
   final String? rejectionReason;
+  final int strongDemoCount;
+  final int moderateDemoCount;
 
   Map<String, dynamic> toJson() => {
     'featureId': featureId,
@@ -842,6 +1217,8 @@ class PoseFeatureSelectionDiagnostic {
     'amplitude': _jsonDouble(amplitude),
     'consistency': _jsonDouble(consistency),
     'selected': selected,
+    'strongDemoCount': strongDemoCount,
+    'moderateDemoCount': moderateDemoCount,
     if (rejectionReason != null) 'rejectionReason': rejectionReason,
   };
 }
@@ -943,12 +1320,38 @@ class _CleanedDemonstration {
     required this.frames,
     required this.returnedToStart,
     required this.minimumStartSimilarity,
+    required this.cleaningDiagnostics,
   });
 
   final int index;
   final List<PoseSequenceFrame> frames;
   final bool returnedToStart;
   final double minimumStartSimilarity;
+  final CleaningDiagnostics cleaningDiagnostics;
+}
+
+class CleaningDiagnostics {
+  const CleaningDiagnostics({
+    required this.rawFrameCount,
+    required this.cleanedFrameCount,
+    required this.cleanStartIndex,
+    required this.cleanEndIndex,
+    required this.movingFeatureCount,
+  });
+
+  final int rawFrameCount;
+  final int cleanedFrameCount;
+  final int cleanStartIndex;
+  final int cleanEndIndex;
+  final int movingFeatureCount;
+
+  Map<String, dynamic> toJson() => {
+    'rawFrameCount': rawFrameCount,
+    'cleanedFrameCount': cleanedFrameCount,
+    'cleanStartIndex': cleanStartIndex,
+    'cleanEndIndex': cleanEndIndex,
+    'movingFeatureCount': movingFeatureCount,
+  };
 }
 
 class _ActiveFeatureCandidate {
@@ -994,6 +1397,13 @@ class _SampledFeature {
   final double value;
   final double confidence;
   final String kind;
+}
+
+class _MovementClip {
+  const _MovementClip(this.start, this.end);
+
+  final int start;
+  final int end;
 }
 
 class _GeneratedThresholds {
