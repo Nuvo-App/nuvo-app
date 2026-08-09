@@ -131,23 +131,6 @@ NuvoPoseFrame _sideLungeRight() => _frame({
 // |hip→knee| = 0.188, |ankle→knee| = 0.16
 // cos = -0.0128 / (0.188*0.16) = -0.426 → angle ≈ 115° < 118 ✅
 
-/// Forward lunge — should NOT trigger side lunge (insufficient lateral separation).
-/// In a forward lunge, the step is in Z (toward camera), so X-separation
-/// between knees is small.
-NuvoPoseFrame _forwardLungeRight() => _frame({
-      'leftHip': _p(0.45, 0.42),
-      'rightHip': _p(0.55, 0.42),
-      'leftKnee': _p(0.48, 0.60),
-      'rightKnee': _p(0.58, 0.54),
-      'leftAnkle': _p(0.46, 0.78),
-      'rightAnkle': _p(0.62, 0.72),
-    });
-// kneeSeparation = |0.48 - 0.58| / 0.10 = 1.0 > 0.85 — this WOULD trigger
-// side lunge. The forward lunge in 2D front view can produce enough
-// X-separation to cross the threshold. This is a known limitation.
-// The identity test below uses a forward lunge with minimal lateral
-// separation to prove the threshold works for clear cases.
-
 void main() {
   group('Factory Batch Identity Tests', () {
     // ── Registration tests ──────────────────────────────────────────────────

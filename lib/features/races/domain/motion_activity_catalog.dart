@@ -25,6 +25,9 @@ const motionActivityDefinitions = [
     icon: Icons.fitness_center_rounded,
     framingLabel: 'Upper body + hands visible',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.upperBody,
+    featured: true,
+    sortPriority: 1,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.jumpingJacks,
@@ -48,6 +51,9 @@ const motionActivityDefinitions = [
     icon: Icons.accessibility_new_rounded,
     framingLabel: 'Full body · leave room for arms',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.cardio,
+    featured: true,
+    sortPriority: 3,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.squats,
@@ -71,6 +77,9 @@ const motionActivityDefinitions = [
     icon: Icons.person_outline_rounded,
     framingLabel: 'Full body centered in frame',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: true,
+    sortPriority: 1,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.lunges,
@@ -94,6 +103,9 @@ const motionActivityDefinitions = [
     icon: Icons.directions_walk_rounded,
     framingLabel: 'Full body · lower body visible',
     preferredCameraView: PreferredCameraView.frontOrSlightAngle,
+    category: MovementCategory.lowerBody,
+    featured: true,
+    sortPriority: 2,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.plankHold,
@@ -117,6 +129,9 @@ const motionActivityDefinitions = [
     icon: Icons.straighten_rounded,
     framingLabel: 'Side view · full body in frame',
     preferredCameraView: PreferredCameraView.sideOrDiagonalRequired,
+    category: MovementCategory.core,
+    featured: false,
+    sortPriority: 1,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.highKnees,
@@ -140,6 +155,9 @@ const motionActivityDefinitions = [
     icon: Icons.directions_run_rounded,
     framingLabel: 'Full body · lower body visible',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.cardio,
+    featured: true,
+    sortPriority: 5,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.armRaises,
@@ -163,6 +181,9 @@ const motionActivityDefinitions = [
     icon: Icons.sports_gymnastics_rounded,
     framingLabel: 'Upper body + arms visible',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.upperBody,
+    featured: false,
+    sortPriority: 2,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.sumoSquats,
@@ -186,6 +207,9 @@ const motionActivityDefinitions = [
     icon: Icons.accessibility_new_outlined,
     framingLabel: 'Full body · wide stance visible',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 3,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.sideLunges,
@@ -209,6 +233,9 @@ const motionActivityDefinitions = [
     icon: Icons.directions_walk_outlined,
     framingLabel: 'Full body · lateral space needed',
     preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 4,
   ),
 ];
 
@@ -218,6 +245,68 @@ const motionActivityDefinitions = [
 final Set<MotionActivityType> supportedMotionActivityTypes = {
   for (final definition in motionActivityDefinitions) definition.type,
 };
+
+/// Movements marked `featured: true`, sorted by [sortPriority].
+/// These appear in the "Popular" row of the picker.
+final List<MotionActivityDefinition> featuredActivities = [
+  for (final d in motionActivityDefinitions)
+    if (d.featured) d,
+]..sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+
+/// All movements sorted by [sortPriority] within their category,
+/// then categories in enum order.
+final List<MotionActivityDefinition> sortedActivities = [
+  ...motionActivityDefinitions,
+]..sort((a, b) {
+    final catCompare =
+        a.category.index.compareTo(b.category.index);
+    if (catCompare != 0) return catCompare;
+    return a.sortPriority.compareTo(b.sortPriority);
+  });
+
+/// Movements in a specific category, sorted by [sortPriority].
+List<MotionActivityDefinition> activitiesByCategory(
+  MovementCategory category,
+) {
+  final result = [
+    for (final d in motionActivityDefinitions)
+      if (d.category == category) d,
+  ];
+  result.sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+  return result;
+}
+
+/// Categories that have at least one movement.
+List<MovementCategory> get activeCategories {
+  final seen = <MovementCategory>{};
+  for (final d in motionActivityDefinitions) {
+    seen.add(d.category);
+  }
+  // Return in enum order
+  return MovementCategory.values.where((c) => seen.contains(c)).toList();
+}
+
+/// Searches movements by title or aliases. Case-insensitive.
+/// Returns matches sorted by [sortPriority].
+List<MotionActivityDefinition> searchActivities(String query) {
+  final normalized = query.toLowerCase().trim();
+  if (normalized.isEmpty) return sortedActivities;
+  final matches = <MotionActivityDefinition>[];
+  for (final d in motionActivityDefinitions) {
+    if (d.title.toLowerCase().contains(normalized)) {
+      matches.add(d);
+      continue;
+    }
+    for (final alias in d.aliases) {
+      if (alias.toLowerCase().contains(normalized)) {
+        matches.add(d);
+        break;
+      }
+    }
+  }
+  matches.sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+  return matches;
+}
 
 bool isCameraVerifiedMotionActivity(MotionActivityDefinition? definition) =>
     definition != null &&
