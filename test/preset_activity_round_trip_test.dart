@@ -144,6 +144,71 @@ void main() {
     });
   });
 
+  // ── Backend contract: Flutter catalog matches raceActivities.ts ─────────────
+  // These values are transcribed from server/worker/src/domain/raceActivities.ts
+  // RACE_ACTIVITY_CATALOG. If the backend catalog changes, update these
+  // expectations. If the Flutter catalog changes, the test fails and forces
+  // a conscious decision about whether the two should diverge.
+  group('backend contract', () {
+    /// Mirror of the backend RACE_ACTIVITY_CATALOG entries, encoded as
+    /// (id, displayName, defaultMetric, cameraOrientation, sessionBehavior).
+    /// Source: server/worker/src/domain/raceActivities.ts
+    const backendCatalog = <(String, String, String, String, String)>[
+      ('push_ups', 'Pushups', 'reps', 'front', 'count_reps'),
+      ('jumping_jacks', 'Jumping Jacks', 'reps', 'front', 'count_reps'),
+      ('squats', 'Squats', 'reps', 'front', 'count_reps'),
+      ('lunges', 'Lunges', 'reps', 'front_or_angle', 'count_reps'),
+      ('plank_hold', 'Plank', 'seconds', 'side', 'validated_timer'),
+      ('high_knees', 'High Knees', 'reps', 'front', 'count_reps'),
+      ('arm_raises', 'Arm Raises', 'reps', 'front', 'count_reps'),
+    ];
+
+    test('Flutter catalog has exactly the same preset IDs as backend', () {
+      final flutterIds = motionActivityDefinitions
+          .map((d) => d.type.backendValue)
+          .toSet();
+      final backendIds = backendCatalog.map((e) => e.$1).toSet();
+      expect(flutterIds, equals(backendIds));
+    });
+
+    test('Flutter catalog titles match backend displayNames', () {
+      for (final (id, displayName, _, _, _) in backendCatalog) {
+        final flutter = motionActivityForBackendValue(id);
+        expect(flutter, isNotNull, reason: 'Missing in Flutter: $id');
+        expect(flutter!.title, displayName, reason: id);
+      }
+    });
+
+    test('Flutter catalog metrics match backend defaultMetrics', () {
+      for (final (id, _, metric, _, _) in backendCatalog) {
+        final flutter = motionActivityForBackendValue(id)!;
+        expect(flutter.metric.backendValue, metric, reason: id);
+      }
+    });
+
+    test('Flutter catalog preferredCameraView matches backend cameraOrientation', () {
+      const cameraViewMap = {
+        'front': PreferredCameraView.frontPreferred,
+        'front_or_angle': PreferredCameraView.frontOrSlightAngle,
+        'side': PreferredCameraView.sideOrDiagonalRequired,
+      };
+      for (final (id, _, _, camera, _) in backendCatalog) {
+        final flutter = motionActivityForBackendValue(id)!;
+        final expected = cameraViewMap[camera];
+        expect(expected, isNotNull, reason: 'Unknown backend camera: $camera');
+        expect(flutter.preferredCameraView, expected, reason: id);
+      }
+    });
+
+    test('Flutter isHold matches backend sessionBehavior', () {
+      for (final (id, _, _, _, session) in backendCatalog) {
+        final flutter = motionActivityForBackendValue(id)!;
+        final backendIsHold = session == 'validated_timer';
+        expect(flutter.isHold, backendIsHold, reason: id);
+      }
+    });
+  });
+
   // ── Focused round-trip: arm_raises ──────────────────────────────────────────
   group('arm_raises full round-trip', () {
     test('resolves through every Flutter layer', () {
