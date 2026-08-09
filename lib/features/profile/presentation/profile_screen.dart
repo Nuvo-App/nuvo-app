@@ -13,6 +13,7 @@ import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
+import '../../races/domain/motion_activity_catalog.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 
@@ -644,16 +645,7 @@ class _ProfileRaceRow extends StatelessWidget {
   }
 
   static IconData? _movementIconData(String? aiActivityType) {
-    return switch (aiActivityType) {
-      'push_ups' || 'pushups' => Icons.fitness_center_rounded,
-      'plank_hold' || 'plank' => Icons.straighten_rounded,
-      'jumping_jacks' => Icons.accessibility_new_rounded,
-      'squats' => Icons.person_outline_rounded,
-      'lunges' => Icons.directions_walk_rounded,
-      'high_knees' => Icons.directions_run_rounded,
-      'arm_raises' => Icons.sports_gymnastics_rounded,
-      _ => null,
-    };
+    return motionActivityForBackendValue(aiActivityType)?.icon;
   }
 
   static String? _lastActivityAt(Race race, String? userId) {

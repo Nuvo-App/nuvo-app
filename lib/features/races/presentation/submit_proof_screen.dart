@@ -340,23 +340,11 @@ class _MoveCheckCard extends StatelessWidget {
     return 'Ready';
   }
 
-  IconData get _movementIcon => switch (eligibility.movementType) {
-    MotionActivityType.pushUps => Icons.front_hand_rounded,
-    MotionActivityType.plankHold => Icons.straighten_rounded,
-    MotionActivityType.jumpingJacks => Icons.accessibility_new_rounded,
-    MotionActivityType.squats => Icons.person_outline_rounded,
-    MotionActivityType.lunges => Icons.directions_walk_rounded,
-    _ => Icons.person_outline_rounded,
-  };
+  IconData get _movementIcon =>
+      eligibility.movementDefinition?.icon ?? Icons.person_outline_rounded;
 
-  String get _framingLabel => switch (eligibility.movementType) {
-    MotionActivityType.pushUps => 'Upper body + hands visible',
-    MotionActivityType.plankHold => 'Side view · full body in frame',
-    MotionActivityType.jumpingJacks => 'Full body · leave room for arms',
-    MotionActivityType.squats => 'Full body centered in frame',
-    MotionActivityType.lunges => 'Full body · lower body visible',
-    _ => 'Full body inside frame',
-  };
+  String get _framingLabel =>
+      eligibility.movementDefinition?.framingLabel ?? 'Full body inside frame';
 
   String get _estimatedTime {
     final activity = eligibility.movementDefinition;

@@ -92,7 +92,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   /// Hold movements score in seconds, so a per-second "+1" would be noise.
   bool get _usesRepFlash =>
-      _isCustom || _activity != AiMotionActivity.plankHold;
+      _isCustom ||
+      motionActivityForBackendValue(_activity.backendValue)?.isHold != true;
 
   /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak =>
@@ -737,7 +738,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         Text(_movementTitle, style: AppTextStyles.titleLarge),
                         const SizedBox(height: 2),
                         Text(
-                          _activity == AiMotionActivity.plankHold
+                          motionActivityForBackendValue(
+                                      _activity.backendValue,
+                                    )?.isHold ==
+                                    true
                               ? 'Hold until the timer finishes.'
                               : 'Camera will count $_targetLabel.',
                           style: AppTextStyles.bodySmall.copyWith(
@@ -1263,7 +1267,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             Text(
               _isCustom
                   ? 'Detected $detected clean ${customResult?.movementName ?? _customMovementName ?? 'reps'} out of $_targetValue.'
-                  : _activity == AiMotionActivity.plankHold
+                  : motionActivityForBackendValue(_activity.backendValue)?.isHold == true
                   ? 'Counted $detected valid seconds out of $_targetValue.'
                   : 'Detected $detected clean ${_activity.label} out of $_targetValue.',
               style: AppTextStyles.bodyLarge.copyWith(
@@ -1558,14 +1562,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   String _countedLabel(AiMotionResult? result) {
     final value = result?.detectedReps ?? _targetValue;
-    if (_activity == AiMotionActivity.plankHold) return '$value seconds';
-    final unit = switch (_activity) {
-      AiMotionActivity.pushUps => 'pushups',
-      AiMotionActivity.squats => 'squats',
-      AiMotionActivity.jumpingJacks => 'jumping jacks',
-      AiMotionActivity.lunges => 'lunges',
-      _ => _activity.label,
-    };
+    final definition = motionActivityForBackendValue(_activity.backendValue);
+    if (definition?.isHold == true) return '$value seconds';
+    final unit = definition?.unit ?? _activity.label;
     return '$value $unit';
   }
 

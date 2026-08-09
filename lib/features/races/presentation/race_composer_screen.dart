@@ -792,22 +792,6 @@ class _ActivityPage extends StatelessWidget {
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
 
-  static const _activityIcons = {
-    MotionActivityType.pushUps: Icons.fitness_center_rounded,
-    MotionActivityType.squats: Icons.person_outline_rounded,
-    MotionActivityType.jumpingJacks: Icons.accessibility_new_rounded,
-    MotionActivityType.lunges: Icons.directions_walk_rounded,
-    MotionActivityType.plankHold: Icons.timer_outlined,
-  };
-
-  static const _activityDescriptions = {
-    MotionActivityType.pushUps: 'Counted in reps',
-    MotionActivityType.squats: 'Counted in reps',
-    MotionActivityType.jumpingJacks: 'Counted in reps',
-    MotionActivityType.lunges: 'Counted in reps',
-    MotionActivityType.plankHold: 'Counted in seconds',
-  };
-
   void _select(MotionActivityDefinition activity) {
     // Determine target: keep current if the new activity supports it,
     // otherwise reset to the new activity's default.
@@ -836,9 +820,8 @@ class _ActivityPage extends StatelessWidget {
           for (final activity in motionActivityDefinitions) ...[
             _ActivityTile(
               activity: activity,
-              icon: _activityIcons[activity.type] ?? Icons.sports_rounded,
-              description:
-                  _activityDescriptions[activity.type] ?? activity.unit,
+              icon: activity.icon,
+              description: 'Counted in ${activity.metric.label}',
               selected: draft.activity.type == activity.type,
               onTap: () => _select(activity),
             ),
