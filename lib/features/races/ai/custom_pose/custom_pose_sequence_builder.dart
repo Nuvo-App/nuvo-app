@@ -19,9 +19,14 @@ class CustomPoseSequenceBuilder {
   CustomPoseBuildResult build(CustomPoseCalibration calibration) {
     try {
       _validateCalibration(calibration);
-      final cleaned = calibration.demonstrations
-          .map((demo) => _cleanDemonstration(calibration.startPose, demo))
-          .toList(growable: false);
+      // Cross-demo region selection on raw frames to identify the shared
+      // taught movement and exclude setup/exit motion (walking to/from phone).
+      // Falls back to per-demo motion-energy clipping if region selection
+      // is uncertain.
+      final cleaned = _applySharedRegionSelection(
+        calibration.startPose,
+        calibration.demonstrations,
+      );
       // Cross-demonstration relevance: features moving in every demo form the
       // shared moving set, used for diagnostics and as a soft prior during
       // active feature selection.
@@ -201,6 +206,201 @@ class CustomPoseSequenceBuilder {
     }
   }
 
+  /// Cross-demo region selection on raw demonstration frames to identify the
+  /// shared taught movement and exclude setup/exit motion (walking to/from
+  /// phone). Falls back to per-demo motion-energy clipping if region
+  /// selection is uncertain.
+  List<_CleanedDemonstration> _applySharedRegionSelection(
+    NormalizedPose startPose,
+    List<PoseDemonstration> demos,
+  ) {
+    // First-pass: per-demo motion-energy clipping (always computed as
+    // fallback).
+    final firstPass = demos
+        .map((demo) => _cleanDemonstration(startPose, demo))
+        .toList(growable: false);
+
+    if (demos.length < 2) {
+      for (final demo in firstPass) {
+        demo.cleaningDiagnostics._setRegionSelection(
+          candidateRegionCount: 1,
+          selectedRegionStartIndex: 0,
+          selectedRegionEndIndex: demo.frames.length,
+          selectedRegionScore: 0,
+          crossDemoRegionSelectionUsed: false,
+        );
+      }
+      return firstPass;
+    }
+
+    // Build candidate regions from RAW frames (before first-pass clipping)
+    // so setup/exit motion is available for region splitting.
+    final candidates = <_CleanedDemoCandidate>[];
+    for (final demo in demos) {
+      final frames = demo.frames.where((f) => f.pose.isValid).toList();
+      if (frames.length < 4) {
+        candidates.add(
+          _CleanedDemoCandidate(
+            index: demo.index,
+            frames: frames,
+            regions: [_MovementClip(0, frames.length)],
+            movingFeatureIds: <String>{},
+          ),
+        );
+        continue;
+      }
+      final movingFeatureIds = _movingFeaturesForDemo(frames);
+      if (movingFeatureIds.isEmpty) {
+        candidates.add(
+          _CleanedDemoCandidate(
+            index: demo.index,
+            frames: frames,
+            regions: [_MovementClip(0, frames.length)],
+            movingFeatureIds: <String>{},
+          ),
+        );
+        continue;
+      }
+      final energy = _maxMotionEnergySeries(frames, movingFeatureIds);
+      final smoothed = _smoothSeries(energy, window: 3);
+      final regions = _findMotionRegions(
+        smoothed,
+        activeThreshold: 0.15,
+        minConsecutiveActive: 2,
+        minConsecutiveInactive: 4,
+        minRegionLength: 3,
+      );
+      candidates.add(
+        _CleanedDemoCandidate(
+          index: demo.index,
+          frames: frames,
+          regions: regions.isEmpty
+              ? [_MovementClip(0, frames.length)]
+              : regions,
+          movingFeatureIds: movingFeatureIds,
+        ),
+      );
+    }
+
+    // Need at least 2 demos with multiple regions for region selection to
+    // be meaningful.
+    final multiRegionCount = candidates
+        .where((c) => c.regions.length > 1)
+        .length;
+    if (multiRegionCount < 2) {
+      // Fallback: use first-pass clips.
+      for (final demo in firstPass) {
+        demo.cleaningDiagnostics._setRegionSelection(
+          candidateRegionCount: 1,
+          selectedRegionStartIndex: 0,
+          selectedRegionEndIndex: demo.frames.length,
+          selectedRegionScore: 0,
+          crossDemoRegionSelectionUsed: false,
+        );
+      }
+      return firstPass;
+    }
+
+    // Compute shared feature IDs across all demos for region comparison.
+    final perDemoMoving = candidates
+        .map((c) => c.movingFeatureIds)
+        .toList(growable: false);
+    final sharedFeatureIds = _sharedMovingFeatureIds(perDemoMoving);
+    if (sharedFeatureIds.isEmpty) {
+      for (final demo in firstPass) {
+        demo.cleaningDiagnostics._setRegionSelection(
+          candidateRegionCount: 1,
+          selectedRegionStartIndex: 0,
+          selectedRegionEndIndex: demo.frames.length,
+          selectedRegionScore: 0,
+          crossDemoRegionSelectionUsed: false,
+        );
+      }
+      return firstPass;
+    }
+
+    final selection = _selectSharedRegions(
+      candidates,
+      sharedFeatureIds.toSet(),
+    );
+    if (selection == null || selection.score < 0.30) {
+      // Fallback: uncertain selection, keep first-pass clips.
+      for (final demo in firstPass) {
+        demo.cleaningDiagnostics._setRegionSelection(
+          candidateRegionCount: 1,
+          selectedRegionStartIndex: 0,
+          selectedRegionEndIndex: demo.frames.length,
+          selectedRegionScore: selection?.score ?? 0,
+          crossDemoRegionSelectionUsed: false,
+        );
+      }
+      return firstPass;
+    }
+
+    // Apply selected regions with 2-3 frames context padding.
+    const contextPadding = 2;
+    final result = <_CleanedDemonstration>[];
+    for (var i = 0; i < candidates.length; i++) {
+      final candidate = candidates[i];
+      final selected = selection.selected[i];
+      final start = math.max(0, selected.clip.start - contextPadding);
+      final end = math.min(
+        candidate.frames.length,
+        selected.clip.end + contextPadding,
+      );
+      final regionFrames = candidate.frames.sublist(start, end);
+      // Re-apply motion-progress alignment to the selected region.
+      final regionMovingIds = _movingFeaturesForDemo(regionFrames);
+      final alignedFrames = regionMovingIds.isEmpty
+          ? regionFrames
+          : _motionProgressFrames(regionFrames, regionMovingIds);
+      // Recompute return-to-start on the selected region.
+      final similarity = const PoseSimilarity(minValidFeatureRatio: 0.30);
+      final startScores = alignedFrames
+          .map((frame) => similarity.compare(startPose, frame.pose).similarity)
+          .toList(growable: false);
+      final minStartSimilarity = startScores.isEmpty
+          ? 0.0
+          : startScores.reduce(math.min);
+      var returnedToStart = false;
+      if (startScores.length >= 2 && startScores.last >= 0.98) {
+        var suffix = 0;
+        for (var j = startScores.length - 1; j >= 0; j--) {
+          if (startScores[j] >= 0.98) {
+            suffix++;
+          } else {
+            break;
+          }
+        }
+        returnedToStart = suffix >= 2 || startScores.first >= 0.94;
+      }
+      final cleaningDiagnostics = CleaningDiagnostics(
+        rawFrameCount: candidate.frames.length,
+        cleanedFrameCount: alignedFrames.length,
+        cleanStartIndex: start,
+        cleanEndIndex: end,
+        movingFeatureCount: regionMovingIds.length,
+      );
+      cleaningDiagnostics._setRegionSelection(
+        candidateRegionCount: selection.candidateCounts[i],
+        selectedRegionStartIndex: start,
+        selectedRegionEndIndex: end,
+        selectedRegionScore: selection.score,
+        crossDemoRegionSelectionUsed: true,
+      );
+      result.add(
+        _CleanedDemonstration(
+          index: candidate.index,
+          frames: alignedFrames,
+          returnedToStart: returnedToStart,
+          minimumStartSimilarity: minStartSimilarity,
+          cleaningDiagnostics: cleaningDiagnostics,
+        ),
+      );
+    }
+    return result;
+  }
+
   _CleanedDemonstration _cleanDemonstration(
     NormalizedPose startPose,
     PoseDemonstration demo,
@@ -353,6 +553,36 @@ class CustomPoseSequenceBuilder {
     return energy;
   }
 
+  /// Max per-feature motion energy series. Unlike [_motionEnergySeries] which
+  /// averages across all moving features, this returns the MAX normalized
+  /// delta across features for each frame. This is used for region splitting
+  /// where walking (legs only) and arm movements (arms only) should each
+  /// produce detectable energy peaks without being diluted by features that
+  /// aren't moving in that region.
+  List<double> _maxMotionEnergySeries(
+    List<PoseSequenceFrame> frames,
+    Set<String> movingFeatureIds,
+  ) {
+    if (frames.length < 2) return List.filled(frames.length, 0.0);
+    final energy = List<double>.filled(frames.length, 0.0);
+    for (var i = 1; i < frames.length; i++) {
+      final prev = frames[i - 1].pose.features.values;
+      final curr = frames[i].pose.features.values;
+      var maxDelta = 0.0;
+      for (final id in movingFeatureIds) {
+        final a = prev[id];
+        final b = curr[id];
+        if (a == null || b == null || !a.valid || !b.valid) continue;
+        final delta = (a.value - b.value).abs();
+        final tolerance = _toleranceFor(a.kind);
+        final normalized = (delta / tolerance).clamp(0.0, 1.0);
+        if (normalized > maxDelta) maxDelta = normalized;
+      }
+      energy[i] = maxDelta;
+    }
+    return energy;
+  }
+
   /// Centered moving average for small-window noise smoothing.
   List<double> _smoothSeries(List<double> values, {required int window}) {
     if (values.length <= 1) return List.of(values);
@@ -438,6 +668,278 @@ class CustomPoseSequenceBuilder {
     final cleanStart = math.max(0, startIndex - leadIn);
     final cleanEnd = math.min(active.length, endAfterReturn);
     return _MovementClip(cleanStart, cleanEnd);
+  }
+
+  /// Split a recording into candidate motion regions separated by sustained
+  /// low-motion gaps. Each region is a [_MovementClip] (start, endExclusive).
+  /// Regions shorter than [minRegionLength] are dropped. This is used to
+  /// separate setup/exit motion (walking to/from the phone) from the actual
+  /// taught movement.
+  List<_MovementClip> _findMotionRegions(
+    List<double> smoothed, {
+    required double activeThreshold,
+    required int minConsecutiveActive,
+    required int minConsecutiveInactive,
+    required int minRegionLength,
+  }) {
+    final active = smoothed.map((value) => value > activeThreshold).toList();
+    final regions = <_MovementClip>[];
+    var i = 0;
+    while (i < active.length) {
+      // Skip inactive frames.
+      while (i < active.length && !active[i]) {
+        i++;
+      }
+      if (i >= active.length) break;
+      // Find the start of a sustained active run.
+      var runStart = i;
+      var runLen = 0;
+      while (i < active.length && active[i]) {
+        runLen++;
+        i++;
+      }
+      if (runLen >= minConsecutiveActive) {
+        // Extend past short inactive gaps within the region.
+        var lastActive = i - 1;
+        var inactiveRun = 0;
+        while (i < active.length) {
+          if (active[i]) {
+            lastActive = i;
+            inactiveRun = 0;
+          } else {
+            inactiveRun++;
+            if (inactiveRun >= minConsecutiveInactive) break;
+          }
+          i++;
+        }
+        final end = lastActive + 1;
+        if (end - runStart >= minRegionLength) {
+          regions.add(_MovementClip(runStart, end));
+        }
+      }
+    }
+    return regions;
+  }
+
+  /// Camera-approach penalty: returns a value in [0, 1] where 0 means no
+  /// monotonic body-scale change and 1 means a large consistent scale change
+  /// across the region (person walking toward/away from camera). This is a
+  /// soft penalty, not a hard reject — normal movements like squats that
+  /// change scale moderately will get a small penalty.
+  double _cameraApproachPenalty(List<PoseSequenceFrame> frames) {
+    if (frames.length < 4) return 0.0;
+    final scales = frames
+        .map((f) => f.pose.scale)
+        .where((s) => s.isFinite)
+        .toList();
+    if (scales.length < 4) return 0.0;
+    final first = scales.first;
+    final last = scales.last;
+    if (first <= 0) return 0.0;
+    final totalChange = ((last - first) / first).abs();
+    // Only penalize large scale changes (> 15% of initial scale).
+    if (totalChange < 0.15) return 0.0;
+    // Check monotonicity: how consistently does the scale move in one direction?
+    var increasing = 0;
+    var decreasing = 0;
+    for (var i = 1; i < scales.length; i++) {
+      if (scales[i] > scales[i - 1]) {
+        increasing++;
+      } else if (scales[i] < scales[i - 1]) {
+        decreasing++;
+      }
+    }
+    final monotonicity = math.max(increasing, decreasing) / (scales.length - 1);
+    // Penalty = totalChange * monotonicity, capped at 1.0.
+    return (totalChange * monotonicity).clamp(0.0, 1.0);
+  }
+
+  /// Select the shared taught-movement region across demonstrations.
+  ///
+  /// For each demo, candidate motion regions are extracted. Each candidate
+  /// is resampled and compared against candidates from other demos using
+  /// [_sequenceSimilarity]. The combination with the strongest mutual
+  /// similarity is selected. A camera-approach penalty and a position
+  /// tie-breaker (prefer regions away from recording edges) are applied.
+  ///
+  /// Returns null if region selection is uncertain (fewer than 2 demos have
+  /// multiple candidate regions, or best score is too low), signalling the
+  /// caller to fall back to the current single-clip behavior.
+  _RegionSelection? _selectSharedRegions(
+    List<_CleanedDemoCandidate> demos,
+    Set<String> sharedFeatureIds,
+  ) {
+    if (demos.length < 2) return null;
+    final featureIds = sharedFeatureIds.toList()..sort();
+    if (featureIds.isEmpty) return null;
+
+    // Resample each candidate region for comparison.
+    _SampledFrame resampleRegion(List<PoseSequenceFrame> frames) {
+      // Single-frame summary: average feature values across the region.
+      final features = <String, _SampledFeature>{};
+      for (final id in featureIds) {
+        final values = <double>[];
+        final confidences = <double>[];
+        String? kind;
+        for (final frame in frames) {
+          final f = frame.pose.features.values[id];
+          if (f == null || !f.valid || !f.value.isFinite) continue;
+          values.add(f.value);
+          confidences.add(f.confidence);
+          kind ??= f.kind;
+        }
+        if (values.isEmpty || kind == null) continue;
+        features[id] = _SampledFeature(
+          value: _average(values),
+          confidence: _average(confidences),
+          kind: kind,
+        );
+      }
+      return _SampledFrame(position: 0.5, features: features);
+    }
+
+    // Build candidate lists: (demoIndex, regionIndex, region, resampled, penalty, centerPosition)
+    final candidates = <List<_RegionCandidate>>[];
+    for (var di = 0; di < demos.length; di++) {
+      final demo = demos[di];
+      final demoCandidates = <_RegionCandidate>[];
+      for (var ri = 0; ri < demo.regions.length; ri++) {
+        final region = demo.frames.sublist(
+          demo.regions[ri].start,
+          demo.regions[ri].end,
+        );
+        if (region.length < 3) continue;
+        final penalty = _cameraApproachPenalty(region);
+        final centerPos =
+            (demo.regions[ri].start + demo.regions[ri].end) /
+            2 /
+            demo.frames.length;
+        demoCandidates.add(
+          _RegionCandidate(
+            demoIndex: di,
+            regionIndex: ri,
+            clip: demo.regions[ri],
+            resampled: resampleRegion(region),
+            cameraPenalty: penalty,
+            centerPosition: centerPos,
+          ),
+        );
+      }
+      if (demoCandidates.isEmpty) return null;
+      candidates.add(demoCandidates);
+    }
+
+    // Find the combination with the best mutual similarity.
+    // For efficiency with 3 demos, iterate over all combinations.
+    // For each combination, compute average pairwise similarity minus
+    // camera-approach penalties, plus a small position tie-breaker.
+    var bestScore = -1.0;
+    var bestCombo = <int>[];
+    void recurse(int demoIdx, List<int> current) {
+      if (demoIdx == candidates.length) {
+        // Compute average pairwise similarity.
+        var simSum = 0.0;
+        var pairCount = 0;
+        for (var a = 0; a < current.length; a++) {
+          for (var b = a + 1; b < current.length; b++) {
+            final ca = candidates[a][current[a]];
+            final cb = candidates[b][current[b]];
+            final sim = _sampledFrameSimilarity(
+              ca.resampled,
+              cb.resampled,
+              featureIds,
+            );
+            simSum += sim;
+            pairCount++;
+          }
+        }
+        final avgSim = pairCount > 0 ? simSum / pairCount : 0.0;
+        // Camera-approach penalty: average across selected candidates.
+        var penaltySum = 0.0;
+        for (final idx in current.asMap().entries) {
+          penaltySum += candidates[idx.key][idx.value].cameraPenalty;
+        }
+        final avgPenalty = penaltySum / current.length;
+        // Position tie-breaker: prefer regions away from edges (center ~0.5).
+        var posBonus = 0.0;
+        for (final idx in current.asMap().entries) {
+          final cp = candidates[idx.key][idx.value].centerPosition;
+          posBonus += 1.0 - (2 * cp - 1).abs(); // 1.0 at center, 0.0 at edges
+        }
+        posBonus /= current.length;
+        // Final score: similarity - camera penalty + small position bonus.
+        final score = avgSim * (1.0 - 0.3 * avgPenalty) + 0.05 * posBonus;
+        if (score > bestScore) {
+          bestScore = score;
+          bestCombo = List.of(current);
+        }
+        return;
+      }
+      for (var ri = 0; ri < candidates[demoIdx].length; ri++) {
+        recurse(demoIdx + 1, [...current, ri]);
+      }
+    }
+
+    recurse(0, []);
+    if (bestCombo.isEmpty || bestScore < 0) return null;
+
+    // Build selection result.
+    final selected = <_SelectedRegion>[];
+    for (var di = 0; di < demos.length; di++) {
+      final candidate = candidates[di][bestCombo[di]];
+      selected.add(
+        _SelectedRegion(demoIndex: di, clip: candidate.clip, score: bestScore),
+      );
+    }
+    return _RegionSelection(
+      selected: selected,
+      score: bestScore,
+      candidateCounts: candidates.map((c) => c.length).toList(),
+    );
+  }
+
+  /// Lightweight similarity between two single-frame region summaries.
+  /// Uses the same start-relative coord comparison as [_sequenceSimilarity].
+  double _sampledFrameSimilarity(
+    _SampledFrame a,
+    _SampledFrame b,
+    List<String> featureIds,
+  ) {
+    final aBaseline = <String, double>{};
+    final bBaseline = <String, double>{};
+    for (final id in featureIds) {
+      final aFirst = a.features[id];
+      final bFirst = b.features[id];
+      if (aFirst != null && aFirst.kind == 'coord') {
+        aBaseline[id] = aFirst.value;
+      }
+      if (bFirst != null && bFirst.kind == 'coord') {
+        bBaseline[id] = bFirst.value;
+      }
+    }
+    var weighted = 0.0;
+    var weightTotal = 0.0;
+    for (final id in featureIds) {
+      final left = a.features[id];
+      final right = b.features[id];
+      if (left == null || right == null) continue;
+      final tolerance = _toleranceFor(left.kind);
+      final leftValue = left.kind == 'coord' && aBaseline.containsKey(id)
+          ? left.value - aBaseline[id]!
+          : left.value;
+      final rightValue = right.kind == 'coord' && bBaseline.containsKey(id)
+          ? right.value - bBaseline[id]!
+          : right.value;
+      final contribution = (1 - (leftValue - rightValue).abs() / tolerance)
+          .clamp(0.0, 1.0);
+      final weight = math
+          .min(left.confidence, right.confidence)
+          .clamp(0.0, 1.0);
+      weighted += contribution * weight;
+      weightTotal += weight;
+    }
+    if (weightTotal <= 0) return 0;
+    return (weighted / weightTotal).clamp(0.0, 1.0);
   }
 
   /// Rebuild frames with position driven by a blend of cumulative motion
@@ -1331,26 +1833,61 @@ class _CleanedDemonstration {
 }
 
 class CleaningDiagnostics {
-  const CleaningDiagnostics({
+  CleaningDiagnostics({
     required this.rawFrameCount,
-    required this.cleanedFrameCount,
-    required this.cleanStartIndex,
-    required this.cleanEndIndex,
+    required int cleanedFrameCount,
+    required int cleanStartIndex,
+    required int cleanEndIndex,
     required this.movingFeatureCount,
-  });
+  }) {
+    _cleanedFrameCount = cleanedFrameCount;
+    _cleanStartIndex = cleanStartIndex;
+    _cleanEndIndex = cleanEndIndex;
+  }
 
   final int rawFrameCount;
-  final int cleanedFrameCount;
-  final int cleanStartIndex;
-  final int cleanEndIndex;
   final int movingFeatureCount;
+
+  void _setRegionSelection({
+    required int candidateRegionCount,
+    required int selectedRegionStartIndex,
+    required int selectedRegionEndIndex,
+    required double selectedRegionScore,
+    required bool crossDemoRegionSelectionUsed,
+    int? cleanedFrameCount,
+    int? cleanStartIndex,
+    int? cleanEndIndex,
+  }) {
+    _regionCandidateCount = candidateRegionCount;
+    _regionStartIndex = selectedRegionStartIndex;
+    _regionEndIndex = selectedRegionEndIndex;
+    _regionScore = selectedRegionScore;
+    _regionSelectionUsed = crossDemoRegionSelectionUsed;
+    if (cleanedFrameCount != null) _cleanedFrameCount = cleanedFrameCount;
+    if (cleanStartIndex != null) _cleanStartIndex = cleanStartIndex;
+    if (cleanEndIndex != null) _cleanEndIndex = cleanEndIndex;
+  }
+
+  int _regionCandidateCount = 1;
+  int _regionStartIndex = 0;
+  int _regionEndIndex = 0;
+  double _regionScore = 0;
+  bool _regionSelectionUsed = false;
+  late int _cleanedFrameCount;
+  late int _cleanStartIndex;
+  late int _cleanEndIndex;
 
   Map<String, dynamic> toJson() => {
     'rawFrameCount': rawFrameCount,
-    'cleanedFrameCount': cleanedFrameCount,
-    'cleanStartIndex': cleanStartIndex,
-    'cleanEndIndex': cleanEndIndex,
+    'cleanedFrameCount': _cleanedFrameCount,
+    'cleanStartIndex': _cleanStartIndex,
+    'cleanEndIndex': _cleanEndIndex,
     'movingFeatureCount': movingFeatureCount,
+    'candidateRegionCount': _regionCandidateCount,
+    'selectedRegionStartIndex': _regionStartIndex,
+    'selectedRegionEndIndex': _regionEndIndex,
+    'selectedRegionScore': _jsonDouble(_regionScore),
+    'crossDemoRegionSelectionUsed': _regionSelectionUsed,
   };
 }
 
@@ -1422,4 +1959,65 @@ class _GeneratedThresholds {
   final double minimumValidFeatureRatio;
   final double minimumVisibility;
   final int cooldownMs;
+}
+
+/// A candidate motion region within a single demonstration, used during
+/// cross-demo region selection to identify the shared taught movement.
+class _RegionCandidate {
+  const _RegionCandidate({
+    required this.demoIndex,
+    required this.regionIndex,
+    required this.clip,
+    required this.resampled,
+    required this.cameraPenalty,
+    required this.centerPosition,
+  });
+
+  final int demoIndex;
+  final int regionIndex;
+  final _MovementClip clip;
+  final _SampledFrame resampled;
+  final double cameraPenalty;
+  final double centerPosition;
+}
+
+/// A selected region for one demonstration after cross-demo matching.
+class _SelectedRegion {
+  const _SelectedRegion({
+    required this.demoIndex,
+    required this.clip,
+    required this.score,
+  });
+
+  final int demoIndex;
+  final _MovementClip clip;
+  final double score;
+}
+
+/// Result of cross-demo region selection.
+class _RegionSelection {
+  const _RegionSelection({
+    required this.selected,
+    required this.score,
+    required this.candidateCounts,
+  });
+
+  final List<_SelectedRegion> selected;
+  final double score;
+  final List<int> candidateCounts;
+}
+
+/// A demonstration's first-pass clip split into candidate motion regions.
+class _CleanedDemoCandidate {
+  const _CleanedDemoCandidate({
+    required this.index,
+    required this.frames,
+    required this.regions,
+    required this.movingFeatureIds,
+  });
+
+  final int index;
+  final List<PoseSequenceFrame> frames;
+  final List<_MovementClip> regions;
+  final Set<String> movingFeatureIds;
 }
