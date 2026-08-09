@@ -267,6 +267,10 @@ abstract class MotionValidator {
   );
 }
 
+/// Authoritative validator factory for each preset movement.
+/// This switch and [supportedMovementDefinitions] must stay in sync — every
+/// entry in [supportedMovementDefinitions] must have a case here.
+/// [verifyValidatorDispatchComplete] verifies this invariant.
 MotionValidator createMotionValidator(
   AiMotionActivity activity,
   int targetValue,
@@ -281,6 +285,16 @@ MotionValidator createMotionValidator(
   AiMotionActivity.armRaises => ArmRaisesValidator(targetValue: targetValue),
   AiMotionActivity.plankHold => PlankHoldValidator(targetValue: targetValue),
 };
+
+/// Verifies that every [supportedMovementDefinitions] entry has a matching
+/// case in [createMotionValidator]. Throws if a movement is registered in
+/// the definitions list but has no validator constructor.
+/// Call this from tests to catch registration drift.
+void verifyValidatorDispatchComplete() {
+  for (final definition in supportedMovementDefinitions) {
+    createMotionValidator(definition.activity, 1);
+  }
+}
 
 class RepCounterStateMachine {
   MovementPhase _stableState = MovementPhase.unknown;
