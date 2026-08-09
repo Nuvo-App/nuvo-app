@@ -249,13 +249,8 @@ class VerifierRuntimeResolver {
   MovementDefinition? _movementDefinitionForEligibility(
     CameraVerificationEligibility eligibility,
   ) {
-    final activity = eligibility.movementDefinition;
-    if (!eligibility.isCameraVerifiable || activity == null) return null;
-    for (final definition in supportedMovementDefinitions) {
-      if (definition.activity.backendValue == activity.type.backendValue) {
-        return definition;
-      }
-    }
-    return null;
+    final movementType = eligibility.movementType;
+    if (!eligibility.isCameraVerifiable || movementType == null) return null;
+    return movementDefinitionForType(movementType);
   }
 }
