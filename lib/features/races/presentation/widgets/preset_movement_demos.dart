@@ -10,44 +10,48 @@ import 'nuvo_character_painter.dart';
 /// movement's distinct phases (down/up, start/active, etc.) and loops.
 
 // ── Pushups ───────────────────────────────────────────────────────────────────
-// PushupsValidator: "down" = elbow angle < 110°, "up" = elbow angle > 160°.
-// Front view: body horizontal, arms pushing up and down.
+// PushupsValidator: "down" = elbow angle < 112°, "up" = elbow angle > 150°.
+// Front view: body horizontal, arms pushing up and down. Wrists stay on
+// the ground; the body rises and falls.
 
 class _PushupsKeyPoses {
-  // Top position — arms extended, body up.
+  // Top position — arms extended, body up. Body is horizontal: head,
+  // shoulders, hips, knees, ankles all at similar Y. Arms are vertical
+  // from shoulders down to wrists on the ground.
   static const top = NuvoCharacterPose(
-    head: Offset(0.50, 0.30),
-    neck: Offset(0.50, 0.32),
-    leftShoulder: Offset(0.43, 0.33),
-    rightShoulder: Offset(0.57, 0.33),
-    leftElbow: Offset(0.41, 0.40),
-    rightElbow: Offset(0.59, 0.40),
-    leftWrist: Offset(0.40, 0.46),
-    rightWrist: Offset(0.60, 0.46),
-    leftHip: Offset(0.46, 0.34),
-    rightHip: Offset(0.54, 0.34),
-    leftKnee: Offset(0.46, 0.36),
-    rightKnee: Offset(0.54, 0.36),
-    leftAnkle: Offset(0.46, 0.38),
-    rightAnkle: Offset(0.54, 0.38),
+    head: Offset(0.50, 0.22),
+    neck: Offset(0.50, 0.23),
+    leftShoulder: Offset(0.43, 0.24),
+    rightShoulder: Offset(0.57, 0.24),
+    leftElbow: Offset(0.43, 0.32),
+    rightElbow: Offset(0.57, 0.32),
+    leftWrist: Offset(0.43, 0.40),
+    rightWrist: Offset(0.57, 0.40),
+    leftHip: Offset(0.46, 0.25),
+    rightHip: Offset(0.54, 0.25),
+    leftKnee: Offset(0.46, 0.26),
+    rightKnee: Offset(0.54, 0.26),
+    leftAnkle: Offset(0.46, 0.27),
+    rightAnkle: Offset(0.54, 0.27),
   );
 
-  // Bottom position — chest lowered, elbows bent.
+  // Bottom position — chest lowered, elbows bent out to sides. Body
+  // drops by ~0.10; wrists stay fixed on the ground.
   static const bottom = NuvoCharacterPose(
-    head: Offset(0.50, 0.38),
-    neck: Offset(0.50, 0.39),
-    leftShoulder: Offset(0.43, 0.40),
-    rightShoulder: Offset(0.57, 0.40),
-    leftElbow: Offset(0.40, 0.36),
-    rightElbow: Offset(0.60, 0.36),
-    leftWrist: Offset(0.40, 0.46),
-    rightWrist: Offset(0.60, 0.46),
-    leftHip: Offset(0.46, 0.41),
-    rightHip: Offset(0.54, 0.41),
-    leftKnee: Offset(0.46, 0.42),
-    rightKnee: Offset(0.54, 0.42),
-    leftAnkle: Offset(0.46, 0.43),
-    rightAnkle: Offset(0.54, 0.43),
+    head: Offset(0.50, 0.32),
+    neck: Offset(0.50, 0.33),
+    leftShoulder: Offset(0.43, 0.34),
+    rightShoulder: Offset(0.57, 0.34),
+    leftElbow: Offset(0.38, 0.30),
+    rightElbow: Offset(0.62, 0.30),
+    leftWrist: Offset(0.43, 0.40),
+    rightWrist: Offset(0.57, 0.40),
+    leftHip: Offset(0.46, 0.35),
+    rightHip: Offset(0.54, 0.35),
+    leftKnee: Offset(0.46, 0.36),
+    rightKnee: Offset(0.54, 0.36),
+    leftAnkle: Offset(0.46, 0.37),
+    rightAnkle: Offset(0.54, 0.37),
   );
 
   static const poses = [top, bottom, top];
@@ -246,7 +250,7 @@ class _HighKneesKeyPoses {
     rightAnkle: Offset(0.56, 0.76),
   );
 
-  // Right knee up — above hip line.
+  // Right knee up — clearly above hip line (y=0.32 vs hip y=0.40).
   static const rightKneeUp = NuvoCharacterPose(
     head: Offset(0.50, 0.08),
     neck: Offset(0.50, 0.15),
@@ -259,12 +263,12 @@ class _HighKneesKeyPoses {
     leftHip: Offset(0.45, 0.40),
     rightHip: Offset(0.55, 0.40),
     leftKnee: Offset(0.44, 0.58),
-    rightKnee: Offset(0.58, 0.38),
+    rightKnee: Offset(0.58, 0.32),
     leftAnkle: Offset(0.44, 0.76),
-    rightAnkle: Offset(0.56, 0.50),
+    rightAnkle: Offset(0.56, 0.44),
   );
 
-  // Left knee up — above hip line.
+  // Left knee up — clearly above hip line (y=0.32 vs hip y=0.40).
   static const leftKneeUp = NuvoCharacterPose(
     head: Offset(0.50, 0.08),
     neck: Offset(0.50, 0.15),
@@ -276,9 +280,9 @@ class _HighKneesKeyPoses {
     rightWrist: Offset(0.66, 0.30),
     leftHip: Offset(0.45, 0.40),
     rightHip: Offset(0.55, 0.40),
-    leftKnee: Offset(0.42, 0.38),
+    leftKnee: Offset(0.42, 0.32),
     rightKnee: Offset(0.56, 0.58),
-    leftAnkle: Offset(0.44, 0.50),
+    leftAnkle: Offset(0.44, 0.44),
     rightAnkle: Offset(0.56, 0.76),
   );
 
