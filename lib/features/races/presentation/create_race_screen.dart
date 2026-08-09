@@ -87,9 +87,11 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
   void _parseIdea() {
     final parsed = draftFromIdea(_ideaController.text);
     if (parsed == null) {
+      final names = motionActivityDefinitions
+          .map((d) => d.title)
+          .join(', ');
       setState(() {
-        _error =
-            'Nuvo can verify Pushups, Squats, Jumping Jacks, Lunges, and Plank.';
+        _error = 'Nuvo can verify $names.';
       });
       return;
     }
