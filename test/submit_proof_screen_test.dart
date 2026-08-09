@@ -10,9 +10,11 @@ import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
+import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/presentation/race_controller.dart';
 import 'package:nuvo/features/races/presentation/submit_proof_screen.dart';
-import 'package:nuvo/features/races/presentation/widgets/arm_raises_animation.dart';
+import 'package:nuvo/features/races/presentation/widgets/movement_demo.dart';
+import 'package:nuvo/features/races/presentation/widgets/preset_movement_demos.dart';
 
 Race _armRaisesRace() => const Race(
   id: 'race-arm',
@@ -90,7 +92,7 @@ Widget _buildTestApp() {
 
 void main() {
   testWidgets(
-    'SubmitProofScreen shows ArmRaisesAnimation BEFORE Begin for arm_raises race',
+    'SubmitProofScreen shows movement animation BEFORE Begin for arm_raises race',
     (tester) async {
       await tester.pumpWidget(_buildTestApp());
 
@@ -99,7 +101,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(ArmRaisesAnimation), findsOneWidget);
+      expect(find.byType(NuvoMovementAnimation), findsOneWidget);
       expect(find.text('Begin'), findsOneWidget);
       expect(find.text('Do this'), findsOneWidget);
       expect(find.text('Arm Raises'), findsOneWidget);
@@ -119,10 +121,25 @@ void main() {
   });
 
   testWidgets(
-    'ArmRaisesAnimation is NOT rendered inside the AI Motion screen',
+    'movement animation is NOT rendered inside the AI Motion screen',
     (tester) async {
       await tester.pumpWidget(const MaterialApp(home: _AiMotionPlaceholder()));
-      expect(find.byType(ArmRaisesAnimation), findsNothing);
+      expect(find.byType(NuvoMovementAnimation), findsNothing);
     },
   );
+
+  group('preset movement demo coverage', () {
+    test('every supported preset movement has a pre-verify demo', () {
+      for (final definition in motionActivityDefinitions) {
+        final demo = movementDemoForType(definition.type);
+        expect(
+          demo,
+          isNotNull,
+          reason: '${definition.type.name} has no pre-verify MovementDemo',
+        );
+        expect(demo!.poses.length, greaterThan(1),
+            reason: '${definition.type.name} demo needs at least 2 poses');
+      }
+    });
+  });
 }

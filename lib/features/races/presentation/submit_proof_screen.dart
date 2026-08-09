@@ -11,10 +11,10 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
-import '../domain/motion_activity.dart';
 import '../domain/race_display.dart';
 import 'race_controller.dart';
-import 'widgets/arm_raises_animation.dart';
+import 'widgets/movement_demo.dart';
+import 'widgets/preset_movement_demos.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
   const SubmitProofScreen({super.key, required this.raceId});
@@ -47,11 +47,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
       final eligibility = resolveCameraVerification(race);
-      // Arm Raises has a pre-verify movement demo before the camera opens.
-      // Other camera-verifiable presets skip straight to the AI Motion screen.
+      // Show a pre-verify movement demo before the camera opens when a
+      // demo is available for the movement. Other camera-verifiable presets
+      // skip straight to the AI Motion screen.
       final hasPreVerifyDemo =
           eligibility.isCameraVerifiable &&
-          eligibility.movementType == MotionActivityType.armRaises;
+          eligibility.movementType != null &&
+          movementDemoForType(eligibility.movementType!) != null;
       if (eligibility.isCameraVerifiable && !hasPreVerifyDemo && mounted) {
         context.go('/race/${widget.raceId}/proof/ai-motion');
         return;
@@ -221,9 +223,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   List<Widget> _formContent(Race race) {
     final eligibility = resolveCameraVerification(race);
 
-    // Dedicated pre-verify movement demo for Arm Raises.
+    // Show pre-verify movement demo when a demo is available.
     if (eligibility.isCameraVerifiable &&
-        eligibility.movementType == MotionActivityType.armRaises) {
+        eligibility.movementType != null &&
+        movementDemoForType(eligibility.movementType!) != null) {
       return _preVerifyContent(race, eligibility);
     }
 
@@ -271,6 +274,11 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   ) {
     final movementName =
         eligibility.movementDefinition?.title ?? race.displayTitle;
+    final demo = eligibility.movementType != null
+        ? movementDemoForType(eligibility.movementType!)
+        : null;
+    final framingLabel =
+        eligibility.movementDefinition?.framingLabel ?? 'Full body inside frame';
 
     return [
       _backRow(),
@@ -297,17 +305,17 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       const SizedBox(height: 24),
 
       // Large looping movement animation — the visual focus
-      const SizedBox(
+      SizedBox(
         height: 340,
         width: double.infinity,
-        child: ArmRaisesAnimation(),
+        child: NuvoMovementAnimation(demo: demo!),
       ),
 
       const SizedBox(height: 28),
 
       // Short camera/setup instruction
       Text(
-        'Raise both arms overhead, then bring them back down.',
+        framingLabel,
         style: AppTextStyles.bodyLarge.copyWith(
           color: NuvoColors.navy,
           height: 1.4,
@@ -316,7 +324,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       ),
       const SizedBox(height: 10),
       Text(
-        'Stand where Nuvo can see your upper body and arms.',
+        'Stand where Nuvo can see your whole body.',
         style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         textAlign: TextAlign.center,
       ),
