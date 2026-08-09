@@ -54,6 +54,8 @@ void main() {
       'squats': AiMotionActivity.squats,
       'lunges': AiMotionActivity.lunges,
       'plank_hold': AiMotionActivity.plankHold,
+      'high_knees': AiMotionActivity.highKnees,
+      'arm_raises': AiMotionActivity.armRaises,
     };
 
     for (final entry in cases.entries) {
@@ -241,20 +243,20 @@ void main() {
 
       // Rep #5 and immediately rep #6 arrive in the same run of frames.
       for (var i = 0; i < 3; i++) {
-          validator.update(closedFrame());
-        }
+        validator.update(closedFrame());
+      }
       for (var i = 0; i < 3; i++) {
-          validator.update(openFrame());
-        }
+        validator.update(openFrame());
+      }
       for (var i = 0; i < 3; i++) {
-          validator.update(closedFrame());
-        }
+        validator.update(closedFrame());
+      }
       for (var i = 0; i < 3; i++) {
-          validator.update(openFrame());
-        }
+        validator.update(openFrame());
+      }
       for (var i = 0; i < 3; i++) {
-          validator.update(closedFrame());
-        }
+        validator.update(closedFrame());
+      }
 
       final result = validator.finish();
       expect(result.detectedReps, 5);

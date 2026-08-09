@@ -65,7 +65,15 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       if (code == null) {
         try {
           code = await controller.createInviteCode(widget.raceId);
-        } catch (_) {}
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Couldn't create invite code. Try again."),
+              ),
+            );
+          }
+        }
       }
       if (mounted) {
         setState(() {
@@ -108,7 +116,12 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
           });
         }
       } catch (_) {
-        if (mounted) setState(() => _searching = false);
+        if (mounted) {
+          setState(() => _searching = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Search isn't working right now.")),
+          );
+        }
       }
     });
   }

@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/animated_race_track.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
-import '../../../core/widgets/track_side_orbit.dart';
+import '../../../core/widgets/nuvo_leaderboard.dart';
+import '../../../core/widgets/nuvo_race_strip.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -21,8 +23,6 @@ const _kMuted = Color(0xFFC5CBD5);
 const _kWarmWhite = Color(0xFFFAF9F6);
 const _kDarkText = Color(0xFF152238);
 const _kMutedText = Color(0xFF7F8795);
-const _kSeparator = Color(0xFFDDE1E6);
-const _kDarkProgress = Color(0xFF414A59);
 
 const bool _kPreviewMode = bool.fromEnvironment('NUVO_TRACKSIDE_PREVIEW');
 
@@ -36,7 +36,6 @@ class ArenaScreen extends ConsumerStatefulWidget {
 }
 
 class _ArenaScreenState extends ConsumerState<ArenaScreen> {
-  String? _selectedParticipantId;
   var _selectedBoardIndex = 0;
   late final PageController _pageController;
 
@@ -101,32 +100,32 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final totalGoal = race?.targetValue ?? progressParts.$2;
     final currentValue = myPart?.progressValue ?? progressParts.$1;
     final currentRank = myPart?.rank ?? activeBoard.myRank ?? 1;
+    final raceStrips = _buildRaceStripData(boards);
     final pageChildren = List<Widget>.generate(boards.length, (index) {
       final board = boards[index];
       final boardRace = cameraRaceById[board.id];
       final boardParticipants = boardRace?.participants ?? [];
       final boardParts = _parseValue(board.progressLabel);
       final boardTotalGoal = boardRace?.targetValue ?? boardParts.$2;
-      final boardMyPart =
-          boardParticipants.where((p) => p.userId == myUserId).firstOrNull;
+      final boardMyPart = boardParticipants
+          .where((p) => p.userId == myUserId)
+          .firstOrNull;
       final boardCurrentValue = boardMyPart?.progressValue ?? boardParts.$1;
       final boardCurrentRank = boardMyPart?.rank ?? board.myRank ?? 1;
-      final boardOrbitParticipants = _buildOrbitParticipants(
+      final competitors = _buildRaceCompetitors(
         participants: boardParticipants,
         miniLeaderboard: board.miniLeaderboard,
         myUserId: myUserId,
-      );
-      return TrackSideOrbit(
-        scale: scale,
         totalGoal: boardTotalGoal,
-        currentUserValue: boardCurrentValue,
-        currentUserRank: boardCurrentRank,
-        participants: boardOrbitParticipants,
-        selectedParticipantId:
-            selectedIndex == index ? _selectedParticipantId : null,
-        onParticipantTap: (id) => setState(() {
-          _selectedParticipantId = id;
-        }),
+      );
+      return Center(
+        child: NuvoRaceTrack(
+          competitors: competitors,
+          totalGoal: boardTotalGoal,
+          currentValue: boardCurrentValue,
+          currentRank: boardCurrentRank,
+          size: 220 * scale,
+        ),
       );
     });
 
@@ -151,7 +150,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   'calculatedHeroHeight': (464.0 * scale).toStringAsFixed(1),
                   'calculatedPanelMinHeight': panelMinHeight.toStringAsFixed(1),
                   'calculatedNavigationHeight':
-                      (75.0 * scale + MediaQuery.paddingOf(context).bottom).toStringAsFixed(1),
+                      (75.0 * scale + MediaQuery.paddingOf(context).bottom)
+                          .toStringAsFixed(1),
                   'calculatedBottomReserve': bottomPad.toStringAsFixed(1),
                   'arenaScreen': TrackSideLayoutDiagnostics.box(
                     TrackSideLayoutKeys.arenaScreen,
@@ -186,51 +186,59 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       ? constraints.maxHeight
                       : canvasHeight,
                 ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-              _TrackSideHero(
-                scale: scale,
-                pageController: _pageController,
-                pageCount: boards.length,
-                pageBuilder: (index) => pageChildren[index],
-                onPageChanged: (index) => setState(() {
-                  _selectedBoardIndex = index;
-                  _selectedParticipantId = null;
-                }),
-                raceIndex: selectedIndex,
-                raceCount: boards.length,
-                racerCount: activeBoard.racerCount ?? 0,
-                totalGoal: totalGoal,
-                currentValue: currentValue,
-                currentRank: currentRank,
-                subtitle: 'First to $totalGoal Pushups',
-                onPreviousRace: selectedIndex > 0
-                    ? () => _pageController.previousPage(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOutCubic,
-                        )
-                    : null,
-                onNextRace: selectedIndex < boards.length - 1
-                    ? () => _pageController.nextPage(
-                          duration: const Duration(milliseconds: 250),
-                          curve: Curves.easeOutCubic,
-                        )
-                    : null,
-                onSubmit: () => _handlePrimaryAction(activeBoard, race),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        16 * scale,
+                        12 * scale,
+                        16 * scale,
+                        8 * scale,
+                      ),
+                      child: NuvoRaceStripRail(
+                        races: raceStrips,
+                        selectedId: activeBoard.id,
+                        onTap: (data) {
+                          final index = boards.indexWhere(
+                            (b) => b.id == data.id,
+                          );
+                          if (index >= 0 && index != selectedIndex) {
+                            _pageController.animateToPage(
+                              index,
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeOutCubic,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    _TrackSideHero(
+                      scale: scale,
+                      pageController: _pageController,
+                      pageCount: boards.length,
+                      pageBuilder: (index) => pageChildren[index],
+                      onPageChanged: (index) => setState(() {
+                        _selectedBoardIndex = index;
+                      }),
+                      totalGoal: totalGoal,
+                      currentValue: currentValue,
+                      currentRank: currentRank,
+                      subtitle: 'First to $totalGoal Pushups',
+                      onSubmit: () => _handlePrimaryAction(activeBoard, race),
+                    ),
+                    _StandingsAndActivityPanel(
+                      scale: scale,
+                      minHeight: panelMinHeight,
+                      board: activeBoard,
+                      race: race,
+                      myUserId: myUserId,
+                      activity: snapshot.activity,
+                    ),
+                    SizedBox(height: bottomPad),
+                  ],
+                ),
               ),
-              _StandingsAndActivityPanel(
-                scale: scale,
-                minHeight: panelMinHeight,
-                board: activeBoard,
-                race: race,
-                myUserId: myUserId,
-                activity: snapshot.activity,
-              ),
-                  SizedBox(height: bottomPad),
-                ],
-              ),
-            ),
             );
           },
         ),
@@ -238,18 +246,20 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     );
   }
 
-  List<TrackSideOrbitParticipant> _buildOrbitParticipants({
+  List<RaceCompetitor> _buildRaceCompetitors({
     required List<RaceParticipant> participants,
     required List<ArenaMiniLeaderboardRow> miniLeaderboard,
     required String myUserId,
+    required int totalGoal,
   }) {
     final source = participants.isNotEmpty
         ? participants
         : miniLeaderboard.map((r) {
             final parts = _parseValue(r.value);
             final total = parts.$2;
-            final progressPercent =
-                total == 0 ? 0 : ((parts.$1 / total) * 100).round();
+            final progressPercent = total == 0
+                ? 0
+                : ((parts.$1 / total) * 100).round();
             return RaceParticipant(
               id: r.label,
               userId: r.isCurrentUser ? myUserId : r.label,
@@ -272,16 +282,33 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     return ranked.asMap().entries.map((e) {
       final p = e.value;
       final rank = p.rank ?? e.key + 1;
-      return TrackSideOrbitParticipant(
+      final progress = totalGoal == 0
+          ? 0.0
+          : (p.progressValue / totalGoal).clamp(0.0, 1.0);
+      return RaceCompetitor(
         id: p.userId.isNotEmpty ? p.userId : p.id,
         name: p.displayName,
         initials: _initials(p.displayName),
+        progress: progress,
         rank: rank,
-        progressValue: p.progressValue,
-        photoUrl: p.profilePhotoUrl,
+        avatarImageUrl: p.profilePhotoUrl,
         isCurrentUser: p.userId == myUserId || p.id == myUserId,
+        isLeader: rank == 1,
       );
     }).toList();
+  }
+
+  List<NuvoRaceStripData> _buildRaceStripData(List<ArenaBoard> boards) {
+    return boards
+        .map(
+          (board) => NuvoRaceStripData(
+            id: board.id,
+            title: board.title,
+            rank: board.myRank,
+            progressPercent: board.progressPercent,
+          ),
+        )
+        .toList();
   }
 
   (int, int) _parseValue(String value) {
@@ -326,15 +353,10 @@ class _TrackSideHero extends StatelessWidget {
     required this.pageCount,
     required this.pageBuilder,
     required this.onPageChanged,
-    required this.raceIndex,
-    required this.raceCount,
-    required this.racerCount,
     required this.totalGoal,
     required this.currentValue,
     required this.currentRank,
     required this.subtitle,
-    required this.onPreviousRace,
-    required this.onNextRace,
     required this.onSubmit,
   });
 
@@ -343,21 +365,14 @@ class _TrackSideHero extends StatelessWidget {
   final int pageCount;
   final Widget Function(int index) pageBuilder;
   final ValueChanged<int> onPageChanged;
-  final int raceIndex;
-  final int raceCount;
-  final int racerCount;
   final int totalGoal;
   final int currentValue;
   final int currentRank;
   final String subtitle;
-  final VoidCallback? onPreviousRace;
-  final VoidCallback? onNextRace;
   final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    final remaining = (totalGoal - currentValue).clamp(0, totalGoal);
-
     return SizedBox(
       key: TrackSideLayoutKeys.hero,
       height: 464 * scale,
@@ -414,19 +429,6 @@ class _TrackSideHero extends StatelessWidget {
               ),
             ),
           ),
-          if (raceCount > 1)
-            Positioned(
-              right: 12 * scale,
-              top: 54 * scale,
-              child: _RaceSwitcher(
-                scale: scale,
-                index: raceIndex,
-                count: raceCount,
-                racerCount: racerCount,
-                onPrevious: onPreviousRace,
-                onNext: onNextRace,
-              ),
-            ),
           Positioned(
             left: 0,
             right: 0,
@@ -460,76 +462,8 @@ class _TrackSideHero extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 155 * scale,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  '$currentValue',
-                  style: AppTextStyles.displayLarge.copyWith(
-                    color: _kBlue,
-                    fontSize: 64 * scale,
-                    fontWeight: FontWeight.w800,
-                    height: 1.0,
-                  ),
-                ),
-                SizedBox(width: 7 * scale),
-                Text(
-                  '/',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: _kMuted,
-                    fontSize: 24 * scale,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                SizedBox(width: 8 * scale),
-                Text(
-                  '$totalGoal',
-                  style: AppTextStyles.displayLarge.copyWith(
-                    color: _kWhite,
-                    fontSize: 56 * scale,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 234 * scale,
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '$remaining',
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: _kBlue,
-                      fontSize: 15 * scale,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  TextSpan(
-                    text: ' to the finish line',
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: _kMuted,
-                      fontSize: 15 * scale,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
-                ],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Positioned(
-            left: 22 * scale,
-            top: 176 * scale,
-            width: 346 * scale,
-            height: 200 * scale,
+            top: 150 * scale,
+            height: 230 * scale,
             child: PageView.builder(
               controller: pageController,
               onPageChanged: onPageChanged,
@@ -614,113 +548,6 @@ class _HeroBackground extends StatelessWidget {
   }
 }
 
-class _RaceSwitcher extends StatelessWidget {
-  const _RaceSwitcher({
-    required this.scale,
-    required this.index,
-    required this.count,
-    required this.racerCount,
-    required this.onPrevious,
-    required this.onNext,
-  });
-
-  final double scale;
-  final int index;
-  final int count;
-  final int racerCount;
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final width = 88 * scale;
-    final height = 28 * scale;
-    return Semantics(
-      label: 'Race ${index + 1} of $count, $racerCount participants',
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _kBlue.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8 * scale),
-                  border: Border.all(color: _kBlue.withValues(alpha: 0.18)),
-                ),
-              ),
-            ),
-            Text(
-              '${index + 1} / $count',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: const Color(0xFFE8F1FF),
-                fontSize: 11 * scale,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Positioned(
-              left: -4 * scale,
-              top: -8 * scale,
-              child: _RaceSwitchButton(
-                scale: scale,
-                icon: Icons.chevron_left_rounded,
-                onPressed: onPrevious,
-              ),
-            ),
-            Positioned(
-              right: -4 * scale,
-              top: -8 * scale,
-              child: _RaceSwitchButton(
-                scale: scale,
-                icon: Icons.chevron_right_rounded,
-                onPressed: onNext,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RaceSwitchButton extends StatelessWidget {
-  const _RaceSwitchButton({
-    required this.scale,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final double scale;
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = onPressed == null
-        ? const Color(0x557D8CA3)
-        : const Color(0xFFF4F8FF);
-    return GestureDetector(
-      onTap: onPressed,
-      behavior: HitTestBehavior.translucent,
-      child: SizedBox(
-        width: 44.0 * scale,
-        height: 44.0 * scale,
-        child: Center(
-          child: Icon(
-            icon,
-            size: 18 * scale,
-            color: color,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _StandingsAndActivityPanel extends StatelessWidget {
   const _StandingsAndActivityPanel({
     required this.scale,
@@ -740,7 +567,6 @@ class _StandingsAndActivityPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = board.miniLeaderboard;
     final firstActivity = activity.isNotEmpty ? activity.first : null;
 
     return Container(
@@ -783,20 +609,7 @@ class _StandingsAndActivityPanel extends StatelessWidget {
             ],
           ),
           SizedBox(height: 16 * scale),
-          for (var i = 0; i < rows.length; i++) ...[
-            _StandingRow(
-              scale: scale,
-              row: rows[i],
-              rank: i + 1,
-              myUserId: myUserId,
-            ),
-            if (i < rows.length - 1)
-              Container(
-                height: 16 * scale,
-                alignment: Alignment.center,
-                child: Divider(height: 1, color: _kSeparator.withValues(alpha: 0.65)),
-              ),
-          ],
+          NuvoLeaderboard(entries: _buildLeaderboardEntries(board)),
           SizedBox(height: 30 * scale),
           KeyedSubtree(
             key: TrackSideLayoutKeys.recentActivity,
@@ -842,98 +655,24 @@ class _StandingsAndActivityPanel extends StatelessWidget {
       ),
     );
   }
-}
 
-class _StandingRow extends StatelessWidget {
-  const _StandingRow({
-    required this.scale,
-    required this.row,
-    required this.rank,
-    required this.myUserId,
-  });
-
-  final double scale;
-  final ArenaMiniLeaderboardRow row;
-  final int rank;
-  final String myUserId;
-
-  @override
-  Widget build(BuildContext context) {
-    final isUser = row.isCurrentUser || row.label == 'You';
-    final displayName = isUser ? 'You' : row.label;
-    final parts = row.value.split('/').map((s) => s.trim()).toList();
-    final valueNum = int.tryParse(parts.first) ?? 0;
-    final totalPart = parts.length > 1 ? parts[1] : '100';
-    final totalLabel = totalPart.replaceAll(RegExp(r'[^0-9]'), '');
-    final valueLabel = parts.length == 2
-        ? '${parts[0]} / $totalLabel'
-        : row.value;
-    final totalNum = int.tryParse(totalLabel) ?? 100;
-    final progress = totalNum == 0 ? 0.0 : valueNum / totalNum;
-
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 1 * scale),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24 * scale,
-            child: Text(
-              '$rank',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: isUser ? _kBlue : _kMutedText,
-                fontSize: 13 * scale,
-                fontWeight: isUser ? FontWeight.w700 : FontWeight.w400,
-              ),
-            ),
-          ),
-          SizedBox(width: 8 * scale),
-          NuvoAvatar(
-            initials: _initials(displayName),
-            photoUrl: row.profilePhotoUrl,
-            size: 36 * scale,
-            bgColor: nuvoAvatarColorFor(row.label),
-            textColor: _kWhite,
-            borderColor: isUser ? _kBlue : NuvoColors.white,
-            borderWidth: isUser ? 2.0 : 1.5,
-          ),
-          SizedBox(width: 12 * scale),
-          Expanded(
-            child: Text(
-              displayName,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: isUser ? _kBlue : _kDarkText,
-                fontSize: 15 * scale,
-                fontWeight: isUser ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ),
-          SizedBox(width: 8 * scale),
-          Text(
-            valueLabel,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: isUser ? _kBlue : _kMutedText,
-              fontSize: 14 * scale,
-              fontWeight: isUser ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-          SizedBox(width: 16 * scale),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3 * scale),
-            child: SizedBox(
-              width: 70 * scale,
-              height: 6 * scale,
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: _kSeparator,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  isUser ? _kBlue : _kDarkProgress,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  List<NuvoLeaderboardEntry> _buildLeaderboardEntries(ArenaBoard board) {
+    final rows = board.miniLeaderboard;
+    return rows.asMap().entries.map((e) {
+      final row = e.value;
+      final rank = e.key + 1;
+      final isUser = row.isCurrentUser || row.label == 'You';
+      return NuvoLeaderboardEntry(
+        id: row.label,
+        rank: rank,
+        name: isUser ? 'You' : row.label,
+        value: row.value,
+        initials: _initials(isUser ? 'You' : row.label),
+        photoUrl: row.profilePhotoUrl,
+        isCurrentUser: isUser,
+        isLeader: rank == 1,
+      );
+    }).toList();
   }
 
   String _initials(String name) {

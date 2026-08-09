@@ -101,6 +101,46 @@ const motionActivityDefinitions = [
       'Keep your body straight.',
     ],
   ),
+  MotionActivityDefinition(
+    type: MotionActivityType.highKnees,
+    title: 'High Knees',
+    metric: RaceMetric.reps,
+    suggestedTargets: [10, 20, 40, 60],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['high knees', 'high knee', 'high-knees', 'highknees'],
+    proofLabel: 'high knees',
+    cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body visible.',
+      'Lift each knee above your hip.',
+      'Alternate legs cleanly.',
+    ],
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.armRaises,
+    title: 'Arm Raises',
+    metric: RaceMetric.reps,
+    suggestedTargets: [10, 20, 40, 60],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['arm raises', 'arm raise', 'arm-raises', 'armraises'],
+    proofLabel: 'arm raises',
+    cameraInstruction: 'Upper body front view',
+    instructions: [
+      'Keep your upper body and arms visible.',
+      'Raise both arms above your shoulders.',
+      'Lower both arms to finish the rep.',
+    ],
+  ),
 ];
 
 const supportedMotionActivityTypes = {
@@ -109,6 +149,8 @@ const supportedMotionActivityTypes = {
   MotionActivityType.jumpingJacks,
   MotionActivityType.plankHold,
   MotionActivityType.lunges,
+  MotionActivityType.highKnees,
+  MotionActivityType.armRaises,
 };
 
 bool isCameraVerifiedMotionActivity(MotionActivityDefinition? definition) =>
@@ -167,6 +209,14 @@ MotionActivityDefinition? _inferSupportedMotionActivity(
   }
   if (RegExp(r'(^|[^a-z])planks?([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.plankHold);
+  }
+  if (RegExp(r'(^|[^a-z])high\s+knees?([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])highknees?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.highKnees);
+  }
+  if (RegExp(r'(^|[^a-z])arm\s+raises?([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])armraises?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.armRaises);
   }
   return null;
 }

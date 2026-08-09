@@ -484,3 +484,205 @@ test('scoring rule defaults to cumulative_sum for unknown rules', () => {
   assert.equal(r.newScore, 8);
   assert.equal(r.completed, false);
 });
+
+// ── Custom race INSERT column/bind alignment ─────────────────────────────────
+
+test('custom race INSERT has matching column count, placeholder count, and bind order', () => {
+  const source = readFileSync(new URL('../src/routes/races.ts', import.meta.url), 'utf8');
+  const routeStart = source.indexOf("racesRouter.post('/', async (c) => {");
+  assert.notEqual(routeStart, -1, 'POST / route must exist');
+  const routeSource = source.slice(routeStart);
+
+  // Find the custom INSERT block
+  const customInsertStart = routeSource.indexOf('INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,');
+  assert.notEqual(customInsertStart, -1, 'custom INSERT must exist');
+
+  // Extract the column list
+  const columnSection = routeSource.slice(customInsertStart);
+  const columnEnd = columnSection.indexOf(')');
+  const columnList = columnSection.slice(0, columnEnd);
+  const columns = columnList
+    .replace('INSERT INTO races (', '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  assert.ok(columns.includes('verifier_type'), 'INSERT must include verifier_type');
+  assert.ok(columns.includes('verifier_version'), 'INSERT must include verifier_version');
+  assert.ok(columns.includes('verifier_spec_json'), 'INSERT must include verifier_spec_json');
+  assert.ok(columns.includes('custom_activity_name'), 'INSERT must include custom_activity_name');
+
+  // Extract the VALUES section
+  const valuesStart = columnSection.indexOf('VALUES (');
+  const valuesSection = columnSection.slice(valuesStart);
+  const valuesEnd = valuesSection.indexOf(')');
+  const valuesList = valuesSection.slice(0, valuesEnd);
+  const values = valuesList
+    .replace('VALUES (', '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // Count placeholders (?)
+  const placeholderCount = values.filter((v) => v === '?').length;
+  const literalCount = values.filter((v) => v !== '?').length;
+  assert.equal(columns.length, values.length, 'column count must match value count');
+  assert.equal(placeholderCount + literalCount, columns.length, 'all values must be accounted for');
+
+  // Verify bind order: the custom bind block binds in the same order as columns
+  const bindStart = routeSource.indexOf('.bind(', customInsertStart);
+  const bindSection = routeSource.slice(bindStart);
+  const bindEnd = bindSection.indexOf(')');
+  const bindArgs = bindSection.slice(5, bindEnd)
+    .split(/\s*,\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  assert.equal(bindArgs.length, placeholderCount, `bind args (${bindArgs.length}) must match placeholder count (${placeholderCount})`);
+
+  // Verify key bind positions match their columns
+  const verifierTypeIdx = columns.indexOf('verifier_type');
+  assert.ok(bindArgs[verifierTypeIdx].includes('custom.verifierType'), `verifier_type bind must be custom.verifierType, got: ${bindArgs[verifierTypeIdx]}`);
+  const verifierVersionIdx = columns.indexOf('verifier_version');
+  assert.ok(bindArgs[verifierVersionIdx].includes('custom.verifierVersion'), `verifier_version bind must be custom.verifierVersion`);
+  const verifierSpecIdx = columns.indexOf('verifier_spec_json');
+  assert.ok(bindArgs[verifierSpecIdx].includes('custom.verifierSpecJson'), `verifier_spec_json bind must be custom.verifierSpecJson`);
+  const customActivityIdx = columns.indexOf('custom_activity_name');
+  assert.ok(bindArgs[customActivityIdx].includes('custom.customActivityName'), `custom_activity_name bind must be custom.customActivityName`);
+});
+
+test('POST /races wraps DB batch in try/catch for useful error responses', () => {
+  const source = readFileSync(new URL('../src/routes/races.ts', import.meta.url), 'utf8');
+  const routeStart = source.indexOf("racesRouter.post('/', async (c) => {");
+  const routeSource = source.slice(routeStart);
+  assert.ok(routeSource.includes('Could not create the race'), 'DB failure must return a user-friendly error');
+  assert.ok(routeSource.includes('no such column'), 'DB failure must detect missing column errors');
+});
+
+test('buildRaceResponse includes custom verifier fields in response', () => {
+  const source = readFileSync(new URL('../src/routes/races.ts', import.meta.url), 'utf8');
+  assert.ok(source.includes('verifierType: race.verifier_type'), 'response must include verifierType');
+  assert.ok(source.includes('verifierVersion: race.verifier_version'), 'response must include verifierVersion');
+  assert.ok(source.includes('verifierSpec: verifier.spec'), 'response must include verifierSpec');
+  assert.ok(source.includes('customActivityName: race.custom_activity_name'), 'response must include customActivityName');
+});
+
+// ── Preset activity registration: high_knees and arm_raises ────────────────────
+
+// Mirrors the preset branch of raceConfigFromRow/raceScoringConfigFromRow in
+// routes/races.ts using only the exported domain helpers, so we can prove a
+// synthetic race row resolves to a non-null scoring config without importing
+// the non-exported route helper.
+function presetScoringConfigFromRow(race) {
+  const activityId = normalizeActivityId(race.activity_id ?? race.movement_type);
+  const activity = activityForId(activityId);
+  if (!activity || !activityId) return null;
+  const metric = normalizeMetric(race.metric ?? race.target_unit, activity);
+  if (!metric) return null;
+  const format = ((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal'));
+  const scoringRule = (race.scoring_rule ?? 'cumulative_sum');
+  return { activityId, metric, format, scoringRule, targetValue: race.target_value };
+}
+
+test('normalizeActivityId recognizes high_knees and its aliases', () => {
+  assert.equal(normalizeActivityId('high_knees'), 'high_knees');
+  assert.equal(normalizeActivityId('high knee'), 'high_knees');
+  assert.equal(normalizeActivityId('high knees'), 'high_knees');
+  assert.equal(normalizeActivityId('high-knees'), 'high_knees');
+  assert.equal(normalizeActivityId('highknees'), 'high_knees');
+  assert.equal(normalizeActivityId('high knee'), 'high_knees');
+});
+
+test('normalizeActivityId recognizes arm_raises and its aliases', () => {
+  assert.equal(normalizeActivityId('arm_raises'), 'arm_raises');
+  assert.equal(normalizeActivityId('arm raise'), 'arm_raises');
+  assert.equal(normalizeActivityId('arm raises'), 'arm_raises');
+  assert.equal(normalizeActivityId('arm-raises'), 'arm_raises');
+  assert.equal(normalizeActivityId('armraises'), 'arm_raises');
+});
+
+test('activityForId returns definitions for high_knees and arm_raises', () => {
+  const highKnees = activityForId('high_knees');
+  assert.equal(highKnees?.id, 'high_knees');
+  assert.equal(highKnees?.defaultMetric, 'reps');
+  assert.equal(highKnees?.validatorKey, 'high_knees_v1');
+  assert.equal(highKnees?.cameraOrientation, 'front');
+  assert.deepEqual(highKnees?.supportedFormats, ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt']);
+
+  const armRaises = activityForId('arm_raises');
+  assert.equal(armRaises?.id, 'arm_raises');
+  assert.equal(armRaises?.defaultMetric, 'reps');
+  assert.equal(armRaises?.validatorKey, 'arm_raises_v1');
+  assert.equal(armRaises?.cameraOrientation, 'front');
+  assert.deepEqual(armRaises?.supportedFormats, ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt']);
+});
+
+test('synthetic race row with activity_id=high_knees produces a non-null scoring config', () => {
+  const config = presetScoringConfigFromRow({
+    activity_id: 'high_knees',
+    metric: 'reps',
+    format: 'first_to_goal',
+    scoring_rule: 'cumulative_sum',
+    target_value: 20,
+  });
+  assert.ok(config, 'high_knees race row must resolve to a scoring config');
+  assert.equal(config.activityId, 'high_knees');
+  assert.equal(config.metric, 'reps');
+  assert.equal(config.targetValue, 20);
+});
+
+test('synthetic race row with activity_id=arm_raises produces a non-null scoring config', () => {
+  const config = presetScoringConfigFromRow({
+    activity_id: 'arm_raises',
+    metric: 'reps',
+    format: 'first_to_goal',
+    scoring_rule: 'cumulative_sum',
+    target_value: 20,
+  });
+  assert.ok(config, 'arm_raises race row must resolve to a scoring config');
+  assert.equal(config.activityId, 'arm_raises');
+  assert.equal(config.metric, 'reps');
+  assert.equal(config.targetValue, 20);
+});
+
+test('normalizeMetric recognizes high_knees and arm_raises as reps', () => {
+  assert.equal(normalizeMetric('high_knees', activityForId('high_knees')), 'reps');
+  assert.equal(normalizeMetric('high knees', activityForId('high_knees')), 'reps');
+  assert.equal(normalizeMetric('arm_raises', activityForId('arm_raises')), 'reps');
+  assert.equal(normalizeMetric('arm raises', activityForId('arm_raises')), 'reps');
+});
+
+test('configFromBody accepts high_knees preset race (proves POST /races stores activity_id non-null)', () => {
+  const config = configFromBody({
+    activityId: 'high_knees',
+    metric: 'reps',
+    format: 'first_to_goal',
+    targetValue: 20,
+  });
+  assert.equal('error' in config, false);
+  assert.equal(config.activityId, 'high_knees');
+  assert.equal(config.metric, 'reps');
+});
+
+test('configFromBody accepts arm_raises preset race (proves POST /races stores activity_id non-null)', () => {
+  const config = configFromBody({
+    activityId: 'arm_raises',
+    metric: 'reps',
+    format: 'first_to_goal',
+    targetValue: 20,
+  });
+  assert.equal('error' in config, false);
+  assert.equal(config.activityId, 'arm_raises');
+  assert.equal(config.metric, 'reps');
+});
+
+test('existing five preset activities still normalize correctly (regression)', () => {
+  assert.equal(normalizeActivityId('push_ups'), 'push_ups');
+  assert.equal(normalizeActivityId('pushups'), 'push_ups');
+  assert.equal(normalizeActivityId('jumping_jacks'), 'jumping_jacks');
+  assert.equal(normalizeActivityId('jumping jack'), 'jumping_jacks');
+  assert.equal(normalizeActivityId('squats'), 'squats');
+  assert.equal(normalizeActivityId('lunges'), 'lunges');
+  assert.equal(normalizeActivityId('plank_hold'), 'plank_hold');
+  assert.equal(normalizeActivityId('plank'), 'plank_hold');
+  assert.equal(normalizeActivityId('burpees'), undefined);
+});
