@@ -11,6 +11,8 @@ enum MovementType {
   lunges,
   highKnees,
   armRaises,
+  sumoSquats,
+  sideLunges,
   unsupported,
 }
 
@@ -97,6 +99,20 @@ const supportedMovementDefinitions = [
     unit: 'arm raises',
     defaultTarget: 10,
   ),
+  MovementDefinition(
+    type: MovementType.sumoSquats,
+    activity: AiMotionActivity.sumoSquats,
+    title: 'Sumo squats',
+    unit: 'sumo squats',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.sideLunges,
+    activity: AiMotionActivity.sideLunges,
+    title: 'Side lunges',
+    unit: 'side lunges',
+    defaultTarget: 10,
+  ),
 ];
 
 MovementDefinition? movementDefinitionForActivity(AiMotionActivity activity) {
@@ -124,6 +140,8 @@ AiMotionActivity? _aiMotionActivityForType(MotionActivityType type) {
     MotionActivityType.highKnees => AiMotionActivity.highKnees,
     MotionActivityType.armRaises => AiMotionActivity.armRaises,
     MotionActivityType.plankHold => AiMotionActivity.plankHold,
+    MotionActivityType.sumoSquats => AiMotionActivity.sumoSquats,
+    MotionActivityType.sideLunges => AiMotionActivity.sideLunges,
   };
 }
 
@@ -291,6 +309,14 @@ MotionValidator createMotionValidator(
   AiMotionActivity.highKnees => HighKneesValidator(targetValue: targetValue),
   AiMotionActivity.armRaises => ArmRaisesValidator(targetValue: targetValue),
   AiMotionActivity.plankHold => PlankHoldValidator(targetValue: targetValue),
+  AiMotionActivity.sumoSquats => ConfigurableRepValidator(
+    definition: sumoSquatRepDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.sideLunges => ConfigurableRepValidator(
+    definition: sideLungeRepDefinition,
+    targetValue: targetValue,
+  ),
 };
 
 /// Verifies that every [supportedMovementDefinitions] entry has a matching
@@ -1360,5 +1386,81 @@ const lungeRepDefinition = RepMovementDefinition(
   stableFrames: 3,
   statusText: 'Tracking lunges',
   coachingTextActive: 'Drop into depth, then stand tall',
+  coachingTextIncomplete: 'Full body needed',
+);
+
+/// Sumo Squats: START when standing tall with wide stance, ACTIVE when deep
+/// squat with wide stance. The wide stance (ankleWidthToBodyWidth > 1.5)
+/// is the identity differentiator from regular squats (which have
+/// ankleWidthToBodyWidth ~0.3-0.5). hipToKneeRatio captures the vertical
+/// descent, same as standard squats.
+const sumoSquatRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.sumoSquats,
+  requiredLandmarks: [
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: AndCondition([
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.86, greaterThan: true),
+    ComparisonCondition(
+      PoseSignal.ankleWidthToBodyWidth,
+      1.5,
+      greaterThan: true,
+    ),
+  ]),
+  activeCondition: AndCondition([
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.58, greaterThan: false),
+    ComparisonCondition(
+      PoseSignal.ankleWidthToBodyWidth,
+      1.5,
+      greaterThan: true,
+    ),
+  ]),
+  stableFrames: 3,
+  statusText: 'Tracking sumo squats',
+  coachingTextActive: 'Stand tall after each squat',
+  coachingTextIncomplete: 'Full body · wide stance needed',
+);
+
+/// Side Lunges: START when both legs straight, ACTIVE when one knee bent
+/// with large lateral knee separation. The kneeSeparation > 0.85 threshold
+/// is the identity differentiator from forward lunges (which produce
+/// kneeSeparation ~0.55-0.70). Side lunges produce direct lateral
+/// X-separation, while forward lunges produce Z-movement that only
+/// partially shows as X-separation in 2D front view.
+const sideLungeRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.sideLunges,
+  requiredLandmarks: [
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: AndCondition([
+    ComparisonCondition(PoseSignal.leftKneeAngle, 154, greaterThan: true),
+    ComparisonCondition(PoseSignal.rightKneeAngle, 154, greaterThan: true),
+  ]),
+  activeCondition: AndCondition([
+    ComparisonCondition(
+      PoseSignal.kneeSeparationToHipWidth,
+      0.85,
+      greaterThan: true,
+    ),
+    OrCondition([
+      ComparisonCondition(PoseSignal.leftKneeAngle, 118, greaterThan: false),
+      ComparisonCondition(PoseSignal.rightKneeAngle, 118, greaterThan: false),
+    ]),
+  ]),
+  stableFrames: 3,
+  statusText: 'Tracking side lunges',
+  coachingTextActive: 'Step out to the side, then stand tall',
   coachingTextIncomplete: 'Full body needed',
 );

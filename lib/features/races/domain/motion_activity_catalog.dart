@@ -164,6 +164,52 @@ const motionActivityDefinitions = [
     framingLabel: 'Upper body + arms visible',
     preferredCameraView: PreferredCameraView.frontPreferred,
   ),
+  MotionActivityDefinition(
+    type: MotionActivityType.sumoSquats,
+    title: 'Sumo Squats',
+    metric: RaceMetric.reps,
+    suggestedTargets: [10, 20, 40, 60],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['sumo squats', 'sumo squat', 'sumo'],
+    proofLabel: 'sumo squats',
+    cameraInstruction: 'Full body front view',
+    instructions: [
+      'Stand with feet wider than shoulder width.',
+      'Keep your full body centered.',
+      'Go lower, stand tall to finish.',
+    ],
+    icon: Icons.accessibility_new_outlined,
+    framingLabel: 'Full body · wide stance visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.sideLunges,
+    title: 'Side Lunges',
+    metric: RaceMetric.reps,
+    suggestedTargets: [8, 16, 30, 50],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['side lunges', 'side lunge', 'lateral lunges'],
+    proofLabel: 'side lunges',
+    cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body visible.',
+      'Step one leg out to the side.',
+      'Stand tall to finish the rep.',
+    ],
+    icon: Icons.directions_walk_outlined,
+    framingLabel: 'Full body · lateral space needed',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+  ),
 ];
 
 /// All preset movement types that support camera verification.

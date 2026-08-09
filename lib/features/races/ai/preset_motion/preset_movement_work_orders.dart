@@ -179,6 +179,52 @@ const presetMovementWorkOrders = [
       requiresDirectionalCycle: true,
     ),
   ),
+
+  // ── Sumo Squats ────────────────────────────────────────────────────────────
+  MovementWorkOrder(
+    type: MotionActivityType.sumoSquats,
+    family: MovementFactoryFamily.configurableRep,
+    requiredLandmarks: [
+      'leftShoulder',
+      'rightShoulder',
+      'leftHip',
+      'rightHip',
+      'leftKnee',
+      'rightKnee',
+      'leftAnkle',
+      'rightAnkle',
+    ],
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    isHold: false,
+    stableFrames: 3,
+    demoPhaseNames: ['standing', 'sumoSquat'],
+    confusionLabels: ['narrow_stance', 'not_deep_enough', 'looks_like_regular_squat'],
+    behavior: ConfigurableRepBehavior(sumoSquatRepDefinition),
+  ),
+
+  // ── Side Lunges ────────────────────────────────────────────────────────────
+  MovementWorkOrder(
+    type: MotionActivityType.sideLunges,
+    family: MovementFactoryFamily.configurableRep,
+    requiredLandmarks: [
+      'leftHip',
+      'rightHip',
+      'leftKnee',
+      'rightKnee',
+      'leftAnkle',
+      'rightAnkle',
+    ],
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    isHold: false,
+    stableFrames: 3,
+    demoPhaseNames: ['standing', 'sideLungeRight', 'sideLungeLeft'],
+    confusionLabels: [
+      'looks_like_forward_lunge',
+      'insufficient_lateral_separation',
+      'not_deep_enough',
+    ],
+    behavior: ConfigurableRepBehavior(sideLungeRepDefinition),
+  ),
 ];
 
 /// Looks up the work order for a [MotionActivityType].
