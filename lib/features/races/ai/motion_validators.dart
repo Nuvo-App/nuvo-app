@@ -2,7 +2,16 @@ import 'dart:math' as math;
 
 import '../data/ai_motion_models.dart';
 
-enum MovementType { pushups, squats, jumpingJacks, plank, lunges, unsupported }
+enum MovementType {
+  pushups,
+  squats,
+  jumpingJacks,
+  plank,
+  lunges,
+  highKnees,
+  armRaises,
+  unsupported,
+}
 
 enum MovementPhase { unknown, start, active }
 
@@ -71,6 +80,20 @@ const supportedMovementDefinitions = [
     activity: AiMotionActivity.lunges,
     title: 'Lunges',
     unit: 'lunges',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.highKnees,
+    activity: AiMotionActivity.highKnees,
+    title: 'High knees',
+    unit: 'high knees',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.armRaises,
+    activity: AiMotionActivity.armRaises,
+    title: 'Arm raises',
+    unit: 'arm raises',
     defaultTarget: 10,
   ),
 ];

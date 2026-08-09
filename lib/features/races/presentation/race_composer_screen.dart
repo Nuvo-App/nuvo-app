@@ -127,6 +127,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   String? _error;
   bool _learnedProviderPresentOnInit = false;
   String? _lastApiError;
+  int? _lastApiStatusCode;
   String _lastCreatePathUsed = 'none';
 
   static const _steps = _Step.values;
@@ -258,16 +259,20 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
           _lastApiError = e.message;
+          _lastApiStatusCode = e.statusCode;
+          _error = e.statusCode >= 500
+              ? "Couldn't create the race. Try again."
+              : e.message;
           _loading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Something went wrong. Try again.';
-          _lastApiError = _error;
+          _error = "Couldn't create the race. Try again.";
+          _lastApiError = e.toString();
+          _lastApiStatusCode = null;
           _loading = false;
         });
       }
@@ -289,25 +294,44 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     return null;
   }
 
-  Map<String, dynamic> _raceComposerDebugReport(RaceDraft draft) => {
-    'providerPresentOnInit': _learnedProviderPresentOnInit,
-    'providerPresentNow': ref.read(learnedCustomMovementProvider) != null,
-    'step': _step.name,
-    'draft': {
-      'isCustom': draft.isCustom,
-      'customActivityName': draft.customActivityName,
-      'verifierSpecPresent': draft.verifierSpec != null,
-      'isValidToCreate': draft.isValidToCreate,
-      'resolvedTitle': draft.resolvedTitle,
-      'targetValue': draft.targetValue,
-      'visibility': draft.visibility,
-    },
-    'validationError': _draftValidationError(draft),
-    'screenError': _error,
-    'lastApiError': _lastApiError,
-    'createPathUsed': _lastCreatePathUsed,
-    'primaryButtonDisabled': _loading,
-  };
+  Map<String, dynamic> _raceComposerDebugReport(RaceDraft draft) {
+    final spec = draft.verifierSpec;
+    String? specJson;
+    int? specJsonBytes;
+    if (spec != null) {
+      try {
+        specJson = jsonEncode(spec.toJson());
+        specJsonBytes = specJson.length;
+      } catch (_) {
+        specJson = '<encode_failed>';
+        specJsonBytes = null;
+      }
+    }
+    return {
+      'providerPresentOnInit': _learnedProviderPresentOnInit,
+      'providerPresentNow': ref.read(learnedCustomMovementProvider) != null,
+      'step': _step.name,
+      'draft': {
+        'isCustom': draft.isCustom,
+        'customActivityName': draft.customActivityName,
+        'verifierSpecPresent': draft.verifierSpec != null,
+        'verifierType': spec?.verifierType,
+        'verifierVersion': spec?.schemaVersion,
+        'verifierSpecJsonBytes': specJsonBytes,
+        'isValidToCreate': draft.isValidToCreate,
+        'resolvedTitle': draft.resolvedTitle,
+        'targetValue': draft.targetValue,
+        'metric': draft.metric.name,
+        'visibility': draft.visibility,
+      },
+      'validationError': _draftValidationError(draft),
+      'screenError': _error,
+      'lastApiError': _lastApiError,
+      'lastApiStatusCode': _lastApiStatusCode,
+      'createPathUsed': _lastCreatePathUsed,
+      'primaryButtonDisabled': _loading,
+    };
+  }
 
   Future<void> _copyRaceComposerDebugReport(RaceDraft draft) async {
     if (!(kDebugMode || kNuvoDiagnosticsEnabled)) return;

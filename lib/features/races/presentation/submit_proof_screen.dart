@@ -14,6 +14,7 @@ import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
 import '../domain/race_display.dart';
 import 'race_controller.dart';
+import 'widgets/arm_raises_animation.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
   const SubmitProofScreen({super.key, required this.raceId});
@@ -46,7 +47,12 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
       final eligibility = resolveCameraVerification(race);
-      if (eligibility.isCameraVerifiable && mounted) {
+      // Arm Raises has a pre-verify movement demo before the camera opens.
+      // Other camera-verifiable presets skip straight to the AI Motion screen.
+      final hasPreVerifyDemo =
+          eligibility.isCameraVerifiable &&
+          eligibility.movementType == MotionActivityType.armRaises;
+      if (eligibility.isCameraVerifiable && !hasPreVerifyDemo && mounted) {
         context.go('/race/${widget.raceId}/proof/ai-motion');
         return;
       }
@@ -214,6 +220,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
   List<Widget> _formContent(Race race) {
     final eligibility = resolveCameraVerification(race);
+
+    // Dedicated pre-verify movement demo for Arm Raises.
+    if (eligibility.isCameraVerifiable &&
+        eligibility.movementType == MotionActivityType.armRaises) {
+      return _preVerifyContent(race, eligibility);
+    }
+
     return [
       _backRow(),
       const SizedBox(height: 24),
@@ -247,6 +260,66 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         _MoveCheckCard(race: race, eligibility: eligibility)
       else
         _UnsupportedVerificationCard(message: eligibility.unsupportedMessage),
+    ];
+  }
+
+  /// Dedicated pre-verification movement demo shown before the camera opens.
+  /// The animated character is the dominant visual element.
+  List<Widget> _preVerifyContent(
+    Race race,
+    CameraVerificationEligibility eligibility,
+  ) {
+    final movementName =
+        eligibility.movementDefinition?.title ?? race.displayTitle;
+
+    return [
+      _backRow(),
+      const SizedBox(height: 16),
+
+      // Movement name — large, clear
+      Text(
+        movementName,
+        style: AppTextStyles.headlineLarge.copyWith(
+          fontSize: 34,
+          letterSpacing: -0.9,
+        ),
+      ),
+      const SizedBox(height: 6),
+
+      // "Do this" label
+      Text(
+        'Do this',
+        style: AppTextStyles.labelUppercase(
+          14,
+        ).copyWith(color: NuvoColors.blue),
+      ),
+
+      const SizedBox(height: 24),
+
+      // Large looping movement animation — the visual focus
+      const SizedBox(
+        height: 340,
+        width: double.infinity,
+        child: ArmRaisesAnimation(),
+      ),
+
+      const SizedBox(height: 28),
+
+      // Short camera/setup instruction
+      Text(
+        'Raise both arms overhead, then bring them back down.',
+        style: AppTextStyles.bodyLarge.copyWith(
+          color: NuvoColors.navy,
+          height: 1.4,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 10),
+      Text(
+        'Stand where Nuvo can see your upper body and arms.',
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        textAlign: TextAlign.center,
+      ),
     ];
   }
 
@@ -328,8 +401,7 @@ class _MoveCheckCard extends StatelessWidget {
 
         const SizedBox(height: 20),
 
-        // Framing illustration — just corner brackets + instruction text
-        // This is what professional apps do: show framing, not a person
+        // Framing illustration — corner brackets + instruction text
         SizedBox(
           height: 160,
           width: double.infinity,

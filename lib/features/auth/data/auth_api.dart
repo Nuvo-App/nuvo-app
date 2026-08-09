@@ -96,18 +96,41 @@ class AuthApi {
     String path, {
     String? accessToken,
   }) async {
-    final res = await _client.delete(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(accessToken: accessToken),
-    );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
+    final url = '$_kApiBase$path';
+    try {
+      final res = await _client.delete(
+        Uri.parse(url),
+        headers: _headers(accessToken: accessToken),
       );
+      debugPrint('[AuthApi] DELETE $path → ${res.statusCode}');
+      if (res.statusCode >= 400) {
+        final snippet = res.body.length > 200
+            ? res.body.substring(0, 200)
+            : res.body;
+        debugPrint('[AuthApi] error body: $snippet');
+      }
+      if (res.statusCode >= 400) {
+        // Don't let a non-JSON error body mask the original API error.
+        String message;
+        try {
+          final json = jsonDecode(res.body) as Map<String, dynamic>;
+          message = json['error'] as String? ?? 'Request failed';
+        } catch (_) {
+          message = 'Request failed';
+        }
+        throw ApiException(res.statusCode, message);
+      }
+      try {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw ApiException(res.statusCode, 'Request failed');
+      }
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      // Network-level failure (CORS blocked, no connectivity, etc.)
+      debugPrint('[AuthApi] DELETE $path network error (${e.runtimeType}): $e');
+      rethrow;
     }
-    return json;
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────

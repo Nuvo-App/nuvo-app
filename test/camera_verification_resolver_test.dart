@@ -35,7 +35,7 @@ Race _race({
 void main() {
   group('camera verification resolver', () {
     test(
-      'active preset catalog is exactly the five camera-verified activities',
+      'active preset catalog is exactly the seven camera-verified activities',
       () {
         expect(motionActivityDefinitions.map((d) => d.type).toSet(), {
           MotionActivityType.pushUps,
@@ -43,6 +43,8 @@ void main() {
           MotionActivityType.squats,
           MotionActivityType.lunges,
           MotionActivityType.plankHold,
+          MotionActivityType.highKnees,
+          MotionActivityType.armRaises,
         });
         expect(supportedMotionActivityTypes, {
           MotionActivityType.pushUps,
@@ -50,6 +52,8 @@ void main() {
           MotionActivityType.squats,
           MotionActivityType.lunges,
           MotionActivityType.plankHold,
+          MotionActivityType.highKnees,
+          MotionActivityType.armRaises,
         });
       },
     );
@@ -61,6 +65,8 @@ void main() {
         'squats': MotionActivityType.squats,
         'lunges': MotionActivityType.lunges,
         'plank_hold': MotionActivityType.plankHold,
+        'high_knees': MotionActivityType.highKnees,
+        'arm_raises': MotionActivityType.armRaises,
       };
 
       for (final entry in cases.entries) {
@@ -248,6 +254,58 @@ void main() {
       expect(eligibility.isCameraVerifiable, isFalse);
       expect(eligibility.movementType, isNull);
       expect(eligibility.reason, 'missing_custom_verifier_spec');
+    });
+
+    test('high knees title inference resolves with front camera view', () {
+      final eligibility = resolveCameraVerification(
+        _race(
+          title: 'First to 20 High Knees',
+          activityId: null,
+          aiActivityType: null,
+        ),
+      );
+
+      expect(eligibility.isCameraVerifiable, isTrue);
+      expect(eligibility.movementType, MotionActivityType.highKnees);
+      expect(eligibility.source, CameraVerificationSource.titleInference);
+      expect(
+        eligibility.preferredCameraView,
+        PreferredCameraView.frontPreferred,
+      );
+    });
+
+    test('arm raises title inference resolves with front camera view', () {
+      final eligibility = resolveCameraVerification(
+        _race(
+          title: 'First to 20 Arm Raises',
+          activityId: null,
+          aiActivityType: null,
+        ),
+      );
+
+      expect(eligibility.isCameraVerifiable, isTrue);
+      expect(eligibility.movementType, MotionActivityType.armRaises);
+      expect(eligibility.source, CameraVerificationSource.titleInference);
+      expect(
+        eligibility.preferredCameraView,
+        PreferredCameraView.frontPreferred,
+      );
+    });
+
+    test('high-knees and arm_raises backend values resolve explicitly', () {
+      final hk = resolveCameraVerification(
+        _race(activityId: 'high_knees', title: 'High Knees'),
+      );
+      expect(hk.isCameraVerifiable, isTrue);
+      expect(hk.movementType, MotionActivityType.highKnees);
+      expect(hk.source, CameraVerificationSource.explicitField);
+
+      final ar = resolveCameraVerification(
+        _race(activityId: 'arm_raises', title: 'Arm Raises'),
+      );
+      expect(ar.isCameraVerifiable, isTrue);
+      expect(ar.movementType, MotionActivityType.armRaises);
+      expect(ar.source, CameraVerificationSource.explicitField);
     });
   });
 }

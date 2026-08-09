@@ -5,7 +5,12 @@ import '../data/race_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 
-enum CameraVerificationSource { explicitField, titleInference, customVerifier, unresolved }
+enum CameraVerificationSource {
+  explicitField,
+  titleInference,
+  customVerifier,
+  unresolved,
+}
 
 enum PreferredCameraView {
   frontPreferred,
@@ -41,7 +46,8 @@ class CameraVerificationEligibility {
   MotionActivityDefinition? get movementDefinition =>
       motionActivityForType(movementType);
 
-  bool get isCustomVerifier => source == CameraVerificationSource.customVerifier;
+  bool get isCustomVerifier =>
+      source == CameraVerificationSource.customVerifier;
 }
 
 CameraVerificationEligibility resolveCameraVerification(Race race) {
@@ -121,7 +127,11 @@ void debugLogCameraVerificationDecision(
 
 CameraVerificationEligibility _resolveCustomVerification(Race race) {
   if (race.status != 'active') {
-    return _customIneligible(race, 'race_not_active', 'This race is not active.');
+    return _customIneligible(
+      race,
+      'race_not_active',
+      'This race is not active.',
+    );
   }
   if (race.verifierType != customPoseVerifierType) {
     return _customIneligible(
@@ -257,6 +267,14 @@ MotionActivityType? _inferSupportedActivity(Iterable<String?> values) {
   if (RegExp(r'(^|[^a-z])planks?([^a-z]|$)').hasMatch(normalized)) {
     return MotionActivityType.plankHold;
   }
+  if (RegExp(r'(^|[^a-z])high\s+knees?([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])highknees?([^a-z]|$)').hasMatch(normalized)) {
+    return MotionActivityType.highKnees;
+  }
+  if (RegExp(r'(^|[^a-z])arm\s+raises?([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])armraises?([^a-z]|$)').hasMatch(normalized)) {
+    return MotionActivityType.armRaises;
+  }
   return null;
 }
 
@@ -264,10 +282,11 @@ PreferredCameraView _preferredCameraView(MotionActivityType movement) {
   return switch (movement) {
     MotionActivityType.pushUps ||
     MotionActivityType.squats ||
-    MotionActivityType.jumpingJacks => PreferredCameraView.frontPreferred,
+    MotionActivityType.jumpingJacks ||
+    MotionActivityType.highKnees ||
+    MotionActivityType.armRaises => PreferredCameraView.frontPreferred,
     MotionActivityType.lunges => PreferredCameraView.frontOrSlightAngle,
     MotionActivityType.plankHold => PreferredCameraView.sideOrDiagonalRequired,
-    _ => PreferredCameraView.frontPreferred,
   };
 }
 

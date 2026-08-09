@@ -679,21 +679,33 @@ racesRouter.post('/', async (c) => {
 
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
 
-  await c.env.DB.batch([
-    raceStmt,
-    c.env.DB.prepare(
-      `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at)
-       VALUES (?, ?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP)`
-    ).bind(generateId(), raceId, userId, creatorPersonId),
-    c.env.DB.prepare(
-      `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
-       VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
-    ).bind(generateId(), raceId, userId),
-  ]);
+  try {
+    await c.env.DB.batch([
+      raceStmt,
+      c.env.DB.prepare(
+        `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at)
+         VALUES (?, ?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP)`
+      ).bind(generateId(), raceId, userId, creatorPersonId),
+      c.env.DB.prepare(
+        `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
+         VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
+      ).bind(generateId(), raceId, userId),
+    ]);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[races] create race DB batch failed:', message);
+    if (message.includes('no such column') || message.includes('no column named')) {
+      return c.json({ ok: false, error: 'This race type is not supported by the database yet. Please update the server.' }, 503);
+    }
+    return c.json({ ok: false, error: 'Could not create the race. Please try again.' }, 500);
+  }
 
   const race = await getRace(c.env.DB, raceId);
+  if (!race) {
+    return c.json({ ok: false, error: 'Race was created but could not be loaded.' }, 500);
+  }
   await recomputeRanks(c.env.DB, raceId);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race!) }, 201);
+  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) }, 201);
 });
 
 // GET /races/:id

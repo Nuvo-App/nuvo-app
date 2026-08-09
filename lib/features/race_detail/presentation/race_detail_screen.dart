@@ -66,7 +66,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.id);
       if (mounted) setState(() => _race = race);
-    } catch (_) {}
+    } catch (e) {
+      // Background refresh failed — preserve the already-loaded race on
+      // screen and log diagnostics. We intentionally do NOT clear _race or
+      // surface a disruptive error here; the periodic timer keeps running.
+      debugPrint('RACE_DETAIL_REFRESH_ERROR: ${e.runtimeType}: $e');
+    }
   }
 
   Future<void> _load() async {

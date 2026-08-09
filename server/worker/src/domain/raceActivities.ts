@@ -1,4 +1,4 @@
-export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold';
+export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'high_knees' | 'arm_raises';
 export type RaceMetric = 'reps' | 'seconds';
 export type RaceFormat = 'first_to_goal' | 'most_in_window' | 'best_attempt' | 'timed_attempt';
 export type RaceScoringRule = 'cumulative_sum' | 'maximum_attempt';
@@ -97,6 +97,36 @@ export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
     availability: 'supported',
     instructions: ['Use a side view.', 'Keep your whole body visible.', 'Keep your body straight.'],
   },
+  {
+    id: 'high_knees',
+    displayName: 'High Knees',
+    aliases: ['high knees', 'high knee', 'high-knees', 'highknees'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'high_knees_v1',
+    verificationMethod: 'camera_pose',
+    cameraOrientation: 'front',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [10, 20, 40, 60],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep your full body visible.', 'Lift each knee above your hip.', 'Alternate legs cleanly.'],
+  },
+  {
+    id: 'arm_raises',
+    displayName: 'Arm Raises',
+    aliases: ['arm raises', 'arm raise', 'arm-raises', 'armraises'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'arm_raises_v1',
+    verificationMethod: 'camera_pose',
+    cameraOrientation: 'front',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [10, 20, 40, 60],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep your upper body and arms visible.', 'Raise both arms above your shoulders.', 'Lower both arms to finish the rep.'],
+  },
 ];
 
 export function activityForId(id: string | null | undefined): RaceActivityDefinition | undefined {
@@ -109,7 +139,9 @@ export function normalizeActivityId(value: string | null | undefined): RaceActiv
   if (normalized === 'pushups' || normalized === 'push_up') return 'push_ups';
   if (normalized === 'plank' || normalized === 'plank_hold') return 'plank_hold';
   if (normalized === 'jumping_jack') return 'jumping_jacks';
-  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold'].includes(normalized)) {
+  if (normalized === 'high_knee' || normalized === 'highknees') return 'high_knees';
+  if (normalized === 'arm_raise' || normalized === 'armraises') return 'arm_raises';
+  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold', 'high_knees', 'arm_raises'].includes(normalized)) {
     return normalized as RaceActivityId;
   }
   return undefined;
@@ -126,7 +158,11 @@ export function normalizeMetric(value: string | null | undefined, activity?: Rac
     normalized === 'push ups' ||
     normalized === 'jumping jacks' ||
     normalized === 'squats' ||
-    normalized === 'lunges'
+    normalized === 'lunges' ||
+    normalized === 'high_knees' ||
+    normalized === 'high knees' ||
+    normalized === 'arm_raises' ||
+    normalized === 'arm raises'
   ) return 'reps';
   return undefined;
 }

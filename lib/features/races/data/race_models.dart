@@ -180,6 +180,8 @@ class Race {
       'squats',
       'lunges',
       'plank_hold',
+      'high_knees',
+      'arm_raises',
     };
     final activity = activityId ?? aiActivityType;
     return isAiMotionRace && activity != null && supported.contains(activity);

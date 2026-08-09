@@ -548,5 +548,73 @@ void main() {
       expect(customCalled, isFalse);
       expect(presetCalled, isTrue);
     });
+
+    test(
+      'createCustomRace failure does not clear learned movement or draft',
+      () async {
+        final spec = _anySpec();
+        final draft = RaceDraft(
+          title: '',
+          hasCustomName: false,
+          activity: _pushups,
+          metric: RaceMetric.reps,
+          format: RaceFormat.firstToGoal,
+          targetValue: 10,
+          customActivityName: 'wave',
+          verifierSpec: spec,
+        );
+
+        expect(draft.isCustom, isTrue);
+        expect(draft.verifierSpec, isNotNull);
+        expect(draft.customActivityName, 'wave');
+
+        // Simulate a failed create — the draft and spec must survive
+        Object? caught;
+        try {
+          await createRaceForComposerDraft(
+            draft: draft,
+            createCustomRace:
+                ({
+                  required title,
+                  required targetValue,
+                  required customActivityName,
+                  required verifierSpec,
+                }) async {
+                  throw Exception('HTTP 500: Internal server error');
+                },
+            createRace:
+                ({
+                  required title,
+                  description,
+                  category,
+                  goalType = 'manual',
+                  targetValue,
+                  unit,
+                  proofRequirement,
+                  proofReviewMode,
+                  visibility,
+                  aiActivityType,
+                  activityId,
+                  metric,
+                  format,
+                  recurrence,
+                  targetUnit,
+                  proofMode,
+                }) async {
+                  return _race(title: title);
+                },
+          );
+        } catch (e) {
+          caught = e;
+        }
+
+        // The exception propagated — but the draft and spec are unchanged
+        expect(caught, isNotNull);
+        expect(draft.isCustom, isTrue);
+        expect(draft.verifierSpec, same(spec));
+        expect(draft.customActivityName, 'wave');
+        expect(draft.targetValue, 10);
+      },
+    );
   });
 }
