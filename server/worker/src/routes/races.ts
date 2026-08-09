@@ -559,7 +559,15 @@ racesRouter.get('/', async (c) => {
      WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
      ORDER BY r.created_at DESC`
   ).bind(userId, userId).all<RaceRow>();
-  const races = await Promise.all(rows.results.map((r) => buildRaceResponse(c.env.DB, c.get('userId'), r)));
+  const races: unknown[] = [];
+  for (const row of rows.results) {
+    try {
+      races.push(await buildRaceResponse(c.env.DB, c.get('userId'), row));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[races] GET /races skipping corrupt race:', row.id, message);
+    }
+  }
   return c.json({ ok: true, races });
 });
 
@@ -712,7 +720,13 @@ racesRouter.post('/', async (c) => {
 racesRouter.get('/:id', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id') ?? '');
   if (!race) return c.json(badRequest('Race not found'), 404);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  try {
+    return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[races] GET /races/:id buildRaceResponse failed:', race.id, message);
+    return c.json({ ok: false, error: 'Could not load this race. Please try again.' }, 500);
+  }
 });
 
 // PATCH /races/:id
