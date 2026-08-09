@@ -27,6 +27,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   Race? _race;
   bool _raceLoading = true;
   String? _raceError;
+  bool _navigating = false;
 
   @override
   void initState() {
@@ -152,19 +153,32 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         label: 'Begin',
         icon: Icons.camera_alt_rounded,
         expand: true,
-        onPressed: () {
-          HapticFeedback.mediumImpact();
-          debugLogCameraVerificationDecision(
-            race,
-            eligibility,
-            routeAction: 'submit_proof_to_camera',
-          );
-          context.push('/race/${widget.raceId}/proof/ai-motion');
-        },
+        onPressed: _navigating
+            ? null
+            : () => _beginCameraProof(race, eligibility),
       ),
       const SizedBox(height: 10),
       backToRace,
     ];
+  }
+
+  Future<void> _beginCameraProof(
+    Race race,
+    CameraVerificationEligibility eligibility,
+  ) async {
+    if (_navigating) return;
+    setState(() => _navigating = true);
+    HapticFeedback.mediumImpact();
+    debugLogCameraVerificationDecision(
+      race,
+      eligibility,
+      routeAction: 'submit_proof_to_camera',
+    );
+    try {
+      await context.push('/race/${widget.raceId}/proof/ai-motion');
+    } finally {
+      if (mounted) setState(() => _navigating = false);
+    }
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────────
@@ -431,17 +445,15 @@ class _SkeletonBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: NuvoColors.divider.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(radius),
-      ),
-    ).animate(onPlay: (c) => c.repeat(reverse: true)).fadeIn(
-      duration: 620.ms,
-      begin: 0.45,
-      curve: Curves.easeInOut,
-    );
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: NuvoColors.divider.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(radius),
+          ),
+        )
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .fadeIn(duration: 620.ms, begin: 0.45, curve: Curves.easeInOut);
   }
 }
 

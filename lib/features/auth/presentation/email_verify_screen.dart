@@ -60,7 +60,9 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
         setState(() {
           _error = e.statusCode == 401
               ? 'Invalid or expired code. Use the newest code from your email.'
-              : e.message;
+              : e.statusCode >= 500
+              ? 'Nuvo hit a snag. Try again.'
+              : 'Could not verify your code. Try again.';
           _loading = false;
           for (final c in _controllers) {
             c.clear();
