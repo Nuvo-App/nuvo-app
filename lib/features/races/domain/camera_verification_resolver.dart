@@ -5,17 +5,13 @@ import '../data/race_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 
+export 'motion_activity.dart' show PreferredCameraView;
+
 enum CameraVerificationSource {
   explicitField,
   titleInference,
   customVerifier,
   unresolved,
-}
-
-enum PreferredCameraView {
-  frontPreferred,
-  frontOrSlightAngle,
-  sideOrDiagonalRequired,
 }
 
 class CameraVerificationEligibility {
@@ -79,7 +75,7 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
     );
   }
 
-  final inferred = _inferSupportedActivity([
+  final inferred = inferSupportedMotionActivity([
     race.title,
     race.unit,
     race.targetUnit,
@@ -87,7 +83,7 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
   if (inferred != null) {
     return _eligible(
       race,
-      inferred,
+      inferred.type,
       CameraVerificationSource.titleInference,
       'safe_title_or_unit_inference',
     );
@@ -223,14 +219,15 @@ CameraVerificationEligibility _eligible(
   CameraVerificationSource source,
   String reason,
 ) {
+  final definition = motionActivityForType(movement);
   return CameraVerificationEligibility(
     raceId: race.id,
     raceTitle: race.title,
     isCameraVerifiable: true,
     movementType: movement,
     source: source,
-    preferredCameraView: _preferredCameraView(movement),
-    instructions: _instructions(movement),
+    preferredCameraView: definition?.preferredCameraView,
+    instructions: definition?.instructions ?? const ['Keep your body in frame.'],
     reason: reason,
   );
 }
@@ -239,58 +236,4 @@ MotionActivityType? _supportedActivityFromBackendValue(String? value) {
   final type = MotionActivityType.fromBackendValue(value);
   if (type == null) return null;
   return supportedMotionActivityTypes.contains(type) ? type : null;
-}
-
-MotionActivityType? _inferSupportedActivity(Iterable<String?> values) {
-  final normalized = values
-      .whereType<String>()
-      .join(' ')
-      .toLowerCase()
-      .replaceAll(RegExp(r'[-_]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-  if (normalized.isEmpty) return null;
-
-  if (RegExp(r'(^|[^a-z])push\s*ups?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])pushups?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.pushUps;
-  }
-  if (RegExp(r'(^|[^a-z])squats?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.squats;
-  }
-  if (RegExp(r'(^|[^a-z])jumping\s+jacks?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.jumpingJacks;
-  }
-  if (RegExp(r'(^|[^a-z])lunges?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.lunges;
-  }
-  if (RegExp(r'(^|[^a-z])planks?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.plankHold;
-  }
-  if (RegExp(r'(^|[^a-z])high\s+knees?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])highknees?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.highKnees;
-  }
-  if (RegExp(r'(^|[^a-z])arm\s+raises?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])armraises?([^a-z]|$)').hasMatch(normalized)) {
-    return MotionActivityType.armRaises;
-  }
-  return null;
-}
-
-PreferredCameraView _preferredCameraView(MotionActivityType movement) {
-  return switch (movement) {
-    MotionActivityType.pushUps ||
-    MotionActivityType.squats ||
-    MotionActivityType.jumpingJacks ||
-    MotionActivityType.highKnees ||
-    MotionActivityType.armRaises => PreferredCameraView.frontPreferred,
-    MotionActivityType.lunges => PreferredCameraView.frontOrSlightAngle,
-    MotionActivityType.plankHold => PreferredCameraView.sideOrDiagonalRequired,
-  };
-}
-
-List<String> _instructions(MotionActivityType movement) {
-  return motionActivityForType(movement)?.instructions ??
-      const ['Keep your body in frame.'];
 }

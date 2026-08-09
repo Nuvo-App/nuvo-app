@@ -1,3 +1,12 @@
+import 'package:flutter/material.dart';
+
+/// Camera framing preference for a preset movement.
+enum PreferredCameraView {
+  frontPreferred,
+  frontOrSlightAngle,
+  sideOrDiagonalRequired,
+}
+
 enum MotionActivityType {
   pushUps('push_ups'),
   jumpingJacks('jumping_jacks'),
@@ -77,6 +86,9 @@ class MotionActivityDefinition {
     required this.proofLabel,
     required this.cameraInstruction,
     required this.instructions,
+    required this.icon,
+    required this.framingLabel,
+    required this.preferredCameraView,
     this.isHold = false,
   });
 
@@ -90,6 +102,9 @@ class MotionActivityDefinition {
   final String proofLabel;
   final String cameraInstruction;
   final List<String> instructions;
+  final IconData icon;
+  final String framingLabel;
+  final PreferredCameraView preferredCameraView;
 
   int get defaultTarget => suggestedTargets.first;
 
