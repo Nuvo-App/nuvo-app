@@ -233,9 +233,33 @@ void main() {
   group('NuvoMovementAnimation for all preset demos', () {
     for (final definition in motionActivityDefinitions) {
       final demo = movementDemoForType(definition.type);
-      testWidgets(
-        'renders ${definition.type.name} demo without exceptions',
-        (tester) async {
+      final isPlank = definition.type.name == 'plankHold';
+
+      testWidgets('renders ${definition.type.name} demo without exceptions', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 200,
+                height: 300,
+                child: NuvoMovementAnimation(demo: demo!),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(tester.takeException(), isNull);
+        expect(find.byType(CustomPaint), findsWidgets);
+      });
+
+      if (!isPlank) {
+        testWidgets('${definition.type.name} demo pose changes over time', (
+          tester,
+        ) async {
           await tester.pumpWidget(
             MaterialApp(
               home: Scaffold(
@@ -247,17 +271,68 @@ void main() {
               ),
             ),
           );
-          // Pump a few frames to let the AnimationController fire and
-          // the CustomPaint paint.
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 50));
-          await tester.pump(const Duration(milliseconds: 50));
-          expect(tester.takeException(), isNull);
-          // NuvoCharacterPainter is a CustomPainter (not a widget), so
-          // verify the CustomPaint widget is present.
-          expect(find.byType(CustomPaint), findsWidgets);
-        },
-      );
+
+          // Capture pose at an early frame.
+          NuvoCharacterPose poseAtFrame() {
+            final paints = tester.widgetList<CustomPaint>(
+              find.byType(CustomPaint),
+            );
+            final cp = paints.firstWhere(
+              (w) => w.painter is NuvoCharacterPainter,
+              orElse: () => throw StateError('No NuvoCharacterPainter found'),
+            );
+            return (cp.painter as NuvoCharacterPainter).pose;
+          }
+
+          final pose0 = poseAtFrame();
+
+          // Advance well into the animation cycle.
+          await tester.pump(const Duration(milliseconds: 800));
+          final pose1 = poseAtFrame();
+
+          // The pose must have changed — the animation is moving.
+          final moved =
+              pose0.leftWrist != pose1.leftWrist ||
+              pose0.leftKnee != pose1.leftKnee ||
+              pose0.leftElbow != pose1.leftElbow ||
+              pose0.head != pose1.head;
+          expect(
+            moved,
+            isTrue,
+            reason: '${definition.type.name} pose did not change over time',
+          );
+        });
+      } else {
+        testWidgets(
+          '${definition.type.name} hold demo renders correctly (static-ish)',
+          (tester) async {
+            await tester.pumpWidget(
+              MaterialApp(
+                home: Scaffold(
+                  body: SizedBox(
+                    width: 200,
+                    height: 300,
+                    child: NuvoMovementAnimation(demo: demo!),
+                  ),
+                ),
+              ),
+            );
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 50));
+            await tester.pump(const Duration(milliseconds: 50));
+            expect(tester.takeException(), isNull);
+            expect(find.byType(CustomPaint), findsWidgets);
+
+            // Plank has a subtle breathing dip — verify it renders over
+            // time without requiring large pose changes.
+            await tester.pump(const Duration(milliseconds: 2000));
+            expect(tester.takeException(), isNull);
+            expect(find.byType(CustomPaint), findsWidgets);
+          },
+        );
+      }
     }
   });
 }

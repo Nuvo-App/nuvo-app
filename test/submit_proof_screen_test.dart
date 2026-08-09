@@ -16,16 +16,29 @@ import 'package:nuvo/features/races/presentation/submit_proof_screen.dart';
 import 'package:nuvo/features/races/presentation/widgets/movement_demo.dart';
 import 'package:nuvo/features/races/presentation/widgets/preset_movement_demos.dart';
 
-Race _armRaisesRace() => const Race(
-  id: 'race-arm',
+// ── Test fixtures ─────────────────────────────────────────────────────────────
+
+/// All 7 preset movements that must show a pre-verify demo.
+const _presetCases = <(String id, String title, String unit)>[
+  ('push_ups', 'First to 15 Pushups', 'reps'),
+  ('squats', 'First to 25 Squats', 'reps'),
+  ('jumping_jacks', 'First to 30 Jumping Jacks', 'reps'),
+  ('lunges', 'First to 20 Lunges', 'reps'),
+  ('plank_hold', 'First to 60 Plank Seconds', 'seconds'),
+  ('high_knees', 'First to 40 High Knees', 'reps'),
+  ('arm_raises', 'First to 20 Arm Raises', 'reps'),
+];
+
+Race _raceFor(String activityId, String title, String unit) => Race(
+  id: 'race-test',
   creatorId: 'user-1',
-  title: 'First to 20 Arm Raises',
+  title: title,
   goalType: 'first_to_goal',
-  targetValue: 20,
-  unit: 'reps',
-  targetUnit: 'reps',
-  activityId: 'arm_raises',
-  metric: 'reps',
+  targetValue: 15,
+  unit: unit,
+  targetUnit: unit,
+  activityId: activityId,
+  metric: unit,
   format: 'first_to_goal',
   proofRequirement: 'ai_check',
   proofMode: 'ai_check',
@@ -62,8 +75,7 @@ class _AiMotionPlaceholder extends StatelessWidget {
       const Scaffold(body: Center(child: Text('AI Motion Screen')));
 }
 
-Widget _buildTestApp() {
-  final race = _armRaisesRace();
+Widget _buildTestApp(Race race) {
   return ProviderScope(
     overrides: [
       raceRepositoryProvider.overrideWithValue(_FakeRaceRepo(race)),
@@ -73,15 +85,15 @@ Widget _buildTestApp() {
     ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
-        initialLocation: '/race/race-arm/proof',
+        initialLocation: '/race/race-test/proof',
         routes: [
           GoRoute(
-            path: '/race/race-arm/proof',
+            path: '/race/race-test/proof',
             builder: (context, state) =>
-                const SubmitProofScreen(raceId: 'race-arm'),
+                const SubmitProofScreen(raceId: 'race-test'),
           ),
           GoRoute(
-            path: '/race/race-arm/proof/ai-motion',
+            path: '/race/race-test/proof/ai-motion',
             builder: (context, state) => const _AiMotionPlaceholder(),
           ),
         ],
@@ -90,43 +102,72 @@ Widget _buildTestApp() {
   );
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 void main() {
-  testWidgets(
-    'SubmitProofScreen shows movement animation BEFORE Begin for arm_raises race',
-    (tester) async {
-      await tester.pumpWidget(_buildTestApp());
+  group('SubmitProofScreen pre-verify demo for all 7 presets', () {
+    for (final (id, title, unit) in _presetCases) {
+      testWidgets(
+        '$id shows NuvoMovementAnimation BEFORE Begin (no auto-skip)',
+        (tester) async {
+          final race = _raceFor(id, title, unit);
+          await tester.pumpWidget(_buildTestApp(race));
 
-      // Use pump with duration instead of pumpAndSettle because the
-      // looping animation never settles.
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 100));
+          // Pump a few frames to let the async race load + animation start.
+          // The looping animation never settles, so use pump with duration.
+          await tester.pump(const Duration(milliseconds: 100));
+          await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(NuvoMovementAnimation), findsOneWidget);
-      expect(find.text('Begin'), findsOneWidget);
-      expect(find.text('Do this'), findsOneWidget);
-      expect(find.text('Arm Raises'), findsOneWidget);
-    },
-  );
+          // The pre-verify animation must be visible.
+          expect(
+            find.byType(NuvoMovementAnimation),
+            findsOneWidget,
+            reason: '$id should show NuvoMovementAnimation before Begin',
+          );
 
-  testWidgets('tapping Begin navigates to the ai-motion route', (tester) async {
-    await tester.pumpWidget(_buildTestApp());
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 100));
+          // "Do this" label must be present.
+          expect(
+            find.text('Do this'),
+            findsOneWidget,
+            reason: '$id should show "Do this" label',
+          );
 
-    await tester.tap(find.text('Begin'));
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pump(const Duration(milliseconds: 100));
+          // Begin button must be present.
+          expect(
+            find.text('Begin'),
+            findsOneWidget,
+            reason: '$id should show Begin button',
+          );
 
-    expect(find.byType(_AiMotionPlaceholder), findsOneWidget);
+          // AI Motion screen must NOT have opened yet.
+          expect(
+            find.byType(_AiMotionPlaceholder),
+            findsNothing,
+            reason: '$id should NOT auto-navigate to AI Motion screen',
+          );
+        },
+      );
+
+      testWidgets('$id tapping Begin navigates to the ai-motion route', (
+        tester,
+      ) async {
+        final race = _raceFor(id, title, unit);
+        await tester.pumpWidget(_buildTestApp(race));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        await tester.tap(find.text('Begin'));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(
+          find.byType(_AiMotionPlaceholder),
+          findsOneWidget,
+          reason: '$id should navigate to AI Motion after Begin tap',
+        );
+      });
+    }
   });
-
-  testWidgets(
-    'movement animation is NOT rendered inside the AI Motion screen',
-    (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: _AiMotionPlaceholder()));
-      expect(find.byType(NuvoMovementAnimation), findsNothing);
-    },
-  );
 
   group('preset movement demo coverage', () {
     test('every supported preset movement has a pre-verify demo', () {
@@ -137,9 +178,35 @@ void main() {
           isNotNull,
           reason: '${definition.type.name} has no pre-verify MovementDemo',
         );
-        expect(demo!.poses.length, greaterThan(1),
-            reason: '${definition.type.name} demo needs at least 2 poses');
+        expect(
+          demo!.poses.length,
+          greaterThan(1),
+          reason: '${definition.type.name} demo needs at least 2 poses',
+        );
       }
     });
+
+    test('movementDemoForType returns non-null for all 7 preset IDs', () {
+      for (final (id, _, _) in _presetCases) {
+        // Verify via the catalog that each ID resolves to a definition
+        // and that definition has a demo.
+        final def = motionActivityForBackendValue(id);
+        expect(def, isNotNull, reason: 'No catalog definition for $id');
+        final demo = movementDemoForType(def!.type);
+        expect(demo, isNotNull, reason: 'No demo for $id');
+      }
+    });
+  });
+
+  group('AI Motion screen isolation', () {
+    testWidgets(
+      'movement animation is NOT rendered inside the AI Motion screen',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(home: _AiMotionPlaceholder()),
+        );
+        expect(find.byType(NuvoMovementAnimation), findsNothing);
+      },
+    );
   });
 }
