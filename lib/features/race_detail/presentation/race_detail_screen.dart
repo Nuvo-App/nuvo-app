@@ -107,7 +107,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           routeAction: 'race_detail_loaded',
         );
       }
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('RACE_DETAIL_LOAD_ERROR: ${e.runtimeType}: $e');
+      debugPrint('RACE_DETAIL_LOAD_STACK: $stack');
       if (mounted) {
         setState(() {
           _race = null;

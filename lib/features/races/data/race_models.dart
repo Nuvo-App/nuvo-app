@@ -95,9 +95,9 @@ class Race {
     final verifierType = json['verifierType'] as String? ?? 'preset_pose';
     final parsedCustomSpec = _decodeCustomVerifierSpec(json, verifierType);
     return Race(
-      id: json['id'] as String,
-      creatorId: json['creatorId'] as String,
-      title: json['title'] as String,
+      id: json['id'] as String? ?? '',
+      creatorId: json['creatorId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
       description: json['description'] as String?,
       category: json['category'] as String?,
       goalType: json['goalType'] as String? ?? 'manual',
@@ -137,8 +137,8 @@ class Race {
       proofReviewMode: json['proofReviewMode'] as String? ?? 'auto_accept',
       visibility: json['visibility'] as String? ?? 'private',
       inviteCode: json['inviteCode'] as String?,
-      createdAt: json['createdAt'] as String,
-      updatedAt: json['updatedAt'] as String,
+      createdAt: json['createdAt'] as String? ?? '',
+      updatedAt: json['updatedAt'] as String? ?? '',
       participants:
           (json['participants'] as List<dynamic>?)
               ?.map((p) => RaceParticipant.fromJson(p as Map<String, dynamic>))
@@ -312,13 +312,13 @@ class RaceParticipant {
 
   factory RaceParticipant.fromJson(Map<String, dynamic> json) =>
       RaceParticipant(
-        id: json['id'] as String,
-        userId: json['userId'] as String,
+        id: json['id'] as String? ?? '',
+        userId: json['userId'] as String? ?? '',
         displayName: json['displayName'] as String? ?? 'Unknown',
         progressValue: json['progressValue'] as int? ?? 0,
         progressPercent: json['progressPercent'] as int? ?? 0,
         rank: json['rank'] as int?,
-        joinedAt: json['joinedAt'] as String,
+        joinedAt: json['joinedAt'] as String? ?? '',
         profilePhotoUrl: json['profilePhotoUrl'] as String?,
       );
 }
@@ -342,7 +342,7 @@ class RaceFinalStanding {
 
   factory RaceFinalStanding.fromJson(Map<String, dynamic> json) =>
       RaceFinalStanding(
-        userId: json['userId'] as String,
+        userId: json['userId'] as String? ?? '',
         displayName: json['displayName'] as String? ?? 'Unknown',
         profilePhotoUrl: json['profilePhotoUrl'] as String?,
         rank: json['rank'] as int? ?? 0,
@@ -439,8 +439,8 @@ class RaceProof {
   final int? peoplePassed;
 
   factory RaceProof.fromJson(Map<String, dynamic> json) => RaceProof(
-    id: json['id'] as String,
-    userId: json['userId'] as String,
+    id: json['id'] as String? ?? '',
+    userId: json['userId'] as String? ?? '',
     displayName: json['displayName'] as String? ?? 'Unknown',
     proofType: json['proofType'] as String? ?? 'manual',
     aiActivityType: json['aiActivityType'] as String?,
@@ -457,7 +457,7 @@ class RaceProof {
     verificationSummary: json['verificationSummary'] as String?,
     reviewedBy: json['reviewedBy'] as String?,
     reviewedAt: json['reviewedAt'] as String?,
-    createdAt: json['createdAt'] as String,
+    createdAt: json['createdAt'] as String? ?? '',
     profilePhotoUrl: json['profilePhotoUrl'] as String?,
     thumbnailUrl: json['thumbnailUrl'] as String?,
     rankBefore: (json['rankBefore'] as num?)?.toInt(),
