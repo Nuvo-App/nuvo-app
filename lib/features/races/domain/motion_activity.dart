@@ -14,7 +14,9 @@ enum MotionActivityType {
   lunges('lunges'),
   highKnees('high_knees'),
   armRaises('arm_raises'),
-  plankHold('plank_hold');
+  plankHold('plank_hold'),
+  sumoSquats('sumo_squats'),
+  sideLunges('side_lunges');
 
   const MotionActivityType(this.backendValue);
 
@@ -27,6 +29,8 @@ enum MotionActivityType {
     }
     if (normalized == 'lunge') return MotionActivityType.lunges;
     if (normalized == 'plank') return MotionActivityType.plankHold;
+    if (normalized == 'sumo squat') return MotionActivityType.sumoSquats;
+    if (normalized == 'side lunge') return MotionActivityType.sideLunges;
     for (final type in MotionActivityType.values) {
       if (type.backendValue == normalized) return type;
     }

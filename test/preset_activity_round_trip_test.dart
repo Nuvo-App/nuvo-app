@@ -10,7 +10,7 @@ import 'package:nuvo/features/races/domain/race_draft.dart';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-/// The seven preset movements that must round-trip through every Flutter layer.
+/// The preset movements that must round-trip through every Flutter layer.
 const _presetCases = <(String, MotionActivityType, AiMotionActivity)>[
   ('push_ups', MotionActivityType.pushUps, AiMotionActivity.pushUps),
   ('squats', MotionActivityType.squats, AiMotionActivity.squats),
@@ -19,6 +19,8 @@ const _presetCases = <(String, MotionActivityType, AiMotionActivity)>[
   ('plank_hold', MotionActivityType.plankHold, AiMotionActivity.plankHold),
   ('high_knees', MotionActivityType.highKnees, AiMotionActivity.highKnees),
   ('arm_raises', MotionActivityType.armRaises, AiMotionActivity.armRaises),
+  ('sumo_squats', MotionActivityType.sumoSquats, AiMotionActivity.sumoSquats),
+  ('side_lunges', MotionActivityType.sideLunges, AiMotionActivity.sideLunges),
 ];
 
 /// Builds a backend JSON payload for a preset race, mirroring what the
@@ -161,6 +163,8 @@ void main() {
       ('plank_hold', 'Plank', 'seconds', 'side', 'validated_timer'),
       ('high_knees', 'High Knees', 'reps', 'front', 'count_reps'),
       ('arm_raises', 'Arm Raises', 'reps', 'front', 'count_reps'),
+      ('sumo_squats', 'Sumo Squats', 'reps', 'front', 'count_reps'),
+      ('side_lunges', 'Side Lunges', 'reps', 'front', 'count_reps'),
     ];
 
     test('Flutter catalog has exactly the same preset IDs as backend', () {

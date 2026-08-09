@@ -111,6 +111,133 @@ const squatsDemo = MovementDemo(
   duration: Duration(milliseconds: 2200),
 );
 
+// ── Sumo Squats ───────────────────────────────────────────────────────────────
+// ConfigurableRepValidator with sumoSquatRepDefinition:
+// "start" = hipToKneeRatio > 0.86 AND ankleWidthToBodyWidth > 1.5,
+// "active" = hipToKneeRatio < 0.58 AND ankleWidthToBodyWidth > 1.5.
+// Front view: wide stance, deep squat. Ankles stay wide throughout.
+
+class _SumoSquatsKeyPoses {
+  // Standing — wide stance, legs straight.
+  static const standing = NuvoCharacterPose(
+    head: Offset(0.50, 0.08),
+    neck: Offset(0.50, 0.15),
+    leftShoulder: Offset(0.42, 0.18),
+    rightShoulder: Offset(0.58, 0.18),
+    leftElbow: Offset(0.39, 0.28),
+    rightElbow: Offset(0.61, 0.28),
+    leftWrist: Offset(0.38, 0.38),
+    rightWrist: Offset(0.62, 0.38),
+    leftHip: Offset(0.45, 0.40),
+    rightHip: Offset(0.55, 0.40),
+    leftKnee: Offset(0.38, 0.58),
+    rightKnee: Offset(0.62, 0.58),
+    leftAnkle: Offset(0.30, 0.76),
+    rightAnkle: Offset(0.70, 0.76),
+  );
+
+  // Deep squat — hips lowered, knees bent, stance still wide.
+  static const sumoSquat = NuvoCharacterPose(
+    head: Offset(0.50, 0.16),
+    neck: Offset(0.50, 0.22),
+    leftShoulder: Offset(0.42, 0.25),
+    rightShoulder: Offset(0.58, 0.25),
+    leftElbow: Offset(0.38, 0.32),
+    rightElbow: Offset(0.62, 0.32),
+    leftWrist: Offset(0.40, 0.40),
+    rightWrist: Offset(0.60, 0.40),
+    leftHip: Offset(0.43, 0.50),
+    rightHip: Offset(0.57, 0.50),
+    leftKnee: Offset(0.36, 0.54),
+    rightKnee: Offset(0.64, 0.54),
+    leftAnkle: Offset(0.30, 0.76),
+    rightAnkle: Offset(0.70, 0.76),
+  );
+
+  static const poses = [standing, sumoSquat, standing];
+}
+
+const sumoSquatsDemo = MovementDemo(
+  poses: _SumoSquatsKeyPoses.poses,
+  duration: Duration(milliseconds: 2400),
+);
+
+// ── Side Lunges ───────────────────────────────────────────────────────────────
+// ConfigurableRepValidator with sideLungeRepDefinition:
+// "start" = both knees straight (>154°),
+// "active" = kneeSeparation > 0.85 AND one knee < 118°.
+// Front view: lateral step produces large X-separation between knees.
+
+class _SideLungesKeyPoses {
+  // Standing — neutral stance.
+  static const standing = NuvoCharacterPose(
+    head: Offset(0.50, 0.08),
+    neck: Offset(0.50, 0.15),
+    leftShoulder: Offset(0.42, 0.18),
+    rightShoulder: Offset(0.58, 0.18),
+    leftElbow: Offset(0.39, 0.28),
+    rightElbow: Offset(0.61, 0.28),
+    leftWrist: Offset(0.38, 0.38),
+    rightWrist: Offset(0.62, 0.38),
+    leftHip: Offset(0.45, 0.40),
+    rightHip: Offset(0.55, 0.40),
+    leftKnee: Offset(0.44, 0.58),
+    rightKnee: Offset(0.56, 0.58),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  // Side lunge — right leg steps out wide to the side, right knee bends.
+  // Large lateral X-separation between knees.
+  static const sideLungeRight = NuvoCharacterPose(
+    head: Offset(0.48, 0.10),
+    neck: Offset(0.48, 0.17),
+    leftShoulder: Offset(0.40, 0.20),
+    rightShoulder: Offset(0.56, 0.20),
+    leftElbow: Offset(0.37, 0.30),
+    rightElbow: Offset(0.59, 0.30),
+    leftWrist: Offset(0.36, 0.40),
+    rightWrist: Offset(0.60, 0.40),
+    leftHip: Offset(0.45, 0.42),
+    rightHip: Offset(0.55, 0.42),
+    leftKnee: Offset(0.46, 0.58),
+    rightKnee: Offset(0.72, 0.54),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.82, 0.76),
+  );
+
+  // Side lunge — left leg steps out wide to the side, left knee bends.
+  static const sideLungeLeft = NuvoCharacterPose(
+    head: Offset(0.52, 0.10),
+    neck: Offset(0.52, 0.17),
+    leftShoulder: Offset(0.44, 0.20),
+    rightShoulder: Offset(0.60, 0.20),
+    leftElbow: Offset(0.41, 0.30),
+    rightElbow: Offset(0.63, 0.30),
+    leftWrist: Offset(0.40, 0.40),
+    rightWrist: Offset(0.64, 0.40),
+    leftHip: Offset(0.45, 0.42),
+    rightHip: Offset(0.55, 0.42),
+    leftKnee: Offset(0.28, 0.54),
+    rightKnee: Offset(0.54, 0.58),
+    leftAnkle: Offset(0.18, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  static const poses = [
+    standing,
+    sideLungeRight,
+    standing,
+    sideLungeLeft,
+    standing,
+  ];
+}
+
+const sideLungesDemo = MovementDemo(
+  poses: _SideLungesKeyPoses.poses,
+  duration: Duration(milliseconds: 3600),
+);
+
 // ── Jumping Jacks ─────────────────────────────────────────────────────────────
 // JumpingJacksValidator: "start" = arms down + feet together,
 // "active" = arms overhead + feet apart.
@@ -356,5 +483,7 @@ MovementDemo? movementDemoForType(MotionActivityType type) {
     MotionActivityType.highKnees => highKneesDemo,
     MotionActivityType.armRaises => armRaisesDemo,
     MotionActivityType.plankHold => plankHoldDemo,
+    MotionActivityType.sumoSquats => sumoSquatsDemo,
+    MotionActivityType.sideLunges => sideLungesDemo,
   };
 }

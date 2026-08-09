@@ -27,6 +27,8 @@ const _presetCases = <(String id, String title, String unit)>[
   ('plank_hold', 'First to 60 Plank Seconds', 'seconds'),
   ('high_knees', 'First to 40 High Knees', 'reps'),
   ('arm_raises', 'First to 20 Arm Raises', 'reps'),
+  ('sumo_squats', 'First to 20 Sumo Squats', 'reps'),
+  ('side_lunges', 'First to 16 Side Lunges', 'reps'),
 ];
 
 Race _raceFor(String activityId, String title, String unit) => Race(
@@ -186,7 +188,7 @@ void main() {
       }
     });
 
-    test('movementDemoForType returns non-null for all 7 preset IDs', () {
+    test('movementDemoForType returns non-null for all 9 preset IDs', () {
       for (final (id, _, _) in _presetCases) {
         // Verify via the catalog that each ID resolves to a definition
         // and that definition has a demo.

@@ -5,7 +5,9 @@ enum AiMotionActivity {
   armRaises,
   plankHold,
   pushUps,
-  lunges;
+  lunges,
+  sumoSquats,
+  sideLunges;
 
   String get backendValue => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping_jacks',
@@ -15,6 +17,8 @@ enum AiMotionActivity {
     AiMotionActivity.plankHold => 'plank_hold',
     AiMotionActivity.pushUps => 'push_ups',
     AiMotionActivity.lunges => 'lunges',
+    AiMotionActivity.sumoSquats => 'sumo_squats',
+    AiMotionActivity.sideLunges => 'side_lunges',
   };
 
   String get label => switch (this) {
@@ -25,6 +29,8 @@ enum AiMotionActivity {
     AiMotionActivity.plankHold => 'seconds of plank',
     AiMotionActivity.pushUps => 'push-ups',
     AiMotionActivity.lunges => 'lunges',
+    AiMotionActivity.sumoSquats => 'sumo squats',
+    AiMotionActivity.sideLunges => 'side lunges',
   };
 
   static AiMotionActivity fromBackendValue(String value) => switch (value) {
@@ -34,6 +40,8 @@ enum AiMotionActivity {
     'plank_hold' => AiMotionActivity.plankHold,
     'push_ups' || 'pushups' => AiMotionActivity.pushUps,
     'lunges' || 'lunge' => AiMotionActivity.lunges,
+    'sumo_squats' || 'sumo squats' => AiMotionActivity.sumoSquats,
+    'side_lunges' || 'side lunges' => AiMotionActivity.sideLunges,
     _ => AiMotionActivity.pushUps,
   };
 }

@@ -172,7 +172,7 @@ class WorkOrderValidationError implements Exception {
 
 void main() {
   group('work-order validation', () {
-    test('all 7 preset work orders validate', () {
+    test('all 9 preset work orders validate', () {
       for (final order in presetMovementWorkOrders) {
         expect(
           () => validateWorkOrder(order),
@@ -196,7 +196,7 @@ void main() {
       );
     });
 
-    test('all 7 catalog movements have exactly one work order', () {
+    test('all 9 catalog movements have exactly one work order', () {
       for (final definition in motionActivityDefinitions) {
         final orders = presetMovementWorkOrders
             .where((o) => o.type == definition.type)
@@ -402,15 +402,17 @@ void main() {
   });
 
   group('factory family distribution', () {
-    test('exactly 3 movements use configurableRep', () {
+    test('exactly 5 movements use configurableRep', () {
       final configurable = presetMovementWorkOrders
           .where((o) => o.family == MovementFactoryFamily.configurableRep)
           .toList();
-      expect(configurable.length, 3);
+      expect(configurable.length, 5);
       expect(configurable.map((o) => o.type).toSet(), {
         MotionActivityType.squats,
         MotionActivityType.jumpingJacks,
         MotionActivityType.lunges,
+        MotionActivityType.sumoSquats,
+        MotionActivityType.sideLunges,
       });
     });
 
@@ -614,5 +616,7 @@ AiMotionActivity _aiActivityForType(MotionActivityType type) {
     MotionActivityType.highKnees => AiMotionActivity.highKnees,
     MotionActivityType.armRaises => AiMotionActivity.armRaises,
     MotionActivityType.plankHold => AiMotionActivity.plankHold,
+    MotionActivityType.sumoSquats => AiMotionActivity.sumoSquats,
+    MotionActivityType.sideLunges => AiMotionActivity.sideLunges,
   };
 }
