@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/presentation/widgets/arm_raises_animation.dart';
+import 'package:nuvo/features/races/presentation/widgets/movement_demo.dart';
 import 'package:nuvo/features/races/presentation/widgets/nuvo_character_painter.dart';
+import 'package:nuvo/features/races/presentation/widgets/preset_movement_demos.dart';
 
 void main() {
   group('NuvoCharacterPose', () {
@@ -225,6 +228,37 @@ void main() {
       );
       expect(find.byType(CustomPaint), findsWidgets);
     });
+  });
+
+  group('NuvoMovementAnimation for all preset demos', () {
+    for (final definition in motionActivityDefinitions) {
+      final demo = movementDemoForType(definition.type);
+      testWidgets(
+        'renders ${definition.type.name} demo without exceptions',
+        (tester) async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: SizedBox(
+                  width: 200,
+                  height: 300,
+                  child: NuvoMovementAnimation(demo: demo!),
+                ),
+              ),
+            ),
+          );
+          // Pump a few frames to let the AnimationController fire and
+          // the CustomPaint paint.
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+          await tester.pump(const Duration(milliseconds: 50));
+          expect(tester.takeException(), isNull);
+          // NuvoCharacterPainter is a CustomPainter (not a widget), so
+          // verify the CustomPaint widget is present.
+          expect(find.byType(CustomPaint), findsWidgets);
+        },
+      );
+    }
   });
 }
 
