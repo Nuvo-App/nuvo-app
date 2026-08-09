@@ -47,6 +47,14 @@ void main() {
     });
   });
 
+  group('validator dispatch completeness', () {
+    test('every supported movement definition has a validator constructor', () {
+      // Exercises createMotionValidator for every entry in
+      // supportedMovementDefinitions. Throws if any case is missing.
+      verifyValidatorDispatchComplete();
+    });
+  });
+
   group('VerifierRuntimeResolver preset routing', () {
     final cases = {
       'push_ups': AiMotionActivity.pushUps,
