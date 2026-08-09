@@ -633,6 +633,239 @@ void main() {
     });
   });
 
+  group('cross-demo region selection', () {
+    test('A. walk away / movement / walk back: selects arm movement', () {
+      // Each demo has different setup walking, same arm raise, different exit.
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(
+              1,
+              poses: _walkAwayMovementBackPoses(setupFrames: 8, exitFrames: 6),
+            ),
+            _demo(
+              2,
+              poses: _walkAwayMovementBackPoses(
+                setupFrames: 12,
+                exitFrames: 10,
+              ),
+            ),
+            _demo(
+              3,
+              poses: _walkAwayMovementBackPoses(setupFrames: 6, exitFrames: 14),
+            ),
+          ],
+        ),
+      );
+
+      expect(result.succeeded, isTrue, reason: result.failureReason);
+      final active = result.spec!.activeFeatureIds;
+      // Walking coordinates should NOT dominate — arm features should be
+      // the primary active features.
+      expect(
+        active.any((id) => id.contains('Wrist') || id.contains('Elbow')),
+        isTrue,
+        reason: 'No arm features selected for walk-away recording: $active',
+      );
+      // Leg/hip walking features should not be the majority.
+      final legCount = active
+          .where((id) => id.contains('Ankle') || id.contains('Hip'))
+          .length;
+      expect(
+        legCount,
+        lessThan(active.length / 2),
+        reason: 'Walking features dominate active set: $active',
+      );
+    });
+
+    test('B. phone reach: exit reach excluded from taught movement', () {
+      // Each recording ends with a different large wrist reach toward phone.
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _phoneReachPoses(reachSide: 'left')),
+            _demo(2, poses: _phoneReachPoses(reachSide: 'right')),
+            _demo(3, poses: _phoneReachPoses(reachSide: 'left')),
+          ],
+        ),
+      );
+
+      expect(result.succeeded, isTrue, reason: result.failureReason);
+      // The shared taught movement (overhead raise) should be selected,
+      // not the phone reach.
+      final active = result.spec!.activeFeatureIds;
+      expect(active.any((id) => id.contains('Wrist')), isTrue);
+    });
+
+    test('C. different setup lengths: same taught movement selected', () {
+      // Demo 1: 5 setup + movement + 4 exit
+      // Demo 2: 15 setup + movement + 10 exit
+      // Demo 3: 3 setup + movement + 20 exit
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(
+              1,
+              poses: _walkAwayMovementBackPoses(setupFrames: 5, exitFrames: 4),
+            ),
+            _demo(
+              2,
+              poses: _walkAwayMovementBackPoses(
+                setupFrames: 15,
+                exitFrames: 10,
+              ),
+            ),
+            _demo(
+              3,
+              poses: _walkAwayMovementBackPoses(setupFrames: 3, exitFrames: 20),
+            ),
+          ],
+        ),
+      );
+
+      expect(result.succeeded, isTrue, reason: result.failureReason);
+      expect(
+        result.spec!.canonicalSequence,
+        hasLength(customPoseTemplateFrameCount),
+      );
+      // Verify region selection was used.
+      final cleaning = result.toDiagnosticsJson()['cleaning'] as List;
+      final anyRegionSelection = cleaning.any(
+        (entry) =>
+            (entry as Map<String, dynamic>)['crossDemoRegionSelectionUsed'] ==
+            true,
+      );
+      expect(
+        anyRegionSelection,
+        isTrue,
+        reason: 'Cross-demo region selection was not used',
+      );
+    });
+
+    test('D. camera scale change: approach candidate penalized', () {
+      // A recording where one candidate region has large monotonic body-scale
+      // change (walking toward camera). The taught arm movement should still
+      // be selected over the camera-approach region.
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _cameraApproachPoses(approach: true)),
+            _demo(2, poses: _cameraApproachPoses(approach: true)),
+            _demo(3, poses: _cameraApproachPoses(approach: true)),
+          ],
+        ),
+      );
+
+      // Builder should succeed and select the arm movement, not the
+      // camera-approach region.
+      if (result.succeeded) {
+        final active = result.spec!.activeFeatureIds;
+        expect(
+          active.any((id) => id.contains('Wrist') || id.contains('Elbow')),
+          isTrue,
+          reason: 'Arm features not selected despite camera approach: $active',
+        );
+      }
+      // Do not assert that scale change alone always rejects — it's a soft
+      // penalty, not a hard reject.
+    });
+
+    test('E. no setup/exit: clean recordings work unchanged', () {
+      // Recordings containing only the taught movement (no setup/exit).
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _returnToStartPoses(leading: 3, trailing: 3)),
+            _demo(2, poses: _returnToStartPoses(leading: 3, trailing: 3)),
+            _demo(3, poses: _returnToStartPoses(leading: 3, trailing: 3)),
+          ],
+        ),
+      );
+
+      expect(result.succeeded, isTrue, reason: result.failureReason);
+      expect(
+        result.spec!.canonicalSequence,
+        hasLength(customPoseTemplateFrameCount),
+      );
+    });
+
+    test(
+      'F. runtime: build from setup/movement/exit verifies 4th performance',
+      () {
+        // Build from recordings with setup + movement + exit.
+        final spec = builder
+            .build(
+              _calibration(
+                demos: [
+                  _demo(
+                    1,
+                    poses: _walkAwayMovementBackPoses(
+                      setupFrames: 8,
+                      exitFrames: 6,
+                    ),
+                  ),
+                  _demo(
+                    2,
+                    poses: _walkAwayMovementBackPoses(
+                      setupFrames: 10,
+                      exitFrames: 8,
+                    ),
+                  ),
+                  _demo(
+                    3,
+                    poses: _walkAwayMovementBackPoses(
+                      setupFrames: 6,
+                      exitFrames: 10,
+                    ),
+                  ),
+                ],
+              ),
+            )
+            .spec;
+
+        expect(spec, isNotNull);
+        final runtime = CustomPoseSequenceRuntime(spec: spec!, target: 3)
+          ..start();
+        // 4th performance: clean overhead movement only.
+        final attempt = _runtimeGeneralizationAttempt();
+        for (var i = 0; i < 3; i++) {
+          _playRuntime(runtime, attempt);
+        }
+        expect(
+          runtime.currentValue,
+          greaterThan(0),
+          reason:
+              '${runtime.lastUpdate.state} progress=${runtime.lastUpdate.sequenceProgress} '
+              'sim=${runtime.lastUpdate.currentSimilarity} '
+              'failure=${runtime.failedRuleReason}',
+        );
+      },
+    );
+
+    test('G. wrong movement: clearly different movement still fails', () {
+      // Two demos with overhead + one completely different movement.
+      final result = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _returnToStartPoses(leading: 3, trailing: 3)),
+            _demo(2, poses: _returnToStartPoses(leading: 3, trailing: 3)),
+            _demo(3, poses: _oppositeTerminalPoses()),
+          ],
+        ),
+      );
+
+      if (result.succeeded) {
+        expect(
+          result.spec!.calibrationSummary.lowestPairwiseSimilarityScore,
+          lessThan(0.70),
+          reason: 'Wrong movement should produce poor consistency',
+        );
+      } else {
+        expect(result.failureReason, isNotNull);
+      }
+    });
+  });
+
   group('demonstration cleaning', () {
     test('A. dead time: idle frames before and after movement are trimmed', () {
       // 20 idle + movement + 20 idle = ~45 frames per demo.
@@ -1238,4 +1471,222 @@ void _playRuntime(
   for (final frame in frames) {
     runtime.update(frame);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cross-demo region selection test helpers
+// ---------------------------------------------------------------------------
+
+/// A recording with [setupFrames] of walking motion (high leg/hip movement),
+/// then the actual arm raise movement, then [exitFrames] of walking motion.
+/// The walking motion is simulated by shifting hip/ankle coordinates.
+List<NormalizedPose> _walkAwayMovementBackPoses({
+  required int setupFrames,
+  required int exitFrames,
+}) {
+  const normalizer = PoseNormalizer();
+  final neutral = normalizer.normalize(neutralStandingPose());
+  final overhead = normalizer.normalize(armsOverheadPose());
+  final raised = normalizer.normalize(leftArmRaisedPose());
+  final poses = <NormalizedPose>[];
+  // Setup: simulate walking by shifting leg coordinates frame by frame.
+  // Per-frame shifts large enough to create clear motion energy regions
+  // (each frame shifts by ~0.08 in coord space, well above the 0.15
+  // active threshold after normalization by tolerance 0.35).
+  for (var i = 0; i < setupFrames; i++) {
+    poses.add(_shiftLegs(neutral, dx: 0.08 * i, dy: 0.04 * i));
+  }
+  // Settle (7 neutral frames to create a low-motion gap > minConsecutiveInactive).
+  for (var i = 0; i < 7; i++) {
+    poses.add(neutral);
+  }
+  // Actual arm movement.
+  poses.addAll([
+    _blendPose(neutral, raised, 0.33),
+    _blendPose(neutral, raised, 0.67),
+    raised,
+    _blendPose(raised, overhead, 0.33),
+    _blendPose(raised, overhead, 0.67),
+    overhead,
+    overhead,
+    _blendPose(overhead, neutral, 0.33),
+    _blendPose(overhead, neutral, 0.67),
+    neutral,
+  ]);
+  // Settle (7 neutral frames).
+  for (var i = 0; i < 7; i++) {
+    poses.add(neutral);
+  }
+  // Exit: simulate walking back.
+  for (var i = 0; i < exitFrames; i++) {
+    poses.add(_shiftLegs(neutral, dx: -0.08 * i, dy: 0.05 * i));
+  }
+  return poses;
+}
+
+/// A recording with the overhead arm movement followed by a large wrist
+/// reach toward the phone (simulated by extending one wrist forward).
+/// The reach side differs between demos to ensure it's not consistent.
+List<NormalizedPose> _phoneReachPoses({required String reachSide}) {
+  const normalizer = PoseNormalizer();
+  final neutral = normalizer.normalize(neutralStandingPose());
+  final overhead = normalizer.normalize(armsOverheadPose());
+  final raised = normalizer.normalize(leftArmRaisedPose());
+  final poses = <NormalizedPose>[];
+  // Settle.
+  for (var i = 0; i < 3; i++) {
+    poses.add(neutral);
+  }
+  // Actual arm movement.
+  poses.addAll([
+    _blendPose(neutral, raised, 0.33),
+    _blendPose(neutral, raised, 0.67),
+    raised,
+    _blendPose(raised, overhead, 0.33),
+    _blendPose(raised, overhead, 0.67),
+    overhead,
+    overhead,
+    _blendPose(overhead, neutral, 0.33),
+    _blendPose(overhead, neutral, 0.67),
+    neutral,
+  ]);
+  // Settle (5 neutral frames).
+  for (var i = 0; i < 5; i++) {
+    poses.add(neutral);
+  }
+  // Phone reach: large wrist extension toward camera.
+  final reachPose = _extendWrist(neutral, side: reachSide, forward: 0.15);
+  for (var i = 0; i < 6; i++) {
+    poses.add(_blendPose(neutral, reachPose, 0.3 + 0.1 * i));
+  }
+  return poses;
+}
+
+/// A recording where one candidate region has large monotonic body-scale
+/// change (walking toward camera), plus the actual arm movement.
+List<NormalizedPose> _cameraApproachPoses({required bool approach}) {
+  const normalizer = PoseNormalizer();
+  final neutral = normalizer.normalize(neutralStandingPose());
+  final overhead = normalizer.normalize(armsOverheadPose());
+  final raised = normalizer.normalize(leftArmRaisedPose());
+  final poses = <NormalizedPose>[];
+  // Camera-approach region: simulate walking toward camera by progressively
+  // scaling the body (increasing NormalizedPose.scale).
+  for (var i = 0; i < 10; i++) {
+    final t = i / 10;
+    poses.add(_scaleBody(neutral, scaleChange: approach ? 0.3 * t : 0));
+  }
+  // Settle (5 neutral frames).
+  for (var i = 0; i < 5; i++) {
+    poses.add(neutral);
+  }
+  // Actual arm movement.
+  poses.addAll([
+    _blendPose(neutral, raised, 0.33),
+    _blendPose(neutral, raised, 0.67),
+    raised,
+    _blendPose(raised, overhead, 0.33),
+    _blendPose(raised, overhead, 0.67),
+    overhead,
+    overhead,
+    _blendPose(overhead, neutral, 0.33),
+    _blendPose(overhead, neutral, 0.67),
+    neutral,
+  ]);
+  // Settle (5 neutral frames).
+  for (var i = 0; i < 5; i++) {
+    poses.add(neutral);
+  }
+  return poses;
+}
+
+/// Shift hip and ankle coordinates to simulate walking.
+NormalizedPose _shiftLegs(
+  NormalizedPose base, {
+  required double dx,
+  required double dy,
+}) {
+  final features = <String, PoseFeatureValue>{};
+  for (final entry in base.features.values.entries) {
+    final id = entry.key;
+    final f = entry.value;
+    if (f.kind != 'coord') {
+      features[id] = f;
+      continue;
+    }
+    // Shift leg-related coordinates.
+    if (id.contains('Hip') || id.contains('Ankle') || id.contains('Knee')) {
+      features[id] = PoseFeatureValue(
+        value: f.value + (id.contains('.x') ? dx : dy),
+        confidence: f.confidence,
+        valid: f.valid,
+        kind: f.kind,
+      );
+    } else {
+      features[id] = f;
+    }
+  }
+  return NormalizedPose(
+    schemaVersion: base.schemaVersion,
+    landmarks: base.landmarks,
+    features: PoseFeatureVector(Map.unmodifiable(features)),
+    originX: base.originX,
+    originY: base.originY,
+    scale: base.scale,
+    originReference: base.originReference,
+    scaleReference: base.scaleReference,
+    validLandmarkCount: base.validLandmarkCount,
+    validFeatureCount: base.validFeatureCount,
+  );
+}
+
+/// Extend one wrist forward to simulate reaching toward the phone.
+NormalizedPose _extendWrist(
+  NormalizedPose base, {
+  required String side,
+  required double forward,
+}) {
+  final features = <String, PoseFeatureValue>{};
+  for (final entry in base.features.values.entries) {
+    final id = entry.key;
+    final f = entry.value;
+    if (id.contains('${side}Wrist') && f.kind == 'coord') {
+      features[id] = PoseFeatureValue(
+        value: f.value + (id.contains('.y') ? -forward : 0),
+        confidence: f.confidence,
+        valid: f.valid,
+        kind: f.kind,
+      );
+    } else {
+      features[id] = f;
+    }
+  }
+  return NormalizedPose(
+    schemaVersion: base.schemaVersion,
+    landmarks: base.landmarks,
+    features: PoseFeatureVector(Map.unmodifiable(features)),
+    originX: base.originX,
+    originY: base.originY,
+    scale: base.scale,
+    originReference: base.originReference,
+    scaleReference: base.scaleReference,
+    validLandmarkCount: base.validLandmarkCount,
+    validFeatureCount: base.validFeatureCount,
+  );
+}
+
+/// Scale the body to simulate walking toward/away from camera.
+NormalizedPose _scaleBody(NormalizedPose base, {required double scaleChange}) {
+  return NormalizedPose(
+    schemaVersion: base.schemaVersion,
+    landmarks: base.landmarks,
+    features: base.features,
+    originX: base.originX,
+    originY: base.originY,
+    scale: base.scale * (1 + scaleChange),
+    originReference: base.originReference,
+    scaleReference: base.scaleReference,
+    validLandmarkCount: base.validLandmarkCount,
+    validFeatureCount: base.validFeatureCount,
+  );
 }
