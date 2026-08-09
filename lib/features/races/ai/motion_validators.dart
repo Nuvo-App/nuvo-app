@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../data/ai_motion_models.dart';
+import '../domain/motion_activity.dart';
 
 enum MovementType {
   pushups,
@@ -103,6 +104,27 @@ MovementDefinition? movementDefinitionForActivity(AiMotionActivity activity) {
     if (definition.activity == activity) return definition;
   }
   return null;
+}
+
+/// Resolves a [MotionActivityType] (domain identity) to the corresponding
+/// runtime [MovementDefinition]. This is the canonical bridge between the
+/// catalog identity and the validator runtime — no string matching required.
+MovementDefinition? movementDefinitionForType(MotionActivityType type) {
+  final activity = _aiMotionActivityForType(type);
+  if (activity == null) return null;
+  return movementDefinitionForActivity(activity);
+}
+
+AiMotionActivity? _aiMotionActivityForType(MotionActivityType type) {
+  return switch (type) {
+    MotionActivityType.pushUps => AiMotionActivity.pushUps,
+    MotionActivityType.jumpingJacks => AiMotionActivity.jumpingJacks,
+    MotionActivityType.squats => AiMotionActivity.squats,
+    MotionActivityType.lunges => AiMotionActivity.lunges,
+    MotionActivityType.highKnees => AiMotionActivity.highKnees,
+    MotionActivityType.armRaises => AiMotionActivity.armRaises,
+    MotionActivityType.plankHold => AiMotionActivity.plankHold,
+  };
 }
 
 class NuvoVerifyOutput {
