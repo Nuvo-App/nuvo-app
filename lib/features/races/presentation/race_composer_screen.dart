@@ -782,7 +782,7 @@ class _RaceNamePreview extends StatelessWidget {
 
 // ── Step 2: Activity ──────────────────────────────────────────────────────────
 
-class _ActivityPage extends StatelessWidget {
+class _ActivityPage extends StatefulWidget {
   const _ActivityPage({
     required this.draft,
     required this.onDraftChanged,
@@ -792,16 +792,28 @@ class _ActivityPage extends StatelessWidget {
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
 
+  @override
+  State<_ActivityPage> createState() => _ActivityPageState();
+}
+
+class _ActivityPageState extends State<_ActivityPage> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  MovementCategory? _selectedCategory; // null = All
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   void _select(MotionActivityDefinition activity) {
-    // Determine target: keep current if the new activity supports it,
-    // otherwise reset to the new activity's default.
-    final currentTarget = draft.targetValue;
+    final currentTarget = widget.draft.targetValue;
     final keepTarget =
         activity.suggestedTargets.contains(currentTarget) ||
-        // allow arbitrary targets that are reasonable for the new activity
         (currentTarget >= 1 && currentTarget <= 99999);
-    onDraftChanged(
-      draft.asPreset(
+    widget.onDraftChanged(
+      widget.draft.asPreset(
         activity: activity,
         targetValue: keepTarget ? currentTarget : activity.defaultTarget,
       ),
@@ -814,19 +826,79 @@ class _ActivityPage extends StatelessWidget {
       question: 'What are you competing in?',
       support: 'Camera verifies every rep.',
       ctaLabel: 'Set the finish line',
-      onCta: onNext,
+      onCta: widget.onNext,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final activity in motionActivityDefinitions) ...[
-            _ActivityTile(
-              activity: activity,
-              icon: activity.icon,
-              description: 'Counted in ${activity.metric.label}',
-              selected: draft.activity.type == activity.type,
-              onTap: () => _select(activity),
+          // ── Search bar ───────────────────────────────────────────────────
+          _SearchBar(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _searchQuery = value),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Search results OR browse ────────────────────────────────────
+          if (_searchQuery.isNotEmpty)
+            _SearchResults(
+              query: _searchQuery,
+              selectedType: widget.draft.activity.type,
+              onSelect: _select,
+            )
+          else ...[
+            // ── Popular row ───────────────────────────────────────────────
+            if (featuredActivities.isNotEmpty) ...[
+              Text(
+                'Popular',
+                style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: featuredActivities.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (context, i) {
+                    final activity = featuredActivities[i];
+                    return _PopularChip(
+                      activity: activity,
+                      selected: widget.draft.activity.type == activity.type,
+                      onTap: () => _select(activity),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // ── Category tabs ─────────────────────────────────────────────
+            _CategoryTabs(
+              categories: activeCategories,
+              selected: _selectedCategory,
+              onSelect: (cat) => setState(() => _selectedCategory = cat),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
+
+            // ── Category sections ────────────────────────────────────────
+            if (_selectedCategory == null)
+              for (final category in activeCategories) ...[
+                _CategorySection(
+                  category: category,
+                  selectedType: widget.draft.activity.type,
+                  onSelect: _select,
+                ),
+                const SizedBox(height: 24),
+              ]
+            else
+              _CategorySection(
+                category: _selectedCategory!,
+                selectedType: widget.draft.activity.type,
+                onSelect: _select,
+                showAll: true,
+              ),
           ],
+
+          // ── Teach a movement ────────────────────────────────────────────
           const SizedBox(height: 6),
           NuvoSecondaryButton(
             label: 'Teach a movement',
@@ -840,17 +912,46 @@ class _ActivityPage extends StatelessWidget {
   }
 }
 
-class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({
+// ── Search bar ───────────────────────────────────────────────────────────────
+
+class _SearchBar extends StatelessWidget {
+  const _SearchBar({required this.controller, required this.onChanged});
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.border, width: 1.5),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+        decoration: InputDecoration(
+          hintText: 'Search movements',
+          hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+          prefixIcon: const Icon(Icons.search_rounded, color: NuvoColors.muted, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Popular chip ─────────────────────────────────────────────────────────────
+
+class _PopularChip extends StatelessWidget {
+  const _PopularChip({
     required this.activity,
-    required this.icon,
-    required this.description,
     required this.selected,
     required this.onTap,
   });
   final MotionActivityDefinition activity;
-  final IconData icon;
-  final String description;
   final bool selected;
   final VoidCallback onTap;
 
@@ -860,68 +961,293 @@ class _ActivityTile extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
+              ? NuvoColors.actionBlue.withValues(alpha: 0.08)
               : NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
           border: Border.all(
             color: selected ? NuvoColors.actionBlue : NuvoColors.border,
             width: selected ? 2 : 1.5,
           ),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: selected
-                    ? NuvoColors.actionBlue.withValues(alpha: 0.12)
-                    : NuvoColors.panel,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                icon,
+            Icon(
+              activity.icon,
+              color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              activity.title,
+              style: AppTextStyles.bodyMedium.copyWith(
                 color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                size: 22,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    activity.title,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (selected) ...[
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.check_circle_rounded,
-                color: NuvoColors.actionBlue,
-                size: 20,
-              ),
-            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Category tabs ────────────────────────────────────────────────────────────
+
+class _CategoryTabs extends StatelessWidget {
+  const _CategoryTabs({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
+  final List<MovementCategory> categories;
+  final MovementCategory? selected;
+  final ValueChanged<MovementCategory?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: categories.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          if (i == 0) {
+            final isSelected = selected == null;
+            return _CategoryTab(
+              label: 'All',
+              selected: isSelected,
+              onTap: () => onSelect(null),
+            );
+          }
+          final cat = categories[i - 1];
+          return _CategoryTab(
+            label: cat.label,
+            selected: selected == cat,
+            onTap: () => onSelect(cat),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _CategoryTab extends StatelessWidget {
+  const _CategoryTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? NuvoColors.actionBlue : NuvoColors.white,
+          borderRadius: BorderRadius.circular(NuvoRadii.sm),
+          border: Border.all(
+            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: selected ? NuvoColors.white : NuvoColors.navy,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Category section ─────────────────────────────────────────────────────────
+
+class _CategorySection extends StatelessWidget {
+  const _CategorySection({
+    required this.category,
+    required this.selectedType,
+    required this.onSelect,
+    this.showAll = false,
+  });
+  final MovementCategory category;
+  final MotionActivityType selectedType;
+  final ValueChanged<MotionActivityDefinition> onSelect;
+  final bool showAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final activities = activitiesByCategory(category);
+    final displayed = showAll ? activities : activities.take(4).toList();
+    final hasMore = !showAll && activities.length > 4;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              category.label,
+              style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
+            ),
+            if (hasMore)
+              GestureDetector(
+                onTap: () {
+                  // Navigate to full category list — for now, expand inline
+                  // by tapping the category tab.
+                },
+                child: Text(
+                  'See all',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.actionBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 2.6,
+          ),
+          itemCount: displayed.length,
+          itemBuilder: (context, i) {
+            final activity = displayed[i];
+            return _CompactActivityCard(
+              activity: activity,
+              selected: activity.type == selectedType,
+              onTap: () => onSelect(activity),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+// ── Compact activity card ────────────────────────────────────────────────────
+
+class _CompactActivityCard extends StatelessWidget {
+  const _CompactActivityCard({
+    required this.activity,
+    required this.selected,
+    required this.onTap,
+  });
+  final MotionActivityDefinition activity;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
+              : NuvoColors.white,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: Border.all(
+            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+            width: selected ? 2 : 1.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  activity.icon,
+                  color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    activity.title,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              activity.metric.label,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.muted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Search results ───────────────────────────────────────────────────────────
+
+class _SearchResults extends StatelessWidget {
+  const _SearchResults({
+    required this.query,
+    required this.selectedType,
+    required this.onSelect,
+  });
+  final String query;
+  final MotionActivityType selectedType;
+  final ValueChanged<MotionActivityDefinition> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final results = searchActivities(query);
+    if (results.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text(
+            'No movements found for "$query"',
+            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final activity in results) ...[
+          _CompactActivityCard(
+            activity: activity,
+            selected: activity.type == selectedType,
+            onTap: () => onSelect(activity),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
     );
   }
 }

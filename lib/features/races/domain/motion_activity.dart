@@ -79,6 +79,21 @@ enum RaceRecurrence {
   final String label;
 }
 
+/// Broad browsing categories for the movement picker.
+/// A movement has one primary category even if it involves multiple
+/// body parts. Keep categories broad — do not create narrow taxonomies.
+enum MovementCategory {
+  upperBody('Upper Body'),
+  lowerBody('Lower Body'),
+  cardio('Cardio'),
+  core('Core'),
+  fullBody('Full Body');
+
+  const MovementCategory(this.label);
+
+  final String label;
+}
+
 class MotionActivityDefinition {
   const MotionActivityDefinition({
     required this.type,
@@ -93,7 +108,10 @@ class MotionActivityDefinition {
     required this.icon,
     required this.framingLabel,
     required this.preferredCameraView,
+    required this.category,
     this.isHold = false,
+    this.featured = false,
+    this.sortPriority = 100,
   });
 
   final MotionActivityType type;
@@ -109,6 +127,15 @@ class MotionActivityDefinition {
   final IconData icon;
   final String framingLabel;
   final PreferredCameraView preferredCameraView;
+
+  /// Primary browsing category for the picker.
+  final MovementCategory category;
+
+  /// Whether this movement appears in the "Popular" row.
+  final bool featured;
+
+  /// Lower numbers sort first. Used for ordering within a category.
+  final int sortPriority;
 
   int get defaultTarget => suggestedTargets.first;
 
