@@ -1,4 +1,6 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../domain/motion_activity.dart';
+import '../domain/motion_activity_catalog.dart';
 
 class Race {
   const Race({
@@ -174,17 +176,12 @@ class Race {
 
   bool get isSupportedAiMotionRace {
     if (isCustomVerifierRace) return false;
-    const supported = {
-      'push_ups',
-      'jumping_jacks',
-      'squats',
-      'lunges',
-      'plank_hold',
-      'high_knees',
-      'arm_raises',
-    };
     final activity = activityId ?? aiActivityType;
-    return isAiMotionRace && activity != null && supported.contains(activity);
+    if (activity == null) return false;
+    final type = MotionActivityType.fromBackendValue(activity);
+    return isAiMotionRace &&
+        type != null &&
+        supportedMotionActivityTypes.contains(type);
   }
 
   String get effectiveAiActivityType {

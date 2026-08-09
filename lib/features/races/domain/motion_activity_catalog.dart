@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import 'motion_activity.dart';
 
 const motionActivityDefinitions = [
@@ -20,6 +22,9 @@ const motionActivityDefinitions = [
       'Wait for the Ready signal.',
       'Finish each rep cleanly.',
     ],
+    icon: Icons.fitness_center_rounded,
+    framingLabel: 'Upper body + hands visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.jumpingJacks,
@@ -40,6 +45,9 @@ const motionActivityDefinitions = [
       'Leave room above your head.',
       'Finish each rep cleanly.',
     ],
+    icon: Icons.accessibility_new_rounded,
+    framingLabel: 'Full body · leave room for arms',
+    preferredCameraView: PreferredCameraView.frontPreferred,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.squats,
@@ -60,6 +68,9 @@ const motionActivityDefinitions = [
       'Go lower.',
       'Stand tall to finish the rep.',
     ],
+    icon: Icons.person_outline_rounded,
+    framingLabel: 'Full body centered in frame',
+    preferredCameraView: PreferredCameraView.frontPreferred,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.lunges,
@@ -80,6 +91,9 @@ const motionActivityDefinitions = [
       'Step back into frame.',
       'Stand tall to finish the rep.',
     ],
+    icon: Icons.directions_walk_rounded,
+    framingLabel: 'Full body · lower body visible',
+    preferredCameraView: PreferredCameraView.frontOrSlightAngle,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.plankHold,
@@ -100,6 +114,9 @@ const motionActivityDefinitions = [
       'Keep your whole body visible.',
       'Keep your body straight.',
     ],
+    icon: Icons.straighten_rounded,
+    framingLabel: 'Side view · full body in frame',
+    preferredCameraView: PreferredCameraView.sideOrDiagonalRequired,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.highKnees,
@@ -120,6 +137,9 @@ const motionActivityDefinitions = [
       'Lift each knee above your hip.',
       'Alternate legs cleanly.',
     ],
+    icon: Icons.directions_run_rounded,
+    framingLabel: 'Full body · lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
   ),
   MotionActivityDefinition(
     type: MotionActivityType.armRaises,
@@ -140,17 +160,17 @@ const motionActivityDefinitions = [
       'Raise both arms above your shoulders.',
       'Lower both arms to finish the rep.',
     ],
+    icon: Icons.sports_gymnastics_rounded,
+    framingLabel: 'Upper body + arms visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
   ),
 ];
 
-const supportedMotionActivityTypes = {
-  MotionActivityType.pushUps,
-  MotionActivityType.squats,
-  MotionActivityType.jumpingJacks,
-  MotionActivityType.plankHold,
-  MotionActivityType.lunges,
-  MotionActivityType.highKnees,
-  MotionActivityType.armRaises,
+/// All preset movement types that support camera verification.
+/// Derived from [motionActivityDefinitions] so the catalog is the single
+/// source of truth for which movements are supported.
+final Set<MotionActivityType> supportedMotionActivityTypes = {
+  for (final definition in motionActivityDefinitions) definition.type,
 };
 
 bool isCameraVerifiedMotionActivity(MotionActivityDefinition? definition) =>
@@ -177,12 +197,15 @@ MotionActivityDefinition? resolveRaceMotionActivity({
   final explicit = motionActivityForBackendValue(aiActivityType);
   if (isCameraVerifiedMotionActivity(explicit)) return explicit;
 
-  final inferred = _inferSupportedMotionActivity([title, unit, targetUnit]);
+  final inferred = inferSupportedMotionActivity([title, unit, targetUnit]);
   if (isCameraVerifiedMotionActivity(inferred)) return inferred;
   return null;
 }
 
-MotionActivityDefinition? _inferSupportedMotionActivity(
+/// Infers a supported camera-verified [MotionActivityDefinition] from
+/// free-text fields (title, unit, target unit). Returns null if no supported
+/// movement matches.
+MotionActivityDefinition? inferSupportedMotionActivity(
   Iterable<String?> values,
 ) {
   final normalized = values
