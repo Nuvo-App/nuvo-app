@@ -1,7 +1,6 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
+import 'movement_demo.dart';
 import 'nuvo_character_painter.dart';
 
 /// Key poses for the Arm Raises movement, matching what
@@ -10,7 +9,7 @@ import 'nuvo_character_painter.dart';
 /// - "up" = wrists above shoulder line by 0.04+
 ///
 /// The animation cycles: down → up → down, looping smoothly.
-class _ArmRaisesKeyPoses {
+class ArmRaisesKeyPoses {
   // Neutral standing pose — arms at sides.
   static const down = NuvoCharacterPose(
     head: Offset(0.50, 0.10),
@@ -112,78 +111,36 @@ class _ArmRaisesKeyPoses {
     shoulderLevel,
     raising,
   ];
-
-  /// Interpolate across all key poses given a [t] in 0–1.
-  /// The cycle goes down→overhead→down and then loops.
-  static NuvoCharacterPose poseAt(double t) {
-    // t in 0–1 maps across all segments
-    final segmentCount = poses.length - 1;
-    final scaled = t * segmentCount;
-    final idx = scaled.floor().clamp(0, segmentCount - 1);
-    final localT = scaled - idx;
-
-    // Use ease-in-out for natural movement
-    final eased = _easeInOutSine(localT);
-    return NuvoCharacterPose.lerp(poses[idx], poses[idx + 1], eased);
-  }
-
-  static double _easeInOutSine(double t) => 0.5 * (1 - math.cos(math.pi * t));
 }
 
+/// [MovementDemo] for Arm Raises — the canonical demo data for this movement.
+const armRaisesDemo = MovementDemo(
+  poses: ArmRaisesKeyPoses.poses,
+  duration: Duration(milliseconds: 2800),
+);
+
 /// A widget that displays an animated illustrated Nuvo character performing
-/// Arm Raises.  The animation loops continuously.
+/// Arm Raises. The animation loops continuously.
 ///
-/// The character is painted with [NuvoCharacterPainter] and the pose is
-/// interpolated between hand-authored key poses using an
-/// [AnimationController].
-class ArmRaisesAnimation extends StatefulWidget {
+/// This is a thin wrapper around [NuvoMovementAnimation] with the
+/// [armRaisesDemo] data, kept for backward compatibility with existing
+/// call sites and tests.
+class ArmRaisesAnimation extends StatelessWidget {
   const ArmRaisesAnimation({
     super.key,
     this.bodyColor = const Color(0xFF07152D),
     this.accentColor = const Color(0xFF1264FF),
-    this.duration = const Duration(milliseconds: 2800),
   });
 
   final Color bodyColor;
   final Color accentColor;
-  final Duration duration;
-
-  @override
-  State<ArmRaisesAnimation> createState() => _ArmRaisesAnimationState();
-}
-
-class _ArmRaisesAnimationState extends State<ArmRaisesAnimation>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final pose = _ArmRaisesKeyPoses.poseAt(_controller.value);
-        return CustomPaint(
-          painter: NuvoCharacterPainter(
-            pose: pose,
-            bodyColor: widget.bodyColor,
-            accentColor: widget.accentColor,
-          ),
-          child: const SizedBox.expand(),
-        );
-      },
+    return NuvoMovementAnimation(
+      demo: armRaisesDemo,
+      bodyColor: bodyColor,
+      accentColor: accentColor,
     );
   }
 }
