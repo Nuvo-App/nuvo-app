@@ -236,7 +236,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       }
     } on ApiException catch (e) {
       debugPrint('EDIT_PROFILE_SAVE_FAILED: ${e.message}');
-      if (mounted) setState(() => _nameError = e.message);
+      if (mounted) {
+        setState(() {
+          _nameError = e.statusCode >= 500
+              ? 'Nuvo hit a snag. Try again.'
+              : 'Could not save your changes. Try again.';
+        });
+      }
     } catch (e) {
       debugPrint('EDIT_PROFILE_SAVE_FAILED: $e');
       if (mounted) {

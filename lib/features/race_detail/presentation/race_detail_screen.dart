@@ -39,6 +39,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
   Race? _race;
   bool _loading = true;
   bool _busy = false;
+  bool _navigating = false;
   String? _error;
   Timer? _refreshTimer;
 
@@ -171,9 +172,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() => _busy = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_friendlyApiError(e, 'join this race'))),
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -202,9 +203,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() => _busy = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_friendlyApiError(e, 'leave this race'))),
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -213,6 +214,35 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           const SnackBar(content: Text('Could not leave this race.')),
         );
       }
+    }
+  }
+
+  /// Maps an [ApiException] to a concise user-facing message. Technical
+  /// details are logged via [debugPrint] but never shown to the user.
+  String _friendlyApiError(ApiException e, String action) {
+    debugPrint('RACE_DETAIL_API_ERROR: ${e.statusCode} ${e.message}');
+    if (e.statusCode >= 500) {
+      return 'Nuvo hit a snag. Try again.';
+    }
+    if (e.statusCode == 401 || e.statusCode == 403) {
+      return 'You may need to sign in again.';
+    }
+    if (e.statusCode == 404) {
+      return 'This race could not be found.';
+    }
+    if (e.statusCode == 409) {
+      return 'That action is not available right now.';
+    }
+    return 'Could not $action. Try again.';
+  }
+
+  Future<void> _goToInviteCrew(String raceId) async {
+    if (_navigating) return;
+    setState(() => _navigating = true);
+    try {
+      await context.push('/race/$raceId/invite');
+    } finally {
+      if (mounted) setState(() => _navigating = false);
     }
   }
 
@@ -454,9 +484,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 NuvoOutlineButton(
                   label: 'Invite crew',
                   expand: true,
-                  onPressed: _busy
+                  onPressed: (_busy || _navigating)
                       ? null
-                      : () => context.push('/race/${race.id}/invite'),
+                      : () => _goToInviteCrew(race.id),
                 ),
               ],
 

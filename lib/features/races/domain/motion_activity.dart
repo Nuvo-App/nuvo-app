@@ -47,7 +47,7 @@ enum RaceFormat {
   firstToGoal('first_to_goal', 'First to the goal'),
   mostInWindow('most_in_window', 'Most before time runs out'),
   bestAttempt('best_attempt', 'Best single attempt'),
-  timedAttempt('timed_attempt', 'Timed challenge');
+  timedAttempt('timed_attempt', 'Timed race');
 
   const RaceFormat(this.backendValue, this.label);
 

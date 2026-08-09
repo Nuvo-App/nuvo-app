@@ -20,6 +20,7 @@ import '../../ai/custom_pose/normalized_pose.dart';
 import '../../ai/custom_pose/pose_calibration_flow.dart';
 import '../../ai/custom_pose/pose_stream_controller.dart';
 import 'learned_custom_movement_provider.dart';
+import 'learned_movement_preview.dart';
 import 'pose_skeleton_overlay.dart';
 
 const bool kNuvoDiagnosticsEnabled = bool.fromEnvironment('NUVO_DIAGNOSTICS');
@@ -53,6 +54,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   bool _testingVerifier = false;
   bool _cameraInterruptedDuringTest = false;
   bool _debugReadyFixture = false;
+  bool _navigating = false;
   CustomPoseSequenceRuntime? _customRuntime;
   CustomPoseRuntimeUpdate? _customUpdate;
   CustomPoseRuntimeResult? _customTestResult;
@@ -333,6 +335,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _finishRecording() {
     _flow.stopRecordingExample();
+    if (_flow.stage == TeachMovementStage.readyToRecord &&
+        _flow.acceptedCount >= _flow.requiredExampleCount &&
+        _flow.canLearn) {
+      _flow.buildWhenReady();
+    }
   }
 
   void _cancelRecording() {
@@ -623,10 +630,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           style: AppTextStyles.titleMedium,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 12),
-        _progressDots(),
-        const SizedBox(height: 8),
-        _progressText(),
         const SizedBox(height: 20),
         _cameraActionButton(),
         const SizedBox(height: 12),
@@ -662,6 +665,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  // ignore: unused_element
   Widget _progressText() {
     final accepted = _flow.acceptedCount;
     final needed = _flow.requiredExampleCount;
@@ -672,6 +676,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  // ignore: unused_element
   Widget _captureControls() {
     final stage = _flow.stage;
     final canRemoveLast =
@@ -782,6 +787,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  // ignore: unused_element
   Widget _progressDots() {
     final filled = _flow.acceptedCount;
     final dots = List.generate(3, (index) {
@@ -819,26 +825,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       return const Center(child: CircularProgressIndicator());
     }
     if (stage == TeachMovementStage.readyToRecord) {
-      final canRecord = _cameraReady && _flow.canRecordNextExample;
-      if (_flow.lastExampleRejected) {
-        return NuvoPrimaryButton(
-          label: 'Record again',
-          expand: true,
-          onPressed: canRecord ? _startRecording : null,
-        );
-      }
-      final count = _flow.savedExampleCount;
-      if (count < _flow.requiredExampleCount) {
-        return NuvoPrimaryButton(
-          label: 'Record example ${count + 1}',
-          expand: true,
-          onPressed: canRecord ? _startRecording : null,
-        );
-      }
+      final hasProgress = _flow.acceptedCount > 0 || _flow.lastExampleRejected;
       return NuvoPrimaryButton(
-        label: 'Learn movement',
+        label: hasProgress ? 'Record again' : 'Record',
         expand: true,
-        onPressed: _flow.canLearn ? _flow.buildWhenReady : null,
+        onPressed: _cameraReady ? _startRecording : null,
       );
     }
     return NuvoOutlineButton(
@@ -856,28 +847,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         onPressed: _cancelRecording,
       );
     }
-    if (_flow.stage != TeachMovementStage.readyToRecord) {
-      return const SizedBox.shrink();
-    }
-    final NuvoOutlineButton? extra;
-    if (_flow.canRecordExtraExample && !_flow.lastExampleRejected) {
-      extra = NuvoOutlineButton(
-        label: 'Record one more',
-        expand: true,
-        onPressed: (_cameraReady && _flow.canRecordNextExample)
-            ? _startRecording
-            : null,
-      );
-    } else {
-      extra = null;
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (extra != null) ...[extra, const SizedBox(height: 8)],
-        _captureControls(),
-      ],
-    );
+    return const SizedBox.shrink();
   }
 
   void _syncCaptureDeviceInfo(CameraDescription camera) {
@@ -911,16 +881,34 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Map<String, dynamic> _debugMovementReport() {
+    final streamState = _poseStream.state;
+    final result = _customTestResult;
     return {
       'generatedAtIso8601': DateTime.now().toUtc().toIso8601String(),
       'teaching': _flow.debugReport(),
+      'poseStream': {
+        'framesReceived': streamState.framesReceived,
+        'framesProcessed': streamState.framesProcessed,
+        'framesDropped': streamState.framesDropped,
+        'emptyPoseCount': streamState.emptyPoseCount,
+        'detectorBusy': streamState.detectorBusy,
+        'lastGoodPoseAt': streamState.lastGoodPoseAt?.toUtc().toIso8601String(),
+      },
       'test': {
         'testing': _testingVerifier,
         'cameraInterruptedDuringTest': _cameraInterruptedDuringTest,
         if (_customUpdate != null)
           'latestUpdate': _customUpdate!.toDiagnosticsJson(),
         'runtimeTrace': List.unmodifiable(_runtimeDiagnostics),
-        if (_customTestResult != null) 'result': _customTestResult!.toJson(),
+        if (result != null)
+          'runtimeResult': {
+            'isVerified': result.isVerified,
+            'count': result.count,
+            'target': result.target,
+            'framesAnalyzed': result.framesAnalyzed,
+            'validFrames': result.validFrames,
+          },
+        if (result != null) 'result': result.toJson(),
       },
       'mirror': _mirrorDiagnostics(),
     };
@@ -1023,18 +1011,35 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final testResult = _customTestResult;
     final canUseMovement = spec != null;
     final testLabel = testResult == null ? 'Test movement' : 'Test again';
+    final isLearned =
+        _flow.stage == TeachMovementStage.learned || _debugReadyFixture;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(movementName, style: AppTextStyles.titleLarge),
         const SizedBox(height: 8),
-        if (_flow.stage == TeachMovementStage.learned ||
-            _debugReadyFixture) ...[
+        if (isLearned) ...[
           Text(
             'Movement learned',
             style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.success),
           ),
-          const SizedBox(height: 16),
+          if (spec != null) ...[
+            const SizedBox(height: 16),
+            Text(
+              'Here’s what Nuvo learned',
+              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            LearnedMovementPreview(spec: spec),
+            const SizedBox(height: 16),
+            Text(
+              'Does this look like your movement?',
+              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+          ],
           if (testResult != null) ...[
             _testResultStatus(testResult),
             const SizedBox(height: 14),
@@ -1050,27 +1055,36 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             NuvoOutlineButton(
               label: 'Use this movement',
               expand: true,
-              onPressed: _goToRaceCreation,
+              onPressed: _navigating ? null : _goToRaceCreation,
             ),
           ],
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _smallButton('Retry teaching', _restart),
+              const SizedBox(width: 8),
+              _smallButton('Change name', _changeName),
+            ],
+          ),
         ] else ...[
           Text(
             _flow.message,
             style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.danger),
           ),
+          const SizedBox(height: 14),
+          NuvoPrimaryButton(
+            label: 'Retry teaching',
+            expand: true,
+            onPressed: _restart,
+          ),
+          const SizedBox(height: 12),
+          NuvoOutlineButton(
+            label: 'Change name',
+            expand: true,
+            onPressed: _changeName,
+          ),
         ],
-        const SizedBox(height: 14),
-        NuvoPrimaryButton(
-          label: 'Retry teaching',
-          expand: true,
-          onPressed: _restart,
-        ),
-        const SizedBox(height: 12),
-        NuvoOutlineButton(
-          label: 'Change name',
-          expand: true,
-          onPressed: _changeName,
-        ),
         if (_showDiagnostics) ...[const SizedBox(height: 12), _debugPanel()],
       ],
     );
@@ -1087,7 +1101,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         borderRadius: BorderRadius.circular(NuvoRadii.md),
       ),
       child: Text(
-        matched ? 'Matched' : 'Try again',
+        matched
+            ? "Nuvo recognized your movement. You're ready to use it."
+            : "Nuvo couldn't match that. Try again.",
         style: AppTextStyles.titleMedium.copyWith(
           color: matched ? NuvoColors.success : NuvoColors.danger,
         ),
@@ -1096,10 +1112,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  void _goToRaceCreation() {
+  Future<void> _goToRaceCreation() async {
     final spec = _effectiveSpec;
-    if (spec == null) return;
-    context.push('/races/new');
+    if (spec == null || _navigating) return;
+    setState(() => _navigating = true);
+    try {
+      await context.push('/races/new');
+    } finally {
+      if (mounted) setState(() => _navigating = false);
+    }
   }
 
   String _nuvoTestStatus({
