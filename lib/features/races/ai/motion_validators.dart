@@ -276,11 +276,18 @@ MotionValidator createMotionValidator(
   int targetValue,
 ) => switch (activity) {
   AiMotionActivity.pushUps => PushupsValidator(targetValue: targetValue),
-  AiMotionActivity.jumpingJacks => JumpingJacksValidator(
+  AiMotionActivity.jumpingJacks => ConfigurableRepValidator(
+    definition: jumpingJackRepDefinition,
     targetValue: targetValue,
   ),
-  AiMotionActivity.squats => SquatsValidator(targetValue: targetValue),
-  AiMotionActivity.lunges => LungesValidator(targetValue: targetValue),
+  AiMotionActivity.squats => ConfigurableRepValidator(
+    definition: squatRepDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.lunges => ConfigurableRepValidator(
+    definition: lungeRepDefinition,
+    targetValue: targetValue,
+  ),
   AiMotionActivity.highKnees => HighKneesValidator(targetValue: targetValue),
   AiMotionActivity.armRaises => ArmRaisesValidator(targetValue: targetValue),
   AiMotionActivity.plankHold => PlankHoldValidator(targetValue: targetValue),
@@ -1065,3 +1072,293 @@ class _Point {
   final double x;
   final double y;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Configurable rep-counting validator engine
+//
+// A small, declarative system for expressing rep-based movement validators
+// (squats, jumping jacks, lunges) as data instead of hand-written classes.
+// Each definition specifies the START and ACTIVE conditions as a tree of
+// pose-signal comparisons. ConfigurableRepValidator evaluates the tree,
+// feeds the result into the existing RepCounterStateMachine, and inherits
+// all frame-counting / confidence / finish behavior from _BaseValidator.
+//
+// Only the three movements whose conditions fit this model are routed here.
+// Pushups, HighKnees, ArmRaises, and PlankHold keep their custom validators.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Numeric signals extractable from a pose frame via [PoseFeatureExtractor].
+/// Only the signals needed by the three configurable validators are listed.
+enum PoseSignal {
+  hipToKneeRatio,
+  ankleWidthToBodyWidth,
+  kneeSeparationToHipWidth,
+  leftKneeAngle,
+  rightKneeAngle;
+
+  double extract(PoseFeatureExtractor f) => switch (this) {
+    PoseSignal.hipToKneeRatio => f.hipToKneeRatio(),
+    PoseSignal.ankleWidthToBodyWidth => f.ankleWidth / f.bodyWidth,
+    PoseSignal.kneeSeparationToHipWidth =>
+      (f.frame.point('leftKnee')!.x - f.frame.point('rightKnee')!.x).abs() /
+          f.hipWidth,
+    PoseSignal.leftKneeAngle => f.kneeAngle(left: true),
+    PoseSignal.rightKneeAngle => f.kneeAngle(left: false),
+  };
+}
+
+/// Boolean signals from [PoseFeatureExtractor].
+enum BooleanPoseSignal {
+  wristsAboveShoulders,
+  wristsNearBody;
+
+  bool extract(PoseFeatureExtractor f) => switch (this) {
+    BooleanPoseSignal.wristsAboveShoulders => f.wristsAboveShoulders,
+    BooleanPoseSignal.wristsNearBody => f.wristsNearBody,
+  };
+}
+
+/// A condition evaluated against pose features. Returns true or false.
+abstract class PoseCondition {
+  const PoseCondition();
+
+  bool evaluate(PoseFeatureExtractor features);
+}
+
+/// Compares a numeric [PoseSignal] against a constant [threshold].
+class ComparisonCondition extends PoseCondition {
+  const ComparisonCondition(
+    this.signal,
+    this.threshold, {
+    required this.greaterThan,
+  });
+
+  final PoseSignal signal;
+  final double threshold;
+  final bool greaterThan;
+
+  @override
+  bool evaluate(PoseFeatureExtractor f) {
+    final value = signal.extract(f);
+    return greaterThan ? value > threshold : value < threshold;
+  }
+}
+
+/// Wraps a [BooleanPoseSignal] as a condition.
+class BooleanCondition extends PoseCondition {
+  const BooleanCondition(this.signal);
+
+  final BooleanPoseSignal signal;
+
+  @override
+  bool evaluate(PoseFeatureExtractor f) => signal.extract(f);
+}
+
+/// Logical AND of multiple conditions.
+class AndCondition extends PoseCondition {
+  const AndCondition(this.conditions);
+
+  final List<PoseCondition> conditions;
+
+  @override
+  bool evaluate(PoseFeatureExtractor f) =>
+      conditions.every((c) => c.evaluate(f));
+}
+
+/// Logical OR of multiple conditions.
+class OrCondition extends PoseCondition {
+  const OrCondition(this.conditions);
+
+  final List<PoseCondition> conditions;
+
+  @override
+  bool evaluate(PoseFeatureExtractor f) => conditions.any((c) => c.evaluate(f));
+}
+
+/// Verification-only definition for a rep-counting movement.
+/// Contains no UI metadata (title, icon, animation) — that lives in the
+/// movement catalog. This object only describes how to detect reps.
+class RepMovementDefinition {
+  const RepMovementDefinition({
+    required this.activity,
+    required this.requiredLandmarks,
+    required this.startCondition,
+    required this.activeCondition,
+    required this.stableFrames,
+    required this.statusText,
+    required this.coachingTextActive,
+    required this.coachingTextIncomplete,
+  });
+
+  final AiMotionActivity activity;
+  final List<String> requiredLandmarks;
+  final PoseCondition startCondition;
+  final PoseCondition activeCondition;
+  final int stableFrames;
+  final String statusText;
+  final String coachingTextActive;
+  final String coachingTextIncomplete;
+
+  String coachingText(bool fullBodyVisible) =>
+      fullBodyVisible ? coachingTextActive : coachingTextIncomplete;
+}
+
+/// Generic rep-counting validator driven by a [RepMovementDefinition].
+/// Extends [_BaseValidator] for frame-counting, visibility, confidence,
+/// and finish behavior. Uses [RepCounterStateMachine] for counting —
+/// no new counting algorithm.
+class ConfigurableRepValidator extends _BaseValidator {
+  ConfigurableRepValidator({
+    required this.definition,
+    required super.targetValue,
+  });
+
+  final RepMovementDefinition definition;
+  final RepCounterStateMachine _counter = RepCounterStateMachine();
+
+  @override
+  AiMotionActivity get activity => definition.activity;
+
+  @override
+  int get currentValue => math.min(_counter.count, targetValue);
+
+  @override
+  String get statusText => definition.statusText;
+
+  @override
+  String get coachingText => definition.coachingText(fullBodyVisible);
+
+  // stateLabel and debugValues are inherited from _BaseValidator ('tracking'
+  // and the base frame/visibility map), matching the three original
+  // validators which also did not override them.
+
+  @override
+  List<String> get criticalPoints => definition.requiredLandmarks;
+
+  @override
+  void resetState() {
+    _counter.reset();
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
+    _counter.update(
+      _measureState(features),
+      stableFrames: definition.stableFrames,
+    );
+  }
+
+  MovementPhase _measureState(PoseFeatureExtractor features) {
+    // Active is checked first, then start — matching the evaluation order
+    // of SquatsValidator and JumpingJacksValidator. For LungesValidator the
+    // original code checks start first, but the start and active conditions
+    // are mutually exclusive (both knees > 154° implies neither < 118°), so
+    // the order does not affect behavior.
+    if (definition.activeCondition.evaluate(features)) {
+      return MovementPhase.active;
+    }
+    if (definition.startCondition.evaluate(features)) {
+      return MovementPhase.start;
+    }
+    return MovementPhase.unknown;
+  }
+}
+
+// ── Movement definitions ─────────────────────────────────────────────────────
+
+/// Squats: START when hips are high relative to knees, ACTIVE when deep.
+const squatRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.squats,
+  requiredLandmarks: [
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: ComparisonCondition(
+    PoseSignal.hipToKneeRatio,
+    0.86,
+    greaterThan: true,
+  ),
+  activeCondition: ComparisonCondition(
+    PoseSignal.hipToKneeRatio,
+    0.58,
+    greaterThan: false,
+  ),
+  stableFrames: 3,
+  statusText: 'Tracking squats',
+  coachingTextActive: 'Stand tall after each squat',
+  coachingTextIncomplete: 'Full body needed',
+);
+
+/// Jumping Jacks: START when arms down + feet together, ACTIVE when arms up + feet wide.
+const jumpingJackRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.jumpingJacks,
+  requiredLandmarks: [
+    'leftWrist',
+    'rightWrist',
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: AndCondition([
+    BooleanCondition(BooleanPoseSignal.wristsNearBody),
+    ComparisonCondition(
+      PoseSignal.ankleWidthToBodyWidth,
+      1.18,
+      greaterThan: false,
+    ),
+  ]),
+  activeCondition: AndCondition([
+    BooleanCondition(BooleanPoseSignal.wristsAboveShoulders),
+    ComparisonCondition(
+      PoseSignal.ankleWidthToBodyWidth,
+      1.38,
+      greaterThan: true,
+    ),
+  ]),
+  stableFrames: 3,
+  statusText: 'Tracking motion',
+  coachingTextActive: 'Keep moving',
+  coachingTextIncomplete: 'Full body needed',
+);
+
+/// Lunges: START when both legs straight, ACTIVE when knees separated + one bent.
+const lungeRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.lunges,
+  requiredLandmarks: [
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: AndCondition([
+    ComparisonCondition(PoseSignal.leftKneeAngle, 154, greaterThan: true),
+    ComparisonCondition(PoseSignal.rightKneeAngle, 154, greaterThan: true),
+  ]),
+  activeCondition: AndCondition([
+    ComparisonCondition(
+      PoseSignal.kneeSeparationToHipWidth,
+      0.55,
+      greaterThan: true,
+    ),
+    OrCondition([
+      ComparisonCondition(PoseSignal.leftKneeAngle, 118, greaterThan: false),
+      ComparisonCondition(PoseSignal.rightKneeAngle, 118, greaterThan: false),
+    ]),
+  ]),
+  stableFrames: 3,
+  statusText: 'Tracking lunges',
+  coachingTextActive: 'Drop into depth, then stand tall',
+  coachingTextIncomplete: 'Full body needed',
+);
