@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -87,11 +88,11 @@ class CompeteScreen extends ConsumerWidget {
                         ),
                       )
                     else if (raceState.error != null && raceState.races.isEmpty)
-                      Text(
-                        raceState.error!,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.muted,
-                        ),
+                      NuvoErrorState(
+                        message: "Couldn't load your races.",
+                        onRetry: () => ref
+                            .read(raceControllerProvider.notifier)
+                            .loadRaces(),
                       )
                     else if (raceState.races.isEmpty || cameraRaces.isEmpty)
                       _EmptyState(onStart: () => context.push('/races/new'))
@@ -796,6 +797,7 @@ class _WaitingTile extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
@@ -841,7 +843,7 @@ class _WaitingTile extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const Spacer(),
+            const SizedBox(height: 8),
             Text(
               '${race.participantCount} ${race.participantCount == 1 ? 'racer' : 'racers'} at the start line',
               style: AppTextStyles.bodySmall.copyWith(
@@ -908,6 +910,7 @@ class _FinishedTile extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
               Icons.check_circle_rounded,
@@ -925,7 +928,7 @@ class _FinishedTile extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const Spacer(),
+            const SizedBox(height: 8),
             Text(
               rank == null ? 'Finished' : 'Finished · #$rank',
               style: AppTextStyles.labelSmall.copyWith(
@@ -982,6 +985,7 @@ class _QuickStartRow extends StatelessWidget {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     label,

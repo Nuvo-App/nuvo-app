@@ -9,6 +9,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -83,6 +84,14 @@ class MoveScreen extends ConsumerWidget {
                   ),
                 ),
               )
+            else if (raceState.error != null &&
+                readyRaces.isEmpty &&
+                completedRaces.isEmpty)
+              NuvoErrorState(
+                message: "Couldn't load your races.",
+                onRetry: () =>
+                    ref.read(raceControllerProvider.notifier).loadRaces(),
+              )
             else if (readyRaces.isEmpty && completedRaces.isEmpty)
               _EmptyState(onStart: () => context.push('/races/new'))
             else if (readyRaces.isNotEmpty) ...[
@@ -141,6 +150,7 @@ class _MoveHero extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -224,6 +234,7 @@ class _CompletedSectionState extends State<_CompletedSection> {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         PressableScale(
           onTap: () => setState(() => _expanded = !_expanded),
@@ -780,6 +791,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 52,

@@ -52,6 +52,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   bool _loading = true;
   bool _searching = false;
   String? _error;
+  String? _searchError;
 
   @override
   void initState() {
@@ -111,10 +112,14 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       setState(() {
         _results = const [];
         _searching = false;
+        _searchError = null;
       });
       return;
     }
-    setState(() => _searching = true);
+    setState(() {
+      _searching = true;
+      _searchError = null;
+    });
     _debounce = Timer(const Duration(milliseconds: 280), () async {
       try {
         final results = await ref
@@ -127,7 +132,12 @@ class _PassScreenState extends ConsumerState<PassScreen> {
           });
         }
       } catch (_) {
-        if (mounted) setState(() => _searching = false);
+        if (mounted) {
+          setState(() {
+            _searching = false;
+            _searchError = 'Search failed. Try again.';
+          });
+        }
       }
     });
   }
@@ -256,6 +266,12 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     isCrew: _isCrew,
                     isAdding: (user) => _adding.contains(user.id),
                     onAdd: _addCrew,
+                  ),
+                ] else if (_searchError != null && !_searching) ...[
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => _onSearchChanged(_searchController.text),
+                    child: _EmptyNote(text: _searchError!),
                   ),
                 ] else if (_searchController.text.trim().length >= 2 &&
                     !_searching) ...[
