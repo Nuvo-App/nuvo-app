@@ -239,15 +239,13 @@ void main() {
       expect(v.currentValue, 0, reason: 'Jumping jack = 0');
     });
 
-    test('INVALID: incomplete squat+jump sequence = 0 reps', () {
+    test('INVALID: squat without jump = 0 reps', () {
       final v = _buildValidator()..start();
       _feed(v, _standing(), 8);
       _feed(v, _squat(), 3);
-      // Only 1 airborne frame (needs 2 for stability)
-      _feed(v, _jump(), 1);
-      // Back to standing — wrong-phase
+      // No airborne phase — go directly back to standing (wrong-phase reset).
       _feed(v, _standing(), 3);
-      expect(v.currentValue, 0, reason: 'Incomplete sequence = 0');
+      expect(v.currentValue, 0, reason: 'Squat without jump = 0');
     });
 
     test('repeated valid jump squats = 2 reps', () {

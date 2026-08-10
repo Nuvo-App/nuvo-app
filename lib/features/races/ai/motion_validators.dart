@@ -500,13 +500,15 @@ class PoseFeatureExtractor {
   }
 
   double kneeAngle({required bool left}) {
-    final hip = frame.point(left ? 'leftHip' : 'rightHip')!;
-    final knee = frame.point(left ? 'leftKnee' : 'rightKnee')!;
-    final ankle = frame.point(left ? 'leftAnkle' : 'rightAnkle')!;
+    final hip = frame.point(left ? 'leftHip' : 'rightHip');
+    final knee = frame.point(left ? 'leftKnee' : 'rightKnee');
+    final ankle = frame.point(left ? 'leftAnkle' : 'rightAnkle');
+    if (hip == null || knee == null || ankle == null) return 180;
     return _angle(hip, knee, ankle);
   }
 
-  double hipToKneeRatio() => (kneeY - hipY) / torsoHeight;
+  double hipToKneeRatio() =>
+      ((kneeY - hipY) / torsoHeight).clamp(-2.0, 3.0);
 
   double _averageY(String a, String b) =>
       (frame.point(a)!.y + frame.point(b)!.y) / 2;
@@ -1352,6 +1354,52 @@ class MultiPhaseSequenceValidator extends _BaseValidator {
     for (final tracker in _trackers) {
       tracker.update(frame);
     }
+  }
+
+  /// Core landmarks that must be present for any phase evaluation.
+  /// Ankles are excluded — they are frequently lost during airborne
+  /// phases, and the AirborneStateTracker handles missing ankles
+  /// gracefully. This override allows frames with missing ankles to
+  /// still reach the tracker, improving real-world tolerance.
+  static const _coreLandmarks = [
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+  ];
+
+  @override
+  MotionValidationUpdate update(NuvoPoseFrame frame) {
+    framesAnalyzed++;
+
+    // Always update the airborne tracker — it handles missing ankles
+    // safely (returns early if landmarks are absent/low-likelihood).
+    _airborne.update(frame);
+
+    // Use relaxed landmark check: core landmarks (shoulders, hips, knees)
+    // must be present, but ankles may be missing during airborne.
+    if (!frame.hasPoints(_coreLandmarks)) {
+      invalidPoseFrames++;
+      lastVisibilityScore = 0;
+      lastFailureReason = 'missing_landmarks';
+      return snapshot();
+    }
+    validPoseFrames++;
+    lastVisibilityScore = _visibilityScore(frame);
+    if (!fullBodyVisible) {
+      lastFailureReason = 'low_landmark_confidence';
+    }
+
+    // Feed frame to trackers. Each tracker checks its own
+    // requiredLandmarks and skips if ankles are missing — but the
+    // airborne tracker state is already fresh from the update above.
+    for (final tracker in _trackers) {
+      tracker.update(frame);
+    }
+
+    return snapshot();
   }
 }
 
