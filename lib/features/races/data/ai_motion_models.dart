@@ -7,7 +7,11 @@ enum AiMotionActivity {
   pushUps,
   lunges,
   sumoSquats,
-  sideLunges;
+  sideLunges,
+  deepSquats,
+  squatJacks,
+  jumpSquats,
+  lungeJumps;
 
   String get backendValue => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping_jacks',
@@ -19,6 +23,10 @@ enum AiMotionActivity {
     AiMotionActivity.lunges => 'lunges',
     AiMotionActivity.sumoSquats => 'sumo_squats',
     AiMotionActivity.sideLunges => 'side_lunges',
+    AiMotionActivity.deepSquats => 'deep_squats',
+    AiMotionActivity.squatJacks => 'squat_jacks',
+    AiMotionActivity.jumpSquats => 'jump_squats',
+    AiMotionActivity.lungeJumps => 'lunge_jumps',
   };
 
   String get label => switch (this) {
@@ -31,6 +39,10 @@ enum AiMotionActivity {
     AiMotionActivity.lunges => 'lunges',
     AiMotionActivity.sumoSquats => 'sumo squats',
     AiMotionActivity.sideLunges => 'side lunges',
+    AiMotionActivity.deepSquats => 'deep squats',
+    AiMotionActivity.squatJacks => 'squat jacks',
+    AiMotionActivity.jumpSquats => 'jump squats',
+    AiMotionActivity.lungeJumps => 'lunge jumps',
   };
 
   static AiMotionActivity fromBackendValue(String value) => switch (value) {
@@ -42,6 +54,10 @@ enum AiMotionActivity {
     'lunges' || 'lunge' => AiMotionActivity.lunges,
     'sumo_squats' || 'sumo squats' => AiMotionActivity.sumoSquats,
     'side_lunges' || 'side lunges' => AiMotionActivity.sideLunges,
+    'deep_squats' || 'deep squats' => AiMotionActivity.deepSquats,
+    'squat_jacks' || 'squat jacks' => AiMotionActivity.squatJacks,
+    'jump_squats' || 'jump squats' => AiMotionActivity.jumpSquats,
+    'lunge_jumps' || 'lunge jumps' => AiMotionActivity.lungeJumps,
     _ => AiMotionActivity.pushUps,
   };
 }

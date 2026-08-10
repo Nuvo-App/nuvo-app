@@ -18,7 +18,7 @@ import 'package:nuvo/features/races/presentation/widgets/preset_movement_demos.d
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
-/// All 7 preset movements that must show a pre-verify demo.
+/// All preset movements that must show a pre-verify demo.
 const _presetCases = <(String id, String title, String unit)>[
   ('push_ups', 'First to 15 Pushups', 'reps'),
   ('squats', 'First to 25 Squats', 'reps'),
@@ -29,6 +29,10 @@ const _presetCases = <(String id, String title, String unit)>[
   ('arm_raises', 'First to 20 Arm Raises', 'reps'),
   ('sumo_squats', 'First to 20 Sumo Squats', 'reps'),
   ('side_lunges', 'First to 16 Side Lunges', 'reps'),
+  ('deep_squats', 'First to 15 Deep Squats', 'reps'),
+  ('squat_jacks', 'First to 15 Squat Jacks', 'reps'),
+  ('jump_squats', 'First to 15 Jump Squats', 'reps'),
+  ('lunge_jumps', 'First to 15 Lunge Jumps', 'reps'),
 ];
 
 Race _raceFor(String activityId, String title, String unit) => Race(
@@ -107,7 +111,7 @@ Widget _buildTestApp(Race race) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  group('SubmitProofScreen pre-verify demo for all 7 presets', () {
+  group('SubmitProofScreen pre-verify demo for all 13 presets', () {
     for (final (id, title, unit) in _presetCases) {
       testWidgets(
         '$id shows NuvoMovementAnimation BEFORE Begin (no auto-skip)',
@@ -188,7 +192,7 @@ void main() {
       }
     });
 
-    test('movementDemoForType returns non-null for all 9 preset IDs', () {
+    test('movementDemoForType returns non-null for all 13 preset IDs', () {
       for (final (id, _, _) in _presetCases) {
         // Verify via the catalog that each ID resolves to a definition
         // and that definition has a demo.

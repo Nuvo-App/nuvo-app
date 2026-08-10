@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 import '../data/ai_motion_models.dart';
 import '../domain/motion_activity.dart';
+import 'airborne_state_tracker.dart';
+import 'multi_phase_sequence_tracker.dart';
+import 'preset_motion/multi_phase_definitions.dart';
 
 enum MovementType {
   pushups,
@@ -13,6 +16,10 @@ enum MovementType {
   armRaises,
   sumoSquats,
   sideLunges,
+  deepSquats,
+  squatJacks,
+  jumpSquats,
+  lungeJumps,
   unsupported,
 }
 
@@ -113,6 +120,34 @@ const supportedMovementDefinitions = [
     unit: 'side lunges',
     defaultTarget: 10,
   ),
+  MovementDefinition(
+    type: MovementType.deepSquats,
+    activity: AiMotionActivity.deepSquats,
+    title: 'Deep squats',
+    unit: 'deep squats',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.squatJacks,
+    activity: AiMotionActivity.squatJacks,
+    title: 'Squat jacks',
+    unit: 'squat jacks',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.jumpSquats,
+    activity: AiMotionActivity.jumpSquats,
+    title: 'Jump squats',
+    unit: 'jump squats',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.lungeJumps,
+    activity: AiMotionActivity.lungeJumps,
+    title: 'Lunge jumps',
+    unit: 'lunge jumps',
+    defaultTarget: 10,
+  ),
 ];
 
 MovementDefinition? movementDefinitionForActivity(AiMotionActivity activity) {
@@ -142,6 +177,10 @@ AiMotionActivity? _aiMotionActivityForType(MotionActivityType type) {
     MotionActivityType.plankHold => AiMotionActivity.plankHold,
     MotionActivityType.sumoSquats => AiMotionActivity.sumoSquats,
     MotionActivityType.sideLunges => AiMotionActivity.sideLunges,
+    MotionActivityType.deepSquats => AiMotionActivity.deepSquats,
+    MotionActivityType.squatJacks => AiMotionActivity.squatJacks,
+    MotionActivityType.jumpSquats => AiMotionActivity.jumpSquats,
+    MotionActivityType.lungeJumps => AiMotionActivity.lungeJumps,
   };
 }
 
@@ -316,6 +355,30 @@ MotionValidator createMotionValidator(
   AiMotionActivity.sideLunges => ConfigurableRepValidator(
     definition: sideLungeRepDefinition,
     targetValue: targetValue,
+  ),
+  AiMotionActivity.deepSquats => ConfigurableRepValidator(
+    definition: deepSquatRepDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.squatJacks => ConfigurableRepValidator(
+    definition: squatJackRepDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.jumpSquats => MultiPhaseSequenceValidator(
+    activity: AiMotionActivity.jumpSquats,
+    targetValue: targetValue,
+    definitions: (airborne) => [buildJumpSquatDefinition(airborne)],
+    statusText: 'Tracking jump squats',
+    coachingTextActive: 'Squat down, jump up, land soft',
+    coachingTextIncomplete: 'Full body needed',
+  ),
+  AiMotionActivity.lungeJumps => MultiPhaseSequenceValidator(
+    activity: AiMotionActivity.lungeJumps,
+    targetValue: targetValue,
+    definitions: buildLungeJumpDefinitions,
+    statusText: 'Tracking lunge jumps',
+    coachingTextActive: 'Lunge, jump, switch legs',
+    coachingTextIncomplete: 'Full body needed',
   ),
 };
 
@@ -1201,6 +1264,97 @@ class OrCondition extends PoseCondition {
   bool evaluate(PoseFeatureExtractor f) => conditions.any((c) => c.evaluate(f));
 }
 
+/// Production validator that runs one or more [MultiPhaseSequenceTracker]s
+/// in parallel and sums their completion counts.
+///
+/// This is the shared production runtime for [MovementFactoryFamily.multiPhaseSequence]
+/// movements. Both Jump Squats and Lunge Jumps use this class — they differ
+/// only in the [MultiPhaseSequenceDefinition]s passed in.
+///
+/// For single-direction movements (e.g., Jump Squats), one tracker runs.
+/// For bidirectional movements (e.g., Lunge Jumps with both right-start
+/// and left-start sequences), two trackers run in parallel on the same
+/// frame stream. Only one tracker can progress at a time — when the user
+/// is in a right lunge, the right-start tracker advances while the
+/// left-start tracker sees a wrong-phase and resets to idle.
+///
+/// The [AirborneStateTracker] is owned by this validator and shared
+/// across all trackers and definitions. It is updated once per frame
+/// before any phase conditions are evaluated, ensuring air-detection
+/// state is fresh and consistent.
+class MultiPhaseSequenceValidator extends _BaseValidator {
+  MultiPhaseSequenceValidator({
+    required this.activity,
+    required super.targetValue,
+    required this.definitions,
+    required this.statusText,
+    required this.coachingTextActive,
+    required this.coachingTextIncomplete,
+  }) : _airborne = AirborneStateTracker() {
+    final defs = definitions(_airborne);
+    _trackers = defs
+        .map((def) => MultiPhaseSequenceTracker(definition: def))
+        .toList(growable: false);
+  }
+
+  @override
+  final AiMotionActivity activity;
+
+  /// Builds the sequence definition(s) given the runtime
+  /// [AirborneStateTracker]. Called once in the constructor.
+  final List<MultiPhaseSequenceDefinition> Function(
+    AirborneStateTracker airborne,
+  ) definitions;
+
+  final AirborneStateTracker _airborne;
+
+  @override
+  final String statusText;
+  final String coachingTextActive;
+  final String coachingTextIncomplete;
+
+  late List<MultiPhaseSequenceTracker> _trackers;
+
+  @override
+  int get currentValue =>
+      math.min(_totalCompletions, targetValue);
+
+  int get _totalCompletions =>
+      _trackers.fold(0, (sum, t) => sum + t.completionCount);
+
+  @override
+  String get coachingText =>
+      fullBodyVisible ? coachingTextActive : coachingTextIncomplete;
+
+  @override
+  List<String> get criticalPoints =>
+      _trackers.first.definition.requiredLandmarks;
+
+  @override
+  void resetState() {
+    for (final tracker in _trackers) {
+      tracker.reset();
+    }
+    // Rebuild trackers to get fresh AirborneStateTracker state.
+    _airborne.reset();
+    final defs = definitions(_airborne);
+    _trackers = defs
+        .map((def) => MultiPhaseSequenceTracker(definition: def))
+        .toList(growable: false);
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    // Update the shared AirborneStateTracker once per frame, then feed
+    // the frame to each sequence tracker. The tracker reads
+    // _airborne.isAirborne via AirborneCondition.
+    _airborne.update(frame);
+    for (final tracker in _trackers) {
+      tracker.update(frame);
+    }
+  }
+}
+
 /// Verification-only definition for a rep-counting movement.
 /// Contains no UI metadata (title, icon, animation) — that lives in the
 /// movement catalog. This object only describes how to detect reps.
@@ -1463,4 +1617,104 @@ const sideLungeRepDefinition = RepMovementDefinition(
   statusText: 'Tracking side lunges',
   coachingTextActive: 'Step out to the side, then stand tall',
   coachingTextIncomplete: 'Full body needed',
+);
+
+/// Deep Squats: START when standing tall, ACTIVE when hips drop well below
+/// the standard squat depth. The hipToKneeRatio < 0.30 threshold is the
+/// identity differentiator from regular squats (which use < 0.58).
+///
+/// hipToKneeRatio = (kneeY - hipY) / torsoHeight.
+/// - Standing: ratio ~1.0+ (hips far above knees)
+/// - Normal squat (thighs ~parallel): ratio ~0.40-0.55
+/// - Deep squat (hips below knees): ratio ~0.10-0.25
+///
+/// The 0.30 threshold sits below the normal-squat range (~0.40-0.55) and
+/// above the deep-squat range (~0.10-0.25), giving a categorical gap.
+/// A normal valid squat (ratio 0.50) satisfies regular squats (< 0.58)
+/// but does NOT satisfy deep squats (< 0.30). This is the identity proof.
+const deepSquatRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.deepSquats,
+  requiredLandmarks: [
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: ComparisonCondition(
+    PoseSignal.hipToKneeRatio,
+    0.86,
+    greaterThan: true,
+  ),
+  activeCondition: ComparisonCondition(
+    PoseSignal.hipToKneeRatio,
+    0.30,
+    greaterThan: false,
+  ),
+  stableFrames: 3,
+  statusText: 'Tracking deep squats',
+  coachingTextActive: 'Stand tall after each deep squat',
+  coachingTextIncomplete: 'Full body · go below parallel',
+);
+
+/// Squat Jacks: START when closed (arms down, feet together, standing),
+/// ACTIVE when open+squat (arms up, feet wide, AND squat depth).
+///
+/// This is a compound of three categorical signals:
+/// - wristsAboveShoulders (arms up) — same as jumping jacks
+/// - ankleWidthToBodyWidth > 1.18 (feet wide) — same as jumping jacks
+/// - hipToKneeRatio < 0.58 (squat depth) — same as regular squats
+///
+/// Identity proof:
+/// - vs Jumping Jacks: jumping jacks stay standing (hipToKneeRatio ~1.0),
+///   so they fail the squat-depth condition. A squat jack race cannot be
+///   cheated by doing jumping jacks.
+/// - vs Squats: regular squats have arms down and feet together, so they
+///   fail both the arms-up and feet-wide conditions. A squat jack race
+///   cannot be cheated by doing regular squats.
+/// - vs Deep Squats: deep squats have arms down and feet together, so
+///   they fail the arms-up and feet-wide conditions.
+///
+/// The conjunction of three signals — none of which is unique alone —
+/// creates a categorical identity that no single existing movement
+/// satisfies.
+const squatJackRepDefinition = RepMovementDefinition(
+  activity: AiMotionActivity.squatJacks,
+  requiredLandmarks: [
+    'leftWrist',
+    'rightWrist',
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ],
+  startCondition: AndCondition([
+    BooleanCondition(BooleanPoseSignal.wristsNearBody),
+    ComparisonCondition(
+      PoseSignal.ankleWidthToBodyWidth,
+      1.18,
+      greaterThan: false,
+    ),
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.86, greaterThan: true),
+  ]),
+  activeCondition: AndCondition([
+    BooleanCondition(BooleanPoseSignal.wristsAboveShoulders),
+    ComparisonCondition(
+      PoseSignal.ankleWidthToBodyWidth,
+      1.38,
+      greaterThan: true,
+    ),
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.58, greaterThan: false),
+  ]),
+  stableFrames: 3,
+  statusText: 'Tracking squat jacks',
+  coachingTextActive: 'Jump wide, squat down, arms up — then return',
+  coachingTextIncomplete: 'Full body · jump wide and squat',
 );

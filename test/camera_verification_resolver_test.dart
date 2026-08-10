@@ -35,7 +35,7 @@ Race _race({
 void main() {
   group('camera verification resolver', () {
     test(
-      'active preset catalog is exactly the nine camera-verified activities',
+      'active preset catalog is exactly the thirteen camera-verified activities',
       () {
         expect(motionActivityDefinitions.map((d) => d.type).toSet(), {
           MotionActivityType.pushUps,
@@ -47,6 +47,10 @@ void main() {
           MotionActivityType.armRaises,
           MotionActivityType.sumoSquats,
           MotionActivityType.sideLunges,
+          MotionActivityType.deepSquats,
+          MotionActivityType.squatJacks,
+          MotionActivityType.jumpSquats,
+          MotionActivityType.lungeJumps,
         });
         expect(supportedMotionActivityTypes, {
           MotionActivityType.pushUps,
@@ -58,6 +62,10 @@ void main() {
           MotionActivityType.armRaises,
           MotionActivityType.sumoSquats,
           MotionActivityType.sideLunges,
+          MotionActivityType.deepSquats,
+          MotionActivityType.squatJacks,
+          MotionActivityType.jumpSquats,
+          MotionActivityType.lungeJumps,
         });
       },
     );
@@ -71,6 +79,8 @@ void main() {
         'plank_hold': MotionActivityType.plankHold,
         'high_knees': MotionActivityType.highKnees,
         'arm_raises': MotionActivityType.armRaises,
+        'jump_squats': MotionActivityType.jumpSquats,
+        'lunge_jumps': MotionActivityType.lungeJumps,
       };
 
       for (final entry in cases.entries) {
