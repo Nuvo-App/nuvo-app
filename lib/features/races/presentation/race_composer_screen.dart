@@ -21,6 +21,7 @@ import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
 import 'create_race_screen.dart';
 import 'custom_pose/learned_custom_movement_provider.dart';
+import 'custom_pose/recent_movements_provider.dart';
 import 'race_controller.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -782,7 +783,7 @@ class _RaceNamePreview extends StatelessWidget {
 
 // ── Step 2: Activity ──────────────────────────────────────────────────────────
 
-class _ActivityPage extends StatefulWidget {
+class _ActivityPage extends ConsumerStatefulWidget {
   const _ActivityPage({
     required this.draft,
     required this.onDraftChanged,
@@ -793,13 +794,22 @@ class _ActivityPage extends StatefulWidget {
   final VoidCallback onNext;
 
   @override
-  State<_ActivityPage> createState() => _ActivityPageState();
+  ConsumerState<_ActivityPage> createState() => _ActivityPageState();
 }
 
-class _ActivityPageState extends State<_ActivityPage> {
+class _ActivityPageState extends ConsumerState<_ActivityPage> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   MovementCategory? _selectedCategory; // null = All
+
+  @override
+  void initState() {
+    super.initState();
+    // Load recent movements from storage on first build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(recentMovementIdsProvider.notifier).load();
+    });
+  }
 
   @override
   void dispose() {
@@ -818,10 +828,14 @@ class _ActivityPageState extends State<_ActivityPage> {
         targetValue: keepTarget ? currentTarget : activity.defaultTarget,
       ),
     );
+    // Record selection in recent movements
+    ref.read(recentMovementIdsProvider.notifier).record(activity.type.backendValue);
   }
 
   @override
   Widget build(BuildContext context) {
+    final recentIds = ref.watch(recentMovementIdsProvider);
+    final recentActivities = recentActivitiesFromIds(recentIds);
     return _PageShell(
       question: 'What are you competing in?',
       support: 'Camera verifies every rep.',
@@ -845,10 +859,10 @@ class _ActivityPageState extends State<_ActivityPage> {
               onSelect: _select,
             )
           else ...[
-            // ── Popular row ───────────────────────────────────────────────
-            if (featuredActivities.isNotEmpty) ...[
+            // ── Recent row (only if non-empty) ───────────────────────────
+            if (recentActivities.isNotEmpty) ...[
               Text(
-                'Popular',
+                'Recent',
                 style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
               ),
               const SizedBox(height: 10),
@@ -856,10 +870,10 @@ class _ActivityPageState extends State<_ActivityPage> {
                 height: 72,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: featuredActivities.length,
+                  itemCount: recentActivities.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 10),
                   itemBuilder: (context, i) {
-                    final activity = featuredActivities[i];
+                    final activity = recentActivities[i];
                     return _PopularChip(
                       activity: activity,
                       selected: widget.draft.activity.type == activity.type,
