@@ -355,12 +355,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       const SizedBox(height: 8),
       _AccountRow(
-        icon: Icons.edit_rounded,
-        label: 'Edit profile',
-        onTap: () => context.push('/profile/edit'),
-      ),
-      const SizedBox(height: 8),
-      _AccountRow(
         icon: Icons.logout_rounded,
         label: 'Sign out',
         isDanger: true,
@@ -371,6 +365,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         icon: Icons.delete_outline_rounded,
         label: 'Delete account',
         isDanger: true,
+        isDestructiveLowEmphasis: true,
         onTap: _confirmDeleteAccount,
       ),
       const SizedBox(height: 24),
@@ -699,19 +694,25 @@ class _AccountRow extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.isDanger = false,
+    this.isDestructiveLowEmphasis = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool isDanger;
+  final bool isDestructiveLowEmphasis;
 
   @override
   Widget build(BuildContext context) {
-    final color = isDanger ? NuvoColors.danger : NuvoColors.navy;
-    final bg = isDanger
-        ? NuvoColors.danger.withValues(alpha: 0.10)
-        : NuvoColors.icyBlue;
+    final color = isDestructiveLowEmphasis
+        ? NuvoColors.muted
+        : (isDanger ? NuvoColors.danger : NuvoColors.navy);
+    final bg = isDestructiveLowEmphasis
+        ? NuvoColors.panel
+        : (isDanger
+              ? NuvoColors.danger.withValues(alpha: 0.10)
+              : NuvoColors.icyBlue);
 
     return PressableScale(
       onTap: onTap,
@@ -740,7 +741,7 @@ class _AccountRow extends StatelessWidget {
                 style: AppTextStyles.bodyMedium.copyWith(color: color),
               ),
             ),
-            if (!isDanger)
+            if (!isDanger && !isDestructiveLowEmphasis)
               const NuvoIcon(
                 NuvoIconType.arrow,
                 color: _kProfileTextMuted,

@@ -524,37 +524,21 @@ class _PageShell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                      question,
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
-                        height: 1.1,
-                      ),
-                    )
-                    .animate()
-                    .fadeIn(duration: 220.ms)
-                    .slideY(
-                      begin: 0.06,
-                      end: 0,
-                      duration: 260.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
+                  question,
+                  style: AppTextStyles.headlineLarge.copyWith(
+                    color: NuvoColors.navy,
+                    height: 1.1,
+                  ),
+                ).animate().fadeIn(duration: 220.ms),
                 const SizedBox(height: 8),
                 Text(
                   support,
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: NuvoColors.muted,
                   ),
-                ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
+                ),
                 const SizedBox(height: 24),
-                body
-                    .animate(delay: 60.ms)
-                    .fadeIn(duration: 220.ms)
-                    .slideY(
-                      begin: 0.04,
-                      end: 0,
-                      duration: 240.ms,
-                      curve: Curves.easeOutCubic,
-                    ),
+                body.animate(delay: 60.ms).fadeIn(duration: 220.ms),
               ],
             ),
           ),
@@ -647,7 +631,7 @@ class _NamePageState extends State<_NamePage> {
   Widget build(BuildContext context) {
     return _PageShell(
       question: 'Name your race.',
-      support: 'Give your crew something worth chasing.',
+      support: 'Your crew will see this name.',
       ctaLabel: 'Choose activity',
       onCta: _commit,
       ctaEnabled: _ctrl.text.trim().isNotEmpty,
@@ -840,7 +824,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     final recentActivities = recentActivitiesFromIds(recentIds);
     return _PageShell(
       question: 'What are you competing in?',
-      support: 'Camera verifies every rep.',
+      support: 'Pick a movement for your crew.',
       ctaLabel: 'Set the finish line',
       onCta: widget.onNext,
       body: Column(
@@ -916,13 +900,23 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               ),
           ],
 
-          // ── Teach a movement ────────────────────────────────────────────
-          const SizedBox(height: 12),
-          NuvoSecondaryButton(
-            label: 'Teach a movement',
-            icon: Icons.video_camera_front_rounded,
-            expand: true,
-            onPressed: () => context.push('/internal/teach-movement'),
+          // ── Teach a movement (demoted: text link, not a competing button) ─
+          const SizedBox(height: 16),
+          Center(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.push('/internal/teach-movement'),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  'Teach a movement',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1653,7 +1647,7 @@ class _RacersPageState extends State<_RacersPage> {
   Widget build(BuildContext context) {
     return _PageShell(
       question: 'Who are you racing with?',
-      support: 'Pull in your crew or start solo.',
+      support: 'Race solo or with crew.',
       ctaLabel: 'Review race',
       onCta: widget.onNext,
       body: Column(
