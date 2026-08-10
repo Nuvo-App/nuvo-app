@@ -61,6 +61,7 @@ void main() {
     'squat_jacks': AiMotionActivity.squatJacks,
     'jumping_jacks': AiMotionActivity.jumpingJacks,
     'lunge_jumps': AiMotionActivity.lungeJumps,
+    'lunges': AiMotionActivity.lunges,
   };
 
   group('Real Video QA — Per-clip diagnostics', () {
@@ -187,7 +188,7 @@ void main() {
       // ignore: avoid_print
       print('\n=== FULL CONFUSION MATRIX (real video) ===');
       // ignore: avoid_print
-      print('  ${"Clip ID".padRight(30)} ${"Movement".padRight(16)} ${"JSQ".padRight(6)} ${"SQT".padRight(6)} ${"DSQ".padRight(6)} ${"SJM".padRight(6)} ${"JJ".padRight(6)} ${"LJ".padRight(6)}');
+      print('  ${"Clip ID".padRight(30)} ${"Movement".padRight(16)} ${"JSQ".padRight(6)} ${"SQT".padRight(6)} ${"DSQ".padRight(6)} ${"SJM".padRight(6)} ${"JJ".padRight(6)} ${"LJ".padRight(6)} ${"LUN".padRight(6)}');
 
       for (final fixture in fixtures) {
         final results = <String, int>{};
@@ -207,7 +208,61 @@ void main() {
             '${results['deep_squats'].toString().padRight(6)} '
             '${results['squat_jacks'].toString().padRight(6)} '
             '${results['jumping_jacks'].toString().padRight(6)} '
-            '${results['lunge_jumps'].toString().padRight(6)}');
+            '${results['lunge_jumps'].toString().padRight(6)} '
+            '${results['lunges'].toString().padRight(6)}');
+      }
+    });
+  });
+
+  group('Real Video QA — Per-movement summary', () {
+    test('all movements detection summary', () {
+      final movements = <String>[
+        'jump_squats', 'normal_squats', 'deep_squats',
+        'vertical_jumps', 'jumping_jacks', 'squat_jacks',
+        'lunge_jumps', 'lunges',
+      ];
+
+      // ignore: avoid_print
+      print('\n=== PER-MOVEMENT DETECTION SUMMARY ===');
+      print('  ${"Movement".padRight(16)} ${"Clips".padRight(8)} ${"ExpReps".padRight(8)} ${"DetReps".padRight(8)} ${"Recall".padRight(8)} ${"Clips>0".padRight(8)}');
+
+      for (final mv in movements) {
+        final mvFixtures = fixtures.where((f) => f.movement == mv).toList();
+        if (mvFixtures.isEmpty) continue;
+
+        final runner = ReplayRunner();
+        var totalExpected = 0;
+        var totalDetected = 0;
+        var clipsDetected = 0;
+
+        for (final fixture in mvFixtures) {
+          final result = runner.run(fixture);
+          totalExpected += fixture.expected.reps;
+          totalDetected += result.detectedReps;
+          if (result.detectedReps > 0) clipsDetected++;
+        }
+
+        final recall = totalExpected > 0
+            ? '${(totalDetected / totalExpected * 100).toStringAsFixed(1)}%'
+            : 'N/A';
+
+        // ignore: avoid_print
+        print('  ${mv.padRight(16)} ${mvFixtures.length.toString().padRight(8)} '
+            '${totalExpected.toString().padRight(8)} '
+            '${totalDetected.toString().padRight(8)} '
+            '${recall.padRight(8)} '
+            '$clipsDetected/${mvFixtures.length}');
+      }
+    });
+  });
+
+  group('Real Video QA — Fixture validity', () {
+    test('all fixtures have valid structure', () {
+      for (final fixture in fixtures) {
+        expect(fixture.id, isNotEmpty, reason: 'Fixture missing id');
+        expect(fixture.movement, isNotEmpty, reason: 'Fixture ${fixture.id} missing movement');
+        expect(fixture.frames, isNotEmpty, reason: 'Fixture ${fixture.id} has no frames');
+        expect(fixture.expected.reps, greaterThan(0), reason: 'Fixture ${fixture.id} has 0 expected reps');
       }
     });
   });

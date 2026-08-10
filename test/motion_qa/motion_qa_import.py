@@ -193,7 +193,7 @@ def build_fixture(fixture_id, movement, expected_reps, frames, source_info):
             'type': source_info.get('sourceType', 'local'),
             'name': source_info.get('title', fixture_id),
             'extractor': 'mediapipe',
-            'cameraView': 'front',
+            'cameraView': source_info.get('cameraView', 'front'),
             'qualityTier': 'real_video',
         },
         'frames': frames,
@@ -270,6 +270,7 @@ def process_manifest(manifest_path, output_dir):
             'sourceType': src.get('sourceType', 'youtube'),
             'title': src.get('title', sid),
             'movement': src.get('movement', ''),
+            'cameraView': src.get('cameraView', 'front'),
         }
         
         result = process_single(
@@ -313,7 +314,9 @@ def main():
     parser.add_argument('--manifest', help='JSON manifest of sources')
     parser.add_argument('--id', help='Fixture ID', default='real_001')
     parser.add_argument('--movement', default='jump_squats',
-                        choices=['jump_squats', 'normal_squats', 'vertical_jumps', 'jumping_jacks'])
+                        choices=['jump_squats', 'normal_squats', 'deep_squats',
+                                 'vertical_jumps', 'jumping_jacks', 'squat_jacks',
+                                 'lunge_jumps', 'lunges'])
     parser.add_argument('--expected-reps', type=int, default=3)
     parser.add_argument('--start', type=float, default=0, help='Start time in seconds')
     parser.add_argument('--end', type=float, default=None, help='End time in seconds')
