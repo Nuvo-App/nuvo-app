@@ -512,27 +512,14 @@ class _CrewHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: NuvoColors.blue,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                crewCount == 0
-                    ? 'Your start line is open'
-                    : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          Text(
+            crewCount == 0
+                ? 'Your start line is open'
+                : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
+            style: AppTextStyles.labelMedium.copyWith(
+              color: NuvoColors.muted,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 14),
           Row(
@@ -553,7 +540,7 @@ class _CrewHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'The people you want at the start line.',
+                      'Your crew for races.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                       ),

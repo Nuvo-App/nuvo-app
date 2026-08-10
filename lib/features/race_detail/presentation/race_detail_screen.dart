@@ -423,6 +423,46 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 _CompleteCallout(race: race, participant: myPart, rank: rank),
               ],
 
+              // ── Board (leaderboard is the hero — shown first) ───────────
+              if (myRaceComplete && race.finalStandings.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const _SectionLabel(label: 'Final standings'),
+                const SizedBox(height: 12),
+                _FinalStandingsGroup(
+                  standings: race.finalStandings,
+                  race: race,
+                  userId: user?.id,
+                ),
+              ] else ...[
+                const SizedBox(height: 20),
+                const _SectionLabel(label: 'The board'),
+                const SizedBox(height: 12),
+                if (sorted.isEmpty)
+                  Text(
+                    'No one on the board yet. Invite crew to race.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  )
+                else
+                  _LeaderboardGroup(
+                    race: race,
+                    participants: sorted,
+                    userId: user?.id,
+                  ),
+              ],
+
+              if (race.participantCount > 1) ...[
+                const SizedBox(height: 14),
+                _BoardPulseStrip(
+                  label: recentMoveCount == 0
+                      ? 'Board is waiting for the first move.'
+                      : 'Board moved ${recentMoveCount == 1 ? 'once' : '$recentMoveCount times'} recently',
+                  movers: movementAvatars.take(3).toList(),
+                ),
+              ],
+
+              // ── Path to goal (demoted below leaderboard) ────────────────
               if (isParticipant && !myRaceComplete) ...[
                 const SizedBox(height: 24),
                 const _SectionLabel(label: 'Path to goal'),
@@ -445,55 +485,26 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 daysLeft: myRaceComplete ? null : _daysLeft(race.finishLineAt),
               ),
 
-              const SizedBox(height: 22),
-
-              // ── Final standings (completed races only) ──────────────
-              if (myRaceComplete && race.finalStandings.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                const _SectionLabel(label: 'Final standings'),
-                const SizedBox(height: 12),
-                _FinalStandingsGroup(
-                  standings: race.finalStandings,
-                  race: race,
-                  userId: user?.id,
-                ),
-              ],
-
-              // ── Board ──────────────────────────────────────────────────
-              const _SectionLabel(label: 'The board'),
-              const SizedBox(height: 12),
-              if (sorted.isEmpty)
-                Text(
-                  'No one on the board yet. Invite crew to race.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.muted,
-                  ),
-                )
-              else
-                _LeaderboardGroup(
-                  race: race,
-                  participants: sorted,
-                  userId: user?.id,
-                ),
-
-              if (race.participantCount > 1) ...[
-                const SizedBox(height: 14),
-                _BoardPulseStrip(
-                  label: recentMoveCount == 0
-                      ? 'Board is waiting for the first move.'
-                      : 'Board moved ${recentMoveCount == 1 ? 'once' : '$recentMoveCount times'} recently',
-                  movers: movementAvatars.take(3).toList(),
-                ),
-              ],
-
+              // ── Invite crew (demoted to text link) ──────────────────────
               if (canVerify && isOwner && !myRaceComplete) ...[
-                const SizedBox(height: 18),
-                NuvoOutlineButton(
-                  label: 'Invite crew',
-                  expand: true,
-                  onPressed: (_busy || _navigating)
-                      ? null
-                      : () => _goToInviteCrew(race.id),
+                const SizedBox(height: 16),
+                Center(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: (_busy || _navigating)
+                        ? null
+                        : () => _goToInviteCrew(race.id),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'Invite crew',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.blue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
 

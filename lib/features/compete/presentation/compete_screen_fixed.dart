@@ -141,7 +141,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.fitness_center_rounded,
                         label: 'First to 100 Pushups',
-                        sublabel: 'Editable camera race',
+                        sublabel: '',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.pushups,
@@ -151,7 +151,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.person_outline_rounded,
                         label: 'First to 15 Squats',
-                        sublabel: 'Editable camera race',
+                        sublabel: '',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.squats,
@@ -161,7 +161,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.accessibility_new_rounded,
                         label: 'First to 500 Jumping Jacks',
-                        sublabel: 'Editable camera race',
+                        sublabel: '',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.jumpingJacks,
@@ -171,7 +171,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.directions_walk_rounded,
                         label: 'First to 40 Lunges',
-                        sublabel: 'Editable camera race',
+                        sublabel: '',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.lunges,
@@ -181,7 +181,7 @@ class CompeteScreen extends ConsumerWidget {
                       _QuickStartRow(
                         icon: Icons.timer_outlined,
                         label: 'First to 300 Plank Seconds',
-                        sublabel: 'Editable camera race',
+                        sublabel: '',
                         onTap: () => context.push(
                           '/races/new',
                           extra: RaceCreatePrefill.plank,
@@ -248,29 +248,16 @@ class _CompeteHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: NuvoColors.blue,
-                  shape: BoxShape.circle,
-                ),
+          if (finishedCount > 0) ...[
+            Text(
+              '$finishedCount ${finishedCount == 1 ? 'race' : 'races'} finished',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.muted,
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(width: 7),
-              Text(
-                finishedCount == 0
-                    ? 'A fresh start line'
-                    : '$finishedCount ${finishedCount == 1 ? 'race' : 'races'} finished',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+            ),
+            const SizedBox(height: 14),
+          ],
           Row(
             children: [
               Expanded(
@@ -286,14 +273,6 @@ class _CompeteHero extends StatelessWidget {
                         letterSpacing: -0.9,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Set a finish line and pull in your crew.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
-                        fontSize: 14,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -305,6 +284,7 @@ class _CompeteHero extends StatelessWidget {
           Row(
             children: [
               Expanded(
+                flex: 2,
                 child: NuvoPrimaryButton(
                   label: 'Start race',
                   expand: true,
@@ -313,6 +293,7 @@ class _CompeteHero extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Expanded(
+                flex: 1,
                 child: NuvoOutlineButton(
                   label: 'Join',
                   expand: true,
@@ -994,14 +975,16 @@ class _QuickStartRow extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    sublabel,
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                      fontWeight: FontWeight.w600,
+                  if (sublabel.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      sublabel,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

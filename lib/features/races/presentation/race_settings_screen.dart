@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -272,7 +271,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Tune the start line, finish line, move rules, and lifecycle.',
+              'Edit your race details and rules.',
               style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 24),
@@ -347,8 +346,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                 _Input(
                   controller: _rulesController,
                   label: 'Race rules',
-                  hint:
-                      'What counts, what does not, and how the winner is decided.',
+                  hint: 'How the winner is decided.',
                   maxLines: 5,
                 ),
               ],
@@ -406,7 +404,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             ),
             const SizedBox(height: 26),
             _Section(
-              title: 'Lifecycle',
+              title: 'Race status',
               children: [
                 NuvoGhostButton(
                   label: 'Archive race',
@@ -440,11 +438,6 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                               .cancelRace(widget.raceId),
                         ),
                 ),
-              ],
-            ),
-            _Section(
-              title: 'Danger zone',
-              children: [
                 NuvoDangerButton(
                   label: 'Delete race',
                   icon: Icons.delete_outline_rounded,
@@ -455,7 +448,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                       : () => _runLifecycleAction(
                           title: 'Delete race?',
                           message:
-                              'This hides the race from your arena. Move history is preserved in the backend.',
+                              'This removes the race from your arena. Race history is preserved.',
                           confirmLabel: 'Delete',
                           returnToArena: true,
                           action: () => ref
@@ -466,7 +459,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
               ],
             ),
           ],
-        ).animate().fadeIn(duration: 220.ms, curve: Curves.easeOut).slideY(begin: 0.03, end: 0, duration: 260.ms),
+        ),
       ),
     );
   }

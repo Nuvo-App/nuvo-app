@@ -178,7 +178,7 @@ class _MoveHero extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Choose a race, then verify your move.',
+                      'Verify your moves and climb the board.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -759,7 +759,7 @@ class _RecentMoveRow extends StatelessWidget {
                         statusLabel,
                         style: AppTextStyles.labelSmall.copyWith(
                           color: statusColor,
-                          fontSize: 9,
+                          fontSize: 11,
                         ),
                       ),
                     ),
