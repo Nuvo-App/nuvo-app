@@ -2,16 +2,18 @@ import '../airborne_state_tracker.dart';
 import '../motion_validators.dart';
 import '../multi_phase_sequence_tracker.dart';
 
-/// Landmarks required for jump squat and lunge jump detection.
-const _lowerBodyLandmarks = [
+/// Core landmarks required for jump squat and lunge jump phase evaluation.
+/// Ankles are NOT required here — they are frequently lost during airborne
+/// phases. The [AirborneStateTracker] has its own internal ankle landmark
+/// checks and handles missing ankles gracefully. Phase conditions
+/// (hipToKneeRatio, kneeAngle) only need shoulders, hips, and knees.
+const _coreLandmarks = [
   'leftShoulder',
   'rightShoulder',
   'leftHip',
   'rightHip',
   'leftKnee',
   'rightKnee',
-  'leftAnkle',
-  'rightAnkle',
 ];
 
 /// Builds the Jump Squat production sequence definition.
@@ -36,11 +38,22 @@ const _lowerBodyLandmarks = [
 MultiPhaseSequenceDefinition buildJumpSquatDefinition(
   AirborneStateTracker airborne,
 ) {
+  // Lowered from 0.86 to 0.70 — real-world jump squatters stay in an
+  // athletic stance between reps (hipToKneeRatio ~0.70-0.85), rarely
+  // reaching fully standing (0.86+). Evidence: real video QA shows 0/3
+  // clips detected because STANDING phase never matches.
   final standingCondition = const ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.86,
+    0.70,
     greaterThan: true,
   );
+
+  // STANDING only counts when grounded — prevents matching during
+  // airborne when legs are straight (high ratio) but person is in flight.
+  final groundedStandingCondition = AndCondition([
+    standingCondition,
+    GroundedCondition(airborne),
+  ]);
 
   final squatCondition = const ComparisonCondition(
     PoseSignal.hipToKneeRatio,
@@ -59,31 +72,32 @@ MultiPhaseSequenceDefinition buildJumpSquatDefinition(
     phases: [
       SequencePhaseDefinition(
         id: 'STANDING',
-        condition: standingCondition,
-        stableFrames: 3,
+        condition: groundedStandingCondition,
+        stableFrames: 2,
       ),
       SequencePhaseDefinition(
         id: 'SQUAT',
         condition: squatCondition,
-        stableFrames: 3,
+        stableFrames: 1,
       ),
       SequencePhaseDefinition(
         id: 'AIRBORNE',
         condition: airborneCondition,
-        stableFrames: 2,
+        stableFrames: 1,
       ),
       SequencePhaseDefinition(
         id: 'LANDING',
         condition: landingCondition,
-        stableFrames: 3,
+        stableFrames: 2,
       ),
     ],
     resetCondition: AndCondition([
       standingCondition,
       GroundedCondition(airborne),
     ]),
-    requiredLandmarks: _lowerBodyLandmarks,
+    requiredLandmarks: _coreLandmarks,
     cooldownFrames: 3,
+    noiseGraceFrames: 1,
   );
 }
 
@@ -145,7 +159,7 @@ List<MultiPhaseSequenceDefinition> buildLungeJumpDefinitions(
         SequencePhaseDefinition(
           id: 'AIRBORNE',
           condition: airborneCondition,
-          stableFrames: 2,
+          stableFrames: 1,
         ),
         SequencePhaseDefinition(
           id: 'LEFT_LUNGE',
@@ -154,8 +168,9 @@ List<MultiPhaseSequenceDefinition> buildLungeJumpDefinitions(
         ),
       ],
       resetCondition: standingCondition,
-      requiredLandmarks: _lowerBodyLandmarks,
+      requiredLandmarks: _coreLandmarks,
       cooldownFrames: 3,
+      noiseGraceFrames: 1,
     ),
     // Left-start: LEFT_LUNGE → AIRBORNE → RIGHT_LUNGE
     MultiPhaseSequenceDefinition(
@@ -168,7 +183,7 @@ List<MultiPhaseSequenceDefinition> buildLungeJumpDefinitions(
         SequencePhaseDefinition(
           id: 'AIRBORNE',
           condition: airborneCondition,
-          stableFrames: 2,
+          stableFrames: 1,
         ),
         SequencePhaseDefinition(
           id: 'RIGHT_LUNGE',
@@ -177,8 +192,9 @@ List<MultiPhaseSequenceDefinition> buildLungeJumpDefinitions(
         ),
       ],
       resetCondition: standingCondition,
-      requiredLandmarks: _lowerBodyLandmarks,
+      requiredLandmarks: _coreLandmarks,
       cooldownFrames: 3,
+      noiseGraceFrames: 1,
     ),
   ];
 }

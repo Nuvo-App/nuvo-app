@@ -1,0 +1,123 @@
+[
+  {
+    "id": "yt_jump_squat_001",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_jump_squat_001.json",
+    "movement": "jump_squats",
+    "expectedReps": 3,
+    "url": "https://www.youtube.com/watch?v=BRfxI2Es2lE",
+    "uploader": "PureGym",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_jump_squat_002",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_jump_squat_002.json",
+    "movement": "jump_squats",
+    "expectedReps": 5,
+    "url": "https://www.youtube.com/watch?v=CVaEhXotL7M",
+    "uploader": "FitnessBlender",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_jump_squat_003",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_jump_squat_003.json",
+    "movement": "jump_squats",
+    "expectedReps": 3,
+    "url": "https://www.youtube.com/shorts/YpTGpNOV55A",
+    "uploader": "unknown",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_squat_001",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_squat_001.json",
+    "movement": "normal_squats",
+    "expectedReps": 5,
+    "url": "https://www.youtube.com/watch?v=C_VtOYc6j5c",
+    "uploader": "CrossFit",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_squat_002",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_squat_002.json",
+    "movement": "normal_squats",
+    "expectedReps": 3,
+    "url": "https://www.youtube.com/watch?v=yl1LrMTHxAE",
+    "uploader": "unknown",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_squat_003",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_squat_003.json",
+    "movement": "normal_squats",
+    "expectedReps": 5,
+    "url": "https://www.youtube.com/watch?v=aNXM6m7dPfk",
+    "uploader": "Ryan Ford",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_vertical_jump_001",
+    "success": false,
+    "output": null,
+    "movement": "vertical_jumps",
+    "expectedReps": 3,
+    "url": "https://www.youtube.com/watch?v=mNTyphy6M6s",
+    "uploader": "THIRSTgym",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_vertical_jump_002",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_vertical_jump_002.json",
+    "movement": "vertical_jumps",
+    "expectedReps": 3,
+    "url": "https://www.youtube.com/watch?v=ZkuUPp57ky4",
+    "uploader": "Catalyst Athletics",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_jumping_jack_001",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_jumping_jack_001.json",
+    "movement": "jumping_jacks",
+    "expectedReps": 8,
+    "url": "https://www.youtube.com/watch?v=aknTmegKiIg",
+    "uploader": "Pentagons Personal Training",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_jumping_jack_002",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_jumping_jack_002.json",
+    "movement": "jumping_jacks",
+    "expectedReps": 10,
+    "url": "https://www.youtube.com/watch?v=Tvv9ykWngAU",
+    "uploader": "FRESH! Wellness Group",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  },
+  {
+    "id": "yt_jumping_jack_003",
+    "success": true,
+    "output": "test/motion_qa/fixtures/real/yt_jumping_jack_003.json",
+    "movement": "jumping_jacks",
+    "expectedReps": 5,
+    "url": "https://www.youtube.com/watch?v=uLVt6u15L98",
+    "uploader": "NASM",
+    "license": "standard_youtube",
+    "usageStatus": "TEMPORARY_QA_ONLY"
+  }
+]

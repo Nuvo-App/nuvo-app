@@ -61,12 +61,12 @@ enum AirbornePhase {
 /// matching the existing [RepCounterStateMachine] pattern.
 class AirborneStateTracker {
   AirborneStateTracker({
-    this.baselineFrames = 5,
-    this.flightThresholdRatio = 0.18,
+    this.baselineFrames = 4,
+    this.flightThresholdRatio = 0.25,
     this.groundedToleranceRatio = 0.10,
     this.minFlightThreshold = 0.025,
     this.minGroundedTolerance = 0.015,
-    this.jitterTolerance = 0.015,
+    this.jitterTolerance = 0.030,
     this.minLikelihood = 0.35,
     this.baselineEmaAlpha = 0.20,
   });
