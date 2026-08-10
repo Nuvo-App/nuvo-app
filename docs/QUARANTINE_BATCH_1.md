@@ -83,6 +83,22 @@ differentiators are continuous, ambiguous, or undetectable in 2D front view.
   differentiation impossible.
 - **Verdict:** Continuous, not categorical. Quarantined.
 
+### Half Squats (Batch A candidate)
+- **Candidate differentiator:** hipToKneeRatio in [0.60, 0.80] (shallower
+  than regular squats' ACTIVE threshold of 0.58)
+- **Problem:** This is a continuous differentiator, not categorical. The
+  boundary between "half squat" and "regular squat" is a degree of depth,
+  not a categorical pose change. A person doing a "regular squat" might
+  naturally hit ratio 0.55-0.65 depending on flexibility; a "half squat"
+  hits 0.65-0.75. The overlap zone (0.60-0.65) makes any threshold
+  arbitrary. Worse, half squats are *easier* than regular squats, so a
+  half squat race CAN be cheated by doing regular squats (which go
+  deeper) — there's no way to reject "too deep" without a two-sided
+  threshold, and the lower bound would collide with regular squats'
+  upper bound. This is the same pattern as Narrow Squats (Batch 1):
+  continuous degree difference with overlap, no categorical signal.
+- **Verdict:** Continuous, not categorical. Quarantined.
+
 ## Pass Details
 
 ### Sumo Squats

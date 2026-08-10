@@ -1,4 +1,4 @@
-export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'high_knees' | 'arm_raises' | 'sumo_squats' | 'side_lunges';
+export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'high_knees' | 'arm_raises' | 'sumo_squats' | 'side_lunges' | 'deep_squats' | 'squat_jacks' | 'jump_squats' | 'lunge_jumps';
 export type RaceMetric = 'reps' | 'seconds';
 export type RaceFormat = 'first_to_goal' | 'most_in_window' | 'best_attempt' | 'timed_attempt';
 export type RaceScoringRule = 'cumulative_sum' | 'maximum_attempt';
@@ -157,6 +157,66 @@ export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
     availability: 'supported',
     instructions: ['Keep your full body visible.', 'Step one leg out to the side.', 'Stand tall to finish the rep.'],
   },
+  {
+    id: 'deep_squats',
+    displayName: 'Deep Squats',
+    aliases: ['deep squats', 'deep squat', 'ass to grass', 'atg squats'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'deep_squats_v1',
+    verificationMethod: 'camera_pose',
+    cameraOrientation: 'front',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [8, 15, 30, 50],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep your full body centered.', 'Squat below parallel — hips below knees.', 'Stand tall to finish the rep.'],
+  },
+  {
+    id: 'squat_jacks',
+    displayName: 'Squat Jacks',
+    aliases: ['squat jacks', 'squat jack', 'squatting jacks'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'squat_jacks_v1',
+    verificationMethod: 'camera_pose',
+    cameraOrientation: 'front',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [8, 15, 30, 50],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep your full body visible.', 'Jump feet wide and squat down, arms up.', 'Return to standing with feet together.'],
+  },
+  {
+    id: 'jump_squats',
+    displayName: 'Jump Squats',
+    aliases: ['jump squats', 'jump squat', 'plyometric squats', 'squat jumps'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'jump_squats_v1',
+    verificationMethod: 'camera_pose',
+    cameraOrientation: 'front',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [8, 15, 30, 50],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep your full body visible.', 'Squat down, then jump explosively upward.', 'Land softly and stand tall to finish.'],
+  },
+  {
+    id: 'lunge_jumps',
+    displayName: 'Lunge Jumps',
+    aliases: ['lunge jumps', 'lunge jump', 'jumping lunges', 'split jumps'],
+    supportedMetrics: ['reps'],
+    defaultMetric: 'reps',
+    validatorKey: 'lunge_jumps_v1',
+    verificationMethod: 'camera_pose',
+    cameraOrientation: 'front_or_angle',
+    sessionBehavior: 'count_reps',
+    suggestedTargets: [8, 15, 30, 50],
+    supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt'],
+    availability: 'supported',
+    instructions: ['Keep your full body visible.', 'Lunge forward, then jump and switch legs in the air.', 'Land in the opposite lunge to finish the rep.'],
+  },
 ];
 
 export function activityForId(id: string | null | undefined): RaceActivityDefinition | undefined {
@@ -171,7 +231,11 @@ export function normalizeActivityId(value: string | null | undefined): RaceActiv
   if (normalized === 'jumping_jack') return 'jumping_jacks';
   if (normalized === 'high_knee' || normalized === 'highknees') return 'high_knees';
   if (normalized === 'arm_raise' || normalized === 'armraises') return 'arm_raises';
-  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold', 'high_knees', 'arm_raises', 'sumo_squats', 'side_lunges'].includes(normalized)) {
+  if (normalized === 'deep_squat') return 'deep_squats';
+  if (normalized === 'squat_jack') return 'squat_jacks';
+  if (normalized === 'jump_squat') return 'jump_squats';
+  if (normalized === 'lunge_jump') return 'lunge_jumps';
+  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold', 'high_knees', 'arm_raises', 'sumo_squats', 'side_lunges', 'deep_squats', 'squat_jacks', 'jump_squats', 'lunge_jumps'].includes(normalized)) {
     return normalized as RaceActivityId;
   }
   return undefined;
@@ -196,7 +260,15 @@ export function normalizeMetric(value: string | null | undefined, activity?: Rac
     normalized === 'sumo_squats' ||
     normalized === 'sumo squats' ||
     normalized === 'side_lunges' ||
-    normalized === 'side lunges'
+    normalized === 'side lunges' ||
+    normalized === 'deep_squats' ||
+    normalized === 'deep squats' ||
+    normalized === 'squat_jacks' ||
+    normalized === 'squat jacks' ||
+    normalized === 'jump_squats' ||
+    normalized === 'jump squats' ||
+    normalized === 'lunge_jumps' ||
+    normalized === 'lunge jumps'
   ) return 'reps';
   return undefined;
 }

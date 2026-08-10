@@ -115,6 +115,27 @@ void validateWorkOrder(MovementWorkOrder order) {
           'simpleStateRep cannot be a hold movement',
         );
       }
+
+    case MovementFactoryFamily.multiPhaseSequence:
+      if (order.behavior is! MultiPhaseSequenceBehavior) {
+        throw WorkOrderValidationError(
+          order.type,
+          'multiPhaseSequence family requires MultiPhaseSequenceBehavior',
+        );
+      }
+      final b = order.behavior as MultiPhaseSequenceBehavior;
+      if (b.phaseNames.isEmpty) {
+        throw WorkOrderValidationError(
+          order.type,
+          'multiPhaseSequence must have non-empty phaseNames',
+        );
+      }
+      if (order.isHold) {
+        throw WorkOrderValidationError(
+          order.type,
+          'multiPhaseSequence cannot be a hold movement',
+        );
+      }
   }
 }
 
@@ -172,7 +193,7 @@ class WorkOrderValidationError implements Exception {
 
 void main() {
   group('work-order validation', () {
-    test('all 9 preset work orders validate', () {
+    test('all 13 preset work orders validate', () {
       for (final order in presetMovementWorkOrders) {
         expect(
           () => validateWorkOrder(order),
@@ -196,7 +217,7 @@ void main() {
       );
     });
 
-    test('all 9 catalog movements have exactly one work order', () {
+    test('all 13 catalog movements have exactly one work order', () {
       for (final definition in motionActivityDefinitions) {
         final orders = presetMovementWorkOrders
             .where((o) => o.type == definition.type)
@@ -402,17 +423,19 @@ void main() {
   });
 
   group('factory family distribution', () {
-    test('exactly 5 movements use configurableRep', () {
+    test('exactly 7 movements use configurableRep', () {
       final configurable = presetMovementWorkOrders
           .where((o) => o.family == MovementFactoryFamily.configurableRep)
           .toList();
-      expect(configurable.length, 5);
+      expect(configurable.length, 7);
       expect(configurable.map((o) => o.type).toSet(), {
         MotionActivityType.squats,
         MotionActivityType.jumpingJacks,
         MotionActivityType.lunges,
         MotionActivityType.sumoSquats,
         MotionActivityType.sideLunges,
+        MotionActivityType.deepSquats,
+        MotionActivityType.squatJacks,
       });
     });
 
@@ -446,6 +469,17 @@ void main() {
           .toList();
       expect(simple.length, 1);
       expect(simple.first.type, MotionActivityType.armRaises);
+    });
+
+    test('exactly 2 movements use multiPhaseSequence', () {
+      final multiPhase = presetMovementWorkOrders
+          .where((o) => o.family == MovementFactoryFamily.multiPhaseSequence)
+          .toList();
+      expect(multiPhase.length, 2);
+      expect(multiPhase.map((o) => o.type).toSet(), {
+        MotionActivityType.jumpSquats,
+        MotionActivityType.lungeJumps,
+      });
     });
   });
 
@@ -618,5 +652,9 @@ AiMotionActivity _aiActivityForType(MotionActivityType type) {
     MotionActivityType.plankHold => AiMotionActivity.plankHold,
     MotionActivityType.sumoSquats => AiMotionActivity.sumoSquats,
     MotionActivityType.sideLunges => AiMotionActivity.sideLunges,
+    MotionActivityType.deepSquats => AiMotionActivity.deepSquats,
+    MotionActivityType.squatJacks => AiMotionActivity.squatJacks,
+    MotionActivityType.jumpSquats => AiMotionActivity.jumpSquats,
+    MotionActivityType.lungeJumps => AiMotionActivity.lungeJumps,
   };
 }

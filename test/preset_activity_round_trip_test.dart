@@ -14,13 +14,21 @@ import 'package:nuvo/features/races/domain/race_draft.dart';
 const _presetCases = <(String, MotionActivityType, AiMotionActivity)>[
   ('push_ups', MotionActivityType.pushUps, AiMotionActivity.pushUps),
   ('squats', MotionActivityType.squats, AiMotionActivity.squats),
-  ('jumping_jacks', MotionActivityType.jumpingJacks, AiMotionActivity.jumpingJacks),
+  (
+    'jumping_jacks',
+    MotionActivityType.jumpingJacks,
+    AiMotionActivity.jumpingJacks,
+  ),
   ('lunges', MotionActivityType.lunges, AiMotionActivity.lunges),
   ('plank_hold', MotionActivityType.plankHold, AiMotionActivity.plankHold),
   ('high_knees', MotionActivityType.highKnees, AiMotionActivity.highKnees),
   ('arm_raises', MotionActivityType.armRaises, AiMotionActivity.armRaises),
   ('sumo_squats', MotionActivityType.sumoSquats, AiMotionActivity.sumoSquats),
   ('side_lunges', MotionActivityType.sideLunges, AiMotionActivity.sideLunges),
+  ('deep_squats', MotionActivityType.deepSquats, AiMotionActivity.deepSquats),
+  ('squat_jacks', MotionActivityType.squatJacks, AiMotionActivity.squatJacks),
+  ('jump_squats', MotionActivityType.jumpSquats, AiMotionActivity.jumpSquats),
+  ('lunge_jumps', MotionActivityType.lungeJumps, AiMotionActivity.lungeJumps),
 ];
 
 /// Builds a backend JSON payload for a preset race, mirroring what the
@@ -53,9 +61,8 @@ Map<String, dynamic> _raceJson({
   };
 }
 
-Race _raceFromBackend(String activityId) => Race.fromJson(
-  _raceJson(activityId: activityId),
-);
+Race _raceFromBackend(String activityId) =>
+    Race.fromJson(_raceJson(activityId: activityId));
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
@@ -83,52 +90,68 @@ void main() {
       }
     });
 
-    test('RaceDraft.toCreatePayload emits the correct activityId and aiActivityType', () {
-      for (final (id, type, _) in _presetCases) {
-        final definition = motionActivityForType(type)!;
-        final draft = draftForActivity(definition).copyWith(targetValue: 15);
-        final payload = draft.toCreatePayload();
+    test(
+      'RaceDraft.toCreatePayload emits the correct activityId and aiActivityType',
+      () {
+        for (final (id, type, _) in _presetCases) {
+          final definition = motionActivityForType(type)!;
+          final draft = draftForActivity(definition).copyWith(targetValue: 15);
+          final payload = draft.toCreatePayload();
 
-        expect(payload['activityId'], id, reason: id);
-        expect(payload['aiActivityType'], id, reason: id);
-      }
-    });
+          expect(payload['activityId'], id, reason: id);
+          expect(payload['aiActivityType'], id, reason: id);
+        }
+      },
+    );
 
-    test('Race.fromJson + resolveCameraVerification marks every preset verifiable', () {
-      for (final (id, expectedType, _) in _presetCases) {
-        final race = _raceFromBackend(id);
-        final eligibility = resolveCameraVerification(race);
+    test(
+      'Race.fromJson + resolveCameraVerification marks every preset verifiable',
+      () {
+        for (final (id, expectedType, _) in _presetCases) {
+          final race = _raceFromBackend(id);
+          final eligibility = resolveCameraVerification(race);
 
-        expect(eligibility.isCameraVerifiable, isTrue, reason: id);
-        expect(eligibility.movementType, expectedType, reason: id);
-        expect(
-          eligibility.source,
-          CameraVerificationSource.explicitField,
-          reason: id,
-        );
-      }
-    });
+          expect(eligibility.isCameraVerifiable, isTrue, reason: id);
+          expect(eligibility.movementType, expectedType, reason: id);
+          expect(
+            eligibility.source,
+            CameraVerificationSource.explicitField,
+            reason: id,
+          );
+        }
+      },
+    );
 
-    test('VerifierRuntimeResolver.resolve returns presetPose for every preset', () {
-      for (final (id, _, expectedActivity) in _presetCases) {
-        final race = _raceFromBackend(id);
-        final eligibility = resolveCameraVerification(race);
-        final resolution = resolver.resolve(eligibility: eligibility);
+    test(
+      'VerifierRuntimeResolver.resolve returns presetPose for every preset',
+      () {
+        for (final (id, _, expectedActivity) in _presetCases) {
+          final race = _raceFromBackend(id);
+          final eligibility = resolveCameraVerification(race);
+          final resolution = resolver.resolve(eligibility: eligibility);
 
-        expect(resolution.type, VerifierType.presetPose, reason: id);
-        expect(resolution.canCreateRuntime, isTrue, reason: id);
-        expect(resolution.presetMovement?.activity, expectedActivity, reason: id);
-      }
-    });
+          expect(resolution.type, VerifierType.presetPose, reason: id);
+          expect(resolution.canCreateRuntime, isTrue, reason: id);
+          expect(
+            resolution.presetMovement?.activity,
+            expectedActivity,
+            reason: id,
+          );
+        }
+      },
+    );
 
-    test('createMotionValidator returns the correct validator activity for every preset', () {
-      for (final (id, _, expectedActivity) in _presetCases) {
-        final validator = createMotionValidator(expectedActivity, 15);
+    test(
+      'createMotionValidator returns the correct validator activity for every preset',
+      () {
+        for (final (id, _, expectedActivity) in _presetCases) {
+          final validator = createMotionValidator(expectedActivity, 15);
 
-        expect(validator.activity, expectedActivity, reason: id);
-        expect(validator.targetValue, 15, reason: id);
-      }
-    });
+          expect(validator.activity, expectedActivity, reason: id);
+          expect(validator.targetValue, 15, reason: id);
+        }
+      },
+    );
 
     test('runtime movement matches the direct validator for every preset', () {
       for (final (id, _, expectedActivity) in _presetCases) {
@@ -165,6 +188,10 @@ void main() {
       ('arm_raises', 'Arm Raises', 'reps', 'front', 'count_reps'),
       ('sumo_squats', 'Sumo Squats', 'reps', 'front', 'count_reps'),
       ('side_lunges', 'Side Lunges', 'reps', 'front', 'count_reps'),
+      ('deep_squats', 'Deep Squats', 'reps', 'front', 'count_reps'),
+      ('squat_jacks', 'Squat Jacks', 'reps', 'front', 'count_reps'),
+      ('jump_squats', 'Jump Squats', 'reps', 'front', 'count_reps'),
+      ('lunge_jumps', 'Lunge Jumps', 'reps', 'front_or_angle', 'count_reps'),
     ];
 
     test('Flutter catalog has exactly the same preset IDs as backend', () {
@@ -190,19 +217,26 @@ void main() {
       }
     });
 
-    test('Flutter catalog preferredCameraView matches backend cameraOrientation', () {
-      const cameraViewMap = {
-        'front': PreferredCameraView.frontPreferred,
-        'front_or_angle': PreferredCameraView.frontOrSlightAngle,
-        'side': PreferredCameraView.sideOrDiagonalRequired,
-      };
-      for (final (id, _, _, camera, _) in backendCatalog) {
-        final flutter = motionActivityForBackendValue(id)!;
-        final expected = cameraViewMap[camera];
-        expect(expected, isNotNull, reason: 'Unknown backend camera: $camera');
-        expect(flutter.preferredCameraView, expected, reason: id);
-      }
-    });
+    test(
+      'Flutter catalog preferredCameraView matches backend cameraOrientation',
+      () {
+        const cameraViewMap = {
+          'front': PreferredCameraView.frontPreferred,
+          'front_or_angle': PreferredCameraView.frontOrSlightAngle,
+          'side': PreferredCameraView.sideOrDiagonalRequired,
+        };
+        for (final (id, _, _, camera, _) in backendCatalog) {
+          final flutter = motionActivityForBackendValue(id)!;
+          final expected = cameraViewMap[camera];
+          expect(
+            expected,
+            isNotNull,
+            reason: 'Unknown backend camera: $camera',
+          );
+          expect(flutter.preferredCameraView, expected, reason: id);
+        }
+      },
+    );
 
     test('Flutter isHold matches backend sessionBehavior', () {
       for (final (id, _, _, _, session) in backendCatalog) {
@@ -298,6 +332,96 @@ void main() {
       final validator = createMotionValidator(AiMotionActivity.highKnees, 15);
       expect(validator.activity, AiMotionActivity.highKnees);
       expect(validator.targetValue, 15);
+    });
+  });
+
+  // ── Focused round-trip: deep_squats ─────────────────────────────────────────
+  group('deep_squats full round-trip', () {
+    test('resolves through every Flutter layer', () {
+      const id = 'deep_squats';
+      final race = _raceFromBackend(id);
+
+      // 1. Backend value -> Flutter type.
+      expect(
+        MotionActivityType.fromBackendValue(id),
+        MotionActivityType.deepSquats,
+      );
+
+      // 2. Supported catalog membership.
+      expect(
+        supportedMotionActivityTypes.contains(MotionActivityType.deepSquats),
+        isTrue,
+      );
+
+      // 3. Draft payload carries the correct activityId / aiActivityType.
+      final definition = motionActivityForType(MotionActivityType.deepSquats)!;
+      final draft = draftForActivity(definition).copyWith(targetValue: 15);
+      final payload = draft.toCreatePayload();
+      expect(payload['activityId'], id);
+      expect(payload['aiActivityType'], id);
+
+      // 4. Race.fromJson resolves as camera-verifiable with the right movement.
+      final eligibility = resolveCameraVerification(race);
+      expect(eligibility.isCameraVerifiable, isTrue);
+      expect(eligibility.movementType, MotionActivityType.deepSquats);
+      expect(eligibility.source, CameraVerificationSource.explicitField);
+
+      // 5. VerifierRuntimeResolver returns a presetPose runtime.
+      final resolution = resolver.resolve(eligibility: eligibility);
+      expect(resolution.type, VerifierType.presetPose);
+      expect(resolution.canCreateRuntime, isTrue);
+      expect(resolution.presetMovement?.activity, AiMotionActivity.deepSquats);
+
+      // 6. createMotionValidator returns a ConfigurableRepValidator.
+      final validator = createMotionValidator(AiMotionActivity.deepSquats, 15);
+      expect(validator.activity, AiMotionActivity.deepSquats);
+      expect(validator.targetValue, 15);
+      expect(validator, isA<ConfigurableRepValidator>());
+    });
+  });
+
+  // ── Focused round-trip: squat_jacks ─────────────────────────────────────────
+  group('squat_jacks full round-trip', () {
+    test('resolves through every Flutter layer', () {
+      const id = 'squat_jacks';
+      final race = _raceFromBackend(id);
+
+      // 1. Backend value -> Flutter type.
+      expect(
+        MotionActivityType.fromBackendValue(id),
+        MotionActivityType.squatJacks,
+      );
+
+      // 2. Supported catalog membership.
+      expect(
+        supportedMotionActivityTypes.contains(MotionActivityType.squatJacks),
+        isTrue,
+      );
+
+      // 3. Draft payload carries the correct activityId / aiActivityType.
+      final definition = motionActivityForType(MotionActivityType.squatJacks)!;
+      final draft = draftForActivity(definition).copyWith(targetValue: 15);
+      final payload = draft.toCreatePayload();
+      expect(payload['activityId'], id);
+      expect(payload['aiActivityType'], id);
+
+      // 4. Race.fromJson resolves as camera-verifiable with the right movement.
+      final eligibility = resolveCameraVerification(race);
+      expect(eligibility.isCameraVerifiable, isTrue);
+      expect(eligibility.movementType, MotionActivityType.squatJacks);
+      expect(eligibility.source, CameraVerificationSource.explicitField);
+
+      // 5. VerifierRuntimeResolver returns a presetPose runtime.
+      final resolution = resolver.resolve(eligibility: eligibility);
+      expect(resolution.type, VerifierType.presetPose);
+      expect(resolution.canCreateRuntime, isTrue);
+      expect(resolution.presetMovement?.activity, AiMotionActivity.squatJacks);
+
+      // 6. createMotionValidator returns a ConfigurableRepValidator.
+      final validator = createMotionValidator(AiMotionActivity.squatJacks, 15);
+      expect(validator.activity, AiMotionActivity.squatJacks);
+      expect(validator.targetValue, 15);
+      expect(validator, isA<ConfigurableRepValidator>());
     });
   });
 }

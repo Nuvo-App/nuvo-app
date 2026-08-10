@@ -169,6 +169,10 @@ void main() {
       expect(types, contains(MotionActivityType.lunges));
       expect(types, contains(MotionActivityType.sumoSquats));
       expect(types, contains(MotionActivityType.sideLunges));
+      expect(types, contains(MotionActivityType.deepSquats));
+      expect(types, contains(MotionActivityType.squatJacks));
+      expect(types, contains(MotionActivityType.jumpSquats));
+      expect(types, contains(MotionActivityType.lungeJumps));
     });
   });
 

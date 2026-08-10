@@ -1,5 +1,7 @@
 import '../../domain/motion_activity.dart';
+import '../airborne_state_tracker.dart';
 import '../motion_validators.dart';
+import '../multi_phase_sequence_tracker.dart';
 
 /// Factory family that determines which validator implementation
 /// a movement uses.
@@ -14,12 +16,16 @@ import '../motion_validators.dart';
 ///   [HoldTimerStateMachine]. Currently plank.
 /// - [simpleStateRep]: open/closed state machine without debounce.
 ///   Currently arm raises.
+/// - [multiPhaseSequence]: ordered N-phase sequence detection via
+///   [MultiPhaseSequenceTracker] + [MultiPhaseSequenceDefinition].
+///   Currently jump squats, lunge jumps.
 enum MovementFactoryFamily {
   configurableRep,
   customRep,
   alternatingSideRep,
   hold,
   simpleStateRep,
+  multiPhaseSequence,
 }
 
 /// Describes the verification behavior for a [MovementWorkOrder].
@@ -104,6 +110,32 @@ class SimpleStateBehavior extends WorkOrderBehavior {
   /// If true, a rep only counts after an open→closed cycle following
   /// a prior open state (raise-then-lower requirement).
   final bool requiresDirectionalCycle;
+}
+
+/// Behavior for [MovementFactoryFamily.multiPhaseSequence] movements.
+///
+/// References the production [MultiPhaseSequenceDefinition] builder so
+/// tests can verify the work order matches the actual runtime definition.
+/// The builder is a function (not a const) because [MultiPhaseSequenceDefinition]
+/// conditions reference a shared [AirborneStateTracker] instance that is
+/// owned by the validator at runtime.
+class MultiPhaseSequenceBehavior extends WorkOrderBehavior {
+  const MultiPhaseSequenceBehavior({
+    required this.definitionBuilder,
+    required this.phaseNames,
+  });
+
+  /// Builds the sequence definition(s) given the runtime
+  /// [AirborneStateTracker]. Returns one definition for single-direction
+  /// movements (e.g., jump squats) or multiple for bidirectional
+  /// movements (e.g., lunge jumps with both left-start and right-start).
+  final List<MultiPhaseSequenceDefinition> Function(
+    AirborneStateTracker airborne,
+  ) definitionBuilder;
+
+  /// Ordered phase names for this movement (e.g., ['STANDING', 'SQUAT',
+  /// 'AIRBORNE', 'LANDING']). Used for demo phase name verification.
+  final List<String> phaseNames;
 }
 
 /// Immutable work order describing an existing preset movement for

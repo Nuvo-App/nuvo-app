@@ -238,6 +238,305 @@ const sideLungesDemo = MovementDemo(
   duration: Duration(milliseconds: 3600),
 );
 
+// ── Deep Squats ───────────────────────────────────────────────────────────────
+// ConfigurableRepValidator with deepSquatRepDefinition:
+// "start" = hipToKneeRatio > 0.86 (standing tall),
+// "active" = hipToKneeRatio < 0.30 (hips below knees — below parallel).
+// Front view: same stance as regular squats, but the descent goes deeper.
+// The demo shows standing → normal squat depth (pass-through, not held) →
+// deep squat depth (held) → standing, matching the verifier's active phase.
+
+class _DeepSquatsKeyPoses {
+  // Standing — legs straight, same as regular squat standing.
+  static const standing = NuvoCharacterPose(
+    head: Offset(0.50, 0.08),
+    neck: Offset(0.50, 0.15),
+    leftShoulder: Offset(0.42, 0.18),
+    rightShoulder: Offset(0.58, 0.18),
+    leftElbow: Offset(0.39, 0.28),
+    rightElbow: Offset(0.61, 0.28),
+    leftWrist: Offset(0.38, 0.38),
+    rightWrist: Offset(0.62, 0.38),
+    leftHip: Offset(0.45, 0.40),
+    rightHip: Offset(0.55, 0.40),
+    leftKnee: Offset(0.44, 0.58),
+    rightKnee: Offset(0.56, 0.58),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  // Normal squat depth — thighs ~parallel. This is the pass-through phase
+  // that a regular squat would hold but a deep squat continues past.
+  // hipToKneeRatio here ~0.50 (between 0.30 and 0.58 — counts for regular
+  // squats but NOT for deep squats).
+  static const normalSquatDepth = NuvoCharacterPose(
+    head: Offset(0.50, 0.12),
+    neck: Offset(0.50, 0.18),
+    leftShoulder: Offset(0.42, 0.21),
+    rightShoulder: Offset(0.58, 0.21),
+    leftElbow: Offset(0.38, 0.28),
+    rightElbow: Offset(0.62, 0.28),
+    leftWrist: Offset(0.37, 0.36),
+    rightWrist: Offset(0.63, 0.36),
+    leftHip: Offset(0.45, 0.46),
+    rightHip: Offset(0.55, 0.46),
+    leftKnee: Offset(0.43, 0.54),
+    rightKnee: Offset(0.57, 0.54),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  // Deep squat depth — hips below knees. This is the active phase.
+  // hipToKneeRatio here ~0.20 (< 0.30 — counts for deep squats).
+  static const deepSquatDepth = NuvoCharacterPose(
+    head: Offset(0.50, 0.16),
+    neck: Offset(0.50, 0.22),
+    leftShoulder: Offset(0.42, 0.25),
+    rightShoulder: Offset(0.58, 0.25),
+    leftElbow: Offset(0.38, 0.32),
+    rightElbow: Offset(0.62, 0.32),
+    leftWrist: Offset(0.38, 0.40),
+    rightWrist: Offset(0.62, 0.40),
+    leftHip: Offset(0.45, 0.52),
+    rightHip: Offset(0.55, 0.52),
+    leftKnee: Offset(0.42, 0.50),
+    rightKnee: Offset(0.58, 0.50),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  static const poses = [
+    standing,
+    normalSquatDepth,
+    deepSquatDepth,
+    normalSquatDepth,
+    standing,
+  ];
+}
+
+const deepSquatsDemo = MovementDemo(
+  poses: _DeepSquatsKeyPoses.poses,
+  duration: Duration(milliseconds: 2800),
+);
+
+// ── Squat Jacks ──────────────────────────────────────────────────────────────
+// ConfigurableRepValidator with squatJackRepDefinition:
+// "start" = arms down + feet together + standing (hipToKneeRatio > 0.86),
+// "active" = arms up + feet wide + squat depth (hipToKneeRatio < 0.58).
+// Front view: a jumping jack that adds a squat at the open phase.
+
+class _SquatJacksKeyPoses {
+  // Closed — arms down, feet together, standing tall.
+  static const closed = NuvoCharacterPose(
+    head: Offset(0.50, 0.08),
+    neck: Offset(0.50, 0.15),
+    leftShoulder: Offset(0.42, 0.18),
+    rightShoulder: Offset(0.58, 0.18),
+    leftElbow: Offset(0.40, 0.26),
+    rightElbow: Offset(0.60, 0.26),
+    leftWrist: Offset(0.41, 0.34),
+    rightWrist: Offset(0.59, 0.34),
+    leftHip: Offset(0.45, 0.40),
+    rightHip: Offset(0.55, 0.40),
+    leftKnee: Offset(0.44, 0.58),
+    rightKnee: Offset(0.56, 0.58),
+    leftAnkle: Offset(0.47, 0.76),
+    rightAnkle: Offset(0.53, 0.76),
+  );
+
+  // Open + squat — arms up, feet wide, squat depth.
+  // Combines jumping jack open pose with squat descent.
+  static const openSquat = NuvoCharacterPose(
+    head: Offset(0.50, 0.10),
+    neck: Offset(0.50, 0.16),
+    leftShoulder: Offset(0.42, 0.20),
+    rightShoulder: Offset(0.58, 0.20),
+    leftElbow: Offset(0.34, 0.14),
+    rightElbow: Offset(0.66, 0.14),
+    leftWrist: Offset(0.30, 0.08),
+    rightWrist: Offset(0.70, 0.08),
+    leftHip: Offset(0.45, 0.44),
+    rightHip: Offset(0.55, 0.44),
+    leftKnee: Offset(0.38, 0.54),
+    rightKnee: Offset(0.62, 0.54),
+    leftAnkle: Offset(0.30, 0.76),
+    rightAnkle: Offset(0.70, 0.76),
+  );
+
+  static const poses = [closed, openSquat, closed];
+}
+
+const squatJacksDemo = MovementDemo(
+  poses: _SquatJacksKeyPoses.poses,
+  duration: Duration(milliseconds: 2400),
+);
+
+// ── Jump Squats ──────────────────────────────────────────────────────────────
+// MultiPhaseSequenceValidator with buildJumpSquatDefinition:
+// STANDING → SQUAT → AIRBORNE → LANDING → standing.
+// Front view: squat down, then jump up with arms raised, then land and stand.
+// The airborne pose visibly leaves the ground (ankles rise above baseline).
+
+class _JumpSquatsKeyPoses {
+  // Standing — neutral, arms at sides.
+  static const standing = NuvoCharacterPose(
+    head: Offset(0.50, 0.08),
+    neck: Offset(0.50, 0.15),
+    leftShoulder: Offset(0.42, 0.18),
+    rightShoulder: Offset(0.58, 0.18),
+    leftElbow: Offset(0.39, 0.28),
+    rightElbow: Offset(0.61, 0.28),
+    leftWrist: Offset(0.38, 0.38),
+    rightWrist: Offset(0.62, 0.38),
+    leftHip: Offset(0.45, 0.40),
+    rightHip: Offset(0.55, 0.40),
+    leftKnee: Offset(0.44, 0.58),
+    rightKnee: Offset(0.56, 0.58),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  // Squat — hips low, knees bent, arms forward for balance.
+  static const squat = NuvoCharacterPose(
+    head: Offset(0.50, 0.14),
+    neck: Offset(0.50, 0.20),
+    leftShoulder: Offset(0.42, 0.23),
+    rightShoulder: Offset(0.58, 0.23),
+    leftElbow: Offset(0.36, 0.30),
+    rightElbow: Offset(0.64, 0.30),
+    leftWrist: Offset(0.34, 0.36),
+    rightWrist: Offset(0.66, 0.36),
+    leftHip: Offset(0.45, 0.48),
+    rightHip: Offset(0.55, 0.48),
+    leftKnee: Offset(0.42, 0.54),
+    rightKnee: Offset(0.58, 0.54),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  // Airborne — whole body lifted up, arms overhead, ankles above baseline.
+  // The y-coordinates are shifted up by ~0.12 to visibly leave the ground.
+  static const airborne = NuvoCharacterPose(
+    head: Offset(0.50, 0.02),
+    neck: Offset(0.50, 0.08),
+    leftShoulder: Offset(0.42, 0.12),
+    rightShoulder: Offset(0.58, 0.12),
+    leftElbow: Offset(0.36, 0.04),
+    rightElbow: Offset(0.64, 0.04),
+    leftWrist: Offset(0.34, 0.00),
+    rightWrist: Offset(0.66, 0.00),
+    leftHip: Offset(0.45, 0.28),
+    rightHip: Offset(0.55, 0.28),
+    leftKnee: Offset(0.44, 0.44),
+    rightKnee: Offset(0.56, 0.44),
+    leftAnkle: Offset(0.44, 0.60),
+    rightAnkle: Offset(0.56, 0.60),
+  );
+
+  // Landing — back on the ground, slight squat to absorb impact.
+  static const landing = NuvoCharacterPose(
+    head: Offset(0.50, 0.12),
+    neck: Offset(0.50, 0.18),
+    leftShoulder: Offset(0.42, 0.21),
+    rightShoulder: Offset(0.58, 0.21),
+    leftElbow: Offset(0.38, 0.28),
+    rightElbow: Offset(0.62, 0.28),
+    leftWrist: Offset(0.36, 0.34),
+    rightWrist: Offset(0.64, 0.34),
+    leftHip: Offset(0.45, 0.46),
+    rightHip: Offset(0.55, 0.46),
+    leftKnee: Offset(0.43, 0.55),
+    rightKnee: Offset(0.57, 0.55),
+    leftAnkle: Offset(0.44, 0.76),
+    rightAnkle: Offset(0.56, 0.76),
+  );
+
+  static const poses = [standing, squat, airborne, landing, standing];
+}
+
+const jumpSquatsDemo = MovementDemo(
+  poses: _JumpSquatsKeyPoses.poses,
+  duration: Duration(milliseconds: 2800),
+);
+
+// ── Lunge Jumps ──────────────────────────────────────────────────────────────
+// MultiPhaseSequenceValidator with buildLungeJumpDefinitions:
+// RIGHT_LUNGE → AIRBORNE → LEFT_LUNGE (and vice versa).
+// Front view: lunge right, jump switch, lunge left, jump switch.
+// The airborne transition visibly lifts the body off the ground.
+
+class _LungeJumpsKeyPoses {
+  // Lunge right — right leg forward, left leg back.
+  // Mirrors the existing lunges demo lungeRight pose.
+  static const lungeRight = NuvoCharacterPose(
+    head: Offset(0.52, 0.10),
+    neck: Offset(0.52, 0.17),
+    leftShoulder: Offset(0.44, 0.20),
+    rightShoulder: Offset(0.60, 0.20),
+    leftElbow: Offset(0.41, 0.30),
+    rightElbow: Offset(0.63, 0.30),
+    leftWrist: Offset(0.40, 0.40),
+    rightWrist: Offset(0.64, 0.40),
+    leftHip: Offset(0.47, 0.42),
+    rightHip: Offset(0.57, 0.42),
+    leftKnee: Offset(0.42, 0.58),
+    rightKnee: Offset(0.64, 0.52),
+    leftAnkle: Offset(0.40, 0.76),
+    rightAnkle: Offset(0.70, 0.72),
+  );
+
+  // Airborne — body lifted, legs switching, arms up for momentum.
+  // The y-coordinates are shifted up to visibly leave the ground.
+  static const airborne = NuvoCharacterPose(
+    head: Offset(0.50, 0.04),
+    neck: Offset(0.50, 0.10),
+    leftShoulder: Offset(0.42, 0.14),
+    rightShoulder: Offset(0.58, 0.14),
+    leftElbow: Offset(0.36, 0.06),
+    rightElbow: Offset(0.64, 0.06),
+    leftWrist: Offset(0.34, 0.02),
+    rightWrist: Offset(0.66, 0.02),
+    leftHip: Offset(0.45, 0.30),
+    rightHip: Offset(0.55, 0.30),
+    leftKnee: Offset(0.40, 0.44),
+    rightKnee: Offset(0.60, 0.44),
+    leftAnkle: Offset(0.42, 0.58),
+    rightAnkle: Offset(0.58, 0.58),
+  );
+
+  // Lunge left — left leg forward, right leg back.
+  // Mirrors the existing lunges demo lungeLeft pose.
+  static const lungeLeft = NuvoCharacterPose(
+    head: Offset(0.48, 0.10),
+    neck: Offset(0.48, 0.17),
+    leftShoulder: Offset(0.40, 0.20),
+    rightShoulder: Offset(0.56, 0.20),
+    leftElbow: Offset(0.37, 0.30),
+    rightElbow: Offset(0.59, 0.30),
+    leftWrist: Offset(0.36, 0.40),
+    rightWrist: Offset(0.60, 0.40),
+    leftHip: Offset(0.43, 0.42),
+    rightHip: Offset(0.53, 0.42),
+    leftKnee: Offset(0.36, 0.52),
+    rightKnee: Offset(0.58, 0.58),
+    leftAnkle: Offset(0.30, 0.72),
+    rightAnkle: Offset(0.60, 0.76),
+  );
+
+  static const poses = [
+    lungeRight,
+    airborne,
+    lungeLeft,
+    airborne,
+    lungeRight,
+  ];
+}
+
+const lungeJumpsDemo = MovementDemo(
+  poses: _LungeJumpsKeyPoses.poses,
+  duration: Duration(milliseconds: 3200),
+);
+
 // ── Jumping Jacks ─────────────────────────────────────────────────────────────
 // JumpingJacksValidator: "start" = arms down + feet together,
 // "active" = arms overhead + feet apart.
@@ -485,5 +784,9 @@ MovementDemo? movementDemoForType(MotionActivityType type) {
     MotionActivityType.plankHold => plankHoldDemo,
     MotionActivityType.sumoSquats => sumoSquatsDemo,
     MotionActivityType.sideLunges => sideLungesDemo,
+    MotionActivityType.deepSquats => deepSquatsDemo,
+    MotionActivityType.squatJacks => squatJacksDemo,
+    MotionActivityType.jumpSquats => jumpSquatsDemo,
+    MotionActivityType.lungeJumps => lungeJumpsDemo,
   };
 }
