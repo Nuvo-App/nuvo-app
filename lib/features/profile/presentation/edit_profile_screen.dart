@@ -292,7 +292,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               color: NuvoColors.muted,
                             ),
                           ),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 24),
 
                           // ── Photo section ──────────────────────────────────────────
                           Center(
@@ -309,15 +309,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                           _openProfilePhotoSheet();
                                         },
                                   child: SizedBox(
-                                    width: 104,
-                                    height: 104,
+                                    width: 88,
+                                    height: 88,
                                     child: Stack(
                                       clipBehavior: Clip.none,
                                       children: [
                                         _uploading
                                             ? Container(
-                                                width: 104,
-                                                height: 104,
+                                                width: 88,
+                                                height: 88,
                                                 decoration: BoxDecoration(
                                                   color: NuvoColors.navy
                                                       .withValues(alpha: 0.08),
@@ -325,8 +325,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                 ),
                                                 alignment: Alignment.center,
                                                 child: const SizedBox(
-                                                  width: 28,
-                                                  height: 28,
+                                                  width: 24,
+                                                  height: 24,
                                                   child:
                                                       CircularProgressIndicator(
                                                         strokeWidth: 2.5,
@@ -338,7 +338,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                 initials: initials,
                                                 localBytes: _pendingImageBytes,
                                                 photoUrl: photoUrl,
-                                                size: 104,
+                                                size: 88,
                                                 bgColor: NuvoColors.navy
                                                     .withValues(alpha: 0.08),
                                                 textColor: NuvoColors.navy,
@@ -356,8 +356,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                 _openProfilePhotoSheet();
                                               },
                                               child: Container(
-                                                width: 28,
-                                                height: 28,
+                                                width: 26,
+                                                height: 26,
                                                 decoration: BoxDecoration(
                                                   color: NuvoColors.blue,
                                                   shape: BoxShape.circle,
@@ -373,7 +373,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                       : Icons
                                                             .photo_camera_rounded,
                                                   color: NuvoColors.white,
-                                                  size: 13,
+                                                  size: 12,
                                                 ),
                                               ),
                                             ),
@@ -382,7 +382,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 8),
                                 GestureDetector(
                                   behavior: HitTestBehavior.opaque,
                                   onTap: _uploading
@@ -396,7 +396,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
-                                      vertical: 8,
+                                      vertical: 6,
                                     ),
                                     child: Text(
                                       hasPhoto ? 'Change photo' : 'Add photo',
@@ -410,7 +410,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 24),
                           NuvoTextInput(
                             controller: _nameController,
                             label: 'Full name',

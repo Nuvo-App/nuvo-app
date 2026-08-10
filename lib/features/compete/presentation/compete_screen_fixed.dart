@@ -135,9 +135,9 @@ class CompeteScreen extends ConsumerWidget {
                         const SizedBox(height: 12),
                         _FinishedRail(races: finished, userId: uid),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       const _SectionLabel(label: 'Quick starts'),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       _QuickStartRow(
                         icon: Icons.fitness_center_rounded,
                         label: 'First to 100 Pushups',
@@ -147,7 +147,7 @@ class CompeteScreen extends ConsumerWidget {
                           extra: RaceCreatePrefill.pushups,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _QuickStartRow(
                         icon: Icons.person_outline_rounded,
                         label: 'First to 15 Squats',
@@ -157,7 +157,7 @@ class CompeteScreen extends ConsumerWidget {
                           extra: RaceCreatePrefill.squats,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _QuickStartRow(
                         icon: Icons.accessibility_new_rounded,
                         label: 'First to 500 Jumping Jacks',
@@ -167,7 +167,7 @@ class CompeteScreen extends ConsumerWidget {
                           extra: RaceCreatePrefill.jumpingJacks,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _QuickStartRow(
                         icon: Icons.directions_walk_rounded,
                         label: 'First to 40 Lunges',
@@ -177,7 +177,7 @@ class CompeteScreen extends ConsumerWidget {
                           extra: RaceCreatePrefill.lunges,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       _QuickStartRow(
                         icon: Icons.timer_outlined,
                         label: 'First to 300 Plank Seconds',

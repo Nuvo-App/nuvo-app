@@ -278,21 +278,30 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         ? movementDemoForType(eligibility.movementType!)
         : null;
     final framingLabel =
-        eligibility.movementDefinition?.framingLabel ?? 'Full body inside frame';
+        eligibility.movementDefinition?.framingLabel ??
+        'Full body inside frame';
+
+    // Compute a demo height that fits small iPhones without pushing the CTA
+    // below the fold. On a 667px screen with SafeArea (~60px) and bottom bar
+    // (~110px), the body has ~497px. Content above+below the demo is ~180px,
+    // so the demo gets ~317px. We cap at 320 and floor at 220 to keep it
+    // visually significant on larger screens while fitting small ones.
+    final screenHeight = MediaQuery.of(context).size.height;
+    final demoHeight = (screenHeight - 360).clamp(220.0, 320.0);
 
     return [
       _backRow(),
-      const SizedBox(height: 16),
+      const SizedBox(height: 12),
 
       // Movement name — large, clear
       Text(
         movementName,
         style: AppTextStyles.headlineLarge.copyWith(
-          fontSize: 34,
+          fontSize: 32,
           letterSpacing: -0.9,
         ),
       ),
-      const SizedBox(height: 6),
+      const SizedBox(height: 4),
 
       // "Do this" label
       Text(
@@ -302,16 +311,16 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         ).copyWith(color: NuvoColors.blue),
       ),
 
-      const SizedBox(height: 24),
+      const SizedBox(height: 16),
 
       // Large looping movement animation — the visual focus
       SizedBox(
-        height: 340,
+        height: demoHeight,
         width: double.infinity,
         child: NuvoMovementAnimation(demo: demo!),
       ),
 
-      const SizedBox(height: 28),
+      const SizedBox(height: 20),
 
       // Short camera/setup instruction
       Text(
@@ -322,7 +331,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         ),
         textAlign: TextAlign.center,
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 8),
       Text(
         'Stand where Nuvo can see your whole body.',
         style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),

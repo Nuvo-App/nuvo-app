@@ -115,165 +115,183 @@ class _CreateIdentityScreenState extends ConsumerState<CreateIdentityScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child:
-            ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 34, 22, 44),
-                  children: [
-                    // Step indicator
-                    Row(
-                      children: [
-                        for (var i = 0; i < 5; i++) ...[
-                          Expanded(
-                            child: Container(
-                              height: 3,
-                              decoration: BoxDecoration(
-                                color: i == 0
-                                    ? NuvoColors.blue
-                                    : NuvoColors.border,
-                                borderRadius: BorderRadius.circular(99),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Scrollable content ───────────────────────────────────────────
+            Expanded(
+              child:
+                  SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Step indicator
+                            Row(
+                              children: [
+                                for (var i = 0; i < 5; i++) ...[
+                                  Expanded(
+                                    child: Container(
+                                      height: 3,
+                                      decoration: BoxDecoration(
+                                        color: i == 0
+                                            ? NuvoColors.blue
+                                            : NuvoColors.border,
+                                        borderRadius: BorderRadius.circular(99),
+                                      ),
+                                    ),
+                                  ),
+                                  if (i < 4) const SizedBox(width: 4),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+
+                            Text(
+                              'Create your\nNuvo identity',
+                              style: AppTextStyles.headlineLarge.copyWith(
+                                fontSize: 32,
+                                letterSpacing: -0.9,
                               ),
                             ),
-                          ),
-                          if (i < 4) const SizedBox(width: 4),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-
-                    Text(
-                      'Create your\nNuvo identity',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Choose how your crew will find and race you.',
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Avatar preview
-                    Center(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 86,
-                        height: 86,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _nameController.text.trim().isEmpty
-                              ? NuvoColors.panel
-                              : NuvoColors.blue,
-                          boxShadow: [
-                            BoxShadow(
-                              color: NuvoColors.blue.withValues(alpha: 0.18),
-                              blurRadius: 18,
-                              offset: const Offset(0, 8),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Choose how your crew will find and race you.',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: NuvoColors.muted,
+                              ),
                             ),
+                            const SizedBox(height: 24),
+
+                            // Avatar preview
+                            Center(
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 76,
+                                height: 76,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _nameController.text.trim().isEmpty
+                                      ? NuvoColors.panel
+                                      : NuvoColors.blue,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: NuvoColors.blue.withValues(
+                                        alpha: 0.18,
+                                      ),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _initials,
+                                  style: AppTextStyles.headlineMedium.copyWith(
+                                    color: NuvoColors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            NuvoTextInput(
+                              controller: _nameController,
+                              label: 'FULL NAME',
+                              hint: 'Your name',
+                              textCapitalization: TextCapitalization.words,
+                              onChanged: (_) => setState(() {}),
+                            ),
+                            const SizedBox(height: 16),
+
+                            NuvoTextInput(
+                              controller: _usernameController,
+                              label: 'USERNAME',
+                              hint: 'pick a handle',
+                              prefixIcon: Padding(
+                                padding: const EdgeInsets.only(left: 14),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  widthFactor: 1,
+                                  child: Text(
+                                    '@',
+                                    style: AppTextStyles.bodyMedium,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+
+                            if (_usernameChecking)
+                              Text(
+                                'Checking availability…',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
+                              )
+                            else if (username.length >= 3) ...[
+                              Row(
+                                children: [
+                                  Icon(
+                                    _usernameAvailable == true
+                                        ? Icons.check_circle_rounded
+                                        : Icons.cancel_rounded,
+                                    color: _usernameAvailable == true
+                                        ? NuvoColors.success
+                                        : NuvoColors.danger,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _usernameAvailable == true
+                                        ? '@$username is available'
+                                        : '@$username is taken',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: _usernameAvailable == true
+                                          ? NuvoColors.success
+                                          : NuvoColors.danger,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+
+                            if (_error != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                _error!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.danger,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          _initials,
-                          style: AppTextStyles.headlineMedium.copyWith(
-                            color: NuvoColors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    NuvoTextInput(
-                      controller: _nameController,
-                      label: 'FULL NAME',
-                      hint: 'Your name',
-                      textCapitalization: TextCapitalization.words,
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 20),
-
-                    NuvoTextInput(
-                      controller: _usernameController,
-                      label: 'USERNAME',
-                      hint: 'pick a handle',
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 14),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: 1,
-                          child: Text('@', style: AppTextStyles.bodyMedium),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    if (_usernameChecking)
-                      Text(
-                        'Checking availability…',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
-                        ),
                       )
-                    else if (username.length >= 3) ...[
-                      Row(
-                        children: [
-                          Icon(
-                            _usernameAvailable == true
-                                ? Icons.check_circle_rounded
-                                : Icons.cancel_rounded,
-                            color: _usernameAvailable == true
-                                ? NuvoColors.success
-                                : NuvoColors.danger,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _usernameAvailable == true
-                                ? '@$username is available'
-                                : '@$username is taken',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: _usernameAvailable == true
-                                  ? NuvoColors.success
-                                  : NuvoColors.danger,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                      .animate()
+                      .fadeIn(duration: 280.ms, curve: Curves.easeOut)
+                      .slideY(
+                        begin: 0.04,
+                        end: 0,
+                        duration: 320.ms,
+                        curve: Curves.easeOutCubic,
                       ),
-                    ],
+            ),
 
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _error!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 32),
-
-                    NuvoPrimaryButton(
-                      label: 'Continue',
-                      icon: Icons.arrow_forward_rounded,
-                      expand: true,
-                      loading: _loading,
-                      onPressed: _canContinue ? _submit : null,
-                    ),
-                  ],
-                )
-                .animate()
-                .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                .slideY(
-                  begin: 0.04,
-                  end: 0,
-                  duration: 320.ms,
-                  curve: Curves.easeOutCubic,
-                ),
+            // ── Pinned CTA ───────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: NuvoPrimaryButton(
+                label: 'Continue',
+                icon: Icons.arrow_forward_rounded,
+                expand: true,
+                loading: _loading,
+                onPressed: _canContinue ? _submit : null,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

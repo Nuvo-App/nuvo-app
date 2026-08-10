@@ -545,7 +545,7 @@ class _PageShell extends StatelessWidget {
                     color: NuvoColors.muted,
                   ),
                 ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
                 body
                     .animate(delay: 60.ms)
                     .fadeIn(duration: 220.ms)
@@ -829,7 +829,9 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       ),
     );
     // Record selection in recent movements
-    ref.read(recentMovementIdsProvider.notifier).record(activity.type.backendValue);
+    ref
+        .read(recentMovementIdsProvider.notifier)
+        .record(activity.type.backendValue);
   }
 
   @override
@@ -849,7 +851,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
             controller: _searchController,
             onChanged: (value) => setState(() => _searchQuery = value),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // ── Search results OR browse ────────────────────────────────────
           if (_searchQuery.isNotEmpty)
@@ -863,9 +865,11 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
             if (recentActivities.isNotEmpty) ...[
               Text(
                 'Recent',
-                style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: NuvoColors.navy,
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               SizedBox(
                 height: 72,
                 child: ListView.separated(
@@ -882,7 +886,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                   },
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
             ],
 
             // ── Category tabs ─────────────────────────────────────────────
@@ -891,7 +895,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               selected: _selectedCategory,
               onSelect: (cat) => setState(() => _selectedCategory = cat),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             // ── Category sections ────────────────────────────────────────
             if (_selectedCategory == null)
@@ -901,7 +905,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                   selectedType: widget.draft.activity.type,
                   onSelect: _select,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
               ]
             else
               _CategorySection(
@@ -913,7 +917,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
           ],
 
           // ── Teach a movement ────────────────────────────────────────────
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           NuvoSecondaryButton(
             label: 'Teach a movement',
             icon: Icons.video_camera_front_rounded,
@@ -948,9 +952,16 @@ class _SearchBar extends StatelessWidget {
         decoration: InputDecoration(
           hintText: 'Search movements',
           hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-          prefixIcon: const Icon(Icons.search_rounded, color: NuvoColors.muted, size: 20),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            color: NuvoColors.muted,
+            size: 20,
+          ),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -1214,9 +1225,7 @@ class _CompactActivityCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               activity.metric.label,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.muted,
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
             ),
           ],
         ),
