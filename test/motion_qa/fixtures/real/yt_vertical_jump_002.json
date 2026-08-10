@@ -7,7 +7,7 @@
   },
   "source": {
     "type": "youtube",
-    "name": "Pause Vertical Jump | Olympic Weightlifting Exercise Library",
+    "name": "Pause Vertical Jump",
     "extractor": "mediapipe",
     "cameraView": "front",
     "qualityTier": "real_video"
@@ -23114,7 +23114,7 @@
       }
     }
   ],
-  "label": "Pause Vertical Jump | Olympic Weightlifting Exercise Library",
+  "label": "Pause Vertical Jump",
   "tags": [
     "real_video",
     "mediapipe",

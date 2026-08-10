@@ -6,8 +6,8 @@
     "shouldMatch": false
   },
   "source": {
-    "type": "local",
-    "name": "yt_vertical_jump_001",
+    "type": "youtube",
+    "name": "Bodyweight Vertical Jump",
     "extractor": "mediapipe",
     "cameraView": "front",
     "qualityTier": "real_video"
@@ -23114,10 +23114,10 @@
       }
     }
   ],
-  "label": "yt_vertical_jump_001",
+  "label": "Bodyweight Vertical Jump",
   "tags": [
     "real_video",
     "mediapipe",
-    ""
+    "vertical_jumps"
   ]
 }

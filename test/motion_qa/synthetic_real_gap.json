@@ -1,0 +1,1476 @@
+{
+  "synthetic": [
+    {
+      "id": "jsq_clean_3",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 48,
+      "hkr": {
+        "min": -0.0109,
+        "max": 1.1575,
+        "mean": 0.8717,
+        "median": 1.0931,
+        "count": 48
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 2,
+        "mean": 2.0,
+        "median": 2,
+        "count": 3
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8506,
+        "max": 0.9984,
+        "mean": 0.9285,
+        "median": 0.9292,
+        "count": 96
+      },
+      "knee_confidence": {
+        "min": 0.851,
+        "max": 0.9981,
+        "mean": 0.9289,
+        "median": 0.9285,
+        "count": 96
+      },
+      "hip_confidence": {
+        "min": 0.85,
+        "max": 0.9995,
+        "mean": 0.93,
+        "median": 0.9331,
+        "count": 96
+      },
+      "torso_height": {
+        "min": 0.1689,
+        "max": 0.3052,
+        "mean": 0.2155,
+        "median": 0.2006,
+        "count": 48
+      }
+    },
+    {
+      "id": "jsq_noisy_3",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 50,
+      "hkr": {
+        "min": -0.0374,
+        "max": 1.2256,
+        "mean": 0.853,
+        "median": 1.037,
+        "count": 50
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 2,
+        "mean": 1.25,
+        "median": 1,
+        "count": 4
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8539,
+        "max": 0.9997,
+        "mean": 0.9293,
+        "median": 0.9301,
+        "count": 96
+      },
+      "knee_confidence": {
+        "min": 0.851,
+        "max": 0.9994,
+        "mean": 0.9332,
+        "median": 0.9443,
+        "count": 100
+      },
+      "hip_confidence": {
+        "min": 0.8501,
+        "max": 0.9993,
+        "mean": 0.9241,
+        "median": 0.9258,
+        "count": 100
+      },
+      "torso_height": {
+        "min": 0.1494,
+        "max": 0.3078,
+        "mean": 0.2148,
+        "median": 0.205,
+        "count": 50
+      }
+    },
+    {
+      "id": "jsq_very_noisy_2",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 23,
+      "hkr": {
+        "min": -0.0222,
+        "max": 1.4035,
+        "mean": 0.9086,
+        "median": 1.0479,
+        "count": 23
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 1,
+        "mean": 1.0,
+        "median": 1,
+        "count": 1
+      },
+      "max_airborne_run": 1,
+      "ankle_confidence": {
+        "min": 0.6505,
+        "max": 0.7988,
+        "mean": 0.7288,
+        "median": 0.7232,
+        "count": 42
+      },
+      "knee_confidence": {
+        "min": 0.6611,
+        "max": 0.789,
+        "mean": 0.7124,
+        "median": 0.7044,
+        "count": 46
+      },
+      "hip_confidence": {
+        "min": 0.657,
+        "max": 0.7976,
+        "mean": 0.7341,
+        "median": 0.7465,
+        "count": 46
+      },
+      "torso_height": {
+        "min": 0.1621,
+        "max": 0.3153,
+        "mean": 0.2086,
+        "median": 0.194,
+        "count": 23
+      }
+    },
+    {
+      "id": "jsq_minimal_1",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 13,
+      "hkr": {
+        "min": -0.0221,
+        "max": 1.1804,
+        "mean": 0.8154,
+        "median": 1.058,
+        "count": 13
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 2,
+        "mean": 2.0,
+        "median": 2,
+        "count": 1
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8501,
+        "max": 0.9999,
+        "mean": 0.9086,
+        "median": 0.9114,
+        "count": 26
+      },
+      "knee_confidence": {
+        "min": 0.8513,
+        "max": 0.9926,
+        "mean": 0.9221,
+        "median": 0.9409,
+        "count": 26
+      },
+      "hip_confidence": {
+        "min": 0.8509,
+        "max": 0.9915,
+        "mean": 0.9093,
+        "median": 0.9138,
+        "count": 26
+      },
+      "torso_height": {
+        "min": 0.1642,
+        "max": 0.3096,
+        "mean": 0.2195,
+        "median": 0.2022,
+        "count": 13
+      }
+    },
+    {
+      "id": "squat_confuser_3",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 48,
+      "hkr": {
+        "min": -0.0187,
+        "max": 1.2178,
+        "mean": 0.8875,
+        "median": 1.0756,
+        "count": 48
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.8507,
+        "max": 0.9978,
+        "mean": 0.9303,
+        "median": 0.9362,
+        "count": 96
+      },
+      "knee_confidence": {
+        "min": 0.8512,
+        "max": 0.9943,
+        "mean": 0.9269,
+        "median": 0.9276,
+        "count": 96
+      },
+      "hip_confidence": {
+        "min": 0.8533,
+        "max": 0.9978,
+        "mean": 0.9366,
+        "median": 0.9484,
+        "count": 96
+      },
+      "torso_height": {
+        "min": 0.1898,
+        "max": 0.3085,
+        "mean": 0.2194,
+        "median": 0.2022,
+        "count": 48
+      }
+    },
+    {
+      "id": "jump_confuser_3",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 45,
+      "hkr": {
+        "min": 0.986,
+        "max": 1.2031,
+        "mean": 1.1011,
+        "median": 1.096,
+        "count": 45
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 2,
+        "mean": 2.0,
+        "median": 2,
+        "count": 3
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8512,
+        "max": 0.999,
+        "mean": 0.9285,
+        "median": 0.9316,
+        "count": 90
+      },
+      "knee_confidence": {
+        "min": 0.8501,
+        "max": 0.9994,
+        "mean": 0.9231,
+        "median": 0.9215,
+        "count": 90
+      },
+      "hip_confidence": {
+        "min": 0.8502,
+        "max": 0.9981,
+        "mean": 0.9179,
+        "median": 0.912,
+        "count": 90
+      },
+      "torso_height": {
+        "min": 0.1894,
+        "max": 0.2132,
+        "mean": 0.2001,
+        "median": 0.2001,
+        "count": 45
+      }
+    },
+    {
+      "id": "jacks_confuser_3",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 36,
+      "hkr": {
+        "min": 1.0136,
+        "max": 1.2065,
+        "mean": 1.1285,
+        "median": 1.1359,
+        "count": 36
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.8536,
+        "max": 0.9954,
+        "mean": 0.9233,
+        "median": 0.9322,
+        "count": 72
+      },
+      "knee_confidence": {
+        "min": 0.8517,
+        "max": 0.999,
+        "mean": 0.9267,
+        "median": 0.9268,
+        "count": 72
+      },
+      "hip_confidence": {
+        "min": 0.8508,
+        "max": 0.9973,
+        "mean": 0.9191,
+        "median": 0.9147,
+        "count": 72
+      },
+      "torso_height": {
+        "min": 0.1866,
+        "max": 0.2094,
+        "mean": 0.1983,
+        "median": 0.1992,
+        "count": 36
+      }
+    },
+    {
+      "id": "partial_confuser_3",
+      "movement": "jump_squats",
+      "is_real": false,
+      "total_frames": 48,
+      "hkr": {
+        "min": 0.6158,
+        "max": 1.2325,
+        "mean": 1.0134,
+        "median": 1.0969,
+        "count": 48
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 2,
+        "mean": 2.0,
+        "median": 2,
+        "count": 3
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8502,
+        "max": 0.9995,
+        "mean": 0.9254,
+        "median": 0.9281,
+        "count": 96
+      },
+      "knee_confidence": {
+        "min": 0.8501,
+        "max": 0.9973,
+        "mean": 0.928,
+        "median": 0.9279,
+        "count": 96
+      },
+      "hip_confidence": {
+        "min": 0.851,
+        "max": 0.9997,
+        "mean": 0.9226,
+        "median": 0.9221,
+        "count": 96
+      },
+      "torso_height": {
+        "min": 0.1564,
+        "max": 0.2371,
+        "mean": 0.1998,
+        "median": 0.1991,
+        "count": 48
+      }
+    },
+    {
+      "id": "ljs_clean_2",
+      "movement": "lunge_jumps",
+      "is_real": false,
+      "total_frames": 21,
+      "hkr": {
+        "min": 0.7772,
+        "max": 1.1377,
+        "mean": 0.9076,
+        "median": 0.8431,
+        "count": 21
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 2,
+        "mean": 2.0,
+        "median": 2,
+        "count": 2
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8507,
+        "max": 0.9999,
+        "mean": 0.9204,
+        "median": 0.918,
+        "count": 42
+      },
+      "knee_confidence": {
+        "min": 0.8519,
+        "max": 0.9988,
+        "mean": 0.9246,
+        "median": 0.9235,
+        "count": 42
+      },
+      "hip_confidence": {
+        "min": 0.852,
+        "max": 0.9988,
+        "mean": 0.9276,
+        "median": 0.9302,
+        "count": 42
+      },
+      "torso_height": {
+        "min": 0.1671,
+        "max": 0.2055,
+        "mean": 0.1942,
+        "median": 0.1972,
+        "count": 21
+      }
+    },
+    {
+      "id": "ljs_noisy_2",
+      "movement": "lunge_jumps",
+      "is_real": false,
+      "total_frames": 21,
+      "hkr": {
+        "min": 0.7408,
+        "max": 1.1634,
+        "mean": 0.8934,
+        "median": 0.8446,
+        "count": 21
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 2,
+        "mean": 2.0,
+        "median": 2,
+        "count": 1
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.8513,
+        "max": 0.9988,
+        "mean": 0.9222,
+        "median": 0.918,
+        "count": 39
+      },
+      "knee_confidence": {
+        "min": 0.8545,
+        "max": 0.9976,
+        "mean": 0.9273,
+        "median": 0.9287,
+        "count": 42
+      },
+      "hip_confidence": {
+        "min": 0.8512,
+        "max": 0.9988,
+        "mean": 0.9263,
+        "median": 0.9312,
+        "count": 42
+      },
+      "torso_height": {
+        "min": 0.1636,
+        "max": 0.2152,
+        "mean": 0.1961,
+        "median": 0.1973,
+        "count": 21
+      }
+    }
+  ],
+  "real": [
+    {
+      "id": "yt_deep_squat_001",
+      "movement": "deep_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.1801,
+        "max": 2.3068,
+        "mean": 0.6036,
+        "median": 0.6113,
+        "count": 187
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 22,
+        "mean": 8.5,
+        "median": 9,
+        "count": 4
+      },
+      "max_airborne_run": 22,
+      "ankle_confidence": {
+        "min": 0.1716,
+        "max": 0.9173,
+        "mean": 0.5446,
+        "median": 0.5235,
+        "count": 510
+      },
+      "knee_confidence": {
+        "min": 0.1611,
+        "max": 0.9384,
+        "mean": 0.6519,
+        "median": 0.6852,
+        "count": 510
+      },
+      "hip_confidence": {
+        "min": 0.9875,
+        "max": 0.9995,
+        "mean": 0.9965,
+        "median": 0.9972,
+        "count": 510
+      },
+      "torso_height": {
+        "min": 0.0382,
+        "max": 0.293,
+        "mean": 0.1802,
+        "median": 0.1885,
+        "count": 187
+      }
+    },
+    {
+      "id": "yt_deep_squat_002",
+      "movement": "deep_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.4224,
+        "max": -0.3371,
+        "mean": -0.3726,
+        "median": -0.3725,
+        "count": 29
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.0046,
+        "max": 0.8118,
+        "mean": 0.0774,
+        "median": 0.0161,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.0154,
+        "max": 0.9407,
+        "mean": 0.1347,
+        "median": 0.0593,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.0701,
+        "max": 0.9774,
+        "mean": 0.3462,
+        "median": 0.2744,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.2302,
+        "max": 0.2538,
+        "mean": 0.2355,
+        "median": 0.234,
+        "count": 29
+      }
+    },
+    {
+      "id": "yt_deep_squat_003",
+      "movement": "deep_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.4232,
+        "max": 0.7999,
+        "mean": 0.3707,
+        "median": 0.6732,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 16,
+        "mean": 6.3333,
+        "median": 2,
+        "count": 3
+      },
+      "max_airborne_run": 16,
+      "ankle_confidence": {
+        "min": 0.4274,
+        "max": 0.9839,
+        "mean": 0.837,
+        "median": 0.8899,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.6904,
+        "max": 0.9904,
+        "mean": 0.926,
+        "median": 0.9615,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.999,
+        "max": 1.0,
+        "mean": 0.9997,
+        "median": 0.9997,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1848,
+        "max": 0.2794,
+        "mean": 0.2308,
+        "median": 0.2153,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_jump_squat_001",
+      "movement": "jump_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": 0.0,
+        "max": 3.0,
+        "mean": 0.8018,
+        "median": 0.7496,
+        "count": 170
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 2,
+        "mean": 1.5,
+        "median": 2,
+        "count": 2
+      },
+      "max_airborne_run": 2,
+      "ankle_confidence": {
+        "min": 0.3476,
+        "max": 0.9803,
+        "mean": 0.6832,
+        "median": 0.7115,
+        "count": 500
+      },
+      "knee_confidence": {
+        "min": 0.2033,
+        "max": 0.9755,
+        "mean": 0.6704,
+        "median": 0.6947,
+        "count": 500
+      },
+      "hip_confidence": {
+        "min": 0.7572,
+        "max": 0.9998,
+        "mean": 0.9932,
+        "median": 0.9956,
+        "count": 500
+      },
+      "torso_height": {
+        "min": 0.0,
+        "max": 0.4834,
+        "mean": 0.2753,
+        "median": 0.2983,
+        "count": 170
+      }
+    },
+    {
+      "id": "yt_jump_squat_002",
+      "movement": "jump_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.2042,
+        "max": 0.8196,
+        "mean": 0.4377,
+        "median": 0.5499,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 3,
+        "mean": 2.5,
+        "median": 3,
+        "count": 2
+      },
+      "max_airborne_run": 3,
+      "ankle_confidence": {
+        "min": 0.7168,
+        "max": 0.9957,
+        "mean": 0.9516,
+        "median": 0.9865,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.6944,
+        "max": 0.9982,
+        "mean": 0.9538,
+        "median": 0.9903,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9995,
+        "max": 1.0,
+        "mean": 0.9999,
+        "median": 0.9999,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1567,
+        "max": 0.2566,
+        "mean": 0.2013,
+        "median": 0.1919,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_jump_squat_003",
+      "movement": "jump_squats",
+      "is_real": true,
+      "total_frames": 296,
+      "hkr": {
+        "min": 0.0399,
+        "max": 0.8512,
+        "mean": 0.6035,
+        "median": 0.7466,
+        "count": 296
+      },
+      "airborne_duration_frames": {
+        "min": 12,
+        "max": 13,
+        "mean": 12.5714,
+        "median": 13,
+        "count": 7
+      },
+      "max_airborne_run": 13,
+      "ankle_confidence": {
+        "min": 0.9835,
+        "max": 0.996,
+        "mean": 0.9904,
+        "median": 0.9904,
+        "count": 592
+      },
+      "knee_confidence": {
+        "min": 0.9882,
+        "max": 0.9978,
+        "mean": 0.9949,
+        "median": 0.9951,
+        "count": 592
+      },
+      "hip_confidence": {
+        "min": 0.9998,
+        "max": 1.0,
+        "mean": 0.9999,
+        "median": 0.9999,
+        "count": 592
+      },
+      "torso_height": {
+        "min": 0.0532,
+        "max": 0.119,
+        "mean": 0.0887,
+        "median": 0.0969,
+        "count": 296
+      }
+    },
+    {
+      "id": "yt_jump_squat_004",
+      "movement": "jump_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.0033,
+        "max": 1.0166,
+        "mean": 0.656,
+        "median": 0.7453,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 8,
+        "mean": 5.1111,
+        "median": 6,
+        "count": 9
+      },
+      "max_airborne_run": 8,
+      "ankle_confidence": {
+        "min": 0.9517,
+        "max": 0.9969,
+        "mean": 0.9836,
+        "median": 0.989,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.9695,
+        "max": 0.9988,
+        "mean": 0.9903,
+        "median": 0.9946,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9994,
+        "max": 1.0,
+        "mean": 0.9998,
+        "median": 0.9998,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1347,
+        "max": 0.2407,
+        "mean": 0.1937,
+        "median": 0.2048,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_jump_squat_005",
+      "movement": "jump_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.1529,
+        "max": 0.7729,
+        "mean": 0.5045,
+        "median": 0.6551,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 2,
+        "max": 59,
+        "mean": 19.5,
+        "median": 14,
+        "count": 8
+      },
+      "max_airborne_run": 59,
+      "ankle_confidence": {
+        "min": 0.6156,
+        "max": 0.9964,
+        "mean": 0.8705,
+        "median": 0.8996,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.6712,
+        "max": 0.9967,
+        "mean": 0.8985,
+        "median": 0.9747,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9995,
+        "max": 1.0,
+        "mean": 0.9998,
+        "median": 0.9999,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.077,
+        "max": 0.1735,
+        "mean": 0.1318,
+        "median": 0.1346,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_jump_squat_006",
+      "movement": "jump_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -2.0,
+        "max": 0.7208,
+        "mean": 0.154,
+        "median": 0.1697,
+        "count": 297
+      },
+      "airborne_duration_frames": {
+        "min": 1,
+        "max": 4,
+        "mean": 2.0,
+        "median": 1,
+        "count": 3
+      },
+      "max_airborne_run": 4,
+      "ankle_confidence": {
+        "min": 0.4925,
+        "max": 0.9739,
+        "mean": 0.8562,
+        "median": 0.9009,
+        "count": 594
+      },
+      "knee_confidence": {
+        "min": 0.6337,
+        "max": 0.9891,
+        "mean": 0.9196,
+        "median": 0.9466,
+        "count": 594
+      },
+      "hip_confidence": {
+        "min": 0.9942,
+        "max": 1.0,
+        "mean": 0.9995,
+        "median": 0.9998,
+        "count": 594
+      },
+      "torso_height": {
+        "min": 0.0175,
+        "max": 0.109,
+        "mean": 0.0814,
+        "median": 0.0808,
+        "count": 297
+      }
+    },
+    {
+      "id": "yt_jumping_jack_001",
+      "movement": "jumping_jacks",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": 0.7797,
+        "max": 0.8285,
+        "mean": 0.8062,
+        "median": 0.8077,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.9407,
+        "max": 0.9907,
+        "mean": 0.9661,
+        "median": 0.9636,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.9549,
+        "max": 0.995,
+        "mean": 0.9738,
+        "median": 0.9712,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9993,
+        "max": 0.9998,
+        "mean": 0.9997,
+        "median": 0.9997,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1653,
+        "max": 0.1851,
+        "mean": 0.175,
+        "median": 0.1777,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_jumping_jack_002",
+      "movement": "jumping_jacks",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.3938,
+        "max": 3.0,
+        "mean": 0.9939,
+        "median": 0.7729,
+        "count": 245
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 9,
+      "ankle_confidence": {
+        "min": 0.1882,
+        "max": 0.9837,
+        "mean": 0.746,
+        "median": 0.8938,
+        "count": 490
+      },
+      "knee_confidence": {
+        "min": 0.3789,
+        "max": 0.9867,
+        "mean": 0.8026,
+        "median": 0.9281,
+        "count": 490
+      },
+      "hip_confidence": {
+        "min": 0.8804,
+        "max": 0.9999,
+        "mean": 0.9899,
+        "median": 0.9988,
+        "count": 490
+      },
+      "torso_height": {
+        "min": 0.0032,
+        "max": 0.2755,
+        "mean": 0.1914,
+        "median": 0.2303,
+        "count": 245
+      }
+    },
+    {
+      "id": "yt_jumping_jack_003",
+      "movement": "jumping_jacks",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -2.0,
+        "max": 3.0,
+        "mean": 0.6474,
+        "median": 0.6795,
+        "count": 298
+      },
+      "airborne_duration_frames": {
+        "min": 5,
+        "max": 65,
+        "mean": 18.3,
+        "median": 8,
+        "count": 10
+      },
+      "max_airborne_run": 65,
+      "ankle_confidence": {
+        "min": 0.6326,
+        "max": 0.9939,
+        "mean": 0.9394,
+        "median": 0.9862,
+        "count": 596
+      },
+      "knee_confidence": {
+        "min": 0.5725,
+        "max": 0.9962,
+        "mean": 0.9364,
+        "median": 0.9916,
+        "count": 596
+      },
+      "hip_confidence": {
+        "min": 0.9982,
+        "max": 0.9999,
+        "mean": 0.9997,
+        "median": 0.9998,
+        "count": 596
+      },
+      "torso_height": {
+        "min": 0.0003,
+        "max": 0.3719,
+        "mean": 0.2071,
+        "median": 0.2113,
+        "count": 298
+      }
+    },
+    {
+      "id": "yt_squat_001",
+      "movement": "normal_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.1319,
+        "max": 0.7119,
+        "mean": 0.3787,
+        "median": 0.4819,
+        "count": 297
+      },
+      "airborne_duration_frames": {
+        "min": 3,
+        "max": 17,
+        "mean": 10.0,
+        "median": 17,
+        "count": 2
+      },
+      "max_airborne_run": 17,
+      "ankle_confidence": {
+        "min": 0.4721,
+        "max": 0.997,
+        "mean": 0.9264,
+        "median": 0.9879,
+        "count": 594
+      },
+      "knee_confidence": {
+        "min": 0.4247,
+        "max": 0.999,
+        "mean": 0.917,
+        "median": 0.9949,
+        "count": 594
+      },
+      "hip_confidence": {
+        "min": 0.9227,
+        "max": 1.0,
+        "mean": 0.9972,
+        "median": 1.0,
+        "count": 594
+      },
+      "torso_height": {
+        "min": 0.2395,
+        "max": 0.3062,
+        "mean": 0.2702,
+        "median": 0.2699,
+        "count": 297
+      }
+    },
+    {
+      "id": "yt_squat_002",
+      "movement": "normal_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": 0.6809,
+        "max": 0.822,
+        "mean": 0.7389,
+        "median": 0.7334,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 10,
+        "max": 10,
+        "mean": 10.0,
+        "median": 10,
+        "count": 1
+      },
+      "max_airborne_run": 10,
+      "ankle_confidence": {
+        "min": 0.4906,
+        "max": 0.9894,
+        "mean": 0.8748,
+        "median": 0.9213,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.8918,
+        "max": 0.9937,
+        "mean": 0.9657,
+        "median": 0.9767,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.995,
+        "max": 0.9998,
+        "mean": 0.9988,
+        "median": 0.9994,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.2377,
+        "max": 0.2942,
+        "mean": 0.2784,
+        "median": 0.2794,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_squat_003",
+      "movement": "normal_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.3277,
+        "max": 0.8386,
+        "mean": 0.4967,
+        "median": 0.6933,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.6495,
+        "max": 0.9941,
+        "mean": 0.9409,
+        "median": 0.9578,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.6826,
+        "max": 0.9952,
+        "mean": 0.9713,
+        "median": 0.9885,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9991,
+        "max": 1.0,
+        "mean": 0.9998,
+        "median": 0.9999,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.129,
+        "max": 0.2535,
+        "mean": 0.1859,
+        "median": 0.1792,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_squat_004",
+      "movement": "normal_squats",
+      "is_real": true,
+      "total_frames": 202,
+      "hkr": {
+        "min": 0.1238,
+        "max": 0.7971,
+        "mean": 0.5874,
+        "median": 0.7004,
+        "count": 179
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.3746,
+        "max": 0.9895,
+        "mean": 0.9032,
+        "median": 0.9649,
+        "count": 404
+      },
+      "knee_confidence": {
+        "min": 0.2114,
+        "max": 0.9938,
+        "mean": 0.8828,
+        "median": 0.9642,
+        "count": 404
+      },
+      "hip_confidence": {
+        "min": 0.9987,
+        "max": 0.9999,
+        "mean": 0.9997,
+        "median": 0.9998,
+        "count": 404
+      },
+      "torso_height": {
+        "min": 0.1979,
+        "max": 0.2929,
+        "mean": 0.2659,
+        "median": 0.2761,
+        "count": 179
+      }
+    },
+    {
+      "id": "yt_squat_005",
+      "movement": "normal_squats",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": -0.0609,
+        "max": 0.9,
+        "mean": 0.5599,
+        "median": 0.6649,
+        "count": 67
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.0049,
+        "max": 0.9758,
+        "mean": 0.1885,
+        "median": 0.0109,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.0165,
+        "max": 0.9674,
+        "mean": 0.2275,
+        "median": 0.0838,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.7767,
+        "max": 0.9995,
+        "mean": 0.9059,
+        "median": 0.9138,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1684,
+        "max": 0.2474,
+        "mean": 0.2051,
+        "median": 0.1982,
+        "count": 67
+      }
+    },
+    {
+      "id": "yt_vertical_jump_001",
+      "movement": "vertical_jumps",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": 0.6006,
+        "max": 0.7258,
+        "mean": 0.6722,
+        "median": 0.6736,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.9113,
+        "max": 0.9932,
+        "mean": 0.9689,
+        "median": 0.9761,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.9157,
+        "max": 0.9954,
+        "mean": 0.9742,
+        "median": 0.9808,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9994,
+        "max": 0.9999,
+        "mean": 0.9998,
+        "median": 0.9999,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1746,
+        "max": 0.189,
+        "mean": 0.1816,
+        "median": 0.1815,
+        "count": 300
+      }
+    },
+    {
+      "id": "yt_vertical_jump_002",
+      "movement": "vertical_jumps",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": 0.2111,
+        "max": 0.8175,
+        "mean": 0.6511,
+        "median": 0.7293,
+        "count": 291
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.4341,
+        "max": 0.9751,
+        "mean": 0.8357,
+        "median": 0.8867,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.3318,
+        "max": 0.9776,
+        "mean": 0.7791,
+        "median": 0.8999,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9984,
+        "max": 0.9999,
+        "mean": 0.9995,
+        "median": 0.9996,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1186,
+        "max": 0.2088,
+        "mean": 0.1661,
+        "median": 0.1746,
+        "count": 291
+      }
+    },
+    {
+      "id": "yt_vertical_jump_003",
+      "movement": "vertical_jumps",
+      "is_real": true,
+      "total_frames": 300,
+      "hkr": {
+        "min": 0.7248,
+        "max": 0.7918,
+        "mean": 0.7437,
+        "median": 0.7391,
+        "count": 300
+      },
+      "airborne_duration_frames": {
+        "min": 0,
+        "max": 0,
+        "mean": 0,
+        "median": 0,
+        "count": 0
+      },
+      "max_airborne_run": 0,
+      "ankle_confidence": {
+        "min": 0.9394,
+        "max": 0.9731,
+        "mean": 0.9568,
+        "median": 0.9561,
+        "count": 600
+      },
+      "knee_confidence": {
+        "min": 0.8993,
+        "max": 0.9715,
+        "mean": 0.9472,
+        "median": 0.9478,
+        "count": 600
+      },
+      "hip_confidence": {
+        "min": 0.9996,
+        "max": 0.9999,
+        "mean": 0.9998,
+        "median": 0.9998,
+        "count": 600
+      },
+      "torso_height": {
+        "min": 0.1732,
+        "max": 0.1868,
+        "mean": 0.1818,
+        "median": 0.1849,
+        "count": 300
+      }
+    }
+  ]
+}
