@@ -3,14 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
-import '../../../core/widgets/pressable_scale.dart';
+import '../../../core/widgets/nuvo_race_components.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
@@ -18,18 +17,18 @@ import '../../races/domain/race_display.dart';
 import '../../races/presentation/create_race_screen.dart';
 import '../../races/presentation/race_controller.dart';
 
-/// Compete — Variant B IA.
+/// Compete — Phase 1 design language.
 ///
-/// Screen question: "What competition matters to me right now, and how do I
-/// start or join something?"
-///
-/// Structure:
+/// IA preserved from Variant B (Stage 2):
 /// 1. Compact header (title + active/finished summary + Start/Join)
-/// 2. ONE loud "Continue competing" navy surface
+/// 2. ONE loud "Continue competing" navy surface (NuvoFeaturedRaceCard)
 /// 3. "Your races" compact list (capped at 3, inline See all)
-/// 4. Waiting-for-crew summary row (inline expansion)
-/// 5. Finished summary row (inline expansion)
-/// 6. Quick Starts in a compact 2-column wrap
+/// 4. Waiting-for-crew summary (NuvoWaitingCrewSummary)
+/// 5. Finished summary (NuvoFinishedSummary)
+/// 6. Quick Starts in a compact 2-column wrap (NuvoQuickStart)
+///
+/// Visual presentation rebuilt with race product components that encode
+/// competition, placement, crew completeness, and results — not generic cards.
 class CompeteScreen extends ConsumerStatefulWidget {
   const CompeteScreen({super.key});
 
@@ -91,9 +90,9 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
-                  22,
-                  16,
-                  22,
+                  NuvoSpacing.pageHorizontal,
+                  NuvoSpacing.lg,
+                  NuvoSpacing.pageHorizontal,
                   NuvoBottomNav.bottomPadding(context),
                 ),
                 sliver: SliverList(
@@ -119,13 +118,8 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                       _EmptyState(onStart: () => context.push('/races/new'))
                     else ...[
                       if (needsAttention != null) ...[
-                        _ContinueCompetingCard(
-                          race: needsAttention,
-                          userId: uid,
-                          onOpen: () =>
-                              context.push('/race/${needsAttention.id}'),
-                        ),
-                        const SizedBox(height: 24),
+                        _buildFeaturedCard(needsAttention, uid),
+                        const SizedBox(height: NuvoSpacing.xxl),
                       ],
                       if (inMotionRows.isNotEmpty) ...[
                         _CappedRaceList(
@@ -137,22 +131,19 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                               setState(() => _racesExpanded = !_racesExpanded),
                           onOpen: (race) => context.push('/race/${race.id}'),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: NuvoSpacing.lg),
                       ],
                       if (waiting.isNotEmpty) ...[
-                        _SummaryRow(
-                          icon: Icons.group_add_rounded,
-                          iconBg: NuvoColors.amberTint,
-                          iconColor: NuvoColors.warning,
-                          title: 'Waiting for crew',
-                          subtitle:
-                              '${waiting.length} ${waiting.length == 1 ? 'race' : 'races'} need crew',
+                        NuvoWaitingCrewSummary(
+                          raceCount: waiting.length,
+                          totalWaitingSlots: _totalWaitingSlots(waiting),
+                          avatars: _collectAvatars(waiting, uid),
                           expanded: _waitingExpanded,
                           onToggle: () => setState(
                             () => _waitingExpanded = !_waitingExpanded,
                           ),
                           children: [
-                            const SizedBox(height: 10),
+                            const SizedBox(height: NuvoSpacing.sm),
                             _SummaryExpansionList(
                               races: waiting,
                               userId: uid,
@@ -161,23 +152,19 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: NuvoSpacing.sm),
                       ],
                       if (finished.isNotEmpty) ...[
-                        _SummaryRow(
-                          icon: Icons.check_circle_rounded,
-                          iconBg: NuvoColors.success.withValues(alpha: 0.10),
-                          iconColor: NuvoColors.success,
-                          title: 'Finished',
-                          subtitle:
-                              '${finished.length} ${finished.length == 1 ? 'race' : 'races'} · ${_wonCount(finished, uid)} won',
+                        NuvoFinishedSummary(
+                          raceCount: finished.length,
+                          wonCount: _wonCount(finished, uid),
                           expanded: _finishedExpanded,
                           onToggle: () => setState(
                             () => _finishedExpanded = !_finishedExpanded,
                           ),
                           children: [
-                            const SizedBox(height: 10),
-                            _SummaryExpansionList(
+                            const SizedBox(height: NuvoSpacing.sm),
+                            _FinishedExpansionList(
                               races: finished,
                               userId: uid,
                               onOpen: (race) =>
@@ -185,10 +172,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: NuvoSpacing.sm),
                       ],
-                      const SizedBox(height: 8),
-                      _QuickStartsBento(
+                      const SizedBox(height: NuvoSpacing.sm),
+                      _QuickStarts(
                         onStart: (prefill) =>
                             context.push('/races/new', extra: prefill),
                       ),
@@ -203,14 +190,76 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     );
   }
 
+  Widget _buildFeaturedCard(Race race, String? uid) {
+    final myPart = uid != null ? race.participantFor(uid) : null;
+    final pct = raceProgressPercent(race, myPart);
+    final rank = rankForUser(race, uid);
+    final activity = raceActivityTitle(race);
+    final target = raceTargetLabel(race);
+    final progressLabel = raceProgressLabel(race, myPart);
+
+    final avatars = _collectAvatars([race], uid);
+    final racerStack = NuvoRacerStack(
+      avatars: avatars,
+      total: race.participantCount,
+      size: 28,
+      max: 4,
+    );
+
+    return NuvoFeaturedRaceCard(
+      activityLabel: activity,
+      targetLabel: target,
+      raceTitle: race.displayTitle,
+      progressPercent: pct,
+      progressLabel: progressLabel,
+      racerStack: racerStack,
+      rank: rank,
+      onOpen: () => context.push('/race/${race.id}'),
+    );
+  }
+
   int _wonCount(List<Race> races, String? uid) {
     if (uid == null) return 0;
     var count = 0;
     for (final race in races) {
-      final rank = rankForUser(race, uid);
-      if (rank == 1) count++;
+      if (rankForUser(race, uid) == 1) count++;
     }
     return count;
+  }
+
+  int _totalWaitingSlots(List<Race> waiting) {
+    // Each waiting race has 1 participant (the creator). A "full" race has 2+.
+    // We show up to 3 empty slots total across all waiting races.
+    return waiting.length.clamp(0, 3);
+  }
+
+  /// Collect avatar tuples from race participants (excluding the current user
+  /// so the stack shows opponents, not self).
+  List<({String initials, String? photoUrl, String id})> _collectAvatars(
+    List<Race> races,
+    String? uid,
+  ) {
+    final result = <({String initials, String? photoUrl, String id})>[];
+    for (final race in races) {
+      for (final p in race.participants) {
+        if (p.userId == uid) continue;
+        final name = p.displayName.trim();
+        final initials = name.isEmpty
+            ? '?'
+            : name
+                  .split(RegExp(r'\s+'))
+                  .where((w) => w.isNotEmpty)
+                  .take(2)
+                  .map((w) => w[0].toUpperCase())
+                  .join();
+        result.add((
+          initials: initials,
+          photoUrl: p.profilePhotoUrl,
+          id: p.userId,
+        ));
+      }
+    }
+    return result;
   }
 }
 
@@ -236,7 +285,12 @@ class _CompactHeader extends StatelessWidget {
         : '$activeCount ${activeCount == 1 ? 'race' : 'races'} active';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
+      padding: const EdgeInsets.fromLTRB(
+        NuvoSpacing.pageHorizontal,
+        NuvoSpacing.xl,
+        NuvoSpacing.pageHorizontal,
+        0,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -252,7 +306,7 @@ class _CompactHeader extends StatelessWidget {
                     letterSpacing: -0.8,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: NuvoSpacing.xs),
                 Text(
                   summary,
                   style: AppTextStyles.bodySmall.copyWith(
@@ -263,7 +317,7 @@ class _CompactHeader extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: NuvoSpacing.md),
           Expanded(
             flex: 2,
             child: NuvoPrimaryButton(
@@ -273,7 +327,7 @@ class _CompactHeader extends StatelessWidget {
               expand: true,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: NuvoSpacing.sm),
           Expanded(
             flex: 1,
             child: NuvoOutlineButton(
@@ -284,94 +338,6 @@ class _CompactHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ── Continue competing (ONE loud surface) ─────────────────────────────────────
-
-class _ContinueCompetingCard extends StatelessWidget {
-  const _ContinueCompetingCard({
-    required this.race,
-    required this.onOpen,
-    this.userId,
-  });
-
-  final Race race;
-  final String? userId;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final myPart = userId != null ? race.participantFor(userId!) : null;
-    final pct = raceProgressPercent(race, myPart);
-    final rank = rankForUser(race, userId);
-    final activity = raceActivityTitle(race);
-    final target = raceTargetLabel(race);
-
-    final rankStr = rank != null ? ' · You\'re ${_ordinal(rank)}' : '';
-    final metaLine =
-        '${race.participantCount} ${race.participantCount == 1 ? 'racer' : 'racers'}$rankStr · $pct%';
-
-    return PressableScale(
-      onTap: onOpen,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: AppShadows.hardMedium,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$activity · $target',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              race.displayTitle,
-              style: AppTextStyles.headlineMedium.copyWith(
-                color: NuvoColors.white,
-                fontSize: 20,
-                height: 1.15,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              metaLine,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.white.withValues(alpha: 0.65),
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 16),
-            NuvoRaceLane(
-              progressPercent: pct,
-              onDark: true,
-              trackHeight: 6,
-              dotDiameter: 12,
-            ),
-            const SizedBox(height: 16),
-            NuvoPrimaryButton(
-              label: 'View leaderboard',
-              expand: true,
-              small: true,
-              onPressed: onOpen,
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -406,12 +372,12 @@ class _CappedRaceList extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              'Your races · ${races.length} active',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.textMuted,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
+            Flexible(
+              child: Text(
+                'Your races · ${races.length} active',
+                style: AppTextStyles.sectionKicker,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const Spacer(),
@@ -428,23 +394,18 @@ class _CappedRaceList extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: NuvoSpacing.sm),
         Container(
           decoration: BoxDecoration(
             color: NuvoColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: NuvoColors.divider),
+            borderRadius: BorderRadius.circular(NuvoRadii.card),
+            border: NuvoBorders.divider,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               for (var i = 0; i < visible.length; i++) ...[
-                _CompactRaceRow(
-                  race: visible[i],
-                  index: i + 1,
-                  userId: userId,
-                  onTap: () => onOpen(visible[i]),
-                ),
+                _buildRow(visible[i], i + 1),
                 if (i < visible.length - 1)
                   const Divider(
                     height: 1,
@@ -459,184 +420,39 @@ class _CappedRaceList extends StatelessWidget {
       ],
     );
   }
-}
 
-// ── Compact race row (quiet, tappable → Race Detail) ──────────────────────────
-
-class _CompactRaceRow extends StatelessWidget {
-  const _CompactRaceRow({
-    required this.race,
-    required this.index,
-    required this.onTap,
-    this.userId,
-  });
-
-  final Race race;
-  final int index;
-  final String? userId;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildRow(Race race, int index) {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
+    final rank = rankForUser(race, userId);
+    final avatars = _rowAvatars(race, userId);
 
-    return Semantics(
-      button: true,
-      label: race.displayTitle,
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: NuvoColors.panel,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '$index',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.navy,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      race.displayTitle,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${race.participantCount} ${race.participantCount == 1 ? 'racer' : 'racers'} · $pct%',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        fontSize: 12,
-                        color: NuvoColors.textMuted,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const NuvoIcon(
-                NuvoIconType.arrow,
-                color: NuvoColors.textMuted,
-                size: 14,
-              ),
-            ],
-          ),
-        ),
-      ),
+    return NuvoRaceRow(
+      raceTitle: race.displayTitle,
+      rank: rank ?? index,
+      participantCount: race.participantCount,
+      progressPercent: pct,
+      avatars: avatars,
+      onTap: () => onOpen(race),
     );
   }
-}
 
-// ── Summary row (Waiting / Finished) with inline expansion ────────────────────
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.expanded,
-    required this.onToggle,
-    required this.children,
-  });
-
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final bool expanded;
-  final VoidCallback onToggle;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        PressableScale(
-          onTap: onToggle,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: NuvoColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: NuvoColors.divider),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, color: iconColor, size: 16),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: AppTextStyles.titleMedium.copyWith(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontSize: 12,
-                          color: NuvoColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                AnimatedRotation(
-                  turns: expanded ? 0.25 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: NuvoColors.textMuted,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (expanded) ...children,
-      ],
-    );
+  List<({String initials, String? photoUrl, String id})> _rowAvatars(
+    Race race,
+    String? uid,
+  ) {
+    return race.participants.where((p) => p.userId != uid).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
   }
 }
 
@@ -657,19 +473,14 @@ class _SummaryExpansionList extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.divider),
+        borderRadius: BorderRadius.circular(NuvoRadii.card),
+        border: NuvoBorders.divider,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (var i = 0; i < races.length; i++) ...[
-            _CompactRaceRow(
-              race: races[i],
-              index: i + 1,
-              userId: userId,
-              onTap: () => onOpen(races[i]),
-            ),
+            _buildRow(races[i], i + 1),
             if (i < races.length - 1)
               const Divider(
                 height: 1,
@@ -682,38 +493,133 @@ class _SummaryExpansionList extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildRow(Race race, int index) {
+    final myPart = userId != null ? race.participantFor(userId!) : null;
+    final pct = raceProgressPercent(race, myPart);
+    final rank = rankForUser(race, userId);
+    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
+
+    return NuvoRaceRow(
+      raceTitle: race.displayTitle,
+      rank: rank ?? index,
+      participantCount: race.participantCount,
+      progressPercent: pct,
+      avatars: avatars,
+      onTap: () => onOpen(race),
+    );
+  }
+}
+
+/// List of finished race rows used inside the finished summary expansion.
+class _FinishedExpansionList extends StatelessWidget {
+  const _FinishedExpansionList({
+    required this.races,
+    required this.userId,
+    required this.onOpen,
+  });
+
+  final List<Race> races;
+  final String? userId;
+  final ValueChanged<Race> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.card),
+        border: NuvoBorders.divider,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < races.length; i++) ...[
+            _buildRow(races[i]),
+            if (i < races.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 54,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRow(Race race) {
+    final rank = rankForUser(race, userId);
+    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
+
+    return NuvoFinishedRaceRow(
+      raceTitle: race.displayTitle,
+      rank: rank,
+      participantCount: race.participantCount,
+      avatars: avatars,
+      onTap: () => onOpen(race),
+    );
+  }
 }
 
 // ── Quick Starts (compact 2-column wrap) ──────────────────────────────────────
 
-class _QuickStartsBento extends StatelessWidget {
-  const _QuickStartsBento({required this.onStart});
+class _QuickStarts extends StatelessWidget {
+  const _QuickStarts({required this.onStart});
   final ValueChanged<RaceCreatePrefill> onStart;
 
   static const _items = [
     (
       icon: Icons.fitness_center_rounded,
-      label: '100 Pushups',
+      movementName: 'Pushups',
+      target: '100 reps',
       prefill: RaceCreatePrefill.pushups,
     ),
     (
-      icon: Icons.person_outline_rounded,
-      label: '15 Squats',
+      icon: Icons.accessibility_new_rounded,
+      movementName: 'Squats',
+      target: '15 reps',
       prefill: RaceCreatePrefill.squats,
     ),
     (
       icon: Icons.accessibility_new_rounded,
-      label: '500 Jumping Jacks',
+      movementName: 'Jumping Jacks',
+      target: '500 reps',
       prefill: RaceCreatePrefill.jumpingJacks,
     ),
     (
       icon: Icons.directions_walk_rounded,
-      label: '40 Lunges',
+      movementName: 'Lunges',
+      target: '40 reps',
       prefill: RaceCreatePrefill.lunges,
     ),
     (
       icon: Icons.timer_outlined,
-      label: '300 Plank Seconds',
+      movementName: 'Plank',
+      target: '300 sec',
       prefill: RaceCreatePrefill.plank,
     ),
   ];
@@ -723,84 +629,22 @@ class _QuickStartsBento extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Quick starts',
-          style: AppTextStyles.labelSmall.copyWith(
-            color: NuvoColors.textMuted,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-          ),
-        ),
-        const SizedBox(height: 10),
+        Text('Quick starts', style: AppTextStyles.sectionKicker),
+        const SizedBox(height: NuvoSpacing.sm),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: NuvoSpacing.sm,
+          runSpacing: NuvoSpacing.sm,
           children: [
             for (final item in _items)
-              _QuickStartChip(
+              NuvoQuickStart(
                 icon: item.icon,
-                label: item.label,
+                movementName: item.movementName,
+                target: item.target,
                 onTap: () => onStart(item.prefill),
               ),
           ],
         ),
       ],
-    );
-  }
-}
-
-class _QuickStartChip extends StatelessWidget {
-  const _QuickStartChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.border, width: 1.25),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: NuvoColors.panel,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: NuvoColors.border, width: 1),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: NuvoColors.navy, size: 16),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -821,7 +665,7 @@ class _EmptyState extends StatelessWidget {
           height: 52,
           decoration: BoxDecoration(
             color: NuvoColors.blue.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
           child: const NuvoIcon(
             NuvoIconType.flag,
@@ -829,17 +673,17 @@ class _EmptyState extends StatelessWidget {
             size: 22,
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: NuvoSpacing.xl),
         Text(
           'No races yet.',
           style: AppTextStyles.headlineMedium.copyWith(color: NuvoColors.navy),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: NuvoSpacing.sm),
         Text(
           'Start a race, set a finish line, and pull in your crew.',
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: NuvoSpacing.xl),
         NuvoPrimaryButton(
           label: 'Start a race',
           expand: true,
@@ -847,21 +691,5 @@ class _EmptyState extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-String _ordinal(int n) {
-  if (n >= 11 && n <= 13) return '${n}th';
-  switch (n % 10) {
-    case 1:
-      return '${n}st';
-    case 2:
-      return '${n}nd';
-    case 3:
-      return '${n}rd';
-    default:
-      return '${n}th';
   }
 }

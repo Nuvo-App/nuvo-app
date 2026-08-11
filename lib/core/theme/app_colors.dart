@@ -104,6 +104,29 @@ final class NuvoColors {
     avatarSage,
   ];
 
+  // ── Race-state semantic aliases ───────────────────────────────────────────────
+  // Map to existing canonical colors. New race UI should prefer these names so
+  // the role/state is readable at the call site.
+
+  /// Active/live race state — same as action blue.
+  static const Color raceLive = blue;
+
+  /// Crew-waiting / incomplete-attention state — same as warning.
+  static const Color crewWaiting = warning;
+  static const Color crewWaitingTint = amberTint;
+
+  /// Finished / completed race state — same as success.
+  static const Color raceFinished = success;
+
+  /// 1st place / leader — same as gold.
+  static const Color position1 = gold;
+
+  /// 2nd place — same as silver.
+  static const Color position2 = silver;
+
+  /// 3rd place — same as bronze.
+  static const Color position3 = bronze;
+
   // ── Short aliases ─────────────────────────────────────────────────────────────
   static const Color mint = success;
   static const Color prize = gold;

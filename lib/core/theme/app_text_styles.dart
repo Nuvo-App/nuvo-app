@@ -106,4 +106,48 @@ abstract final class AppTextStyles {
   // ── Brand ─────────────────────────────────────────────────────────────────────
   static TextStyle get brandLabel =>
       _manrope(13, FontWeight.w900, color: NuvoColors.blue, height: 1.0);
+
+  // ── Race UI semantic helpers ──────────────────────────────────────────────────
+  // Aliases/compositions that make race-screen call sites readable.
+
+  /// Section kicker / eyebrow. Alias of [eyebrow].
+  static TextStyle get sectionKicker => eyebrow;
+
+  /// Compact race row title (15/w700).
+  static TextStyle get raceRowTitle =>
+      _manrope(15, FontWeight.w700, height: 1.25);
+
+  /// Compact race row meta line (12/w500, muted).
+  static TextStyle get raceRowMeta =>
+      _manrope(12, FontWeight.w500, color: AppColors.textMuted, height: 1.3);
+
+  /// Featured race title on navy surface (20/w800, white).
+  static TextStyle get featuredRaceTitle =>
+      _manrope(20, FontWeight.w800, color: NuvoColors.white, height: 1.15);
+
+  /// Stat number — large tabular figure for rank/score/placement.
+  static TextStyle statLarge(
+    double size, {
+    Color? color,
+    FontWeight weight = FontWeight.w800,
+  }) => GoogleFonts.manrope(
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? AppColors.textPrimary,
+    height: 1.0,
+    letterSpacing: -0.5,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+
+  /// Placement label — "1st", "2nd", "You're 3rd".
+  static TextStyle placementLabel({
+    Color? color,
+    double size = 13,
+    FontWeight weight = FontWeight.w800,
+  }) => _manrope(
+    size,
+    weight,
+    color: color ?? AppColors.textPrimary,
+    height: 1.1,
+  );
 }
