@@ -158,6 +158,7 @@ class NuvoPrimaryButton extends StatelessWidget {
     this.loading = false,
     this.small = false,
     this.flat = false,
+    this.subtleLift = false,
   });
 
   final String label;
@@ -171,17 +172,37 @@ class NuvoPrimaryButton extends StatelessWidget {
   /// When true, renders without hard-offset shadow. Use on dark surfaces
   /// (e.g. inside the featured card) or when the button is structurally
   /// secondary and should not compete with the screen's hero depth.
+  ///
+  /// When flat is true and [subtleLift] is true, a very soft ambient shadow
+  /// is applied instead of the hard-offset — enough to read as tappable on
+  /// a light page without creating a second depth layer that competes with
+  /// the screen's hero.
   final bool flat;
+
+  /// Subtle ambient lift for flat primary buttons on light surfaces.
+  /// Ignored when [flat] is false. Use for primary entry-point buttons
+  /// that need affordance without competing with the featured hero.
+  final bool subtleLift;
 
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
+    final List<BoxShadow>? shadows;
+    if (!enabled) {
+      shadows = null;
+    } else if (!flat) {
+      shadows = AppShadows.hardMedium;
+    } else if (subtleLift) {
+      shadows = AppShadows.softSubtle;
+    } else {
+      shadows = null;
+    }
     return _buttonShell(
       height: small ? 46 : 56,
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: enabled ? NuvoColors.actionBlue : NuvoColors.disabledSurface,
       borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
-      shadows: enabled && !flat ? AppShadows.hardMedium : null,
+      shadows: shadows,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,

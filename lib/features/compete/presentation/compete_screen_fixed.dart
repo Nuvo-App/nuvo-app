@@ -309,7 +309,7 @@ class _CompactHeader extends StatelessWidget {
               Text(
                 summary,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.navy,
+                  color: NuvoColors.muted,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -322,6 +322,7 @@ class _CompactHeader extends StatelessWidget {
               label: 'Start race',
               small: true,
               flat: true,
+              subtleLift: true,
               onPressed: onStart,
               expand: true,
             ),
@@ -406,6 +407,7 @@ class _CappedRaceList extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: NuvoBorders.divider,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -480,6 +482,7 @@ class _SummaryExpansionList extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: NuvoBorders.divider,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -545,6 +548,7 @@ class _FinishedExpansionList extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: NuvoBorders.divider,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(

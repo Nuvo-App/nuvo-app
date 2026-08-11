@@ -838,8 +838,8 @@ class NuvoRaceRow extends StatelessWidget {
                         Expanded(
                           child: NuvoRaceLane(
                             progressPercent: progressPercent,
-                            trackHeight: 3,
-                            dotDiameter: 8,
+                            trackHeight: 4,
+                            dotDiameter: 10,
                           ),
                         ),
                       ],
