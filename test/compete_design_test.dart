@@ -408,5 +408,108 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('A fresh start line'), findsNothing);
     });
+
+    // ── Defect regression tests ────────────────────────────────────────────────
+
+    testWidgets('Compete title does not wrap at 375x667', (tester) async {
+      tester.view.physicalSize = const Size(375, 667);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      // "Compete" must be rendered as a single text widget, not wrapped.
+      final competeText = find.text('Compete');
+      expect(competeText, findsOneWidget);
+      // Verify the text widget has no soft wrap by checking its render box
+      // does not exceed one line height (~36px for 30px font).
+      final renderBox = tester.renderObject<RenderBox>(competeText);
+      expect(renderBox.size.height, lessThan(40));
+    });
+
+    testWidgets('Compete title does not wrap at 390x844', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final competeText = find.text('Compete');
+      expect(competeText, findsOneWidget);
+      final renderBox = tester.renderObject<RenderBox>(competeText);
+      expect(renderBox.size.height, lessThan(40));
+    });
+
+    testWidgets('Start race and Join remain reachable at 375x667', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(375, 667);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Start race'), findsOneWidget);
+      expect(find.text('Join'), findsOneWidget);
+    });
+
+    testWidgets('featured race remains visible at 375x667', (tester) async {
+      tester.view.physicalSize = const Size(375, 667);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+    });
+
+    testWidgets('See all still works after header fix', (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
+      await tester.pumpAndSettle();
+      expect(find.text('See all'), findsOneWidget);
+      await tester.tap(find.text('See all'));
+      await tester.pumpAndSettle();
+      expect(find.text('Show less'), findsOneWidget);
+    });
+
+    testWidgets('long race name does not break layout at 375x667', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(375, 667);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final races = [
+        _cameraRace(
+          id: 'r1',
+          title: 'Pushup Race With An Extremely Long Title That Must Truncate',
+          participantCount: 3,
+        ),
+        for (var i = 1; i < 5; i++)
+          _cameraRace(id: 'r$i', title: 'Squat Race $i', participantCount: 2),
+      ];
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(races)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('header does not overflow with large finished count', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(375, 667);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      final races = [
+        _cameraRace(id: 'a1', title: 'Pushup Active', participantCount: 3),
+        for (var i = 0; i < 99; i++)
+          _cameraRace(
+            id: 'f$i',
+            title: 'Finished Race $i',
+            status: 'completed',
+          ),
+      ];
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(races)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
   });
 }

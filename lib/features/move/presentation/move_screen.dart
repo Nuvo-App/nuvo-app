@@ -395,11 +395,18 @@ class _ReadySegment extends StatelessWidget {
               if (hasMore)
                 GestureDetector(
                   onTap: onToggleExpand,
-                  child: Text(
-                    expanded ? 'Show less' : 'See all ${alsoReady.length}',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.blue,
-                      fontWeight: FontWeight.w700,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      expanded ? 'Show less' : 'See all ${alsoReady.length}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.blue,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -643,11 +650,18 @@ class _CompletedSegment extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
                 onTap: onToggleExpand,
-                child: Text(
-                  expanded ? 'Show less' : 'See all ${races.length}',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.blue,
-                    fontWeight: FontWeight.w700,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    expanded ? 'Show less' : 'See all ${races.length}',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -808,11 +822,18 @@ class _RecentSegment extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 10),
               child: GestureDetector(
                 onTap: onToggleExpand,
-                child: Text(
-                  expanded ? 'Show less' : 'See all ${entries.length}',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.blue,
-                    fontWeight: FontWeight.w700,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    expanded ? 'Show less' : 'See all ${entries.length}',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
