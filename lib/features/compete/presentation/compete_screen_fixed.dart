@@ -174,7 +174,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                         ),
                         const SizedBox(height: NuvoSpacing.sm),
                       ],
-                      const SizedBox(height: NuvoSpacing.sm),
+                      const SizedBox(height: NuvoSpacing.xxl),
                       _QuickStarts(
                         onStart: (prefill) =>
                             context.push('/races/new', extra: prefill),
@@ -309,7 +309,7 @@ class _CompactHeader extends StatelessWidget {
               Text(
                 summary,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
+                  color: NuvoColors.navy,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -321,6 +321,7 @@ class _CompactHeader extends StatelessWidget {
             child: NuvoPrimaryButton(
               label: 'Start race',
               small: true,
+              flat: true,
               onPressed: onStart,
               expand: true,
             ),
@@ -331,6 +332,7 @@ class _CompactHeader extends StatelessWidget {
             child: NuvoOutlineButton(
               label: 'Join',
               small: true,
+              flat: true,
               onPressed: onJoin,
               expand: true,
             ),
@@ -391,7 +393,7 @@ class _CappedRaceList extends StatelessWidget {
                   child: Text(
                     expanded ? 'Show less' : 'See all',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.blue,
+                      color: NuvoColors.navy,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -403,8 +405,7 @@ class _CappedRaceList extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: NuvoColors.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: NuvoBorders.divider,
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -478,8 +479,7 @@ class _SummaryExpansionList extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: NuvoBorders.divider,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -544,8 +544,7 @@ class _FinishedExpansionList extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: NuvoBorders.divider,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(

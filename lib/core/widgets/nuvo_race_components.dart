@@ -681,30 +681,39 @@ class NuvoFeaturedRaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rankStr = rank != null ? ' · You\'re ${_ordinal(rank!)}' : '';
-
     return PressableScale(
       onTap: onOpen,
       child: Container(
         padding: const EdgeInsets.all(NuvoSpacing.xl),
         decoration: BoxDecoration(
           color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          boxShadow: AppShadows.hardMedium,
+          borderRadius: BorderRadius.circular(NuvoRadii.hero),
+          boxShadow: AppShadows.hardLarge,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Kicker: activity + target
-            Text(
-              '$activityLabel · $targetLabel',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            // Top row: kicker (left) + rank badge (right)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    '$activityLabel · $targetLabel',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (rank != null) ...[
+                  const SizedBox(width: NuvoSpacing.sm),
+                  NuvoRacePositionBadge(rank: rank, size: 32, onDark: true),
+                ],
+              ],
             ),
             const SizedBox(height: NuvoSpacing.sm),
             // Title
@@ -714,16 +723,14 @@ class NuvoFeaturedRaceCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: NuvoSpacing.sm),
-            // Racer stack + rank
+            const SizedBox(height: NuvoSpacing.md),
+            // Racer stack + count on its own line
             Row(
               children: [
                 racerStack,
                 const SizedBox(width: NuvoSpacing.sm),
                 Text(
-                  rankStr.isEmpty
-                      ? 'In progress'
-                      : 'You\'re ${_ordinal(rank!)}',
+                  rank != null ? 'You\'re ${_ordinal(rank!)}' : 'In progress',
                   style: AppTextStyles.raceRowMeta.copyWith(
                     color: NuvoColors.white.withValues(alpha: 0.7),
                   ),
@@ -731,20 +738,22 @@ class NuvoFeaturedRaceCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: NuvoSpacing.lg),
-            // Progress lane with score + distance-to-go
+            // Progress lane — larger, more prominent
             NuvoRaceProgressLane(
               progressPercent: progressPercent,
               progressLabel: progressLabel,
               targetLabel: targetLabel,
               onDark: true,
-              trackHeight: 6,
-              dotDiameter: 12,
+              trackHeight: 8,
+              dotDiameter: 16,
             ),
             const SizedBox(height: NuvoSpacing.lg),
+            // Flat CTA — no hard shadow on the dark surface
             NuvoPrimaryButton(
               label: actionLabel,
               expand: true,
               small: true,
+              flat: true,
               onPressed: onOpen,
             ),
           ],
@@ -801,10 +810,10 @@ class NuvoRaceRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Position badge — structural placement
-              NuvoRacePositionBadge(rank: rank, size: 30),
+              // Position badge — structural placement (larger for hierarchy)
+              NuvoRacePositionBadge(rank: rank, size: 34),
               const SizedBox(width: NuvoSpacing.md),
-              // Title + racer count
+              // Title + racer count + progress lane
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -816,11 +825,24 @@ class NuvoRaceRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      '$participantCount ${participantCount == 1 ? 'racer' : 'racers'}',
-                      style: AppTextStyles.raceRowMeta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Text(
+                          '$participantCount ${participantCount == 1 ? 'racer' : 'racers'}',
+                          style: AppTextStyles.raceRowMeta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: NuvoSpacing.sm),
+                        // Thin inline progress lane — visual progress
+                        Expanded(
+                          child: NuvoRaceLane(
+                            progressPercent: progressPercent,
+                            trackHeight: 3,
+                            dotDiameter: 8,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -835,12 +857,12 @@ class NuvoRaceRow extends StatelessWidget {
                   max: 3,
                 ),
               const SizedBox(width: NuvoSpacing.sm),
-              // Progress as a stat number
+              // Progress as a stat number — navy, not blue
               Text(
                 '$progressPercent%',
                 style: AppTextStyles.statLarge(
                   15,
-                  color: NuvoColors.blue,
+                  color: NuvoColors.navy,
                   weight: FontWeight.w800,
                 ),
               ),
