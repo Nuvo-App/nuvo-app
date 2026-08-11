@@ -6,21 +6,27 @@ import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
 import 'nuvo_button.dart';
-import 'nuvo_shared_components.dart';
 import 'pressable_scale.dart';
 
-/// Race product components for Nuvo.
+/// Canonical race components for Nuvo.
 ///
-/// These encode product meaning — placement, progress, crew completeness,
-/// results, and movement identity — rather than being generic containers.
+/// Visual grammar:
+///   RaceHero    — the one loud navy surface (Compete featured, Verify Up Next)
+///   RaceRow     — active race row (Compete "Your races", Verify "Also ready")
+///   RaceResultRow — finished race row (Compete Finished, Verify Completed)
+///   RaceActivityRow — recent proof activity (Verify Recent)
 ///
-/// Layering:
-///   foundations → existing primitives (NuvoAvatar, NuvoRaceLane, NuvoButton)
-///   → these race product components → screens
+/// Shared primitives:
+///   RacePlacement — quiet rank treatment (not a colored badge)
+///   RaceProgress  — progress that works at 0%, partial, and complete
+///   RacePeople    — avatar stack with count
 ///
-/// No generic "FancyCard" abstractions. Each component here exists because it
-/// represents a recurring Nuvo product concept that a plain Container cannot
-/// express structurally.
+/// Design rules:
+///   - Movement + title dominate. Badges/pills are secondary.
+///   - Rank is a quiet number, not a colored square. Podium gets color only
+///     on the number itself, not a container.
+///   - Progress at 0% shows a start-line marker, not an empty bar.
+///   - No chevrons. Rows are tappable; the press scale is the affordance.
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -40,7 +46,6 @@ String _ordinal(int n) {
   }
 }
 
-/// Returns the placement color for [rank] (1=gold, 2=silver, 3=bronze).
 Color? _placementColor(int? rank) {
   if (rank == null) return null;
   return switch (rank) {
@@ -52,80 +57,188 @@ Color? _placementColor(int? rank) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NuvoRacePositionBadge
+// RacePlacement — quiet rank, not a colored badge
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Placement badge for a race position.
+/// Quiet placement treatment.
 ///
-/// Encodes product meaning: 1st/2nd/3rd get medal colors and a crown icon;
-/// other positions get a neutral numbered chip. The visual weight differs by
-/// placement — the leader's badge is larger and colored, not just "a number
-/// in a circle."
-class NuvoRacePositionBadge extends StatelessWidget {
-  const NuvoRacePositionBadge({
+/// Shows rank as a number with placement color (gold/silver/bronze for 1-3).
+/// No container, no badge shape — just the number. The color communicates
+/// podium status without a generic rounded square.
+class RacePlacement extends StatelessWidget {
+  const RacePlacement({
     super.key,
     required this.rank,
-    this.size = 30,
+    this.size = 16,
     this.onDark = false,
+    this.prefix = '#',
   });
 
   final int? rank;
   final double size;
   final bool onDark;
+  final String prefix;
 
   @override
   Widget build(BuildContext context) {
-    if (rank == null) {
-      return SizedBox(width: size, height: size);
-    }
+    if (rank == null) return const SizedBox.shrink();
 
     final color = _placementColor(rank);
-    final bgColor = onDark
-        ? (color?.withValues(alpha: 0.22) ??
-              NuvoColors.white.withValues(alpha: 0.10))
-        : (color?.withValues(alpha: 0.16) ?? NuvoColors.panel);
     final fgColor = onDark
         ? (color ?? NuvoColors.white.withValues(alpha: 0.85))
         : (color ?? NuvoColors.navy);
 
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(NuvoRadii.badge),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        '$rank',
-        style: AppTextStyles.statLarge(
-          size * 0.42,
-          color: fgColor,
-          weight: FontWeight.w800,
-        ),
+    return Text(
+      '$prefix$rank',
+      style: AppTextStyles.statLarge(
+        size,
+        color: fgColor,
+        weight: FontWeight.w800,
       ),
     );
   }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NuvoRacerStack
+// RaceProgress — progress that works at every state
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Race progress track.
+///
+/// - 0%: start-line marker (a small dot at the left). No empty bar.
+/// - partial: filled portion + position dot
+/// - 100%: finish-line check at the right
+///
+/// Does NOT look like a Material slider. The track is thin, the fill is
+/// blue (or green at completion), and the position marker has a navy ring
+/// so it reads as "you are here on the track."
+class RaceProgress extends StatelessWidget {
+  const RaceProgress({
+    super.key,
+    required this.progressPercent,
+    this.onDark = false,
+    this.trackHeight = 3.0,
+    this.dotDiameter = 10.0,
+  });
+
+  final int progressPercent;
+  final bool onDark;
+  final double trackHeight;
+  final double dotDiameter;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (progressPercent / 100).clamp(0.0, 1.0);
+    final trackColor = onDark
+        ? Colors.white.withValues(alpha: 0.16)
+        : NuvoColors.trackBg;
+    final fillColor = progress >= 1
+        ? NuvoColors.success
+        : NuvoColors.actionBlue;
+
+    return SizedBox(
+      height: dotDiameter,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final totalWidth = constraints.maxWidth;
+          final fillWidth = (totalWidth * progress).clamp(0.0, totalWidth);
+
+          return Stack(
+            alignment: Alignment.centerLeft,
+            children: [
+              // Track
+              Container(
+                height: trackHeight,
+                decoration: BoxDecoration(
+                  color: trackColor,
+                  borderRadius: BorderRadius.circular(trackHeight / 2),
+                ),
+              ),
+              // Fill (only when progress > 0)
+              if (progress > 0)
+                Container(
+                  width: fillWidth,
+                  height: trackHeight,
+                  decoration: BoxDecoration(
+                    color: fillColor,
+                    borderRadius: BorderRadius.circular(trackHeight / 2),
+                  ),
+                ),
+              // 0%: start-line marker — small, quiet
+              if (progress == 0)
+                Positioned(
+                  left: 0,
+                  child: Container(
+                    width: dotDiameter * 0.7,
+                    height: dotDiameter * 0.7,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: onDark
+                          ? Colors.white.withValues(alpha: 0.30)
+                          : NuvoColors.border,
+                    ),
+                  ),
+                ),
+              // Partial: position dot with navy ring
+              if (progress > 0 && progress < 1)
+                Positioned(
+                  left: (fillWidth - dotDiameter / 2).clamp(
+                    0.0,
+                    totalWidth - dotDiameter,
+                  ),
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
+                    decoration: BoxDecoration(
+                      color: fillColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
+                    ),
+                  ),
+                ),
+              // 100%: finish-line check at right
+              if (progress >= 1)
+                Positioned(
+                  right: 0,
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
+                    decoration: BoxDecoration(
+                      color: NuvoColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 7,
+                      color: NuvoColors.white,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RacePeople — avatar stack with count
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// Avatar stack that understands crew completeness.
 ///
-/// When [emptySlots] > 0, renders dashed empty-slot circles to structurally
-/// communicate that the race is waiting for crew — not just text saying so.
-/// Filled avatars use [NuvoAvatar]; empty slots are a distinct visual shape
-/// (dashed outline, plus icon) so the incompleteness is visible at a glance.
-class NuvoRacerStack extends StatelessWidget {
-  const NuvoRacerStack({
+/// Filled avatars + dashed empty slots when waiting for crew.
+/// The +N overflow bubble shows total people beyond the visible stack.
+class RacePeople extends StatelessWidget {
+  const RacePeople({
     super.key,
     required this.avatars,
     required this.total,
     this.emptySlots = 0,
-    this.size = 28,
-    this.max = 4,
+    this.size = 24,
+    this.max = 3,
     this.borderColor = NuvoColors.white,
   });
 
@@ -141,7 +254,6 @@ class NuvoRacerStack extends StatelessWidget {
     final filled = avatars.length;
     final showEmpty = emptySlots > 0;
     final overflow = total > max;
-    // Reserve one slot for the +N bubble if overflow.
     final visibleFilled = overflow
         ? filled.clamp(0, max - 1)
         : filled.clamp(0, max);
@@ -242,31 +354,22 @@ class _EmptyCrewSlot extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NuvoRaceProgressLane
+// RaceProgressLabel — score + target context line
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Progress lane with target and distance-to-go context.
-///
-/// Wraps [NuvoRaceLane] with a header line showing the current score and the
-/// finish line, so progress is visible as competition, not just a bar.
-class NuvoRaceProgressLane extends StatelessWidget {
-  const NuvoRaceProgressLane({
+/// Progress context line: "12 reps to 100 reps" or "20% to finish".
+class RaceProgressLabel extends StatelessWidget {
+  const RaceProgressLabel({
     super.key,
-    required this.progressPercent,
     required this.progressLabel,
     required this.targetLabel,
     this.onDark = false,
-    this.trackHeight = 6,
-    this.dotDiameter = 12,
     this.compact = false,
   });
 
-  final int progressPercent;
   final String progressLabel;
   final String targetLabel;
   final bool onDark;
-  final double trackHeight;
-  final double dotDiameter;
   final bool compact;
 
   @override
@@ -284,42 +387,449 @@ class NuvoRaceProgressLane extends StatelessWidget {
     );
     final targetStyle = AppTextStyles.raceRowMeta.copyWith(color: targetColor);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: progressLabel, style: valueStyle),
-              TextSpan(text: ' to $targetLabel', style: targetStyle),
-            ],
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        SizedBox(height: compact ? 6 : NuvoSpacing.sm),
-        NuvoRaceLane(
-          progressPercent: progressPercent,
-          onDark: onDark,
-          trackHeight: trackHeight,
-          dotDiameter: dotDiameter,
-        ),
-      ],
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: progressLabel, style: valueStyle),
+          TextSpan(text: ' to $targetLabel', style: targetStyle),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NuvoWaitingCrewSummary
+// RaceHero — the one loud navy surface
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Summary row for races waiting for crew.
+/// Hero race card. The strongest object on the page.
 ///
-/// Structurally communicates incompleteness: shows filled avatars + empty crew
-/// slots (dashed circles with +) rather than just a text count. The visual
-/// shape itself says "someone is missing."
-class NuvoWaitingCrewSummary extends StatelessWidget {
-  const NuvoWaitingCrewSummary({
+/// Shared by Compete (featured race) and Verify (Up Next). The [variant]
+/// controls the CTA label and whether rank is shown.
+///
+/// Layout:
+///   kicker (movement · target)
+///   race title
+///   progress label + progress track
+///   people + placement (inline, not stacked)
+///   CTA
+class RaceHero extends StatelessWidget {
+  const RaceHero({
+    super.key,
+    required this.activityLabel,
+    required this.targetLabel,
+    required this.raceTitle,
+    required this.progressPercent,
+    required this.progressLabel,
+    required this.racerStack,
+    this.rank,
+    required this.onOpen,
+    this.actionLabel = 'View leaderboard',
+    this.ctaIcon,
+    this.showRank = true,
+  });
+
+  final String activityLabel;
+  final String targetLabel;
+  final String raceTitle;
+  final int progressPercent;
+  final String progressLabel;
+  final Widget racerStack;
+  final int? rank;
+  final VoidCallback onOpen;
+  final String actionLabel;
+  final IconData? ctaIcon;
+  final bool showRank;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onOpen,
+      child: Container(
+        padding: const EdgeInsets.all(NuvoSpacing.xl),
+        decoration: BoxDecoration(
+          color: NuvoColors.navy,
+          borderRadius: BorderRadius.circular(NuvoRadii.hero),
+          boxShadow: AppShadows.hardLarge,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Kicker
+            Text(
+              '$activityLabel · $targetLabel',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.blue,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: NuvoSpacing.sm),
+            // Title
+            Text(
+              raceTitle,
+              style: AppTextStyles.featuredRaceTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: NuvoSpacing.md),
+            // Progress label + track
+            RaceProgressLabel(
+              progressLabel: progressLabel,
+              targetLabel: targetLabel,
+              onDark: true,
+            ),
+            const SizedBox(height: 6),
+            RaceProgress(
+              progressPercent: progressPercent,
+              onDark: true,
+              trackHeight: 6,
+              dotDiameter: 14,
+            ),
+            const SizedBox(height: NuvoSpacing.md),
+            // People + placement inline
+            Row(
+              children: [
+                racerStack,
+                const SizedBox(width: NuvoSpacing.sm),
+                if (showRank && rank != null)
+                  Text(
+                    'You\'re ${_ordinal(rank!)}',
+                    style: AppTextStyles.raceRowMeta.copyWith(
+                      color: NuvoColors.white.withValues(alpha: 0.7),
+                    ),
+                  )
+                else
+                  Text(
+                    'In progress',
+                    style: AppTextStyles.raceRowMeta.copyWith(
+                      color: NuvoColors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: NuvoSpacing.lg),
+            // CTA — flat, doesn't overpower
+            NuvoPrimaryButton(
+              label: actionLabel,
+              icon: ctaIcon,
+              expand: true,
+              small: true,
+              flat: true,
+              onPressed: onOpen,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RaceRow — active race row
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Active race row for "Your races" lists.
+///
+/// Answers quickly: What race? Where am I? How far along? Who am I racing?
+///
+/// Layout:
+///   race title (dominant)
+///   movement · progress label (meta line)
+///   progress track (compact)
+///   people + placement (right-aligned, quiet)
+class RaceRow extends StatelessWidget {
+  const RaceRow({
+    super.key,
+    required this.raceTitle,
+    required this.movementLabel,
+    required this.progressLabel,
+    required this.progressPercent,
+    required this.rank,
+    required this.participantCount,
+    required this.avatars,
+    required this.onTap,
+  });
+
+  final String raceTitle;
+  final String movementLabel;
+  final String progressLabel;
+  final int progressPercent;
+  final int? rank;
+  final int participantCount;
+  final List<({String initials, String? photoUrl, String id})> avatars;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: raceTitle,
+      child: PressableScale(
+        onTap: onTap,
+        scale: 0.985,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 64),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NuvoSpacing.md,
+            vertical: NuvoSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      raceTitle,
+                      style: AppTextStyles.raceRowTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$movementLabel · $progressLabel',
+                      style: AppTextStyles.raceRowMeta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    RaceProgress(
+                      progressPercent: progressPercent,
+                      trackHeight: 3,
+                      dotDiameter: 9,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: NuvoSpacing.sm),
+              // People + placement on the right
+              if (avatars.isNotEmpty) ...[
+                RacePeople(
+                  avatars: avatars,
+                  total: participantCount,
+                  size: 22,
+                  max: 3,
+                ),
+                const SizedBox(width: NuvoSpacing.sm),
+              ],
+              RacePlacement(rank: rank, size: 14),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RaceResultRow — finished race row
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Finished race row. Shows placement, not progress.
+///
+/// Layout:
+///   race title (dominant)
+///   movement · racer count (meta line)
+///   people + placement (right-aligned)
+///
+/// No progress bar — the absence of progress communicates "this is over."
+class RaceResultRow extends StatelessWidget {
+  const RaceResultRow({
+    super.key,
+    required this.raceTitle,
+    required this.movementLabel,
+    required this.rank,
+    required this.participantCount,
+    required this.avatars,
+    required this.onTap,
+  });
+
+  final String raceTitle;
+  final String movementLabel;
+  final int? rank;
+  final int participantCount;
+  final List<({String initials, String? photoUrl, String id})> avatars;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final placementStr = rank != null ? _ordinal(rank!) : '--';
+
+    return Semantics(
+      button: true,
+      label: raceTitle,
+      child: PressableScale(
+        onTap: onTap,
+        scale: 0.985,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 60),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NuvoSpacing.md,
+            vertical: NuvoSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      raceTitle,
+                      style: AppTextStyles.raceRowTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$movementLabel · $participantCount ${participantCount == 1 ? 'racer' : 'racers'}',
+                      style: AppTextStyles.raceRowMeta,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: NuvoSpacing.sm),
+              if (avatars.isNotEmpty) ...[
+                RacePeople(
+                  avatars: avatars,
+                  total: participantCount,
+                  size: 22,
+                  max: 3,
+                ),
+                const SizedBox(width: NuvoSpacing.sm),
+              ],
+              Text(
+                placementStr,
+                style: AppTextStyles.placementLabel(
+                  color: _placementColor(rank) ?? NuvoColors.textMuted,
+                  size: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RaceActivityRow — recent proof activity
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Recent proof activity row for Verify Recent.
+///
+/// Prioritizes race/movement and verification outcome, NOT the actor.
+/// The actor is secondary (small avatar) because it's usually the same user.
+///
+/// Layout:
+///   small avatar (secondary)
+///   race title (dominant)
+///   movement · value · status (meta line)
+///   status indicator (right)
+class RaceActivityRow extends StatelessWidget {
+  const RaceActivityRow({
+    super.key,
+    required this.raceTitle,
+    required this.movementLabel,
+    required this.actorName,
+    required this.actorInitial,
+    required this.actorPhotoUrl,
+    required this.actorId,
+    required this.valueStr,
+    required this.statusLabel,
+    required this.statusColor,
+    required this.onTap,
+  });
+
+  final String raceTitle;
+  final String movementLabel;
+  final String actorName;
+  final String actorInitial;
+  final String? actorPhotoUrl;
+  final String actorId;
+  final String? valueStr;
+  final String statusLabel;
+  final Color statusColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$raceTitle · $statusLabel',
+      child: PressableScale(
+        onTap: onTap,
+        scale: 0.985,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 60),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NuvoSpacing.md,
+            vertical: NuvoSpacing.md,
+          ),
+          child: Row(
+            children: [
+              // Small avatar — secondary
+              NuvoAvatar(
+                initials: actorInitial,
+                photoUrl: actorPhotoUrl,
+                size: 28,
+                bgColor: nuvoAvatarColorFor(actorId),
+                textColor: NuvoColors.white,
+              ),
+              const SizedBox(width: NuvoSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      raceTitle,
+                      style: AppTextStyles.raceRowTitle.copyWith(fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$movementLabel${valueStr != null ? ' · $valueStr' : ''}',
+                      style: AppTextStyles.raceRowMeta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: NuvoSpacing.sm),
+              // Status — quiet text, no pill container
+              Text(
+                statusLabel,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// RaceSummary — waiting/finished summary header
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Summary row for waiting-for-crew races.
+///
+/// Shows the incompleteness structurally: filled avatars + empty slots.
+class RaceWaitingSummary extends StatelessWidget {
+  const RaceWaitingSummary({
     super.key,
     required this.raceCount,
     required this.totalWaitingSlots,
@@ -358,12 +868,6 @@ class NuvoWaitingCrewSummary extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.group_add_rounded,
-                  color: NuvoColors.crewWaiting,
-                  size: 22,
-                ),
-                const SizedBox(width: NuvoSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,11 +881,11 @@ class NuvoWaitingCrewSummary extends StatelessWidget {
                   ),
                 ),
                 if (avatars.isNotEmpty) ...[
-                  NuvoRacerStack(
+                  RacePeople(
                     avatars: avatars,
                     total: avatars.length,
                     emptySlots: totalWaitingSlots.clamp(0, 3),
-                    size: 24,
+                    size: 22,
                     max: 3,
                   ),
                   const SizedBox(width: NuvoSpacing.sm),
@@ -405,17 +909,9 @@ class NuvoWaitingCrewSummary extends StatelessWidget {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// NuvoFinishedSummary
-// ──────────────────────────────────────────────────────────────────────────────
-
 /// Summary row for finished races.
-///
-/// Structurally emphasizes results: a placement badge (crown for 1st, number
-/// for others) replaces the generic checkmark. The visual shape says
-/// "this is over, here is where you placed."
-class NuvoFinishedSummary extends StatelessWidget {
-  const NuvoFinishedSummary({
+class RaceFinishedSummary extends StatelessWidget {
+  const RaceFinishedSummary({
     super.key,
     required this.raceCount,
     required this.wonCount,
@@ -453,16 +949,6 @@ class NuvoFinishedSummary extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  wonCount > 0
-                      ? Icons.emoji_events_rounded
-                      : Icons.check_rounded,
-                  color: wonCount > 0
-                      ? NuvoColors.position1
-                      : NuvoColors.raceFinished,
-                  size: 22,
-                ),
-                const SizedBox(width: NuvoSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,16 +978,12 @@ class NuvoFinishedSummary extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NuvoQuickStart
+// RaceQuickStart — quick start tile
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Quick start tile for a movement race.
-///
-/// Leads with movement identity (the exercise icon is the primary visual
-/// element, not a generic container). The target number is set in tabular
-/// figures so it reads as a score/target, not a label. Compact and scannable.
-class NuvoQuickStart extends StatelessWidget {
-  const NuvoQuickStart({
+/// Quick start tile. Movement identity leads, target is secondary.
+class RaceQuickStart extends StatelessWidget {
+  const RaceQuickStart({
     super.key,
     required this.icon,
     required this.movementName,
@@ -530,9 +1012,7 @@ class NuvoQuickStart extends StatelessWidget {
           border: NuvoBorders.divider,
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            // Movement identity icon — compact, no nested container
             Icon(icon, color: NuvoColors.navy, size: 20),
             const SizedBox(width: NuvoSpacing.sm),
             Flexible(
@@ -567,325 +1047,42 @@ class NuvoQuickStart extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// NuvoFeaturedRaceCard
+// Legacy aliases — keep old names working during migration
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// The one loud "continue competing" surface.
-///
-/// Shows competition, not just a navy rectangle with text. Visible elements:
-/// - activity + target kicker
-/// - race title
-/// - racer stack (the people you're competing against)
-/// - your rank badge
-/// - progress lane with score and distance-to-go
-/// - "View leaderboard" action
-///
-/// Reserved signature shadow — this is the one surface that earns it.
-class NuvoFeaturedRaceCard extends StatelessWidget {
-  const NuvoFeaturedRaceCard({
+/// Legacy alias for [RacePeople].
+typedef NuvoRacerStack = RacePeople;
+
+/// Legacy alias for [RaceProgress].
+/// Note: old NuvoRaceLane had a different API; use RaceProgress directly.
+class NuvoRaceLane extends RaceProgress {
+  const NuvoRaceLane({
     super.key,
-    required this.activityLabel,
-    required this.targetLabel,
-    required this.raceTitle,
-    required this.progressPercent,
-    required this.progressLabel,
-    required this.racerStack,
-    required this.rank,
-    required this.onOpen,
-    this.actionLabel = 'View leaderboard',
-  });
-
-  final String activityLabel;
-  final String targetLabel;
-  final String raceTitle;
-  final int progressPercent;
-  final String progressLabel;
-  final Widget racerStack;
-  final int? rank;
-  final VoidCallback onOpen;
-  final String actionLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onOpen,
-      child: Container(
-        padding: const EdgeInsets.all(NuvoSpacing.xl),
-        decoration: BoxDecoration(
-          color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(NuvoRadii.hero),
-          boxShadow: AppShadows.hardLarge,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top row: kicker (left) + rank badge (right)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    '$activityLabel · $targetLabel',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.blue,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (rank != null) ...[
-                  const SizedBox(width: NuvoSpacing.sm),
-                  NuvoRacePositionBadge(rank: rank, size: 32, onDark: true),
-                ],
-              ],
-            ),
-            const SizedBox(height: NuvoSpacing.sm),
-            // Title
-            Text(
-              raceTitle,
-              style: AppTextStyles.featuredRaceTitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: NuvoSpacing.md),
-            // Racer stack + count on its own line
-            Row(
-              children: [
-                racerStack,
-                const SizedBox(width: NuvoSpacing.sm),
-                Text(
-                  rank != null ? 'You\'re ${_ordinal(rank!)}' : 'In progress',
-                  style: AppTextStyles.raceRowMeta.copyWith(
-                    color: NuvoColors.white.withValues(alpha: 0.7),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: NuvoSpacing.lg),
-            // Progress lane — larger, more prominent
-            NuvoRaceProgressLane(
-              progressPercent: progressPercent,
-              progressLabel: progressLabel,
-              targetLabel: targetLabel,
-              onDark: true,
-              trackHeight: 8,
-              dotDiameter: 16,
-            ),
-            const SizedBox(height: NuvoSpacing.lg),
-            // Flat CTA — no hard shadow on the dark surface
-            NuvoPrimaryButton(
-              label: actionLabel,
-              expand: true,
-              small: true,
-              flat: true,
-              onPressed: onOpen,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    required super.progressPercent,
+    super.onDark = false,
+    super.trackHeight = 3.0,
+    super.dotDiameter = 12.0,
+    Duration delay = Duration.zero,
+  }) : super();
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// NuvoRaceRow
-// ──────────────────────────────────────────────────────────────────────────────
+/// Legacy alias for [RaceProgressLabel].
+typedef NuvoRaceProgressLane = RaceProgressLabel;
 
-/// Compact race row for the "Your races" list.
-///
-/// Shows competition info, not just a title and meta line:
-/// - rank/position badge on the left (structural placement)
-/// - race title
-/// - racer stack (the people)
-/// - progress percent as a stat number
-///
-/// Tappable → Race Detail.
-class NuvoRaceRow extends StatelessWidget {
-  const NuvoRaceRow({
-    super.key,
-    required this.raceTitle,
-    required this.rank,
-    required this.participantCount,
-    required this.progressPercent,
-    required this.avatars,
-    required this.onTap,
-  });
+/// Legacy alias for [RaceWaitingSummary].
+typedef NuvoWaitingCrewSummary = RaceWaitingSummary;
 
-  final String raceTitle;
-  final int? rank;
-  final int participantCount;
-  final int progressPercent;
-  final List<({String initials, String? photoUrl, String id})> avatars;
-  final VoidCallback onTap;
+/// Legacy alias for [RaceFinishedSummary].
+typedef NuvoFinishedSummary = RaceFinishedSummary;
 
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: raceTitle,
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(
-            horizontal: NuvoSpacing.md,
-            vertical: NuvoSpacing.md,
-          ),
-          child: Row(
-            children: [
-              // Position badge — structural placement (larger for hierarchy)
-              NuvoRacePositionBadge(rank: rank, size: 34),
-              const SizedBox(width: NuvoSpacing.md),
-              // Title + racer count + progress lane
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      raceTitle,
-                      style: AppTextStyles.raceRowTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Text(
-                          '$participantCount ${participantCount == 1 ? 'racer' : 'racers'}',
-                          style: AppTextStyles.raceRowMeta,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(width: NuvoSpacing.sm),
-                        // Thin inline progress lane — visual progress
-                        Expanded(
-                          child: NuvoRaceLane(
-                            progressPercent: progressPercent,
-                            trackHeight: 4,
-                            dotDiameter: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              // Racer stack — the people
-              if (avatars.isNotEmpty)
-                NuvoRacerStack(
-                  avatars: avatars,
-                  total: participantCount,
-                  size: 24,
-                  max: 3,
-                ),
-              const SizedBox(width: NuvoSpacing.sm),
-              // Progress as a stat number — navy, not blue
-              Text(
-                '$progressPercent%',
-                style: AppTextStyles.statLarge(
-                  15,
-                  color: NuvoColors.navy,
-                  weight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+/// Legacy alias for [RaceQuickStart].
+typedef NuvoQuickStart = RaceQuickStart;
 
-// ──────────────────────────────────────────────────────────────────────────────
-// NuvoFinishedRaceRow
-// ──────────────────────────────────────────────────────────────────────────────
+/// Legacy alias for [RaceHero].
+typedef NuvoFeaturedRaceCard = RaceHero;
 
-/// Compact race row for finished races.
-///
-/// Structurally different from [NuvoRaceRow]: shows placement badge (crown for
-/// 1st) and final result, NOT progress percent. The absence of a progress bar
-/// and the presence of a placement badge communicates "this is over."
-class NuvoFinishedRaceRow extends StatelessWidget {
-  const NuvoFinishedRaceRow({
-    super.key,
-    required this.raceTitle,
-    required this.rank,
-    required this.participantCount,
-    required this.avatars,
-    required this.onTap,
-  });
+/// Legacy alias for [RaceRow].
+typedef NuvoRaceRow = RaceRow;
 
-  final String raceTitle;
-  final int? rank;
-  final int participantCount;
-  final List<({String initials, String? photoUrl, String id})> avatars;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final placementStr = rank != null ? _ordinal(rank!) : '--';
-
-    return Semantics(
-      button: true,
-      label: raceTitle,
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(
-            horizontal: NuvoSpacing.md,
-            vertical: NuvoSpacing.md,
-          ),
-          child: Row(
-            children: [
-              // Placement badge — crown for 1st, number for others
-              NuvoRacePositionBadge(rank: rank, size: 30),
-              const SizedBox(width: NuvoSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      raceTitle,
-                      style: AppTextStyles.raceRowTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$participantCount ${participantCount == 1 ? 'racer' : 'racers'}',
-                      style: AppTextStyles.raceRowMeta,
-                      maxLines: 1,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              if (avatars.isNotEmpty)
-                NuvoRacerStack(
-                  avatars: avatars,
-                  total: participantCount,
-                  size: 24,
-                  max: 3,
-                ),
-              const SizedBox(width: NuvoSpacing.sm),
-              // Placement label — NOT a progress percent
-              Text(
-                placementStr,
-                style: AppTextStyles.placementLabel(
-                  color: _placementColor(rank) ?? NuvoColors.textMuted,
-                  size: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+/// Legacy alias for [RaceResultRow].
+typedef NuvoFinishedRaceRow = RaceResultRow;

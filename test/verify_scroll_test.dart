@@ -89,10 +89,9 @@ Widget _buildApp(RaceRepository repo) {
 }
 
 void main() {
-  testWidgets('Verify short content has zero scroll extent (truly stationary)', (
+  testWidgets('Verify uses BouncingScrollPhysics for native iOS feel', (
     tester,
   ) async {
-    // Short dataset: 1 ready race — content fits in viewport.
     final races = [
       _r(
         id: 'a1',
@@ -105,26 +104,34 @@ void main() {
     await tester.pumpAndSettle();
     tester.takeException();
 
-    // Find the SingleChildScrollView and verify it uses ClampingScrollPhysics.
-    final scrollView = tester.widget<SingleChildScrollView>(
-      find.byType(SingleChildScrollView),
-    );
+    // Verify should use BouncingScrollPhysics for native iOS elastic overscroll.
+    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
     expect(
-      scrollView.physics,
-      isA<ClampingScrollPhysics>(),
-      reason: 'Verify should use ClampingScrollPhysics.',
+      scrollable.position.physics,
+      isA<BouncingScrollPhysics>(),
+      reason: 'Verify should use BouncingScrollPhysics for native iOS bounce.',
     );
+  });
 
-    // With ConstrainedBox(minHeight: viewport), short content is expanded
-    // to fill the viewport, so maxScrollExtent should be 0 — the view is
-    // truly stationary.
+  testWidgets('Verify short content has no fake scroll extent', (tester) async {
+    final races = [
+      _r(
+        id: 'a1',
+        title: 'Pushup Race',
+        participantCount: 2,
+        progressPercent: 20,
+      ),
+    ];
+    await tester.pumpWidget(_buildApp(_StubRaceRepo(races)));
+    await tester.pumpAndSettle();
+    tester.takeException();
+
+    // Short content should have zero maxScrollExtent — no fake empty space.
     final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
     expect(
       scrollable.position.maxScrollExtent,
       equals(0.0),
-      reason:
-          'Short content should have zero scroll extent — '
-          'ConstrainedBox fills the remaining viewport.',
+      reason: 'Short content should have zero scroll extent — no fake space.',
     );
   });
 
@@ -159,10 +166,7 @@ void main() {
     );
 
     // Drag up to scroll.
-    await tester.drag(
-      find.byType(SingleChildScrollView),
-      const Offset(0, -200),
-    );
+    await tester.drag(find.byType(Scrollable), const Offset(0, -200));
     await tester.pumpAndSettle();
     expect(
       scrollable.position.pixels,

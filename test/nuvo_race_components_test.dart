@@ -2,50 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/widgets/nuvo_race_components.dart';
 
-/// Tests for the Nuvo race product component system.
+/// Tests for the Nuvo canonical race component system.
 ///
 /// Tests structure and behavior, not pixel-perfect rendering.
 void main() {
-  group('NuvoRacePositionBadge', () {
-    testWidgets('1st place shows crown icon', (tester) async {
+  group('RacePlacement', () {
+    testWidgets('renders rank number with prefix', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: NuvoRacePositionBadge(rank: 1, size: 30)),
+          home: Scaffold(body: RacePlacement(rank: 4, size: 16)),
         ),
       );
-      // Crown icon should be present for podium positions.
-      expect(find.byIcon(Icons.emoji_events), findsNothing);
-      // The crown is a NuvoIcon, not a Material Icon. Just verify the badge
-      // renders without error and has the right size.
       expect(tester.takeException(), isNull);
-      final container = tester.widget<Container>(find.byType(Container).first);
-      expect((container.constraints?.maxWidth ?? 0) >= 0, isTrue);
+      expect(find.text('#4'), findsOneWidget);
     });
 
-    testWidgets('null rank renders empty space', (tester) async {
+    testWidgets('null rank renders nothing', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: NuvoRacePositionBadge(rank: null, size: 30)),
+          home: Scaffold(body: RacePlacement(rank: null, size: 16)),
         ),
       );
       expect(tester.takeException(), isNull);
-      // Should render a SizedBox, not a Container with decoration.
-      expect(find.byType(Container), findsNothing);
+      expect(find.byType(Text), findsNothing);
     });
 
-    testWidgets('4th place shows number, not crown', (tester) async {
+    testWidgets('1st place renders without error', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: NuvoRacePositionBadge(rank: 4, size: 30)),
+          home: Scaffold(body: RacePlacement(rank: 1, size: 16)),
         ),
       );
       expect(tester.takeException(), isNull);
-      // Should show the number "4" as text.
-      expect(find.text('4'), findsOneWidget);
+      expect(find.text('#1'), findsOneWidget);
     });
   });
 
-  group('NuvoRacerStack', () {
+  group('RacePeople', () {
     testWidgets('shows filled avatars and overflow count', (tester) async {
       final avatars = [
         for (var i = 0; i < 5; i++)
@@ -54,7 +47,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoRacerStack(avatars: avatars, total: 5, size: 28, max: 4),
+            body: RacePeople(avatars: avatars, total: 5, size: 28, max: 4),
           ),
         ),
       );
@@ -68,7 +61,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoRacerStack(
+            body: RacePeople(
               avatars: avatars,
               total: 1,
               emptySlots: 3,
@@ -89,7 +82,7 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: NuvoRacerStack(
+            body: RacePeople(
               avatars: [],
               total: 0,
               emptySlots: 2,
@@ -104,13 +97,12 @@ void main() {
     });
   });
 
-  group('NuvoRaceProgressLane', () {
+  group('RaceProgressLabel', () {
     testWidgets('renders progress label and target', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: NuvoRaceProgressLane(
-              progressPercent: 40,
+            body: RaceProgressLabel(
               progressLabel: '20 / 50 reps',
               targetLabel: '50 reps',
             ),
@@ -118,7 +110,6 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-      // Should show the progress label text.
       expect(find.textContaining('20'), findsOneWidget);
       expect(find.textContaining('50 reps'), findsWidgets);
     });
@@ -136,8 +127,7 @@ void main() {
               width: 280,
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: NuvoRaceProgressLane(
-                  progressPercent: 40,
+                child: RaceProgressLabel(
                   progressLabel: '20 / 100 reps',
                   targetLabel: '100 reps',
                 ),
@@ -150,12 +140,12 @@ void main() {
     });
   });
 
-  group('NuvoWaitingCrewSummary', () {
-    testWidgets('shows race count and crew slot icon', (tester) async {
+  group('RaceWaitingSummary', () {
+    testWidgets('shows race count', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoWaitingCrewSummary(
+            body: RaceWaitingSummary(
               raceCount: 3,
               totalWaitingSlots: 3,
               avatars: const [],
@@ -169,15 +159,13 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Waiting for crew'), findsOneWidget);
       expect(find.textContaining('3 races'), findsOneWidget);
-      // Should show the group_add icon (crew slot icon).
-      expect(find.byIcon(Icons.group_add_rounded), findsOneWidget);
     });
 
     testWidgets('expands to show children', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoWaitingCrewSummary(
+            body: RaceWaitingSummary(
               raceCount: 2,
               totalWaitingSlots: 2,
               avatars: const [],
@@ -195,7 +183,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoWaitingCrewSummary(
+            body: RaceWaitingSummary(
               raceCount: 2,
               totalWaitingSlots: 2,
               avatars: const [],
@@ -210,12 +198,12 @@ void main() {
     });
   });
 
-  group('NuvoFinishedSummary', () {
+  group('RaceFinishedSummary', () {
     testWidgets('shows race count and win count', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoFinishedSummary(
+            body: RaceFinishedSummary(
               raceCount: 5,
               wonCount: 2,
               expanded: false,
@@ -230,51 +218,14 @@ void main() {
       expect(find.textContaining('5 races'), findsOneWidget);
       expect(find.textContaining('2 wins'), findsOneWidget);
     });
-
-    testWidgets('shows crown icon when wonCount > 0', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: NuvoFinishedSummary(
-              raceCount: 1,
-              wonCount: 1,
-              expanded: false,
-              onToggle: () {},
-              children: const [],
-            ),
-          ),
-        ),
-      );
-      // Crown is a NuvoIcon rendered via CustomPaint. At least one CustomPaint
-      // should be present (the crown). The exact count varies with Material
-      // scaffolding, so we just verify it's there.
-      expect(find.byType(CustomPaint), findsWidgets);
-    });
-
-    testWidgets('shows check icon when wonCount == 0', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: NuvoFinishedSummary(
-              raceCount: 1,
-              wonCount: 0,
-              expanded: false,
-              onToggle: () {},
-              children: const [],
-            ),
-          ),
-        ),
-      );
-      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
-    });
   });
 
-  group('NuvoQuickStart', () {
+  group('RaceQuickStart', () {
     testWidgets('shows movement name and target', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoQuickStart(
+            body: RaceQuickStart(
               icon: Icons.fitness_center_rounded,
               movementName: 'Pushups',
               target: '100 reps',
@@ -293,7 +244,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoQuickStart(
+            body: RaceQuickStart(
               icon: Icons.fitness_center_rounded,
               movementName: 'Pushups',
               target: '100 reps',
@@ -302,23 +253,23 @@ void main() {
           ),
         ),
       );
-      await tester.tap(find.byType(NuvoQuickStart));
+      await tester.tap(find.byType(RaceQuickStart));
       expect(tapped, isTrue);
     });
   });
 
-  group('NuvoRaceRow', () {
-    testWidgets('shows title, racer count, and progress percent', (
-      tester,
-    ) async {
+  group('RaceRow', () {
+    testWidgets('shows title, movement, and progress label', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoRaceRow(
+            body: RaceRow(
               raceTitle: 'Pushup Race',
+              movementLabel: 'Pushups',
+              progressLabel: '45 / 100 reps',
+              progressPercent: 45,
               rank: 1,
               participantCount: 3,
-              progressPercent: 45,
               avatars: const [
                 (initials: 'AB', photoUrl: null, id: 'u2'),
                 (initials: 'CD', photoUrl: null, id: 'u3'),
@@ -330,8 +281,8 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(find.text('Pushup Race'), findsOneWidget);
-      expect(find.textContaining('3 racers'), findsOneWidget);
-      expect(find.text('45%'), findsOneWidget);
+      expect(find.textContaining('Pushups'), findsOneWidget);
+      expect(find.textContaining('45'), findsOneWidget);
     });
 
     testWidgets('long title does not overflow at 280px', (tester) async {
@@ -341,11 +292,13 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoRaceRow(
+            body: RaceRow(
               raceTitle: 'Very Long Pushup Race Title That Should Truncate',
+              movementLabel: 'Pushups',
+              progressLabel: '20 / 100 reps',
+              progressPercent: 20,
               rank: 1,
               participantCount: 2,
-              progressPercent: 20,
               avatars: const [(initials: 'AB', photoUrl: null, id: 'u2')],
               onTap: () {},
             ),
@@ -356,13 +309,14 @@ void main() {
     });
   });
 
-  group('NuvoFinishedRaceRow', () {
+  group('RaceResultRow', () {
     testWidgets('shows placement label, not progress percent', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoFinishedRaceRow(
+            body: RaceResultRow(
               raceTitle: 'Pushup Race',
+              movementLabel: 'Pushups',
               rank: 2,
               participantCount: 3,
               avatars: const [
@@ -380,12 +334,13 @@ void main() {
       expect(find.textContaining('%'), findsNothing);
     });
 
-    testWidgets('1st place shows crown badge', (tester) async {
+    testWidgets('1st place shows 1st', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoFinishedRaceRow(
+            body: RaceResultRow(
               raceTitle: 'Pushup Race',
+              movementLabel: 'Pushups',
               rank: 1,
               participantCount: 3,
               avatars: const [],
@@ -399,12 +354,12 @@ void main() {
     });
   });
 
-  group('NuvoFeaturedRaceCard', () {
+  group('RaceHero', () {
     testWidgets('shows activity, title, progress, and action', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NuvoFeaturedRaceCard(
+            body: RaceHero(
               activityLabel: 'Pushups',
               targetLabel: '100 reps',
               raceTitle: 'Morning Pushup Race',
@@ -433,7 +388,7 @@ void main() {
           home: Scaffold(
             body: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
-              child: NuvoFeaturedRaceCard(
+              child: RaceHero(
                 activityLabel: 'Pushups',
                 targetLabel: '100 reps',
                 raceTitle: 'Morning Pushup Race With A Long Title',
@@ -452,44 +407,45 @@ void main() {
   });
 
   group('Structural differentiation', () {
-    testWidgets(
-      'NuvoRaceRow and NuvoFinishedRaceRow are structurally different',
-      (tester) async {
-        // Active race row: shows progress percent
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: NuvoRaceRow(
-                raceTitle: 'Active Race',
-                rank: 1,
-                participantCount: 2,
-                progressPercent: 50,
-                avatars: const [],
-                onTap: () {},
-              ),
+    testWidgets('RaceRow and RaceResultRow are structurally different', (
+      tester,
+    ) async {
+      // Active race row: shows progress
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RaceRow(
+              raceTitle: 'Active Race',
+              movementLabel: 'Pushups',
+              progressLabel: '50 / 100 reps',
+              progressPercent: 50,
+              rank: 1,
+              participantCount: 2,
+              avatars: const [],
+              onTap: () {},
             ),
           ),
-        );
-        expect(find.text('50%'), findsOneWidget);
-        expect(find.textContaining('st'), findsNothing); // no placement label
+        ),
+      );
+      expect(find.textContaining('50'), findsOneWidget);
 
-        // Finished race row: shows placement, NOT percent
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: NuvoFinishedRaceRow(
-                raceTitle: 'Finished Race',
-                rank: 1,
-                participantCount: 2,
-                avatars: const [],
-                onTap: () {},
-              ),
+      // Finished race row: shows placement, NOT progress
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RaceResultRow(
+              raceTitle: 'Finished Race',
+              movementLabel: 'Pushups',
+              rank: 1,
+              participantCount: 2,
+              avatars: const [],
+              onTap: () {},
             ),
           ),
-        );
-        expect(find.text('1st'), findsOneWidget);
-        expect(find.textContaining('%'), findsNothing);
-      },
-    );
+        ),
+      );
+      expect(find.text('1st'), findsOneWidget);
+      expect(find.textContaining('%'), findsNothing);
+    });
   });
 }
