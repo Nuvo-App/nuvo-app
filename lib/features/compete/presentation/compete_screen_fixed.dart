@@ -317,7 +317,7 @@ class _CompactHeader extends StatelessWidget {
           ),
           const SizedBox(width: NuvoSpacing.md),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: NuvoPrimaryButton(
               label: 'Start race',
               small: true,
@@ -327,7 +327,7 @@ class _CompactHeader extends StatelessWidget {
           ),
           const SizedBox(width: NuvoSpacing.sm),
           Expanded(
-            flex: 1,
+            flex: 2,
             child: NuvoOutlineButton(
               label: 'Join',
               small: true,
@@ -385,8 +385,8 @@ class _CappedRaceList extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
+                    horizontal: 8,
+                    vertical: 6,
                   ),
                   child: Text(
                     expanded ? 'Show less' : 'See all',

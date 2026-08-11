@@ -582,7 +582,9 @@ class NuvoQuickStart extends StatelessWidget {
       onTap: onTap,
       scale: 0.97,
       child: Container(
-        constraints: const BoxConstraints(minWidth: 150),
+        constraints: BoxConstraints(
+          minWidth: MediaQuery.sizeOf(context).width < 400 ? 140 : 150,
+        ),
         padding: const EdgeInsets.symmetric(
           horizontal: NuvoSpacing.md,
           vertical: NuvoSpacing.md,
