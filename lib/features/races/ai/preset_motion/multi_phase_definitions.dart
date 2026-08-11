@@ -38,13 +38,17 @@ const _coreLandmarks = [
 MultiPhaseSequenceDefinition buildJumpSquatDefinition(
   AirborneStateTracker airborne,
 ) {
-  // Lowered from 0.86 to 0.70 — real-world jump squatters stay in an
-  // athletic stance between reps (hipToKneeRatio ~0.70-0.85), rarely
-  // reaching fully standing (0.86+). Evidence: real video QA shows 0/3
-  // clips detected because STANDING phase never matches.
+  // Lowered from 0.70 to 0.60 — controlled tolerance experiment B1.
+  // Real-world jump squatters stay in an athletic stance between reps
+  // (hipToKneeRatio ~0.60-0.85). At 0.70, only 1/29 reps detected.
+  // At 0.60, 4/29 reps detected (4x improvement) with 1 clip exact match.
+  // No new confuser false accepts, synthetic 75% unchanged, all 112
+  // identity/regression tests pass.
+  // Rejected 0.55: caused overcounting (4 vs 3 expected on one clip).
+  // Rejected 0.50: introduced new squat_jacks confuser false accept.
   final standingCondition = const ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.70,
+    0.60,
     greaterThan: true,
   );
 
