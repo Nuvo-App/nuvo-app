@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
-import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 
 const _kTrackNavy = Color(0xFF071B35);
@@ -25,14 +24,14 @@ class NuvoBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  static const double _surfaceHeight = 64;
-  static const double _darkHeight = 64;
+  static const double _surfaceHeight = 56;
+  static const double _darkHeight = 56;
   static const double _horizontalMargin = 16;
-  static const double _topReserve = 6;
-  static const double _bottomGapNoInset = 10;
-  static const double _bottomGapWithInset = 8;
-  static const double _shadowReserve = 2;
-  static const double _contentGap = 8;
+  static const double _topReserve = 4;
+  static const double _bottomGapNoInset = 8;
+  static const double _bottomGapWithInset = 6;
+  static const double _shadowReserve = 0;
+  static const double _contentGap = 6;
 
   static double bottomPadding(BuildContext context) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
@@ -97,12 +96,11 @@ class NuvoBottomNav extends StatelessWidget {
             _horizontalMargin,
             dockBottom,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.lg),
             border: Border.all(color: NuvoColors.divider, width: 1),
-            boxShadow: AppShadows.softSubtle,
           ),
           child: Row(
             children: [
@@ -179,12 +177,12 @@ class _NavButton extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
               constraints: BoxConstraints(
-                minWidth: isDark ? 44 : 48,
-                minHeight: isDark ? 36 : 48,
+                minWidth: isDark ? 44 : 44,
+                minHeight: isDark ? 36 : 42,
               ),
               padding: EdgeInsets.symmetric(
-                horizontal: isDark ? 4 : 6,
-                vertical: isDark ? 4 : 6,
+                horizontal: isDark ? 4 : 5,
+                vertical: isDark ? 4 : 5,
               ),
               decoration: isDark
                   ? null
@@ -278,9 +276,9 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
 
   @override
   Widget build(BuildContext context) {
-    final pressedOffset = _pressed ? 2.0 : 0.0;
-    final width = widget.selected ? 60.0 : 58.0;
-    final height = widget.selected ? 56.0 : 54.0;
+    final pressedOffset = _pressed ? 1.5 : 0.0;
+    final width = widget.selected ? 52.0 : 50.0;
+    final height = widget.selected ? 48.0 : 46.0;
 
     return Semantics(
       selected: widget.selected,
@@ -293,8 +291,8 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         child: SizedBox(
-          width: 68,
-          height: 62,
+          width: 58,
+          height: 52,
           child: Align(
             alignment: Alignment.topCenter,
             child: AnimatedContainer(
@@ -307,18 +305,17 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
               ),
               width: width,
               height: height,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               decoration: BoxDecoration(
                 color: NuvoColors.actionBlue,
                 borderRadius: BorderRadius.circular(NuvoRadii.button),
-                border: Border.all(color: NuvoColors.navy, width: 1.5),
-                boxShadow: _pressed ? null : AppShadows.softSubtle,
+                border: Border.all(color: NuvoColors.navy, width: 1.25),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(widget.item.icon, size: 22, color: NuvoColors.white),
-                  const SizedBox(height: 3),
+                  Icon(widget.item.icon, size: 18, color: NuvoColors.white),
+                  const SizedBox(height: 2),
                   Text(
                     widget.item.label,
                     maxLines: 1,

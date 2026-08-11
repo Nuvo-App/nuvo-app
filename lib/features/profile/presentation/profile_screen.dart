@@ -141,89 +141,72 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 20),
 
-                  // Avatar + name
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          NuvoColors.icyBlue,
-                          NuvoColors.surface,
-                          NuvoColors.surface,
-                        ],
-                        stops: [0, 0.42, 1],
-                      ),
-                      borderRadius: BorderRadius.circular(NuvoRadii.hero),
-                      border: NuvoBorders.divider,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Hero(
-                          tag: 'profile-avatar',
-                          child: NuvoAvatar(
-                            initials: initials,
-                            photoUrl: photoUrl,
-                            size: NuvoAvatarSizes.xl,
-                            bgColor: NuvoColors.panel,
-                            textColor: NuvoColors.navy,
-                            borderColor: NuvoColors.border,
-                          ),
+                  // Avatar + name — plain layout, no card surface
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Hero(
+                        tag: 'profile-avatar',
+                        child: NuvoAvatar(
+                          initials: initials,
+                          photoUrl: photoUrl,
+                          size: NuvoAvatarSizes.xl,
+                          bgColor: NuvoColors.panel,
+                          textColor: NuvoColors.navy,
+                          borderColor: NuvoColors.border,
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                displayName,
-                                style: AppTextStyles.headlineLarge.copyWith(
-                                  color: NuvoColors.navy,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              style: AppTextStyles.headlineLarge.copyWith(
+                                color: NuvoColors.navy,
+                                fontWeight: FontWeight.w700,
                               ),
-                              if (username != null) ...[
-                                const SizedBox(height: 5),
-                                Text(
-                                  username,
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: NuvoColors.textMuted,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (username != null) ...[
+                              const SizedBox(height: 5),
+                              Text(
+                                username,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: NuvoColors.textMuted,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: NuvoSpacing.sm),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: NuvoColors.blue,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Member pass active',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: NuvoColors.navy,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: NuvoSpacing.sm),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.check_circle_rounded,
-                                    color: NuvoColors.blue,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      'Member pass active',
-                                      style: AppTextStyles.labelSmall.copyWith(
-                                        color: NuvoColors.navy,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
 
                   // Stats row
