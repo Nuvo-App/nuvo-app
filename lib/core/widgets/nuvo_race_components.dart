@@ -356,17 +356,17 @@ class NuvoWaitingCrewSummary extends StatelessWidget {
               vertical: NuvoSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: NuvoColors.crewWaitingTint.withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: Border.all(
-                color: NuvoColors.crewWaiting.withValues(alpha: 0.25),
-                width: 1,
-              ),
+              color: NuvoColors.crewWaitingTint.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              border: NuvoBorders.divider,
             ),
             child: Row(
               children: [
-                // Empty-slot icon — structurally says "missing people"
-                const _CrewSlotIcon(size: 32),
+                const Icon(
+                  Icons.group_add_rounded,
+                  color: NuvoColors.crewWaiting,
+                  size: 22,
+                ),
                 const SizedBox(width: NuvoSpacing.md),
                 Expanded(
                   child: Column(
@@ -374,9 +374,7 @@ class NuvoWaitingCrewSummary extends StatelessWidget {
                     children: [
                       Text(
                         'Waiting for crew',
-                        style: AppTextStyles.raceRowTitle.copyWith(
-                          color: NuvoColors.navy,
-                        ),
+                        style: AppTextStyles.sectionTitle,
                       ),
                       Text(subtitle, style: AppTextStyles.raceRowMeta),
                     ],
@@ -407,29 +405,6 @@ class NuvoWaitingCrewSummary extends StatelessWidget {
         ),
         if (expanded) ...children,
       ],
-    );
-  }
-}
-
-class _CrewSlotIcon extends StatelessWidget {
-  const _CrewSlotIcon({required this.size});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: NuvoColors.crewWaitingTint,
-        borderRadius: BorderRadius.circular(NuvoRadii.badge),
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.group_add_rounded,
-        color: NuvoColors.crewWaiting,
-        size: size * 0.5,
-      ),
     );
   }
 }
@@ -476,28 +451,27 @@ class NuvoFinishedSummary extends StatelessWidget {
               vertical: NuvoSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: NuvoColors.raceFinished.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: Border.all(
-                color: NuvoColors.raceFinished.withValues(alpha: 0.25),
-                width: 1,
-              ),
+              color: NuvoColors.raceFinished.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              border: NuvoBorders.divider,
             ),
             child: Row(
               children: [
-                // Result icon — crown if won, check otherwise
-                _ResultIcon(size: 32, won: wonCount > 0),
+                Icon(
+                  wonCount > 0
+                      ? Icons.emoji_events_rounded
+                      : Icons.check_rounded,
+                  color: wonCount > 0
+                      ? NuvoColors.position1
+                      : NuvoColors.raceFinished,
+                  size: 22,
+                ),
                 const SizedBox(width: NuvoSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Finished',
-                        style: AppTextStyles.raceRowTitle.copyWith(
-                          color: NuvoColors.navy,
-                        ),
-                      ),
+                      Text('Finished', style: AppTextStyles.sectionTitle),
                       Text(subtitle, style: AppTextStyles.raceRowMeta),
                     ],
                   ),
@@ -517,38 +491,6 @@ class NuvoFinishedSummary extends StatelessWidget {
         ),
         if (expanded) ...children,
       ],
-    );
-  }
-}
-
-class _ResultIcon extends StatelessWidget {
-  const _ResultIcon({required this.size, required this.won});
-  final double size;
-  final bool won;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: won
-            ? NuvoColors.position1.withValues(alpha: 0.16)
-            : NuvoColors.raceFinished.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(NuvoRadii.badge),
-      ),
-      alignment: Alignment.center,
-      child: won
-          ? NuvoIcon(
-              NuvoIconType.crown,
-              color: NuvoColors.position1,
-              size: size * 0.5,
-            )
-          : Icon(
-              Icons.check_rounded,
-              color: NuvoColors.raceFinished,
-              size: size * 0.5,
-            ),
     );
   }
 }
@@ -582,32 +524,20 @@ class NuvoQuickStart extends StatelessWidget {
       onTap: onTap,
       scale: 0.97,
       child: Container(
-        constraints: BoxConstraints(
-          minWidth: MediaQuery.sizeOf(context).width < 400 ? 140 : 150,
-        ),
         padding: const EdgeInsets.symmetric(
           horizontal: NuvoSpacing.md,
-          vertical: NuvoSpacing.md,
+          vertical: 10,
         ),
         decoration: BoxDecoration(
           color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.sm),
-          border: NuvoBorders.quiet,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: NuvoBorders.divider,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Movement identity icon — the primary visual
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: NuvoColors.panel,
-                borderRadius: BorderRadius.circular(NuvoRadii.badge),
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: NuvoColors.navy, size: 18),
-            ),
+            // Movement identity icon — compact, no nested container
+            Icon(icon, color: NuvoColors.navy, size: 20),
             const SizedBox(width: NuvoSpacing.sm),
             Flexible(
               child: Column(
@@ -623,9 +553,9 @@ class NuvoQuickStart extends StatelessWidget {
                   Text(
                     target,
                     style: AppTextStyles.statLarge(
-                      12,
-                      color: NuvoColors.blue,
-                      weight: FontWeight.w800,
+                      11,
+                      color: NuvoColors.muted,
+                      weight: FontWeight.w700,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

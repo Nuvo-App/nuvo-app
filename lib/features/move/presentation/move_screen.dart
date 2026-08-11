@@ -11,7 +11,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -93,9 +93,10 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
       backgroundColor: NuvoColors.page,
       body: SafeArea(
         child: ListView(
+          physics: const ClampingScrollPhysics(),
           padding: EdgeInsets.fromLTRB(
             22,
-            22,
+            32,
             22,
             NuvoBottomNav.bottomPadding(context),
           ),
@@ -191,14 +192,7 @@ class _CompactVerifyHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Verify',
-          style: AppTextStyles.headlineLarge.copyWith(
-            color: NuvoColors.navy,
-            fontSize: 30,
-            letterSpacing: -0.8,
-          ),
-        ),
+        Text('Verify', style: AppTextStyles.screenTitle),
         const SizedBox(height: NuvoSpacing.xs),
         Text(
           readyCount > 0
@@ -291,9 +285,8 @@ class _SegmentTab extends StatelessWidget {
             color: selected ? NuvoColors.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(NuvoRadii.xs),
             border: selected
-                ? Border.all(color: NuvoColors.border, width: 1)
+                ? Border.all(color: NuvoColors.divider, width: 1)
                 : null,
-            boxShadow: selected ? AppShadows.hardSmall : null,
           ),
           child: Column(
             children: [
@@ -366,14 +359,7 @@ class _ReadySegment extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Up next (ONE loud surface) ────────────────────────────────────────
-        Text(
-          'Up next',
-          style: AppTextStyles.labelSmall.copyWith(
-            color: NuvoColors.textMuted,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.8,
-          ),
-        ),
+        Text('Up next', style: AppTextStyles.sectionTitle),
         const SizedBox(height: 10),
         _UpNextCard(
           race: upNext,
@@ -384,14 +370,7 @@ class _ReadySegment extends StatelessWidget {
           const SizedBox(height: NuvoSpacing.xl),
           Row(
             children: [
-              Text(
-                'Also ready',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: NuvoColors.textMuted,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                ),
-              ),
+              Text('Also ready', style: AppTextStyles.sectionTitle),
               const Spacer(),
               if (hasMore)
                 GestureDetector(
@@ -405,7 +384,7 @@ class _ReadySegment extends StatelessWidget {
                     child: Text(
                       expanded ? 'Show less' : 'See all ${alsoReady.length}',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.blue,
+                        color: NuvoColors.navy,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -471,34 +450,44 @@ class _UpNextCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.button),
-        boxShadow: AppShadows.hardMedium,
+        borderRadius: BorderRadius.circular(NuvoRadii.hero),
+        boxShadow: AppShadows.hardLarge,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$activity · $target',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.blue,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          // Kicker + rank badge
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  '$activity · $target',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.blue,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (rank != null) ...[
+                const SizedBox(width: NuvoSpacing.sm),
+                NuvoRacePositionBadge(rank: rank, size: 32, onDark: true),
+              ],
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: NuvoSpacing.sm),
+          // Title
           Text(
             race.displayTitle,
-            style: AppTextStyles.headlineMedium.copyWith(
-              color: NuvoColors.white,
-              fontSize: 20,
-              height: 1.15,
-            ),
+            style: AppTextStyles.featuredRaceTitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: NuvoSpacing.sm),
+          // Meta — racers + progress
           Text(
             metaLine,
             style: AppTextStyles.bodySmall.copyWith(
@@ -508,18 +497,23 @@ class _UpNextCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: NuvoSpacing.lg),
-          NuvoRaceLane(
+          // Progress lane
+          NuvoRaceProgressLane(
             progressPercent: pct,
+            progressLabel: '$pct%',
+            targetLabel: target,
             onDark: true,
-            trackHeight: 6,
-            dotDiameter: 12,
+            trackHeight: 8,
+            dotDiameter: 16,
           ),
           const SizedBox(height: NuvoSpacing.lg),
+          // CTA — flat on dark surface
           NuvoPrimaryButton(
             label: 'Start verification',
             icon: Icons.camera_alt_rounded,
             expand: true,
             small: true,
+            flat: true,
             onPressed: onVerify,
           ),
         ],
@@ -660,7 +654,7 @@ class _CompletedSegment extends StatelessWidget {
                   child: Text(
                     expanded ? 'Show less' : 'See all ${races.length}',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.blue,
+                      color: NuvoColors.navy,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -832,7 +826,7 @@ class _RecentSegment extends StatelessWidget {
                   child: Text(
                     expanded ? 'Show less' : 'See all ${entries.length}',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.blue,
+                      color: NuvoColors.navy,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -968,7 +962,7 @@ class _RecentProofRow extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: statusColor.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(NuvoRadii.xs),
                           ),
                           child: Text(
                             statusLabel,
@@ -1029,7 +1023,7 @@ class _SegmentEmptyState extends StatelessWidget {
           height: 44,
           decoration: BoxDecoration(
             color: NuvoColors.panelLight,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
           alignment: Alignment.center,
           child: Icon(icon, color: NuvoColors.muted, size: 22),

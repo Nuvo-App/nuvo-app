@@ -25,13 +25,13 @@ class NuvoBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  static const double _surfaceHeight = 76;
-  static const double _darkHeight = 75;
+  static const double _surfaceHeight = 64;
+  static const double _darkHeight = 64;
   static const double _horizontalMargin = 16;
-  static const double _topReserve = 8;
+  static const double _topReserve = 6;
   static const double _bottomGapNoInset = 10;
   static const double _bottomGapWithInset = 8;
-  static const double _shadowReserve = 4;
+  static const double _shadowReserve = 2;
   static const double _contentGap = 8;
 
   static double bottomPadding(BuildContext context) {
@@ -100,9 +100,9 @@ class NuvoBottomNav extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
           decoration: BoxDecoration(
             color: NuvoColors.surface,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: NuvoColors.navy, width: 2),
-            boxShadow: AppShadows.hardSmall,
+            borderRadius: BorderRadius.circular(NuvoRadii.lg),
+            border: Border.all(color: NuvoColors.divider, width: 1),
+            boxShadow: AppShadows.softSubtle,
           ),
           child: Row(
             children: [
@@ -179,17 +179,19 @@ class _NavButton extends StatelessWidget {
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
               constraints: BoxConstraints(
-                minWidth: isDark ? 44 : 52,
-                minHeight: isDark ? 36 : 54,
+                minWidth: isDark ? 44 : 48,
+                minHeight: isDark ? 36 : 48,
               ),
               padding: EdgeInsets.symmetric(
-                horizontal: isDark ? 4 : 7,
-                vertical: isDark ? 4 : 7,
+                horizontal: isDark ? 4 : 6,
+                vertical: isDark ? 4 : 6,
               ),
               decoration: isDark
                   ? null
                   : BoxDecoration(
-                      color: selected ? NuvoColors.panel : CupertinoColors.transparent,
+                      color: selected
+                          ? NuvoColors.panel
+                          : CupertinoColors.transparent,
                       borderRadius: BorderRadius.circular(NuvoRadii.md),
                       border: selected
                           ? Border.all(
@@ -227,12 +229,8 @@ class _NavButton extends StatelessWidget {
                       colorBlendMode: BlendMode.srcIn,
                     )
                   else
-                    Icon(
-                      item.icon!,
-                      size: isDark ? 20 : 24,
-                      color: labelColor,
-                    ),
-                  SizedBox(height: isDark ? 2 : 4),
+                    Icon(item.icon!, size: isDark ? 20 : 22, color: labelColor),
+                  SizedBox(height: isDark ? 2 : 3),
                   Text(
                     item.label,
                     maxLines: 1,
@@ -280,9 +278,9 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
 
   @override
   Widget build(BuildContext context) {
-    final pressedOffset = _pressed ? 3.5 : 0.0;
-    final width = widget.selected ? 66.0 : 64.0;
-    final height = widget.selected ? 62.0 : 60.0;
+    final pressedOffset = _pressed ? 2.0 : 0.0;
+    final width = widget.selected ? 60.0 : 58.0;
+    final height = widget.selected ? 56.0 : 54.0;
 
     return Semantics(
       selected: widget.selected,
@@ -295,8 +293,8 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         child: SizedBox(
-          width: 74,
-          height: 68,
+          width: 68,
+          height: 62,
           child: Align(
             alignment: Alignment.topCenter,
             child: AnimatedContainer(
@@ -309,18 +307,18 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
               ),
               width: width,
               height: height,
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
                 color: NuvoColors.actionBlue,
                 borderRadius: BorderRadius.circular(NuvoRadii.button),
-                border: Border.all(color: NuvoColors.navy, width: 2),
-                boxShadow: _pressed ? null : AppShadows.hardSmall,
+                border: Border.all(color: NuvoColors.navy, width: 1.5),
+                boxShadow: _pressed ? null : AppShadows.softSubtle,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(widget.item.icon, size: 25, color: NuvoColors.white),
-                  const SizedBox(height: 4),
+                  Icon(widget.item.icon, size: 22, color: NuvoColors.white),
+                  const SizedBox(height: 3),
                   Text(
                     widget.item.label,
                     maxLines: 1,
