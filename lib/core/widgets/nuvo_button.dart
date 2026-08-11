@@ -157,6 +157,7 @@ class NuvoPrimaryButton extends StatelessWidget {
     this.expand = false,
     this.loading = false,
     this.small = false,
+    this.flat = false,
   });
 
   final String label;
@@ -167,6 +168,11 @@ class NuvoPrimaryButton extends StatelessWidget {
   final bool loading;
   final bool small;
 
+  /// When true, renders without hard-offset shadow. Use on dark surfaces
+  /// (e.g. inside the featured card) or when the button is structurally
+  /// secondary and should not compete with the screen's hero depth.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
@@ -175,7 +181,7 @@ class NuvoPrimaryButton extends StatelessWidget {
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: enabled ? NuvoColors.actionBlue : NuvoColors.disabledSurface,
       borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
-      shadows: enabled ? AppShadows.hardMedium : null,
+      shadows: enabled && !flat ? AppShadows.hardMedium : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -213,6 +219,7 @@ class NuvoOutlineButton extends StatelessWidget {
     this.leadingWidget,
     this.expand = false,
     this.small = false,
+    this.flat = false,
   });
 
   final String label;
@@ -222,6 +229,9 @@ class NuvoOutlineButton extends StatelessWidget {
   final bool expand;
   final bool small;
 
+  /// When true, renders without hard-offset shadow.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
@@ -230,7 +240,7 @@ class NuvoOutlineButton extends StatelessWidget {
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoColors.surface,
       borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
-      shadows: enabled ? AppShadows.hardSmall : null,
+      shadows: enabled && !flat ? AppShadows.hardSmall : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
