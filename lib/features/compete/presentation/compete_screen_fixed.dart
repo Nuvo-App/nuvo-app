@@ -78,7 +78,9 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
           onRefresh: () =>
               ref.read(raceControllerProvider.notifier).loadRaces(),
           child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             slivers: [
               SliverToBoxAdapter(
                 child: _CompactHeader(
@@ -199,7 +201,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     final progressLabel = raceProgressLabel(race, myPart);
 
     final avatars = _collectAvatars([race], uid);
-    final racerStack = NuvoRacerStack(
+    final racerStack = RacePeople(
       avatars: avatars,
       total: race.participantCount,
       size: 28,
@@ -427,12 +429,16 @@ class _CappedRaceList extends StatelessWidget {
     final pct = raceProgressPercent(race, myPart);
     final rank = rankForUser(race, userId);
     final avatars = _rowAvatars(race, userId);
+    final activity = raceActivityTitle(race);
+    final progressLabel = raceProgressLabel(race, myPart);
 
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
+      movementLabel: activity,
+      progressLabel: progressLabel,
+      progressPercent: pct,
       rank: rank ?? index,
       participantCount: race.participantCount,
-      progressPercent: pct,
       avatars: avatars,
       onTap: () => onOpen(race),
     );
@@ -499,6 +505,8 @@ class _SummaryExpansionList extends StatelessWidget {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
     final rank = rankForUser(race, userId);
+    final activity = raceActivityTitle(race);
+    final progressLabel = raceProgressLabel(race, myPart);
     final avatars = race.participants.where((p) => p.userId != userId).map((p) {
       final name = p.displayName.trim();
       final initials = name.isEmpty
@@ -514,9 +522,11 @@ class _SummaryExpansionList extends StatelessWidget {
 
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
+      movementLabel: activity,
+      progressLabel: progressLabel,
+      progressPercent: pct,
       rank: rank ?? index,
       participantCount: race.participantCount,
-      progressPercent: pct,
       avatars: avatars,
       onTap: () => onOpen(race),
     );
@@ -563,6 +573,7 @@ class _FinishedExpansionList extends StatelessWidget {
 
   Widget _buildRow(Race race) {
     final rank = rankForUser(race, userId);
+    final activity = raceActivityTitle(race);
     final avatars = race.participants.where((p) => p.userId != userId).map((p) {
       final name = p.displayName.trim();
       final initials = name.isEmpty
@@ -578,6 +589,7 @@ class _FinishedExpansionList extends StatelessWidget {
 
     return NuvoFinishedRaceRow(
       raceTitle: race.displayTitle,
+      movementLabel: activity,
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
@@ -632,9 +644,14 @@ class _QuickStarts extends StatelessWidget {
       children: [
         Text('Quick starts', style: AppTextStyles.sectionTitle),
         const SizedBox(height: NuvoSpacing.sm),
-        Wrap(
-          spacing: NuvoSpacing.sm,
-          runSpacing: NuvoSpacing.sm,
+        // Deliberate 2-column grid — not an accidental wrap.
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: NuvoSpacing.sm,
+          crossAxisSpacing: NuvoSpacing.sm,
+          childAspectRatio: 2.4,
           children: [
             for (final item in _items)
               NuvoQuickStart(

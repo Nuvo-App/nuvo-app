@@ -9,6 +9,29 @@ import '../theme/app_text_styles.dart';
 const _kTrackNavy = Color(0xFF071B35);
 const _kTrackActiveBlue = Color(0xFF2F7CFF);
 
+/// Bottom navigation for Nuvo.
+///
+/// GEOMETRY CONTRACT:
+///   _dockHeight         — visible dock container height
+///   _dockPadding        — internal vertical padding
+///   _dockInternal       — usable height inside dock (= _dockHeight - _dockPadding*2)
+///   _verifyRise         — how far Verify extends above the dock top edge
+///   _topReserve         — space above dock for Verify rise + breathing
+///   _bottomGap*         — gap between dock bottom and screen bottom (excl. safe area)
+///   _contentGap         — extra breathing room between dock top and page content
+///
+/// Every scrollable page MUST use [NuvoBottomNav.bottomPadding] as its bottom
+/// inset. This guarantees no content is ever obscured by the dock.
+///
+/// CONTENT FIT MATH (normal button):
+///   icon(20) + spacing(2) + label(10) + padding(4*2) = 40px
+///   Must be <= _dockInternal (46px) → 6px headroom ✓
+///
+/// CONTENT FIT MATH (Verify button):
+///   icon(18) + spacing(2) + label(10) + padding(4*2) = 38px
+///   AnimatedContainer height = 46px → fits in _dockInternal
+///   Verify SizedBox = _dockInternal + _verifyRise = 46 + 8 = 54px
+///   Aligned topCenter → rises 8px above dock, 0px below
 class NuvoBottomNav extends StatelessWidget {
   const NuvoBottomNav({
     super.key,
@@ -24,15 +47,23 @@ class NuvoBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  static const double _surfaceHeight = 56;
-  static const double _darkHeight = 56;
+  // ── Geometry contract ──────────────────────────────────────────────────────
+  static const double _dockHeight = 60;
+  static const double _dockPadding = 7;
+  static const double _dockInternal = _dockHeight - _dockPadding * 2; // 46
+  static const double _verifyRise = 8;
+  static const double _topReserve =
+      _verifyRise + 4; // 12 — Verify rise + breathing
+  static const double _bottomGapNoInset = 10;
+  static const double _bottomGapWithInset = 8;
+  static const double _contentGap = 8;
   static const double _horizontalMargin = 16;
-  static const double _topReserve = 4;
-  static const double _bottomGapNoInset = 8;
-  static const double _bottomGapWithInset = 6;
-  static const double _shadowReserve = 0;
-  static const double _contentGap = 6;
 
+  // Dark mode (Arena) uses a simpler full-width bar.
+  static const double _darkHeight = 60;
+
+  /// The bottom padding every scrollable page must use.
+  /// Ensures content can scroll completely above the dock.
   static double bottomPadding(BuildContext context) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     return _occupiedHeight(safeBottom) + _contentGap;
@@ -40,11 +71,7 @@ class NuvoBottomNav extends StatelessWidget {
 
   static double _occupiedHeight(double safeBottom) {
     final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
-    return _topReserve +
-        _surfaceHeight +
-        bottomGap +
-        safeBottom +
-        _shadowReserve;
+    return _topReserve + _dockHeight + bottomGap + safeBottom;
   }
 
   static const _items = [
@@ -59,7 +86,6 @@ class NuvoBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
-    final dockBottom = safeBottom + bottomGap + _shadowReserve;
 
     if (isDark) {
       return Container(
@@ -89,20 +115,24 @@ class NuvoBottomNav extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: Container(
-          height: _surfaceHeight,
+          height: _dockHeight,
           margin: EdgeInsets.fromLTRB(
             _horizontalMargin,
             0,
             _horizontalMargin,
-            dockBottom,
+            bottomGap + safeBottom,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: _dockPadding,
+          ),
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.lg),
             border: Border.all(color: NuvoColors.divider, width: 1),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               for (var index = 0; index < _items.length; index++)
                 _NavButton(
@@ -152,7 +182,8 @@ class _NavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isPrimary && !isDark) {
       return Expanded(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: _VerifyNavButton(item: item, selected: selected, onTap: onTap),
         ),
       );
@@ -176,14 +207,7 @@ class _NavButton extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              constraints: BoxConstraints(
-                minWidth: isDark ? 44 : 44,
-                minHeight: isDark ? 36 : 42,
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: isDark ? 4 : 5,
-                vertical: isDark ? 4 : 5,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               decoration: isDark
                   ? null
                   : BoxDecoration(
@@ -193,8 +217,8 @@ class _NavButton extends StatelessWidget {
                       borderRadius: BorderRadius.circular(NuvoRadii.md),
                       border: selected
                           ? Border.all(
-                              color: NuvoColors.blue.withValues(alpha: 0.18),
-                              width: 1.25,
+                              color: NuvoColors.blue.withValues(alpha: 0.15),
+                              width: 1,
                             )
                           : null,
                     ),
@@ -204,8 +228,8 @@ class _NavButton extends StatelessWidget {
                 children: [
                   if (item.asset != null && isDark)
                     SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       child: ClipRect(
                         child: OverflowBox(
                           maxWidth: 48,
@@ -222,13 +246,13 @@ class _NavButton extends StatelessWidget {
                   else if (item.asset != null)
                     Image.asset(
                       item.asset!,
-                      height: 24,
+                      height: 20,
                       color: labelColor,
                       colorBlendMode: BlendMode.srcIn,
                     )
                   else
-                    Icon(item.icon!, size: isDark ? 20 : 22, color: labelColor),
-                  SizedBox(height: isDark ? 2 : 3),
+                    Icon(item.icon!, size: isDark ? 20 : 20, color: labelColor),
+                  const SizedBox(height: 2),
                   Text(
                     item.label,
                     maxLines: 1,
@@ -236,7 +260,7 @@ class _NavButton extends StatelessWidget {
                     textScaler: const TextScaler.linear(1),
                     style: AppTextStyles.labelSmall.copyWith(
                       color: labelColor,
-                      fontSize: isDark ? 10 : 11,
+                      fontSize: isDark ? 10 : 10,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                       height: 1,
                     ),
@@ -277,8 +301,11 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
   @override
   Widget build(BuildContext context) {
     final pressedOffset = _pressed ? 1.5 : 0.0;
-    final width = widget.selected ? 52.0 : 50.0;
-    final height = widget.selected ? 48.0 : 46.0;
+    // AnimatedContainer fits inside dock internal height.
+    // SizedBox is taller by _verifyRise so the button rises above the dock.
+    final containerHeight = NuvoBottomNav._dockInternal; // 46
+    final sizedBoxHeight =
+        NuvoBottomNav._dockInternal + NuvoBottomNav._verifyRise; // 54
 
     return Semantics(
       selected: widget.selected,
@@ -291,8 +318,8 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         child: SizedBox(
-          width: 58,
-          height: 52,
+          width: 52,
+          height: sizedBoxHeight,
           child: Align(
             alignment: Alignment.topCenter,
             child: AnimatedContainer(
@@ -303,8 +330,8 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
                 pressedOffset,
                 0,
               ),
-              width: width,
-              height: height,
+              width: 48,
+              height: containerHeight,
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               decoration: BoxDecoration(
                 color: NuvoColors.actionBlue,
@@ -323,7 +350,7 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
                     textScaler: const TextScaler.linear(1),
                     style: AppTextStyles.labelSmall.copyWith(
                       color: NuvoColors.white,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w800,
                       height: 1,
                     ),

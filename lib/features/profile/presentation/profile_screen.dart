@@ -7,17 +7,15 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
-import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_icons.dart';
+import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
-import '../../races/domain/motion_activity_catalog.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 
-const _kProfileBorder = NuvoColors.border;
 const _kProfileTextMuted = NuvoColors.muted;
 
 const _kPrivacyUrl = 'https://getnuvo.net/privacy';
@@ -452,16 +450,12 @@ class _ProfileRaceGroup extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < races.length; i++) ...[
-            _ProfileRaceRow(
-              race: races[i],
-              userId: userId,
-              onTap: () => context.push('/race/${races[i].id}'),
-            ),
+            _buildRow(context, races[i]),
             if (i < races.length - 1)
               const Divider(
                 height: 1,
                 thickness: 1,
-                indent: 64,
+                indent: 54,
                 color: NuvoColors.divider,
               ),
           ],
@@ -469,194 +463,50 @@ class _ProfileRaceGroup extends StatelessWidget {
       ),
     );
   }
-}
 
-// ── Profile race row ──────────────────────────────────────────────────────────
-
-class _ProfileRaceRow extends StatelessWidget {
-  const _ProfileRaceRow({required this.race, required this.onTap, this.userId});
-
-  final Race race;
-  final String? userId;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildRow(BuildContext context, Race race) {
     final uid = userId;
     final myPart = uid != null ? race.participantFor(uid) : null;
     final pct = raceProgressPercent(race, myPart);
-    final isComplete = raceIsCompleted(race);
-    final isActive = raceIsActive(race);
     final rank = rankForUser(race, userId);
-    final movementIcon = _movementIconData(
-      race.activityId ?? race.aiActivityType,
-    );
-    final lastAt = _lastActivityAt(race, userId);
-    final racerCount = race.participantCount;
-    final isCameraVerified = race.isAiMotionRace;
+    final activity = raceActivityTitle(race);
+    final progressLabel = raceProgressLabel(race, myPart);
+    final isComplete = raceIsCompleted(race);
 
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 78),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        color: isComplete
-            ? NuvoColors.success.withValues(alpha: 0.05)
-            : isActive
-            ? NuvoColors.surface
-            : NuvoColors.panel,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title row with movement icon and rank/status
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (movementIcon != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.icyBlue,
-                      borderRadius: BorderRadius.circular(NuvoRadii.badge),
-                    ),
-                    child: Icon(movementIcon, color: NuvoColors.blue, size: 18),
-                  ),
-                  const SizedBox(width: NuvoSpacing.md),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        race.displayTitle,
-                        style: AppTextStyles.titleMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _metaLine(
-                          scoreLabel: raceProgressLabel(race, myPart),
-                          isComplete: isComplete,
-                          racerCount: racerCount,
-                          isCameraVerified: isCameraVerified,
-                          lastAt: lastAt,
-                        ),
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                if (rank != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isComplete
-                          ? NuvoColors.success.withValues(alpha: 0.10)
-                          : NuvoColors.navy.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                    ),
-                    child: CountUpText(
-                      value: rank,
-                      prefix: '#',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: isComplete
-                            ? NuvoColors.success
-                            : NuvoColors.navy,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? NuvoColors.blue.withValues(alpha: 0.10)
-                          : _kProfileBorder.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                    ),
-                    child: Text(
-                      isActive ? 'Active' : _statusLabel(race.status),
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: isActive ? NuvoColors.blue : NuvoColors.muted,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(NuvoRadii.pill),
-              child: LinearProgressIndicator(
-                value: (pct / 100).clamp(0.0, 1.0),
-                minHeight: 3,
-                color: isComplete ? NuvoColors.success : NuvoColors.blue,
-                backgroundColor: NuvoColors.trackBg,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
 
-  static IconData? _movementIconData(String? aiActivityType) {
-    return motionActivityForBackendValue(aiActivityType)?.icon;
-  }
-
-  static String? _lastActivityAt(Race race, String? userId) {
-    if (race.recentProofs.isEmpty) return null;
-    final myProofs = userId != null
-        ? race.recentProofs.where((p) => p.userId == userId).toList()
-        : race.recentProofs;
-    if (myProofs.isEmpty) return null;
-    myProofs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return myProofs.first.createdAt;
-  }
-
-  static String _metaLine({
-    required String scoreLabel,
-    required bool isComplete,
-    required int racerCount,
-    required bool isCameraVerified,
-    required String? lastAt,
-  }) {
-    final parts = <String>[
-      if (isComplete) 'Finished' else scoreLabel,
-      if (racerCount > 1) '$racerCount racers' else 'Solo',
-      if (isCameraVerified) 'Camera verified',
-    ];
-    if (lastAt != null) {
-      final ago = _timeAgo(lastAt);
-      if (ago.isNotEmpty) parts.add(ago);
+    if (isComplete) {
+      return RaceResultRow(
+        raceTitle: race.displayTitle,
+        movementLabel: activity,
+        rank: rank,
+        participantCount: race.participantCount,
+        avatars: avatars,
+        onTap: () => context.push('/race/${race.id}'),
+      );
     }
-    return parts.join(' · ');
-  }
 
-  static String _timeAgo(String iso) {
-    try {
-      final dt = DateTime.parse(iso).toLocal();
-      final diff = DateTime.now().difference(dt);
-      if (diff.inSeconds < 60) return 'just now';
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      return '${diff.inDays}d ago';
-    } catch (_) {
-      return '';
-    }
+    return RaceRow(
+      raceTitle: race.displayTitle,
+      movementLabel: activity,
+      progressLabel: progressLabel,
+      progressPercent: pct,
+      rank: rank,
+      participantCount: race.participantCount,
+      avatars: avatars,
+      onTap: () => context.push('/race/${race.id}'),
+    );
   }
 }
 
@@ -746,12 +596,3 @@ class _SectionLabel extends StatelessWidget {
     );
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-String _statusLabel(String status) => switch (status) {
-  'completed' || 'complete' || 'finished' => 'Finished',
-  'archived' => 'Archived',
-  'cancelled' => 'Cancelled',
-  _ => status.replaceAll('_', ' '),
-};

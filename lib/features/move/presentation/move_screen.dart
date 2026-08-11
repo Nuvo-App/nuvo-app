@@ -6,12 +6,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
-import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
@@ -91,105 +88,91 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: ListView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            22,
+            32,
+            22,
+            NuvoBottomNav.bottomPadding(context),
+          ),
+          children: [
+            // ── Compact header ────────────────────────────────────────
+            _CompactVerifyHeader(readyCount: readyRaces.length),
+            const SizedBox(height: NuvoSpacing.xl),
+
+            // ── Loading / error / empty ───────────────────────────────
+            if (raceState.loading &&
+                readyRaces.isEmpty &&
+                completedRaces.isEmpty)
+              const Center(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    22,
-                    32,
-                    22,
-                    NuvoBottomNav.bottomPadding(context),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Compact header ────────────────────────────────────────
-                      _CompactVerifyHeader(readyCount: readyRaces.length),
-                      const SizedBox(height: NuvoSpacing.xl),
-
-                      // ── Loading / error / empty ───────────────────────────────
-                      if (raceState.loading &&
-                          readyRaces.isEmpty &&
-                          completedRaces.isEmpty)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 32),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: NuvoColors.blue,
-                            ),
-                          ),
-                        )
-                      else if (raceState.error != null &&
-                          readyRaces.isEmpty &&
-                          completedRaces.isEmpty)
-                        NuvoErrorState(
-                          message: "Couldn't load your races.",
-                          onRetry: () => ref
-                              .read(raceControllerProvider.notifier)
-                              .loadRaces(),
-                        )
-                      else if (allEmpty)
-                        _EmptyState(onStart: () => context.push('/races/new'))
-                      // ── Segmented control + segment content ───────────────────
-                      else ...[
-                        _SegmentedControl(
-                          segment: _segment,
-                          readyCount: readyRaces.length,
-                          completedCount: completedRaces.length,
-                          recentCount: recentMoves.length,
-                          onChanged: (s) => setState(() {
-                            _segment = s;
-                            _readyExpanded = false;
-                            _completedExpanded = false;
-                            _recentExpanded = false;
-                          }),
-                        ),
-                        const SizedBox(height: NuvoSpacing.xl),
-
-                        switch (_segment) {
-                          _VerifySegment.ready => _ReadySegment(
-                            races: readyRaces,
-                            userId: uid,
-                            expanded: _readyExpanded,
-                            cap: _readyCap,
-                            onToggleExpand: () => setState(
-                              () => _readyExpanded = !_readyExpanded,
-                            ),
-                            onVerify: openVerification,
-                            onStartRace: () => context.push('/races/new'),
-                          ),
-                          _VerifySegment.completed => _CompletedSegment(
-                            races: completedRaces,
-                            userId: uid,
-                            expanded: _completedExpanded,
-                            cap: _completedCap,
-                            onToggleExpand: () => setState(
-                              () => _completedExpanded = !_completedExpanded,
-                            ),
-                            onOpen: (race) => context.push('/race/${race.id}'),
-                          ),
-                          _VerifySegment.recent => _RecentSegment(
-                            entries: recentMoves,
-                            expanded: _recentExpanded,
-                            cap: _recentCap,
-                            onToggleExpand: () => setState(
-                              () => _recentExpanded = !_recentExpanded,
-                            ),
-                            onOpen: (race) => context.push('/race/${race.id}'),
-                          ),
-                        },
-                      ],
-                    ],
+                  padding: EdgeInsets.symmetric(vertical: 32),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: NuvoColors.blue,
                   ),
                 ),
+              )
+            else if (raceState.error != null &&
+                readyRaces.isEmpty &&
+                completedRaces.isEmpty)
+              NuvoErrorState(
+                message: "Couldn't load your races.",
+                onRetry: () =>
+                    ref.read(raceControllerProvider.notifier).loadRaces(),
+              )
+            else if (allEmpty)
+              _EmptyState(onStart: () => context.push('/races/new'))
+            // ── Segmented control + segment content ───────────────────
+            else ...[
+              _SegmentedControl(
+                segment: _segment,
+                readyCount: readyRaces.length,
+                completedCount: completedRaces.length,
+                recentCount: recentMoves.length,
+                onChanged: (s) => setState(() {
+                  _segment = s;
+                  _readyExpanded = false;
+                  _completedExpanded = false;
+                  _recentExpanded = false;
+                }),
               ),
-            );
-          },
+              const SizedBox(height: NuvoSpacing.xl),
+
+              switch (_segment) {
+                _VerifySegment.ready => _ReadySegment(
+                  races: readyRaces,
+                  userId: uid,
+                  expanded: _readyExpanded,
+                  cap: _readyCap,
+                  onToggleExpand: () =>
+                      setState(() => _readyExpanded = !_readyExpanded),
+                  onVerify: openVerification,
+                  onStartRace: () => context.push('/races/new'),
+                ),
+                _VerifySegment.completed => _CompletedSegment(
+                  races: completedRaces,
+                  userId: uid,
+                  expanded: _completedExpanded,
+                  cap: _completedCap,
+                  onToggleExpand: () =>
+                      setState(() => _completedExpanded = !_completedExpanded),
+                  onOpen: (race) => context.push('/race/${race.id}'),
+                ),
+                _VerifySegment.recent => _RecentSegment(
+                  entries: recentMoves,
+                  expanded: _recentExpanded,
+                  cap: _recentCap,
+                  onToggleExpand: () =>
+                      setState(() => _recentExpanded = !_recentExpanded),
+                  onOpen: (race) => context.push('/race/${race.id}'),
+                ),
+              },
+            ],
+          ],
         ),
       ),
     );
@@ -455,70 +438,43 @@ class _UpNextCard extends StatelessWidget {
     final pct = raceProgressPercent(race, myPart);
     final activity = raceActivityTitle(race);
     final target = raceTargetLabel(race);
+    final progressLabel = raceProgressLabel(race, myPart);
+    final rank = rankForUser(race, userId);
 
-    final metaLine =
-        '${race.participantCount} ${race.participantCount == 1 ? 'racer' : 'racers'} · $pct%';
+    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+    return RaceHero(
+      activityLabel: activity,
+      targetLabel: target,
+      raceTitle: race.displayTitle,
+      progressPercent: pct,
+      progressLabel: progressLabel,
+      racerStack: RacePeople(
+        avatars: avatars,
+        total: race.participantCount,
+        size: 28,
+        max: 4,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$activity · $target',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.blue,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            race.displayTitle,
-            style: AppTextStyles.featuredRaceTitle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            metaLine,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: NuvoColors.white.withValues(alpha: 0.65),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: NuvoSpacing.md),
-          NuvoRaceProgressLane(
-            progressPercent: pct,
-            progressLabel: '$pct%',
-            targetLabel: target,
-            onDark: true,
-            trackHeight: 6,
-            dotDiameter: 12,
-          ),
-          const SizedBox(height: NuvoSpacing.md),
-          NuvoPrimaryButton(
-            label: 'Start verification',
-            icon: Icons.camera_alt_rounded,
-            expand: true,
-            small: true,
-            flat: true,
-            onPressed: onVerify,
-          ),
-        ],
-      ),
+      rank: rank,
+      onOpen: onVerify,
+      actionLabel: 'Start verification',
+      ctaIcon: Icons.camera_alt_rounded,
     );
   }
 }
 
-// ── Verify race row (quiet, tappable → verification flow) ─────────────────────
+// ── Verify race row — uses canonical RaceRow with verify-specific onTap ──────
 
 class _VerifyRaceRow extends StatelessWidget {
   const _VerifyRaceRow({required this.race, required this.onTap, this.userId});
@@ -532,69 +488,30 @@ class _VerifyRaceRow extends StatelessWidget {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
     final activity = raceActivityTitle(race);
+    final progressLabel = raceProgressLabel(race, myPart);
+    final rank = rankForUser(race, userId);
+    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
 
-    return Semantics(
-      button: true,
-      label: 'Verify ${race.displayTitle}',
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: NuvoColors.panel,
-                  borderRadius: BorderRadius.circular(NuvoRadii.badge),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.camera_alt_outlined,
-                  color: NuvoColors.navy,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      race.displayTitle,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$activity · $pct%',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        fontSize: 12,
-                        color: NuvoColors.textMuted,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              const NuvoIcon(
-                NuvoIconType.arrow,
-                color: NuvoColors.textMuted,
-                size: 14,
-              ),
-            ],
-          ),
-        ),
-      ),
+    return RaceRow(
+      raceTitle: race.displayTitle,
+      movementLabel: activity,
+      progressLabel: progressLabel,
+      progressPercent: pct,
+      rank: rank,
+      participantCount: race.participantCount,
+      avatars: avatars,
+      onTap: onTap,
     );
   }
 }
@@ -704,71 +621,26 @@ class _CompletedRaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final rank = rankForUser(race, userId);
     final activity = raceActivityTitle(race);
+    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+      final name = p.displayName.trim();
+      final initials = name.isEmpty
+          ? '?'
+          : name
+                .split(RegExp(r'\s+'))
+                .where((w) => w.isNotEmpty)
+                .take(2)
+                .map((w) => w[0].toUpperCase())
+                .join();
+      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+    }).toList();
 
-    return Semantics(
-      button: true,
-      label: race.displayTitle,
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: NuvoColors.success.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(NuvoRadii.badge),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: NuvoColors.success,
-                  size: 16,
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      race.displayTitle,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      rank != null
-                          ? '$activity · Finished #${_ordinal(rank)}'
-                          : '$activity · Finished',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        fontSize: 12,
-                        color: NuvoColors.textMuted,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              const NuvoIcon(
-                NuvoIconType.arrow,
-                color: NuvoColors.textMuted,
-                size: 14,
-              ),
-            ],
-          ),
-        ),
-      ),
+    return RaceResultRow(
+      raceTitle: race.displayTitle,
+      movementLabel: activity,
+      rank: rank,
+      participantCount: race.participantCount,
+      avatars: avatars,
+      onTap: onTap,
     );
   }
 }
@@ -904,90 +776,19 @@ class _RecentProofRow extends StatelessWidget {
         ? proof.displayName[0].toUpperCase()
         : '?';
 
-    return Semantics(
-      button: true,
-      label: '${proof.displayName} · ${race.displayTitle}',
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              NuvoAvatar(
-                initials: initial,
-                photoUrl: proof.profilePhotoUrl,
-                size: 34,
-                bgColor: NuvoColors.panel,
-                textColor: NuvoColors.navy,
-              ),
-              const SizedBox(width: NuvoSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      proof.displayName,
-                      style: AppTextStyles.titleMedium.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            race.displayTitle,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              fontSize: 12,
-                              color: NuvoColors.textMuted,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(NuvoRadii.xs),
-                          ),
-                          child: Text(
-                            statusLabel,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              fontSize: 10,
-                              color: statusColor,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (valueStr != null) ...[
-                const SizedBox(width: NuvoSpacing.sm),
-                Text(
-                  valueStr,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    fontSize: 12,
-                    color: NuvoColors.navy,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+    final activity = raceActivityTitle(race);
+
+    return RaceActivityRow(
+      raceTitle: race.displayTitle,
+      movementLabel: activity,
+      actorName: proof.displayName,
+      actorInitial: initial,
+      actorPhotoUrl: proof.profilePhotoUrl,
+      actorId: proof.userId,
+      valueStr: valueStr,
+      statusLabel: statusLabel,
+      statusColor: statusColor,
+      onTap: onTap,
     );
   }
 }
@@ -1089,21 +890,5 @@ class _EmptyState extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-String _ordinal(int n) {
-  if (n >= 11 && n <= 13) return '${n}th';
-  switch (n % 10) {
-    case 1:
-      return '${n}st';
-    case 2:
-      return '${n}nd';
-    case 3:
-      return '${n}rd';
-    default:
-      return '${n}th';
   }
 }

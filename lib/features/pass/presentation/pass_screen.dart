@@ -217,7 +217,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         child: RefreshIndicator(
           onRefresh: _fetch,
           child: ListView(
-            physics: const ClampingScrollPhysics(),
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             padding: EdgeInsets.fromLTRB(
               20,
               32,
