@@ -294,28 +294,26 @@ class _CompactHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Compete',
-                  style: AppTextStyles.headlineLarge.copyWith(
-                    color: NuvoColors.navy,
-                    fontSize: 30,
-                    letterSpacing: -0.8,
-                  ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Compete',
+                style: AppTextStyles.headlineLarge.copyWith(
+                  color: NuvoColors.navy,
+                  fontSize: 30,
+                  letterSpacing: -0.8,
                 ),
-                const SizedBox(height: NuvoSpacing.xs),
-                Text(
-                  summary,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              const SizedBox(height: NuvoSpacing.xs),
+              Text(
+                summary,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(width: NuvoSpacing.md),
           Expanded(
@@ -384,11 +382,18 @@ class _CappedRaceList extends StatelessWidget {
             if (hasMore)
               GestureDetector(
                 onTap: onToggleExpand,
-                child: Text(
-                  expanded ? 'Show less' : 'See all',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.blue,
-                    fontWeight: FontWeight.w700,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    expanded ? 'Show less' : 'See all',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
