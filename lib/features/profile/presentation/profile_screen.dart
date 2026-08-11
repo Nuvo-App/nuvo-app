@@ -130,9 +130,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       PressableScale(
                         onTap: () => context.push('/profile/edit'),
                         child: Container(
+                          constraints: const BoxConstraints(minHeight: 36),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
-                            vertical: 7,
+                            vertical: 8,
                           ),
                           decoration: BoxDecoration(
                             color: NuvoColors.panel,
@@ -212,7 +213,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   ),
                                 ),
                               ],
-                              const SizedBox(height: 8),
+                              const SizedBox(height: NuvoSpacing.sm),
                               Row(
                                 children: [
                                   const Icon(
@@ -221,11 +222,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     size: 16,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    'Member pass active',
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: NuvoColors.navy,
-                                      fontWeight: FontWeight.w700,
+                                  Flexible(
+                                    child: Text(
+                                      'Member pass active',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: NuvoColors.navy,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -269,7 +274,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
           // ── Profile body — page-colored background ────────────────────────
           SliverFillRemaining(
-            hasScrollBody: false,
+            hasScrollBody: true,
             child: Container(
               color: NuvoColors.page,
               padding: EdgeInsets.fromLTRB(
@@ -278,9 +283,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 20,
                 NuvoBottomNav.bottomPadding(context),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _profileBody(raceState, uid, context),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _profileBody(raceState, uid, context),
+                ),
               ),
             ),
           ),
@@ -304,7 +311,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return [
       // Race history
       const _SectionLabel(label: 'Race history'),
-      const SizedBox(height: 12),
+      const SizedBox(height: NuvoSpacing.md),
 
       if (raceState.loading && raceState.races.isEmpty)
         const Center(
@@ -324,13 +331,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       else ...[
         if (activeRaces.isNotEmpty) ...[
           const _SubsectionLabel(label: 'Active'),
-          const SizedBox(height: 8),
+          const SizedBox(height: NuvoSpacing.sm),
           _ProfileRaceGroup(races: activeRaces, userId: uid),
         ],
         if (finishedRaces.isNotEmpty) ...[
           SizedBox(height: activeRaces.isEmpty ? 0 : 14),
           const _SubsectionLabel(label: 'Finished'),
-          const SizedBox(height: 8),
+          const SizedBox(height: NuvoSpacing.sm),
           _ProfileRaceGroup(races: finishedRaces, userId: uid),
         ],
         if (otherRaces.isNotEmpty) ...[
@@ -338,29 +345,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             height: activeRaces.isEmpty && finishedRaces.isEmpty ? 0 : 14,
           ),
           const _SubsectionLabel(label: 'Other'),
-          const SizedBox(height: 8),
+          const SizedBox(height: NuvoSpacing.sm),
           _ProfileRaceGroup(races: otherRaces, userId: uid),
         ],
       ],
 
-      const SizedBox(height: 24),
+      const SizedBox(height: NuvoSpacing.xxl),
 
       // Account
       const _SectionLabel(label: 'Account'),
-      const SizedBox(height: 12),
+      const SizedBox(height: NuvoSpacing.md),
       _AccountRow(
         icon: Icons.badge_rounded,
         label: 'Member pass',
         onTap: () => context.go('/pass'),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: NuvoSpacing.sm),
       _AccountRow(
         icon: Icons.logout_rounded,
         label: 'Sign out',
         isDanger: true,
         onTap: () => ref.read(authControllerProvider.notifier).logout(),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: NuvoSpacing.sm),
       _AccountRow(
         icon: Icons.delete_outline_rounded,
         label: 'Delete account',
@@ -368,17 +375,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         isDestructiveLowEmphasis: true,
         onTap: _confirmDeleteAccount,
       ),
-      const SizedBox(height: 24),
+      const SizedBox(height: NuvoSpacing.xxl),
 
       // Legal
       const _SectionLabel(label: 'Legal'),
-      const SizedBox(height: 12),
+      const SizedBox(height: NuvoSpacing.md),
       _AccountRow(
         icon: Icons.policy_rounded,
         label: 'Privacy Policy',
         onTap: () => _openUrl(_kPrivacyUrl),
       ),
-      const SizedBox(height: 8),
+      const SizedBox(height: NuvoSpacing.sm),
       _AccountRow(
         icon: Icons.description_rounded,
         label: 'Terms of Service',
@@ -543,11 +550,11 @@ class _ProfileRaceRow extends StatelessWidget {
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: NuvoColors.icyBlue,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(NuvoRadii.badge),
                     ),
                     child: Icon(movementIcon, color: NuvoColors.blue, size: 18),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: NuvoSpacing.md),
                 ],
                 Expanded(
                   child: Column(
@@ -556,7 +563,7 @@ class _ProfileRaceRow extends StatelessWidget {
                       Text(
                         race.displayTitle,
                         style: AppTextStyles.titleMedium,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
@@ -571,7 +578,7 @@ class _ProfileRaceRow extends StatelessWidget {
                         style: AppTextStyles.bodySmall.copyWith(
                           color: NuvoColors.muted,
                         ),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -588,7 +595,7 @@ class _ProfileRaceRow extends StatelessWidget {
                       color: isComplete
                           ? NuvoColors.success.withValues(alpha: 0.10)
                           : NuvoColors.navy.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(NuvoRadii.pill),
                     ),
                     child: CountUpText(
                       value: rank,
@@ -611,7 +618,7 @@ class _ProfileRaceRow extends StatelessWidget {
                       color: isActive
                           ? NuvoColors.blue.withValues(alpha: 0.10)
                           : _kProfileBorder.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(NuvoRadii.pill),
                     ),
                     child: Text(
                       isActive ? 'Active' : _statusLabel(race.status),
@@ -720,7 +727,7 @@ class _AccountRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(NuvoRadii.card),
           border: NuvoBorders.quiet,
         ),
         child: Row(
@@ -730,11 +737,11 @@ class _AccountRow extends StatelessWidget {
               height: 32,
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(NuvoRadii.xs),
               ),
               child: Icon(icon, color: color, size: 18),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: NuvoSpacing.md),
             Expanded(
               child: Text(
                 label,
