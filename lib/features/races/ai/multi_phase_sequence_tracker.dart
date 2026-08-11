@@ -51,6 +51,7 @@ class MultiPhaseSequenceDefinition {
     required this.resetCondition,
     required this.requiredLandmarks,
     this.cooldownFrames = 3,
+    this.noiseGraceFrames = 0,
   });
 
   /// Ordered list of phases. Phase 0 is the start phase.
@@ -67,6 +68,12 @@ class MultiPhaseSequenceDefinition {
   /// Minimum frames to wait after completion before checking resetCondition.
   /// Prevents multiple completions from holding the final pose.
   final int cooldownFrames;
+
+  /// Number of non-matching (noise) frames tolerated before resetting
+  /// candidate frame progress. 0 = strict consecutive (original behavior).
+  /// 1 = allow 1 noise frame in a row without losing progress.
+  /// Set based on replay evidence of real-world noise patterns.
+  final int noiseGraceFrames;
 }
 
 /// State of the multi-phase sequence tracker.
@@ -128,6 +135,7 @@ class MultiPhaseSequenceTracker {
   int _candidateFrames = 0;
   int _completionCount = 0;
   int _cooldownFramesRemaining = 0;
+  int _noiseGraceRemaining = 0;
 
   /// Current state of the tracker.
   SequenceState get state => _state;
@@ -158,6 +166,7 @@ class MultiPhaseSequenceTracker {
     _candidateFrames = 0;
     _completionCount = 0;
     _cooldownFramesRemaining = 0;
+    _noiseGraceRemaining = 0;
   }
 
   /// Processes a single pose frame and updates sequence progress.
@@ -238,17 +247,31 @@ class MultiPhaseSequenceTracker {
       }
     }
 
-    // Noise policy: no phase matches → stay, reset candidate frames.
+    // Noise policy: no phase matches → use grace if available, else reset.
     if (matchedPhaseIndex == -1) {
+      if (_noiseGraceRemaining > 0) {
+        _noiseGraceRemaining--;
+        // Grace: keep candidate frames, tolerate this noise frame.
+        return false;
+      }
       _candidateFrames = 0;
       return false;
     }
+    // Reset grace on a matching frame.
+    _noiseGraceRemaining = definition.noiseGraceFrames;
 
     // Wrong-phase policy: matched phase is neither current nor expected next.
-    // Reset to idle.
     // (expectedNext was computed above for priority matching.)
     if (matchedPhaseIndex != _currentPhaseIndex &&
         matchedPhaseIndex != expectedNext) {
+      // Backward match (earlier phase) — could be noise during a transient
+      // phase like AIRBORNE where ankle dropout causes a false match on an
+      // earlier phase (e.g., STANDING). Use grace if available.
+      if (matchedPhaseIndex < _currentPhaseIndex &&
+          _noiseGraceRemaining > 0) {
+        _noiseGraceRemaining--;
+        return false;
+      }
       _state = SequenceState.idle;
       _currentPhaseIndex = -1;
       _candidatePhaseIndex = -1;
