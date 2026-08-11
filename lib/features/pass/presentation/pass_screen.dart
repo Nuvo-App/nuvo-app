@@ -496,74 +496,47 @@ class _CrewHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
-          stops: [0, 0.42, 1],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          crewCount == 0
+              ? 'Your start line is open'
+              : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
+          style: AppTextStyles.labelMedium.copyWith(
+            color: NuvoColors.muted,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.divider,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            crewCount == 0
-                ? 'Your start line is open'
-                : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
-            style: AppTextStyles.labelMedium.copyWith(
-              color: NuvoColors.muted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Crew', style: AppTextStyles.screenTitle),
-                    const SizedBox(height: 5),
-                    Text(
-                      'Your crew for races.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NuvoPrimaryButton(
-                  label: 'Share pass',
-                  icon: Icons.ios_share_rounded,
-                  expand: true,
-                  small: true,
-                  onPressed: onShare,
-                ),
-              ),
-              const SizedBox(width: 10),
-              NuvoGhostButton(
-                label: 'Copy ID',
-                icon: Icons.copy_rounded,
+        const SizedBox(height: 6),
+        Text('Crew', style: AppTextStyles.screenTitle),
+        const SizedBox(height: 4),
+        Text(
+          'Your crew for races.',
+          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+        ),
+        const SizedBox(height: NuvoSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: NuvoPrimaryButton(
+                label: 'Share pass',
+                icon: Icons.ios_share_rounded,
+                expand: true,
                 small: true,
-                onPressed: onCopy,
+                onPressed: onShare,
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+            const SizedBox(width: 10),
+            NuvoGhostButton(
+              label: 'Copy ID',
+              icon: Icons.copy_rounded,
+              small: true,
+              onPressed: onCopy,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

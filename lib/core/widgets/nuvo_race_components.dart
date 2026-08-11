@@ -6,7 +6,6 @@ import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
 import 'nuvo_button.dart';
-import 'nuvo_icons.dart';
 import 'nuvo_shared_components.dart';
 import 'pressable_scale.dart';
 
@@ -80,7 +79,6 @@ class NuvoRacePositionBadge extends StatelessWidget {
       return SizedBox(width: size, height: size);
     }
 
-    final isPodium = rank! <= 3;
     final color = _placementColor(rank);
     final bgColor = onDark
         ? (color?.withValues(alpha: 0.22) ??
@@ -98,16 +96,14 @@ class NuvoRacePositionBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(NuvoRadii.badge),
       ),
       alignment: Alignment.center,
-      child: isPodium && size >= 28
-          ? NuvoIcon(NuvoIconType.crown, color: fgColor, size: size * 0.5)
-          : Text(
-              '$rank',
-              style: AppTextStyles.statLarge(
-                size * 0.42,
-                color: fgColor,
-                weight: FontWeight.w800,
-              ),
-            ),
+      child: Text(
+        '$rank',
+        style: AppTextStyles.statLarge(
+          size * 0.42,
+          color: fgColor,
+          weight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }

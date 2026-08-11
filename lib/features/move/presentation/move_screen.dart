@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
@@ -92,89 +91,105 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: ListView(
-          physics: const ClampingScrollPhysics(),
-          padding: EdgeInsets.fromLTRB(
-            22,
-            32,
-            22,
-            NuvoBottomNav.bottomPadding(context),
-          ),
-          children: [
-            // ── Compact header ────────────────────────────────────────────────
-            _CompactVerifyHeader(readyCount: readyRaces.length),
-            const SizedBox(height: NuvoSpacing.xl),
-
-            // ── Loading / error / empty ───────────────────────────────────────
-            if (raceState.loading &&
-                readyRaces.isEmpty &&
-                completedRaces.isEmpty)
-              const Center(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: NuvoColors.blue,
+                  padding: EdgeInsets.fromLTRB(
+                    22,
+                    32,
+                    22,
+                    NuvoBottomNav.bottomPadding(context),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Compact header ────────────────────────────────────────
+                      _CompactVerifyHeader(readyCount: readyRaces.length),
+                      const SizedBox(height: NuvoSpacing.xl),
+
+                      // ── Loading / error / empty ───────────────────────────────
+                      if (raceState.loading &&
+                          readyRaces.isEmpty &&
+                          completedRaces.isEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: NuvoColors.blue,
+                            ),
+                          ),
+                        )
+                      else if (raceState.error != null &&
+                          readyRaces.isEmpty &&
+                          completedRaces.isEmpty)
+                        NuvoErrorState(
+                          message: "Couldn't load your races.",
+                          onRetry: () => ref
+                              .read(raceControllerProvider.notifier)
+                              .loadRaces(),
+                        )
+                      else if (allEmpty)
+                        _EmptyState(onStart: () => context.push('/races/new'))
+                      // ── Segmented control + segment content ───────────────────
+                      else ...[
+                        _SegmentedControl(
+                          segment: _segment,
+                          readyCount: readyRaces.length,
+                          completedCount: completedRaces.length,
+                          recentCount: recentMoves.length,
+                          onChanged: (s) => setState(() {
+                            _segment = s;
+                            _readyExpanded = false;
+                            _completedExpanded = false;
+                            _recentExpanded = false;
+                          }),
+                        ),
+                        const SizedBox(height: NuvoSpacing.xl),
+
+                        switch (_segment) {
+                          _VerifySegment.ready => _ReadySegment(
+                            races: readyRaces,
+                            userId: uid,
+                            expanded: _readyExpanded,
+                            cap: _readyCap,
+                            onToggleExpand: () => setState(
+                              () => _readyExpanded = !_readyExpanded,
+                            ),
+                            onVerify: openVerification,
+                            onStartRace: () => context.push('/races/new'),
+                          ),
+                          _VerifySegment.completed => _CompletedSegment(
+                            races: completedRaces,
+                            userId: uid,
+                            expanded: _completedExpanded,
+                            cap: _completedCap,
+                            onToggleExpand: () => setState(
+                              () => _completedExpanded = !_completedExpanded,
+                            ),
+                            onOpen: (race) => context.push('/race/${race.id}'),
+                          ),
+                          _VerifySegment.recent => _RecentSegment(
+                            entries: recentMoves,
+                            expanded: _recentExpanded,
+                            cap: _recentCap,
+                            onToggleExpand: () => setState(
+                              () => _recentExpanded = !_recentExpanded,
+                            ),
+                            onOpen: (race) => context.push('/race/${race.id}'),
+                          ),
+                        },
+                      ],
+                    ],
                   ),
                 ),
-              )
-            else if (raceState.error != null &&
-                readyRaces.isEmpty &&
-                completedRaces.isEmpty)
-              NuvoErrorState(
-                message: "Couldn't load your races.",
-                onRetry: () =>
-                    ref.read(raceControllerProvider.notifier).loadRaces(),
-              )
-            else if (allEmpty)
-              _EmptyState(onStart: () => context.push('/races/new'))
-            // ── Segmented control + segment content ───────────────────────────
-            else ...[
-              _SegmentedControl(
-                segment: _segment,
-                readyCount: readyRaces.length,
-                completedCount: completedRaces.length,
-                recentCount: recentMoves.length,
-                onChanged: (s) => setState(() {
-                  _segment = s;
-                  _readyExpanded = false;
-                  _completedExpanded = false;
-                  _recentExpanded = false;
-                }),
               ),
-              const SizedBox(height: NuvoSpacing.xl),
-
-              switch (_segment) {
-                _VerifySegment.ready => _ReadySegment(
-                  races: readyRaces,
-                  userId: uid,
-                  expanded: _readyExpanded,
-                  cap: _readyCap,
-                  onToggleExpand: () =>
-                      setState(() => _readyExpanded = !_readyExpanded),
-                  onVerify: openVerification,
-                  onStartRace: () => context.push('/races/new'),
-                ),
-                _VerifySegment.completed => _CompletedSegment(
-                  races: completedRaces,
-                  userId: uid,
-                  expanded: _completedExpanded,
-                  cap: _completedCap,
-                  onToggleExpand: () =>
-                      setState(() => _completedExpanded = !_completedExpanded),
-                  onOpen: (race) => context.push('/race/${race.id}'),
-                ),
-                _VerifySegment.recent => _RecentSegment(
-                  entries: recentMoves,
-                  expanded: _recentExpanded,
-                  cap: _recentCap,
-                  onToggleExpand: () =>
-                      setState(() => _recentExpanded = !_recentExpanded),
-                  onOpen: (race) => context.push('/race/${race.id}'),
-                ),
-              },
-            ],
-          ],
+            );
+          },
         ),
       ),
     );
@@ -440,54 +455,37 @@ class _UpNextCard extends StatelessWidget {
     final pct = raceProgressPercent(race, myPart);
     final activity = raceActivityTitle(race);
     final target = raceTargetLabel(race);
-    final rank = rankForUser(race, userId);
 
-    final rankStr = rank != null ? ' · You\'re ${_ordinal(rank)}' : '';
     final metaLine =
-        '${race.participantCount} ${race.participantCount == 1 ? 'racer' : 'racers'}$rankStr · $pct%';
+        '${race.participantCount} ${race.participantCount == 1 ? 'racer' : 'racers'} · $pct%';
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        boxShadow: AppShadows.hardLarge,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Kicker + rank badge
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  '$activity · $target',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.blue,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (rank != null) ...[
-                const SizedBox(width: NuvoSpacing.sm),
-                NuvoRacePositionBadge(rank: rank, size: 32, onDark: true),
-              ],
-            ],
+          Text(
+            '$activity · $target',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.blue,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: NuvoSpacing.sm),
-          // Title
+          const SizedBox(height: 4),
           Text(
             race.displayTitle,
             style: AppTextStyles.featuredRaceTitle,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: NuvoSpacing.sm),
-          // Meta — racers + progress
+          const SizedBox(height: 4),
           Text(
             metaLine,
             style: AppTextStyles.bodySmall.copyWith(
@@ -496,18 +494,16 @@ class _UpNextCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: NuvoSpacing.lg),
-          // Progress lane
+          const SizedBox(height: NuvoSpacing.md),
           NuvoRaceProgressLane(
             progressPercent: pct,
             progressLabel: '$pct%',
             targetLabel: target,
             onDark: true,
-            trackHeight: 8,
-            dotDiameter: 16,
+            trackHeight: 6,
+            dotDiameter: 12,
           ),
-          const SizedBox(height: NuvoSpacing.lg),
-          // CTA — flat on dark surface
+          const SizedBox(height: NuvoSpacing.md),
           NuvoPrimaryButton(
             label: 'Start verification',
             icon: Icons.camera_alt_rounded,
