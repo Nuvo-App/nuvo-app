@@ -923,6 +923,21 @@ class NuvoRaceLane extends StatelessWidget {
                     borderRadius: BorderRadius.circular(trackHeight / 2),
                   ),
                 ),
+              // At 0%, show a start marker so the lane doesn't look empty.
+              if (progress == 0)
+                Positioned(
+                  left: 0,
+                  child: Container(
+                    width: dotDiameter,
+                    height: dotDiameter,
+                    decoration: BoxDecoration(
+                      color: onDark
+                          ? Colors.white.withValues(alpha: 0.25)
+                          : NuvoColors.border,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
               if (progress > 0 && progress < 1)
                 Positioned(
                   left: (fillWidth - dotDiameter / 2).clamp(

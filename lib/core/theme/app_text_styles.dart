@@ -113,6 +113,22 @@ abstract final class AppTextStyles {
   /// Section kicker / eyebrow. Alias of [eyebrow].
   static TextStyle get sectionKicker => eyebrow;
 
+  /// Readable structural section title (14/w700/navy).
+  /// Use for section headers like "Your races", "Up next", "Quick starts".
+  /// Not uppercase — communicates structure without dashboard feel.
+  static TextStyle get sectionTitle =>
+      _manrope(14, FontWeight.w700, color: NuvoColors.navy, height: 1.2);
+
+  /// Screen title (30/w800/navy, tight tracking).
+  /// Use for the primary title on every tab screen: Compete, Verify, Crew, Profile.
+  static TextStyle get screenTitle => _manrope(
+    30,
+    FontWeight.w800,
+    color: NuvoColors.navy,
+    height: 1.10,
+    letterSpacing: -0.8,
+  );
+
   /// Compact race row title (15/w700).
   static TextStyle get raceRowTitle =>
       _manrope(15, FontWeight.w700, height: 1.25);

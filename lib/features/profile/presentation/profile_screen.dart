@@ -100,8 +100,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : (progressValues.fold<int>(0, (s, v) => s + v) / progressValues.length)
               .round();
 
-    final safeTop = MediaQuery.paddingOf(context).top;
-
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: CustomScrollView(
@@ -111,21 +109,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Container(
-              padding: EdgeInsets.fromLTRB(22, safeTop + 20, 22, 22),
+              padding: const EdgeInsets.fromLTRB(22, 32, 22, 22),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Top row: label + edit
                   Row(
                     children: [
-                      Text(
-                        'Profile',
-                        style: AppTextStyles.headlineLarge.copyWith(
-                          color: NuvoColors.navy,
-                          fontSize: 32,
-                          letterSpacing: -0.9,
-                        ),
-                      ),
+                      Text('Profile', style: AppTextStyles.screenTitle),
                       const Spacer(),
                       PressableScale(
                         onTap: () => context.push('/profile/edit'),
@@ -167,14 +158,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         stops: [0, 0.42, 1],
                       ),
                       borderRadius: BorderRadius.circular(NuvoRadii.hero),
-                      border: Border.all(color: NuvoColors.navy, width: 2),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: NuvoColors.navy,
-                          blurRadius: 0,
-                          offset: Offset(4, 4),
-                        ),
-                      ],
+                      border: NuvoBorders.divider,
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
@@ -249,7 +233,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: NuvoColors.panel,
                       borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                      border: NuvoBorders.quiet,
+                      border: NuvoBorders.divider,
                     ),
                     child: Row(
                       children: [
@@ -478,8 +462,8 @@ class _ProfileRaceGroup extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border, width: 1.25),
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: NuvoBorders.divider,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -728,7 +712,7 @@ class _AccountRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.card),
-          border: NuvoBorders.quiet,
+          border: NuvoBorders.divider,
         ),
         child: Row(
           children: [

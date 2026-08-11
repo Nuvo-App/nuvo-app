@@ -7,7 +7,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/member_pass_card.dart';
@@ -218,9 +217,10 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         child: RefreshIndicator(
           onRefresh: _fetch,
           child: ListView(
+            physics: const ClampingScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               20,
-              18,
+              32,
               20,
               NuvoBottomNav.bottomPadding(context),
             ),
@@ -505,9 +505,8 @@ class _CrewHeader extends StatelessWidget {
           colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
           stops: [0, 0.42, 1],
         ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: AppShadows.surfaceShadow,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: NuvoBorders.divider,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,15 +528,7 @@ class _CrewHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Crew',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
-                        height: 1.05,
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
-                    ),
+                    Text('Crew', style: AppTextStyles.screenTitle),
                     const SizedBox(height: 5),
                     Text(
                       'Your crew for races.',
@@ -733,8 +724,8 @@ class _PeopleSurface extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border, width: 1.25),
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: NuvoBorders.divider,
       ),
       child: Column(children: children),
     );

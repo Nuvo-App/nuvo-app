@@ -287,7 +287,7 @@ class _CompactHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         NuvoSpacing.pageHorizontal,
-        NuvoSpacing.xl,
+        NuvoSpacing.xxxl,
         NuvoSpacing.pageHorizontal,
         0,
       ),
@@ -297,14 +297,7 @@ class _CompactHeader extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Compete',
-                style: AppTextStyles.headlineLarge.copyWith(
-                  color: NuvoColors.navy,
-                  fontSize: 30,
-                  letterSpacing: -0.8,
-                ),
-              ),
+              Text('Compete', style: AppTextStyles.screenTitle),
               const SizedBox(height: NuvoSpacing.xs),
               Text(
                 summary,
@@ -376,7 +369,7 @@ class _CappedRaceList extends StatelessWidget {
             Flexible(
               child: Text(
                 'Your races · ${races.length} active',
-                style: AppTextStyles.sectionKicker,
+                style: AppTextStyles.sectionTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -637,7 +630,7 @@ class _QuickStarts extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Quick starts', style: AppTextStyles.sectionKicker),
+        Text('Quick starts', style: AppTextStyles.sectionTitle),
         const SizedBox(height: NuvoSpacing.sm),
         Wrap(
           spacing: NuvoSpacing.sm,
