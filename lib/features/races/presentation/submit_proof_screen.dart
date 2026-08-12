@@ -55,7 +55,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           eligibility.movementType != null &&
           movementDemoForType(eligibility.movementType!) != null;
       if (eligibility.isCameraVerifiable && !hasPreVerifyDemo && mounted) {
-        context.go('/race/${widget.raceId}/proof/ai-motion');
+        context.push('/race/${widget.raceId}/proof/ai-motion');
         return;
       }
       setState(() {

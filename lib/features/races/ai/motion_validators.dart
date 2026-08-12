@@ -507,8 +507,7 @@ class PoseFeatureExtractor {
     return _angle(hip, knee, ankle);
   }
 
-  double hipToKneeRatio() =>
-      ((kneeY - hipY) / torsoHeight).clamp(-2.0, 3.0);
+  double hipToKneeRatio() => ((kneeY - hipY) / torsoHeight).clamp(-2.0, 3.0);
 
   double _averageY(String a, String b) =>
       (frame.point(a)!.y + frame.point(b)!.y) / 2;
@@ -647,6 +646,12 @@ enum _OpenClosedState { unknown, closed, open }
 class PushupsValidator extends _BaseValidator {
   PushupsValidator({required super.targetValue});
 
+  // Pose frames arrive asynchronously from the camera. Two corroborating
+  // frames catch a fast, real phase without allowing a single noisy frame to
+  // count as a rep.
+  static const _phaseStableFrames = 2;
+  static const _repCooldownFrames = 3;
+
   final RepCounterStateMachine _counter = RepCounterStateMachine();
   double? _topShoulderY;
   int _cooldownFrames = 0;
@@ -712,6 +717,13 @@ class PushupsValidator extends _BaseValidator {
       _counter.update(MovementPhase.unknown);
       return;
     }
+    if (!_isSafeFraming(frame)) {
+      lastFailureReason = 'pushup_framing_too_close';
+      _pushupFeedback =
+          'Move the camera back so your upper body fits in frame.';
+      _counter.update(MovementPhase.unknown);
+      return;
+    }
     if (!handsBelowShoulders) {
       lastFailureReason = 'hands_not_visible_for_pushup';
       _pushupFeedback = 'Keep your upper body in frame.';
@@ -738,11 +750,11 @@ class PushupsValidator extends _BaseValidator {
     if (_cooldownFrames > 0) _cooldownFrames--;
 
     if (elbowAngle > 150) {
-      _counter.update(MovementPhase.start);
+      _counter.update(MovementPhase.start, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Start when ready.';
     } else if (_cooldownFrames == 0 &&
         (elbowAngle < 112 || shoulderDrop > features.torsoHeight * 0.16)) {
-      _counter.update(MovementPhase.active);
+      _counter.update(MovementPhase.active, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Keep going.';
     } else {
       lastFailureReason = 'pushup_not_low_enough';
@@ -751,7 +763,7 @@ class PushupsValidator extends _BaseValidator {
     }
 
     if (_counter.count > previousCount) {
-      _cooldownFrames = 6;
+      _cooldownFrames = _repCooldownFrames;
       lastFailureReason = '';
       _topShoulderY = shoulderY;
     }
@@ -765,6 +777,30 @@ class PushupsValidator extends _BaseValidator {
     'symmetryError': _lastSymmetryError,
     'cooldownFrames': _cooldownFrames.toDouble(),
   };
+
+  bool _isSafeFraming(NuvoPoseFrame frame) {
+    final points = criticalPoints
+        .map(frame.point)
+        .whereType<NuvoPosePoint>()
+        .toList(growable: false);
+    if (points.length != criticalPoints.length) return false;
+
+    final minX = points.map((point) => point.x).reduce(math.min);
+    final maxX = points.map((point) => point.x).reduce(math.max);
+    final minY = points.map((point) => point.y).reduce(math.min);
+    final maxY = points.map((point) => point.y).reduce(math.max);
+
+    // A close/cropped camera view often produces a high-confidence pose, but
+    // the extremities are clipped. Reject that geometry before phase matching.
+    const edgeMargin = 0.04;
+    const maximumSpan = 0.88;
+    return minX >= edgeMargin &&
+        maxX <= 1 - edgeMargin &&
+        minY >= edgeMargin &&
+        maxY <= 1 - edgeMargin &&
+        maxX - minX <= maximumSpan &&
+        maxY - minY <= maximumSpan;
+  }
 }
 
 class JumpingJacksValidator extends _BaseValidator {
@@ -1306,7 +1342,8 @@ class MultiPhaseSequenceValidator extends _BaseValidator {
   /// [AirborneStateTracker]. Called once in the constructor.
   final List<MultiPhaseSequenceDefinition> Function(
     AirborneStateTracker airborne,
-  ) definitions;
+  )
+  definitions;
 
   final AirborneStateTracker _airborne;
 
@@ -1318,8 +1355,7 @@ class MultiPhaseSequenceValidator extends _BaseValidator {
   late List<MultiPhaseSequenceTracker> _trackers;
 
   @override
-  int get currentValue =>
-      math.min(_totalCompletions, targetValue);
+  int get currentValue => math.min(_totalCompletions, targetValue);
 
   int get _totalCompletions =>
       _trackers.fold(0, (sum, t) => sum + t.completionCount);
@@ -1481,22 +1517,28 @@ class ConfigurableRepValidator extends _BaseValidator {
     // include knees (e.g. jumping jacks) don't crash when knees are absent.
     // These never influence the counting logic below.
     if (frame.hasPoints(const [
-      'leftKnee', 'rightKnee', 'leftHip', 'rightHip',
-      'leftShoulder', 'rightShoulder',
+      'leftKnee',
+      'rightKnee',
+      'leftHip',
+      'rightHip',
+      'leftShoulder',
+      'rightShoulder',
     ])) {
       _lastHipToKneeRatio = features.hipToKneeRatio();
     }
     if (frame.hasPoints(const [
-      'leftAnkle', 'rightAnkle', 'leftShoulder', 'rightShoulder', 'leftHip', 'rightHip',
+      'leftAnkle',
+      'rightAnkle',
+      'leftShoulder',
+      'rightShoulder',
+      'leftHip',
+      'rightHip',
     ])) {
       _lastAnkleWidthToBodyWidth = features.ankleWidth / features.bodyWidth;
     }
     final phase = _measureState(features);
     _lastPhase = phase;
-    _counter.update(
-      phase,
-      stableFrames: definition.stableFrames,
-    );
+    _counter.update(phase, stableFrames: definition.stableFrames);
   }
 
   @override

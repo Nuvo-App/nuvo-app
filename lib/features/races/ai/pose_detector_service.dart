@@ -6,10 +6,13 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 
 import '../data/ai_motion_models.dart';
 import 'camera_image_converter.dart';
+import 'pose_landmark_smoother.dart';
 
 class PoseDetectorService {
   PoseDetectorService({
-    Duration minFrameInterval = const Duration(milliseconds: 90),
+    // ML Kit runs in stream mode. Keep a 30 FPS target while the in-flight
+    // guard drops frames when inference or image conversion is slower.
+    Duration minFrameInterval = const Duration(milliseconds: 33),
   }) : this._(minFrameInterval);
 
   PoseDetectorService._(this._minFrameInterval)
@@ -22,6 +25,7 @@ class PoseDetectorService {
 
   final PoseDetector _poseDetector;
   final Duration _minFrameInterval;
+  final PoseLandmarkSmoother _smoother = PoseLandmarkSmoother();
 
   bool _isProcessingFrame = false;
   bool _disposed = false;
@@ -73,12 +77,13 @@ class PoseDetectorService {
         );
       }
 
-      return NuvoPoseFrame(
+      final frame = NuvoPoseFrame(
         points: points,
         imageWidth: image.width.toDouble(),
         imageHeight: image.height.toDouble(),
         createdAt: now,
       );
+      return _smoother.smooth(frame);
     } finally {
       _isProcessingFrame = false;
     }
@@ -86,6 +91,7 @@ class PoseDetectorService {
 
   Future<void> dispose() async {
     _disposed = true;
+    _smoother.reset();
     await _poseDetector.close();
   }
 }
