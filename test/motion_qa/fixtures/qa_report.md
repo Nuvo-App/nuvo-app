@@ -2,9 +2,9 @@
 
 ## POSITIVE
 - Total sequences: 44
-- Accepted: 27
-- Rejected: 17
-- Accept rate: 61.4%
+- Accepted: 29
+- Rejected: 15
+- Accept rate: 65.9%
 
 ## CONFUSERS
 - normal_squat → false accepts: 0
@@ -13,17 +13,17 @@
 - partial_squat → false accepts: 0
 
 ## FAILURE REASONS
-- undercounted: 17
+- undercounted: 15
 - airborne_never_detected: 1
 
 ## ROBUSTNESS
 - drop_frames: 6/8 (75.0%)
 - duplicate_frames: 7/8 (87.5%)
 - time_stretch: 7/8 (87.5%)
-- time_compress: 4/8 (50.0%)
+- time_compress: 5/8 (62.5%)
 - coordinate_jitter: 7/8 (87.5%)
 - confidence_degradation: 7/8 (87.5%)
-- ankle_dropout: 5/8 (62.5%)
+- ankle_dropout: 6/8 (75.0%)
 - body_translation: 7/8 (87.5%)
 - scale_change: 7/8 (87.5%)
 - mirror: 7/8 (87.5%)

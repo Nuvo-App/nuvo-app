@@ -1,0 +1,214 @@
+[
+  {
+    "id": "EXP-000001",
+    "timestamp": "2026-08-11T11:14:28.567247",
+    "family": "mlp",
+    "candidateName": "mlp_w15_h16_l2_v1",
+    "parentExperimentId": null,
+    "hypothesis": "MLP: window=15, hidden=16, layers=2, lr=0.01, epochs=10, thresh=0.5",
+    "config": {
+      "windowSize": 15,
+      "hiddenSize": 16,
+      "numLayers": 2,
+      "lr": 0.01,
+      "epochs": 10,
+      "threshold": 0.5
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 15,
+    "modelParams": 2065,
+    "threshold": 0.5,
+    "trainDurationMs": null,
+    "evalDurationMs": 39,
+    "tp": 9,
+    "fn": 7,
+    "fp": 14,
+    "recall": 0.5625,
+    "precision": 0.391304347826087,
+    "f1": 0.46153846153846156,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.4444444444444444,
+    "catastrophicClips": 0,
+    "productScore": 0.1452991452991453,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.3333333333333333,
+        "falseAcceptReps": 2,
+        "falseAcceptClips": 1
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 2,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 14 false positive reps; normal_squats: 0.33 FA clip rate; deep_squats: 1.00 FA clip rate; jumping_jacks: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: -0.0679 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000002",
+    "timestamp": "2026-08-11T11:14:28.602913",
+    "family": "mlp",
+    "candidateName": "mlp_w15_h32_l2_v2",
+    "parentExperimentId": null,
+    "hypothesis": "MLP: window=15, hidden=32, layers=2, lr=0.01, epochs=10, thresh=0.5",
+    "config": {
+      "windowSize": 15,
+      "hiddenSize": 32,
+      "numLayers": 2,
+      "lr": 0.01,
+      "epochs": 10,
+      "threshold": 0.5
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 15,
+    "modelParams": 4129,
+    "threshold": 0.5,
+    "trainDurationMs": null,
+    "evalDurationMs": 34,
+    "tp": 9,
+    "fn": 7,
+    "fp": 14,
+    "recall": 0.5625,
+    "precision": 0.391304347826087,
+    "f1": 0.46153846153846156,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.4444444444444444,
+    "catastrophicClips": 0,
+    "productScore": 0.1452991452991453,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.3333333333333333,
+        "falseAcceptReps": 2,
+        "falseAcceptClips": 1
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 2,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 14 false positive reps; normal_squats: 0.33 FA clip rate; deep_squats: 1.00 FA clip rate; jumping_jacks: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: -0.0679 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000000",
+    "timestamp": "2026-08-11T11:14:28.522972",
+    "family": "camera",
+    "candidateName": "camera_torso_relative_v1",
+    "parentExperimentId": null,
+    "hypothesis": "Camera-relative: torso_relative with {mode: torso_relative, referencePoint: midHip}",
+    "config": {
+      "mode": "torso_relative",
+      "referencePoint": "midHip"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 82,
+    "tp": 5,
+    "fn": 11,
+    "fp": 3,
+    "recall": 0.3125,
+    "precision": 0.625,
+    "f1": 0.4166666666666667,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.19444444444444445,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "11 missed reps; 3 false positive reps; jumping_jacks: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: -0.1127 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  }
+]

@@ -1,0 +1,122 @@
+{
+  "temporal": {
+    "family": "temporal",
+    "experimentsAttempted": 3724,
+    "bestF1": 0.6000000000000001,
+    "startingBestF1": 0.6000000000000001,
+    "plateaued": true,
+    "plateauedAt": "2026-08-11T11:19:51.301593",
+    "plateauedAtCount": 3724,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.6000, Recent best: 0.6000, Improvement: 0.0000",
+    "totalRuntimeMs": 77987.0,
+    "consecutiveFailures": 0
+  },
+  "camera": {
+    "family": "camera",
+    "experimentsAttempted": 370,
+    "bestF1": 0.43478260869565216,
+    "startingBestF1": 0.43478260869565216,
+    "plateaued": true,
+    "plateauedAt": "2026-08-11T11:19:51.301973",
+    "plateauedAtCount": 370,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4348, Recent best: 0.4348, Improvement: 0.0000",
+    "totalRuntimeMs": 9171.0,
+    "consecutiveFailures": 0
+  },
+  "signal_quality": {
+    "family": "signal_quality",
+    "experimentsAttempted": 363,
+    "bestF1": 0.43478260869565216,
+    "startingBestF1": 0.43478260869565216,
+    "plateaued": true,
+    "plateauedAt": "2026-08-11T11:19:51.302229",
+    "plateauedAtCount": 363,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4348, Recent best: 0.4348, Improvement: 0.0000",
+    "totalRuntimeMs": 9859.0,
+    "consecutiveFailures": 0
+  },
+  "geometric": {
+    "family": "geometric",
+    "experimentsAttempted": 2836,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.5294117647058824,
+    "plateaued": true,
+    "plateauedAt": "2026-08-11T11:19:51.302661",
+    "plateauedAtCount": 2836,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.5294, Recent best: 0.5294, Improvement: 0.0000",
+    "totalRuntimeMs": 59606.0,
+    "consecutiveFailures": 0
+  },
+  "confuser_specialist": {
+    "family": "confuser_specialist",
+    "experimentsAttempted": 337,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.5294117647058824,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 8580.0,
+    "consecutiveFailures": 0
+  },
+  "mlp": {
+    "family": "mlp",
+    "experimentsAttempted": 358,
+    "bestF1": 0.4864864864864864,
+    "startingBestF1": 0.4864864864864864,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 7425.0,
+    "consecutiveFailures": 0
+  },
+  "conv1d": {
+    "family": "conv1d",
+    "experimentsAttempted": 360,
+    "bestF1": 0.4864864864864864,
+    "startingBestF1": 0.4864864864864864,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 7171.0,
+    "consecutiveFailures": 0
+  },
+  "gru": {
+    "family": "gru",
+    "experimentsAttempted": 359,
+    "bestF1": 0.4864864864864864,
+    "startingBestF1": 0.4864864864864864,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 7308.0,
+    "consecutiveFailures": 0
+  },
+  "hybrid": {
+    "family": "hybrid",
+    "experimentsAttempted": 344,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.5294117647058824,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 8539.0,
+    "consecutiveFailures": 0
+  },
+  "ensemble": {
+    "family": "ensemble",
+    "experimentsAttempted": 3249,
+    "bestF1": 0.5714285714285715,
+    "startingBestF1": 0.5714285714285715,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 69749.0,
+    "consecutiveFailures": 0
+  }
+}

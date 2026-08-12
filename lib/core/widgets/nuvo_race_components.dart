@@ -5,7 +5,6 @@ import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
-import 'nuvo_button.dart';
 import 'pressable_scale.dart';
 
 /// Canonical race components for Nuvo.
@@ -445,84 +444,150 @@ class RaceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasProof = progressPercent > 0;
+
     return PressableScale(
       onTap: onOpen,
       child: Container(
-        padding: const EdgeInsets.all(NuvoSpacing.xl),
         decoration: BoxDecoration(
-          color: NuvoColors.navy,
-          borderRadius: BorderRadius.circular(NuvoRadii.hero),
+          borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          border: Border.all(color: NuvoColors.navy, width: 2),
           boxShadow: AppShadows.hardLarge,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Kicker
-            Text(
-              '$activityLabel · $targetLabel',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(NuvoRadii.lg - 1),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── White body: race identity + track lane ──
+              Container(
+                color: NuvoColors.surface,
+                padding: const EdgeInsets.fromLTRB(
+                  NuvoSpacing.xl,
+                  NuvoSpacing.xl,
+                  NuvoSpacing.xl,
+                  NuvoSpacing.lg,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Race title
+                    Text(
+                      raceTitle,
+                      style: AppTextStyles.featuredRaceTitle.copyWith(
+                        color: NuvoColors.navy,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    // Movement · target
+                    Text(
+                      '$activityLabel · $targetLabel',
+                      style: AppTextStyles.raceRowMeta.copyWith(
+                        color: NuvoColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: NuvoSpacing.xl),
+                    // Race lane — prominent track on white
+                    RaceProgress(
+                      progressPercent: progressPercent,
+                      onDark: false,
+                      trackHeight: 5,
+                      dotDiameter: 16,
+                    ),
+                    const SizedBox(height: 8),
+                    // Lane context
+                    Row(
+                      children: [
+                        if (!hasProof)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  color: NuvoColors.actionBlue,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Start line',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: NuvoColors.navy,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Expanded(
+                            child: RaceProgressLabel(
+                              progressLabel: progressLabel,
+                              targetLabel: targetLabel,
+                              onDark: false,
+                              compact: true,
+                            ),
+                          ),
+                        if (showRank && rank != null && hasProof)
+                          Text(
+                            _ordinal(rank!),
+                            style: AppTextStyles.placementLabel(
+                              color: _placementColor(rank) ?? NuvoColors.navy,
+                              size: 13,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: NuvoSpacing.sm),
-            // Title
-            Text(
-              raceTitle,
-              style: AppTextStyles.featuredRaceTitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: NuvoSpacing.md),
-            // Progress label + track
-            RaceProgressLabel(
-              progressLabel: progressLabel,
-              targetLabel: targetLabel,
-              onDark: true,
-            ),
-            const SizedBox(height: 6),
-            RaceProgress(
-              progressPercent: progressPercent,
-              onDark: true,
-              trackHeight: 6,
-              dotDiameter: 14,
-            ),
-            const SizedBox(height: NuvoSpacing.md),
-            // People + placement inline
-            Row(
-              children: [
-                racerStack,
-                const SizedBox(width: NuvoSpacing.sm),
-                if (showRank && rank != null)
-                  Text(
-                    'You\'re ${_ordinal(rank!)}',
-                    style: AppTextStyles.raceRowMeta.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.7),
+              // ── Blue action strip: crew + CTA ──
+              Container(
+                color: NuvoColors.actionBlue,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NuvoSpacing.xl,
+                  vertical: NuvoSpacing.md,
+                ),
+                child: Row(
+                  children: [
+                    racerStack,
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: onOpen,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            actionLabel,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: NuvoColors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            ctaIcon ?? Icons.arrow_forward_rounded,
+                            color: NuvoColors.white,
+                            size: 16,
+                          ),
+                        ],
+                      ),
                     ),
-                  )
-                else
-                  Text(
-                    'In progress',
-                    style: AppTextStyles.raceRowMeta.copyWith(
-                      color: NuvoColors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: NuvoSpacing.lg),
-            // CTA — flat, doesn't overpower
-            NuvoPrimaryButton(
-              label: actionLabel,
-              icon: ctaIcon,
-              expand: true,
-              small: true,
-              flat: true,
-              onPressed: onOpen,
-            ),
-          ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -566,6 +631,8 @@ class RaceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasProof = progressPercent > 0;
+
     return Semantics(
       button: true,
       label: raceTitle,
@@ -584,40 +651,78 @@ class RaceRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      raceTitle,
-                      style: AppTextStyles.raceRowTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        if (hasProof) ...[
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: const BoxDecoration(
+                              color: NuvoColors.actionBlue,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                        ],
+                        Flexible(
+                          child: Text(
+                            raceTitle,
+                            style: AppTextStyles.raceRowTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '$movementLabel · $progressLabel',
+                      hasProof
+                          ? '$movementLabel · $progressLabel'
+                          : movementLabel,
                       style: AppTextStyles.raceRowMeta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 6),
-                    RaceProgress(
-                      progressPercent: progressPercent,
-                      trackHeight: 3,
-                      dotDiameter: 9,
-                    ),
+                    if (hasProof) ...[
+                      const SizedBox(height: 6),
+                      RaceProgress(
+                        progressPercent: progressPercent,
+                        trackHeight: 3,
+                        dotDiameter: 9,
+                      ),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(width: NuvoSpacing.sm),
-              // People + placement on the right
-              if (avatars.isNotEmpty) ...[
-                RacePeople(
-                  avatars: avatars,
-                  total: participantCount,
-                  size: 22,
-                  max: 3,
-                ),
-                const SizedBox(width: NuvoSpacing.sm),
-              ],
-              RacePlacement(rank: rank, size: 14),
+              // Right side: placement + people
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (hasProof)
+                    RacePlacement(rank: rank, size: 15)
+                  else
+                    Text(
+                      'At start',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.textDim,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  if (avatars.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    RacePeople(
+                      avatars: avatars,
+                      total: participantCount,
+                      size: 20,
+                      max: 3,
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
         ),
@@ -862,7 +967,7 @@ class RaceWaitingSummary extends StatelessWidget {
               vertical: NuvoSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: NuvoColors.crewWaitingTint.withValues(alpha: 0.25),
+              color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
               border: NuvoBorders.divider,
             ),
@@ -895,8 +1000,8 @@ class RaceWaitingSummary extends StatelessWidget {
                   duration: const Duration(milliseconds: 200),
                   child: const Icon(
                     Icons.chevron_right_rounded,
-                    color: NuvoColors.textMuted,
-                    size: 20,
+                    color: NuvoColors.textDim,
+                    size: 18,
                   ),
                 ),
               ],
@@ -943,7 +1048,7 @@ class RaceFinishedSummary extends StatelessWidget {
               vertical: NuvoSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: NuvoColors.raceFinished.withValues(alpha: 0.06),
+              color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
               border: NuvoBorders.divider,
             ),
@@ -963,8 +1068,8 @@ class RaceFinishedSummary extends StatelessWidget {
                   duration: const Duration(milliseconds: 200),
                   child: const Icon(
                     Icons.chevron_right_rounded,
-                    color: NuvoColors.textMuted,
-                    size: 20,
+                    color: NuvoColors.textDim,
+                    size: 18,
                   ),
                 ),
               ],
@@ -1026,6 +1131,7 @@ class RaceQuickStart extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     target,
                     style: AppTextStyles.statLarge(

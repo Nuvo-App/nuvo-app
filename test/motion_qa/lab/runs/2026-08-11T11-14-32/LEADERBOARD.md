@@ -1,0 +1,54 @@
+# LEADERBOARD
+
+| Rank | Experiment | Family | Candidate | Recall | Precision | F1 | FA Clip Rate | Gate |
+|------|------------|--------|-----------|--------|-----------|----|-------------|------|
+| 1 | EXP-000038 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v7 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 2 | EXP-000004 | hybrid | hybrid_temp_adaptive_hyst_mlp_v1 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 3 | EXP-000010 | hybrid | hybrid_temp_adaptive_hyst_mlp_v2 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 4 | EXP-000012 | hybrid | hybrid_temp_adaptive_hyst_mlp_v3 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 5 | EXP-000014 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v1 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 6 | EXP-000016 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v2 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 7 | EXP-000024 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v3 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 8 | EXP-000025 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v4 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 9 | EXP-000053 | hybrid | hybrid_temp_adaptive_hyst_confuser_gate_v6 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 10 | EXP-000027 | temporal | temporal_v2 | 0.5625 | 0.5000 | 0.5294 | 0.1111 | reject |
+| 11 | EXP-000029 | confuser_specialist | confuser_deep_squats_compression_depth_gate_v5 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 12 | EXP-000030 | confuser_specialist | confuser_deep_squats_compression_depth_gate_v6 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 13 | EXP-000155 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v31 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 14 | EXP-000033 | hybrid | hybrid_temp_adaptive_hyst_confuser_gate_v5 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 15 | EXP-000034 | temporal | temporal_v4 | 0.5625 | 0.5000 | 0.5294 | 0.1111 | reject |
+| 16 | EXP-000035 | geometric | geom_kneeAngle,torsoRatio_v4 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 17 | EXP-000135 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v24 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 18 | EXP-000047 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v8 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 19 | EXP-000052 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v9 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 20 | EXP-000054 | confuser_specialist | confuser_deep_squats_compression_depth_gate_v10 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 21 | EXP-000055 | confuser_specialist | confuser_deep_squats_no_flight_phase_gate_v11 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 22 | EXP-000153 | confuser_specialist | confuser_deep_squats_no_flight_phase_gate_v30 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 23 | EXP-000062 | confuser_specialist | confuser_deep_squats_no_flight_phase_gate_v12 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 24 | EXP-000064 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v13 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 25 | EXP-000065 | confuser_specialist | confuser_deep_squats_compression_depth_gate_v14 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 26 | EXP-000066 | confuser_specialist | confuser_deep_squats_no_flight_phase_gate_v15 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 27 | EXP-000152 | temporal | temporal_v18 | 0.5625 | 0.5000 | 0.5294 | 0.1111 | reject |
+| 28 | EXP-000076 | hybrid | hybrid_temp_adaptive_hyst_confuser_gate_v7 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 29 | EXP-000077 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v16 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 30 | EXP-000151 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v29 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 31 | EXP-000081 | hybrid | hybrid_temp_adaptive_hyst_combined_gates_v8 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 32 | EXP-000083 | hybrid | hybrid_high_recall_temporal_high_precision_geometric_v9 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 33 | EXP-000132 | hybrid | hybrid_temp_adaptive_hyst_high_precision_geometric_v17 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 34 | EXP-000085 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v17 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 35 | EXP-000086 | hybrid | hybrid_temp_adaptive_hyst_mlp_v10 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 36 | EXP-000088 | hybrid | hybrid_temp_adaptive_hyst_confuser_gate_v11 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 37 | EXP-000149 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v28 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 38 | EXP-000139 | confuser_specialist | confuser_deep_squats_no_flight_phase_gate_v26 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 39 | EXP-000099 | confuser_specialist | confuser_deep_squats_compression_depth_gate_v18 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 40 | EXP-000102 | hybrid | hybrid_high_recall_temporal_confuser_gate_v13 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 41 | EXP-000108 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v19 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 42 | EXP-000138 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v25 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 43 | EXP-000113 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v20 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 44 | EXP-000114 | confuser_specialist | confuser_deep_squats_knee_angle_gate_v21 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 45 | EXP-000115 | hybrid | hybrid_high_recall_temporal_mlp_v15 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 46 | EXP-000119 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v22 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 47 | EXP-000124 | confuser_specialist | confuser_deep_squats_combined_knee_compression_v23 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 48 | EXP-000126 | hybrid | hybrid_temp_adaptive_hyst_confuser_gate_v16 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 49 | EXP-000145 | confuser_specialist | confuser_deep_squats_no_flight_phase_gate_v27 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |
+| 50 | EXP-000150 | hybrid | hybrid_high_recall_temporal_confuser_gate_v20 | 0.5625 | 0.5000 | 0.5294 | 0.2222 | reject |

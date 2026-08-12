@@ -1,0 +1,54 @@
+[
+  {
+    "name": "FALSE_ACCEPT_DEEP_SQUATS",
+    "description": "Champion false-accepts on deep_squats: 1 clips, 3 reps",
+    "affectedClips": [],
+    "missedReps": 0,
+    "falseReps": 3,
+    "commonFeatures": {},
+    "likelyReason": "Deep squat compression pattern resembles jump squat descent phase",
+    "failingFamilies": [
+      "mlp",
+      "hybrid",
+      "geometric",
+      "temporal",
+      "confuser_specialist"
+    ],
+    "succeedingFamilies": [
+      "camera",
+      "geometric"
+    ],
+    "proposedExperiment": "Add explicit knee-angle threshold gate: reject if knee angle < 60° throughout"
+  },
+  {
+    "name": "FALSE_ACCEPT_SQUAT_JACKS",
+    "description": "Champion false-accepts on squat_jacks: 1 clips, 1 reps",
+    "affectedClips": [],
+    "missedReps": 0,
+    "falseReps": 1,
+    "commonFeatures": {},
+    "likelyReason": "Squat jack combines squat + jump, closely resembling jump squat",
+    "failingFamilies": [
+      "camera",
+      "mlp",
+      "hybrid",
+      "geometric",
+      "temporal",
+      "confuser_specialist"
+    ],
+    "succeedingFamilies": [],
+    "proposedExperiment": "Add temporal ordering gate: require compression before airborne phase"
+  },
+  {
+    "name": "LOW_RECALL_TARGET",
+    "description": "Champion recall is 0.563 — below 0.75 gate",
+    "affectedClips": [],
+    "missedReps": 7,
+    "falseReps": 0,
+    "commonFeatures": {},
+    "likelyReason": "Detector may be too conservative or missing key motion phases",
+    "failingFamilies": [],
+    "succeedingFamilies": [],
+    "proposedExperiment": "Try relaxed temporal thresholds or lower airborne confidence"
+  }
+]

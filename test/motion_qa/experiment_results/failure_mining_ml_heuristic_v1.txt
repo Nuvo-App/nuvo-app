@@ -1,0 +1,12 @@
+=== FAILURE MINING REPORT ===
+
+TOP FAILURE CAUSES:
+  (no failures recorded)
+
+CONFUSER FALSE ACCEPT CLUSTERS:
+  10 reps from deep_squats
+  9 reps from jumping_jacks
+  6 reps from vertical_jumps
+  5 reps from lunges
+  3 reps from normal_squats
+  2 reps from squat_jacks

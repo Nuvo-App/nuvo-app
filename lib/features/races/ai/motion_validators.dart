@@ -1443,6 +1443,9 @@ class ConfigurableRepValidator extends _BaseValidator {
 
   final RepMovementDefinition definition;
   final RepCounterStateMachine _counter = RepCounterStateMachine();
+  MovementPhase _lastPhase = MovementPhase.unknown;
+  double _lastHipToKneeRatio = 0;
+  double _lastAnkleWidthToBodyWidth = 0;
 
   @override
   AiMotionActivity get activity => definition.activity;
@@ -1456,9 +1459,9 @@ class ConfigurableRepValidator extends _BaseValidator {
   @override
   String get coachingText => definition.coachingText(fullBodyVisible);
 
-  // stateLabel and debugValues are inherited from _BaseValidator ('tracking'
-  // and the base frame/visibility map), matching the three original
-  // validators which also did not override them.
+  // stateLabel is inherited from _BaseValidator ('tracking') to preserve
+  // parity with the original SquatsValidator/JumpingJacksValidator/
+  // LungesValidator. The phase is still observable via debugValues['phase'].
 
   @override
   List<String> get criticalPoints => definition.requiredLandmarks;
@@ -1466,16 +1469,43 @@ class ConfigurableRepValidator extends _BaseValidator {
   @override
   void resetState() {
     _counter.reset();
+    _lastPhase = MovementPhase.unknown;
+    _lastHipToKneeRatio = 0;
+    _lastAnkleWidthToBodyWidth = 0;
   }
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
     final features = PoseFeatureExtractor(frame);
+    // Diagnostic values — guarded so movements whose criticalPoints don't
+    // include knees (e.g. jumping jacks) don't crash when knees are absent.
+    // These never influence the counting logic below.
+    if (frame.hasPoints(const [
+      'leftKnee', 'rightKnee', 'leftHip', 'rightHip',
+      'leftShoulder', 'rightShoulder',
+    ])) {
+      _lastHipToKneeRatio = features.hipToKneeRatio();
+    }
+    if (frame.hasPoints(const [
+      'leftAnkle', 'rightAnkle', 'leftShoulder', 'rightShoulder', 'leftHip', 'rightHip',
+    ])) {
+      _lastAnkleWidthToBodyWidth = features.ankleWidth / features.bodyWidth;
+    }
+    final phase = _measureState(features);
+    _lastPhase = phase;
     _counter.update(
-      _measureState(features),
+      phase,
       stableFrames: definition.stableFrames,
     );
   }
+
+  @override
+  Map<String, double> get debugValues => {
+    ...super.debugValues,
+    'hipToKneeRatio': _lastHipToKneeRatio,
+    'ankleWidthToBodyWidth': _lastAnkleWidthToBodyWidth,
+    'phase': _lastPhase.index.toDouble(),
+  };
 
   MovementPhase _measureState(PoseFeatureExtractor features) {
     // Active is checked first, then start — matching the evaluation order

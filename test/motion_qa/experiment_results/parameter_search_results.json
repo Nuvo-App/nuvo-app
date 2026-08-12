@@ -1,0 +1,41 @@
+{
+  "searchSpace": [
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3
+  ],
+  "results": [
+    {
+      "config": {
+        "flightThresholdRatio": 0.1
+      },
+      "objective": 0.2569444444444444
+    },
+    {
+      "config": {
+        "flightThresholdRatio": 0.15
+      },
+      "objective": 0.2569444444444444
+    },
+    {
+      "config": {
+        "flightThresholdRatio": 0.2
+      },
+      "objective": 0.2569444444444444
+    },
+    {
+      "config": {
+        "flightThresholdRatio": 0.25
+      },
+      "objective": 0.2569444444444444
+    },
+    {
+      "config": {
+        "flightThresholdRatio": 0.3
+      },
+      "objective": 0.2569444444444444
+    }
+  ]
+}

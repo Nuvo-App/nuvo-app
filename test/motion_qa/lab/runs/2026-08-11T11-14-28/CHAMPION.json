@@ -1,0 +1,29 @@
+{
+  "experimentId": "EXP-000215",
+  "candidateName": "temporal_v28",
+  "family": "temporal",
+  "architecture": "TemporalHysteresis",
+  "config": {
+    "airborneThreshold": 0.05376,
+    "hysteresis": 0.0903,
+    "minRepGap": 11,
+    "persistence": 1,
+    "nOfM": 5,
+    "velocityGate": true
+  },
+  "datasetVersion": "v1.0.0",
+  "recall": 0.5625,
+  "precision": 0.6428571428571429,
+  "f1": 0.6000000000000001,
+  "falseAcceptClipRate": 0.1111111111111111,
+  "exactCountRate": 0.3333333333333333,
+  "productScore": 0.3733333333333334,
+  "modelParams": null,
+  "gateResult": "reject",
+  "sourceCommit": "m1.3-lab",
+  "timestamp": "2026-08-11T11:14:36.114639",
+  "catastrophicClips": 0,
+  "promotionReason": "F1: 0.5294 → 0.6000 (+0.0706), Recall: 0.5625 → 0.5625, Precision: 0.5000 → 0.6429, FA clip rate: 0.222 → 0.111",
+  "confirmedRuns": 1,
+  "holdoutMetrics": null
+}

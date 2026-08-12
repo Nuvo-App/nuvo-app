@@ -71,8 +71,8 @@ class _RetryRaceRepo extends RaceRepository {
   @override
   Future<List<Race>> getRaces() {
     _calls++;
-    // Throw on first 2 calls (constructor + auth listener), succeed on 3rd (retry).
-    if (_calls <= 2) {
+    // The controller waits for auth before its first request, then retry succeeds.
+    if (_calls == 1) {
       return Future.error(const ApiException(500, 'Internal Server Error'));
     }
     return Future.value(races);
@@ -149,7 +149,7 @@ void main() {
     testWidgets('retry after failure reloads races', (tester) async {
       final repo = _RetryRaceRepo([_cameraRace()]);
       await tester.pumpWidget(_buildApp(repo));
-      // Let the first (failing) load complete.
+      // Let the auth-gated first load complete.
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump();
       // First load failed → error state.
@@ -161,7 +161,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump();
 
-      // Second load succeeded → content visible.
+      // Manual retry succeeded → content visible.
       expect(find.byType(NuvoErrorState), findsNothing);
       expect(find.text('Pushup Race'), findsWidgets);
     });

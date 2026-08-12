@@ -1,0 +1,9 @@
+[
+  {
+    "targetClipCount": 3,
+    "f1": 0.6000000000000001,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "experimentId": "EXP-000215"
+  }
+]

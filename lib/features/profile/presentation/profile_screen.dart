@@ -238,8 +238,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
 
           // ── Profile body — page-colored background ────────────────────────
-          SliverFillRemaining(
-            hasScrollBody: true,
+          SliverToBoxAdapter(
             child: Container(
               color: NuvoColors.page,
               padding: EdgeInsets.fromLTRB(
@@ -248,11 +247,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 20,
                 NuvoBottomNav.bottomPadding(context),
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _profileBody(raceState, uid, context),
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _profileBody(raceState, uid, context),
               ),
             ),
           ),

@@ -1,0 +1,3605 @@
+[
+  {
+    "id": "EXP-275179",
+    "timestamp": "2026-08-11T08:10:32.074409",
+    "family": "temporal",
+    "candidateName": "temporal_v147586",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06480000000000001, hyst=0.0924, gap=14, persist=3",
+    "config": {
+      "airborneThreshold": 0.06480000000000001,
+      "hysteresis": 0.0924,
+      "minRepGap": 14,
+      "persistence": 3,
+      "nOfM": 3,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173418",
+    "timestamp": "2026-08-11T04:29:39.550704",
+    "family": "temporal",
+    "candidateName": "temporal_v92515",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06328, hyst=0.0867, gap=15, persist=6",
+    "config": {
+      "airborneThreshold": 0.06328,
+      "hysteresis": 0.0867,
+      "minRepGap": 15,
+      "persistence": 6,
+      "velocityGate": true,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 28,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208459",
+    "timestamp": "2026-08-11T05:35:16.282418",
+    "family": "temporal",
+    "candidateName": "temporal_v111389",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05616, hyst=0.0899, gap=11, persist=4",
+    "config": {
+      "airborneThreshold": 0.05616,
+      "hysteresis": 0.0899,
+      "minRepGap": 11,
+      "persistence": 4,
+      "nOfM": 2,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 17,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173289",
+    "timestamp": "2026-08-11T04:29:26.584981",
+    "family": "temporal",
+    "candidateName": "temporal_v92450",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06288, hyst=0.0991, gap=12, persist=3",
+    "config": {
+      "airborneThreshold": 0.06288,
+      "hysteresis": 0.0991,
+      "minRepGap": 12,
+      "persistence": 3,
+      "nOfM": 2,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-195587",
+    "timestamp": "2026-08-11T05:09:57.148237",
+    "family": "temporal",
+    "candidateName": "temporal_v104399",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05328000000000001, hyst=0.0895, gap=5, persist=1",
+    "config": {
+      "airborneThreshold": 0.05328000000000001,
+      "hysteresis": 0.0895,
+      "minRepGap": 5,
+      "persistence": 1,
+      "nOfM": 2,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 17,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307951",
+    "timestamp": "2026-08-11T09:42:08.957399",
+    "family": "temporal",
+    "candidateName": "temporal_v165273",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05704000000000001, hyst=0.0914, gap=14, persist=5",
+    "config": {
+      "airborneThreshold": 0.05704000000000001,
+      "hysteresis": 0.0914,
+      "minRepGap": 14,
+      "persistence": 5,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 20,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307934",
+    "timestamp": "2026-08-11T09:42:06.005060",
+    "family": "temporal",
+    "candidateName": "temporal_v165267",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.07152, hyst=0.0975, gap=13, persist=4",
+    "config": {
+      "airborneThreshold": 0.07152,
+      "hysteresis": 0.0975,
+      "minRepGap": 13,
+      "persistence": 4,
+      "nOfM": 6,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307896",
+    "timestamp": "2026-08-11T09:41:59.223251",
+    "family": "temporal",
+    "candidateName": "temporal_v165247",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05088000000000001, hyst=0.0737, gap=13, persist=5",
+    "config": {
+      "airborneThreshold": 0.05088000000000001,
+      "hysteresis": 0.0737,
+      "minRepGap": 13,
+      "persistence": 5,
+      "nOfM": 5
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208557",
+    "timestamp": "2026-08-11T05:35:28.245762",
+    "family": "temporal",
+    "candidateName": "temporal_v111437",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.07568000000000001, hyst=0.098, gap=14, persist=4",
+    "config": {
+      "airborneThreshold": 0.07568000000000001,
+      "hysteresis": 0.098,
+      "minRepGap": 14,
+      "persistence": 4,
+      "nOfM": 3,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173256",
+    "timestamp": "2026-08-11T04:29:23.332082",
+    "family": "temporal",
+    "candidateName": "temporal_v92434",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.055040000000000006, hyst=0.0799, gap=10, persist=6",
+    "config": {
+      "airborneThreshold": 0.055040000000000006,
+      "hysteresis": 0.0799,
+      "minRepGap": 10,
+      "persistence": 6,
+      "velocityGate": true,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173457",
+    "timestamp": "2026-08-11T04:29:43.441622",
+    "family": "temporal",
+    "candidateName": "temporal_v92536",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.050960000000000005, hyst=0.0764, gap=12, persist=1",
+    "config": {
+      "airborneThreshold": 0.050960000000000005,
+      "hysteresis": 0.0764,
+      "minRepGap": 12,
+      "persistence": 1,
+      "nOfM": 3,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 17,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307848",
+    "timestamp": "2026-08-11T09:41:50.009774",
+    "family": "temporal",
+    "candidateName": "temporal_v165223",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.062400000000000004, hyst=0.0909, gap=14, persist=4",
+    "config": {
+      "airborneThreshold": 0.062400000000000004,
+      "hysteresis": 0.0909,
+      "minRepGap": 14,
+      "persistence": 4,
+      "nOfM": 4,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000297",
+    "timestamp": "2026-08-11T01:42:35.086078",
+    "family": "temporal",
+    "candidateName": "temporal_v42",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.0588, hyst=0.0825, gap=7, persist=3",
+    "config": {
+      "airborneThreshold": 0.0588,
+      "hysteresis": 0.0825,
+      "minRepGap": 7,
+      "persistence": 3,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 20,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0375 (champion F1=0.5625)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307804",
+    "timestamp": "2026-08-11T09:41:42.499625",
+    "family": "temporal",
+    "candidateName": "temporal_v165204",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.049120000000000004, hyst=0.0936, gap=14, persist=4",
+    "config": {
+      "airborneThreshold": 0.049120000000000004,
+      "hysteresis": 0.0936,
+      "minRepGap": 14,
+      "persistence": 4,
+      "nOfM": 5,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208588",
+    "timestamp": "2026-08-11T05:35:32.086819",
+    "family": "temporal",
+    "candidateName": "temporal_v111453",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05600000000000001, hyst=0.0922, gap=14, persist=1",
+    "config": {
+      "airborneThreshold": 0.05600000000000001,
+      "hysteresis": 0.0922,
+      "minRepGap": 14,
+      "persistence": 1,
+      "nOfM": 2,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307761",
+    "timestamp": "2026-08-11T09:41:35.324708",
+    "family": "temporal",
+    "candidateName": "temporal_v165179",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05912, hyst=0.0969, gap=5, persist=2",
+    "config": {
+      "airborneThreshold": 0.05912,
+      "hysteresis": 0.0969,
+      "minRepGap": 5,
+      "persistence": 2,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307735",
+    "timestamp": "2026-08-11T09:41:30.883132",
+    "family": "temporal",
+    "candidateName": "temporal_v165167",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05416, hyst=0.0919, gap=13, persist=4",
+    "config": {
+      "airborneThreshold": 0.05416,
+      "hysteresis": 0.0919,
+      "minRepGap": 13,
+      "persistence": 4,
+      "nOfM": 5,
+      "velocityGate": true,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173210",
+    "timestamp": "2026-08-11T04:29:18.822494",
+    "family": "temporal",
+    "candidateName": "temporal_v92413",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.057760000000000006, hyst=0.0801, gap=10, persist=4",
+    "config": {
+      "airborneThreshold": 0.057760000000000006,
+      "hysteresis": 0.0801,
+      "minRepGap": 10,
+      "persistence": 4,
+      "nOfM": 6,
+      "velocityGate": true,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307684",
+    "timestamp": "2026-08-11T09:41:21.981124",
+    "family": "temporal",
+    "candidateName": "temporal_v165133",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.07528000000000001, hyst=0.0983, gap=9, persist=6",
+    "config": {
+      "airborneThreshold": 0.07528000000000001,
+      "hysteresis": 0.0983,
+      "minRepGap": 9,
+      "persistence": 6,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173178",
+    "timestamp": "2026-08-11T04:29:15.496843",
+    "family": "temporal",
+    "candidateName": "temporal_v92395",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05208000000000001, hyst=0.0787, gap=5, persist=3",
+    "config": {
+      "airborneThreshold": 0.05208000000000001,
+      "hysteresis": 0.0787,
+      "minRepGap": 5,
+      "persistence": 3,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307575",
+    "timestamp": "2026-08-11T09:41:02.923684",
+    "family": "temporal",
+    "candidateName": "temporal_v165071",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.0736, hyst=0.0985, gap=6, persist=3",
+    "config": {
+      "airborneThreshold": 0.0736,
+      "hysteresis": 0.0985,
+      "minRepGap": 6,
+      "persistence": 3,
+      "nOfM": 6,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307528",
+    "timestamp": "2026-08-11T09:40:54.432390",
+    "family": "temporal",
+    "candidateName": "temporal_v165052",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06472, hyst=0.0926, gap=8, persist=4",
+    "config": {
+      "airborneThreshold": 0.06472,
+      "hysteresis": 0.0926,
+      "minRepGap": 8,
+      "persistence": 4,
+      "nOfM": 4
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-195697",
+    "timestamp": "2026-08-11T05:10:09.659984",
+    "family": "temporal",
+    "candidateName": "temporal_v104455",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05, hyst=0.0733, gap=10, persist=5",
+    "config": {
+      "airborneThreshold": 0.05,
+      "hysteresis": 0.0733,
+      "minRepGap": 10,
+      "persistence": 5
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307481",
+    "timestamp": "2026-08-11T09:40:46.619479",
+    "family": "temporal",
+    "candidateName": "temporal_v165033",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06152, hyst=0.0946, gap=16, persist=5",
+    "config": {
+      "airborneThreshold": 0.06152,
+      "hysteresis": 0.0946,
+      "minRepGap": 16,
+      "persistence": 5,
+      "nOfM": 6,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173177",
+    "timestamp": "2026-08-11T04:29:15.409227",
+    "family": "temporal",
+    "candidateName": "temporal_v92394",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05456, hyst=0.0943, gap=6, persist=3",
+    "config": {
+      "airborneThreshold": 0.05456,
+      "hysteresis": 0.0943,
+      "minRepGap": 6,
+      "persistence": 3,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000813",
+    "timestamp": "2026-08-11T01:42:46.595514",
+    "family": "temporal",
+    "candidateName": "temporal_v103",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06408000000000001, hyst=0.0987, gap=6, persist=4",
+    "config": {
+      "airborneThreshold": 0.06408000000000001,
+      "hysteresis": 0.0987,
+      "minRepGap": 6,
+      "persistence": 4,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 18,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208627",
+    "timestamp": "2026-08-11T05:35:36.868378",
+    "family": "temporal",
+    "candidateName": "temporal_v111475",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05912, hyst=0.0899, gap=14, persist=1",
+    "config": {
+      "airborneThreshold": 0.05912,
+      "hysteresis": 0.0899,
+      "minRepGap": 14,
+      "persistence": 1,
+      "nOfM": 3,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000838",
+    "timestamp": "2026-08-11T01:42:47.245965",
+    "family": "temporal",
+    "candidateName": "temporal_v107",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05512, hyst=0.09, gap=8, persist=2",
+    "config": {
+      "airborneThreshold": 0.05512,
+      "hysteresis": 0.09,
+      "minRepGap": 8,
+      "persistence": 2,
+      "nOfM": 5,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 44,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307385",
+    "timestamp": "2026-08-11T09:40:28.483963",
+    "family": "temporal",
+    "candidateName": "temporal_v164979",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05992, hyst=0.0982, gap=14, persist=5",
+    "config": {
+      "airborneThreshold": 0.05992,
+      "hysteresis": 0.0982,
+      "minRepGap": 14,
+      "persistence": 5,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000856",
+    "timestamp": "2026-08-11T01:42:47.661299",
+    "family": "temporal",
+    "candidateName": "temporal_v109",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05888, hyst=0.0995, gap=16, persist=4",
+    "config": {
+      "airborneThreshold": 0.05888,
+      "hysteresis": 0.0995,
+      "minRepGap": 16,
+      "persistence": 4,
+      "nOfM": 2,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 20,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307362",
+    "timestamp": "2026-08-11T09:40:24.382472",
+    "family": "temporal",
+    "candidateName": "temporal_v164968",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06296, hyst=0.0916, gap=6, persist=3",
+    "config": {
+      "airborneThreshold": 0.06296,
+      "hysteresis": 0.0916,
+      "minRepGap": 6,
+      "persistence": 3,
+      "nOfM": 5,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 17,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208674",
+    "timestamp": "2026-08-11T05:35:42.473575",
+    "family": "temporal",
+    "candidateName": "temporal_v111501",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06616, hyst=0.0985, gap=15, persist=4",
+    "config": {
+      "airborneThreshold": 0.06616,
+      "hysteresis": 0.0985,
+      "minRepGap": 15,
+      "persistence": 4,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 20,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000899",
+    "timestamp": "2026-08-11T01:42:48.574678",
+    "family": "temporal",
+    "candidateName": "temporal_v116",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05296, hyst=0.0841, gap=15, persist=5",
+    "config": {
+      "airborneThreshold": 0.05296,
+      "hysteresis": 0.0841,
+      "minRepGap": 15,
+      "persistence": 5,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208691",
+    "timestamp": "2026-08-11T05:35:44.576479",
+    "family": "temporal",
+    "candidateName": "temporal_v111507",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.04856, hyst=0.0807, gap=5, persist=3",
+    "config": {
+      "airborneThreshold": 0.04856,
+      "hysteresis": 0.0807,
+      "minRepGap": 5,
+      "persistence": 3,
+      "nOfM": 2,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307293",
+    "timestamp": "2026-08-11T09:40:12.386341",
+    "family": "temporal",
+    "candidateName": "temporal_v164935",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05856, hyst=0.0871, gap=11, persist=2",
+    "config": {
+      "airborneThreshold": 0.05856,
+      "hysteresis": 0.0871,
+      "minRepGap": 11,
+      "persistence": 2,
+      "nOfM": 3,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307275",
+    "timestamp": "2026-08-11T09:40:09.309710",
+    "family": "temporal",
+    "candidateName": "temporal_v164928",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05336, hyst=0.0935, gap=6, persist=3",
+    "config": {
+      "airborneThreshold": 0.05336,
+      "hysteresis": 0.0935,
+      "minRepGap": 6,
+      "persistence": 3,
+      "nOfM": 4,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208698",
+    "timestamp": "2026-08-11T05:35:45.308173",
+    "family": "temporal",
+    "candidateName": "temporal_v111510",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06544, hyst=0.0888, gap=13, persist=3",
+    "config": {
+      "airborneThreshold": 0.06544,
+      "hysteresis": 0.0888,
+      "minRepGap": 13,
+      "persistence": 3,
+      "nOfM": 6,
+      "velocityGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-173041",
+    "timestamp": "2026-08-11T04:29:01.551332",
+    "family": "temporal",
+    "candidateName": "temporal_v92321",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.07088, hyst=0.1, gap=15, persist=6",
+    "config": {
+      "airborneThreshold": 0.07088,
+      "hysteresis": 0.1,
+      "minRepGap": 15,
+      "persistence": 6,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307254",
+    "timestamp": "2026-08-11T09:40:05.807033",
+    "family": "temporal",
+    "candidateName": "temporal_v164917",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05888, hyst=0.0964, gap=7, persist=4",
+    "config": {
+      "airborneThreshold": 0.05888,
+      "hysteresis": 0.0964,
+      "minRepGap": 7,
+      "persistence": 4,
+      "velocityGate": true,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307214",
+    "timestamp": "2026-08-11T09:39:58.618",
+    "family": "temporal",
+    "candidateName": "temporal_v164898",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.04936, hyst=0.0868, gap=8, persist=3",
+    "config": {
+      "airborneThreshold": 0.04936,
+      "hysteresis": 0.0868,
+      "minRepGap": 8,
+      "persistence": 3,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307212",
+    "timestamp": "2026-08-11T09:39:58.315911",
+    "family": "temporal",
+    "candidateName": "temporal_v164896",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.07096000000000001, hyst=0.0979, gap=6, persist=3",
+    "config": {
+      "airborneThreshold": 0.07096000000000001,
+      "hysteresis": 0.0979,
+      "minRepGap": 6,
+      "persistence": 3,
+      "nOfM": 4
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-307188",
+    "timestamp": "2026-08-11T09:39:53.534130",
+    "family": "temporal",
+    "candidateName": "temporal_v164882",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.066, hyst=0.0928, gap=13, persist=6",
+    "config": {
+      "airborneThreshold": 0.066,
+      "hysteresis": 0.0928,
+      "minRepGap": 13,
+      "persistence": 6,
+      "nOfM": 2,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-001106",
+    "timestamp": "2026-08-11T01:42:53.344978",
+    "family": "temporal",
+    "candidateName": "temporal_v141",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06624000000000001, hyst=0.0928, gap=12, persist=6",
+    "config": {
+      "airborneThreshold": 0.06624000000000001,
+      "hysteresis": 0.0928,
+      "minRepGap": 12,
+      "persistence": 6,
+      "velocityGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 19,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-001108",
+    "timestamp": "2026-08-11T01:42:53.389571",
+    "family": "temporal",
+    "candidateName": "temporal_v142",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.07224000000000001, hyst=0.0961, gap=9, persist=1",
+    "config": {
+      "airborneThreshold": 0.07224000000000001,
+      "hysteresis": 0.0961,
+      "minRepGap": 9,
+      "persistence": 1,
+      "velocityGate": true,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-001110",
+    "timestamp": "2026-08-11T01:42:53.438647",
+    "family": "temporal",
+    "candidateName": "temporal_v143",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.04848, hyst=0.0856, gap=13, persist=3",
+    "config": {
+      "airborneThreshold": 0.04848,
+      "hysteresis": 0.0856,
+      "minRepGap": 13,
+      "persistence": 3,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 26,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208715",
+    "timestamp": "2026-08-11T05:35:47.427973",
+    "family": "temporal",
+    "candidateName": "temporal_v111520",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06104000000000001, hyst=0.094, gap=6, persist=2",
+    "config": {
+      "airborneThreshold": 0.06104000000000001,
+      "hysteresis": 0.094,
+      "minRepGap": 6,
+      "persistence": 2,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208443",
+    "timestamp": "2026-08-11T05:35:14.395755",
+    "family": "temporal",
+    "candidateName": "temporal_v111376",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.0704, hyst=0.0951, gap=16, persist=6",
+    "config": {
+      "airborneThreshold": 0.0704,
+      "hysteresis": 0.0951,
+      "minRepGap": 16,
+      "persistence": 6,
+      "nOfM": 6
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 15,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208793",
+    "timestamp": "2026-08-11T05:35:57.023636",
+    "family": "temporal",
+    "candidateName": "temporal_v111555",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.059840000000000004, hyst=0.095, gap=14, persist=2",
+    "config": {
+      "airborneThreshold": 0.059840000000000004,
+      "hysteresis": 0.095,
+      "minRepGap": 14,
+      "persistence": 2
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-172893",
+    "timestamp": "2026-08-11T04:28:45.565692",
+    "family": "temporal",
+    "candidateName": "temporal_v92246",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.06496, hyst=0.0945, gap=9, persist=4",
+    "config": {
+      "airborneThreshold": 0.06496,
+      "hysteresis": 0.0945,
+      "minRepGap": 9,
+      "persistence": 4,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-208839",
+    "timestamp": "2026-08-11T05:36:02.666004",
+    "family": "temporal",
+    "candidateName": "temporal_v111581",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05432000000000001, hyst=0.0865, gap=14, persist=5",
+    "config": {
+      "airborneThreshold": 0.05432000000000001,
+      "hysteresis": 0.0865,
+      "minRepGap": 14,
+      "persistence": 5,
+      "nOfM": 3,
+      "velocityGate": true,
+      "accelGate": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 16,
+    "tp": 9,
+    "fn": 7,
+    "fp": 5,
+    "recall": 0.5625,
+    "precision": 0.6428571428571429,
+    "f1": 0.6000000000000001,
+    "exactCountRate": 0.3333333333333333,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.3733333333333334,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 5 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.6000)",
+    "status": "completed",
+    "error": null
+  }
+]

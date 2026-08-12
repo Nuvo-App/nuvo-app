@@ -1,0 +1,10 @@
+=== FAILURE MINING REPORT ===
+
+TOP FAILURE CAUSES:
+  28x airborne_not_detected
+  12x ascent_timeout
+  11x airborne_too_long
+  2x compression_timeout
+
+CONFUSER FALSE ACCEPT CLUSTERS:
+  1 reps from jumping_jacks
