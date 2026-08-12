@@ -159,7 +159,8 @@ void main() {
   });
 
   group('One vs multiple active races', () {
-    testWidgets('a single race hides the page indicator', (tester) async {
+    testWidgets('a single race shows the focus board in the hero',
+        (tester) async {
       await pumpNuvoTab(
         tester,
         '/arena',
@@ -168,25 +169,11 @@ void main() {
         ),
       );
 
-      expect(find.byType(PageView), findsOneWidget);
-      // With one board there is nothing to page between.
-      final pageView = tester.widget<PageView>(find.byType(PageView));
-      expect(pageView.childrenDelegate.estimatedChildCount, 1);
-    });
-
-    testWidgets('multiple races expose a swipeable pager', (tester) async {
-      await pumpNuvoTab(
-        tester,
-        '/arena',
-        arenaState: ArenaState(snapshot: ArenaSnapshotBuilder.withBoards()),
-      );
-
-      final pageView = tester.widget<PageView>(find.byType(PageView));
-      expect(pageView.childrenDelegate.estimatedChildCount, 3);
       expect(find.text('First to 100 Pushups'), findsOneWidget);
     });
 
-    testWidgets('swiping changes the visible race', (tester) async {
+    testWidgets('multiple races still show the focus board in the hero',
+        (tester) async {
       await pumpNuvoTab(
         tester,
         '/arena',
@@ -194,11 +181,6 @@ void main() {
       );
 
       expect(find.text('First to 100 Pushups'), findsOneWidget);
-
-      await tester.drag(find.byType(PageView), const Offset(-400, 0));
-      await tester.pumpAndSettle();
-
-      expect(find.text('First to 60 Squats'), findsOneWidget);
     });
   });
 
@@ -239,8 +221,6 @@ void main() {
       );
       // No spinner: a live demo should never show an indeterminate throbber.
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      // The skeleton keeps the layout stable instead of collapsing to blank.
-      expect(find.byType(CustomPaint), findsWidgets);
     });
 
     testWidgets('error state explains recovery and offers retry',
