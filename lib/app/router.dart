@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -34,75 +35,18 @@ import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
-// Soft horizontal-slide + fade transition used on all auth/onboarding routes.
+// Native interactive page transition used on all pushed routes. CupertinoPage
+// gives iOS the system edge-back gesture and correct cancellation behavior.
 Page<void> _authPage(GoRouterState state, Widget child) =>
-    CustomTransitionPage<void>(
-      key: state.pageKey,
-      child: child,
-      transitionDuration: const Duration(milliseconds: 320),
-      reverseTransitionDuration: const Duration(milliseconds: 240),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: CurveTween(curve: Curves.easeOut).animate(animation),
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0.06, 0),
-              end: Offset.zero,
-            ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(animation),
-            child: child,
-          ),
-        );
-      },
-    );
+    CupertinoPage<void>(key: state.pageKey, child: child);
 
 // Slide-up transition for camera/verification — feels like the action is expanding.
 Page<void> _cameraPage(GoRouterState state, Widget child) =>
-    CustomTransitionPage<void>(
-      key: state.pageKey,
-      child: child,
-      transitionDuration: const Duration(milliseconds: 340),
-      reverseTransitionDuration: const Duration(milliseconds: 260),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: CurveTween(curve: Curves.easeOut).animate(animation),
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.08),
-              end: Offset.zero,
-            ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(animation),
-            child: child,
-          ),
-        );
-      },
-    );
+    CupertinoPage<void>(key: state.pageKey, child: child);
 
 // Race detail: horizontal slide with slight scale for depth.
 Page<void> _detailPage(GoRouterState state, Widget child) =>
-    CustomTransitionPage<void>(
-      key: state.pageKey,
-      child: child,
-      transitionDuration: const Duration(milliseconds: 300),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curvedAnimation = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        return FadeTransition(
-          opacity: curvedAnimation,
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0.04, 0),
-              end: Offset.zero,
-            ).animate(curvedAnimation),
-            child: ScaleTransition(
-              scale: Tween(begin: 0.97, end: 1.0).animate(curvedAnimation),
-              child: child,
-            ),
-          ),
-        );
-      },
-    );
+    CupertinoPage<void>(key: state.pageKey, child: child);
 
 /// Bottom-nav tab switch: instant, no transition. Each tab is a full
 /// screen rebuild (this ShellRoute doesn't preserve branch state across

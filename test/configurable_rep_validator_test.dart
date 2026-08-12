@@ -123,6 +123,32 @@ NuvoPoseFrame _squatDeep() => _frame({
   'leftAnkle': _p(0.43, 0.90),
   'rightAnkle': _p(0.57, 0.90),
 });
+
+NuvoPoseFrame _pushupFrame({required bool active}) {
+  final shoulderY = 0.36 + (active ? 0.08 : 0);
+  final elbowY = active ? 0.49 : 0.40;
+  return _frame({
+    'leftShoulder': _p(0.34, shoulderY),
+    'rightShoulder': _p(0.66, shoulderY),
+    'leftElbow': _p(0.26, elbowY),
+    'rightElbow': _p(0.74, elbowY),
+    'leftWrist': _p(0.18, 0.48),
+    'rightWrist': _p(0.82, 0.48),
+    'leftHip': _p(0.42, 0.55),
+    'rightHip': _p(0.58, 0.55),
+  });
+}
+
+NuvoPoseFrame _croppedPushupFrame() => _frame({
+  'leftShoulder': _p(0.05, 0.36),
+  'rightShoulder': _p(0.95, 0.36),
+  'leftElbow': _p(0.01, 0.40),
+  'rightElbow': _p(0.99, 0.40),
+  'leftWrist': _p(0.00, 0.48),
+  'rightWrist': _p(1.00, 0.48),
+  'leftHip': _p(0.35, 0.55),
+  'rightHip': _p(0.65, 0.55),
+});
 // torsoHeight = |0.62 - 0.30| = 0.32
 // ratio = (0.64 - 0.62) / 0.32 = 0.0625 < 0.58 → ACTIVE ✅
 
@@ -677,6 +703,38 @@ void main() {
         createMotionValidator(AiMotionActivity.plankHold, 10),
         isA<PlankHoldValidator>(),
       );
+    });
+  });
+
+  group('pushup validator safeguards', () {
+    test('counts a fast phase sequence with two frames per phase', () {
+      final validator = PushupsValidator(targetValue: 5);
+      validator.start();
+
+      for (final frame in [
+        _pushupFrame(active: false),
+        _pushupFrame(active: false),
+        _pushupFrame(active: true),
+        _pushupFrame(active: true),
+        _pushupFrame(active: false),
+        _pushupFrame(active: false),
+      ]) {
+        validator.update(frame);
+      }
+
+      expect(validator.currentValue, 1);
+    });
+
+    test('does not count a close cropped pose', () {
+      final validator = PushupsValidator(targetValue: 1);
+      validator.start();
+
+      for (var i = 0; i < 4; i++) {
+        validator.update(_croppedPushupFrame());
+      }
+
+      expect(validator.currentValue, 0);
+      expect(validator.failedRuleReason, 'pushup_framing_too_close');
     });
   });
 }

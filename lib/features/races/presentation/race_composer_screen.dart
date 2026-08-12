@@ -253,9 +253,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       }
       final wantsInvite = draft.visibility == 'invite_code';
       if (wantsInvite) {
-        context.go('/race/${race.id}/invite');
+        context.push('/race/${race.id}/invite');
       } else {
-        context.go('/race/${race.id}');
+        context.push('/race/${race.id}');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -867,7 +867,7 @@ class _SearchBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.border, width: 1.5),
+        border: Border.all(color: NuvoColors.navy, width: 1.5),
       ),
       child: TextField(
         controller: controller,
@@ -1033,8 +1033,8 @@ class _CompactActivityCard extends StatelessWidget {
               : NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
           border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.divider,
-            width: selected ? 2 : 1,
+            color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+            width: selected ? 2 : 1.5,
           ),
           boxShadow: null,
         ),

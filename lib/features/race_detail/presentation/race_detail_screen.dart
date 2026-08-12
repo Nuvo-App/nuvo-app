@@ -656,18 +656,15 @@ class _RaceSummaryCard extends StatelessWidget {
             children: [
               PressableScale(
                 onTap: onBack,
-                child: Container(
+                child: const SizedBox(
                   width: 36,
                   height: 36,
-                  decoration: BoxDecoration(
-                    color: NuvoColors.surface,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: NuvoColors.navy, width: 1.5),
-                  ),
-                  child: const NuvoIcon(
-                    NuvoIconType.back,
-                    color: NuvoColors.navy,
-                    size: 15,
+                  child: Center(
+                    child: NuvoIcon(
+                      NuvoIconType.back,
+                      color: NuvoColors.navy,
+                      size: 22,
+                    ),
                   ),
                 ),
               ),
