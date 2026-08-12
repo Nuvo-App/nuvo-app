@@ -25,17 +25,42 @@ class RaceState {
 }
 
 class RaceController extends StateNotifier<RaceState> {
-  RaceController(this._repo) : super(const RaceState()) {
-    loadRaces();
-  }
+  RaceController(this._repo) : super(const RaceState());
 
   final RaceRepository _repo;
+  static const _cacheLifetime = Duration(minutes: 5);
+  Future<void>? _loadInFlight;
+  DateTime? _racesLoadedAt;
 
-  Future<void> loadRaces() async {
-    state = state.copyWith(loading: true, error: null);
+  Future<void> loadRaces({bool force = true}) {
+    final loadedAt = _racesLoadedAt;
+    if (!force &&
+        loadedAt != null &&
+        DateTime.now().difference(loadedAt) < _cacheLifetime) {
+      return Future.value();
+    }
+    final inFlight = _loadInFlight;
+    if (inFlight != null) return inFlight;
+
+    final request = _fetchRaces();
+    _loadInFlight = request;
+    request.then<void>(
+      (_) => _clearInFlight(request),
+      onError: (Object _, StackTrace _) => _clearInFlight(request),
+    );
+    return request;
+  }
+
+  void _clearInFlight(Future<void> request) {
+    if (identical(_loadInFlight, request)) _loadInFlight = null;
+  }
+
+  Future<void> _fetchRaces() async {
+    if (mounted) state = RaceState(races: state.races, loading: true);
     try {
       final races = await _repo.getRaces();
-      if (mounted) state = state.copyWith(races: races, loading: false);
+      _racesLoadedAt = DateTime.now();
+      if (mounted) state = RaceState(races: races);
     } on ApiException catch (e) {
       if (mounted) state = state.copyWith(loading: false, error: e.message);
     } catch (_) {
@@ -89,6 +114,7 @@ class RaceController extends StateNotifier<RaceState> {
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
+      _racesLoadedAt = DateTime.now();
     }
     return race;
   }
@@ -107,6 +133,7 @@ class RaceController extends StateNotifier<RaceState> {
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
+      _racesLoadedAt = DateTime.now();
     }
     return race;
   }
@@ -156,6 +183,7 @@ class RaceController extends StateNotifier<RaceState> {
   }
 
   void clearRaces() {
+    _racesLoadedAt = null;
     if (mounted) state = const RaceState();
   }
 
@@ -294,6 +322,7 @@ class RaceController extends StateNotifier<RaceState> {
 
   void _upsertRace(Race race) {
     if (!mounted) return;
+    _racesLoadedAt = DateTime.now();
     final exists = state.races.any((item) => item.id == race.id);
     state = state.copyWith(
       races: exists
@@ -318,12 +347,15 @@ final raceRepositoryProvider = Provider<RaceRepository>(
 final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
   (ref) {
     final controller = RaceController(ref.watch(raceRepositoryProvider));
+    if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+      controller.loadRaces(force: false);
+    }
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (next.status == AuthStatus.unauthenticated) {
         controller.clearRaces();
       } else if (next.status == AuthStatus.authenticated &&
           prev?.status != AuthStatus.authenticated) {
-        controller.loadRaces();
+        controller.loadRaces(force: false);
       }
     });
     return controller;
