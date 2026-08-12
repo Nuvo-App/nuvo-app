@@ -17,7 +17,7 @@ vocabulary, identifies drift, and proposes the migration plan for Phase 1.
 - `NuvoColors.panel` (0xFFE1ECFF) — soft blue tint, active pills
 - `NuvoColors.panelLight` (0xFFF0F5FF) — lighter tint
 - `NuvoColors.divider` (0xFFDCE3EE) — thin separators
-- `NuvoColors.border` (0xFFCBD3DE) — standard stroke
+- `NuvoColors.border` (0xFF07152D) — standard dark structural outline
 - `NuvoColors.muted` (0xFF5E6C85) — secondary text
 - `NuvoColors.textMuted` (0xFF718097) — tertiary text
 - `NuvoColors.success` (0xFF66816C) — verified/completed
@@ -92,9 +92,9 @@ and `14` values are off-scale.
 - `hero` / `action` / `brand` — 2px navy
 - `chip` — 1.5px action blue at 0.45 alpha
 
-**Compete usage:** `NuvoColors.divider` for list container borders,
-`NuvoColors.border` at `1.25` width for Quick Start chips. Inconsistent with
-`NuvoBorders` tokens.
+**Outline rule:** use `NuvoColors.border` / `NuvoColors.navy` for structural
+outlines on cards, fields, chips, and controls. Reserve `NuvoColors.divider`
+for thin separators inside lists. Grey borders should not frame surfaces.
 
 ### Shadows (`lib/core/theme/app_shadows.dart`)
 

@@ -23,7 +23,6 @@ const _arenaText = NuvoColors.navy;
 const _arenaMuted = NuvoColors.textMuted;
 const _arenaBlue = NuvoColors.blue;
 const _arenaGreen = NuvoColors.success;
-const _arenaAmber = NuvoColors.gold;
 
 class ArenaScreen extends ConsumerStatefulWidget {
   const ArenaScreen({super.key, this.preview = false});
@@ -137,16 +136,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onPageChanged: (page) =>
                                   setState(() => _boardPage = page),
                               padEnds: false,
-                              itemBuilder: (context, index) => Padding(
-                                padding: EdgeInsets.only(
-                                  right: index == boards.length - 1 ? 0 : 12,
-                                ),
-                                child: _NextMoveHero(
-                                  board: boards[index],
-                                  onOpen: () =>
-                                      _openBoard(context, boards[index]),
-                                ),
-                              ),
+                              itemBuilder: (context, index) =>
+                                  _BoardCarouselItem(
+                                    controller: _boardsController,
+                                    index: index,
+                                    board: boards[index],
+                                    isLast: index == boards.length - 1,
+                                    onOpen: () =>
+                                        _openBoard(context, boards[index]),
+                                  ),
                             ),
                           );
                         },
@@ -156,25 +154,32 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         _PageDots(count: boards.length, selected: _boardPage),
                       ],
                       const SizedBox(height: 28),
-                      _QuickActions(
-                        onSubmit: activeBoard.isResult
-                            ? null
-                            : () => _handlePrimaryAction(
-                                context,
-                                activeBoard,
-                                raceById,
-                              ),
-                        onStart: () => context.push('/races/new'),
-                        onJoin: () => context.push('/races/join'),
-                      ),
-                      const SizedBox(height: 30),
-                      _SectionLabel(title: 'Leaderboard'),
-                      const SizedBox(height: 12),
-                      _Standings(
-                        board: activeBoard,
-                        currentUserId: user?.id,
-                        initials: user?.avatarInitials ?? '?',
-                        photoUrl: user?.profilePhotoUrl,
+                      KeyedSubtree(
+                        key: ValueKey('board-sections-${activeBoard.id}'),
+                        child: Column(
+                          children: [
+                            _QuickActions(
+                              onSubmit: activeBoard.isResult
+                                  ? null
+                                  : () => _handlePrimaryAction(
+                                      context,
+                                      activeBoard,
+                                      raceById,
+                                    ),
+                              onStart: () => context.push('/races/new'),
+                              onJoin: () => context.push('/races/join'),
+                            ),
+                            const SizedBox(height: 30),
+                            _SectionLabel(title: 'Leaderboard'),
+                            const SizedBox(height: 12),
+                            _Standings(
+                              board: activeBoard,
+                              currentUserId: user?.id,
+                              initials: user?.avatarInitials ?? '?',
+                              photoUrl: user?.profilePhotoUrl,
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 30),
                       _SectionLabel(
@@ -297,6 +302,49 @@ class _SectionLabel extends StatelessWidget {
   );
 }
 
+class _BoardCarouselItem extends StatelessWidget {
+  const _BoardCarouselItem({
+    required this.controller,
+    required this.index,
+    required this.board,
+    required this.isLast,
+    required this.onOpen,
+  });
+
+  final PageController controller;
+  final int index;
+  final ArenaBoard board;
+  final bool isLast;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, child) {
+      final page = controller.hasClients
+          ? (controller.page ?? index.toDouble())
+          : index.toDouble();
+      final delta = (page - index).clamp(-1.0, 1.0);
+      final distance = delta.abs();
+      final arcOffset = distance * distance * 34;
+      return Transform.translate(
+        offset: Offset(0, arcOffset),
+        child: Transform.rotate(
+          angle: -delta * 0.05,
+          child: Transform.scale(
+            scale: 1 - distance * 0.045,
+            child: Padding(
+              padding: EdgeInsets.only(right: isLast ? 0 : 12),
+              child: child,
+            ),
+          ),
+        ),
+      );
+    },
+    child: _NextMoveHero(board: board, onOpen: onOpen),
+  );
+}
+
 class _NextMoveHero extends StatelessWidget {
   const _NextMoveHero({required this.board, required this.onOpen});
   final ArenaBoard board;
@@ -387,8 +435,8 @@ class _NextMoveHero extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _RaceProgressTrack(
+                    key: ValueKey('progress-${board.id}'),
                     progress: pct / 100,
-                    curveIndex: _curveVariantForBoard(board.id),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -449,17 +497,22 @@ class _NextMoveHero extends StatelessWidget {
 }
 
 class _RaceProgressTrack extends StatelessWidget {
-  const _RaceProgressTrack({required this.progress, required this.curveIndex});
+  const _RaceProgressTrack({super.key, required this.progress});
   final double progress;
-  final int curveIndex;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: 42,
-    child: CustomPaint(
-      painter: _RaceProgressPainter(progress: progress, curveIndex: curveIndex),
-      child: const SizedBox.expand(),
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween<double>(begin: 0, end: progress),
+    duration: const Duration(milliseconds: 700),
+    curve: Curves.easeOutCubic,
+    builder: (context, animatedProgress, child) => SizedBox(
+      height: 42,
+      child: CustomPaint(
+        painter: _RaceProgressPainter(progress: animatedProgress),
+        child: child,
+      ),
     ),
+    child: const SizedBox.expand(),
   );
 }
 
@@ -508,51 +561,25 @@ class _RaceDetails extends StatelessWidget {
   }
 }
 
-class _ArenaCurve {
-  const _ArenaCurve(this.controlOne, this.controlTwo);
-  final Offset controlOne;
-  final Offset controlTwo;
-}
-
-const _arenaCurves = <_ArenaCurve>[
-  _ArenaCurve(Offset(.28, .18), Offset(.72, .82)),
-  _ArenaCurve(Offset(.28, .82), Offset(.72, .18)),
-  _ArenaCurve(Offset(.28, .02), Offset(.72, .02)),
-  _ArenaCurve(Offset(.28, .98), Offset(.72, .98)),
-  _ArenaCurve(Offset(.24, .72), Offset(.76, .28)),
-  _ArenaCurve(Offset(.38, .04), Offset(.62, .72)),
-  _ArenaCurve(Offset(.38, .96), Offset(.62, .28)),
-  _ArenaCurve(Offset(.22, .35), Offset(.78, .65)),
-  _ArenaCurve(Offset(.42, .08), Offset(.58, .92)),
-  _ArenaCurve(Offset(.42, .92), Offset(.58, .08)),
-];
-
 class _RaceProgressPainter extends CustomPainter {
-  const _RaceProgressPainter({
-    required this.progress,
-    required this.curveIndex,
-  });
+  const _RaceProgressPainter({required this.progress});
   final double progress;
-  final int curveIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
     final start = Offset(14, size.height / 2);
-    final finish = Offset(size.width - 22, size.height / 2);
-    final curve = _arenaCurves[curveIndex % _arenaCurves.length];
+    final finish = Offset(size.width - 36, size.height / 2);
     final path = Path()
       ..moveTo(start.dx, start.dy)
-      ..cubicTo(
-        start.dx + (finish.dx - start.dx) * curve.controlOne.dx,
-        size.height * curve.controlOne.dy,
-        start.dx + (finish.dx - start.dx) * curve.controlTwo.dx,
-        size.height * curve.controlTwo.dy,
+      ..quadraticBezierTo(
+        size.width * .52,
+        size.height * .38,
         finish.dx,
         finish.dy,
       );
     final track = Paint()
       ..color = NuvoColors.navy
-      ..strokeWidth = 12
+      ..strokeWidth = 16
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, track);
@@ -560,8 +587,9 @@ class _RaceProgressPainter extends CustomPainter {
     if (progress > 0 && metric.length > 0) {
       final progressPaint = Paint()
         ..color = NuvoColors.blue
-        ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round;
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
       canvas.drawPath(
         metric.extractPath(0, metric.length * progress.clamp(0, 1)),
         progressPaint,
@@ -573,15 +601,16 @@ class _RaceProgressPainter extends CustomPainter {
       ..strokeWidth = 3;
     canvas.drawCircle(start, 10, marker);
     final flagPaint = Paint()..color = _arenaText;
+    final flagX = finish.dx + 12;
     canvas.drawRect(
-      Rect.fromLTWH(finish.dx, 5, 2, 28),
+      Rect.fromLTWH(flagX, 5, 2, 28),
       Paint()..color = _arenaLine,
     );
     canvas.drawPath(
       Path()
-        ..moveTo(finish.dx + 2, 5)
+        ..moveTo(flagX + 2, 5)
         ..lineTo(size.width - 3, 10)
-        ..lineTo(finish.dx + 2, 16)
+        ..lineTo(flagX + 2, 16)
         ..close(),
       flagPaint,
     );
@@ -589,15 +618,7 @@ class _RaceProgressPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RaceProgressPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.curveIndex != curveIndex;
-}
-
-int _curveVariantForBoard(String boardId) {
-  var hash = 0;
-  for (final codeUnit in boardId.codeUnits) {
-    hash = (hash * 31 + codeUnit) & 0x7fffffff;
-  }
-  return hash % _arenaCurves.length;
+      oldDelegate.progress != progress;
 }
 
 class _PageDots extends StatelessWidget {
@@ -657,7 +678,8 @@ class _QuickActions extends StatelessWidget {
         flex: 2,
         child: NuvoOutlineButton(
           icon: Icons.add_rounded,
-          label: 'Start',
+          label: '',
+          iconOnly: true,
           onPressed: onStart,
           expand: true,
           small: false,
@@ -668,7 +690,8 @@ class _QuickActions extends StatelessWidget {
         flex: 2,
         child: NuvoOutlineButton(
           icon: Icons.group_add_outlined,
-          label: 'Join',
+          label: '',
+          iconOnly: true,
           onPressed: onJoin,
           expand: true,
           small: false,
@@ -691,11 +714,10 @@ class _Standings extends StatelessWidget {
   final String? photoUrl;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
     decoration: BoxDecoration(
       color: _arenaSurface,
       borderRadius: BorderRadius.circular(NuvoRadii.hero),
-      border: Border.all(color: _arenaLine),
     ),
     child: board.miniLeaderboard.isEmpty
         ? Padding(
@@ -735,51 +757,85 @@ class _StandingRow extends StatelessWidget {
   final String? initials;
   final String? photoUrl;
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Row(
-      children: [
-        SizedBox(
-          width: 22,
-          child: Text(
-            '$rank',
-            style: AppTextStyles.labelMedium.copyWith(
-              color: rank == 1 ? _arenaAmber : _arenaMuted,
-              fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) {
+    final rankColor = switch (rank) {
+      1 => NuvoColors.gold,
+      2 => NuvoColors.silver,
+      3 => NuvoColors.bronze,
+      _ => row.isCurrentUser ? _arenaBlue : _arenaLine,
+    };
+    final isTopThree = rank <= 3;
+    final isCurrentUser = row.isCurrentUser;
+    final selectedFill = isCurrentUser
+        ? (isTopThree ? rankColor : _arenaBlue)
+        : null;
+    final outlineColor = isTopThree
+        ? rankColor
+        : isCurrentUser
+        ? _arenaBlue
+        : null;
+    final textColor = isTopThree ? rankColor : _arenaMuted;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: selectedFill,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: outlineColor != null
+            ? Border.all(color: outlineColor, width: 2)
+            : null,
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 22,
+            child: Text(
+              '$rank',
+              style: AppTextStyles.labelMedium.copyWith(
+                color: selectedFill != null ? NuvoColors.white : textColor,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
-        ),
-        NuvoAvatar(
-          initials: initials ?? _initials(row.label),
-          photoUrl: photoUrl ?? row.profilePhotoUrl,
-          size: 30,
-          bgColor: _arenaSurfaceRaised,
-          textColor: _arenaText,
-          borderColor: row.isCurrentUser ? _arenaBlue : _arenaLine,
-          borderWidth: 1,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            row.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: row.isCurrentUser ? _arenaText : _arenaMuted,
-              fontWeight: row.isCurrentUser ? FontWeight.w700 : FontWeight.w500,
+          NuvoAvatar(
+            initials: initials ?? _initials(row.label),
+            photoUrl: photoUrl ?? row.profilePhotoUrl,
+            size: 34,
+            bgColor: _arenaSurfaceRaised,
+            textColor: selectedFill != null ? NuvoColors.white : _arenaText,
+            borderColor: selectedFill != null
+                ? NuvoColors.white
+                : (outlineColor ?? _arenaLine),
+            borderWidth: outlineColor != null ? 2 : 1,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              row.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: selectedFill != null
+                    ? NuvoColors.white
+                    : (row.isCurrentUser ? _arenaText : _arenaMuted),
+                fontWeight: row.isCurrentUser
+                    ? FontWeight.w700
+                    : FontWeight.w500,
+              ),
             ),
           ),
-        ),
-        Text(
-          row.value,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: row.isCurrentUser ? _arenaBlue : _arenaMuted,
-            fontWeight: FontWeight.w700,
+          Text(
+            row.value,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: selectedFill != null ? NuvoColors.white : textColor,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _ActivityStream extends StatelessWidget {

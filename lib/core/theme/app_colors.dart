@@ -61,8 +61,11 @@ final class NuvoColors {
   // ── Lines and tracks ──────────────────────────────────────────────────────────
   static const Color trackBg = Color(0xFFE1ECFF);
   static const Color divider = Color(0xFFDCE3EE);
-  static const Color border = Color(0xFFCBD3DE);
-  static const Color borderStrong = paleSlate;
+
+  /// Structural outline used on cards, fields, chips, and controls.
+  /// Keep this dark so outlined surfaces carry Nuvo's signature ink edge.
+  static const Color border = navy;
+  static const Color borderStrong = navy;
 
   /// Solid grey hard-offset plate for secondary cards (CTA construction,
   /// grey instead of ink navy). Must read clearly against white faces.

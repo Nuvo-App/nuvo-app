@@ -38,6 +38,7 @@ enum _VerifySegment { ready, completed, recent }
 
 class _MoveScreenState extends ConsumerState<MoveScreen> {
   _VerifySegment _segment = _VerifySegment.ready;
+  int _segmentDirection = 1;
   bool _readyExpanded = false;
   bool _completedExpanded = false;
   bool _recentExpanded = false;
@@ -45,6 +46,28 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
   static const _readyCap = 3;
   static const _completedCap = 5;
   static const _recentCap = 5;
+
+  void _setSegment(_VerifySegment next) {
+    if (next == _segment) return;
+    final oldIndex = _VerifySegment.values.indexOf(_segment);
+    final nextIndex = _VerifySegment.values.indexOf(next);
+    setState(() {
+      _segmentDirection = nextIndex >= oldIndex ? 1 : -1;
+      _segment = next;
+      _readyExpanded = false;
+      _completedExpanded = false;
+      _recentExpanded = false;
+    });
+  }
+
+  void _moveSegment(int delta) {
+    final index = _VerifySegment.values.indexOf(_segment);
+    final nextIndex = (index + delta).clamp(
+      0,
+      _VerifySegment.values.length - 1,
+    );
+    _setSegment(_VerifySegment.values[nextIndex]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,44 +156,67 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
                 readyCount: readyRaces.length,
                 completedCount: completedRaces.length,
                 recentCount: recentMoves.length,
-                onChanged: (s) => setState(() {
-                  _segment = s;
-                  _readyExpanded = false;
-                  _completedExpanded = false;
-                  _recentExpanded = false;
-                }),
+                onChanged: _setSegment,
               ),
               const SizedBox(height: NuvoSpacing.xl),
 
-              switch (_segment) {
-                _VerifySegment.ready => _ReadySegment(
-                  races: readyRaces,
-                  userId: uid,
-                  expanded: _readyExpanded,
-                  cap: _readyCap,
-                  onToggleExpand: () =>
-                      setState(() => _readyExpanded = !_readyExpanded),
-                  onVerify: openVerification,
-                  onStartRace: () => context.push('/races/new'),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragEnd: (details) {
+                  final velocity = details.primaryVelocity ?? 0;
+                  if (velocity < -120) _moveSegment(1);
+                  if (velocity > 120) _moveSegment(-1);
+                },
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  reverseDuration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final offset = Tween<Offset>(
+                      begin: Offset(0.12 * _segmentDirection, 0),
+                      end: Offset.zero,
+                    ).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: offset, child: child),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey(_segment),
+                    child: switch (_segment) {
+                      _VerifySegment.ready => _ReadySegment(
+                        races: readyRaces,
+                        userId: uid,
+                        expanded: _readyExpanded,
+                        cap: _readyCap,
+                        onToggleExpand: () =>
+                            setState(() => _readyExpanded = !_readyExpanded),
+                        onVerify: openVerification,
+                        onStartRace: () => context.push('/races/new'),
+                      ),
+                      _VerifySegment.completed => _CompletedSegment(
+                        races: completedRaces,
+                        userId: uid,
+                        expanded: _completedExpanded,
+                        cap: _completedCap,
+                        onToggleExpand: () => setState(
+                          () => _completedExpanded = !_completedExpanded,
+                        ),
+                        onOpen: (race) => context.push('/race/${race.id}'),
+                      ),
+                      _VerifySegment.recent => _RecentSegment(
+                        entries: recentMoves,
+                        expanded: _recentExpanded,
+                        cap: _recentCap,
+                        onToggleExpand: () =>
+                            setState(() => _recentExpanded = !_recentExpanded),
+                        onOpen: (race) => context.push('/race/${race.id}'),
+                      ),
+                    },
+                  ),
                 ),
-                _VerifySegment.completed => _CompletedSegment(
-                  races: completedRaces,
-                  userId: uid,
-                  expanded: _completedExpanded,
-                  cap: _completedCap,
-                  onToggleExpand: () =>
-                      setState(() => _completedExpanded = !_completedExpanded),
-                  onOpen: (race) => context.push('/race/${race.id}'),
-                ),
-                _VerifySegment.recent => _RecentSegment(
-                  entries: recentMoves,
-                  expanded: _recentExpanded,
-                  cap: _recentCap,
-                  onToggleExpand: () =>
-                      setState(() => _recentExpanded = !_recentExpanded),
-                  onOpen: (race) => context.push('/race/${race.id}'),
-                ),
-              },
+              ),
             ],
           ],
         ),
@@ -227,7 +273,7 @@ class _SegmentedControl extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: NuvoColors.panelLight,
+        color: NuvoColors.navy,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
       ),
       padding: const EdgeInsets.all(4),
@@ -280,10 +326,10 @@ class _SegmentTab extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? NuvoColors.surface : Colors.transparent,
+            color: selected ? NuvoColors.actionBlue : Colors.transparent,
             borderRadius: BorderRadius.circular(NuvoRadii.xs),
             border: selected
-                ? Border.all(color: NuvoColors.divider, width: 1)
+                ? Border.all(color: NuvoColors.actionBlue, width: 1)
                 : null,
           ),
           child: Column(
@@ -292,7 +338,7 @@ class _SegmentTab extends StatelessWidget {
                 label,
                 style: AppTextStyles.labelMedium.copyWith(
                   fontSize: 13,
-                  color: selected ? NuvoColors.navy : NuvoColors.textMuted,
+                  color: selected ? NuvoColors.white : NuvoColors.textMuted,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                 ),
               ),
@@ -301,7 +347,7 @@ class _SegmentTab extends StatelessWidget {
                 '$count',
                 style: AppTextStyles.labelSmall.copyWith(
                   fontSize: 10,
-                  color: selected ? NuvoColors.muted : NuvoColors.textDim,
+                  color: selected ? NuvoColors.white : NuvoColors.textDim,
                   fontWeight: FontWeight.w700,
                 ),
               ),

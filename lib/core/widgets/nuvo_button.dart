@@ -241,6 +241,7 @@ class NuvoOutlineButton extends StatelessWidget {
     this.expand = false,
     this.small = false,
     this.flat = false,
+    this.iconOnly = false,
   });
 
   final String label;
@@ -252,6 +253,9 @@ class NuvoOutlineButton extends StatelessWidget {
 
   /// When true, renders without hard-offset shadow.
   final bool flat;
+
+  /// Centers the icon independently when the control has no visible label.
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -265,12 +269,18 @@ class NuvoOutlineButton extends StatelessWidget {
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
-      child: _buttonContent(
-        label: label,
-        textColor: NuvoColors.navy,
-        icon: icon,
-        leadingWidget: leadingWidget,
-      ),
+      child: iconOnly
+          ? Center(
+              child: icon == null
+                  ? leadingWidget
+                  : Icon(icon, color: NuvoColors.navy, size: 22),
+            )
+          : _buttonContent(
+              label: label,
+              textColor: NuvoColors.navy,
+              icon: icon,
+              leadingWidget: leadingWidget,
+            ),
     );
   }
 }

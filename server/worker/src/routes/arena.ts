@@ -199,11 +199,11 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
 
   const liveBoards = otherLive
     .slice(0, 5)
-    .map((r) => buildRealBoard(r, userId, participantsByRace, false, false));
+    .map((r) => buildRealBoard(r, userId, participantsByRace, false, true));
 
   const results = resultRaces
     .slice(0, 3)
-    .map((r) => buildRealBoard(r, userId, participantsByRace, true, false));
+    .map((r) => buildRealBoard(r, userId, participantsByRace, true, true));
 
   // Header pulse.
   let headerPulse: string;
