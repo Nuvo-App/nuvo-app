@@ -395,6 +395,7 @@ void main() {
       final result = runtime.customResult();
 
       expect(result.isVerified, isFalse);
+      expect(result.count, greaterThan(0));
       expect(result.finalFailureReason, 'target_not_met');
     });
   });

@@ -40,8 +40,16 @@ This document is NOT a new aesthetic. It formalizes what already works.
 | Token | Hex | Usage |
 |-------|-----|-------|
 | `divider` | `0xFFDCE3EE` | Thin separators between list rows |
-| `border` | `0xFFCBD3DE` | Standard stroke on outlined surfaces |
-| `borderStrong` / `paleSlate` | `0xFF929CAD` | Strong stroke, disabled text |
+| `border` | `0xFF07152D` | Standard dark stroke on outlined surfaces |
+| `borderStrong` | `0xFF07152D` | Strong structural stroke and controls |
+| `paleSlate` | `0xFF929CAD` | Disabled text and quiet disabled UI, not structural outlines |
+
+### Outline rule
+
+Structural outlines are always Nuvo navy (`NuvoColors.border`, which aliases
+`NuvoColors.navy`). This applies to cards, fields, chips, buttons, and other
+framed controls. Keep `NuvoColors.divider` light grey only for low-emphasis
+separators between rows. Do not use grey borders to frame a surface.
 
 ### Semantic — race state
 

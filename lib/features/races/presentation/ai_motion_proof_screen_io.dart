@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -179,8 +178,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
       final resolution = _runtimeResolver.resolve(
         eligibility: eligibility,
-        explicitVerifierType:
-            isCustom ? VerifierType.customPoseSequence.id : null,
+        explicitVerifierType: isCustom
+            ? VerifierType.customPoseSequence.id
+            : null,
       );
       if (!resolution.canCreateRuntime) {
         setState(() {
@@ -354,9 +354,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _debugLog(
       _isCustom
           ? 'verificationStarted custom=${_customMovementName ?? 'custom'} '
-            'mode=camera target=${_runtime.targetValue}'
+                'mode=camera target=${_runtime.targetValue}'
           : 'verificationStarted movement=${_runtime.movement.type.name} '
-            'mode=camera target=${_runtime.targetValue}',
+                'mode=camera target=${_runtime.targetValue}',
     );
     setState(() {
       _status = AiMotionProofStatus.recording;
@@ -408,7 +408,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // count; never modifies it.
       if (_usesRepFlash && output.count > _lastCountedValue) {
         final now = DateTime.now();
-        final onStreak = _lastRepAt != null &&
+        final onStreak =
+            _lastRepAt != null &&
             now.difference(_lastRepAt!).inMilliseconds < _streakTimeoutMs;
         _streakCount = onStreak ? _streakCount + 1 : 1;
         _lastRepAt = now;
@@ -430,17 +431,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _debugLog(
           _isCustom
               ? 'validatorState=${output.validatorState} '
-                'custom=${_customMovementName ?? 'custom'} '
-                'count=${output.count} '
-                'confidence=${output.confidence.toStringAsFixed(2)} '
-                'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
-                'debug=${output.debugValues}'
+                    'custom=${_customMovementName ?? 'custom'} '
+                    'count=${output.count} '
+                    'confidence=${output.confidence.toStringAsFixed(2)} '
+                    'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
+                    'debug=${output.debugValues}'
               : 'validatorState=${output.validatorState} '
-                'movement=${output.selectedMovement.type.name} '
-                'count=${output.count} holdSeconds=${output.holdSeconds} '
-                'confidence=${output.confidence.toStringAsFixed(2)} '
-                'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
-                'debug=${output.debugValues}',
+                    'movement=${output.selectedMovement.type.name} '
+                    'count=${output.count} holdSeconds=${output.holdSeconds} '
+                    'confidence=${output.confidence.toStringAsFixed(2)} '
+                    'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
+                    'debug=${output.debugValues}',
         );
       }
       if (mounted) setState(() {});
@@ -479,23 +480,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         });
         return;
       }
+      final acceptedResult = _acceptPartialCustomResult(result);
       _debugLog(
         'verificationFinished custom=${_customMovementName ?? 'custom'} '
-        'value=${result.count} '
-        'confidence=${result.confidence.toStringAsFixed(2)} '
-        'status=${result.verificationStatus} '
+        'value=${acceptedResult.count} '
+        'confidence=${acceptedResult.confidence.toStringAsFixed(2)} '
+        'status=${acceptedResult.verificationStatus} '
         'failedRule=${_runtime.failedRuleReason.isEmpty ? 'none' : _runtime.failedRuleReason}',
       );
       if (!mounted) return;
       setState(() {
-        _customResult = result;
+        _customResult = acceptedResult;
         _result = null;
-        _status = result.isVerified
+        _status = acceptedResult.isVerified
             ? AiMotionProofStatus.aiVerified
             : AiMotionProofStatus.aiFailed;
         _message = null;
       });
-      if (result.isVerified) _scheduleAutoSubmit();
+      if (acceptedResult.isVerified) _scheduleAutoSubmit();
       return;
     }
     final result = verifierResult.aiMotionResult;
@@ -507,22 +509,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       });
       return;
     }
+    final acceptedResult = _acceptPartialMotionResult(result);
     _debugLog(
       'verificationFinished movement=${_runtime.movement.type.name} '
-      'value=${result.detectedReps} '
-      'confidence=${result.confidence.toStringAsFixed(2)} '
-      'status=${result.verificationStatus} '
+      'value=${acceptedResult.detectedReps} '
+      'confidence=${acceptedResult.confidence.toStringAsFixed(2)} '
+      'status=${acceptedResult.verificationStatus} '
       'failedRule=${_runtime.failedRuleReason.isEmpty ? 'none' : _runtime.failedRuleReason}',
     );
     if (!mounted) return;
     setState(() {
-      _result = result;
-      _status = result.isVerified
+      _result = acceptedResult;
+      _status = acceptedResult.isVerified
           ? AiMotionProofStatus.aiVerified
           : AiMotionProofStatus.aiFailed;
       _message = null;
     });
-    if (result.isVerified) _scheduleAutoSubmit();
+    if (acceptedResult.isVerified) _scheduleAutoSubmit();
   }
 
   void _scheduleAutoSubmit() {
@@ -608,6 +611,55 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
   }
 
+  AiMotionResult _acceptPartialMotionResult(AiMotionResult result) {
+    if (result.isVerified ||
+        result.detectedReps <= 0 ||
+        result.validPoseFrames <= 0 ||
+        result.confidence < 0.58) {
+      return result;
+    }
+    return AiMotionResult(
+      activity: result.activity,
+      targetReps: result.targetReps,
+      detectedReps: result.detectedReps,
+      confidence: result.confidence,
+      verificationStatus: 'ai_verified',
+      verificationSummary:
+          'Recorded ${result.detectedReps} ${result.activity.label}. You can continue this race later.',
+      framesAnalyzed: result.framesAnalyzed,
+      validPoseFrames: result.validPoseFrames,
+      durationMs: result.durationMs,
+      validatorVersion: result.validatorVersion,
+    );
+  }
+
+  CustomPoseRuntimeResult _acceptPartialCustomResult(
+    CustomPoseRuntimeResult result,
+  ) {
+    if (result.isVerified ||
+        result.count <= 0 ||
+        result.validFrames <= 0 ||
+        result.confidence < 0.58) {
+      return result;
+    }
+    return CustomPoseRuntimeResult(
+      verifierType: result.verifierType,
+      verifierVersion: result.verifierVersion,
+      movementName: result.movementName,
+      measurementType: result.measurementType,
+      count: result.count,
+      target: result.target,
+      verificationStatus: 'custom_verified',
+      confidence: result.confidence,
+      framesAnalyzed: result.framesAnalyzed,
+      validFrames: result.validFrames,
+      durationMs: result.durationMs,
+      completionEvents: result.completionEvents,
+      invalidAttemptCount: result.invalidAttemptCount,
+      finalFailureReason: null,
+    );
+  }
+
   Future<void> _recordAgain() async {
     _recordingTimer?.cancel();
     await _stopImageStream();
@@ -679,18 +731,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final metricLabel = _isCustom
         ? _metric
         : motionActivityForBackendValue(_activity.backendValue)?.metric.label ??
-            _metric;
+              _metric;
     if (target != null && target > 0) {
       return '$total / $target $metricLabel race total';
     }
     return '$total $metricLabel race total';
   }
 
-  String get _movementTitle =>
-      _isCustom
-          ? (_customMovementName ?? 'Custom movement')
-          : motionActivityForBackendValue(_activity.backendValue)?.title ??
-              _activity.label;
+  String get _movementTitle => _isCustom
+      ? (_customMovementName ?? 'Custom movement')
+      : motionActivityForBackendValue(_activity.backendValue)?.title ??
+            _activity.label;
 
   /// True while a live preview is on screen. In that case the camera takes the
   /// whole screen instead of sitting in an inset card.
@@ -739,9 +790,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         const SizedBox(height: 2),
                         Text(
                           motionActivityForBackendValue(
-                                      _activity.backendValue,
-                                    )?.isHold ==
-                                    true
+                                    _activity.backendValue,
+                                  )?.isHold ==
+                                  true
                               ? 'Hold until the timer finishes.'
                               : 'Camera will count $_targetLabel.',
                           style: AppTextStyles.bodySmall.copyWith(
@@ -909,8 +960,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       color: targetReached
           ? NuvoColors.success
           : _isOnStreak
-              ? NuvoColors.brightGold
-              : NuvoColors.white,
+          ? NuvoColors.brightGold
+          : NuvoColors.white,
       glow: _skeletonGlow,
     );
   }
@@ -921,42 +972,46 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return IgnorePointer(
       child: Align(
         alignment: Alignment.center,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
-          decoration: BoxDecoration(
-            color: NuvoColors.success.withValues(alpha: 0.88),
-            borderRadius: BorderRadius.circular(NuvoRadii.hero),
-            boxShadow: AppShadows.hardMedium,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$_currentValue / $_targetValue',
-                style: AppTextStyles.displayLarge.copyWith(
-                  color: NuvoColors.white,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'FINISH LINE',
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: NuvoColors.white,
-                ),
-              ),
-            ],
-          ),
-        )
-            .animate(key: ValueKey(_targetCelebrationSeq))
-            .scale(
-              begin: const Offset(0.6, 0.6),
-              end: const Offset(1, 1),
-              duration: 420.ms,
-              curve: Curves.elasticOut,
-            )
-            .fadeIn(duration: 160.ms)
-            .then(delay: 1500.ms)
-            .fadeOut(duration: 420.ms),
+        child:
+            Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 32,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NuvoColors.success.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(NuvoRadii.hero),
+                    boxShadow: AppShadows.hardMedium,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$_currentValue / $_targetValue',
+                        style: AppTextStyles.displayLarge.copyWith(
+                          color: NuvoColors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'FINISH LINE',
+                        style: AppTextStyles.titleLarge.copyWith(
+                          color: NuvoColors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+                .animate(key: ValueKey(_targetCelebrationSeq))
+                .scale(
+                  begin: const Offset(0.6, 0.6),
+                  end: const Offset(1, 1),
+                  duration: 420.ms,
+                  curve: Curves.elasticOut,
+                )
+                .fadeIn(duration: 160.ms)
+                .then(delay: 1500.ms)
+                .fadeOut(duration: 420.ms),
       ),
     );
   }
@@ -1056,9 +1111,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           if (_status == AiMotionProofStatus.recording)
             Positioned(left: 14, right: 14, bottom: 14, child: _recordingHud()),
           if (_status == AiMotionProofStatus.recording && _repFlashSeq > 0)
-            Positioned(left: 0, right: 0, bottom: 92, child: _repFlashOverlay()),
-          if (kDebugMode && _isCustom && _status == AiMotionProofStatus.recording)
-            Positioned(left: 14, right: 14, top: 80, child: _customDebugOverlay()),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 92,
+              child: _repFlashOverlay(),
+            ),
+          if (kDebugMode &&
+              _isCustom &&
+              _status == AiMotionProofStatus.recording)
+            Positioned(
+              left: 14,
+              right: 14,
+              top: 80,
+              child: _customDebugOverlay(),
+            ),
         ],
       ),
     );
@@ -1121,12 +1188,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('state: ${update?.state.name ?? '--'}'),
-            Text('count: ${update?.count ?? 0} / ${update?.target ?? _targetValue}'),
-            Text('sequence: ${(update?.sequenceProgress ?? 0).toStringAsFixed(2)}'),
-            Text('similarity: ${(update?.currentSimilarity ?? 0).toStringAsFixed(2)}'),
-            Text('valid features: ${(update?.validFeatureRatio ?? 0).toStringAsFixed(2)}'),
+            Text(
+              'count: ${update?.count ?? 0} / ${update?.target ?? _targetValue}',
+            ),
+            Text(
+              'sequence: ${(update?.sequenceProgress ?? 0).toStringAsFixed(2)}',
+            ),
+            Text(
+              'similarity: ${(update?.currentSimilarity ?? 0).toStringAsFixed(2)}',
+            ),
+            Text(
+              'valid features: ${(update?.validFeatureRatio ?? 0).toStringAsFixed(2)}',
+            ),
             if (update?.failureReason != null)
-              Text('reset: ${update!.failureReason}', style: const TextStyle(color: NuvoColors.danger)),
+              Text(
+                'reset: ${update!.failureReason}',
+                style: const TextStyle(color: NuvoColors.danger),
+              ),
           ],
         ),
       ),
@@ -1240,59 +1318,63 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: const BoxDecoration(
-                color: NuvoColors.white,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.refresh_rounded,
-                color: NuvoColors.navy,
-                size: 36,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Try again',
-              style: AppTextStyles.displaySmall.copyWith(
-                color: NuvoColors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _isCustom
-                  ? 'Detected $detected clean ${customResult?.movementName ?? _customMovementName ?? 'reps'} out of $_targetValue.'
-                  : motionActivityForBackendValue(_activity.backendValue)?.isHold == true
-                  ? 'Counted $detected valid seconds out of $_targetValue.'
-                  : 'Detected $detected clean ${_activity.label} out of $_targetValue.',
-              style: AppTextStyles.bodyLarge.copyWith(
-                color: NuvoColors.white.withValues(alpha: 0.78),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Keep the camera view clear and try again.',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.white.withValues(alpha: 0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        )
-            .animate()
-            .fadeIn(duration: 240.ms, curve: Curves.easeOut)
-            .scale(
-              begin: const Offset(0.96, 0.96),
-              end: const Offset(1, 1),
-              duration: 280.ms,
-              curve: Curves.easeOutCubic,
-            ),
+        child:
+            Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: const BoxDecoration(
+                        color: NuvoColors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.refresh_rounded,
+                        color: NuvoColors.navy,
+                        size: 36,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Try again',
+                      style: AppTextStyles.displaySmall.copyWith(
+                        color: NuvoColors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _isCustom
+                          ? 'Detected $detected clean ${customResult?.movementName ?? _customMovementName ?? 'reps'} out of $_targetValue.'
+                          : motionActivityForBackendValue(
+                                  _activity.backendValue,
+                                )?.isHold ==
+                                true
+                          ? 'Counted $detected valid seconds out of $_targetValue.'
+                          : 'Detected $detected clean ${_activity.label} out of $_targetValue.',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: NuvoColors.white.withValues(alpha: 0.78),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Keep the camera view clear and try again.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.white.withValues(alpha: 0.6),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                )
+                .animate()
+                .fadeIn(duration: 240.ms, curve: Curves.easeOut)
+                .scale(
+                  begin: const Offset(0.96, 0.96),
+                  end: const Offset(1, 1),
+                  duration: 280.ms,
+                  curve: Curves.easeOutCubic,
+                ),
       ),
     );
   }
@@ -1317,49 +1399,50 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
     return IgnorePointer(
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '+$_streakCount',
-              style: AppTextStyles.displayLarge.copyWith(
-                fontSize: 200,
-                height: 0.9,
-                color: flashColor,
-                shadows: shadows,
-              ),
-            ),
-            if (inStreak) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 10, 24, 10),
-                decoration: BoxDecoration(
-                  color: NuvoColors.brightGold,
-                  borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                ),
-                child: Row(
+        child:
+            Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.whatshot_rounded,
-                      color: NuvoColors.navy,
-                      size: 32,
-                    ),
-                    const SizedBox(width: 8),
                     Text(
-                      _streakLabel,
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
+                      '+$_streakCount',
+                      style: AppTextStyles.displayLarge.copyWith(
+                        fontSize: 200,
+                        height: 0.9,
+                        color: flashColor,
+                        shadows: shadows,
                       ),
                     ),
+                    if (inStreak) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 24, 10),
+                        decoration: BoxDecoration(
+                          color: NuvoColors.brightGold,
+                          borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.whatshot_rounded,
+                              color: NuvoColors.navy,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _streakLabel,
+                              style: AppTextStyles.headlineLarge.copyWith(
+                                color: NuvoColors.navy,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ),
-              ),
-            ],
-          ],
-        )
-            .animate(key: ValueKey(_repFlashSeq))
-            .fadeOut(delay: 320.ms, duration: 220.ms),
+                )
+                .animate(key: ValueKey(_repFlashSeq))
+                .fadeOut(delay: 320.ms, duration: 220.ms),
       ),
     );
   }

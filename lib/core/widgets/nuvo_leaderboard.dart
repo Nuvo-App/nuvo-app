@@ -77,6 +77,18 @@ class NuvoLeaderboardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rankColor = switch (entry.rank) {
+      1 => NuvoColors.gold,
+      2 => NuvoColors.silver,
+      3 => NuvoColors.bronze,
+      _ => NuvoColors.blue,
+    };
+    final selectedFill = entry.isCurrentUser ? rankColor : null;
+    final outlineColor = entry.rank <= 3
+        ? rankColor
+        : entry.isCurrentUser
+        ? NuvoColors.blue
+        : null;
     final role = entry.isCurrentUser
         ? NuvoCompetitorAvatarRole.currentUser
         : entry.isLeader
@@ -85,8 +97,11 @@ class NuvoLeaderboardRow extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: entry.isCurrentUser ? NuvoColors.panel : Colors.transparent,
+        color: selectedFill,
         borderRadius: BorderRadius.circular(10),
+        border: outlineColor != null
+            ? Border.all(color: outlineColor, width: 2)
+            : null,
       ),
       child: IntrinsicHeight(
         child: Row(
@@ -109,8 +124,10 @@ class NuvoLeaderboardRow extends StatelessWidget {
                 '#${entry.rank}',
                 textAlign: TextAlign.left,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: entry.isLeader && !entry.isCurrentUser
-                      ? NuvoColors.gold
+                  color: selectedFill != null
+                      ? NuvoColors.white
+                      : entry.rank <= 3
+                      ? rankColor
                       : NuvoColors.navy.withValues(alpha: 0.58),
                   fontWeight: FontWeight.w900,
                 ),
@@ -134,7 +151,9 @@ class NuvoLeaderboardRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.bodyMedium.copyWith(
-                  color: NuvoColors.navy,
+                  color: selectedFill != null
+                      ? NuvoColors.white
+                      : NuvoColors.navy,
                   fontWeight: entry.isCurrentUser
                       ? FontWeight.w800
                       : FontWeight.w600,
@@ -147,7 +166,7 @@ class NuvoLeaderboardRow extends StatelessWidget {
               entry.value,
               style: AppTextStyles.number(
                 15,
-                color: entry.isCurrentUser ? NuvoColors.blue : NuvoColors.navy,
+                color: selectedFill != null ? NuvoColors.white : rankColor,
                 weight: FontWeight.w800,
               ),
             ),

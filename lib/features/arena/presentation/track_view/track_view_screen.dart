@@ -450,7 +450,7 @@ class _ProgressReadout extends StatelessWidget {
           Text(
             '$currentProgress',
             key: const ValueKey('track-view-current-progress'),
-            style: const TextStyle(
+            style: TextStyle(
               color: _kArenaBlue,
               fontSize: 72,
               fontWeight: FontWeight.w900,
@@ -471,7 +471,7 @@ class _ProgressReadout extends StatelessWidget {
           ),
           Text(
             '$goal',
-            style: const TextStyle(
+            style: TextStyle(
               color: _kArenaText,
               fontSize: 66,
               fontWeight: FontWeight.w800,
@@ -682,9 +682,29 @@ class _StandingRow extends StatelessWidget {
       goal: goal,
     );
     final isUser = participant.isCurrentUser;
+    final rankColor = switch (rank) {
+      1 => NuvoColors.gold,
+      2 => NuvoColors.silver,
+      3 => NuvoColors.bronze,
+      _ => _kArenaBlue,
+    };
+    final selectedFill = isUser ? rankColor : null;
+    final outlineColor = rank <= 3
+        ? rankColor
+        : isUser
+        ? _kArenaBlue
+        : null;
 
-    return SizedBox(
+    return Container(
       height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: selectedFill,
+        borderRadius: BorderRadius.circular(12),
+        border: outlineColor != null
+            ? Border.all(color: outlineColor, width: 2)
+            : null,
+      ),
       child: Row(
         children: [
           SizedBox(
@@ -692,7 +712,9 @@ class _StandingRow extends StatelessWidget {
             child: Text(
               '$rank',
               style: TextStyle(
-                color: isUser ? _kArenaBlue : _kPanelMuted,
+                color: selectedFill != null
+                    ? NuvoColors.white
+                    : (rank <= 3 ? rankColor : _kPanelMuted),
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
@@ -705,7 +727,9 @@ class _StandingRow extends StatelessWidget {
               participant.displayName,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: isUser ? _kPanelText : const Color(0xFF4A5565),
+                color: selectedFill != null
+                    ? NuvoColors.white
+                    : (rank <= 3 ? rankColor : const Color(0xFF4A5565)),
                 fontSize: 16,
                 fontWeight: isUser ? FontWeight.w800 : FontWeight.w700,
               ),
@@ -718,15 +742,17 @@ class _StandingRow extends StatelessWidget {
                 TextSpan(
                   text: '${participant.completedAmount}',
                   style: TextStyle(
-                    color: isUser ? _kArenaBlue : _kPanelMuted,
+                    color: selectedFill != null
+                        ? NuvoColors.white
+                        : (rank <= 3 ? rankColor : _kPanelMuted),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 TextSpan(text: ' / $goal'),
               ],
             ),
-            style: const TextStyle(
-              color: _kPanelMuted,
+            style: TextStyle(
+              color: selectedFill != null ? NuvoColors.white : _kPanelMuted,
               fontSize: 13,
               fontWeight: FontWeight.w700,
             ),
@@ -741,7 +767,7 @@ class _StandingRow extends StatelessWidget {
                 value: progress,
                 backgroundColor: const Color(0xFFE4E7EC),
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  isUser ? _kArenaBlue : const Color(0xFF4A5565),
+                  selectedFill != null ? NuvoColors.white : rankColor,
                 ),
               ),
             ),

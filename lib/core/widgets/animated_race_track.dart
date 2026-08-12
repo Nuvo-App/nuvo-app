@@ -12,7 +12,6 @@ const _kRaceTrackNavy = NuvoColors.navy;
 const _kRaceTrackBlue = NuvoColors.blue;
 const _kRaceTrackMuted = NuvoColors.silver;
 const _kRaceTrackWhite = NuvoColors.white;
-const _kRaceTrackGold = NuvoColors.gold;
 
 class RaceCompetitor {
   const RaceCompetitor({
@@ -612,12 +611,25 @@ class _RaceTrackLeaderboardRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rankColor = switch (competitor.rank) {
+      1 => NuvoColors.gold,
+      2 => NuvoColors.silver,
+      3 => NuvoColors.bronze,
+      _ => _kRaceTrackBlue,
+    };
+    final selectedFill = competitor.isCurrentUser ? rankColor : null;
+    final outlineColor = competitor.rank <= 3
+        ? rankColor
+        : competitor.isCurrentUser
+        ? _kRaceTrackBlue
+        : null;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: competitor.isCurrentUser
-            ? _kRaceTrackWhite.withValues(alpha: 0.74)
-            : Colors.transparent,
+        color: selectedFill,
         borderRadius: BorderRadius.circular(12),
+        border: outlineColor != null
+            ? Border.all(color: outlineColor, width: 2)
+            : null,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -629,9 +641,9 @@ class _RaceTrackLeaderboardRow extends StatelessWidget {
                 '${competitor.rank}',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: competitor.rank == 1
-                      ? _kRaceTrackGold
-                      : _kRaceTrackMuted,
+                  color: selectedFill != null
+                      ? _kRaceTrackWhite
+                      : (competitor.rank <= 3 ? rankColor : _kRaceTrackMuted),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -651,7 +663,9 @@ class _RaceTrackLeaderboardRow extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: _kRaceTrackNavy,
+                  color: selectedFill != null
+                      ? _kRaceTrackWhite
+                      : _kRaceTrackNavy,
                   fontWeight: competitor.isCurrentUser
                       ? FontWeight.w800
                       : FontWeight.w600,
@@ -662,9 +676,9 @@ class _RaceTrackLeaderboardRow extends StatelessWidget {
               '$progressValue',
               style: AppTextStyles.number(
                 16,
-                color: competitor.isCurrentUser
-                    ? _kRaceTrackBlue
-                    : _kRaceTrackNavy,
+                color: selectedFill != null
+                    ? _kRaceTrackWhite
+                    : (competitor.rank <= 3 ? rankColor : _kRaceTrackNavy),
                 weight: FontWeight.w800,
               ),
             ),
