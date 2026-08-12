@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,13 +12,16 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_icons.dart';
-import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/presentation/race_controller.dart';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VERIFY — Light-Mode "Proof Studio"
+// Bright, trustworthy verification experience with electric-blue accents.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class MoveScreen extends ConsumerWidget {
   const MoveScreen({super.key});
@@ -44,6 +50,7 @@ class MoveScreen extends ConsumerWidget {
         .expand((r) => r.recentProofs.map((p) => (race: r, proof: p)))
         .take(10)
         .toList();
+
     void openVerification(Race race) {
       debugLogCameraVerificationDecision(
         race,
@@ -55,67 +62,91 @@ class MoveScreen extends ConsumerWidget {
       });
     }
 
-    return Scaffold(
-      backgroundColor: NuvoColors.page,
-      body: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            22,
-            22,
-            22,
-            NuvoBottomNav.bottomPadding(context),
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: NuvoColors.page,
+        body: CustomScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
           ),
-          children: [
-            // ── Hero ─────────────────────────────────────────────────────────
-            _MoveHero(readyCount: readyRaces.length),
-            const SizedBox(height: 28),
-
-            // ── Ready to move ────────────────────────────────────────────────
-            if (raceState.loading &&
-                readyRaces.isEmpty &&
-                completedRaces.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: NuvoColors.blue,
-                  ),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: NuvoBottomNav.bottomPadding(context),
                 ),
-              )
-            else if (readyRaces.isEmpty && completedRaces.isEmpty)
-              _EmptyState(onStart: () => context.push('/races/new'))
-            else if (readyRaces.isNotEmpty) ...[
-              _ReadyNowModule(
-                race: readyRaces.first,
-                userId: uid,
-                onVerify: () => openVerification(readyRaces.first),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Header ────────────────────────────────────
+                    _VerifyHeader(
+                      safeTop: safeTop,
+                      readyCount: readyRaces.length,
+                      totalVerified: completedRaces.length,
+                    ),
+
+                    // ── Content ──────────────────────────────────
+                    if (raceState.loading &&
+                        readyRaces.isEmpty &&
+                        completedRaces.isEmpty)
+                      const _LoadingState()
+                    else if (readyRaces.isEmpty && completedRaces.isEmpty)
+                      _EmptyState(onStart: () => context.push('/races/new'))
+                    else ...[
+                      // Featured verification card
+                      if (readyRaces.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                          child: _ProofStudioCard(
+                            race: readyRaces.first,
+                            userId: uid,
+                            onVerify: () =>
+                                openVerification(readyRaces.first),
+                          ),
+                        ),
+
+                        // Other ready races
+                        if (readyRaces.length > 1) ...[
+                          _SectionLabel(title: 'Ready to verify'),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: _VerifyRaceList(
+                              races: readyRaces.sublist(1),
+                              userId: uid,
+                              onVerify: openVerification,
+                            ),
+                          ),
+                        ],
+                      ],
+
+                      // Completed
+                      if (completedRaces.isNotEmpty) ...[
+                        _SectionLabel(title: 'Verified'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _CompletedSection(
+                            completedRaces: completedRaces,
+                            uid: uid,
+                          ),
+                        ),
+                      ],
+
+                      // Recent moves
+                      if (recentMoves.isNotEmpty) ...[
+                        _SectionLabel(title: 'Recent moves'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _RecentMoveGroup(entries: recentMoves),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
               ),
-              if (readyRaces.length > 1) ...[
-                const SizedBox(height: 20),
-                const _SectionLabel(label: 'Ready to move'),
-                const SizedBox(height: 10),
-                _MoveRaceGroup(
-                  races: readyRaces.skip(1).toList(),
-                  userId: uid,
-                  onVerify: openVerification,
-                ),
-              ],
-            ],
-
-            // ── Completed races ──────────────────────────────────────────────
-            if (completedRaces.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              _CompletedSection(completedRaces: completedRaces, uid: uid),
-            ],
-
-            // ── Recent moves ─────────────────────────────────────────────────
-            if (recentMoves.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              const _SectionLabel(label: 'Recent moves'),
-              const SizedBox(height: 10),
-              _RecentMoveGroup(entries: recentMoves),
-            ],
+            ),
           ],
         ),
       ),
@@ -123,81 +154,127 @@ class MoveScreen extends ConsumerWidget {
   }
 }
 
-// ── Hero ──────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEADER
+// ═══════════════════════════════════════════════════════════════════════════════
 
-class _MoveHero extends StatelessWidget {
-  const _MoveHero({required this.readyCount});
+class _VerifyHeader extends StatelessWidget {
+  const _VerifyHeader({
+    required this.safeTop,
+    required this.readyCount,
+    required this.totalVerified,
+  });
+  final double safeTop;
   final int readyCount;
+  final int totalVerified;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: AppShadows.hardShadow4,
-      ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(22, safeTop + 14, 22, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 4,
-                height: 58,
-                decoration: BoxDecoration(
+              Text(
+                'NUVO',
+                style: AppTextStyles.labelSmall.copyWith(
                   color: NuvoColors.blue,
-                  borderRadius: BorderRadius.circular(99),
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                  fontSize: 10,
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Move',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
-                        height: 1.05,
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
+              const Spacer(),
+              if (readyCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NuvoColors.success.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                    border: Border.all(
+                      color: NuvoColors.success.withValues(alpha: 0.2),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Choose a race, then verify your move.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: NuvoColors.success,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 6),
+                      Text(
+                        '$readyCount ready',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.success,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'Verify',
+                style: AppTextStyles.screenTitle.copyWith(
+                  color: NuvoColors.navy,
+                  fontSize: 34,
                 ),
               ),
-              if (readyCount > 0) ...[
-                const SizedBox(width: 12),
+              const Spacer(),
+              if (totalVerified > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoColors.panel,
-                    borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                    border: NuvoBorders.quiet,
+                    color: NuvoColors.panelLight,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    '$readyCount ready',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.navy,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.verified_rounded,
+                        color: NuvoColors.success,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$totalVerified verified',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.textMuted,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
             ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Capture movement. Confirm progress.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.textMuted,
+            ),
           ),
         ],
       ),
@@ -205,87 +282,16 @@ class _MoveHero extends StatelessWidget {
   }
 }
 
-// ── Completed races section ───────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROOF STUDIO CARD — Signature component
+// ═══════════════════════════════════════════════════════════════════════════════
 
-class _CompletedSection extends StatefulWidget {
-  const _CompletedSection({required this.completedRaces, this.uid});
-
-  final List<Race> completedRaces;
-  final String? uid;
-
-  @override
-  State<_CompletedSection> createState() => _CompletedSectionState();
-}
-
-class _CompletedSectionState extends State<_CompletedSection> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        PressableScale(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Row(
-            children: [
-              Text(
-                'Completed',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: NuvoColors.navy,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: NuvoColors.success.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  '${widget.completedRaces.length}',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.success,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              AnimatedRotation(
-                turns: _expanded ? 0.25 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: const Icon(
-                  Icons.chevron_right_rounded,
-                  color: NuvoColors.muted,
-                  size: 20,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_expanded) ...[
-          const SizedBox(height: 12),
-          _MoveRaceGroup(
-            races: widget.completedRaces,
-            userId: widget.uid,
-            onVerify: (_) {},
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-// ── Ready now module ──────────────────────────────────────────────────────────
-
-class _ReadyNowModule extends StatelessWidget {
-  const _ReadyNowModule({
+class _ProofStudioCard extends StatelessWidget {
+  const _ProofStudioCard({
     required this.race,
+    required this.userId,
     required this.onVerify,
-    this.userId,
   });
-
   final Race race;
   final String? userId;
   final VoidCallback onVerify;
@@ -299,97 +305,351 @@ class _ReadyNowModule extends StatelessWidget {
         .take(3)
         .toList();
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.actionBlue.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: const BoxDecoration(
-              color: NuvoColors.navy,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '$pct%',
-              style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.white,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return PressableScale(
+      onTap: onVerify,
+      scale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: NuvoColors.border, width: 1),
+          boxShadow: AppShadows.heroShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top label
+            Row(
               children: [
-                Text(
-                  race.displayTitle,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: NuvoColors.navy,
-                    fontWeight: FontWeight.w800,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        others.isEmpty
-                            ? 'Solo race · make the next move'
-                            : '${race.participantCount} racers · move the leaderboard',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.textMuted,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.camera_alt_rounded,
+                        size: 12,
+                        color: NuvoColors.blue,
                       ),
-                    ),
-                    if (others.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      NuvoAvatarStack(
-                        avatars: others
-                            .map(
-                              (p) => (
-                                initials: p.displayName,
-                                photoUrl: p.profilePhotoUrl,
-                              ),
-                            )
-                            .toList(),
-                        total: race.participantCount,
-                        size: 22,
-                        max: 3,
-                        borderColor: NuvoColors.icyBlue,
+                      const SizedBox(width: 5),
+                      Text(
+                        'PROOF STUDIO',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.blue,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 9,
+                          letterSpacing: 0.8,
+                        ),
                       ),
                     ],
-                  ],
+                  ),
+                ),
+                const Spacer(),
+                // Progress badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: pct > 75
+                        ? NuvoColors.success.withValues(alpha: 0.08)
+                        : NuvoColors.panelLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$pct%',
+                    style: AppTextStyles.number(
+                      16,
+                      color: pct > 75 ? NuvoColors.success : NuvoColors.navy,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+
+            // Title
+            Text(
+              race.displayTitle,
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: NuvoColors.navy,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Submit proof of your next movement.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: NuvoColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Verification ring visual
+            Center(
+              child: SizedBox(
+                width: 100,
+                height: 100,
+                child: CustomPaint(
+                  painter: _VerificationRingPainter(percent: pct),
+                  child: Center(
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: NuvoColors.blue.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.gpp_good_rounded,
+                        color: NuvoColors.blue,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Bottom: participants + CTA
+            Row(
+              children: [
+                if (others.isNotEmpty) ...[
+                  NuvoAvatarStack(
+                    avatars: others
+                        .map((p) => (
+                              initials: p.displayName,
+                              photoUrl: p.profilePhotoUrl,
+                            ))
+                        .toList(),
+                    total: race.participantCount,
+                    size: 26,
+                    max: 3,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${race.participantCount} racing',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.textMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ] else
+                  const Spacer(),
+                // Verify button
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 11,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: AppShadows.trackBlueGlow,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.camera_alt_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        'Start proof',
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Proof Pulse — A scanning ring with motion waveform indicators.
+/// Two concentric rings: outer progress arc, inner scan lines with pulse markers.
+/// Inspired by Arena's circular geometry and electric-blue movement.
+class _VerificationRingPainter extends CustomPainter {
+  _VerificationRingPainter({required this.percent});
+  final int percent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerRadius = (size.width - 8) / 2;
+    final innerRadius = outerRadius - 12;
+    const stroke = 3.5;
+
+    // Outer ring background
+    canvas.drawCircle(
+      center,
+      outerRadius,
+      Paint()
+        ..color = const Color(0xFFE8ECF2)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke,
+    );
+
+    // Outer progress arc
+    if (percent > 0) {
+      final sweep = (percent / 100) * 2 * math.pi;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: outerRadius),
+        -math.pi / 2,
+        sweep,
+        false,
+        Paint()
+          ..color = NuvoColors.blue
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Inner scan ring (thinner, lighter)
+    canvas.drawCircle(
+      center,
+      innerRadius,
+      Paint()
+        ..color = NuvoColors.blue.withValues(alpha: 0.06)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Scan tick marks (24 around the outer ring — finer than Arena's orbit)
+    for (var i = 0; i < 24; i++) {
+      final angle = (i / 24) * 2 * math.pi - math.pi / 2;
+      final isMajor = i % 6 == 0;
+      final tickInner = outerRadius + 3;
+      final tickOuter = outerRadius + (isMajor ? 7 : 5);
+      final tickColor = isMajor
+          ? NuvoColors.navy.withValues(alpha: 0.2)
+          : const Color(0xFFD8DEE6);
+      canvas.drawLine(
+        Offset(center.dx + tickInner * math.cos(angle),
+            center.dy + tickInner * math.sin(angle)),
+        Offset(center.dx + tickOuter * math.cos(angle),
+            center.dy + tickOuter * math.sin(angle)),
+        Paint()
+          ..color = tickColor
+          ..strokeWidth = isMajor ? 1.5 : 0.8
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Pulse dot at progress position
+    final pulseAngle = (percent / 100) * 2 * math.pi - math.pi / 2;
+    final pulseX = center.dx + outerRadius * math.cos(pulseAngle);
+    final pulseY = center.dy + outerRadius * math.sin(pulseAngle);
+    // Outer glow
+    canvas.drawCircle(
+      Offset(pulseX, pulseY), 8,
+      Paint()..color = NuvoColors.blue.withValues(alpha: 0.12),
+    );
+    // Main dot
+    canvas.drawCircle(
+      Offset(pulseX, pulseY), 4.5,
+      Paint()..color = NuvoColors.blue,
+    );
+    // Core highlight
+    canvas.drawCircle(
+      Offset(pulseX - 1, pulseY - 1), 1.5,
+      Paint()..color = const Color(0xFFB8DBFF),
+    );
+
+    // Motion waveform in inner ring (subtle pulse bars)
+    for (var i = 0; i < 8; i++) {
+      final barAngle = (i / 8) * 2 * math.pi - math.pi / 2;
+      final barHeight = (i == 0 || i == 4) ? 8.0 : (i.isEven ? 5.0 : 3.0);
+      final barCenter = innerRadius - 6;
+      canvas.drawLine(
+        Offset(center.dx + (barCenter - barHeight / 2) * math.cos(barAngle),
+            center.dy + (barCenter - barHeight / 2) * math.sin(barAngle)),
+        Offset(center.dx + (barCenter + barHeight / 2) * math.cos(barAngle),
+            center.dy + (barCenter + barHeight / 2) * math.sin(barAngle)),
+        Paint()
+          ..color = NuvoColors.blue.withValues(alpha: 0.2)
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_VerificationRingPainter old) => old.percent != percent;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION LABEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 28, 22, 14),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 14,
+            decoration: BoxDecoration(
+              color: NuvoColors.blue,
+              borderRadius: BorderRadius.circular(1.5),
+            ),
           ),
-          const SizedBox(width: 12),
-          _VerifyAction(onTap: onVerify),
+          const SizedBox(width: 10),
+          Text(
+            title.toUpperCase(),
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.textMuted,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _MoveRaceGroup extends StatelessWidget {
-  const _MoveRaceGroup({
-    required this.races,
-    required this.onVerify,
-    this.userId,
-  });
+// ═══════════════════════════════════════════════════════════════════════════════
+// VERIFY RACE LIST
+// ═══════════════════════════════════════════════════════════════════════════════
 
+class _VerifyRaceList extends StatelessWidget {
+  const _VerifyRaceList({
+    required this.races,
+    required this.userId,
+    required this.onVerify,
+  });
   final List<Race> races;
   final String? userId;
   final ValueChanged<Race> onVerify;
@@ -400,22 +660,23 @@ class _MoveRaceGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border, width: 1.25),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (var i = 0; i < races.length; i++) ...[
-            _RaceLogRow(
+            _VerifyRow(
               race: races[i],
               userId: userId,
-              onLog: () => onVerify(races[i]),
+              onVerify: () => onVerify(races[i]),
             ),
             if (i < races.length - 1)
               const Divider(
                 height: 1,
                 thickness: 1,
-                indent: 72,
+                indent: 62,
                 color: NuvoColors.divider,
               ),
           ],
@@ -425,121 +686,92 @@ class _MoveRaceGroup extends StatelessWidget {
   }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.titleMedium.copyWith(
-        color: NuvoColors.navy,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
-      ),
-    );
-  }
-}
-
-// ── Race log row ──────────────────────────────────────────────────────────────
-
-class _RaceLogRow extends StatelessWidget {
-  const _RaceLogRow({required this.race, required this.onLog, this.userId});
-
+class _VerifyRow extends StatelessWidget {
+  const _VerifyRow({
+    required this.race,
+    required this.userId,
+    required this.onVerify,
+  });
   final Race race;
   final String? userId;
-  final VoidCallback onLog;
+  final VoidCallback onVerify;
 
   @override
   Widget build(BuildContext context) {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = myPart?.progressPercent ?? 0;
-    final isComplete = pct >= 100;
-
-    final others = race.participants
-        .where((p) => p.userId != userId)
-        .take(4)
-        .toList();
-    final othersCount = race.participantCount - (myPart != null ? 1 : 0);
 
     return PressableScale(
-      onTap: isComplete ? null : onLog,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 76),
+      onTap: onVerify,
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-        color: isComplete
-            ? NuvoColors.success.withValues(alpha: 0.05)
-            : NuvoColors.surface,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
+            // Progress ring
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: pct / 100.0,
+                    strokeWidth: 3,
+                    backgroundColor: NuvoColors.trackBg,
+                    valueColor: const AlwaysStoppedAnimation(NuvoColors.blue),
+                  ),
+                  Text(
+                    '$pct',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.navy,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     race.displayTitle,
-                    style: AppTextStyles.titleMedium,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: NuvoColors.navy,
+                      fontWeight: FontWeight.w700,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(width: 10),
-                if (!isComplete)
-                  _VerifyAction(onTap: onLog)
-                else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.success.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const NuvoIcon(
-                          NuvoIconType.check,
-                          color: NuvoColors.success,
-                          size: 12,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Done',
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: NuvoColors.success,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            NuvoRaceLane(progressPercent: pct, trackHeight: 3, dotDiameter: 10),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    isComplete
-                        ? 'Complete'
-                        : myPart != null
-                        ? '$pct% · ${race.unit ?? 'reps'} logged'
-                        : 'Not started',
+                  const SizedBox(height: 2),
+                  Text(
+                    '${race.participantCount} racing · $pct% done',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: isComplete ? NuvoColors.success : NuvoColors.muted,
+                      color: NuvoColors.textMuted,
                     ),
                   ),
+                ],
+              ),
+            ),
+            PressableScale(
+              onTap: onVerify,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: NuvoColors.blue,
+                  borderRadius: BorderRadius.circular(11),
+                  boxShadow: AppShadows.hardSmall,
                 ),
-                if (othersCount > 0)
-                  _ParticipantPill(others: others, total: othersCount),
-              ],
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: Colors.white,
+                  size: 17,
+                ),
+              ),
             ),
           ],
         ),
@@ -548,71 +780,106 @@ class _RaceLogRow extends StatelessWidget {
   }
 }
 
-class _VerifyAction extends StatelessWidget {
-  const _VerifyAction({required this.onTap});
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPLETED SECTION
+// ═══════════════════════════════════════════════════════════════════════════════
 
-  final VoidCallback onTap;
+class _CompletedSection extends StatelessWidget {
+  const _CompletedSection({required this.completedRaces, this.uid});
+  final List<Race> completedRaces;
+  final String? uid;
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        decoration: BoxDecoration(
-          color: NuvoColors.actionBlue,
-          borderRadius: BorderRadius.circular(NuvoRadii.pill),
-          border: Border.all(color: NuvoColors.navy, width: 1.5),
-        ),
-        child: Text(
-          'Verify',
-          style: AppTextStyles.labelSmall.copyWith(
-            color: NuvoColors.white,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < completedRaces.length; i++) ...[
+            _CompletedRow(race: completedRaces[i], userId: uid),
+            if (i < completedRaces.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 50,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
       ),
     );
   }
 }
 
-// ── Participant pill ──────────────────────────────────────────────────────────
-
-class _ParticipantPill extends StatelessWidget {
-  const _ParticipantPill({required this.others, required this.total});
-  final List<RaceParticipant> others;
-  final int total;
+class _CompletedRow extends StatelessWidget {
+  const _CompletedRow({required this.race, this.userId});
+  final Race race;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        NuvoAvatarStack(
-          avatars: others
-              .map(
-                (p) => (initials: p.displayName, photoUrl: p.profilePhotoUrl),
-              )
-              .toList(),
-          total: total,
-          size: 18,
-          max: 3,
-        ),
-        const SizedBox(width: 5),
-        Text(
-          '$total racing',
-          style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: NuvoColors.success.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: NuvoColors.success,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              race.displayTitle,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: NuvoColors.success.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              'Complete',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.success,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ── Recent move row ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// RECENT MOVES
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _RecentMoveGroup extends StatelessWidget {
   const _RecentMoveGroup({required this.entries});
-
   final List<({Race race, RaceProof proof})> entries;
 
   @override
@@ -620,8 +887,9 @@ class _RecentMoveGroup extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border, width: 1.25),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -632,7 +900,7 @@ class _RecentMoveGroup extends StatelessWidget {
               const Divider(
                 height: 1,
                 thickness: 1,
-                indent: 64,
+                indent: 58,
                 color: NuvoColors.divider,
               ),
           ],
@@ -644,17 +912,14 @@ class _RecentMoveGroup extends StatelessWidget {
 
 class _RecentMoveRow extends StatelessWidget {
   const _RecentMoveRow({required this.proof, required this.race});
-
   final RaceProof proof;
   final Race race;
 
   @override
   Widget build(BuildContext context) {
-    final isChecked =
-        proof.verificationStatus == 'ai_verified' ||
+    final isChecked = proof.verificationStatus == 'ai_verified' ||
         proof.verificationStatus == 'accepted';
-    final isRejected =
-        proof.verificationStatus == 'ai_failed' ||
+    final isRejected = proof.verificationStatus == 'ai_failed' ||
         proof.verificationStatus == 'rejected';
 
     final statusLabel = switch (proof.verificationStatus) {
@@ -669,46 +934,25 @@ class _RecentMoveRow extends StatelessWidget {
     final statusColor = isChecked
         ? NuvoColors.success
         : isRejected
-        ? NuvoColors.danger
-        : NuvoColors.muted;
+            ? NuvoColors.danger
+            : NuvoColors.textMuted;
 
-    final valueStr = proof.value != null
-        ? '+${proof.value} ${race.unit ?? 'reps'}'
-        : null;
+    final valueStr =
+        proof.value != null ? '+${proof.value} ${race.unit ?? 'reps'}' : null;
 
-    final initial = proof.displayName.isNotEmpty
-        ? proof.displayName[0].toUpperCase()
-        : '?';
+    final initial =
+        proof.displayName.isNotEmpty ? proof.displayName[0].toUpperCase() : '?';
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      color: NuvoColors.surface,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: Row(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              NuvoAvatar(
-                initials: initial,
-                photoUrl: proof.profilePhotoUrl,
-                size: 36,
-                bgColor: NuvoColors.panel,
-                textColor: NuvoColors.navy,
-              ),
-              Positioned(
-                bottom: -2,
-                right: -2,
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: statusColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: NuvoColors.surface, width: 1.5),
-                  ),
-                ),
-              ),
-            ],
+          NuvoAvatar(
+            initials: initial,
+            photoUrl: proof.profilePhotoUrl,
+            size: 36,
+            bgColor: NuvoColors.panelLight,
+            textColor: NuvoColors.navy,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -717,7 +961,10 @@ class _RecentMoveRow extends StatelessWidget {
               children: [
                 Text(
                   proof.displayName,
-                  style: AppTextStyles.titleMedium.copyWith(fontSize: 14),
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w700,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -728,13 +975,13 @@ class _RecentMoveRow extends StatelessWidget {
                       child: Text(
                         race.displayTitle,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: NuvoColors.textMuted,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
@@ -742,13 +989,14 @@ class _RecentMoveRow extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: statusColor.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(5),
                       ),
                       child: Text(
                         statusLabel,
                         style: AppTextStyles.labelSmall.copyWith(
                           color: statusColor,
                           fontSize: 9,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -761,7 +1009,9 @@ class _RecentMoveRow extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               valueStr,
-              style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+              style: AppTextStyles.labelMedium.copyWith(
+                color: NuvoColors.navy,
+              ),
             ),
           ],
         ],
@@ -770,7 +1020,25 @@ class _RecentMoveRow extends StatelessWidget {
   }
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 80),
+      child: Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: NuvoColors.blue,
+        ),
+      ),
+    );
+  }
+}
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onStart});
@@ -778,36 +1046,58 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(16),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 40, 28, 0),
+      child: Column(
+        children: [
+          // Verification ring empty state
+          SizedBox(
+            width: 100,
+            height: 100,
+            child: CustomPaint(
+              painter: _VerificationRingPainter(percent: 0),
+              child: Center(
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue.withValues(alpha: 0.06),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    color: NuvoColors.blue,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
           ),
-          child: const Icon(
-            Icons.directions_run_rounded,
-            color: NuvoColors.blue,
-            size: 24,
+          const SizedBox(height: 24),
+          Text(
+            'No races to verify',
+            style: AppTextStyles.headlineMedium.copyWith(
+              color: NuvoColors.navy,
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        Text('No active races yet.', style: AppTextStyles.titleLarge),
-        const SizedBox(height: 6),
-        Text(
-          'Start a race to begin logging moves.',
-          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-        ),
-        const SizedBox(height: 20),
-        NuvoPrimaryButton(
-          label: 'Start a race',
-          expand: true,
-          onPressed: onStart,
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            'Start a race and submit proof\nof your movement to verify progress.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.textMuted,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 28),
+          NuvoPrimaryButton(
+            label: 'Start a race',
+            expand: true,
+            onPressed: onStart,
+          ),
+        ],
+      ),
     );
   }
 }

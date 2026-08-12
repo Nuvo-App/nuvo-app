@@ -16,6 +16,8 @@ class NuvoApp extends ConsumerWidget {
       title: 'Nuvo',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.light(),
+      themeMode: ThemeMode.light,
       routerConfig: ref.watch(routerProvider),
       builder: _appBuilder,
     );

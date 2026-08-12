@@ -1,137 +1,158 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 
-const _kTrackNavy = Color(0xFF071B35);
-const _kTrackActiveBlue = Color(0xFF2F7CFF);
-
+/// Nuvo's single unified floating light navigation.
+///
+/// Used identically by all five tabs — Arena, Compete, Verify, Crew, Profile.
+/// There is no dark variant: Nuvo has one light application theme.
 class NuvoBottomNav extends StatelessWidget {
   const NuvoBottomNav({
     super.key,
     required this.currentIndex,
     required this.onTap,
-    this.isDark = false,
     this.rowKey,
   });
 
-  final bool isDark;
   final Key? rowKey;
-
   final int currentIndex;
   final ValueChanged<int> onTap;
 
-  static const double _surfaceHeight = 76;
-  static const double _darkHeight = 75;
-  static const double _horizontalMargin = 16;
-  static const double _topReserve = 8;
-  static const double _bottomGapNoInset = 10;
-  static const double _bottomGapWithInset = 8;
-  static const double _shadowReserve = 4;
-  static const double _contentGap = 8;
+  /// Height of the visible floating pill.
+  static const double _surfaceHeight = 64;
 
+  /// Horizontal inset of the pill from the screen edges.
+  static const double _horizontalMargin = 16;
+
+  /// Gap above the pill so shadows and scroll content never collide.
+  static const double _topReserve = 8;
+
+  /// Gap below the pill when the device has no home-indicator inset.
+  static const double _bottomGapNoInset = 12;
+
+  /// Gap below the pill when the device has a home indicator.
+  static const double _bottomGapWithInset = 6;
+
+  /// Extra room reserved for the soft drop shadow.
+  static const double _shadowReserve = 4;
+
+  /// Breathing room between the last scrollable item and the pill.
+  static const double _contentGap = 12;
+
+  /// Bottom padding scroll views must apply so their final item clears the nav.
+  ///
+  /// Uses `viewPaddingOf` rather than `paddingOf`: a Scaffold with
+  /// `extendBody: true` consumes the body's `padding.bottom`, which would make
+  /// screens under-pad by exactly the home-indicator inset and let the last row
+  /// slide under the pill. `viewPadding` always reports the true device inset,
+  /// so the screen and the nav agree on the same number.
   static double bottomPadding(BuildContext context) {
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     return _occupiedHeight(safeBottom) + _contentGap;
   }
 
   static double _occupiedHeight(double safeBottom) {
     final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
-    return _topReserve +
-        _surfaceHeight +
-        bottomGap +
-        safeBottom +
-        _shadowReserve;
+    return _topReserve + _surfaceHeight + bottomGap + safeBottom + _shadowReserve;
   }
 
   static const _items = [
-    _NavItem(asset: 'assets/branding/trans.png', label: 'Arena'),
-    _NavItem(icon: Icons.emoji_events_outlined, label: 'Compete'),
-    _NavItem(icon: Icons.gpp_good_outlined, label: 'Verify'),
-    _NavItem(icon: Icons.group_outlined, label: 'Crew'),
-    _NavItem(icon: Icons.person_outline, label: 'Profile'),
+    _NavItem(icon: Icons.stadium_outlined, activeIcon: Icons.stadium, label: 'Arena'),
+    _NavItem(
+        icon: Icons.emoji_events_outlined,
+        activeIcon: Icons.emoji_events,
+        label: 'Compete'),
+    _NavItem(
+        icon: Icons.verified_outlined, activeIcon: Icons.verified, label: 'Verify'),
+    _NavItem(icon: Icons.group_outlined, activeIcon: Icons.group, label: 'Crew'),
+    _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
     final dockBottom = safeBottom + bottomGap + _shadowReserve;
 
-    if (isDark) {
-      return Container(
-        height: _darkHeight + safeBottom,
-        color: _kTrackNavy,
-        padding: EdgeInsets.only(bottom: safeBottom),
-        child: Row(
-          key: rowKey,
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            for (var index = 0; index < _items.length; index++)
-              _NavButton(
-                item: _items[index],
-                selected: currentIndex == index,
-                isPrimary: false,
-                isDark: true,
-                onTap: () => _tap(index),
-              ),
-          ],
-        ),
-      );
-    }
-
     return SizedBox(
       height: _occupiedHeight(safeBottom),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          height: _surfaceHeight,
-          margin: EdgeInsets.fromLTRB(
-            _horizontalMargin,
-            0,
-            _horizontalMargin,
-            dockBottom,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
-          decoration: BoxDecoration(
-            color: NuvoColors.surface,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: NuvoColors.navy, width: 2),
-            boxShadow: AppShadows.hardSmall,
-          ),
-          child: Row(
-            children: [
-              for (var index = 0; index < _items.length; index++)
-                _NavButton(
-                  item: _items[index],
-                  selected: currentIndex == index,
-                  isPrimary: index == 2,
-                  isDark: false,
-                  onTap: () => _tap(index),
+      child: Stack(
+        children: [
+          // Scrim: the page colour fades in beneath the pill so scrolling
+          // content dissolves instead of being visibly sliced by the floating
+          // bar or peeking out below it.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      NuvoColors.page.withValues(alpha: 0),
+                      NuvoColors.page.withValues(alpha: 0.92),
+                      NuvoColors.page,
+                    ],
+                    stops: const [0, 0.42, 0.68],
+                  ),
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              height: _surfaceHeight,
+              margin: EdgeInsets.fromLTRB(
+                _horizontalMargin,
+                0,
+                _horizontalMargin,
+                dockBottom,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: NuvoColors.surface,
+                borderRadius: BorderRadius.circular(_surfaceHeight / 2),
+                border: Border.all(color: NuvoColors.border, width: 1),
+                boxShadow: AppShadows.navBar,
+              ),
+              child: Row(
+                key: rowKey,
+                children: [
+                  for (var index = 0; index < _items.length; index++)
+                    _NavButton(
+                      item: _items[index],
+                      selected: currentIndex == index,
+                      onTap: () => _tap(index),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   void _tap(int index) {
+    if (index == currentIndex) return;
     HapticFeedback.selectionClick();
     onTap(index);
   }
 }
 
 class _NavItem {
-  const _NavItem({this.icon, this.asset, required this.label});
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
 
-  final IconData? icon;
-  final String? asset;
+  final IconData icon;
+  final IconData activeIcon;
   final String label;
 }
 
@@ -139,32 +160,17 @@ class _NavButton extends StatelessWidget {
   const _NavButton({
     required this.item,
     required this.selected,
-    required this.isPrimary,
-    required this.isDark,
     required this.onTap,
   });
 
   final _NavItem item;
   final bool selected;
-  final bool isPrimary;
-  final bool isDark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (isPrimary && !isDark) {
-      return Expanded(
-        child: Center(
-          child: _VerifyNavButton(item: item, selected: selected, onTap: onTap),
-        ),
-      );
-    }
-
-    final color = isDark
-        ? (selected ? _kTrackActiveBlue : NuvoColors.white)
-        : (selected ? NuvoColors.blue : NuvoColors.textMuted);
-    final alpha = selected ? 1.0 : (isDark ? 0.75 : 1.0);
-    final labelColor = color.withValues(alpha: alpha);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final color = selected ? NuvoColors.blue : NuvoColors.textMuted;
 
     return Expanded(
       child: Semantics(
@@ -174,163 +180,42 @@ class _NavButton extends StatelessWidget {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
+          // A 44x44 minimum target is guaranteed by the 64px-tall pill and
+          // the equal-width Expanded slot (390 - 32 - 12) / 5 = 69px.
           child: Center(
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
+              duration: Duration(milliseconds: reduceMotion ? 0 : 160),
               curve: Curves.easeOut,
-              constraints: BoxConstraints(
-                minWidth: isDark ? 44 : 52,
-                minHeight: isDark ? 36 : 54,
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: selected
+                    ? NuvoColors.blue.withValues(alpha: 0.09)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
               ),
-              padding: EdgeInsets.symmetric(
-                horizontal: isDark ? 4 : 7,
-                vertical: isDark ? 4 : 7,
-              ),
-              decoration: isDark
-                  ? null
-                  : BoxDecoration(
-                      color: selected ? NuvoColors.panel : CupertinoColors.transparent,
-                      borderRadius: BorderRadius.circular(NuvoRadii.md),
-                      border: selected
-                          ? Border.all(
-                              color: NuvoColors.blue.withValues(alpha: 0.18),
-                              width: 1.25,
-                            )
-                          : null,
-                    ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (item.asset != null && isDark)
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: ClipRect(
-                        child: OverflowBox(
-                          maxWidth: 48,
-                          maxHeight: 48,
-                          child: Image.asset(
-                            item.asset!,
-                            height: 48,
-                            color: labelColor,
-                            colorBlendMode: BlendMode.srcIn,
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (item.asset != null)
-                    Image.asset(
-                      item.asset!,
-                      height: 24,
-                      color: labelColor,
-                      colorBlendMode: BlendMode.srcIn,
-                    )
-                  else
-                    Icon(
-                      item.icon!,
-                      size: isDark ? 20 : 24,
-                      color: labelColor,
-                    ),
-                  SizedBox(height: isDark ? 2 : 4),
+                  Icon(
+                    selected ? item.activeIcon : item.icon,
+                    size: 22,
+                    color: color,
+                  ),
+                  const SizedBox(height: 3),
                   Text(
                     item.label,
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    overflow: TextOverflow.clip,
+                    softWrap: false,
                     textScaler: const TextScaler.linear(1),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: labelColor,
-                      fontSize: isDark ? 10 : 11,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                      color: color,
+                      fontSize: 10,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                       height: 1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VerifyNavButton extends StatefulWidget {
-  const _VerifyNavButton({
-    required this.item,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _NavItem item;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_VerifyNavButton> createState() => _VerifyNavButtonState();
-}
-
-class _VerifyNavButtonState extends State<_VerifyNavButton> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value) return;
-    setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pressedOffset = _pressed ? 3.5 : 0.0;
-    final width = widget.selected ? 66.0 : 64.0;
-    final height = widget.selected ? 62.0 : 60.0;
-
-    return Semantics(
-      selected: widget.selected,
-      button: true,
-      label: widget.item.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        onTapDown: (_) => _setPressed(true),
-        onTapCancel: () => _setPressed(false),
-        onTapUp: (_) => _setPressed(false),
-        child: SizedBox(
-          width: 74,
-          height: 68,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 90),
-              curve: Curves.easeOut,
-              transform: Matrix4.translationValues(
-                pressedOffset,
-                pressedOffset,
-                0,
-              ),
-              width: width,
-              height: height,
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
-              decoration: BoxDecoration(
-                color: NuvoColors.actionBlue,
-                borderRadius: BorderRadius.circular(NuvoRadii.button),
-                border: Border.all(color: NuvoColors.navy, width: 2),
-                boxShadow: _pressed ? null : AppShadows.hardSmall,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(widget.item.icon, size: 25, color: NuvoColors.white),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textScaler: const TextScaler.linear(1),
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      height: 1,
+                      letterSpacing: 0,
                     ),
                   ),
                 ],

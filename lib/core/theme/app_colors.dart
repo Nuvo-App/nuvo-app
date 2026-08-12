@@ -5,10 +5,10 @@ final class NuvoColors {
 
   // ── Brand core ────────────────────────────────────────────────────────────────
   /// Primary dark — headlines, outlines, nav active state.
-  static const Color navy = Color(0xFF07152D);
+  static const Color navy = Color(0xFF152238);
 
   /// Primary action color — CTA, progress, chips.
-  static const Color blue = Color(0xFF1264FF);
+  static const Color blue = Color(0xFF2F7CFF);
 
   /// Alias of [blue] for explicit call sites.
   static const Color actionBlue = blue;
@@ -23,17 +23,50 @@ final class NuvoColors {
   static const Color blueLight = Color(0xFFE1ECFF);
 
   /// Quiet structural ink used by legacy offset surfaces.
-  static const Color inkNavy = Color(0xFF07152D);
+  static const Color inkNavy = Color(0xFF152238);
 
   /// Slightly deeper navy for layered surfaces (alias of ink).
   static const Color navy2 = navy;
+
+  /// TrackSide deep navy — the primary dark screen background used by Arena.
+  static const Color trackNavy = Color(0xFF071B35);
+
+  /// TrackSide navy for radial glow and layered dark surfaces.
+  static const Color trackNavyDeep = Color(0xFF061A33);
+
+  /// TrackSide electric blue — primary action/accent on dark backgrounds.
+  static const Color trackBlue = Color(0xFF2F7CFF);
+
+  /// Brighter blue interaction state used for hover/pressed highlights.
+  static const Color trackBlueBright = Color(0xFF4A9BFF);
+
+  /// TrackSide off-white surface and text on dark backgrounds.
+  static const Color trackWhite = Color(0xFFF8FAFD);
+
+  /// TrackSide warm off-white for the lower panel surface.
+  static const Color trackOffWhite = Color(0xFFFAF9F6);
+
+  /// TrackSide primary dark text on the off-white panel.
+  static const Color trackDarkText = Color(0xFF152238);
+
+  /// TrackSide muted text for captions and timestamps.
+  static const Color trackMutedText = Color(0xFF7F8795);
+
+  /// TrackSide separator and divider on the panel.
+  static const Color trackSeparator = Color(0xFFDDE1E6);
+
+  /// TrackSide progress track and secondary rails on the panel.
+  static const Color trackDarkProgress = Color(0xFF414A59);
+
+  /// TrackSide participant-rail and secondary marker gray.
+  static const Color trackGray = Color(0xFF5D738A);
 
   /// Platinum — legacy alias.
   static const Color platinum = Color(0xFFEFF3FA);
 
   /// Disabled / locked state.
   static const Color paleSlate = Color(0xFF929CAD);
-  static const Color disabledSurface = Color(0xFFEEF1F5);
+  static const Color disabledSurface = Color(0xFFE8ECF2);
   static const Color disabledText = paleSlate;
 
   // ── Accent palette ────────────────────────────────────────────────────────────
@@ -42,14 +75,15 @@ final class NuvoColors {
   static const Color sunshine = Color(0xFFD5AA63);
 
   // ── Page & surfaces ───────────────────────────────────────────────────────────
-  /// Main page background — clean soft white.
-  static const Color page = Color(0xFFFBFCFF);
+  /// Main page background — warm off-white / very pale blue-gray.
+  static const Color page = Color(0xFFF7F9FC);
 
   /// Alias of [page].
   static const Color pageIce = page;
 
   static const Color pageWarm = page;
   static const Color surface = Color(0xFFFFFFFF);
+  static const Color secondarySurface = Color(0xFFEEF4FF);
   static const Color card = surface;
 
   /// Light tint background — active pills, "you" row highlight.
@@ -61,7 +95,7 @@ final class NuvoColors {
   // ── Lines and tracks ──────────────────────────────────────────────────────────
   static const Color trackBg = Color(0xFFE1ECFF);
   static const Color divider = Color(0xFFDCE3EE);
-  static const Color border = Color(0xFFCBD3DE);
+  static const Color border = Color(0xFFDDE4EE);
   static const Color borderStrong = paleSlate;
 
   /// Solid grey hard-offset plate for secondary cards (CTA construction,
@@ -79,7 +113,7 @@ final class NuvoColors {
 
   // ── Text & semantic ───────────────────────────────────────────────────────────
   static const Color muted = Color(0xFF5E6C85);
-  static const Color textMuted = Color(0xFF718097);
+  static const Color textMuted = Color(0xFF7F8795);
   static const Color textDim = Color(0xFF929CAD);
   static const Color white = surface;
   static const Color success = Color(0xFF66816C);

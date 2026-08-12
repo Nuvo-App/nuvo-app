@@ -1071,3 +1071,68 @@ class NuvoLeaderboardRow extends StatelessWidget {
     );
   }
 }
+
+// ── NuvoScreenHeader ──────────────────────────────────────────────────────────
+
+/// Primary top-of-screen header for the four light-background tabs.
+/// Gives each tab a deliberate navy anchor with a title, supporting copy,
+/// and an optional action, while keeping content surfaces off-white below.
+class NuvoScreenHeader extends StatelessWidget {
+  const NuvoScreenHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.action,
+    this.padding = const EdgeInsets.fromLTRB(22, 18, 22, 28),
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: const BoxDecoration(
+        color: NuvoColors.trackNavy,
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(NuvoRadii.hero),
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AppTextStyles.screenTitle.copyWith(
+                      color: NuvoColors.trackWhite,
+                    ),
+                  ),
+                ),
+                if (action case final Widget action) action,
+              ],
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle!,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: NuvoColors.trackMutedText,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

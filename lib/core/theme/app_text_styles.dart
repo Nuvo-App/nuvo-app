@@ -34,6 +34,10 @@ abstract final class AppTextStyles {
   static TextStyle get headlineLarge =>
       _manrope(31, FontWeight.w800, height: 1.10);
 
+  /// Screen title — primary top-of-screen title at the 32 px TrackSide scale.
+  static TextStyle get screenTitle =>
+      _manrope(32, FontWeight.w800, height: 1.10, letterSpacing: -0.9);
+
   static TextStyle get headlineMedium =>
       _manrope(24, FontWeight.w800, height: 1.15);
 
@@ -77,6 +81,11 @@ abstract final class AppTextStyles {
     color: AppColors.textSecondary,
     fontWeight: FontWeight.w500,
   );
+
+  /// Tiny timestamp / meta label — use only when the value is already
+  /// well-scaled by the calling surface.
+  static TextStyle get timestamp =>
+      _manrope(10, FontWeight.w600, color: AppColors.textMuted, height: 1.2);
 
   // ── Numbers — scores, stats, counts, tabular figures ──────────────────────────
   static TextStyle number(

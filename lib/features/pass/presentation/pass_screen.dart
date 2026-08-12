@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,13 +15,17 @@ import '../../../core/widgets/member_pass_card.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../data/models/user_profile.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CREW — Light-Mode "Living Network"
+// Bright, energetic social movement experience with connection visuals.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _ClosestRace {
   const _ClosestRace({
@@ -200,115 +205,267 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     final profile = _buildProfile(user);
     final races = ref.watch(raceControllerProvider).races;
     final closest = user == null ? null : _closestCrewRace(races, user.id);
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
 
-    return Scaffold(
-      backgroundColor: NuvoColors.page,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: NuvoColors.page,
+        body: RefreshIndicator(
           onRefresh: _fetch,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              18,
-              20,
-              NuvoBottomNav.bottomPadding(context),
+          color: NuvoColors.blue,
+          backgroundColor: NuvoColors.surface,
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
             ),
-            children: [
-              // ── Header ───────────────────────────────────────────────────
-              _CrewHeader(
-                crewCount: _crew.length,
-                onShare: _sharePass,
-                onCopy: _copyId,
-              ),
-              const SizedBox(height: 24),
-
-              // ── Loading ──────────────────────────────────────────────────
-              if (_loading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: CircularProgressIndicator(strokeWidth: 2),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: NuvoBottomNav.bottomPadding(context),
                   ),
-                )
-              // ── Error ────────────────────────────────────────────────────
-              else if (_error != null)
-                NuvoErrorState(message: _error!, onRetry: _fetch)
-              // ── Content ──────────────────────────────────────────────────
-              else ...[
-                // ── Member pass (hero) ───────────────────────────────────
-                MemberPassCard(profile: profile, compact: true, dark: true),
-                const SizedBox(height: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Header ──────────────────────────────────
+                      _CrewHeader(
+                        safeTop: safeTop,
+                        crewCount: _crew.length,
+                        onShare: _sharePass,
+                        onCopy: _copyId,
+                      ),
 
-                // ── Find people ──────────────────────────────────────────
-                const _SectionLabel(label: 'Find people'),
-                const SizedBox(height: 12),
-                NuvoSearchField(
-                  controller: _searchController,
-                  hint: 'Username or member ID',
-                  searching: _searching,
-                  onChanged: _onSearchChanged,
+                      // ── Constellation ─────────────────────────────
+                      if (!_loading && _crew.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                          child: _MovementConstellation(
+                            crewCount: _crew.length,
+                            memberInitials: _crew
+                                .take(6)
+                                .map((u) => u.initials)
+                                .toList(),
+                          ),
+                        ),
+
+                      // ── Content ─────────────────────────────────
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _loading
+                            ? const _LoadingState()
+                            : _error != null
+                                ? NuvoErrorState(
+                                    message: _error!,
+                                    onRetry: _fetch,
+                                  )
+                                : _crewContent(profile, closest),
+                      ),
+                    ],
+                  ),
                 ),
-                if (_results.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _SearchResultList(
-                    results: _results,
-                    isCrew: _isCrew,
-                    isAdding: (user) => _adding.contains(user.id),
-                    onAdd: _addCrew,
-                  ),
-                ] else if (_searchController.text.trim().length >= 2 &&
-                    !_searching) ...[
-                  const SizedBox(height: 16),
-                  const _EmptyNote(text: 'No matching Nuvo members found.'),
-                ],
-                const SizedBox(height: 20),
-
-                // ── Your crew ────────────────────────────────────────────
-                if (closest != null) ...[
-                  const _SectionLabel(label: 'Closest race'),
-                  const SizedBox(height: 12),
-                  _ClosestRaceCard(closest: closest),
-                  const SizedBox(height: 20),
-                ],
-
-                const _SectionLabel(label: 'Your crew'),
-                const SizedBox(height: 12),
-                if (_crew.isEmpty)
-                  const _EmptyNote(
-                    text: 'Search a username or member ID to add crew.',
-                  )
-                else
-                  _CrewList(members: _crew),
-              ],
+              ),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _crewContent(UserProfile profile, _ClosestRace? closest) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Member pass
+        MemberPassCard(profile: profile, compact: true, dark: false),
+        const SizedBox(height: 24),
+
+        // Find people
+        _SectionLabel(title: 'Find people'),
+        const SizedBox(height: 12),
+        NuvoSearchField(
+          controller: _searchController,
+          hint: 'Username or member ID',
+          searching: _searching,
+          onChanged: _onSearchChanged,
+        ),
+        if (_results.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _SearchResultList(
+            results: _results,
+            isCrew: _isCrew,
+            isAdding: (user) => _adding.contains(user.id),
+            onAdd: _addCrew,
+          ),
+        ] else if (_searchController.text.trim().length >= 2 &&
+            !_searching) ...[
+          const SizedBox(height: 16),
+          Text(
+            'No matching Nuvo members found.',
+            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.textMuted),
+          ),
+        ],
+        const SizedBox(height: 24),
+
+        // Closest race
+        if (closest != null) ...[
+          _SectionLabel(title: 'Closest race'),
+          const SizedBox(height: 12),
+          _ClosestRaceCard(closest: closest),
+          const SizedBox(height: 24),
+        ],
+
+        // Your crew
+        _SectionLabel(title: 'Your crew'),
+        const SizedBox(height: 12),
+        if (_crew.isEmpty)
+          _EmptyCrewState()
+        else
+          _CrewGrid(members: _crew),
+      ],
+    );
+  }
 }
 
-// ── Section label ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEADER
+// ═══════════════════════════════════════════════════════════════════════════════
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
-  final String label;
+class _CrewHeader extends StatelessWidget {
+  const _CrewHeader({
+    required this.safeTop,
+    required this.crewCount,
+    required this.onShare,
+    required this.onCopy,
+  });
+  final double safeTop;
+  final int crewCount;
+  final VoidCallback onShare;
+  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.titleMedium.copyWith(
-        color: NuvoColors.navy,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
+    return Padding(
+      padding: EdgeInsets.fromLTRB(22, safeTop + 14, 22, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'NUVO',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: NuvoColors.blue,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                  fontSize: 10,
+                ),
+              ),
+              const Spacer(),
+              if (crewCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                    border: Border.all(
+                      color: NuvoColors.blue.withValues(alpha: 0.15),
+                    ),
+                  ),
+                  child: Text(
+                    '$crewCount in crew',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Crew',
+            style: AppTextStyles.screenTitle.copyWith(
+              color: NuvoColors.navy,
+              fontSize: 34,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'The people you race with.',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Actions
+          Row(
+            children: [
+              Expanded(
+                child: NuvoPrimaryButton(
+                  label: 'Share pass',
+                  icon: Icons.ios_share_rounded,
+                  expand: true,
+                  small: true,
+                  onPressed: onShare,
+                ),
+              ),
+              const SizedBox(width: 10),
+              NuvoOutlineButton(
+                label: 'Copy ID',
+                icon: Icons.copy_rounded,
+                small: true,
+                onPressed: onCopy,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── Closest race card ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION LABEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 14,
+          decoration: BoxDecoration(
+            color: NuvoColors.blue,
+            borderRadius: BorderRadius.circular(1.5),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title.toUpperCase(),
+          style: AppTextStyles.labelSmall.copyWith(
+            color: NuvoColors.textMuted,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLOSEST RACE CARD
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _ClosestRaceCard extends StatelessWidget {
   const _ClosestRaceCard({required this.closest});
@@ -324,174 +481,9 @@ class _ClosestRaceCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.quiet,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${closest.race.displayTitle} · vs ${crewMember.displayName.split(' ').first}',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            closest.gap == 0
-                ? "You're tied"
-                : '${closest.gap} ${closest.gap == 1 ? 'point' : 'points'} apart',
-            style: AppTextStyles.titleLarge,
-          ),
-          const SizedBox(height: 18),
-          _ComparisonTrack(
-            youPercent: me.progressPercent,
-            themPercent: crewMember.progressPercent,
-            youInitials: _initials2('You'),
-            themInitials: _initials2(crewMember.displayName),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            ahead
-                ? "You're ahead in this race."
-                : '${crewMember.displayName.split(' ').first} is ahead in this race.',
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _initials2(String name) {
-  final parts = name.trim().split(RegExp(r'\s+'));
-  if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
-    return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-  }
-  final s = name.trim();
-  return s.isEmpty ? '?' : s[0].toUpperCase();
-}
-
-class _ComparisonTrack extends StatelessWidget {
-  const _ComparisonTrack({
-    required this.youPercent,
-    required this.themPercent,
-    required this.youInitials,
-    required this.themInitials,
-  });
-
-  final int youPercent;
-  final int themPercent;
-  final String youInitials;
-  final String themInitials;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 60,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final trackWidth = constraints.maxWidth - 28;
-          double markerLeft(int percent) =>
-              (trackWidth * (percent / 100).clamp(0.0, 1.0));
-
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              const Positioned(
-                top: 28,
-                left: 0,
-                right: 28,
-                child: ColoredBox(
-                  color: NuvoColors.trackBg,
-                  child: SizedBox(height: 3),
-                ),
-              ),
-              const Positioned(
-                top: 21,
-                right: -2,
-                child: NuvoIcon(
-                  NuvoIconType.flag,
-                  size: 16,
-                  color: NuvoColors.paleSlate,
-                ),
-              ),
-              Positioned(
-                left: markerLeft(themPercent),
-                top: 6,
-                child: _TrackAvatar(
-                  initials: themInitials,
-                  color: NuvoColors.avatarDustyBlue,
-                ),
-              ),
-              Positioned(
-                left: markerLeft(youPercent),
-                top: 34,
-                child: _TrackAvatar(
-                  initials: youInitials,
-                  color: NuvoColors.blue,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TrackAvatar extends StatelessWidget {
-  const _TrackAvatar({required this.initials, required this.color});
-  final String initials;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: NuvoColors.surface, width: 2),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: Colors.white,
-          fontSize: 9,
-        ),
-      ),
-    );
-  }
-}
-
-class _CrewHeader extends StatelessWidget {
-  const _CrewHeader({
-    required this.crewCount,
-    required this.onShare,
-    required this.onCopy,
-  });
-
-  final int crewCount;
-  final VoidCallback onShare;
-  final VoidCallback onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.surface, NuvoColors.surface],
-          stops: [0, 0.42, 1],
-        ),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: NuvoColors.border),
-        boxShadow: AppShadows.surfaceShadow,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,74 +491,52 @@ class _CrewHeader extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 7,
-                height: 7,
-                decoration: const BoxDecoration(
-                  color: NuvoColors.blue,
-                  shape: BoxShape.circle,
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: NuvoColors.amber.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              ),
-              const SizedBox(width: 7),
-              Text(
-                crewCount == 0
-                    ? 'Your start line is open'
-                    : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.muted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Crew',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
-                        height: 1.05,
-                        fontSize: 32,
-                        letterSpacing: -0.9,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      'The people you want at the start line.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: NuvoPrimaryButton(
-                  label: 'Share pass',
-                  icon: Icons.ios_share_rounded,
-                  expand: true,
-                  small: true,
-                  onPressed: onShare,
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.leaderboard_rounded,
+                  color: NuvoColors.amber,
+                  size: 14,
                 ),
               ),
               const SizedBox(width: 10),
-              NuvoGhostButton(
-                label: 'Copy ID',
-                icon: Icons.copy_rounded,
-                small: true,
-                onPressed: onCopy,
+              Expanded(
+                child: Text(
+                  '${closest.race.displayTitle} · vs ${crewMember.displayName.split(' ').first}',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            closest.gap == 0
+                ? "You're tied"
+                : '${closest.gap} ${closest.gap == 1 ? 'point' : 'points'} apart',
+            style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.navy),
+          ),
+          const SizedBox(height: 14),
+          // Progress comparison
+          _ComparisonBar(
+            youPercent: me.progressPercent,
+            themPercent: crewMember.progressPercent,
+            themName: crewMember.displayName.split(' ').first,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            ahead
+                ? "You're ahead in this race."
+                : '${crewMember.displayName.split(' ').first} is ahead.',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.textMuted),
           ),
         ],
       ),
@@ -574,117 +544,170 @@ class _CrewHeader extends StatelessWidget {
   }
 }
 
-// ── User row ──────────────────────────────────────────────────────────────────
-
-class _UserRow extends StatelessWidget {
-  const _UserRow({
-    required this.user,
-    this.added = false,
-    this.loading = false,
-    this.actionLabel,
-    this.onPressed,
-    this.isLast = false,
+class _ComparisonBar extends StatelessWidget {
+  const _ComparisonBar({
+    required this.youPercent,
+    required this.themPercent,
+    required this.themName,
   });
-
-  final PublicUser user;
-  final bool added;
-  final bool loading;
-  final String? actionLabel;
-  final VoidCallback? onPressed;
-  final bool isLast;
+  final int youPercent;
+  final int themPercent;
+  final String themName;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              NuvoAvatar(
-                initials: user.initials,
-                photoUrl: user.profilePhotoUrl,
-                size: NuvoAvatarSizes.md,
-                bgColor: nuvoAvatarColorFor(user.id),
-                textColor: NuvoColors.white,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.displayName,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.navy,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      user.handleLine,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (actionLabel != null)
-                added
-                    ? Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Text(
-                          actionLabel!,
-                          style: AppTextStyles.labelMedium.copyWith(
-                            color: NuvoColors.muted,
-                          ),
-                        ),
-                      )
-                    : SizedBox(
-                        width: 72,
-                        child: NuvoOutlineButton(
-                          label: loading ? '...' : actionLabel!,
-                          small: true,
-                          onPressed: loading ? null : onPressed,
-                        ),
-                      ),
-            ],
+        Row(
+          children: [
+            Text('You', style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.blue,
+              fontWeight: FontWeight.w800,
+            )),
+            const Spacer(),
+            Text('$youPercent%', style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.navy,
+              fontWeight: FontWeight.w800,
+            )),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: (youPercent / 100).clamp(0.0, 1.0),
+            minHeight: 5,
+            backgroundColor: NuvoColors.trackBg,
+            valueColor: const AlwaysStoppedAnimation(NuvoColors.blue),
           ),
         ),
-        if (!isLast)
-          Divider(
-            height: 1,
-            color: NuvoColors.border.withValues(alpha: 0.7),
-            indent: NuvoAvatarSizes.md + 12,
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Text(themName, style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.avatarDustyBlue,
+              fontWeight: FontWeight.w800,
+            )),
+            const Spacer(),
+            Text('$themPercent%', style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.navy,
+              fontWeight: FontWeight.w800,
+            )),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: (themPercent / 100).clamp(0.0, 1.0),
+            minHeight: 5,
+            backgroundColor: NuvoColors.trackBg,
+            valueColor: const AlwaysStoppedAnimation(NuvoColors.avatarDustyBlue),
           ),
+        ),
       ],
     );
   }
 }
 
-// ── Crew list ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// CREW GRID — Signature component (constellation layout)
+// ═══════════════════════════════════════════════════════════════════════════════
 
-class _CrewList extends StatelessWidget {
-  const _CrewList({required this.members});
-
+class _CrewGrid extends StatelessWidget {
+  const _CrewGrid({required this.members});
   final List<PublicUser> members;
 
   @override
   Widget build(BuildContext context) {
-    return _PeopleSurface(
-      children: [
-        for (var i = 0; i < members.length; i++)
-          _UserRow(
-            user: members[i],
-            added: true,
-            actionLabel: 'In crew',
-            isLast: i == members.length - 1,
-          ),
-      ],
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < members.length; i++) ...[
+            _CrewMemberRow(user: members[i], isLast: i == members.length - 1),
+            if (i < members.length - 1)
+              Divider(
+                height: 1,
+                color: NuvoColors.divider,
+                indent: NuvoAvatarSizes.md + 26,
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
+
+class _CrewMemberRow extends StatelessWidget {
+  const _CrewMemberRow({required this.user, this.isLast = false});
+  final PublicUser user;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          NuvoAvatar(
+            initials: user.initials,
+            photoUrl: user.profilePhotoUrl,
+            size: NuvoAvatarSizes.md,
+            bgColor: nuvoAvatarColorFor(user.id),
+            textColor: NuvoColors.white,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.displayName,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user.handleLine,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: NuvoColors.success.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(NuvoRadii.pill),
+            ),
+            child: Text(
+              'In crew',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.success,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SEARCH RESULTS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _SearchResultList extends StatelessWidget {
   const _SearchResultList({
@@ -693,7 +716,6 @@ class _SearchResultList extends StatelessWidget {
     required this.isAdding,
     required this.onAdd,
   });
-
   final List<PublicUser> results;
   final bool Function(PublicUser user) isCrew;
   final bool Function(PublicUser user) isAdding;
@@ -701,54 +723,352 @@ class _SearchResultList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PeopleSurface(
-      children: [
-        for (var i = 0; i < results.length; i++)
-          _UserRow(
-            user: results[i],
-            added: isCrew(results[i]),
-            loading: isAdding(results[i]),
-            actionLabel: isCrew(results[i]) ? 'In crew' : 'Add',
-            onPressed: isCrew(results[i]) || isAdding(results[i])
-                ? null
-                : () => onAdd(results[i]),
-            isLast: i == results.length - 1,
-          ),
-      ],
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < results.length; i++) ...[
+            _SearchRow(
+              user: results[i],
+              added: isCrew(results[i]),
+              loading: isAdding(results[i]),
+              onAdd: isCrew(results[i]) || isAdding(results[i])
+                  ? null
+                  : () => onAdd(results[i]),
+            ),
+            if (i < results.length - 1)
+              Divider(
+                height: 1,
+                color: NuvoColors.divider,
+                indent: NuvoAvatarSizes.md + 26,
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
 
-class _PeopleSurface extends StatelessWidget {
-  const _PeopleSurface({required this.children});
+class _SearchRow extends StatelessWidget {
+  const _SearchRow({
+    required this.user,
+    required this.added,
+    required this.loading,
+    this.onAdd,
+  });
+  final PublicUser user;
+  final bool added;
+  final bool loading;
+  final VoidCallback? onAdd;
 
-  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          NuvoAvatar(
+            initials: user.initials,
+            photoUrl: user.profilePhotoUrl,
+            size: NuvoAvatarSizes.md,
+            bgColor: nuvoAvatarColorFor(user.id),
+            textColor: NuvoColors.white,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.displayName,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user.handleLine,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (added)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: NuvoColors.success.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(NuvoRadii.pill),
+              ),
+              child: Text(
+                'In crew',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: NuvoColors.success,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              width: 72,
+              child: NuvoOutlineButton(
+                label: loading ? '...' : 'Add',
+                small: true,
+                onPressed: loading ? null : onAdd,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STATES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 60),
+      child: Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: NuvoColors.blue,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyCrewState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: NuvoColors.blue.withValues(alpha: 0.06),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: NuvoColors.blue.withValues(alpha: 0.15),
+                width: 1.5,
+              ),
+            ),
+            child: const Icon(
+              Icons.group_add_rounded,
+              color: NuvoColors.blue,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No crew members yet',
+            style: AppTextStyles.titleMedium.copyWith(
+              color: NuvoColors.navy,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Search by username or member ID\nto add people to your crew.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(
+              color: NuvoColors.textMuted,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOVEMENT CONSTELLATION — Signature component
+// Connected portraits with blue path lines radiating from center.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _MovementConstellation extends StatelessWidget {
+  const _MovementConstellation({
+    required this.crewCount,
+    required this.memberInitials,
+  });
+  final int crewCount;
+  final List<String> memberInitials;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      height: 120,
+      width: double.infinity,
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border, width: 1.25),
+        border: Border.all(color: NuvoColors.border, width: 1),
+        boxShadow: AppShadows.card,
       ),
-      child: Column(children: children),
+      child: CustomPaint(
+        painter: _ConstellationPainter(
+          nodeCount: memberInitials.length.clamp(0, 6),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: NuvoColors.blue,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: NuvoColors.blue.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$crewCount connected',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: NuvoColors.navy,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Your movement network',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
-// ── Empty note ────────────────────────────────────────────────────────────────
-
-class _EmptyNote extends StatelessWidget {
-  const _EmptyNote({required this.text});
-  final String text;
+/// Paints the constellation: a central node with radial connection paths
+/// to outer nodes, mimicking Arena's orbital geometry on a light surface.
+class _ConstellationPainter extends CustomPainter {
+  _ConstellationPainter({required this.nodeCount});
+  final int nodeCount;
 
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const orbitRadius = 44.0;
+
+    // Draw orbital ring (faint)
+    canvas.drawCircle(
+      center,
+      orbitRadius,
+      Paint()
+        ..color = NuvoColors.blue.withValues(alpha: 0.05)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
     );
+
+    // Second orbit ring
+    canvas.drawCircle(
+      center,
+      orbitRadius + 14,
+      Paint()
+        ..color = const Color(0xFFE8ECF2)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.5,
+    );
+
+    // Central node
+    canvas.drawCircle(
+      center, 5,
+      Paint()..color = NuvoColors.blue.withValues(alpha: 0.12),
+    );
+    canvas.drawCircle(center, 3, Paint()..color = NuvoColors.blue);
+
+    // Draw connection paths and outer nodes
+    for (var i = 0; i < nodeCount; i++) {
+      final angle = (i / nodeCount) * 2 * math.pi - math.pi / 2;
+      final nodeX = center.dx + orbitRadius * math.cos(angle);
+      final nodeY = center.dy + orbitRadius * math.sin(angle);
+      final node = Offset(nodeX, nodeY);
+
+      // Connection line (trajectory path)
+      final path = Path()
+        ..moveTo(center.dx, center.dy)
+        ..lineTo(nodeX, nodeY);
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = NuvoColors.blue.withValues(alpha: 0.08)
+          ..strokeWidth = 1
+          ..style = PaintingStyle.stroke,
+      );
+
+      // Outer node glow
+      canvas.drawCircle(
+        node, 9,
+        Paint()..color = NuvoColors.blue.withValues(alpha: 0.04),
+      );
+      // Outer node
+      canvas.drawCircle(node, 5, Paint()..color = const Color(0xFFDDE3EB));
+      canvas.drawCircle(node, 3, Paint()..color = const Color(0xFFA8B5C5));
+    }
+
+    // Trajectory arcs between adjacent nodes (subtle)
+    if (nodeCount >= 3) {
+      for (var i = 0; i < nodeCount; i++) {
+        final angle1 = (i / nodeCount) * 2 * math.pi - math.pi / 2;
+        final angle2 = ((i + 1) % nodeCount / nodeCount) * 2 * math.pi - math.pi / 2;
+        final p1 = Offset(
+          center.dx + orbitRadius * math.cos(angle1),
+          center.dy + orbitRadius * math.sin(angle1),
+        );
+        final p2 = Offset(
+          center.dx + orbitRadius * math.cos(angle2),
+          center.dy + orbitRadius * math.sin(angle2),
+        );
+        canvas.drawLine(
+          p1, p2,
+          Paint()
+            ..color = const Color(0xFFE2E7EE)
+            ..strokeWidth = 0.5,
+        );
+      }
+    }
   }
+
+  @override
+  bool shouldRepaint(_ConstellationPainter old) => old.nodeCount != nodeCount;
 }

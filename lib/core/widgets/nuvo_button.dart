@@ -173,9 +173,9 @@ class NuvoPrimaryButton extends StatelessWidget {
     return _buttonShell(
       height: small ? 46 : 56,
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: enabled ? NuvoColors.actionBlue : NuvoColors.disabledSurface,
-      borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
-      shadows: enabled ? AppShadows.hardMedium : null,
+      color: enabled ? NuvoColors.trackBlue : NuvoColors.disabledSurface,
+      borderColor: enabled ? NuvoColors.trackNavy : NuvoColors.border,
+      shadows: enabled ? AppShadows.trackBlueGlow : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -213,6 +213,8 @@ class NuvoOutlineButton extends StatelessWidget {
     this.leadingWidget,
     this.expand = false,
     this.small = false,
+    this.textColor,
+    this.borderColor,
   });
 
   final String label;
@@ -221,22 +223,26 @@ class NuvoOutlineButton extends StatelessWidget {
   final Widget? leadingWidget;
   final bool expand;
   final bool small;
+  final Color? textColor;
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
+    final resolvedTextColor = textColor ?? NuvoColors.navy;
+    final resolvedBorderColor = borderColor ?? NuvoColors.navy;
     return _buttonShell(
       height: small ? 46 : 56,
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoColors.surface,
-      borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
-      shadows: enabled ? AppShadows.hardSmall : null,
+      borderColor: enabled ? resolvedBorderColor : NuvoColors.border,
+      shadows: enabled ? AppShadows.trackBlueGlowSubtle : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
         label: label,
-        textColor: NuvoColors.navy,
+        textColor: resolvedTextColor,
         icon: icon,
         leadingWidget: leadingWidget,
       ),
@@ -254,6 +260,7 @@ class NuvoGhostButton extends StatelessWidget {
     this.icon,
     this.expand = false,
     this.small = false,
+    this.textColor,
   });
 
   final String label;
@@ -261,6 +268,7 @@ class NuvoGhostButton extends StatelessWidget {
   final IconData? icon;
   final bool expand;
   final bool small;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
@@ -274,7 +282,7 @@ class NuvoGhostButton extends StatelessWidget {
       expand: expand,
       child: _buttonContent(
         label: label,
-        textColor: NuvoColors.navy,
+        textColor: textColor ?? NuvoColors.navy,
         icon: icon,
       ),
     );

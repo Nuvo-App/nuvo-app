@@ -21,6 +21,36 @@ final class NuvoTokens {
   /// Quiet structural edge for legacy borders and surfaces.
   static const Color inkNavy = NuvoColors.inkNavy;
 
+  /// TrackSide deep navy — full-screen dark background.
+  static const Color trackNavy = NuvoColors.trackNavy;
+
+  /// TrackSide electric blue — primary dark-background action color.
+  static const Color trackBlue = NuvoColors.trackBlue;
+
+  /// TrackSide bright blue — hover / interaction highlights.
+  static const Color trackBlueBright = NuvoColors.trackBlueBright;
+
+  /// TrackSide off-white — primary text on dark surfaces and panel base.
+  static const Color trackWhite = NuvoColors.trackWhite;
+
+  /// TrackSide warm off-white — panel/lower card surface.
+  static const Color trackOffWhite = NuvoColors.trackOffWhite;
+
+  /// TrackSide dark text — primary dark content text.
+  static const Color trackDarkText = NuvoColors.trackDarkText;
+
+  /// TrackSide muted text — captions and timestamps on panels.
+  static const Color trackMutedText = NuvoColors.trackMutedText;
+
+  /// TrackSide separator — panel dividers.
+  static const Color trackSeparator = NuvoColors.trackSeparator;
+
+  /// TrackSide progress track — rails and inactive tracks.
+  static const Color trackDarkProgress = NuvoColors.trackDarkProgress;
+
+  /// TrackSide gray — rails and secondary markers.
+  static const Color trackGray = NuvoColors.trackGray;
+
   /// Action blue — CTA, progress arcs, chips, interactive only.
   static const Color actionBlue = NuvoColors.actionBlue;
 
@@ -50,11 +80,29 @@ final class NuvoTokens {
   /// Green — finished, verified, completed. Never buttons.
   static const Color green = Color(0xFF23B26D);
 
+  /// Green light tint — success surface.
+  static const Color greenLight = Color(0xFFE2F6EC);
+
   /// Red — passed by opponent, recording, warning.
   static const Color red = Color(0xFFF04F59);
 
+  /// Red light tint — error surface.
+  static const Color redLight = Color(0xFFFFE8EA);
+
   /// Orange — almost finished.
   static const Color orange = Color(0xFFFF8C3A);
+
+  /// Orange light tint — warning surface.
+  static const Color orangeLight = Color(0xFFFFF0E6);
+
+  /// Nuvo semantic success — muted green that harmonizes with navy/blue.
+  static const Color success = green;
+
+  /// Nuvo semantic warning — muted amber/orange.
+  static const Color warning = orange;
+
+  /// Nuvo semantic error — muted red.
+  static const Color error = red;
 
   // ── Gray scale ─────────────────────────────────────────────────────────────
 
