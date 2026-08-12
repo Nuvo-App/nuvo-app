@@ -27,18 +27,43 @@ class ArenaState {
 
 class ArenaController extends StateNotifier<ArenaState> {
   ArenaController(this._repo, {this.onSessionExpired})
-    : super(const ArenaState()) {
-    loadSnapshot();
-  }
+    : super(const ArenaState());
 
   final ArenaRepository _repo;
   final VoidCallback? onSessionExpired;
+  static const _cacheLifetime = Duration(minutes: 5);
+  Future<void>? _loadInFlight;
+  DateTime? _snapshotLoadedAt;
 
-  Future<void> loadSnapshot() async {
-    state = state.copyWith(loading: true, error: null);
+  Future<void> loadSnapshot({bool force = true}) {
+    final loadedAt = _snapshotLoadedAt;
+    if (!force &&
+        loadedAt != null &&
+        DateTime.now().difference(loadedAt) < _cacheLifetime) {
+      return Future.value();
+    }
+    final inFlight = _loadInFlight;
+    if (inFlight != null) return inFlight;
+
+    final request = _fetchSnapshot();
+    _loadInFlight = request;
+    request.then<void>(
+      (_) => _clearInFlight(request),
+      onError: (Object _, StackTrace _) => _clearInFlight(request),
+    );
+    return request;
+  }
+
+  void _clearInFlight(Future<void> request) {
+    if (identical(_loadInFlight, request)) _loadInFlight = null;
+  }
+
+  Future<void> _fetchSnapshot() async {
+    if (mounted) state = ArenaState(snapshot: state.snapshot, loading: true);
     try {
       final snapshot = await _repo.getArenaSnapshot();
-      if (mounted) state = state.copyWith(snapshot: snapshot, loading: false);
+      _snapshotLoadedAt = DateTime.now();
+      if (mounted) state = ArenaState(snapshot: snapshot);
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         debugPrint('[ArenaController] 401 — triggering session expiry');
@@ -58,6 +83,7 @@ class ArenaController extends StateNotifier<ArenaState> {
   }
 
   void clearSnapshot() {
+    _snapshotLoadedAt = null;
     if (mounted) state = const ArenaState();
   }
 }
@@ -83,12 +109,15 @@ final arenaControllerProvider =
           ref.read(authControllerProvider.notifier).sessionExpired();
         },
       );
+      if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+        controller.loadSnapshot(force: false);
+      }
       ref.listen<AuthState>(authControllerProvider, (prev, next) {
         if (next.status == AuthStatus.unauthenticated) {
           controller.clearSnapshot();
         } else if (next.status == AuthStatus.authenticated &&
             prev?.status != AuthStatus.authenticated) {
-          controller.loadSnapshot();
+          controller.loadSnapshot(force: false);
         }
       });
       return controller;

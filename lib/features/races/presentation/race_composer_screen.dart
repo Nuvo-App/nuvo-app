@@ -519,7 +519,7 @@ class _PageShell extends StatelessWidget {
         Expanded(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -645,26 +645,13 @@ class _NamePageState extends State<_NamePage> {
             onChanged: _onTextChanged,
             onSubmitted: (_) => _commit(),
           ),
-          const SizedBox(height: 20),
-          if (_ctrl.text.trim().isNotEmpty) ...[
-            Text(
-              'RACE PREVIEW',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.muted,
-                letterSpacing: 0.8,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _RaceNamePreview(name: _ctrl.text.trim()),
-          ],
         ],
       ),
     );
   }
 }
 
-class _LargeTextField extends StatelessWidget {
+class _LargeTextField extends StatefulWidget {
   const _LargeTextField({
     required this.controller,
     required this.focusNode,
@@ -679,87 +666,76 @@ class _LargeTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
 
   @override
+  State<_LargeTextField> createState() => _LargeTextFieldState();
+}
+
+class _LargeTextFieldState extends State<_LargeTextField> {
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChange);
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-        boxShadow: const [
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(
+          color: _focused ? NuvoColors.actionBlue : NuvoColors.navy,
+          width: 2,
+        ),
+        boxShadow: [
           BoxShadow(
-            color: NuvoColors.inkNavy,
+            color: NuvoColors.navy.withValues(alpha: _focused ? 0.12 : 0.18),
             blurRadius: 0,
-            offset: Offset(3, 3),
+            offset: const Offset(3, 3),
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        onChanged: onChanged,
-        onSubmitted: onSubmitted,
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        onChanged: widget.onChanged,
+        onSubmitted: widget.onSubmitted,
         autofocus: true,
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.done,
         style: AppTextStyles.titleLarge.copyWith(
           color: NuvoColors.navy,
-          fontSize: 22,
-          height: 1.3,
+          fontSize: 20,
+          height: 1.4,
         ),
         maxLines: 2,
+        minLines: 1,
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: widget.hint,
           hintStyle: AppTextStyles.titleLarge.copyWith(
-            color: NuvoColors.muted.withValues(alpha: 0.5),
-            fontSize: 22,
+            color: NuvoColors.muted.withValues(alpha: 0.45),
+            fontSize: 20,
+            height: 1.4,
           ),
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
           isDense: true,
           contentPadding: EdgeInsets.zero,
+          isCollapsed: true,
         ),
-      ),
-    );
-  }
-}
-
-class _RaceNamePreview extends StatelessWidget {
-  const _RaceNamePreview({required this.name});
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: NuvoColors.actionBlue.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(
-          color: NuvoColors.actionBlue.withValues(alpha: 0.18),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: NuvoColors.actionBlue,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              name,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.navy,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -789,10 +765,6 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   @override
   void initState() {
     super.initState();
-    // Load recent movements from storage on first build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(recentMovementIdsProvider.notifier).load();
-    });
   }
 
   @override
@@ -820,8 +792,6 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
 
   @override
   Widget build(BuildContext context) {
-    final recentIds = ref.watch(recentMovementIdsProvider);
-    final recentActivities = recentActivitiesFromIds(recentIds);
     return _PageShell(
       question: 'What are you competing in?',
       support: 'Pick a movement for your crew.',
@@ -845,59 +815,19 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               onSelect: _select,
             )
           else ...[
-            // ── Recent row (only if non-empty) ───────────────────────────
-            if (recentActivities.isNotEmpty) ...[
-              Text(
-                'Recent',
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: NuvoColors.navy,
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 72,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: recentActivities.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (context, i) {
-                    final activity = recentActivities[i];
-                    return _PopularChip(
-                      activity: activity,
-                      selected: widget.draft.activity.type == activity.type,
-                      onTap: () => _select(activity),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-
-            // ── Category tabs ─────────────────────────────────────────────
             _CategoryTabs(
               categories: activeCategories,
               selected: _selectedCategory,
               onSelect: (cat) => setState(() => _selectedCategory = cat),
             ),
-            const SizedBox(height: 16),
-
-            // ── Category sections ────────────────────────────────────────
-            if (_selectedCategory == null)
-              for (final category in activeCategories) ...[
-                _CategorySection(
-                  category: category,
-                  selectedType: widget.draft.activity.type,
-                  onSelect: _select,
-                ),
-                const SizedBox(height: 20),
-              ]
-            else
-              _CategorySection(
-                category: _selectedCategory!,
-                selectedType: widget.draft.activity.type,
-                onSelect: _select,
-                showAll: true,
-              ),
+            const SizedBox(height: 14),
+            _ActivityGrid(
+              activities: _selectedCategory == null
+                  ? motionActivityDefinitions
+                  : activitiesByCategory(_selectedCategory!),
+              selectedType: widget.draft.activity.type,
+              onSelect: _select,
+            ),
           ],
 
           // ── Teach a movement (demoted: text link, not a competing button) ─
@@ -962,58 +892,6 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-// ── Popular chip ─────────────────────────────────────────────────────────────
-
-class _PopularChip extends StatelessWidget {
-  const _PopularChip({
-    required this.activity,
-    required this.selected,
-    required this.onTap,
-  });
-  final MotionActivityDefinition activity;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.08)
-              : NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
-            width: selected ? 2 : 1.5,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              activity.icon,
-              color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              activity.title,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 // ── Category tabs ────────────────────────────────────────────────────────────
 
 class _CategoryTabs extends StatelessWidget {
@@ -1032,6 +910,7 @@ class _CategoryTabs extends StatelessWidget {
       height: 36,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.only(right: 24),
         itemCount: categories.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
@@ -1071,20 +950,21 @@ class _CategoryTab extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? NuvoColors.actionBlue : NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.sm),
-          border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
-            width: 1.5,
+          color: Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? NuvoColors.actionBlue : Colors.transparent,
+              width: selected ? 2 : 0,
+            ),
           ),
         ),
         child: Text(
           label,
           style: AppTextStyles.bodySmall.copyWith(
-            color: selected ? NuvoColors.white : NuvoColors.navy,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            color: selected ? NuvoColors.actionBlue : NuvoColors.muted,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -1092,73 +972,37 @@ class _CategoryTab extends StatelessWidget {
   }
 }
 
-// ── Category section ─────────────────────────────────────────────────────────
-
-class _CategorySection extends StatelessWidget {
-  const _CategorySection({
-    required this.category,
+class _ActivityGrid extends StatelessWidget {
+  const _ActivityGrid({
+    required this.activities,
     required this.selectedType,
     required this.onSelect,
-    this.showAll = false,
   });
-  final MovementCategory category;
+
+  final List<MotionActivityDefinition> activities;
   final MotionActivityType selectedType;
   final ValueChanged<MotionActivityDefinition> onSelect;
-  final bool showAll;
 
   @override
   Widget build(BuildContext context) {
-    final activities = activitiesByCategory(category);
-    final displayed = showAll ? activities : activities.take(4).toList();
-    final hasMore = !showAll && activities.length > 4;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              category.label,
-              style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.navy),
-            ),
-            if (hasMore)
-              GestureDetector(
-                onTap: () {
-                  // Navigate to full category list — for now, expand inline
-                  // by tapping the category tab.
-                },
-                child: Text(
-                  'See all',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.actionBlue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 2.6,
-          ),
-          itemCount: displayed.length,
-          itemBuilder: (context, i) {
-            final activity = displayed[i];
-            return _CompactActivityCard(
-              activity: activity,
-              selected: activity.type == selectedType,
-              onTap: () => onSelect(activity),
-            );
-          },
-        ),
-      ],
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 2.45,
+      ),
+      itemCount: activities.length,
+      itemBuilder: (context, index) {
+        final activity = activities[index];
+        return _CompactActivityCard(
+          activity: activity,
+          selected: activity.type == selectedType,
+          onTap: () => onSelect(activity),
+        );
+      },
     );
   }
 }
@@ -1177,6 +1021,7 @@ class _CompactActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final targetLabel = activity.targetLabel(activity.defaultTarget);
     return PressableScale(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1184,13 +1029,14 @@ class _CompactActivityCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.07)
-              : NuvoColors.white,
+              ? NuvoColors.actionBlue.withValues(alpha: 0.08)
+              : NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
           border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
-            width: selected ? 2 : 1.5,
+            color: selected ? NuvoColors.actionBlue : NuvoColors.divider,
+            width: selected ? 2 : 1,
           ),
+          boxShadow: null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1208,8 +1054,8 @@ class _CompactActivityCard extends StatelessWidget {
                   child: Text(
                     activity.title,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                      color: NuvoColors.navy,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1218,8 +1064,11 @@ class _CompactActivityCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              activity.metric.label,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              targetLabel,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.muted,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ],
         ),
@@ -1256,14 +1105,11 @@ class _SearchResults extends StatelessWidget {
     }
     return Column(
       children: [
-        for (final activity in results) ...[
-          _CompactActivityCard(
-            activity: activity,
-            selected: activity.type == selectedType,
-            onTap: () => onSelect(activity),
-          ),
-          const SizedBox(height: 8),
-        ],
+        _ActivityGrid(
+          activities: results,
+          selectedType: selectedType,
+          onSelect: onSelect,
+        ),
       ],
     );
   }

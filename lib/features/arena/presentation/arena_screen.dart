@@ -1,1 +1,1 @@
-export 'arena_screen_trackside.dart';
+export 'arena_screen_fixed.dart';
