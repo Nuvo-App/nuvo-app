@@ -1,0 +1,47 @@
+{
+  "candidateId": "combo_cam_foot_deepsquat",
+  "family": "hybrid",
+  "architecture": "Combo_Consensus+FootGuard+DeepSquatReject",
+  "gate": "REJECT",
+  "metrics": {
+    "candidateId": "combo_cam_foot_deepsquat",
+    "totalTargetClips": 3,
+    "totalConfuserClips": 9,
+    "totalExpectedReps": 16,
+    "totalDetectedReps": 2,
+    "totalTP": 2,
+    "totalFN": 14,
+    "totalFP": 3,
+    "totalFP_overcount": 0,
+    "totalFP_confuser": 3,
+    "exactCountClips": 0,
+    "overcountClips": 0,
+    "undercountClips": 3,
+    "catastrophicClips": 0,
+    "falseAcceptClips": 2,
+    "totalFalseAcceptReps": 3,
+    "repRecall": "0.1250",
+    "repPrecision": "0.4000",
+    "f1": "0.1905",
+    "countMAE": "4.6667",
+    "exactCountRate": "0.0000",
+    "overcountRate": "0.0000",
+    "undercountRate": "1.0000",
+    "falseAcceptClipRate": "0.2222",
+    "falseAcceptRate": "0.2222",
+    "productScore": "0.0790",
+    "avgProcessingMs": 0,
+    "confuserFalseAccepts": {
+      "jumping_jacks": 1,
+      "squat_jacks": 2
+    },
+    "confuserFalseAcceptClipRates": {
+      "normal_squats": "0.000",
+      "deep_squats": "0.000",
+      "vertical_jumps": "0.000",
+      "jumping_jacks": "1.000",
+      "squat_jacks": "1.000",
+      "lunges": "0.000"
+    }
+  }
+}

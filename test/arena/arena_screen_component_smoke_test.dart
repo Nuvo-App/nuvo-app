@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nuvo/core/widgets/animated_race_track.dart';
-import 'package:nuvo/core/widgets/nuvo_leaderboard.dart';
-import 'package:nuvo/core/widgets/nuvo_race_strip.dart';
+import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
 
@@ -41,24 +39,26 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(child: MaterialApp.router(routerConfig: router)),
     );
-    await tester.pumpAndSettle(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
   }
 
-  testWidgets('Arena mounts shared components on 390x844', (tester) async {
+  testWidgets('Arena shows the Nuvo next-move board', (tester) async {
     await pumpArena(tester);
 
     expect(find.byType(ArenaScreen), findsOneWidget);
-    expect(find.byType(NuvoRaceTrack), findsWidgets);
-    expect(find.byType(NuvoLeaderboard), findsOneWidget);
-    expect(find.byType(NuvoRaceStripRail), findsOneWidget);
-
-    expect(find.text('CREW STANDINGS'), findsOneWidget);
-    expect(find.text('RECENT ACTIVITY'), findsOneWidget);
-    expect(find.text('Your next move'), findsOneWidget);
-    expect(find.text('Submit proof'), findsOneWidget);
+    expect(find.text('Arena'), findsWidgets);
+    expect(find.text('YOUR NEXT MOVE'), findsOneWidget);
+    expect(find.text('First to 100 Pushups'), findsOneWidget);
+    expect(find.text('LEADERBOARD'), findsOneWidget);
+    expect(find.text('Submit proof'), findsWidgets);
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Join'), findsOneWidget);
+    expect(find.byType(NuvoPrimaryButton), findsOneWidget);
+    expect(find.byType(NuvoOutlineButton), findsNWidgets(2));
+    expect(find.text('More races'), findsNothing);
   });
 
-  testWidgets('Arena mounts shared components on taller inset viewport', (
+  testWidgets('Arena remains usable on a taller inset viewport', (
     tester,
   ) async {
     await pumpArena(
@@ -67,25 +67,20 @@ void main() {
       bottomInset: 34,
     );
 
-    expect(find.byType(ArenaScreen), findsOneWidget);
-    expect(find.byType(NuvoRaceTrack), findsWidgets);
-    expect(find.byType(NuvoLeaderboard), findsOneWidget);
-    expect(find.byType(NuvoRaceStripRail), findsOneWidget);
-    expect(find.text('CREW STANDINGS'), findsOneWidget);
-    expect(find.text('RECENT ACTIVITY'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(find.text('First to 100 Pushups'), findsOneWidget);
+    expect(find.text('65'), findsOneWidget);
   });
 
-  testWidgets('NuvoRaceStripRail taps switch the active race', (tester) async {
+  testWidgets('recent activity remains available below the dashboard', (
+    tester,
+  ) async {
     await pumpArena(tester);
 
-    // Preview snapshot has 3 races: Pushups (selected), Squats, Lunges.
-    expect(find.byType(NuvoRaceStripRail), findsOneWidget);
-
-    // Tap the "Squats" strip to switch races.
-    await tester.tap(find.text('Squats'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
-
-    // Squats board center value is 28 / 60 (race track center + leaderboard).
-    expect(find.text('28 / 60'), findsWidgets);
+    expect(find.text('submitted 20 pushups'), findsNothing);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -520));
+    await tester.pumpAndSettle();
+    expect(find.text('RECENT ACTIVITY'), findsOneWidget);
+    expect(find.text('submitted 20 pushups'), findsOneWidget);
   });
 }

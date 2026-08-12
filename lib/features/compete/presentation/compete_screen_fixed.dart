@@ -10,6 +10,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
@@ -70,18 +71,16 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          color: NuvoColors.blue,
-          backgroundColor: NuvoColors.surface,
-          onRefresh: () =>
-              ref.read(raceControllerProvider.notifier).loadRaces(),
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            slivers: [
+      body: RefreshIndicator(
+        color: NuvoColors.blue,
+        backgroundColor: NuvoColors.surface,
+        onRefresh: () =>
+            ref.read(raceControllerProvider.notifier).loadRaces(),
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          slivers: [
               SliverToBoxAdapter(
                 child: _CompactHeader(
                   activeCount: active.length,
@@ -181,6 +180,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                         onStart: (prefill) =>
                             context.push('/races/new', extra: prefill),
                       ),
+                      const SizedBox(height: NuvoSpacing.xxl),
                     ],
                   ]),
                 ),
@@ -188,7 +188,6 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -208,6 +207,8 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
       max: 4,
     );
 
+    final hasProof = pct > 0;
+
     return NuvoFeaturedRaceCard(
       activityLabel: activity,
       targetLabel: target,
@@ -216,7 +217,12 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
       progressLabel: progressLabel,
       racerStack: racerStack,
       rank: rank,
-      onOpen: () => context.push('/race/${race.id}'),
+      showRank: hasProof,
+      actionLabel: hasProof ? 'View leaderboard' : 'Submit proof',
+      ctaIcon: hasProof ? null : Icons.camera_alt_outlined,
+      onOpen: () => context.push(
+        hasProof ? '/race/${race.id}' : '/race/${race.id}/proof',
+      ),
     );
   }
 
@@ -286,58 +292,52 @@ class _CompactHeader extends StatelessWidget {
         ? '$activeCount active · $finishedCount finished'
         : '$activeCount ${activeCount == 1 ? 'race' : 'races'} active';
 
+    final topInset = MediaQuery.of(context).padding.top;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         NuvoSpacing.pageHorizontal,
-        NuvoSpacing.xxxl,
+        topInset + NuvoSpacing.xl,
         NuvoSpacing.pageHorizontal,
         0,
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Compete', style: AppTextStyles.screenTitle),
-              const SizedBox(height: NuvoSpacing.xs),
-              Text(
-                summary,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: NuvoSpacing.md),
           Expanded(
-            flex: 3,
-            child: NuvoPrimaryButton(
-              label: 'Start race',
-              small: true,
-              flat: true,
-              subtleLift: true,
-              onPressed: onStart,
-              expand: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Compete', style: AppTextStyles.screenTitle),
+                const SizedBox(height: NuvoSpacing.xs),
+                Text(
+                  summary,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
+          ),
+          NuvoPrimaryButton(
+            label: 'Start',
+            onPressed: onStart,
+            small: true,
           ),
           const SizedBox(width: NuvoSpacing.sm),
-          Expanded(
-            flex: 2,
-            child: NuvoOutlineButton(
-              label: 'Join',
-              small: true,
-              flat: true,
-              onPressed: onJoin,
-              expand: true,
-            ),
+          NuvoOutlineButton(
+            label: 'Join',
+            onPressed: onJoin,
+            small: true,
           ),
         ],
       ),
     );
   }
 }
+
 
 // ── Capped race list with inline See all ──────────────────────────────────────
 
@@ -437,7 +437,7 @@ class _CappedRaceList extends StatelessWidget {
       movementLabel: activity,
       progressLabel: progressLabel,
       progressPercent: pct,
-      rank: rank ?? index,
+      rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
       onTap: () => onOpen(race),
@@ -525,7 +525,7 @@ class _SummaryExpansionList extends StatelessWidget {
       movementLabel: activity,
       progressLabel: progressLabel,
       progressPercent: pct,
-      rank: rank ?? index,
+      rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
       onTap: () => onOpen(race),
@@ -644,25 +644,94 @@ class _QuickStarts extends StatelessWidget {
       children: [
         Text('Quick starts', style: AppTextStyles.sectionTitle),
         const SizedBox(height: NuvoSpacing.sm),
-        // Deliberate 2-column grid — not an accidental wrap.
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: NuvoSpacing.sm,
-          crossAxisSpacing: NuvoSpacing.sm,
-          childAspectRatio: 2.4,
-          children: [
-            for (final item in _items)
-              NuvoQuickStart(
+        SizedBox(
+          height: 56,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.only(
+              right: NuvoSpacing.pageHorizontal,
+            ),
+            itemCount: _items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: NuvoSpacing.sm),
+            itemBuilder: (_, index) {
+              final item = _items[index];
+              return _QuickStartChip(
                 icon: item.icon,
                 movementName: item.movementName,
                 target: item.target,
                 onTap: () => onStart(item.prefill),
-              ),
-          ],
+              );
+            },
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _QuickStartChip extends StatelessWidget {
+  const _QuickStartChip({
+    required this.icon,
+    required this.movementName,
+    required this.target,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String movementName;
+  final String target;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      scale: 0.96,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: NuvoSpacing.lg,
+          vertical: NuvoSpacing.sm + 2,
+        ),
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: NuvoBorders.divider,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: NuvoColors.navy, size: 18),
+            const SizedBox(width: NuvoSpacing.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  movementName,
+                  style: AppTextStyles.raceRowTitle.copyWith(
+                    fontSize: 13,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  target,
+                  style: AppTextStyles.raceRowMeta.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: NuvoColors.muted,
+                    letterSpacing: 0.2,
+                  ),
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

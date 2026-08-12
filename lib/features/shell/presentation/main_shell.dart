@@ -38,11 +38,11 @@ class MainShell extends StatelessWidget {
       rowKey: TrackSideLayoutKeys.navigationRow,
       currentIndex: currentIndex,
       onTap: (index) => context.go(_paths[index]),
-      isDark: isArena,
+      isDark: false,
     );
 
     return Scaffold(
-      backgroundColor: isArena ? NuvoColors.navy : NuvoColors.page,
+      backgroundColor: NuvoColors.page,
       extendBody: !isArena,
       body: isArena
           ? LayoutBuilder(

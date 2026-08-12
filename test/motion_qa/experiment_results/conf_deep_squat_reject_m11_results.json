@@ -1,0 +1,47 @@
+{
+  "candidateId": "conf_deep_squat_reject",
+  "family": "confuser_specialist",
+  "architecture": "DeepSquatReject",
+  "gate": "REJECT",
+  "metrics": {
+    "candidateId": "conf_deep_squat_reject",
+    "totalTargetClips": 3,
+    "totalConfuserClips": 9,
+    "totalExpectedReps": 16,
+    "totalDetectedReps": 6,
+    "totalTP": 5,
+    "totalFN": 11,
+    "totalFP": 3,
+    "totalFP_overcount": 1,
+    "totalFP_confuser": 2,
+    "exactCountClips": 0,
+    "overcountClips": 1,
+    "undercountClips": 2,
+    "catastrophicClips": 0,
+    "falseAcceptClips": 2,
+    "totalFalseAcceptReps": 2,
+    "repRecall": "0.3125",
+    "repPrecision": "0.6250",
+    "f1": "0.4167",
+    "countMAE": "4.0000",
+    "exactCountRate": "0.0000",
+    "overcountRate": "0.3333",
+    "undercountRate": "0.6667",
+    "falseAcceptClipRate": "0.2222",
+    "falseAcceptRate": "0.2222",
+    "productScore": "0.1944",
+    "avgProcessingMs": 0,
+    "confuserFalseAccepts": {
+      "jumping_jacks": 1,
+      "squat_jacks": 1
+    },
+    "confuserFalseAcceptClipRates": {
+      "normal_squats": "0.000",
+      "deep_squats": "0.000",
+      "vertical_jumps": "0.000",
+      "jumping_jacks": "1.000",
+      "squat_jacks": "1.000",
+      "lunges": "0.000"
+    }
+  }
+}

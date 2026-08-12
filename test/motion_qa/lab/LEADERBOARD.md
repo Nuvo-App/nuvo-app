@@ -1,0 +1,54 @@
+# LEADERBOARD
+
+| Rank | Experiment | Family | Candidate | Recall | Precision | F1 | FA Clip Rate | Gate |
+|------|------------|--------|-----------|--------|-----------|----|-------------|------|
+| 1 | EXP-275179 | temporal | temporal_v147586 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 2 | EXP-173418 | temporal | temporal_v92515 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 3 | EXP-208459 | temporal | temporal_v111389 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 4 | EXP-173289 | temporal | temporal_v92450 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 5 | EXP-195587 | temporal | temporal_v104399 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 6 | EXP-307951 | temporal | temporal_v165273 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 7 | EXP-307934 | temporal | temporal_v165267 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 8 | EXP-307896 | temporal | temporal_v165247 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 9 | EXP-208557 | temporal | temporal_v111437 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 10 | EXP-173256 | temporal | temporal_v92434 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 11 | EXP-173457 | temporal | temporal_v92536 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 12 | EXP-307848 | temporal | temporal_v165223 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 13 | EXP-000297 | temporal | temporal_v42 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 14 | EXP-307804 | temporal | temporal_v165204 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 15 | EXP-208588 | temporal | temporal_v111453 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 16 | EXP-307761 | temporal | temporal_v165179 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 17 | EXP-307735 | temporal | temporal_v165167 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 18 | EXP-173210 | temporal | temporal_v92413 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 19 | EXP-307684 | temporal | temporal_v165133 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 20 | EXP-173178 | temporal | temporal_v92395 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 21 | EXP-307575 | temporal | temporal_v165071 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 22 | EXP-307528 | temporal | temporal_v165052 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 23 | EXP-195697 | temporal | temporal_v104455 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 24 | EXP-307481 | temporal | temporal_v165033 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 25 | EXP-173177 | temporal | temporal_v92394 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 26 | EXP-000813 | temporal | temporal_v103 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 27 | EXP-208627 | temporal | temporal_v111475 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 28 | EXP-000838 | temporal | temporal_v107 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 29 | EXP-307385 | temporal | temporal_v164979 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 30 | EXP-000856 | temporal | temporal_v109 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 31 | EXP-307362 | temporal | temporal_v164968 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 32 | EXP-208674 | temporal | temporal_v111501 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 33 | EXP-000899 | temporal | temporal_v116 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 34 | EXP-208691 | temporal | temporal_v111507 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 35 | EXP-307293 | temporal | temporal_v164935 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 36 | EXP-307275 | temporal | temporal_v164928 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 37 | EXP-208698 | temporal | temporal_v111510 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 38 | EXP-173041 | temporal | temporal_v92321 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 39 | EXP-307254 | temporal | temporal_v164917 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 40 | EXP-307214 | temporal | temporal_v164898 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 41 | EXP-307212 | temporal | temporal_v164896 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 42 | EXP-307188 | temporal | temporal_v164882 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 43 | EXP-001106 | temporal | temporal_v141 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 44 | EXP-001108 | temporal | temporal_v142 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 45 | EXP-001110 | temporal | temporal_v143 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 46 | EXP-208715 | temporal | temporal_v111520 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 47 | EXP-208443 | temporal | temporal_v111376 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 48 | EXP-208793 | temporal | temporal_v111555 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 49 | EXP-172893 | temporal | temporal_v92246 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |
+| 50 | EXP-208839 | temporal | temporal_v111581 | 0.5625 | 0.6429 | 0.6000 | 0.1111 | reject |

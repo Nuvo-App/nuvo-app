@@ -1,0 +1,3500 @@
+[
+  {
+    "id": "EXP-000038",
+    "timestamp": "2026-08-11T11:14:34.175597",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v7",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 43.233063964372874}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 43.233063964372874
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 38,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000004",
+    "timestamp": "2026-08-11T11:14:32.830457",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_mlp_v1",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → mlp verifies. Config: {detector: temp_adaptive_hyst, verifier: mlp, verifierWindow: 15, verifierThreshold: 0.5}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "mlp",
+      "verifierWindow": 15,
+      "verifierThreshold": 0.5
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 15,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 33,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000010",
+    "timestamp": "2026-08-11T11:14:33.023223",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_mlp_v2",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → mlp verifies. Config: {detector: temp_adaptive_hyst, verifier: mlp, verifierWindow: 30, verifierThreshold: 0.5, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "mlp",
+      "verifierWindow": 30,
+      "verifierThreshold": 0.5,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 30,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000012",
+    "timestamp": "2026-08-11T11:14:33.084073",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_mlp_v3",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → mlp verifies. Config: {detector: temp_adaptive_hyst, verifier: mlp, verifierWindow: 15, verifierThreshold: 0.3, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "mlp",
+      "verifierWindow": 15,
+      "verifierThreshold": 0.3,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 15,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000014",
+    "timestamp": "2026-08-11T11:14:33.152854",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v1",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 83.91657809624552}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 83.91657809624552
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 29,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000016",
+    "timestamp": "2026-08-11T11:14:33.220567",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v2",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 29,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000024",
+    "timestamp": "2026-08-11T11:14:33.563320",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v3",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 54,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000025",
+    "timestamp": "2026-08-11T11:14:33.605802",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v4",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 82.15450757842136}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 82.15450757842136
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 40,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000053",
+    "timestamp": "2026-08-11T11:14:34.688505",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_confuser_gate_v6",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → confuser_gate verifies. Config: {detector: temp_adaptive_hyst, verifier: confuser_gate, gate: jumping_jack_stance_width, stanceThreshold: 0.5, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "confuser_gate",
+      "gate": "jumping_jack_stance_width",
+      "stanceThreshold": 0.5,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000027",
+    "timestamp": "2026-08-11T11:14:33.704184",
+    "family": "temporal",
+    "candidateName": "temporal_v2",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.08000000000000002, hyst=0.06, gap=10, persist=4",
+    "config": {
+      "airborneThreshold": 0.08000000000000002,
+      "hysteresis": 0.06,
+      "minRepGap": 10,
+      "persistence": 4
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 62,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.26666666666666666,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000029",
+    "timestamp": "2026-08-11T11:14:33.800379",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_compression_depth_gate_v5",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using compression_depth_gate: {target: deep_squats, method: compression_depth_gate, threshold: 0.1785551362916328}",
+    "config": {
+      "target": "deep_squats",
+      "method": "compression_depth_gate",
+      "threshold": 0.1785551362916328
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 34,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000030",
+    "timestamp": "2026-08-11T11:14:33.832316",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_compression_depth_gate_v6",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using compression_depth_gate: {target: deep_squats, method: compression_depth_gate, threshold: 0.1120729377776119}",
+    "config": {
+      "target": "deep_squats",
+      "method": "compression_depth_gate",
+      "threshold": 0.1120729377776119
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 27,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000155",
+    "timestamp": "2026-08-11T11:14:37.754161",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v31",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 78.2736883434209}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 78.2736883434209
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000033",
+    "timestamp": "2026-08-11T11:14:33.956855",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_confuser_gate_v5",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → confuser_gate verifies. Config: {detector: temp_adaptive_hyst, verifier: confuser_gate, gate: deep_squat_knee_angle, kneeThreshold: 65, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "confuser_gate",
+      "gate": "deep_squat_knee_angle",
+      "kneeThreshold": 65,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 24,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000034",
+    "timestamp": "2026-08-11T11:14:33.989720",
+    "family": "temporal",
+    "candidateName": "temporal_v4",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.064, hyst=0.05, gap=12, persist=5",
+    "config": {
+      "airborneThreshold": 0.064,
+      "hysteresis": 0.05,
+      "minRepGap": 12,
+      "persistence": 5
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.26666666666666666,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000035",
+    "timestamp": "2026-08-11T11:14:34.030414",
+    "family": "geometric",
+    "candidateName": "geom_kneeAngle,torsoRatio_v4",
+    "parentExperimentId": null,
+    "hypothesis": "Geometric features: kneeAngle,torsoRatio at threshold 0.7",
+    "config": {
+      "features": [
+        "kneeAngle",
+        "torsoRatio"
+      ],
+      "threshold": 0.7
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": "kneeAngle,torsoRatio",
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 38,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000135",
+    "timestamp": "2026-08-11T11:14:37.161516",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v24",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 66.91413632293913}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 66.91413632293913
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000047",
+    "timestamp": "2026-08-11T11:14:34.503876",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v8",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 61.31259625205164}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 61.31259625205164
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000052",
+    "timestamp": "2026-08-11T11:14:34.665882",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v9",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 52.407217640121004}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 52.407217640121004
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000054",
+    "timestamp": "2026-08-11T11:14:34.720273",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_compression_depth_gate_v10",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using compression_depth_gate: {target: deep_squats, method: compression_depth_gate, threshold: 0.17517315232999692}",
+    "config": {
+      "target": "deep_squats",
+      "method": "compression_depth_gate",
+      "threshold": 0.17517315232999692
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 30,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000055",
+    "timestamp": "2026-08-11T11:14:34.753209",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_no_flight_phase_gate_v11",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using no_flight_phase_gate: {target: deep_squats, method: no_flight_phase_gate, airborneThreshold: 0.25}",
+    "config": {
+      "target": "deep_squats",
+      "method": "no_flight_phase_gate",
+      "airborneThreshold": 0.25
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 30,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000153",
+    "timestamp": "2026-08-11T11:14:37.689805",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_no_flight_phase_gate_v30",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using no_flight_phase_gate: {target: deep_squats, method: no_flight_phase_gate, airborneThreshold: 0.25}",
+    "config": {
+      "target": "deep_squats",
+      "method": "no_flight_phase_gate",
+      "airborneThreshold": 0.25
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 23,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000062",
+    "timestamp": "2026-08-11T11:14:34.969194",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_no_flight_phase_gate_v12",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using no_flight_phase_gate: {target: deep_squats, method: no_flight_phase_gate, airborneThreshold: 0.25}",
+    "config": {
+      "target": "deep_squats",
+      "method": "no_flight_phase_gate",
+      "airborneThreshold": 0.25
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 26,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000064",
+    "timestamp": "2026-08-11T11:14:35.032519",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v13",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 84.61862671940565}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 84.61862671940565
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000065",
+    "timestamp": "2026-08-11T11:14:35.059102",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_compression_depth_gate_v14",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using compression_depth_gate: {target: deep_squats, method: compression_depth_gate, threshold: 0.15965268944567357}",
+    "config": {
+      "target": "deep_squats",
+      "method": "compression_depth_gate",
+      "threshold": 0.15965268944567357
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000066",
+    "timestamp": "2026-08-11T11:14:35.088595",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_no_flight_phase_gate_v15",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using no_flight_phase_gate: {target: deep_squats, method: no_flight_phase_gate, airborneThreshold: 0.25}",
+    "config": {
+      "target": "deep_squats",
+      "method": "no_flight_phase_gate",
+      "airborneThreshold": 0.25
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 28,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000152",
+    "timestamp": "2026-08-11T11:14:37.664629",
+    "family": "temporal",
+    "candidateName": "temporal_v18",
+    "parentExperimentId": null,
+    "hypothesis": "Temporal config: airborne=0.05416, hyst=0.0344, gap=8, persist=3",
+    "config": {
+      "airborneThreshold": 0.05416,
+      "hysteresis": 0.0344,
+      "minRepGap": 8,
+      "persistence": 3,
+      "accelGate": true,
+      "adaptiveThreshold": true
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 32,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.1111111111111111,
+    "catastrophicClips": 0,
+    "productScore": 0.26666666666666666,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000076",
+    "timestamp": "2026-08-11T11:14:35.388563",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_confuser_gate_v7",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → confuser_gate verifies. Config: {detector: temp_adaptive_hyst, verifier: confuser_gate, gate: vertical_jump_no_compression, compressionThreshold: 0.05, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "confuser_gate",
+      "gate": "vertical_jump_no_compression",
+      "compressionThreshold": 0.05,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 26,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000077",
+    "timestamp": "2026-08-11T11:14:35.421389",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v16",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 70.74681881681634}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 70.74681881681634
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000151",
+    "timestamp": "2026-08-11T11:14:37.630727",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v29",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 48.071167007200984}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 48.071167007200984
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 27,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000081",
+    "timestamp": "2026-08-11T11:14:35.548324",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_combined_gates_v8",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → combined_gates verifies. Config: {detector: temp_adaptive_hyst, verifier: combined_gates, gates: [deep_squat_knee_angle, jumping_jack_stance_width], targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "combined_gates",
+      "gates": [
+        "deep_squat_knee_angle",
+        "jumping_jack_stance_width"
+      ],
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000083",
+    "timestamp": "2026-08-11T11:14:35.605156",
+    "family": "hybrid",
+    "candidateName": "hybrid_high_recall_temporal_high_precision_geometric_v9",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: high_recall_temporal proposes → high_precision_geometric verifies. Config: {detector: high_recall_temporal, verifier: high_precision_geometric, recallThreshold: 0.08, precisionThreshold: 0.6, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "high_recall_temporal",
+      "verifier": "high_precision_geometric",
+      "recallThreshold": 0.08,
+      "precisionThreshold": 0.6,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 28,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000132",
+    "timestamp": "2026-08-11T11:14:37.076235",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_high_precision_geometric_v17",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → high_precision_geometric verifies. Config: {detector: temp_adaptive_hyst, verifier: high_precision_geometric, verifierWindow: 15, verifierThreshold: 0.6, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "high_precision_geometric",
+      "verifierWindow": 15,
+      "verifierThreshold": 0.6,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 15,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 30,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000085",
+    "timestamp": "2026-08-11T11:14:35.667359",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v17",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 77.95289291557395}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 77.95289291557395
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 26,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000086",
+    "timestamp": "2026-08-11T11:14:35.700126",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_mlp_v10",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → mlp verifies. Config: {detector: temp_adaptive_hyst, verifier: mlp, verifierWindow: 15, verifierThreshold: 0.5, confuserGate: deep_squat_knee_angle, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "mlp",
+      "verifierWindow": 15,
+      "verifierThreshold": 0.5,
+      "confuserGate": "deep_squat_knee_angle",
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 15,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000088",
+    "timestamp": "2026-08-11T11:14:35.753193",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_confuser_gate_v11",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → confuser_gate verifies. Config: {detector: temp_adaptive_hyst, verifier: confuser_gate, verifierWindow: 20, verifierThreshold: 0.5, confuserGate: deep_squat_knee_angle, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "confuser_gate",
+      "verifierWindow": 20,
+      "verifierThreshold": 0.5,
+      "confuserGate": "deep_squat_knee_angle",
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 20,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000149",
+    "timestamp": "2026-08-11T11:14:37.577126",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v28",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 30,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000139",
+    "timestamp": "2026-08-11T11:14:37.271689",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_no_flight_phase_gate_v26",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using no_flight_phase_gate: {target: deep_squats, method: no_flight_phase_gate, airborneThreshold: 0.25}",
+    "config": {
+      "target": "deep_squats",
+      "method": "no_flight_phase_gate",
+      "airborneThreshold": 0.25
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 21,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000099",
+    "timestamp": "2026-08-11T11:14:36.085396",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_compression_depth_gate_v18",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using compression_depth_gate: {target: deep_squats, method: compression_depth_gate, threshold: 0.13040841735274972}",
+    "config": {
+      "target": "deep_squats",
+      "method": "compression_depth_gate",
+      "threshold": 0.13040841735274972
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 22,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000102",
+    "timestamp": "2026-08-11T11:14:36.179164",
+    "family": "hybrid",
+    "candidateName": "hybrid_high_recall_temporal_confuser_gate_v13",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: high_recall_temporal proposes → confuser_gate verifies. Config: {detector: high_recall_temporal, verifier: confuser_gate, verifierWindow: 10, verifierThreshold: 0.7, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "high_recall_temporal",
+      "verifier": "confuser_gate",
+      "verifierWindow": 10,
+      "verifierThreshold": 0.7,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 10,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000108",
+    "timestamp": "2026-08-11T11:14:36.355238",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v19",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 31,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000138",
+    "timestamp": "2026-08-11T11:14:37.249285",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v25",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 71.29607894137581}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 71.29607894137581
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 27,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000113",
+    "timestamp": "2026-08-11T11:14:36.503041",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v20",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000114",
+    "timestamp": "2026-08-11T11:14:36.531145",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_knee_angle_gate_v21",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using knee_angle_gate: {target: deep_squats, method: knee_angle_gate, threshold: 59.70550026175427}",
+    "config": {
+      "target": "deep_squats",
+      "method": "knee_angle_gate",
+      "threshold": 59.70550026175427
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 26,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000115",
+    "timestamp": "2026-08-11T11:14:36.562841",
+    "family": "hybrid",
+    "candidateName": "hybrid_high_recall_temporal_mlp_v15",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: high_recall_temporal proposes → mlp verifies. Config: {detector: high_recall_temporal, verifier: mlp, verifierWindow: 20, verifierThreshold: 0.4, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "high_recall_temporal",
+      "verifier": "mlp",
+      "verifierWindow": 20,
+      "verifierThreshold": 0.4,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 20,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 29,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000119",
+    "timestamp": "2026-08-11T11:14:36.675772",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v22",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 27,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000124",
+    "timestamp": "2026-08-11T11:14:36.823499",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_combined_knee_compression_v23",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using combined_knee_compression: {target: deep_squats, method: combined_knee_compression, kneeThreshold: 65, compressionThreshold: 0.12}",
+    "config": {
+      "target": "deep_squats",
+      "method": "combined_knee_compression",
+      "kneeThreshold": 65,
+      "compressionThreshold": 0.12
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 27,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000126",
+    "timestamp": "2026-08-11T11:14:36.886587",
+    "family": "hybrid",
+    "candidateName": "hybrid_temp_adaptive_hyst_confuser_gate_v16",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: temp_adaptive_hyst proposes → confuser_gate verifies. Config: {detector: temp_adaptive_hyst, verifier: confuser_gate, verifierWindow: 30, verifierThreshold: 0.6, confuserGate: deep_squat_knee_angle, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "temp_adaptive_hyst",
+      "verifier": "confuser_gate",
+      "verifierWindow": 30,
+      "verifierThreshold": 0.6,
+      "confuserGate": "deep_squat_knee_angle",
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 30,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 27,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000145",
+    "timestamp": "2026-08-11T11:14:37.449377",
+    "family": "confuser_specialist",
+    "candidateName": "confuser_deep_squats_no_flight_phase_gate_v27",
+    "parentExperimentId": null,
+    "hypothesis": "Reject deep_squats using no_flight_phase_gate: {target: deep_squats, method: no_flight_phase_gate, airborneThreshold: 0.25}",
+    "config": {
+      "target": "deep_squats",
+      "method": "no_flight_phase_gate",
+      "airborneThreshold": 0.25
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": null,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 25,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  },
+  {
+    "id": "EXP-000150",
+    "timestamp": "2026-08-11T11:14:37.602568",
+    "family": "hybrid",
+    "candidateName": "hybrid_high_recall_temporal_confuser_gate_v20",
+    "parentExperimentId": null,
+    "hypothesis": "Hybrid: high_recall_temporal proposes → confuser_gate verifies. Config: {detector: high_recall_temporal, verifier: confuser_gate, verifierWindow: 20, verifierThreshold: 0.4, targetConfuser: deep_squats}",
+    "config": {
+      "detector": "high_recall_temporal",
+      "verifier": "confuser_gate",
+      "verifierWindow": 20,
+      "verifierThreshold": 0.4,
+      "targetConfuser": "deep_squats"
+    },
+    "datasetVersion": "v1.0.0",
+    "splitUsed": "dev",
+    "randomSeed": null,
+    "featureSet": null,
+    "temporalWindow": 20,
+    "modelParams": null,
+    "threshold": null,
+    "trainDurationMs": null,
+    "evalDurationMs": 23,
+    "tp": 9,
+    "fn": 7,
+    "fp": 9,
+    "recall": 0.5625,
+    "precision": 0.5,
+    "f1": 0.5294117647058824,
+    "exactCountRate": 0.0,
+    "falseAcceptClipRate": 0.2222222222222222,
+    "catastrophicClips": 0,
+    "productScore": 0.24705882352941178,
+    "gateResult": "reject",
+    "perConfuserResults": {
+      "normal_squats": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "deep_squats": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 3,
+        "falseAcceptClips": 1
+      },
+      "vertical_jumps": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "jumping_jacks": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      },
+      "squat_jacks": {
+        "falseAcceptClipRate": 1.0,
+        "falseAcceptReps": 1,
+        "falseAcceptClips": 1
+      },
+      "lunges": {
+        "falseAcceptClipRate": 0.0,
+        "falseAcceptReps": 0,
+        "falseAcceptClips": 0
+      }
+    },
+    "failureSummary": "7 missed reps; 9 false positive reps; deep_squats: 1.00 FA clip rate; squat_jacks: 1.00 FA clip rate",
+    "championComparison": "F1 delta: +0.0000 (champion F1=0.5294)",
+    "status": "completed",
+    "error": null
+  }
+]

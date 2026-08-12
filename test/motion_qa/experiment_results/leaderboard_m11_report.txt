@@ -1,0 +1,255 @@
+=== MOTION INTELLIGENCE LEADERBOARD ===
+28 candidates registered
+
+1. temp_adaptive_hyst (temporal/AdaptiveHysteresis) [REJECT]
+   product_score: 0.2471
+   dev: recall=0.5625 precision=0.5000 f1=0.5294
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=9 FN=7 FP=9 (overcount=5 confuser=4) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:1.00 vertical_jumps:0.00 jumping_jacks:0.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.2500 precision=0.6667 f1=0.3636
+   holdout: recall=0.2000 precision=0.5000 f1=0.2857
+
+2. concept_v2 (deterministic/ConceptStateMachine) [RESEARCH]
+   product_score: 0.2319
+   dev: recall=0.3125 precision=0.7143 f1=0.4348
+        exact=0.0000 mae=4.00 faClips=1/9 faClipRate=0.111
+        TP=5 FN=11 FP=2 (overcount=1 confuser=1) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:0.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+3. cam_shoulder_hip_consensus (camera_relative/ShoulderHipConsensus) [REJECT]
+   product_score: 0.2052
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.3333 mae=3.67 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=0 confuser=3) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+4. sq_median_filter (signal_quality/MedianFilterAirborne) [RESEARCH]
+   product_score: 0.2032
+   dev: recall=0.2500 precision=0.8000 f1=0.3810
+        exact=0.3333 mae=4.00 faClips=1/9 faClipRate=0.111
+        TP=4 FN=12 FP=1 (overcount=0 confuser=1) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:0.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+5. cam_torso_sub (camera_relative/TorsoSubtractedAirborne) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+6. temp_n_of_m (temporal/NofMTransitions) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+7. sq_conf_smooth (signal_quality/ConfidenceSmoothing) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+8. feat_accel (feature_engineering/AccelerationFeature) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+9. feat_joint_angular (feature_engineering/JointAngularVelocity) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+10. feat_stance_width (feature_engineering/StanceWidthDynamics) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+11. conf_deep_squat_reject (confuser_specialist/DeepSquatReject) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+12. conf_jumping_jack_reject (confuser_specialist/JumpingJackReject) [REJECT]
+   product_score: 0.1944
+   dev: recall=0.3125 precision=0.6250 f1=0.4167
+        exact=0.0000 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=5 FN=11 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+13. det_foot_guard (deterministic/ConceptStateMachine_with_foot_guard) [RESEARCH]
+   product_score: 0.1789
+   dev: recall=0.1875 precision=1.0000 f1=0.3158
+        exact=0.0000 mae=4.33 faClips=0/9 faClipRate=0.000
+        TP=3 FN=13 FP=0 (overcount=0 confuser=0) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:0.00 squat_jacks:0.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+14. production_jsq (deterministic/MultiPhaseSequenceValidator) [REJECT]
+   product_score: 0.1697
+   dev: recall=0.2500 precision=0.6667 f1=0.3636
+        exact=0.3333 mae=4.00 faClips=2/9 faClipRate=0.222
+        TP=4 FN=12 FP=2 (overcount=0 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+15. ml_heuristic_v1 (ml/HeuristicScore_v1) [REJECT]
+   product_score: 0.1567
+   dev: recall=0.8125 precision=0.3023 f1=0.4407
+        exact=0.0000 mae=2.00 faClips=5/9 faClipRate=0.556
+        TP=13 FN=3 FP=30 (overcount=3 confuser=27) catastrophic=0
+        confuser clip rates: normal_squats:0.33 deep_squats:1.00 vertical_jumps:0.50 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.7500 precision=0.7500 f1=0.7500
+   holdout: recall=1.0000 precision=0.3846 f1=0.5556
+
+16. det_lowered_airborne (deterministic/MultiPhaseSequenceValidator_tuned) [REJECT]
+   product_score: 0.1533
+   dev: recall=0.2500 precision=0.5714 f1=0.3478
+        exact=0.0000 mae=4.33 faClips=2/9 faClipRate=0.222
+        TP=4 FN=12 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+17. conf_vertical_jump_reject (confuser_specialist/VerticalJumpReject) [REJECT]
+   product_score: 0.1533
+   dev: recall=0.2500 precision=0.5714 f1=0.3478
+        exact=0.0000 mae=4.33 faClips=2/9 faClipRate=0.222
+        TP=4 FN=12 FP=3 (overcount=1 confuser=2) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.2000 precision=0.3333 f1=0.2500
+
+18. cam_hip_rel_ankle (camera_relative/HipRelativeAnkleAirborne) [REJECT]
+   product_score: 0.1481
+   dev: recall=0.3125 precision=0.4545 f1=0.3704
+        exact=0.0000 mae=4.00 faClips=3/9 faClipRate=0.333
+        TP=5 FN=11 FP=6 (overcount=1 confuser=5) catastrophic=0
+        confuser clip rates: normal_squats:0.33 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.4000 precision=0.5000 f1=0.4444
+
+19. det_relaxed_temporal (deterministic/MultiPhaseSequenceValidator_relaxed) [REJECT]
+   product_score: 0.1469
+   dev: recall=0.2500 precision=0.5000 f1=0.3333
+        exact=0.0000 mae=4.33 faClips=2/9 faClipRate=0.222
+        TP=4 FN=12 FP=4 (overcount=1 confuser=3) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+20. ml_enhanced_v3 (ml/EnhancedHeuristic_v3_high_threshold) [REJECT]
+   product_score: 0.1363
+   dev: recall=0.5625 precision=0.3103 f1=0.4000
+        exact=0.3333 mae=2.33 faClips=5/9 faClipRate=0.556
+        TP=9 FN=7 FP=20 (overcount=0 confuser=20) catastrophic=0
+        confuser clip rates: normal_squats:0.33 deep_squats:1.00 vertical_jumps:0.50 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.1250 precision=1.0000 f1=0.2222
+   holdout: recall=0.6000 precision=0.3333 f1=0.4286
+
+21. hybrid_ml_gate_det (hybrid/MLGate_DetCounter) [REJECT]
+   product_score: 0.1259
+   dev: recall=0.2500 precision=0.5000 f1=0.3333
+        exact=0.0000 mae=4.33 faClips=3/9 faClipRate=0.333
+        TP=4 FN=12 FP=4 (overcount=1 confuser=3) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:1.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+22. combo_cam_foot_deepsquat (hybrid/Combo_Consensus+FootGuard+DeepSquatReject) [REJECT]
+   product_score: 0.0790
+   dev: recall=0.1250 precision=0.4000 f1=0.1905
+        exact=0.0000 mae=4.67 faClips=2/9 faClipRate=0.222
+        TP=2 FN=14 FP=3 (overcount=0 confuser=3) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+23. ml_enhanced_v1 (ml/EnhancedHeuristic_v1) [REJECT]
+   product_score: 0.0259
+   dev: recall=1.0000 precision=0.1702 f1=0.2909
+        exact=0.0000 mae=7.33 faClips=6/9 faClipRate=0.667
+        TP=16 FN=0 FP=78 (overcount=22 confuser=56) catastrophic=1
+        confuser clip rates: normal_squats:0.67 deep_squats:1.00 vertical_jumps:0.50 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=1.0000 precision=0.4444 f1=0.6154
+   holdout: recall=1.0000 precision=0.2000 f1=0.3333
+
+24. ml_heuristic_v2 (ml/HeuristicScore_v2_low_threshold) [REJECT]
+   product_score: 0.0137
+   dev: recall=1.0000 precision=0.1404 f1=0.2462
+        exact=0.0000 mae=8.33 faClips=6/9 faClipRate=0.667
+        TP=16 FN=0 FP=98 (overcount=25 confuser=73) catastrophic=2
+        confuser clip rates: normal_squats:0.67 deep_squats:1.00 vertical_jumps:0.50 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=1.0000 precision=0.3077 f1=0.4706
+   holdout: recall=0.2000 precision=0.0625 f1=0.0952
+
+25. det_camera_comp (deterministic/ConceptStateMachine_with_camera_comp) [REJECT]
+   product_score: 0.0000
+   dev: recall=0.0000 precision=0.0000 f1=0.0000
+        exact=0.0000 mae=5.33 faClips=0/9 faClipRate=0.000
+        TP=0 FN=16 FP=0 (overcount=0 confuser=0) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:0.00 squat_jacks:0.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+26. ml_enhanced_v2 (ml/EnhancedHeuristic_v2_low_threshold) [REJECT]
+   product_score: 0.0000
+   dev: recall=1.0000 precision=0.1159 f1=0.2078
+        exact=0.0000 mae=13.67 faClips=6/9 faClipRate=0.667
+        TP=16 FN=0 FP=122 (overcount=41 confuser=81) catastrophic=2
+        confuser clip rates: normal_squats:0.67 deep_squats:1.00 vertical_jumps:0.50 jumping_jacks:1.00 squat_jacks:1.00 lunges:0.00
+   val: recall=1.0000 precision=0.2581 f1=0.4103
+   holdout: recall=1.0000 precision=0.1429 f1=0.2500
+
+27. hybrid_det_ml (hybrid/DetProposal_MLVerifier) [REJECT]
+   product_score: 0.0000
+   dev: recall=0.0000 precision=0.0000 f1=0.0000
+        exact=0.0000 mae=5.33 faClips=1/9 faClipRate=0.111
+        TP=0 FN=16 FP=1 (overcount=0 confuser=1) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:0.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+
+28. combo_stance_ml (hybrid/Combo_StanceWidth+MLVerifier) [REJECT]
+   product_score: 0.0000
+   dev: recall=0.0000 precision=0.0000 f1=0.0000
+        exact=0.0000 mae=5.33 faClips=1/9 faClipRate=0.111
+        TP=0 FN=16 FP=1 (overcount=0 confuser=1) catastrophic=0
+        confuser clip rates: normal_squats:0.00 deep_squats:0.00 vertical_jumps:0.00 jumping_jacks:1.00 squat_jacks:0.00 lunges:0.00
+   val: recall=0.0000 precision=0.0000 f1=0.0000
+   holdout: recall=0.0000 precision=0.0000 f1=0.0000
+

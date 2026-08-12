@@ -1,0 +1,26 @@
+[
+  {
+    "ablation": "baseline (all features)",
+    "f1": 0.0
+  },
+  {
+    "ablation": "remove_raw_coords",
+    "f1": 0.0
+  },
+  {
+    "ablation": "remove_velocities",
+    "f1": 0.0
+  },
+  {
+    "ablation": "remove_stance",
+    "f1": 0.0
+  },
+  {
+    "ablation": "remove_concepts",
+    "f1": 0.0
+  },
+  {
+    "ablation": "remove_temporal",
+    "f1": 0.0
+  }
+]

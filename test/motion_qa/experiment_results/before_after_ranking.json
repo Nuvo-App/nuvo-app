@@ -1,0 +1,82 @@
+[
+  {
+    "candidateId": "ml_heuristic_v1",
+    "beforeRank": 1,
+    "afterRank": 15,
+    "afterGate": "REJECT",
+    "afterProductScore": "0.1567",
+    "afterRecall": "1.0000",
+    "afterPrecision": "0.3846",
+    "afterF1": "0.5556"
+  },
+  {
+    "candidateId": "concept_v2",
+    "beforeRank": 2,
+    "afterRank": 2,
+    "afterGate": "RESEARCH",
+    "afterProductScore": "0.2319",
+    "afterRecall": "0.2000",
+    "afterPrecision": "0.3333",
+    "afterF1": "0.2500"
+  },
+  {
+    "candidateId": "ml_heuristic_v2",
+    "beforeRank": 3,
+    "afterRank": 24,
+    "afterGate": "REJECT",
+    "afterProductScore": "0.0137",
+    "afterRecall": "0.2000",
+    "afterPrecision": "0.0625",
+    "afterF1": "0.0952"
+  },
+  {
+    "candidateId": "production_jsq",
+    "beforeRank": 4,
+    "afterRank": 14,
+    "afterGate": "REJECT",
+    "afterProductScore": "0.1697",
+    "afterRecall": "0.0000",
+    "afterPrecision": "0.0000",
+    "afterF1": "0.0000"
+  },
+  {
+    "candidateId": "det_lowered_airborne",
+    "beforeRank": 5,
+    "afterRank": 16,
+    "afterGate": "REJECT",
+    "afterProductScore": "0.1533",
+    "afterRecall": "0.0000",
+    "afterPrecision": "0.0000",
+    "afterF1": "0.0000"
+  },
+  {
+    "candidateId": "det_foot_guard",
+    "beforeRank": 6,
+    "afterRank": 13,
+    "afterGate": "RESEARCH",
+    "afterProductScore": "0.1789",
+    "afterRecall": "0.0000",
+    "afterPrecision": "0.0000",
+    "afterF1": "0.0000"
+  },
+  {
+    "candidateId": "det_camera_comp",
+    "beforeRank": 7,
+    "afterRank": 25,
+    "afterGate": "REJECT",
+    "afterProductScore": "0.0000",
+    "afterRecall": "0.0000",
+    "afterPrecision": "0.0000",
+    "afterF1": "0.0000"
+  },
+  {
+    "candidateId": "det_relaxed_temporal",
+    "beforeRank": 8,
+    "afterRank": 19,
+    "afterGate": "REJECT",
+    "afterProductScore": "0.1469",
+    "afterRecall": "0.0000",
+    "afterPrecision": "0.0000",
+    "afterF1": "0.0000"
+  }
+]

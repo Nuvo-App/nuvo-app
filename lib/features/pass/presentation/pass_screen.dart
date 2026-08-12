@@ -254,7 +254,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
                 // ── Find people ──────────────────────────────────────────
                 const _SectionLabel(label: 'Find people'),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 NuvoSearchField(
                   controller: _searchController,
                   hint: 'Username or member ID',
@@ -262,7 +262,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   onChanged: _onSearchChanged,
                 ),
                 if (_results.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _SearchResultList(
                     results: _results,
                     isCrew: _isCrew,
@@ -285,13 +285,13 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 // ── Your crew ────────────────────────────────────────────
                 if (closest != null) ...[
                   const _SectionLabel(label: 'Closest race'),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _ClosestRaceCard(closest: closest),
                   const SizedBox(height: 20),
                 ],
 
                 const _SectionLabel(label: 'Your crew'),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 if (_crew.isEmpty)
                   const _EmptyNote(
                     text: 'Search a username or member ID to add crew.',
@@ -567,7 +567,7 @@ class _UserRow extends StatelessWidget {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 11),
           child: Row(
             children: [
               NuvoAvatar(
@@ -584,6 +584,8 @@ class _UserRow extends StatelessWidget {
                   children: [
                     Text(
                       user.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.navy,
                         fontWeight: FontWeight.w700,
@@ -592,6 +594,8 @@ class _UserRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       user.handleLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -606,7 +610,7 @@ class _UserRow extends StatelessWidget {
                         child: Text(
                           actionLabel!,
                           style: AppTextStyles.labelMedium.copyWith(
-                            color: NuvoColors.muted,
+                            color: NuvoColors.textMuted,
                           ),
                         ),
                       )
@@ -644,12 +648,7 @@ class _CrewList extends StatelessWidget {
     return _PeopleSurface(
       children: [
         for (var i = 0; i < members.length; i++)
-          _UserRow(
-            user: members[i],
-            added: true,
-            actionLabel: 'In crew',
-            isLast: i == members.length - 1,
-          ),
+          _UserRow(user: members[i], isLast: i == members.length - 1),
       ],
     );
   }
@@ -695,15 +694,9 @@ class _PeopleSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.divider,
-      ),
-      child: Column(children: children),
-    );
+    // Directories stay on the page surface. Grouping comes from section
+    // spacing and inset rules, not another rounded card around every row.
+    return Column(children: children);
   }
 }
 

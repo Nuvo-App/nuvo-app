@@ -1,0 +1,50 @@
+{
+  "candidateId": "ml_enhanced_v1",
+  "family": "ml",
+  "architecture": "EnhancedHeuristic_v1",
+  "gate": "REJECT",
+  "metrics": {
+    "candidateId": "ml_enhanced_v1",
+    "totalTargetClips": 3,
+    "totalConfuserClips": 9,
+    "totalExpectedReps": 16,
+    "totalDetectedReps": 38,
+    "totalTP": 16,
+    "totalFN": 0,
+    "totalFP": 78,
+    "totalFP_overcount": 22,
+    "totalFP_confuser": 56,
+    "exactCountClips": 0,
+    "overcountClips": 3,
+    "undercountClips": 0,
+    "catastrophicClips": 1,
+    "falseAcceptClips": 6,
+    "totalFalseAcceptReps": 56,
+    "repRecall": "1.0000",
+    "repPrecision": "0.1702",
+    "f1": "0.2909",
+    "countMAE": "7.3333",
+    "exactCountRate": "0.0000",
+    "overcountRate": "1.0000",
+    "undercountRate": "0.0000",
+    "falseAcceptClipRate": "0.6667",
+    "falseAcceptRate": "0.6667",
+    "productScore": "0.0259",
+    "avgProcessingMs": 0,
+    "confuserFalseAccepts": {
+      "normal_squats": 14,
+      "deep_squats": 10,
+      "vertical_jumps": 5,
+      "jumping_jacks": 23,
+      "squat_jacks": 4
+    },
+    "confuserFalseAcceptClipRates": {
+      "normal_squats": "0.667",
+      "deep_squats": "1.000",
+      "vertical_jumps": "0.500",
+      "jumping_jacks": "1.000",
+      "squat_jacks": "1.000",
+      "lunges": "0.000"
+    }
+  }
+}

@@ -65,7 +65,7 @@ String raceScoreLabel(Race race, int value) =>
     '$value ${raceMetricLabel(race)}';
 
 String raceProgressLabel(Race race, RaceParticipant? participant) {
-  if (participant == null) return 'Submit your first proof';
+  if (participant == null) return '0';
   final target = race.targetValue;
   final metric = raceMetricLabel(race);
   if (target != null && target > 0) {

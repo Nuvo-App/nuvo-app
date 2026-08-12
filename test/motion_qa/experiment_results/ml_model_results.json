@@ -1,0 +1,122 @@
+[
+  {
+    "model": "FeatureSummaryMLP",
+    "window": 15,
+    "params": 4161,
+    "trainMs": 376,
+    "dev": {
+      "recall": 1.0,
+      "precision": 0.25,
+      "f1": 0.4,
+      "falseAcceptClipRate": 1.0,
+      "tp": 3.0,
+      "fn": 0.0,
+      "fp": 9.0
+    }
+  },
+  {
+    "model": "GRU",
+    "window": 15,
+    "params": 3633,
+    "trainMs": 40469,
+    "dev": {
+      "recall": 0.6666666666666666,
+      "precision": 0.2,
+      "f1": 0.30769230769230765,
+      "falseAcceptClipRate": 0.8888888888888888,
+      "tp": 2.0,
+      "fn": 1.0,
+      "fp": 8.0
+    }
+  },
+  {
+    "model": "FeatureSummaryMLP",
+    "window": 30,
+    "params": 4161,
+    "trainMs": 351,
+    "dev": {
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "falseAcceptClipRate": 0.0,
+      "tp": 0.0,
+      "fn": 3.0,
+      "fp": 0.0
+    }
+  },
+  {
+    "model": "Conv1D",
+    "window": 30,
+    "params": 9737,
+    "trainMs": 419,
+    "dev": {
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "falseAcceptClipRate": 0.0,
+      "tp": 0.0,
+      "fn": 3.0,
+      "fp": 0.0
+    }
+  },
+  {
+    "model": "GRU",
+    "window": 30,
+    "params": 3633,
+    "trainMs": 64064,
+    "dev": {
+      "recall": 0.6666666666666666,
+      "precision": 0.2,
+      "f1": 0.30769230769230765,
+      "falseAcceptClipRate": 0.8888888888888888,
+      "tp": 2.0,
+      "fn": 1.0,
+      "fp": 8.0
+    }
+  },
+  {
+    "model": "FeatureSummaryMLP",
+    "window": 45,
+    "params": 4161,
+    "trainMs": 389,
+    "dev": {
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "falseAcceptClipRate": 0.0,
+      "tp": 0.0,
+      "fn": 3.0,
+      "fp": 0.0
+    }
+  },
+  {
+    "model": "Conv1D",
+    "window": 45,
+    "params": 11785,
+    "trainMs": 522,
+    "dev": {
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0,
+      "falseAcceptClipRate": 0.0,
+      "tp": 0.0,
+      "fn": 3.0,
+      "fp": 0.0
+    }
+  },
+  {
+    "model": "GRU",
+    "window": 45,
+    "params": 3633,
+    "trainMs": 98893,
+    "dev": {
+      "recall": 0.6666666666666666,
+      "precision": 0.18181818181818182,
+      "f1": 0.28571428571428575,
+      "falseAcceptClipRate": 1.0,
+      "tp": 2.0,
+      "fn": 1.0,
+      "fp": 9.0
+    }
+  }
+]

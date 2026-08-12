@@ -1,0 +1,122 @@
+{
+  "temporal": {
+    "family": "temporal",
+    "experimentsAttempted": 1,
+    "bestF1": 0.5142857142857142,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 25.0,
+    "consecutiveFailures": 0
+  },
+  "camera": {
+    "family": "camera",
+    "experimentsAttempted": 5,
+    "bestF1": 0.4166666666666667,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 173.0,
+    "consecutiveFailures": 0
+  },
+  "signal_quality": {
+    "family": "signal_quality",
+    "experimentsAttempted": 0,
+    "bestF1": 0.0,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 0.0,
+    "consecutiveFailures": 0
+  },
+  "geometric": {
+    "family": "geometric",
+    "experimentsAttempted": 2,
+    "bestF1": 0.5142857142857142,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 61.0,
+    "consecutiveFailures": 0
+  },
+  "confuser_specialist": {
+    "family": "confuser_specialist",
+    "experimentsAttempted": 1,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 21.0,
+    "consecutiveFailures": 0
+  },
+  "mlp": {
+    "family": "mlp",
+    "experimentsAttempted": 3,
+    "bestF1": 0.46153846153846156,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 87.0,
+    "consecutiveFailures": 0
+  },
+  "conv1d": {
+    "family": "conv1d",
+    "experimentsAttempted": 0,
+    "bestF1": 0.0,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 0.0,
+    "consecutiveFailures": 0
+  },
+  "gru": {
+    "family": "gru",
+    "experimentsAttempted": 0,
+    "bestF1": 0.0,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 0.0,
+    "consecutiveFailures": 0
+  },
+  "hybrid": {
+    "family": "hybrid",
+    "experimentsAttempted": 3,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 88.0,
+    "consecutiveFailures": 0
+  },
+  "ensemble": {
+    "family": "ensemble",
+    "experimentsAttempted": 0,
+    "bestF1": 0.0,
+    "startingBestF1": 0.0,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 0.0,
+    "consecutiveFailures": 0
+  }
+}

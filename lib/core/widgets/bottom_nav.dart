@@ -24,14 +24,14 @@ const _kTrackActiveBlue = Color(0xFF2F7CFF);
 /// inset. This guarantees no content is ever obscured by the dock.
 ///
 /// CONTENT FIT MATH (normal button):
-///   icon(20) + spacing(2) + label(10) + padding(4*2) = 40px
-///   Must be <= _dockInternal (46px) → 6px headroom ✓
+///   icon(20) + spacing(2) + label(11) + padding(5*2) = 43px
+///   Must be <= _dockInternal (50px) → 7px headroom ✓
 ///
 /// CONTENT FIT MATH (Verify button):
-///   icon(18) + spacing(2) + label(10) + padding(4*2) = 38px
-///   AnimatedContainer height = 46px → fits in _dockInternal
-///   Verify SizedBox = _dockInternal + _verifyRise = 46 + 8 = 54px
-///   Aligned topCenter → rises 8px above dock, 0px below
+///   icon(18) + spacing(2) + label(11) + padding(5*2) = 41px
+///   AnimatedContainer height = 50px → fits in _dockInternal
+///   Verify SizedBox = _dockInternal + _verifyRise = 50 + 10 = 60px
+///   Aligned topCenter → rises 10px above dock, 0px below
 class NuvoBottomNav extends StatelessWidget {
   const NuvoBottomNav({
     super.key,
@@ -48,12 +48,12 @@ class NuvoBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   // ── Geometry contract ──────────────────────────────────────────────────────
-  static const double _dockHeight = 60;
+  static const double _dockHeight = 64;
   static const double _dockPadding = 7;
-  static const double _dockInternal = _dockHeight - _dockPadding * 2; // 46
-  static const double _verifyRise = 8;
+  static const double _dockInternal = _dockHeight - _dockPadding * 2; // 50
+  static const double _verifyRise = 10;
   static const double _topReserve =
-      _verifyRise + 4; // 12 — Verify rise + breathing
+      _verifyRise + 4; // 14 — Verify rise + breathing
   static const double _bottomGapNoInset = 10;
   static const double _bottomGapWithInset = 8;
   static const double _contentGap = 8;
@@ -75,7 +75,7 @@ class NuvoBottomNav extends StatelessWidget {
   }
 
   static const _items = [
-    _NavItem(asset: 'assets/branding/trans.png', label: 'Arena'),
+    _NavItem(icon: Icons.stadium_outlined, label: 'Arena'),
     _NavItem(icon: Icons.emoji_events_outlined, label: 'Compete'),
     _NavItem(icon: Icons.gpp_good_outlined, label: 'Verify'),
     _NavItem(icon: Icons.group_outlined, label: 'Crew'),
@@ -207,7 +207,7 @@ class _NavButton extends StatelessWidget {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: isDark
                   ? null
                   : BoxDecoration(
@@ -262,7 +262,7 @@ class _NavButton extends StatelessWidget {
                       color: labelColor,
                       fontSize: isDark ? 10 : 10,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                      height: 1,
+                      height: 1.1,
                     ),
                   ),
                 ],
@@ -303,9 +303,9 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
     final pressedOffset = _pressed ? 1.5 : 0.0;
     // AnimatedContainer fits inside dock internal height.
     // SizedBox is taller by _verifyRise so the button rises above the dock.
-    final containerHeight = NuvoBottomNav._dockInternal; // 46
+    final containerHeight = NuvoBottomNav._dockInternal; // 50
     final sizedBoxHeight =
-        NuvoBottomNav._dockInternal + NuvoBottomNav._verifyRise; // 54
+        NuvoBottomNav._dockInternal + NuvoBottomNav._verifyRise; // 60
 
     return Semantics(
       selected: widget.selected,
@@ -318,7 +318,7 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
         child: SizedBox(
-          width: 52,
+          width: 56,
           height: sizedBoxHeight,
           child: Align(
             alignment: Alignment.topCenter,
@@ -330,9 +330,9 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
                 pressedOffset,
                 0,
               ),
-              width: 48,
+              width: 52,
               height: containerHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
               decoration: BoxDecoration(
                 color: NuvoColors.actionBlue,
                 borderRadius: BorderRadius.circular(NuvoRadii.button),
@@ -352,7 +352,7 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
                       color: NuvoColors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      height: 1,
+                      height: 1.1,
                     ),
                   ),
                 ],

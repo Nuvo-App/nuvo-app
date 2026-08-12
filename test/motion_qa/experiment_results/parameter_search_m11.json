@@ -1,0 +1,231 @@
+[
+  {
+    "search": "ConceptV2_flightThresholdRatio",
+    "results": [
+      {
+        "config": {
+          "flightThresholdRatio": 0.1
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "flightThresholdRatio": 0.12
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "flightThresholdRatio": 0.15
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "flightThresholdRatio": 0.18
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "flightThresholdRatio": 0.2
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "flightThresholdRatio": 0.25
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "flightThresholdRatio": 0.3
+        },
+        "productScore": 0.23188405797101447
+      }
+    ]
+  },
+  {
+    "search": "ConceptV2_fastRiseThreshold",
+    "results": [
+      {
+        "config": {
+          "fastRiseThreshold": -0.02
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "fastRiseThreshold": -0.015
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "fastRiseThreshold": -0.012
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "fastRiseThreshold": -0.01
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "fastRiseThreshold": -0.008
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "fastRiseThreshold": -0.005
+        },
+        "productScore": 0.23188405797101447
+      },
+      {
+        "config": {
+          "fastRiseThreshold": -0.003
+        },
+        "productScore": 0.23188405797101447
+      }
+    ]
+  },
+  {
+    "search": "HybridDetML_mlThreshold",
+    "results": [
+      {
+        "config": {
+          "mlThreshold": 0.2
+        },
+        "productScore": 0.0
+      },
+      {
+        "config": {
+          "mlThreshold": 0.3
+        },
+        "productScore": 0.0
+      },
+      {
+        "config": {
+          "mlThreshold": 0.4
+        },
+        "productScore": 0.0
+      },
+      {
+        "config": {
+          "mlThreshold": 0.5
+        },
+        "productScore": 0.0
+      },
+      {
+        "config": {
+          "mlThreshold": 0.6
+        },
+        "productScore": 0.0
+      },
+      {
+        "config": {
+          "mlThreshold": 0.7
+        },
+        "productScore": 0.0
+      },
+      {
+        "config": {
+          "mlThreshold": 0.8
+        },
+        "productScore": 0.0
+      }
+    ]
+  },
+  {
+    "search": "JumpingJackReject_footSepThreshold",
+    "results": [
+      {
+        "config": {
+          "footSepThreshold": 0.1
+        },
+        "productSepRunner": 0.19444444444444445
+      },
+      {
+        "config": {
+          "footSepThreshold": 0.12
+        },
+        "productSepRunner": 0.19444444444444445
+      },
+      {
+        "config": {
+          "footSepThreshold": 0.15
+        },
+        "productSepRunner": 0.19444444444444445
+      },
+      {
+        "config": {
+          "footSepThreshold": 0.18
+        },
+        "productSepRunner": 0.19444444444444445
+      },
+      {
+        "config": {
+          "footSepThreshold": 0.2
+        },
+        "productSepRunner": 0.19444444444444445
+      },
+      {
+        "config": {
+          "footSepThreshold": 0.25
+        },
+        "productSepRunner": 0.19444444444444445
+      },
+      {
+        "config": {
+          "footSepThreshold": 0.3
+        },
+        "productSepRunner": 0.19444444444444445
+      }
+    ]
+  },
+  {
+    "search": "DeepSquatReject_minKneeAngle",
+    "results": [
+      {
+        "config": {
+          "minKneeAngle": 50.0
+        },
+        "productScore": 0.19444444444444445
+      },
+      {
+        "config": {
+          "minKneeAngle": 60.0
+        },
+        "productScore": 0.19444444444444445
+      },
+      {
+        "config": {
+          "minKneeAngle": 70.0
+        },
+        "productScore": 0.19444444444444445
+      },
+      {
+        "config": {
+          "minKneeAngle": 80.0
+        },
+        "productScore": 0.19444444444444445
+      },
+      {
+        "config": {
+          "minKneeAngle": 90.0
+        },
+        "productScore": 0.19444444444444445
+      },
+      {
+        "config": {
+          "minKneeAngle": 100.0
+        },
+        "productScore": 0.19444444444444445
+      }
+    ]
+  }
+]
