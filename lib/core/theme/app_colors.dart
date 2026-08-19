@@ -41,6 +41,11 @@ final class NuvoColors {
   static const Color coral = Color(0xFFC97968);
   static const Color sunshine = Color(0xFFD5AA63);
 
+  /// Secondary brand accent — matches the marketing site's `#ff6b21`.
+  /// Reserved for CTA emphasis and accent shadows only; never used as a
+  /// broad surface fill. Pairs with navy-deep text/border, never white text.
+  static const Color orange = Color(0xFFFF6B21);
+
   // ── Page & surfaces ───────────────────────────────────────────────────────────
   /// Main page background — clean soft white.
   static const Color page = Color(0xFFFBFCFF);
@@ -158,4 +163,5 @@ abstract final class AppColors {
   static const Color deepBlue = NuvoColors.navy;
   static const Color neonMint = NuvoColors.aqua;
   static const Color hotAmber = NuvoColors.sunshine;
+  static const Color orange = NuvoColors.orange;
 }

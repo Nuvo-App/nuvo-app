@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -314,20 +315,6 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
               hint: '${_draft.activity.defaultTarget}',
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final target in _draft.activity.suggestedTargets)
-                  _PillChoice(
-                    label: '$target',
-                    selected: _targetController.text == '$target',
-                    onTap: () =>
-                        setState(() => _targetController.text = '$target'),
-                  ),
-              ],
-            ),
             const SizedBox(height: 26),
             const _SectionTitle('Repeat'),
             const SizedBox(height: 10),
@@ -494,7 +481,7 @@ class _PillChoice extends StatelessWidget {
       labelStyle: AppTextStyles.labelMedium.copyWith(
         color: selected ? NuvoColors.white : NuvoColors.navy,
       ),
-      side: BorderSide(color: selected ? NuvoColors.blue : NuvoColors.border),
+      side: BorderSide(color: selected ? NuvoColors.blue : NuvoColors.navy),
     );
   }
 }
@@ -518,8 +505,9 @@ class _ReviewBlock extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: NuvoColors.surface,
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: NuvoColors.navy, width: 2),
         borderRadius: BorderRadius.circular(22),
+        boxShadow: AppShadows.hardSmall,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

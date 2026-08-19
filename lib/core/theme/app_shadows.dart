@@ -20,6 +20,17 @@ abstract final class AppShadows {
     BoxShadow(color: _hardColor, blurRadius: 0, offset: Offset(7, 7)),
   ];
 
+  /// Orange-accent hard offset shadow for CTA emphasis. Matches the
+  /// marketing site's orange-shadow chips/CTAs. Use sparingly — only on
+  /// primary action surfaces where orange is the accent color.
+  static const List<BoxShadow> hardMediumOrange = [
+    BoxShadow(color: NuvoColors.orange, blurRadius: 0, offset: Offset(5, 5)),
+  ];
+
+  static const List<BoxShadow> hardLargeOrange = [
+    BoxShadow(color: NuvoColors.orange, blurRadius: 0, offset: Offset(7, 7)),
+  ];
+
   /// Rare ambient separation for sheets/dialogs where hard offset is too loud.
   static const List<BoxShadow> softSubtle = [
     BoxShadow(

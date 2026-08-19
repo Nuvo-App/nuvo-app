@@ -1,0 +1,76 @@
+[
+  {
+    "name": "FALSE_ACCEPT_NORMAL_SQUATS",
+    "description": "Champion false-accepts on normal_squats: 1 clips, 2 reps",
+    "affectedClips": [],
+    "missedReps": 0,
+    "falseReps": 2,
+    "commonFeatures": {},
+    "likelyReason": "Normal squat has compression but no flight phase",
+    "failingFamilies": [
+      "mlp"
+    ],
+    "succeedingFamilies": [
+      "camera"
+    ],
+    "proposedExperiment": "Investigate specific feature differences between normal_squats and jump_squats"
+  },
+  {
+    "name": "FALSE_ACCEPT_DEEP_SQUATS",
+    "description": "Champion false-accepts on deep_squats: 1 clips, 3 reps",
+    "affectedClips": [],
+    "missedReps": 0,
+    "falseReps": 3,
+    "commonFeatures": {},
+    "likelyReason": "Deep squat compression pattern resembles jump squat descent phase",
+    "failingFamilies": [
+      "mlp"
+    ],
+    "succeedingFamilies": [
+      "camera"
+    ],
+    "proposedExperiment": "Add explicit knee-angle threshold gate: reject if knee angle < 60° throughout"
+  },
+  {
+    "name": "FALSE_ACCEPT_JUMPING_JACKS",
+    "description": "Champion false-accepts on jumping_jacks: 1 clips, 1 reps",
+    "affectedClips": [],
+    "missedReps": 0,
+    "falseReps": 1,
+    "commonFeatures": {},
+    "likelyReason": "Jumping jack airborne phase and vertical motion triggers flight detection",
+    "failingFamilies": [
+      "camera",
+      "mlp"
+    ],
+    "succeedingFamilies": [],
+    "proposedExperiment": "Add stance-width velocity gate: reject if foot separation oscillates without net compression"
+  },
+  {
+    "name": "FALSE_ACCEPT_SQUAT_JACKS",
+    "description": "Champion false-accepts on squat_jacks: 1 clips, 2 reps",
+    "affectedClips": [],
+    "missedReps": 0,
+    "falseReps": 2,
+    "commonFeatures": {},
+    "likelyReason": "Squat jack combines squat + jump, closely resembling jump squat",
+    "failingFamilies": [
+      "camera",
+      "mlp"
+    ],
+    "succeedingFamilies": [],
+    "proposedExperiment": "Add temporal ordering gate: require compression before airborne phase"
+  },
+  {
+    "name": "LOW_RECALL_TARGET",
+    "description": "Champion recall is 0.563 — below 0.75 gate",
+    "affectedClips": [],
+    "missedReps": 7,
+    "falseReps": 0,
+    "commonFeatures": {},
+    "likelyReason": "Detector may be too conservative or missing key motion phases",
+    "failingFamilies": [],
+    "succeedingFamilies": [],
+    "proposedExperiment": "Try relaxed temporal thresholds or lower airborne confidence"
+  }
+]

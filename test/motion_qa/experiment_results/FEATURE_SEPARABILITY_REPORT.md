@@ -1,6 +1,6 @@
 # FEATURE SEPARABILITY REPORT
 
-Generated: 2026-08-11T11:14:31.313495
+Generated: 2026-08-19T00:54:01.789342
 Dataset: 7098 frames, 24 clips
 
 ## TOP 20 SEPARATING FEATURES (Jump Squat vs Confusers)

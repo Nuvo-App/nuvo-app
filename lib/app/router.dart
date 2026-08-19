@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,13 +8,10 @@ import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
+import '../features/auth/presentation/welcome_race_builder_screen.dart';
 import '../features/compete/presentation/compete_screen_fixed.dart';
-import '../features/onboarding/presentation/add_crew_screen.dart';
-import '../features/onboarding/presentation/create_identity_screen.dart';
-import '../features/onboarding/presentation/first_race_screen.dart';
 import '../features/onboarding/presentation/member_pass_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
-import '../features/onboarding/presentation/secure_account_screen.dart';
 import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
@@ -74,6 +70,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             NoTransitionPage(key: state.pageKey, child: const SplashScreen()),
       ),
       GoRoute(
+        path: '/welcome/intro',
+        pageBuilder: (_, state) => _authPage(state, const WelcomeRaceBuilderScreen()),
+      ),
+      GoRoute(
         path: '/welcome',
         pageBuilder: (_, state) => _authPage(state, const WelcomeAuthScreen()),
       ),
@@ -93,16 +93,6 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // ── Onboarding ────────────────────────────────────────────────────────
       GoRoute(
-        path: '/onboarding/create-identity',
-        pageBuilder: (_, state) =>
-            _authPage(state, const CreateIdentityScreen()),
-      ),
-      GoRoute(
-        path: '/onboarding/secure-account',
-        pageBuilder: (_, state) =>
-            _authPage(state, const SecureAccountScreen()),
-      ),
-      GoRoute(
         path: '/onboarding/profile',
         pageBuilder: (_, state) => _authPage(state, const OnboardingScreen()),
       ),
@@ -110,14 +100,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/onboarding/member-pass',
         pageBuilder: (_, state) =>
             _authPage(state, const OnboardingMemberPassScreen()),
-      ),
-      GoRoute(
-        path: '/onboarding/add-crew',
-        pageBuilder: (_, state) => _authPage(state, const AddCrewScreen()),
-      ),
-      GoRoute(
-        path: '/onboarding/first-race',
-        pageBuilder: (_, state) => _authPage(state, const FirstRaceScreen()),
       ),
 
       // ── Main shell (bottom nav) ────────────────────────────────────────────

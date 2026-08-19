@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_board_components.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
@@ -24,6 +25,7 @@ import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -369,6 +371,11 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         ? () => context.push('/races/new')
         : canVerify
         ? () async {
+            if (ref.read(firstRaceGuideProvider) ==
+                FirstRaceGuideStep.raceDetail) {
+              ref.read(firstRaceGuideProvider.notifier).state =
+                  FirstRaceGuideStep.complete;
+            }
             debugLogCameraVerificationDecision(
               race,
               eligibility,
@@ -379,7 +386,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           }
         : null;
 
-    return Scaffold(
+    final screen = Scaffold(
       backgroundColor: NuvoColors.pageIce,
       body: SafeArea(
         bottom: false,
@@ -589,6 +596,22 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         ),
       ),
     );
+
+    final guide = ref.watch(firstRaceGuideProvider);
+    if (guide != FirstRaceGuideStep.raceDetail) return screen;
+    return Stack(
+      children: [
+        screen,
+        FirstRaceGuideCoach(
+          step: guide,
+          targetKey: FirstRaceGuideKeys.racePrimary,
+          eyebrow: 'MAKE THE FIRST MOVE',
+          title: 'This button moves your leaderboard.',
+          body:
+              'Tap Verify now to submit your first proof and see your progress update.',
+        ),
+      ],
+    );
   }
 }
 
@@ -776,6 +799,7 @@ class _RaceSummaryCard extends StatelessWidget {
           ],
           const SizedBox(height: 18),
           NuvoPrimaryButton(
+            key: FirstRaceGuideKeys.racePrimary,
             label: primaryLabel,
             expand: true,
             loading: loading,
@@ -1119,7 +1143,8 @@ class _MoveLogGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: NuvoColors.border, width: 1.25),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardSmall,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -1281,7 +1306,8 @@ class _CheckpointPath extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardSmall,
       ),
       child: Column(
         children: [
@@ -1418,7 +1444,7 @@ class _UnsupportedVerificationNotice extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.icyBlue,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: NuvoColors.navy, width: 2),
       ),
       child: Row(
         children: [
@@ -1679,7 +1705,7 @@ class _ManageRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.border),
+          border: Border.all(color: NuvoColors.navy, width: 2),
         ),
         child: Row(
           children: [

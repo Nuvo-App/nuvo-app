@@ -126,7 +126,7 @@ NuvoPoseFrame _squatDeep() => _frame({
 
 NuvoPoseFrame _pushupFrame({required bool active}) {
   final shoulderY = 0.36 + (active ? 0.08 : 0);
-  final elbowY = active ? 0.49 : 0.40;
+  final elbowY = active ? 0.40 : 0.40;
   return _frame({
     'leftShoulder': _p(0.34, shoulderY),
     'rightShoulder': _p(0.66, shoulderY),
@@ -149,6 +149,20 @@ NuvoPoseFrame _croppedPushupFrame() => _frame({
   'leftHip': _p(0.35, 0.55),
   'rightHip': _p(0.65, 0.55),
 });
+
+NuvoPoseFrame _armOnlyPushupFrame({required bool active}) {
+  final elbowY = active ? 0.49 : 0.40;
+  return _frame({
+    'leftShoulder': _p(0.34, 0.36),
+    'rightShoulder': _p(0.66, 0.36),
+    'leftElbow': _p(0.26, elbowY),
+    'rightElbow': _p(0.74, elbowY),
+    'leftWrist': _p(0.18, 0.48),
+    'rightWrist': _p(0.82, 0.48),
+    'leftHip': _p(0.42, 0.55),
+    'rightHip': _p(0.58, 0.55),
+  });
+}
 // torsoHeight = |0.62 - 0.30| = 0.32
 // ratio = (0.64 - 0.62) / 0.32 = 0.0625 < 0.58 → ACTIVE ✅
 
@@ -735,6 +749,24 @@ void main() {
 
       expect(validator.currentValue, 0);
       expect(validator.failedRuleReason, 'pushup_framing_too_close');
+    });
+
+    test('does not count arm-only bending without torso movement', () {
+      final validator = PushupsValidator(targetValue: 1);
+      validator.start();
+
+      for (final frame in [
+        _armOnlyPushupFrame(active: false),
+        _armOnlyPushupFrame(active: false),
+        _armOnlyPushupFrame(active: true),
+        _armOnlyPushupFrame(active: true),
+        _armOnlyPushupFrame(active: false),
+        _armOnlyPushupFrame(active: false),
+      ]) {
+        validator.update(frame);
+      }
+
+      expect(validator.currentValue, 0);
     });
   });
 }

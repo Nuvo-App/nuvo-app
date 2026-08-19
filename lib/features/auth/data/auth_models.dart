@@ -1,6 +1,7 @@
 class AuthUser {
   final String id;
   final String email;
+  final bool isDemo;
   final String? fullName;
   final String? username;
   final bool onboardingComplete;
@@ -11,6 +12,7 @@ class AuthUser {
   const AuthUser({
     required this.id,
     required this.email,
+    this.isDemo = false,
     this.fullName,
     this.username,
     required this.onboardingComplete,
@@ -22,6 +24,7 @@ class AuthUser {
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
     id: json['id'] as String,
     email: json['email'] as String,
+    isDemo: json['isDemo'] as bool? ?? false,
     fullName: json['fullName'] as String?,
     username: json['username'] as String?,
     onboardingComplete: json['onboardingComplete'] as bool? ?? false,
@@ -48,6 +51,7 @@ class AuthUser {
     email: email,
     fullName: fullName ?? this.fullName,
     username: username ?? this.username,
+    isDemo: isDemo,
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     hasMemberPass: hasMemberPass ?? this.hasMemberPass,
     termsAccepted: termsAccepted ?? this.termsAccepted,

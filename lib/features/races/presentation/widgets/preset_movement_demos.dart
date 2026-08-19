@@ -15,43 +15,43 @@ import 'nuvo_character_painter.dart';
 // the ground; the body rises and falls.
 
 class _PushupsKeyPoses {
-  // Top position — arms extended, body up. Body is horizontal: head,
-  // shoulders, hips, knees, ankles all at similar Y. Arms are vertical
-  // from shoulders down to wrists on the ground.
+  // Top position — arms extended, body up in a clean plank-like line.
+  // Front view: shoulders, hips, knees and ankles sit nearly level so the
+  // body reads as a straight horizontal stick figure doing a pushup.
   static const top = NuvoCharacterPose(
-    head: Offset(0.50, 0.22),
-    neck: Offset(0.50, 0.23),
-    leftShoulder: Offset(0.43, 0.24),
-    rightShoulder: Offset(0.57, 0.24),
-    leftElbow: Offset(0.43, 0.32),
-    rightElbow: Offset(0.57, 0.32),
-    leftWrist: Offset(0.43, 0.40),
-    rightWrist: Offset(0.57, 0.40),
-    leftHip: Offset(0.46, 0.25),
-    rightHip: Offset(0.54, 0.25),
-    leftKnee: Offset(0.46, 0.26),
-    rightKnee: Offset(0.54, 0.26),
-    leftAnkle: Offset(0.46, 0.27),
-    rightAnkle: Offset(0.54, 0.27),
+    head: Offset(0.50, 0.28),
+    neck: Offset(0.50, 0.31),
+    leftShoulder: Offset(0.43, 0.32),
+    rightShoulder: Offset(0.57, 0.32),
+    leftElbow: Offset(0.43, 0.39),
+    rightElbow: Offset(0.57, 0.39),
+    leftWrist: Offset(0.43, 0.46),
+    rightWrist: Offset(0.57, 0.46),
+    leftHip: Offset(0.48, 0.34),
+    rightHip: Offset(0.52, 0.34),
+    leftKnee: Offset(0.48, 0.39),
+    rightKnee: Offset(0.52, 0.39),
+    leftAnkle: Offset(0.48, 0.46),
+    rightAnkle: Offset(0.52, 0.46),
   );
 
-  // Bottom position — chest lowered, elbows bent out to sides. Body
-  // drops by ~0.10; wrists stay fixed on the ground.
+  // Bottom position — chest lowered, elbows flare out, body drops but the
+  // back stays straight. Hands stay planted on the same ground line.
   static const bottom = NuvoCharacterPose(
-    head: Offset(0.50, 0.32),
-    neck: Offset(0.50, 0.33),
-    leftShoulder: Offset(0.43, 0.34),
-    rightShoulder: Offset(0.57, 0.34),
-    leftElbow: Offset(0.38, 0.30),
-    rightElbow: Offset(0.62, 0.30),
-    leftWrist: Offset(0.43, 0.40),
-    rightWrist: Offset(0.57, 0.40),
-    leftHip: Offset(0.46, 0.35),
-    rightHip: Offset(0.54, 0.35),
-    leftKnee: Offset(0.46, 0.36),
-    rightKnee: Offset(0.54, 0.36),
-    leftAnkle: Offset(0.46, 0.37),
-    rightAnkle: Offset(0.54, 0.37),
+    head: Offset(0.50, 0.34),
+    neck: Offset(0.50, 0.37),
+    leftShoulder: Offset(0.43, 0.38),
+    rightShoulder: Offset(0.57, 0.38),
+    leftElbow: Offset(0.36, 0.38),
+    rightElbow: Offset(0.64, 0.38),
+    leftWrist: Offset(0.43, 0.46),
+    rightWrist: Offset(0.57, 0.46),
+    leftHip: Offset(0.48, 0.40),
+    rightHip: Offset(0.52, 0.40),
+    leftKnee: Offset(0.48, 0.43),
+    rightKnee: Offset(0.52, 0.43),
+    leftAnkle: Offset(0.48, 0.46),
+    rightAnkle: Offset(0.52, 0.46),
   );
 
   static const poses = [top, bottom, top];

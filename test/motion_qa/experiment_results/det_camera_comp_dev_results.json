@@ -49,7 +49,7 @@
       "exactMatch": false,
       "repError": 3,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 1,
       "framesProcessed": 300,
       "failures": []
     },

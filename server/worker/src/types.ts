@@ -2,6 +2,7 @@ export type AppEnv = {
   Bindings: {
     DB: D1Database;
     GOOGLE_IOS_CLIENT_ID: string;
+    APPLE_BUNDLE_ID: string;
     RESEND_API_KEY: string;
     RESEND_FROM_EMAIL: string;
     JWT_SECRET: string;

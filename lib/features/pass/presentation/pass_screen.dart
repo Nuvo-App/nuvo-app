@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/member_pass_card.dart';
@@ -343,7 +344,8 @@ class _ClosestRaceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.quiet,
+        border: NuvoBorders.hero,
+        boxShadow: AppShadows.hardSmall,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -696,7 +698,15 @@ class _PeopleSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     // Directories stay on the page surface. Grouping comes from section
     // spacing and inset rules, not another rounded card around every row.
-    return Column(children: children);
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: NuvoBorders.hero,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
   }
 }
 

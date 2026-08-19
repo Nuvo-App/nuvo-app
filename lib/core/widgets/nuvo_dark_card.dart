@@ -24,8 +24,8 @@ class NuvoDarkCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.quiet,
-        boxShadow: AppShadows.card,
+        border: NuvoBorders.hero,
+        boxShadow: AppShadows.hardMedium,
       ),
       child: child,
     );

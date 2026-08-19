@@ -486,7 +486,8 @@ class _EditSheetOption extends StatelessWidget {
           border: Border.all(
             color: isDestructive
                 ? NuvoColors.danger.withValues(alpha: 0.20)
-                : NuvoColors.divider,
+                : NuvoColors.navy,
+            width: isDestructive ? 1 : 2,
           ),
         ),
         child: Row(

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
-import type { ArenaBoard, ArenaSnapshot, ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
+import { generateDemoSnapshot, type ArenaBoard, type ArenaSnapshot, type ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
 import { activityForId, normalizeMetric } from '../domain/raceActivities';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 
@@ -114,6 +114,28 @@ function buildRowSubtitle(
 arenaRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const db = c.env.DB;
+
+  const demoUser = await db
+    .prepare(
+      `SELECT demo_world_enabled, demo_world_seed, demo_world_variant
+       FROM users WHERE id = ?`,
+    )
+    .bind(userId)
+    .first<{
+      demo_world_enabled: number;
+      demo_world_seed: string | null;
+      demo_world_variant: string | null;
+    }>();
+  if (demoUser?.demo_world_enabled === 1) {
+    return c.json({
+      ok: true,
+      snapshot: generateDemoSnapshot(
+        userId,
+        demoUser.demo_world_seed,
+        demoUser.demo_world_variant ?? 'summer_v1',
+      ),
+    });
+  }
 
   const snapshot = await buildRealSnapshot(db, userId);
   return c.json({ ok: true, snapshot });

@@ -51,7 +51,7 @@
       "exactMatch": false,
       "repError": 2,
       "isFalseAccept": false,
-      "processingMs": 1,
+      "processingMs": 10,
       "framesProcessed": 300,
       "failures": [
         {
@@ -225,7 +225,7 @@
       "exactMatch": false,
       "repError": 5,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 1,
       "framesProcessed": 300,
       "failures": [
         {

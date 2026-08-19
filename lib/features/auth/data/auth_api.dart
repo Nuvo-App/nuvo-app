@@ -151,6 +151,17 @@ class AuthApi {
     return AuthResponse.fromJson(json);
   }
 
+  Future<AuthResponse> signInWithApple(
+    String idToken, {
+    String? fullName,
+  }) async {
+    final json = await _post('/auth/apple', {
+      'idToken': idToken,
+      'fullName': ?fullName,
+    });
+    return AuthResponse.fromJson(json);
+  }
+
   Future<AuthResponse> signInReviewer(String email, String password) async {
     final json = await _post('/auth/reviewer', {
       'email': email,
@@ -167,8 +178,9 @@ class AuthApi {
   Future<void> logout(String accessToken) =>
       _post('/auth/logout', {}, accessToken: accessToken);
 
-  Future<AuthUser> getMe(String accessToken) async {
-    final json = await _get('/auth/me', accessToken: accessToken);
+  Future<AuthUser> getMe(String accessToken, {bool resetDemo = false}) async {
+    final path = resetDemo ? '/auth/me?resetDemo=1' : '/auth/me';
+    final json = await _get(path, accessToken: accessToken);
     return AuthUser.fromJson(json['user'] as Map<String, dynamic>);
   }
 

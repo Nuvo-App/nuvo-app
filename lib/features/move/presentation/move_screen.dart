@@ -275,6 +275,7 @@ class _SegmentedControl extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.navy,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
+        border: Border.all(color: NuvoColors.navy, width: 2),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
@@ -441,7 +442,7 @@ class _ReadySegment extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: Border.all(color: NuvoColors.divider),
+              border: NuvoBorders.hero,
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -625,7 +626,7 @@ class _CompletedSegment extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: Border.all(color: NuvoColors.divider),
+            border: NuvoBorders.hero,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -752,7 +753,7 @@ class _RecentSegment extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: Border.all(color: NuvoColors.divider),
+            border: NuvoBorders.hero,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(

@@ -17,6 +17,7 @@ import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/create_race_screen.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 
 /// Compete — Phase 1 design language.
 ///
@@ -69,125 +70,144 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
         .where((race) => resolveCameraVerification(race).isCameraVerifiable)
         .toList();
 
-    return Scaffold(
+    final screen = Scaffold(
       backgroundColor: NuvoColors.page,
       body: RefreshIndicator(
         color: NuvoColors.blue,
         backgroundColor: NuvoColors.surface,
-        onRefresh: () =>
-            ref.read(raceControllerProvider.notifier).loadRaces(),
+        onRefresh: () => ref.read(raceControllerProvider.notifier).loadRaces(),
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
           slivers: [
-              SliverToBoxAdapter(
-                child: _CompactHeader(
-                  activeCount: active.length,
-                  finishedCount: finished.length,
-                  onStart: () => context.push('/races/new'),
-                  onJoin: () => context.push('/races/join'),
-                ),
+            SliverToBoxAdapter(
+              child: _CompactHeader(
+                activeCount: active.length,
+                finishedCount: finished.length,
+                onStart: () {
+                  if (ref.read(firstRaceGuideProvider) ==
+                      FirstRaceGuideStep.competeStart) {
+                    ref.read(firstRaceGuideProvider.notifier).state =
+                        FirstRaceGuideStep.composerName;
+                  }
+                  context.push('/races/new');
+                },
+                onJoin: () => context.push('/races/join'),
               ),
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  NuvoSpacing.pageHorizontal,
-                  NuvoSpacing.lg,
-                  NuvoSpacing.pageHorizontal,
-                  NuvoBottomNav.bottomPadding(context),
-                ),
-                sliver: SliverList(
-                  delegate: SliverChildListDelegate([
-                    if (raceState.loading && raceState.races.isEmpty)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: NuvoColors.blue,
-                          ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                NuvoSpacing.pageHorizontal,
+                NuvoSpacing.lg,
+                NuvoSpacing.pageHorizontal,
+                NuvoBottomNav.bottomPadding(context),
+              ),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  if (raceState.loading && raceState.races.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: NuvoColors.blue,
                         ),
-                      )
-                    else if (raceState.error != null && raceState.races.isEmpty)
-                      NuvoErrorState(
-                        message: "Couldn't load your races.",
-                        onRetry: () => ref
-                            .read(raceControllerProvider.notifier)
-                            .loadRaces(),
-                      )
-                    else if (raceState.races.isEmpty || cameraRaces.isEmpty)
-                      _EmptyState(onStart: () => context.push('/races/new'))
-                    else ...[
-                      if (needsAttention != null) ...[
-                        _buildFeaturedCard(needsAttention, uid),
-                        const SizedBox(height: NuvoSpacing.xxl),
-                      ],
-                      if (inMotionRows.isNotEmpty) ...[
-                        _CappedRaceList(
-                          races: inMotionRows,
-                          userId: uid,
-                          expanded: _racesExpanded,
-                          cap: _racesCap,
-                          onToggleExpand: () =>
-                              setState(() => _racesExpanded = !_racesExpanded),
-                          onOpen: (race) => context.push('/race/${race.id}'),
-                        ),
-                        const SizedBox(height: NuvoSpacing.lg),
-                      ],
-                      if (waiting.isNotEmpty) ...[
-                        NuvoWaitingCrewSummary(
-                          raceCount: waiting.length,
-                          totalWaitingSlots: _totalWaitingSlots(waiting),
-                          avatars: _collectAvatars(waiting, uid),
-                          expanded: _waitingExpanded,
-                          onToggle: () => setState(
-                            () => _waitingExpanded = !_waitingExpanded,
-                          ),
-                          children: [
-                            const SizedBox(height: NuvoSpacing.sm),
-                            _SummaryExpansionList(
-                              races: waiting,
-                              userId: uid,
-                              onOpen: (race) =>
-                                  context.push('/race/${race.id}'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: NuvoSpacing.sm),
-                      ],
-                      if (finished.isNotEmpty) ...[
-                        NuvoFinishedSummary(
-                          raceCount: finished.length,
-                          wonCount: _wonCount(finished, uid),
-                          expanded: _finishedExpanded,
-                          onToggle: () => setState(
-                            () => _finishedExpanded = !_finishedExpanded,
-                          ),
-                          children: [
-                            const SizedBox(height: NuvoSpacing.sm),
-                            _FinishedExpansionList(
-                              races: finished,
-                              userId: uid,
-                              onOpen: (race) =>
-                                  context.push('/race/${race.id}'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: NuvoSpacing.sm),
-                      ],
-                      const SizedBox(height: NuvoSpacing.xxl),
-                      _QuickStarts(
-                        onStart: (prefill) =>
-                            context.push('/races/new', extra: prefill),
                       ),
+                    )
+                  else if (raceState.error != null && raceState.races.isEmpty)
+                    NuvoErrorState(
+                      message: "Couldn't load your races.",
+                      onRetry: () =>
+                          ref.read(raceControllerProvider.notifier).loadRaces(),
+                    )
+                  else if (raceState.races.isEmpty || cameraRaces.isEmpty)
+                    _EmptyState(onStart: () => context.push('/races/new'))
+                  else ...[
+                    if (needsAttention != null) ...[
+                      _buildFeaturedCard(needsAttention, uid),
                       const SizedBox(height: NuvoSpacing.xxl),
                     ],
-                  ]),
-                ),
+                    if (inMotionRows.isNotEmpty) ...[
+                      _CappedRaceList(
+                        races: inMotionRows,
+                        userId: uid,
+                        expanded: _racesExpanded,
+                        cap: _racesCap,
+                        onToggleExpand: () =>
+                            setState(() => _racesExpanded = !_racesExpanded),
+                        onOpen: (race) => context.push('/race/${race.id}'),
+                      ),
+                      const SizedBox(height: NuvoSpacing.lg),
+                    ],
+                    if (waiting.isNotEmpty) ...[
+                      NuvoWaitingCrewSummary(
+                        raceCount: waiting.length,
+                        totalWaitingSlots: _totalWaitingSlots(waiting),
+                        avatars: _collectAvatars(waiting, uid),
+                        expanded: _waitingExpanded,
+                        onToggle: () => setState(
+                          () => _waitingExpanded = !_waitingExpanded,
+                        ),
+                        children: [
+                          const SizedBox(height: NuvoSpacing.sm),
+                          _SummaryExpansionList(
+                            races: waiting,
+                            userId: uid,
+                            onOpen: (race) => context.push('/race/${race.id}'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: NuvoSpacing.sm),
+                    ],
+                    if (finished.isNotEmpty) ...[
+                      NuvoFinishedSummary(
+                        raceCount: finished.length,
+                        wonCount: _wonCount(finished, uid),
+                        expanded: _finishedExpanded,
+                        onToggle: () => setState(
+                          () => _finishedExpanded = !_finishedExpanded,
+                        ),
+                        children: [
+                          const SizedBox(height: NuvoSpacing.sm),
+                          _FinishedExpansionList(
+                            races: finished,
+                            userId: uid,
+                            onOpen: (race) => context.push('/race/${race.id}'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: NuvoSpacing.sm),
+                    ],
+                    const SizedBox(height: NuvoSpacing.xxl),
+                    _QuickStarts(
+                      onStart: (prefill) =>
+                          context.push('/races/new', extra: prefill),
+                    ),
+                    const SizedBox(height: NuvoSpacing.xxl),
+                  ],
+                ]),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
+    );
+
+    final guide = ref.watch(firstRaceGuideProvider);
+    if (guide != FirstRaceGuideStep.competeStart) return screen;
+    return Stack(
+      children: [
+        screen,
+        FirstRaceGuideCoach(
+          step: guide,
+          targetKey: FirstRaceGuideKeys.competeStart,
+          eyebrow: 'FIRST MOVE',
+          title: 'Start your first race here.',
+          body:
+              'Tap Start. I will stay with you while you set the finish line.',
+        ),
+      ],
     );
   }
 
@@ -322,22 +342,18 @@ class _CompactHeader extends StatelessWidget {
             ),
           ),
           NuvoPrimaryButton(
+            key: FirstRaceGuideKeys.competeStart,
             label: 'Start',
             onPressed: onStart,
             small: true,
           ),
           const SizedBox(width: NuvoSpacing.sm),
-          NuvoOutlineButton(
-            label: 'Join',
-            onPressed: onJoin,
-            small: true,
-          ),
+          NuvoOutlineButton(label: 'Join', onPressed: onJoin, small: true),
         ],
       ),
     );
   }
 }
-
 
 // ── Capped race list with inline See all ──────────────────────────────────────
 
@@ -402,7 +418,7 @@ class _CappedRaceList extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: NuvoBorders.divider,
+            border: NuvoBorders.hero,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -481,7 +497,7 @@ class _SummaryExpansionList extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: NuvoBorders.divider,
+        border: NuvoBorders.hero,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -551,7 +567,7 @@ class _FinishedExpansionList extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: NuvoBorders.divider,
+        border: NuvoBorders.hero,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -649,9 +665,7 @@ class _QuickStarts extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.only(
-              right: NuvoSpacing.pageHorizontal,
-            ),
+            padding: const EdgeInsets.only(right: NuvoSpacing.pageHorizontal),
             itemCount: _items.length,
             separatorBuilder: (_, __) => const SizedBox(width: NuvoSpacing.sm),
             itemBuilder: (_, index) {
@@ -696,7 +710,7 @@ class _QuickStartChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.divider,
+          border: NuvoBorders.hero,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

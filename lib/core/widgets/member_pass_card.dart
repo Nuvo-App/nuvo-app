@@ -130,8 +130,8 @@ class MemberPassCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(
           compact ? NuvoRadii.lg : NuvoRadii.hero,
         ),
-        border: Border.all(color: NuvoColors.navy2, width: 1.2),
-        boxShadow: AppShadows.heroShadow,
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardLarge,
       ),
       child: Column(
         children: [

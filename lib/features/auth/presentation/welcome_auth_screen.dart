@@ -1,18 +1,20 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
 import 'auth_controller.dart';
+import 'welcome_onboarding_state.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
+import '../../races/domain/motion_activity.dart';
 
 enum _AuthMode { signup, login }
 
@@ -36,6 +38,8 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
   _AuthMode _mode = _AuthMode.signup;
   bool _googleLoading = false;
   String? _googleError;
+  bool _appleLoading = false;
+  String? _appleError;
 
   Future<void> _openLegalUrl(String url) async {
     final uri = Uri.parse(url);
@@ -55,6 +59,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
     setState(() {
       _googleLoading = true;
       _googleError = null;
+      _appleError = null;
     });
     try {
       final account = await _googleSignIn.signIn();
@@ -84,144 +89,136 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _appleLoading = true;
+      _appleError = null;
+      _googleError = null;
+    });
+    try {
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('Apple did not return an identity token');
+      }
+
+      final fullName = _formatAppleFullName(
+        credential.givenName,
+        credential.familyName,
+      );
+
+      await ref
+          .read(authControllerProvider.notifier)
+          .signInWithApple(idToken, fullName: fullName);
+    } catch (e) {
+      debugPrint('[AppleSignIn] error: $e');
+      if (mounted) {
+        setState(() {
+          _appleError = 'Apple Sign In was cancelled or failed.';
+          _appleLoading = false;
+        });
+      }
+    }
+  }
+
+  String? _formatAppleFullName(String? given, String? family) {
+    final parts = [given, family]
+        .where((s) => s != null && s.trim().isNotEmpty)
+        .map((s) => s!.trim())
+        .toList();
+    if (parts.isEmpty) return null;
+    return parts.join(' ');
+  }
+
+  void _continueDemo() {
+    ref.read(demoReplayProvider.notifier).state = false;
+    ref.read(firstRaceGuideProvider.notifier).state =
+        FirstRaceGuideStep.competeStart;
+    context.go('/compete');
+  }
+
   @override
   Widget build(BuildContext context) {
     final isSignup = _mode == _AuthMode.signup;
+    final replayingDemo = ref.watch(demoReplayProvider);
+    final builderState = ref.watch(welcomeOnboardingStateProvider);
+    final hasBuiltRace =
+        !replayingDemo && isSignup && builderState.canProceedToAuth;
 
     final toggleLabel = isSignup
         ? 'Already have an account? Log in'
         : 'New to Nuvo? Create an account';
 
+    final emailLabel = hasBuiltRace
+        ? 'Create account & start this race'
+        : replayingDemo
+        ? 'Continue demo'
+        : 'Continue with Email';
+
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ── Scrollable hero area ─────────────────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 34, 24, 18),
-                child:
-                    Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const _BrandMark(),
-                            const SizedBox(height: 22),
-
-                            // Hero — animates when mode switches
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 240),
-                              transitionBuilder: (child, animation) =>
-                                  FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween(
-                                        begin: const Offset(0, 0.04),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  ),
-                              child: _HeroBlock(
-                                key: ValueKey(_mode),
-                                isSignup: isSignup,
-                              ),
-                            ),
-
-                            // Product preview card — signup only
-                            if (isSignup) ...[
-                              const SizedBox(height: 22),
-                              const _ProductPreviewCard(),
-                            ],
-                          ],
-                        )
-                        .animate()
-                        .fadeIn(duration: 280.ms, curve: Curves.easeOut)
-                        .slideY(
-                          begin: 0.04,
-                          end: 0,
-                          duration: 320.ms,
-                          curve: Curves.easeOutCubic,
-                        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 52,
               ),
-            ),
-
-            // ── Pinned CTA zone — never clips ───────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const _BrandMark(),
+                  const SizedBox(height: 48),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    child: hasBuiltRace
+                        ? _RacePreview(
+                            key: const ValueKey('preview'),
+                            state: builderState,
+                          )
+                        : _AuthHero(
+                            key: ValueKey(
+                              '${_mode}_${builderState.fitnessGoal}',
+                            ),
+                            isSignup: isSignup,
+                            goal: builderState.fitnessGoal,
+                          ),
+                  ),
+                  const Spacer(),
+                  const SizedBox(height: 42),
                   NuvoPrimaryButton(
-                    label: 'Continue with Email',
+                    label: emailLabel,
                     expand: true,
                     leadingWidget: const Icon(
                       Icons.mail_outline_rounded,
                       size: 18,
                       color: NuvoColors.white,
                     ),
-                    onPressed: () => context.push('/auth/email'),
+                    onPressed: replayingDemo
+                        ? _continueDemo
+                        : () => context.push('/auth/email'),
                   ),
                   const SizedBox(height: 12),
-
-                  // Google — interactive when _kGoogleEnabled, else needs-setup row
-                  if (_kGoogleEnabled) ...[
-                    if (_googleError != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          _googleError!,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: NuvoColors.danger,
-                          ),
-                        ),
-                      ),
-                    ],
-                    GestureDetector(
-                      onTap: _googleLoading ? null : _signInWithGoogle,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: _googleLoading ? 0.55 : 1.0,
-                        child: Container(
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: NuvoColors.white,
-                            borderRadius: BorderRadius.circular(NuvoRadii.md),
-                            border: NuvoBorders.quiet,
-                          ),
-                          alignment: Alignment.center,
-                          child: _googleLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const _GoogleGIcon(),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      'Continue with Google',
-                                      style: AppTextStyles.labelLarge.copyWith(
-                                        color: NuvoColors.navy,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
+                  _AppleButton(
+                    loading: _appleLoading,
+                    error: _appleError,
+                    onPressed: _signInWithApple,
+                  ),
+                  const SizedBox(height: 12),
+                  if (_kGoogleEnabled)
+                    _GoogleButton(
+                      loading: _googleLoading,
+                      error: _googleError,
+                      onPressed: _signInWithGoogle,
                     ),
-                  ],
-
                   const SizedBox(height: 18),
-
-                  // Signup ↔ login toggle
                   GestureDetector(
                     onTap: _toggleMode,
                     behavior: HitTestBehavior.opaque,
@@ -235,47 +232,12 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-
-                  // Terms — always in view
-                  Center(
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.muted.withValues(alpha: 0.65),
-                          height: 1.5,
-                        ),
-                        children: [
-                          const TextSpan(text: 'By continuing you agree to our '),
-                          TextSpan(
-                            text: 'Terms',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: NuvoColors.blue,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () => _openLegalUrl('https://getnuvo.net/terms'),
-                          ),
-                          const TextSpan(text: ' & '),
-                          TextSpan(
-                            text: 'Privacy Policy',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: NuvoColors.blue,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            recognizer: TapGestureRecognizer()
-                              ..onTap = () => _openLegalUrl('https://getnuvo.net/privacy'),
-                          ),
-                          const TextSpan(text: '.'),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 16),
+                  _LegalCopy(onOpen: _openLegalUrl),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -289,345 +251,338 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // trans.png is white — must stay inside dark container
-        Container(
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            color: NuvoColors.navy,
-            borderRadius: BorderRadius.circular(NuvoRadii.sm),
-            border: Border.all(color: NuvoColors.navy),
-          ),
-          padding: const EdgeInsets.all(7),
-          child: Image.asset(AssetPaths.nuvoLogo, fit: BoxFit.contain),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Nuvo', style: AppTextStyles.titleLarge),
-            const SizedBox(height: 1),
-            Text(
-              'RACE WITH YOUR CREW',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.blue,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ],
+    return Image.asset(
+      'assets/branding/nuvotext.png',
+      width: 116,
+      height: 34,
+      alignment: Alignment.centerLeft,
+      fit: BoxFit.contain,
     );
   }
 }
 
-class _StartLineChip extends StatelessWidget {
-  const _StartLineChip({this.label = 'START LINE OPEN'});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-        border: Border.all(color: NuvoColors.border, width: 1.1),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.navy,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _LoopStrip extends StatelessWidget {
-  const _LoopStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    const steps = ['Finish line', 'Crew', 'Proof', 'Leaderboard'];
-    return Wrap(
-      spacing: 7,
-      runSpacing: 7,
-      children: [
-        for (final step in steps)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: step == 'Proof' ? NuvoColors.icyBlue : NuvoColors.surface,
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: NuvoColors.border),
-            ),
-            child: Text(
-              step,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: step == 'Proof' ? NuvoColors.blue : NuvoColors.navy,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _HeroBlock extends StatelessWidget {
-  const _HeroBlock({super.key, required this.isSignup});
+class _AuthHero extends StatelessWidget {
+  const _AuthHero({super.key, required this.isSignup, this.goal});
 
   final bool isSignup;
+  final FitnessGoal? goal;
 
   @override
-  Widget build(BuildContext context) {
-    if (isSignup) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _StartLineChip(),
-          const SizedBox(height: 16),
-          RichText(
-            text: TextSpan(
-              style: AppTextStyles.displayMedium.copyWith(
-                color: NuvoColors.navy,
-              ),
-              children: const [
-                TextSpan(text: 'Turn real life\ninto a '),
-                TextSpan(
-                  text: 'race.',
-                  style: TextStyle(color: NuvoColors.blue),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Pick a finish line, pull in your crew, and submit proof to move the leaderboard.',
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-          ),
-          const SizedBox(height: 16),
-          const _LoopStrip(),
-        ],
-      );
-    } else {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _StartLineChip(label: 'BACK IN THE ARENA'),
-          const SizedBox(height: 16),
-          RichText(
-            text: TextSpan(
-              style: AppTextStyles.displayMedium,
-              children: const [
-                TextSpan(text: 'Welcome\n'),
-                TextSpan(
-                  text: 'back.',
-                  style: TextStyle(color: NuvoColors.blue),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Jump back into your arena and keep your crew competing.',
-            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
-          ),
-        ],
-      );
-    }
-  }
-}
-
-// Static race preview card — marketing illustration, not wired to real user data.
-class _ProductPreviewCard extends StatelessWidget {
-  const _ProductPreviewCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: NuvoColors.border),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        isSignup ? 'Put your first race\non the board.' : 'Welcome\nback.',
+        style: AppTextStyles.displayMedium.copyWith(
+          color: NuvoColors.navy,
+          height: .96,
+          letterSpacing: -1.3,
+        ),
       ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Race header row
-          Row(
+      const SizedBox(height: 18),
+      Text(
+        isSignup
+            ? 'Set a finish line, pull in your crew, and start moving together.'
+            : 'Jump back into your arena and keep your crew moving.',
+        style: AppTextStyles.bodyLarge.copyWith(
+          color: NuvoColors.muted,
+          height: 1.35,
+        ),
+      ),
+      if (isSignup && goal != null) ...[
+        const SizedBox(height: 22),
+        Container(
+          padding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
+          decoration: BoxDecoration(
+            color: NuvoColors.icyBlue,
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: Border.all(color: NuvoColors.navy, width: 1.3),
+          ),
+          child: Row(
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: NuvoColors.blue,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.directions_run_rounded,
-                  color: NuvoColors.white,
-                  size: 19,
-                ),
-              ),
-              const SizedBox(width: 10),
+              Icon(goal!.icon, color: NuvoColors.blue, size: 20),
+              const SizedBox(width: 9),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'First to 100 Pushups',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: NuvoColors.navy,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Camera verified · 65 / 100 reps',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.muted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Active status pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0x2216C784),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0x5516C784)),
-                ),
                 child: Text(
-                  'Live',
-                  style: AppTextStyles.labelSmall.copyWith(
+                  'Training for: ${goal!.title}',
+                  style: AppTextStyles.labelMedium.copyWith(
                     color: NuvoColors.navy,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Progress bar
-          Row(
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: SizedBox(
-                    height: 5,
-                    child: Stack(
-                      children: [
-                        Container(color: NuvoColors.trackBg),
-                        FractionallySizedBox(
-                          widthFactor: 0.65,
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              color: NuvoColors.blue,
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(99),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '65 / 100',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.navy,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Crew bubbles + move CTA
-          Row(
-            children: [
-              const _CrewBubble('A', Color(0xFF8B9CFF)),
-              const SizedBox(width: 4),
-              const _CrewBubble('J', Color(0xFF16C784)),
-              const SizedBox(width: 4),
-              const _CrewBubble('M', Color(0xFFFF8B6B)),
-              const SizedBox(width: 8),
-              Text(
-                '3 crew',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: NuvoColors.muted,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: NuvoColors.blue,
-                  borderRadius: BorderRadius.circular(999),
-                  border: NuvoBorders.action,
-                  boxShadow: AppShadows.actionShadow,
-                ),
-                child: Text(
-                  'Submit proof',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: NuvoColors.white,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
+    ],
+  );
+}
+
+class _RacePreview extends StatelessWidget {
+  const _RacePreview({super.key, required this.state});
+
+  final WelcomeOnboardingState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final option = state.selectedOption!;
+    final target = state.target!;
+    final isCamera = state.proofLabel == 'ai_check';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'One more step.',
+          style: AppTextStyles.displayMedium.copyWith(
+            color: NuvoColors.navy,
+            height: .96,
+            letterSpacing: -1.3,
+          ),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'Create your account to start this race and pull in your crew.',
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: NuvoColors.muted,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 28),
+        NuvoBackplateCard(
+          radius: 28,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      state.generatedTitle,
+                      style: AppTextStyles.titleMedium,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  NuvoIconBadge(icon: option.icon, size: 42, iconSize: 21),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                option.description,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  NuvoPill(
+                    label: state.recurrence == RaceRecurrence.none
+                        ? 'One time'
+                        : state.recurrence.label,
+                    color: NuvoColors.navy,
+                  ),
+                  const SizedBox(width: 8),
+                  NuvoPill(
+                    label: isCamera
+                        ? 'Camera'
+                        : _proofDisplayName(state.proofLabel),
+                    color: isCamera ? NuvoColors.actionBlue : NuvoColors.navy,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: NuvoColors.icyBlue,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: NuvoColors.border),
+                ),
+                child: Text(
+                  'Finish line: $target ${option.unit}',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: NuvoColors.navy,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _CrewBubble extends StatelessWidget {
-  const _CrewBubble(this.initial, this.color);
+String _proofDisplayName(String proof) => switch (proof) {
+  'ai_check' => 'Camera',
+  'manual' => 'Manual',
+  'photo' => 'Photo',
+  'note' => 'Note',
+  'link' => 'Link',
+  'daily_check' => 'Daily check-in',
+  _ => proof,
+};
 
-  final String initial;
-  final Color color;
+class _AppleButton extends StatelessWidget {
+  const _AppleButton({
+    required this.loading,
+    required this.error,
+    required this.onPressed,
+  });
+
+  final bool loading;
+  final String? error;
+  final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: NuvoColors.white, width: 1.5),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initial,
-        style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.white,
-          fontWeight: FontWeight.w800,
-          fontSize: 10,
+  Widget build(BuildContext context) => Column(
+    children: [
+      if (error != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
+          ),
+        ),
+      loading
+          ? Container(
+              height: 52,
+              width: double.infinity,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+              ),
+              child: const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: NuvoColors.white,
+                  strokeWidth: 2,
+                ),
+              ),
+            )
+          : SizedBox(
+              height: 52,
+              width: double.infinity,
+              child: SignInWithAppleButton(
+                onPressed: onPressed,
+                height: 52,
+                style: SignInWithAppleButtonStyle.black,
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+              ),
+            ),
+    ],
+  );
+}
+
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({
+    required this.loading,
+    required this.error,
+    required this.onPressed,
+  });
+  final bool loading;
+  final String? error;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      if (error != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            error!,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
+          ),
+        ),
+      GestureDetector(
+        onTap: loading ? null : onPressed,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: loading ? .55 : 1,
+          child: Container(
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: NuvoColors.white,
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              border: NuvoBorders.action,
+            ),
+            child: loading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _GoogleGIcon(),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Continue with Google',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: NuvoColors.navy,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
-    );
-  }
+    ],
+  );
+}
+
+class _LegalCopy extends StatelessWidget {
+  const _LegalCopy({required this.onOpen});
+  final Future<void> Function(String) onOpen;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: RichText(
+      textAlign: TextAlign.center,
+      text: TextSpan(
+        style: AppTextStyles.labelSmall.copyWith(
+          color: NuvoColors.muted.withValues(alpha: .65),
+          height: 1.5,
+        ),
+        children: [
+          const TextSpan(text: 'By continuing you agree to our '),
+          TextSpan(
+            text: 'Terms',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.blue,
+              fontWeight: FontWeight.w700,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => onOpen('https://getnuvo.net/terms'),
+          ),
+          const TextSpan(text: ' & '),
+          TextSpan(
+            text: 'Privacy Policy',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.blue,
+              fontWeight: FontWeight.w700,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => onOpen('https://getnuvo.net/privacy'),
+          ),
+          const TextSpan(text: '.'),
+        ],
+      ),
+    ),
+  );
 }
 
 class _GoogleGIcon extends StatelessWidget {

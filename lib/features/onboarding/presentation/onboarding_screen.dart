@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -27,7 +29,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _privateStats = true;
   bool _termsAccepted = false;
   bool _loading = false;
+  bool? _usernameAvailable;
+  bool _usernameChecking = false;
   String? _error;
+  Timer? _debounce;
 
   Future<void> _openLegalUrl(String url) async {
     final uri = Uri.parse(url);
@@ -43,10 +48,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _nameController = TextEditingController(text: user?.fullName ?? '');
     _usernameController = TextEditingController(text: user?.username ?? '');
     _nameController.addListener(() => setState(() {}));
+    _usernameController.addListener(_onUsernameChanged);
+  }
+
+  void _onUsernameChanged() {
+    setState(() {
+      _usernameAvailable = null;
+      _error = null;
+    });
+    _debounce?.cancel();
+    final raw = _usernameController.text.trim().toLowerCase();
+    if (raw.length < 3) return;
+    setState(() => _usernameChecking = true);
+    _debounce = Timer(const Duration(milliseconds: 650), () async {
+      final available = await ref
+          .read(authControllerProvider.notifier)
+          .checkUsername(raw);
+      if (mounted) {
+        setState(() {
+          _usernameAvailable = available;
+          _usernameChecking = false;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _nameController.dispose();
     _usernameController.dispose();
     super.dispose();
@@ -59,6 +88,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
   }
+
+  bool get _canContinue =>
+      _nameController.text.trim().isNotEmpty &&
+      _usernameController.text.trim().length >= 3 &&
+      _usernameAvailable == true &&
+      _termsAccepted &&
+      !_loading;
 
   Future<void> _continue() async {
     if (!_termsAccepted) {
@@ -94,6 +130,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final username = _usernameController.text.trim();
+
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
@@ -108,22 +146,22 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Step progress
+                            // Step progress (3 steps: race, profile, pass)
                             Row(
                               children: [
-                                for (var i = 0; i < 5; i++) ...[
+                                for (var i = 0; i < 3; i++) ...[
                                   Expanded(
                                     child: Container(
                                       height: 3,
                                       decoration: BoxDecoration(
-                                        color: i <= 2
+                                        color: i <= 1
                                             ? NuvoColors.blue
                                             : NuvoColors.border,
                                         borderRadius: BorderRadius.circular(99),
                                       ),
                                     ),
                                   ),
-                                  if (i < 4) const SizedBox(width: 4),
+                                  if (i < 2) const SizedBox(width: 4),
                                 ],
                               ],
                             ),
@@ -134,6 +172,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               style: AppTextStyles.headlineLarge.copyWith(
                                 fontSize: 32,
                                 letterSpacing: -0.9,
+                                color: NuvoColors.navy,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -211,23 +250,43 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.check_circle_rounded,
-                                  color: NuvoColors.success,
-                                  size: 16,
+
+                            // Username availability feedback
+                            if (_usernameChecking)
+                              Text(
+                                'Checking availability…',
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.muted,
                                 ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Username set',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: NuvoColors.success,
-                                    fontWeight: FontWeight.w700,
+                              )
+                            else if (username.length >= 3) ...[
+                              Row(
+                                children: [
+                                  Icon(
+                                    _usernameAvailable == true
+                                        ? Icons.check_circle_rounded
+                                        : Icons.cancel_rounded,
+                                    color: _usernameAvailable == true
+                                        ? NuvoColors.success
+                                        : NuvoColors.danger,
+                                    size: 16,
                                   ),
-                                ),
-                              ],
-                            ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _usernameAvailable == true
+                                        ? '@$username is available'
+                                        : '@$username is taken',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: _usernameAvailable == true
+                                          ? NuvoColors.success
+                                          : NuvoColors.danger,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+
                             const SizedBox(height: 20),
 
                             // Private stats toggle
@@ -239,6 +298,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               decoration: BoxDecoration(
                                 color: NuvoColors.panel.withValues(alpha: 0.58),
                                 borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: NuvoColors.navy,
+                                  width: 2,
+                                ),
                               ),
                               child: Row(
                                 children: [
@@ -265,7 +328,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                   const SizedBox(width: 12),
                                   Switch.adaptive(
                                     value: _privateStats,
-                                    activeThumbColor: NuvoColors.blue,
+                                    activeTrackColor: NuvoColors.blue,
                                     onChanged: (value) =>
                                         setState(() => _privateStats = value),
                                   ),
@@ -290,7 +353,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               children: [
                                 Checkbox.adaptive(
                                   value: _termsAccepted,
-                                  activeColor: NuvoColors.blue,
+                                  fillColor: WidgetStateProperty.resolveWith(
+                                    (states) => states.contains(WidgetState.selected)
+                                        ? NuvoColors.blue
+                                        : null,
+                                  ),
                                   onChanged: (value) => setState(
                                     () => _termsAccepted = value ?? false,
                                   ),
@@ -362,7 +429,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 icon: Icons.arrow_forward_rounded,
                 expand: true,
                 loading: _loading,
-                onPressed: _loading ? null : _continue,
+                onPressed: _canContinue ? _continue : null,
               ),
             ),
           ],

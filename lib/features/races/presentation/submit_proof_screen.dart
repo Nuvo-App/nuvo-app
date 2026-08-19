@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
@@ -13,7 +14,6 @@ import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/race_display.dart';
 import 'race_controller.dart';
-import 'widgets/movement_demo.dart';
 import 'widgets/preset_movement_demos.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
@@ -79,28 +79,63 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   @override
   Widget build(BuildContext context) {
     final race = _race;
+    final isPreVerify = !_raceLoading &&
+        _raceError == null &&
+        race != null &&
+        _isPreVerify(race);
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
       bottomNavigationBar: _bottomBar(race),
       body: SafeArea(
-        child:
-            ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-                  children: _raceLoading
-                      ? _loadingContent()
-                      : _raceError != null
-                      ? _errorContent()
-                      : _formContent(race!),
-                )
-                .animate()
-                .fadeIn(duration: 240.ms, curve: Curves.easeOut)
-                .slideY(
-                  begin: 0.03,
-                  end: 0,
-                  duration: 280.ms,
-                  curve: Curves.easeOutCubic,
-                ),
+        child: isPreVerify
+            ? _centeredPreVerifyBody(race)
+            : _defaultBody(race),
+      ),
+    );
+  }
+
+  bool _isPreVerify(Race race) {
+    final eligibility = resolveCameraVerification(race);
+    return eligibility.isCameraVerifiable &&
+        eligibility.movementType != null &&
+        movementDemoForType(eligibility.movementType!) != null;
+  }
+
+  Widget _defaultBody(Race? race) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+      children: _raceLoading
+          ? _loadingContent()
+          : _raceError != null
+              ? _errorContent()
+              : _formContent(race!),
+    )
+        .animate()
+        .fadeIn(duration: 240.ms, curve: Curves.easeOut)
+        .slideY(
+          begin: 0.03,
+          end: 0,
+          duration: 280.ms,
+          curve: Curves.easeOutCubic,
+        );
+  }
+
+  Widget _centeredPreVerifyBody(Race race) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(alignment: Alignment.centerLeft, child: _backRow()),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: _preVerifyContent(race),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -227,7 +262,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     if (eligibility.isCameraVerifiable &&
         eligibility.movementType != null &&
         movementDemoForType(eligibility.movementType!) != null) {
-      return _preVerifyContent(race, eligibility);
+      return _preVerifyContent(race);
     }
 
     return [
@@ -266,33 +301,17 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     ];
   }
 
-  /// Dedicated pre-verification movement demo shown before the camera opens.
-  /// The animated character is the dominant visual element.
-  List<Widget> _preVerifyContent(
-    Race race,
-    CameraVerificationEligibility eligibility,
-  ) {
+  /// Dedicated pre-verification movement instruction shown before the camera opens.
+  List<Widget> _preVerifyContent(Race race) {
+    final eligibility = resolveCameraVerification(race);
     final movementName =
         eligibility.movementDefinition?.title ?? race.displayTitle;
-    final demo = eligibility.movementType != null
-        ? movementDemoForType(eligibility.movementType!)
-        : null;
     final framingLabel =
         eligibility.movementDefinition?.framingLabel ??
         'Full body inside frame';
-
-    // Compute a demo height that fits small iPhones without pushing the CTA
-    // below the fold. On a 667px screen with SafeArea (~60px) and bottom bar
-    // (~110px), the body has ~497px. Content above+below the demo is ~180px,
-    // so the demo gets ~317px. We cap at 320 and floor at 220 to keep it
-    // visually significant on larger screens while fitting small ones.
-    final screenHeight = MediaQuery.of(context).size.height;
-    final demoHeight = (screenHeight - 360).clamp(220.0, 320.0);
+    final goalLabel = race.targetValue != null ? raceTargetLabel(race) : null;
 
     return [
-      _backRow(),
-      const SizedBox(height: 12),
-
       // Movement name — large, clear
       Text(
         movementName,
@@ -300,29 +319,20 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           fontSize: 32,
           letterSpacing: -0.9,
         ),
-      ),
-      const SizedBox(height: 4),
+        textAlign: TextAlign.center,
+      ).animate().fadeIn(duration: 220.ms),
+      if (goalLabel != null) ...[
+        const SizedBox(height: 6),
+        Text(
+          'First to $goalLabel',
+          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.muted),
+          textAlign: TextAlign.center,
+        ).animate(delay: 60.ms).fadeIn(duration: 220.ms),
+      ],
 
-      // "Do this" label
-      Text(
-        'Do this',
-        style: AppTextStyles.labelUppercase(
-          14,
-        ).copyWith(color: NuvoColors.blue),
-      ),
+      const SizedBox(height: 32),
 
-      const SizedBox(height: 16),
-
-      // Large looping movement animation — the visual focus
-      SizedBox(
-        height: demoHeight,
-        width: double.infinity,
-        child: NuvoMovementAnimation(demo: demo!),
-      ),
-
-      const SizedBox(height: 20),
-
-      // Short camera/setup instruction
+      // Camera/setup instruction
       Text(
         framingLabel,
         style: AppTextStyles.bodyLarge.copyWith(
@@ -330,13 +340,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           height: 1.4,
         ),
         textAlign: TextAlign.center,
-      ),
-      const SizedBox(height: 8),
+      ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
+      const SizedBox(height: 6),
       Text(
         'Stand where Nuvo can see your whole body.',
         style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         textAlign: TextAlign.center,
-      ),
+      ).animate(delay: 160.ms).fadeIn(duration: 220.ms),
     ];
   }
 
@@ -572,7 +582,8 @@ class _UnsupportedVerificationCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.divider),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardSmall,
       ),
       child: Row(
         children: [

@@ -969,7 +969,7 @@ class RaceWaitingSummary extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.divider,
+              border: NuvoBorders.hero,
             ),
             child: Row(
               children: [
@@ -1050,7 +1050,7 @@ class RaceFinishedSummary extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.divider,
+              border: NuvoBorders.hero,
             ),
             child: Row(
               children: [
@@ -1114,7 +1114,7 @@ class RaceQuickStart extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.divider,
+          border: NuvoBorders.hero,
         ),
         child: Row(
           children: [

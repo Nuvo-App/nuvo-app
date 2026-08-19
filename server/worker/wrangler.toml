@@ -15,3 +15,4 @@ bucket_name = "nuvor2"
 
 [vars]
 RESEND_FROM_EMAIL = "no-reply@getnuvo.net"
+APPLE_BUNDLE_ID = "net.getnuvo.app"

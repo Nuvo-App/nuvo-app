@@ -1,6 +1,6 @@
 # MOTION INTELLIGENCE — M1.2 REPORT
 
-Generated: 2026-08-11T11:18:02.502457
+Generated: 2026-08-19T00:53:45.848486
 Dataset: v1.0.0 (34 clips)
 Git SHA: 6927d17
 Production files changed: NONE
@@ -57,20 +57,20 @@ Top separating features (by Cohen's d effect size):
 
 | Model | Window | Params | Recall | Precision | F1 | FA Clip Rate | Runtime (ms) |
 |-------|--------|--------|--------|-----------|----|-------------|-------------|
-| FeatureSummaryMLP | 15 | 4161 | 1.0000 | 0.2500 | 0.4000 | 1.000 | 376 |
-| GRU | 15 | 3633 | 0.6667 | 0.2000 | 0.3077 | 0.889 | 40469 |
-| FeatureSummaryMLP | 30 | 4161 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 351 |
-| Conv1D | 30 | 9737 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 419 |
-| GRU | 30 | 3633 | 0.6667 | 0.2000 | 0.3077 | 0.889 | 64064 |
-| FeatureSummaryMLP | 45 | 4161 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 389 |
-| Conv1D | 45 | 11785 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 522 |
-| GRU | 45 | 3633 | 0.6667 | 0.1818 | 0.2857 | 1.000 | 98893 |
+| FeatureSummaryMLP | 15 | 4161 | 1.0000 | 0.2500 | 0.4000 | 1.000 | 506 |
+| GRU | 15 | 3633 | 0.6667 | 0.2000 | 0.3077 | 0.889 | 44430 |
+| FeatureSummaryMLP | 30 | 4161 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 363 |
+| Conv1D | 30 | 9737 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 413 |
+| GRU | 30 | 3633 | 0.6667 | 0.2000 | 0.3077 | 0.889 | 66125 |
+| FeatureSummaryMLP | 45 | 4161 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 393 |
+| Conv1D | 45 | 11785 | 0.0000 | 0.0000 | 0.0000 | 0.000 | 534 |
+| GRU | 45 | 3633 | 0.6667 | 0.1818 | 0.2857 | 1.000 | 92915 |
 
 ## 6. BEST PURE ML
 
 FeatureSummaryMLP (window=15)
   recall=1.0000 precision=0.2500 f1=0.4000
-  params=4161 trainTime=376ms
+  params=4161 trainTime=506ms
 
 ## 7. BEST DETERMINISTIC
 
@@ -134,7 +134,7 @@ Primary failure clusters from M1.1:
 ## 16. SPEED
 
 - Feature extraction: ~7098 frames in < 5 seconds
-- MLP training: ~376ms for 10 epochs
+- MLP training: ~506ms for 10 epochs
 - Evaluation: < 1 second per model
 - Estimated throughput: ~50 experiments/hour (feature extraction cached)
 

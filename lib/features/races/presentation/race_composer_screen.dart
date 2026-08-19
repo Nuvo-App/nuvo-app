@@ -23,6 +23,7 @@ import 'create_race_screen.dart';
 import 'custom_pose/learned_custom_movement_provider.dart';
 import 'custom_pose/recent_movements_provider.dart';
 import 'race_controller.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -186,6 +187,20 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   }
 
   void _advance() {
+    final guide = ref.read(firstRaceGuideProvider);
+    if (guide == FirstRaceGuideStep.composerName) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.composerActivity;
+    } else if (guide == FirstRaceGuideStep.composerActivity) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.composerGoal;
+    } else if (guide == FirstRaceGuideStep.composerGoal) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.composerRacers;
+    } else if (guide == FirstRaceGuideStep.composerRacers) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.composerReview;
+    }
     final idx = _steps.indexOf(_step);
     if (idx < _steps.length - 1) {
       _goToStep(_steps[idx + 1]);
@@ -252,6 +267,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         ref.read(learnedCustomMovementProvider.notifier).state = null;
       }
       final wantsInvite = draft.visibility == 'invite_code';
+      if (ref.read(firstRaceGuideProvider) ==
+          FirstRaceGuideStep.composerReview) {
+        ref.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.raceDetail;
+      }
       if (wantsInvite) {
         context.push('/race/${race.id}/invite');
       } else {
@@ -352,7 +372,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final draft = ref.watch(_composerDraftProvider);
     final stepIndex = _steps.indexOf(_step);
 
-    return Scaffold(
+    final screen = Scaffold(
       backgroundColor: NuvoColors.page,
       // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
       resizeToAvoidBottomInset: true,
@@ -410,6 +430,49 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         ),
       ),
     );
+
+    final guide = ref.watch(firstRaceGuideProvider);
+    final coach = switch (guide) {
+      FirstRaceGuideStep.composerName => FirstRaceGuideCoach(
+        step: guide,
+        targetKey: FirstRaceGuideKeys.composerName,
+        eyebrow: 'NAME THE RACE',
+        title: 'Give the board a finish line.',
+        body: 'Type a short name your crew will understand, then continue.',
+      ),
+      FirstRaceGuideStep.composerActivity => FirstRaceGuideCoach(
+        step: guide,
+        targetKey: FirstRaceGuideKeys.composerActivity,
+        eyebrow: 'CHOOSE PROOF',
+        title: 'Pick what moves the board.',
+        body:
+            'Choose a supported movement. Nuvo will use it to verify progress.',
+      ),
+      FirstRaceGuideStep.composerGoal => FirstRaceGuideCoach(
+        step: guide,
+        targetKey: FirstRaceGuideKeys.composerGoal,
+        eyebrow: 'SET THE FINISH LINE',
+        title: 'Choose the number to beat.',
+        body: 'This is the target everyone races toward.',
+      ),
+      FirstRaceGuideStep.composerReview => FirstRaceGuideCoach(
+        step: guide,
+        targetKey: FirstRaceGuideKeys.composerReview,
+        eyebrow: 'PUT IT ON THE BOARD',
+        title: 'Review it, then start the race.',
+        body: 'Tap Start race to create the real leaderboard.',
+      ),
+      FirstRaceGuideStep.composerRacers => FirstRaceGuideCoach(
+        step: guide,
+        targetKey: FirstRaceGuideKeys.composerRacers,
+        eyebrow: 'BRING YOUR CREW',
+        title: 'Choose who starts with you.',
+        body:
+            'Pick Start solo for now. You can invite your crew from the race room.',
+      ),
+      _ => null,
+    };
+    return coach == null ? screen : Stack(children: [screen, coach]);
   }
 }
 
@@ -496,6 +559,7 @@ class _ProgressLine extends StatelessWidget {
 
 class _PageShell extends StatelessWidget {
   const _PageShell({
+    super.key,
     required this.question,
     required this.support,
     required this.body,
@@ -639,6 +703,7 @@ class _NamePageState extends State<_NamePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _LargeTextField(
+            key: FirstRaceGuideKeys.composerName,
             controller: _ctrl,
             focusNode: _focusNode,
             hint: 'First to 100 Pushups',
@@ -653,6 +718,7 @@ class _NamePageState extends State<_NamePage> {
 
 class _LargeTextField extends StatefulWidget {
   const _LargeTextField({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.hint,
@@ -797,58 +863,61 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       support: 'Pick a movement for your crew.',
       ctaLabel: 'Set the finish line',
       onCta: widget.onNext,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Search bar ───────────────────────────────────────────────────
-          _SearchBar(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _searchQuery = value),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Search results OR browse ────────────────────────────────────
-          if (_searchQuery.isNotEmpty)
-            _SearchResults(
-              query: _searchQuery,
-              selectedType: widget.draft.activity.type,
-              onSelect: _select,
-            )
-          else ...[
-            _CategoryTabs(
-              categories: activeCategories,
-              selected: _selectedCategory,
-              onSelect: (cat) => setState(() => _selectedCategory = cat),
+      body: KeyedSubtree(
+        key: FirstRaceGuideKeys.composerActivity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Search bar ───────────────────────────────────────────────────
+            _SearchBar(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _searchQuery = value),
             ),
-            const SizedBox(height: 14),
-            _ActivityGrid(
-              activities: _selectedCategory == null
-                  ? motionActivityDefinitions
-                  : activitiesByCategory(_selectedCategory!),
-              selectedType: widget.draft.activity.type,
-              onSelect: _select,
-            ),
-          ],
+            const SizedBox(height: 16),
 
-          // ── Teach a movement (demoted: text link, not a competing button) ─
-          const SizedBox(height: 16),
-          Center(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => context.push('/internal/teach-movement'),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(
-                  'Teach a movement',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
-                    fontWeight: FontWeight.w600,
+            // ── Search results OR browse ────────────────────────────────────
+            if (_searchQuery.isNotEmpty)
+              _SearchResults(
+                query: _searchQuery,
+                selectedType: widget.draft.activity.type,
+                onSelect: _select,
+              )
+            else ...[
+              _CategoryTabs(
+                categories: activeCategories,
+                selected: _selectedCategory,
+                onSelect: (cat) => setState(() => _selectedCategory = cat),
+              ),
+              const SizedBox(height: 14),
+              _ActivityGrid(
+                activities: _selectedCategory == null
+                    ? motionActivityDefinitions
+                    : activitiesByCategory(_selectedCategory!),
+                selectedType: widget.draft.activity.type,
+                onSelect: _select,
+              ),
+            ],
+
+            // ── Teach a movement (demoted: text link, not a competing button) ─
+            const SizedBox(height: 16),
+            Center(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => context.push('/internal/teach-movement'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    'Teach a movement',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -864,10 +933,11 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.navy, width: 1.5),
+        border: Border.all(color: NuvoColors.navy, width: 2),
       ),
       child: TextField(
         controller: controller,
@@ -1231,60 +1301,63 @@ class _GoalPageState extends State<_GoalPage> {
       support: 'How many ${widget.draft.metric.label} to win?',
       ctaLabel: 'Invite racers',
       onCta: widget.onNext,
-      body: Column(
-        children: [
-          // ── Big tappable number ──────────────────────────────────────────
-          _GoalDisplay(
-            displayValue: _displayTarget,
-            unitLabel: isSeconds
-                ? widget.draft.displayActivityName.toUpperCase()
-                : widget.draft.metric.label.toUpperCase(),
-            editing: _editing,
-            editCtrl: _editCtrl,
-            editFocus: _editFocus,
-            onTapNumber: _startEdit,
-            onCommitEdit: _commitEdit,
-            onIncrement: _increment,
-            onDecrement: _decrement,
-          ),
-          const SizedBox(height: 24),
-
-          // ── Suggested values ─────────────────────────────────────────────
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final t in _suggestedTargets.take(4))
-                _SuggestedTarget(
-                  value: isSeconds ? _secondsDisplay(t) : '$t',
-                  selected: _target == t,
-                  onTap: () {
-                    _dismissKeyboard();
-                    setState(() => _editing = false);
-                    _setTarget(t);
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // ── Win statement ────────────────────────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: NuvoColors.panel,
-              borderRadius: BorderRadius.circular(NuvoRadii.md),
+      body: KeyedSubtree(
+        key: FirstRaceGuideKeys.composerGoal,
+        child: Column(
+          children: [
+            // ── Big tappable number ──────────────────────────────────────────
+            _GoalDisplay(
+              displayValue: _displayTarget,
+              unitLabel: isSeconds
+                  ? widget.draft.displayActivityName.toUpperCase()
+                  : widget.draft.metric.label.toUpperCase(),
+              editing: _editing,
+              editCtrl: _editCtrl,
+              editFocus: _editFocus,
+              onTapNumber: _startEdit,
+              onCommitEdit: _commitEdit,
+              onIncrement: _increment,
+              onDecrement: _decrement,
             ),
-            child: Text(
-              _winStatement,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.navy,
-                fontWeight: FontWeight.w600,
+            const SizedBox(height: 24),
+
+            // ── Suggested values ─────────────────────────────────────────────
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final t in _suggestedTargets.take(4))
+                  _SuggestedTarget(
+                    value: isSeconds ? _secondsDisplay(t) : '$t',
+                    selected: _target == t,
+                    onTap: () {
+                      _dismissKeyboard();
+                      setState(() => _editing = false);
+                      _setTarget(t);
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // ── Win statement ────────────────────────────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: NuvoColors.panel,
+                borderRadius: BorderRadius.circular(NuvoRadii.md),
+              ),
+              child: Text(
+                _winStatement,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: NuvoColors.navy,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1404,7 +1477,7 @@ class _StepButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.panel,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.border, width: 1.5),
+          border: Border.all(color: NuvoColors.navy, width: 2),
         ),
         alignment: Alignment.center,
         child: Icon(icon, color: NuvoColors.navy, size: 22),
@@ -1434,7 +1507,7 @@ class _SuggestedTarget extends StatelessWidget {
           color: selected ? NuvoColors.actionBlue : NuvoColors.white,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
           border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+            color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
             width: 1.5,
           ),
         ),
@@ -1496,24 +1569,27 @@ class _RacersPageState extends State<_RacersPage> {
       support: 'Race solo or with crew.',
       ctaLabel: 'Review race',
       onCta: widget.onNext,
-      body: Column(
-        children: [
-          _RacerOption(
-            title: 'Pull in your crew',
-            subtitle: 'Invite link opens right after race starts.',
-            icon: Icons.group_add_rounded,
-            selected: _inviteCrew,
-            onTap: () => _setInvite(true),
-          ),
-          const SizedBox(height: 12),
-          _RacerOption(
-            title: 'Start solo',
-            subtitle: 'Race yourself first. Invite anytime.',
-            icon: Icons.person_rounded,
-            selected: !_inviteCrew,
-            onTap: () => _setInvite(false),
-          ),
-        ],
+      body: KeyedSubtree(
+        key: FirstRaceGuideKeys.composerRacers,
+        child: Column(
+          children: [
+            _RacerOption(
+              title: 'Pull in your crew',
+              subtitle: 'Invite link opens right after race starts.',
+              icon: Icons.group_add_rounded,
+              selected: _inviteCrew,
+              onTap: () => _setInvite(true),
+            ),
+            const SizedBox(height: 12),
+            _RacerOption(
+              title: 'Start solo',
+              subtitle: 'Race yourself first. Invite anytime.',
+              icon: Icons.person_rounded,
+              selected: !_inviteCrew,
+              onTap: () => _setInvite(false),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1546,7 +1622,7 @@ class _RacerOption extends StatelessWidget {
               : NuvoColors.white,
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.border,
+            color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
             width: selected ? 2 : 1.5,
           ),
         ),
@@ -1644,102 +1720,126 @@ class _ReviewPage extends StatelessWidget {
     final isInvite = draft.visibility == 'invite_code';
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Tapping title returns to Name
-                GestureDetector(
-                  onTap: () => onEditStep(_Step.name),
-                  child: Text(
-                    draft.resolvedTitle,
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: NuvoColors.navy,
-                      height: 1.1,
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.vertical -
+                    160,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Eyebrow
+                  Text(
+                    'Review your race',
+                    style: AppTextStyles.labelUppercase(
+                      12,
+                    ).copyWith(color: NuvoColors.blue),
+                  ).animate().fadeIn(duration: 180.ms),
+                  const SizedBox(height: 8),
+
+                  // Race title — tappable to edit name
+                  GestureDetector(
+                    onTap: () => onEditStep(_Step.name),
+                    child: Text(
+                      draft.resolvedTitle,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.headlineLarge.copyWith(
+                        color: NuvoColors.navy,
+                        height: 1.1,
+                      ),
                     ),
                   ).animate().fadeIn(duration: 220.ms),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _winSubtitle,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: NuvoColors.muted,
-                  ),
-                ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
-                const SizedBox(height: 32),
+                  const SizedBox(height: 6),
+                  Text(
+                    _winSubtitle,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
+                  const SizedBox(height: 36),
 
-                _RacePathVisual(
-                  targetLabel: _finishLineLabel,
-                ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
+                  // Central hero: the race path card
+                  _RacePathVisual(
+                    targetLabel: _finishLineLabel,
+                  ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 24),
 
-                // Verification/activity — tap returns to Activity
-                _ReviewDetail(
-                  icon: Icons.verified_rounded,
-                  label: 'Camera verified',
-                  sub: '${draft.displayActivityName} · ${draft.metric.label}',
-                  onTap: draft.isCustom
-                      ? null
-                      : () => onEditStep(_Step.activity),
-                ),
-                const SizedBox(height: 10),
-                // Finish line — tap returns to Goal
-                _ReviewDetail(
-                  icon: Icons.flag_rounded,
-                  label: _finishLineLabel,
-                  sub: 'Tap to change finish line',
-                  onTap: () => onEditStep(_Step.goal),
-                ),
-                const SizedBox(height: 10),
-                // Crew mode — tap returns to Racers
-                _ReviewDetail(
-                  icon: isInvite ? Icons.group_rounded : Icons.person_rounded,
-                  label: isInvite ? 'Invite crew' : 'Start solo',
-                  sub: isInvite
-                      ? 'Invite link opens after race starts'
-                      : 'Race yourself first',
-                  onTap: () => onEditStep(_Step.racers),
-                ),
+                  // Compact editable detail chips — centered row
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _ReviewDetailChip(
+                        icon: Icons.verified_rounded,
+                        label: 'Camera verified',
+                        sub: '${draft.displayActivityName} · ${draft.metric.label}',
+                        onTap: draft.isCustom
+                            ? null
+                            : () => onEditStep(_Step.activity),
+                      ),
+                      _ReviewDetailChip(
+                        icon: Icons.flag_rounded,
+                        label: _finishLineLabel,
+                        sub: 'Finish line',
+                        onTap: () => onEditStep(_Step.goal),
+                      ),
+                      _ReviewDetailChip(
+                        icon: isInvite ? Icons.group_rounded : Icons.person_rounded,
+                        label: isInvite ? 'Invite crew' : 'Start solo',
+                        sub: isInvite
+                            ? 'Invite link opens after race starts'
+                            : 'Race yourself first',
+                        onTap: () => onEditStep(_Step.racers),
+                      ),
+                    ],
+                  ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
 
-                if (error != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.danger.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(NuvoRadii.md),
-                      border: Border.all(
-                        color: NuvoColors.danger.withValues(alpha: 0.28),
+                  if (error != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: NuvoColors.danger.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(NuvoRadii.md),
+                        border: Border.all(
+                          color: NuvoColors.danger.withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Text(
+                        error!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.danger,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      error!,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.danger,
-                      ),
+                  ],
+                  if (showDiagnostics) ...[
+                    const SizedBox(height: 16),
+                    NuvoOutlineButton(
+                      label: 'Copy race debug',
+                      expand: true,
+                      onPressed: onCopyDiagnostics,
                     ),
-                  ),
+                  ],
                 ],
-                if (showDiagnostics) ...[
-                  const SizedBox(height: 16),
-                  NuvoOutlineButton(
-                    label: 'Copy race debug',
-                    expand: true,
-                    onPressed: onCopyDiagnostics,
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           child: NuvoPrimaryButton(
+            key: FirstRaceGuideKeys.composerReview,
             label: 'Start race',
             icon: Icons.flag_rounded,
             expand: true,
@@ -1854,8 +1954,8 @@ class _RaceLinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _ReviewDetail extends StatelessWidget {
-  const _ReviewDetail({
+class _ReviewDetailChip extends StatelessWidget {
+  const _ReviewDetailChip({
     required this.icon,
     required this.label,
     required this.sub,
@@ -1868,49 +1968,47 @@ class _ReviewDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: NuvoColors.border, width: 1.5),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: NuvoColors.panel,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: NuvoColors.navy, size: 17),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.navy,
-                    fontWeight: FontWeight.w700,
-                  ),
+          Icon(icon, color: NuvoColors.actionBlue, size: 16),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: NuvoColors.navy,
+                  fontWeight: FontWeight.w700,
                 ),
-                Text(
-                  sub,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
-                  ),
+              ),
+              Text(
+                sub,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (onTap != null)
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: NuvoColors.muted,
-              size: 18,
-            ),
         ],
       ),
+    );
+
+    if (onTap == null) return chip;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: chip,
     );
   }
 }

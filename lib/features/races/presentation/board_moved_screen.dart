@@ -235,7 +235,8 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                           color: Colors.white.withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.14),
+                            color: Colors.white.withValues(alpha: 0.40),
+                            width: 2,
                           ),
                         ),
                         child: Row(

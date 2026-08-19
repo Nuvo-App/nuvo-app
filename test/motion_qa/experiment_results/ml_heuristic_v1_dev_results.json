@@ -55,7 +55,7 @@
       "exactMatch": false,
       "repError": 1,
       "isFalseAccept": false,
-      "processingMs": 2,
+      "processingMs": 1,
       "framesProcessed": 300,
       "failures": []
     },
@@ -97,7 +97,7 @@
       "exactMatch": false,
       "repError": 3,
       "isFalseAccept": true,
-      "processingMs": 1,
+      "processingMs": 0,
       "framesProcessed": 300,
       "failures": []
     },
@@ -111,7 +111,7 @@
       "exactMatch": false,
       "repError": 3,
       "isFalseAccept": false,
-      "processingMs": 1,
+      "processingMs": 0,
       "framesProcessed": 300,
       "failures": []
     },
@@ -125,7 +125,7 @@
       "exactMatch": false,
       "repError": 5,
       "isFalseAccept": false,
-      "processingMs": 1,
+      "processingMs": 0,
       "framesProcessed": 300,
       "failures": []
     },
@@ -153,7 +153,7 @@
       "exactMatch": false,
       "repError": 3,
       "isFalseAccept": false,
-      "processingMs": 1,
+      "processingMs": 0,
       "framesProcessed": 300,
       "failures": []
     },

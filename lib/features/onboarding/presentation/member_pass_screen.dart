@@ -92,16 +92,40 @@ class _OnboardingMemberPassScreenState
       body: SafeArea(
         child:
             ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 32),
+                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 32),
                   children: [
+                    // Step progress (3 steps: race, profile, pass)
+                    Row(
+                      children: [
+                        for (var i = 0; i < 3; i++) ...[
+                          Expanded(
+                            child: Container(
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: i <= 2
+                                    ? NuvoColors.blue
+                                    : NuvoColors.border,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                          ),
+                          if (i < 2) const SizedBox(width: 4),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                     Text(
-                      'Member pass',
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        fontSize: 32,
-                        letterSpacing: -0.9,
+                      'Your pass into the crew.',
+                      style: AppTextStyles.displaySmall,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Keep it close. This is how people find you and race you.',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: NuvoColors.muted,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
                     MemberPassCard(profile: profile),
                     const SizedBox(height: 20),
                     Row(
@@ -140,7 +164,7 @@ class _OnboardingMemberPassScreenState
                       decoration: BoxDecoration(
                         color: NuvoColors.white,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: NuvoColors.border),
+                        border: Border.all(color: NuvoColors.navy, width: 2),
                       ),
                       child: Row(
                         children: [
@@ -175,7 +199,7 @@ class _OnboardingMemberPassScreenState
                       label: 'Continue',
                       icon: Icons.arrow_forward_rounded,
                       expand: true,
-                      onPressed: () => context.go('/onboarding/add-crew'),
+                      onPressed: () => context.go('/arena'),
                     ),
                   ],
                 )

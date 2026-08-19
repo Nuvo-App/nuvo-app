@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
@@ -264,7 +265,8 @@ class _MoveSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.border, width: 1.2),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardSmall,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

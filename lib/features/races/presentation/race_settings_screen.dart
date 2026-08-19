@@ -583,7 +583,7 @@ class _MovementSummary extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: NuvoColors.navy, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

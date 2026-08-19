@@ -753,7 +753,10 @@ class PushupsValidator extends _BaseValidator {
       _counter.update(MovementPhase.start, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Start when ready.';
     } else if (_cooldownFrames == 0 &&
-        (elbowAngle < 112 || shoulderDrop > features.torsoHeight * 0.16)) {
+        // A pushup must show both elbow flexion and the torso moving down.
+        // Using either signal lets arm-only movement or camera jitter count.
+        elbowAngle < 112 &&
+        shoulderDrop > features.torsoHeight * 0.16) {
       _counter.update(MovementPhase.active, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Keep going.';
     } else {

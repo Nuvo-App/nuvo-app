@@ -1,6 +1,6 @@
 # MOTION INTELLIGENCE — M1.1 REPORT
 
-Generated: 2026-08-11T11:14:37.170179
+Generated: 2026-08-19T00:54:09.858351
 Dataset: v1.0.0 (34 clips)
 Git SHA: 6927d17
 Production files changed: NONE

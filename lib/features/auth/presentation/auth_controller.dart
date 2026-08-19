@@ -9,11 +9,20 @@ import '../data/secure_token_store.dart';
 
 enum AuthStatus { loading, authenticated, unauthenticated }
 
+bool isNuvoStoreDemoEmail(String email) =>
+    email.trim().toLowerCase() == 'testing@getnuvo.net';
+
 class AuthState {
-  const AuthState({required this.status, this.user, this.error});
+  const AuthState({
+    required this.status,
+    this.user,
+    this.error,
+    this.guideFirstRace = false,
+  });
   final AuthStatus status;
   final AuthUser? user;
   final String? error;
+  final bool guideFirstRace;
 }
 
 class AuthController extends StateNotifier<AuthState> {
@@ -33,7 +42,11 @@ class AuthController extends StateNotifier<AuthState> {
       );
       if (mounted) {
         state = user != null
-            ? AuthState(status: AuthStatus.authenticated, user: user)
+            ? AuthState(
+                status: AuthStatus.authenticated,
+                user: user,
+                guideFirstRace: isNuvoStoreDemoEmail(user.email),
+              )
             : const AuthState(status: AuthStatus.unauthenticated);
       }
     } catch (e) {
@@ -49,21 +62,47 @@ class AuthController extends StateNotifier<AuthState> {
   Future<void> verifyEmailCode(String email, String code) async {
     final user = await _repo.verifyEmailCode(email, code);
     if (mounted) {
-      state = AuthState(status: AuthStatus.authenticated, user: user);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: user,
+        guideFirstRace: true,
+      );
     }
   }
 
   Future<void> signInWithGoogle(String idToken) async {
     final user = await _repo.signInWithGoogle(idToken);
     if (mounted) {
-      state = AuthState(status: AuthStatus.authenticated, user: user);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: user,
+        guideFirstRace: true,
+      );
+    }
+  }
+
+  Future<void> signInWithApple(
+    String idToken, {
+    String? fullName,
+  }) async {
+    final user = await _repo.signInWithApple(idToken, fullName: fullName);
+    if (mounted) {
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: user,
+        guideFirstRace: true,
+      );
     }
   }
 
   Future<void> signInReviewer(String email, String password) async {
     final user = await _repo.signInReviewer(email, password);
     if (mounted) {
-      state = AuthState(status: AuthStatus.authenticated, user: user);
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: user,
+        guideFirstRace: true,
+      );
     }
   }
 

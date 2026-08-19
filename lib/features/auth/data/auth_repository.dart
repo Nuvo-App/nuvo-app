@@ -18,7 +18,7 @@ class AuthRepository {
     try {
       final accessToken = await _api.refreshSession(refreshToken);
       await _store.saveAccessToken(accessToken);
-      return await _api.getMe(accessToken);
+      return await _api.getMe(accessToken, resetDemo: true);
     } on ApiException {
       await _store.clear();
       return null;
@@ -60,6 +60,18 @@ class AuthRepository {
 
   Future<AuthUser> signInWithGoogle(String idToken) async {
     final res = await _api.signInWithGoogle(idToken);
+    await _store.saveTokens(
+      accessToken: res.accessToken,
+      refreshToken: res.refreshToken,
+    );
+    return res.user;
+  }
+
+  Future<AuthUser> signInWithApple(
+    String idToken, {
+    String? fullName,
+  }) async {
+    final res = await _api.signInWithApple(idToken, fullName: fullName);
     await _store.saveTokens(
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,

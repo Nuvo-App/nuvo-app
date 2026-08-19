@@ -655,14 +655,14 @@ class NuvoTextInput extends StatelessWidget {
               borderRadius: BorderRadius.circular(NuvoRadii.md),
               borderSide: const BorderSide(
                 color: NuvoColors.border,
-                width: 1.25,
+                width: 2,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
               borderSide: const BorderSide(
                 color: NuvoColors.border,
-                width: 1.25,
+                width: 2,
               ),
             ),
             focusedBorder: OutlineInputBorder(
@@ -671,7 +671,7 @@ class NuvoTextInput extends StatelessWidget {
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              borderSide: const BorderSide(color: NuvoColors.danger),
+              borderSide: const BorderSide(color: NuvoColors.danger, width: 2),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
@@ -748,11 +748,11 @@ class NuvoSearchField extends StatelessWidget {
         suffixIconConstraints: const BoxConstraints(),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.border, width: 1.25),
+          borderSide: const BorderSide(color: NuvoColors.border, width: 2),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.border, width: 1.25),
+          borderSide: const BorderSide(color: NuvoColors.border, width: 2),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),

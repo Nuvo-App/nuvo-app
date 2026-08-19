@@ -6,7 +6,6 @@ import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
-import 'package:nuvo/features/onboarding/presentation/create_identity_screen.dart';
 import 'package:nuvo/features/onboarding/presentation/onboarding_screen.dart';
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────
@@ -53,44 +52,6 @@ Widget _buildApp(Widget home) {
 }
 
 void main() {
-  group('Create Identity layout', () {
-    testWidgets('CTA pinned and visible on normal iPhone', (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(_buildApp(const CreateIdentityScreen()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(find.text('Continue'), findsOneWidget);
-    });
-
-    testWidgets('CTA pinned and visible on small iPhone', (tester) async {
-      tester.view.physicalSize = const Size(375, 667);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(_buildApp(const CreateIdentityScreen()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(find.text('Continue'), findsOneWidget);
-    });
-
-    testWidgets('no overflow at small viewport', (tester) async {
-      tester.view.physicalSize = const Size(375, 667);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-
-      await tester.pumpWidget(_buildApp(const CreateIdentityScreen()));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(tester.takeException(), isNull);
-    });
-  });
-
   group('Onboarding Profile layout', () {
     testWidgets('CTA pinned and visible on normal iPhone', (tester) async {
       tester.view.physicalSize = const Size(390, 844);

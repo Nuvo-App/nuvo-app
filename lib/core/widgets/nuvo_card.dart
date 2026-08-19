@@ -14,7 +14,7 @@ class NuvoCard extends StatelessWidget {
     this.onTap,
     this.elevated = true,
     this.borderColor,
-    this.borderWidth = 1,
+    this.borderWidth = 2,
   });
 
   final Widget child;
@@ -29,18 +29,13 @@ class NuvoCard extends StatelessWidget {
     Widget card = Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [NuvoColors.icyBlue, NuvoColors.card, NuvoColors.card],
-          stops: [0, 0.34, 1],
-        ),
+        color: NuvoColors.card,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
         border: Border.all(
           color: borderColor ?? NuvoColors.border,
           width: borderWidth,
         ),
-        boxShadow: elevated ? AppShadows.surfaceShadow : null,
+        boxShadow: elevated ? AppShadows.hardMedium : null,
       ),
       child: child,
     );

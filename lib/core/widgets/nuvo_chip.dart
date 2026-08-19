@@ -22,7 +22,7 @@ class NuvoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = accentColor ?? NuvoColors.actionBlue;
     final bgColor = selected
-        ? accent.withValues(alpha: 0.10)
+        ? NuvoColors.panel
         : NuvoColors.white;
     final border = selected ? accent : NuvoColors.border;
     final textColor = selected ? accent : NuvoColors.navy;
@@ -36,7 +36,7 @@ class NuvoChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(100),
-          border: Border.all(color: border, width: selected ? 1.5 : 1),
+          border: Border.all(color: border, width: 2),
         ),
         child: Text(
           label,

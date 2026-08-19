@@ -748,6 +748,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool get _isImmersiveCamera {
     // Stay immersive across a lens flip so the layout does not thrash.
     if (_switchingCamera) return true;
+    // The camera is still opening. Stay on the immersive surface so there is
+    // no boxed intermediate screen before the preview appears.
+    if (_status == AiMotionProofStatus.setup) return true;
     final controller = _cameraController;
     return controller != null &&
         controller.value.isInitialized &&

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'auth_controller.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 
 class RouterNotifier extends ChangeNotifier {
   RouterNotifier(Ref ref) {
@@ -38,10 +39,26 @@ class RouterNotifier extends ChangeNotifier {
     // Authenticated
     final user = authState.user!;
     debugPrint('[Router] authenticated uid=${user.id} → $loc');
+    final replayingDemo = _ref.read(demoReplayProvider);
+    if (user.onboardingComplete &&
+        replayingDemo &&
+        (loc == '/welcome/intro' || loc == '/welcome')) {
+      return null;
+    }
+    if ((user.isDemo || authState.guideFirstRace) && loc.startsWith('/auth/')) {
+      return '/welcome/intro';
+    }
+    if (user.onboardingComplete &&
+        (user.isDemo || authState.guideFirstRace) &&
+        loc == '/welcome') {
+      _ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.competeStart;
+      return '/compete';
+    }
     if (user.onboardingComplete) {
       if (_isAuthOrOnboarding(loc)) return '/arena';
     } else {
-      if (_isAuthPreOnboarding(loc)) return '/onboarding/create-identity';
+      if (_isAuthPreOnboarding(loc)) return '/onboarding/profile';
     }
 
     return null;

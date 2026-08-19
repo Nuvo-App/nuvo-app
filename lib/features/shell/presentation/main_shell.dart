@@ -41,7 +41,7 @@ class MainShell extends StatelessWidget {
       isDark: false,
     );
 
-    return Scaffold(
+    final shellBody = Scaffold(
       backgroundColor: NuvoColors.page,
       extendBody: !isArena,
       body: isArena
@@ -88,5 +88,7 @@ class MainShell extends StatelessWidget {
           : SafeArea(bottom: false, child: child),
       bottomNavigationBar: isArena ? null : navigation,
     );
+
+    return shellBody;
   }
 }

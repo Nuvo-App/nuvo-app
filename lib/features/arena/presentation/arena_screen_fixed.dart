@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
@@ -334,7 +335,10 @@ class _BoardCarouselItem extends StatelessWidget {
           child: Transform.scale(
             scale: 1 - distance * 0.045,
             child: Padding(
-              padding: EdgeInsets.only(right: isLast ? 0 : 12),
+              padding: EdgeInsets.only(
+                right: isLast ? 0 : 12,
+                bottom: 10,
+              ),
               child: child,
             ),
           ),
@@ -365,6 +369,7 @@ class _NextMoveHero extends StatelessWidget {
         color: _arenaSurface,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
         border: Border.all(color: NuvoColors.navy, width: 2),
+        boxShadow: AppShadows.hardLarge,
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
@@ -439,13 +444,18 @@ class _NextMoveHero extends StatelessWidget {
                     progress: pct / 100,
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    board.chaseCopy ?? board.boardContext,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: _arenaMuted,
-                      height: 1.3,
+                  // Flexible so the hero absorbs a two-line chase line, a long
+                  // title, or a larger OS text size by shrinking here instead
+                  // of overflowing the fixed hero height.
+                  Flexible(
+                    child: Text(
+                      board.chaseCopy ?? board.boardContext,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: _arenaMuted,
+                        height: 1.3,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -597,9 +607,9 @@ class _RaceProgressPainter extends CustomPainter {
     }
     final marker = Paint()
       ..color = NuvoColors.blue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    canvas.drawCircle(start, 10, marker);
+      ..style = PaintingStyle.fill;
+    final markerRadius = progress <= 0 ? 7.0 : 10.0;
+    canvas.drawCircle(start, markerRadius, marker);
     final flagPaint = Paint()..color = _arenaText;
     final flagX = finish.dx + 12;
     canvas.drawRect(
@@ -718,6 +728,8 @@ class _Standings extends StatelessWidget {
     decoration: BoxDecoration(
       color: _arenaSurface,
       borderRadius: BorderRadius.circular(NuvoRadii.hero),
+      border: Border.all(color: NuvoColors.navy, width: 2),
+      boxShadow: AppShadows.hardMedium,
     ),
     child: board.miniLeaderboard.isEmpty
         ? Padding(

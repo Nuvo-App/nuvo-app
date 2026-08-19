@@ -12,6 +12,7 @@ import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
@@ -29,6 +30,18 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  static const _demoAccountEmails = {
+    'sideswifter2010@gmai.com',
+    'sideswifter2010@gmail.com',
+  };
+
+  Future<void> _replayDemo() async {
+    ref.read(firstRaceGuideProvider.notifier).state =
+        FirstRaceGuideStep.competeStart;
+    ref.read(demoReplayProvider.notifier).state = true;
+    if (mounted) context.go('/splash');
+  }
+
   Future<void> _openUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -79,6 +92,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final initials = user?.avatarInitials ?? '?';
     final photoUrl = user?.profilePhotoUrl;
     final uid = user?.id;
+    final canReplayDemo =
+        user != null &&
+        (_demoAccountEmails.contains(user.email.trim().toLowerCase()) ||
+            user.username?.trim().toLowerCase() == 'akshay');
 
     final raceState = ref.watch(raceControllerProvider);
     final activeCount = raceState.races.where(raceIsActive).length;
@@ -214,7 +231,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: NuvoColors.panel,
                       borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                      border: NuvoBorders.divider,
+                      border: NuvoBorders.hero,
                     ),
                     child: Row(
                       children: [
@@ -249,7 +266,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: _profileBody(raceState, uid, context),
+                children: _profileBody(
+                  raceState,
+                  uid,
+                  context,
+                  canReplayDemo: canReplayDemo,
+                ),
               ),
             ),
           ),
@@ -261,8 +283,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   List<Widget> _profileBody(
     RaceState raceState,
     String? uid,
-    BuildContext context,
-  ) {
+    BuildContext context, {
+    required bool canReplayDemo,
+  }) {
     final races = raceState.races.take(6).toList();
     final activeRaces = races.where(raceIsActive).toList();
     final finishedRaces = races.where(raceIsCompleted).toList();
@@ -322,6 +345,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         label: 'Member pass',
         onTap: () => context.go('/pass'),
       ),
+      if (canReplayDemo) ...[
+        const SizedBox(height: NuvoSpacing.sm),
+        _AccountRow(
+          icon: Icons.replay_rounded,
+          label: 'Replay demo',
+          onTap: _replayDemo,
+        ),
+      ],
       const SizedBox(height: NuvoSpacing.sm),
       _AccountRow(
         icon: Icons.logout_rounded,
@@ -441,7 +472,7 @@ class _ProfileRaceGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.divider,
+        border: NuvoBorders.hero,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -542,7 +573,7 @@ class _AccountRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.card),
-          border: NuvoBorders.divider,
+          border: NuvoBorders.hero,
         ),
         child: Row(
           children: [

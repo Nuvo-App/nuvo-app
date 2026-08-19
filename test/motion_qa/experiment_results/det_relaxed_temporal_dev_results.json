@@ -206,7 +206,7 @@
       "exactMatch": false,
       "repError": 5,
       "isFalseAccept": false,
-      "processingMs": 3,
+      "processingMs": 0,
       "framesProcessed": 300,
       "failures": []
     }

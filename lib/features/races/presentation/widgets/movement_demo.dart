@@ -48,13 +48,17 @@ class NuvoMovementAnimation extends StatefulWidget {
   const NuvoMovementAnimation({
     super.key,
     required this.demo,
-    this.bodyColor = const Color(0xFF07152D),
-    this.accentColor = const Color(0xFF1264FF),
+    this.bodyColor = const Color(0xFFEF4444),
+    this.accentColor = Colors.white,
+    this.outlineColor = Colors.white,
+    this.outlineWidth = 3.5,
   });
 
   final MovementDemo demo;
   final Color bodyColor;
   final Color accentColor;
+  final Color outlineColor;
+  final double outlineWidth;
 
   @override
   State<NuvoMovementAnimation> createState() => _NuvoMovementAnimationState();
@@ -98,6 +102,8 @@ class _NuvoMovementAnimationState extends State<NuvoMovementAnimation>
             pose: pose,
             bodyColor: widget.bodyColor,
             accentColor: widget.accentColor,
+            outlineColor: widget.outlineColor,
+            outlineWidth: widget.outlineWidth,
           ),
           child: const SizedBox.expand(),
         );

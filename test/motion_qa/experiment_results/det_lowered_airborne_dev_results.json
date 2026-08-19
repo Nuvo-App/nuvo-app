@@ -27,7 +27,7 @@
     "falseAcceptClipRate": "0.2222",
     "falseAcceptRate": "0.2222",
     "productScore": "0.1533",
-    "avgProcessingMs": 0,
+    "avgProcessingMs": 1,
     "confuserFalseAccepts": {
       "jumping_jacks": 1,
       "squat_jacks": 1
@@ -52,7 +52,7 @@
       "exactMatch": false,
       "repError": 3,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 6,
       "framesProcessed": 300,
       "failures": []
     },
@@ -66,7 +66,7 @@
       "exactMatch": false,
       "repError": 1,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 1,
       "framesProcessed": 296,
       "failures": []
     },
@@ -80,7 +80,7 @@
       "exactMatch": false,
       "repError": 9,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 1,
       "framesProcessed": 300,
       "failures": []
     },
@@ -108,7 +108,7 @@
       "exactMatch": false,
       "repError": 3,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 1,
       "framesProcessed": 300,
       "failures": []
     },
@@ -122,7 +122,7 @@
       "exactMatch": false,
       "repError": 5,
       "isFalseAccept": false,
-      "processingMs": 1,
+      "processingMs": 0,
       "framesProcessed": 300,
       "failures": []
     },
@@ -178,7 +178,7 @@
       "exactMatch": false,
       "repError": 4,
       "isFalseAccept": true,
-      "processingMs": 0,
+      "processingMs": 3,
       "framesProcessed": 300,
       "failures": []
     },
@@ -206,7 +206,7 @@
       "exactMatch": false,
       "repError": 5,
       "isFalseAccept": false,
-      "processingMs": 0,
+      "processingMs": 1,
       "framesProcessed": 300,
       "failures": []
     }

@@ -1,0 +1,122 @@
+{
+  "temporal": {
+    "family": "temporal",
+    "experimentsAttempted": 316,
+    "bestF1": 0.6000000000000001,
+    "startingBestF1": 0.6000000000000001,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.512511",
+    "plateauedAtCount": 316,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.6000, Recent best: 0.6000, Improvement: 0.0000",
+    "totalRuntimeMs": 8837.0,
+    "consecutiveFailures": 0
+  },
+  "camera": {
+    "family": "camera",
+    "experimentsAttempted": 269,
+    "bestF1": 0.43478260869565216,
+    "startingBestF1": 0.43478260869565216,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.512715",
+    "plateauedAtCount": 269,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4348, Recent best: 0.4348, Improvement: 0.0000",
+    "totalRuntimeMs": 8419.0,
+    "consecutiveFailures": 0
+  },
+  "signal_quality": {
+    "family": "signal_quality",
+    "experimentsAttempted": 215,
+    "bestF1": 0.43478260869565216,
+    "startingBestF1": 0.43478260869565216,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.512853",
+    "plateauedAtCount": 215,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4348, Recent best: 0.4348, Improvement: 0.0000",
+    "totalRuntimeMs": 7745.0,
+    "consecutiveFailures": 0
+  },
+  "geometric": {
+    "family": "geometric",
+    "experimentsAttempted": 239,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.5294117647058824,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.512981",
+    "plateauedAtCount": 239,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.5294, Recent best: 0.5294, Improvement: 0.0000",
+    "totalRuntimeMs": 7592.0,
+    "consecutiveFailures": 0
+  },
+  "confuser_specialist": {
+    "family": "confuser_specialist",
+    "experimentsAttempted": 201,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.5294117647058824,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.513110",
+    "plateauedAtCount": 201,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.5294, Recent best: 0.5294, Improvement: 0.0000",
+    "totalRuntimeMs": 7152.0,
+    "consecutiveFailures": 0
+  },
+  "mlp": {
+    "family": "mlp",
+    "experimentsAttempted": 209,
+    "bestF1": 0.4864864864864864,
+    "startingBestF1": 0.4864864864864864,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.513267",
+    "plateauedAtCount": 209,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4865, Recent best: 0.4865, Improvement: 0.0000",
+    "totalRuntimeMs": 5072.0,
+    "consecutiveFailures": 0
+  },
+  "conv1d": {
+    "family": "conv1d",
+    "experimentsAttempted": 206,
+    "bestF1": 0.4864864864864864,
+    "startingBestF1": 0.4864864864864864,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.513780",
+    "plateauedAtCount": 206,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4865, Recent best: 0.4865, Improvement: 0.0000",
+    "totalRuntimeMs": 4891.0,
+    "consecutiveFailures": 0
+  },
+  "gru": {
+    "family": "gru",
+    "experimentsAttempted": 210,
+    "bestF1": 0.4864864864864864,
+    "startingBestF1": 0.4864864864864864,
+    "plateaued": true,
+    "plateauedAt": "2026-08-19T00:55:13.514368",
+    "plateauedAtCount": 210,
+    "plateauReason": "No improvement > 0.005 in last 200 experiments. Earlier best: 0.4865, Recent best: 0.4865, Improvement: 0.0000",
+    "totalRuntimeMs": 4978.0,
+    "consecutiveFailures": 0
+  },
+  "hybrid": {
+    "family": "hybrid",
+    "experimentsAttempted": 202,
+    "bestF1": 0.5294117647058824,
+    "startingBestF1": 0.5294117647058824,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 7053.0,
+    "consecutiveFailures": 0
+  },
+  "ensemble": {
+    "family": "ensemble",
+    "experimentsAttempted": 275,
+    "bestF1": 0.5714285714285715,
+    "startingBestF1": 0.5714285714285715,
+    "plateaued": false,
+    "plateauedAt": null,
+    "plateauedAtCount": null,
+    "plateauReason": null,
+    "totalRuntimeMs": 8375.0,
+    "consecutiveFailures": 0
+  }
+}
