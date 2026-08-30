@@ -88,7 +88,7 @@ class _Place extends StatelessWidget {
   final bool raised;
 
   Color get _placeColor => switch (place) {
-    1 => NuvoColors.blue,
+    1 => NuvoColors.gold,
     2 => NuvoColors.silver,
     _ => NuvoColors.bronze,
   };
@@ -115,8 +115,10 @@ class _Place extends StatelessWidget {
                 size: avatarSize,
                 bgColor: nuvoAvatarColorFor(e.avatarSeedId ?? e.name),
                 textColor: NuvoColors.white,
-                borderColor: me ? NuvoColors.blue : NuvoColors.navy,
-                borderWidth: me ? 3 : 2,
+                borderColor: me
+                    ? NuvoColors.blue
+                    : (place <= 3 ? _placeColor : NuvoColors.navy),
+                borderWidth: me || place == 1 ? 3 : 2,
               ),
               Positioned(
                 top: -8 * s,
@@ -164,7 +166,9 @@ class _Place extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: AppTextStyles.raceRowMeta.copyWith(
-            color: me ? NuvoColors.blue : NuvoColors.muted,
+            color: me
+                ? NuvoColors.blue
+                : (place <= 3 ? _placeColor : NuvoColors.muted),
             fontWeight: FontWeight.w800,
             fontSize: 12 * s,
           ),

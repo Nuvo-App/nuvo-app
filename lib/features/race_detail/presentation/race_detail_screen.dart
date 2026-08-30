@@ -720,6 +720,9 @@ class _YourProgressCard extends StatelessWidget {
         : (leaderGap ?? 0) > 0
         ? '$leaderGap $unit behind the leader'
         : chaseCopy;
+    final done = remaining <= 0;
+    // Green while you hold the lead or have crossed the line, blue otherwise.
+    final accent = (isLeading || done) ? NuvoColors.success : NuvoColors.blue;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -733,7 +736,7 @@ class _YourProgressCard extends StatelessWidget {
         children: [
           Text(
             'YOUR PROGRESS',
-            style: AppTextStyles.eyebrow.copyWith(color: NuvoColors.blue),
+            style: AppTextStyles.eyebrow.copyWith(color: accent),
           ),
           const SizedBox(height: 8),
           Row(
@@ -744,7 +747,7 @@ class _YourProgressCard extends StatelessWidget {
                 '$progressValue / $targetValue $unit',
                 style: AppTextStyles.statLarge(
                   context.rs(30),
-                  color: NuvoColors.blue,
+                  color: accent,
                 ),
               ),
               const Spacer(),
@@ -752,7 +755,7 @@ class _YourProgressCard extends StatelessWidget {
                 rankLabel,
                 style: AppTextStyles.statLarge(
                   context.rs(26),
-                  color: NuvoColors.navy,
+                  color: isLeading ? NuvoColors.gold : NuvoColors.navy,
                 ),
               ),
             ],
@@ -763,7 +766,7 @@ class _YourProgressCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: pct,
               minHeight: 8,
-              color: NuvoColors.blue,
+              color: accent,
               backgroundColor: NuvoColors.trackBg,
             ),
           ),
@@ -1066,13 +1069,7 @@ class _LeaderboardGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.navy, width: 2),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return _OutlinedSheet(
       child: Column(
         children: [
           for (var i = 0; i < participants.length; i++) ...[
@@ -1093,6 +1090,31 @@ class _LeaderboardGroup extends StatelessWidget {
               ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Outlined white container whose child is clipped *inside* the 2 px ink edge,
+/// so the border corners stay crisp. A plain `Container(border: …,
+/// clipBehavior: Clip.antiAlias)` clips the outer half of the border at each
+/// corner, which reads as "clipped corners".
+class _OutlinedSheet extends StatelessWidget {
+  const _OutlinedSheet({required this.child, this.radius = NuvoRadii.lg});
+  final Widget child;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius - 2),
+        child: child,
       ),
     );
   }
@@ -1177,12 +1199,7 @@ class _FinalStandingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return _OutlinedSheet(
       child: Column(
         children: [
           for (var i = 0; i < standings.length; i++) ...[
@@ -1191,6 +1208,14 @@ class _FinalStandingsGroup extends StatelessWidget {
               isCurrentUser: standings[i].userId == userId,
               race: race,
             ),
+            if (i < standings.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: NuvoColors.divider,
+                indent: 16,
+                endIndent: 16,
+              ),
           ],
         ],
       ),
@@ -1213,13 +1238,8 @@ class _MoveLogGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: Border.all(color: NuvoColors.navy, width: 2),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return _OutlinedSheet(
+      radius: NuvoRadii.card,
       child: Column(
         children: [
           for (var i = 0; i < proofs.length; i++) ...[

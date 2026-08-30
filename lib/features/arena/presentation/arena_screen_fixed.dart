@@ -10,6 +10,7 @@ import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_podium.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
@@ -733,46 +734,88 @@ class _Standings extends StatelessWidget {
   final String initials;
   final String? photoUrl;
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: _arenaSurface,
-      borderRadius: BorderRadius.circular(NuvoRadii.lg),
-      border: Border.all(color: NuvoColors.navy, width: 2),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: board.miniLeaderboard.isEmpty
-        ? Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            child: Text(
-              'Your crew will appear here as they join the start line.',
-              style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
-            ),
-          )
-        : Column(
-            children: [
-              for (var i = 0; i < board.miniLeaderboard.length; i++) ...[
-                _StandingRow(
-                  row: board.miniLeaderboard[i],
-                  rank: i + 1,
-                  initials: board.miniLeaderboard[i].isCurrentUser
-                      ? initials
-                      : null,
-                  photoUrl: board.miniLeaderboard[i].isCurrentUser
-                      ? photoUrl
-                      : null,
-                ),
-                if (i < board.miniLeaderboard.length - 1)
-                  const Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: NuvoColors.divider,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-              ],
-            ],
+  Widget build(BuildContext context) {
+    final rows = board.miniLeaderboard;
+    if (rows.isEmpty) {
+      return _OutlinedSheet(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          child: Text(
+            'Your crew will appear here as they join the start line.',
+            style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
           ),
-  );
+        ),
+      );
+    }
+
+    final rest = rows.length > 3 ? rows.sublist(3) : const <ArenaMiniLeaderboardRow>[];
+
+    // Same NuvoPodium as the race page, so tapping "See race board" lands on a
+    // screen that reads the same.
+    return NuvoPodium(
+      top: [
+        for (var i = 0; i < rows.length && i < 3; i++)
+          NuvoPodiumEntry(
+            rank: i + 1,
+            name: rows[i].label,
+            statLabel: rows[i].value,
+            photoUrl: rows[i].isCurrentUser
+                ? photoUrl
+                : rows[i].profilePhotoUrl,
+            initials: rows[i].isCurrentUser ? initials : null,
+            avatarSeedId: rows[i].label,
+            isCurrentUser: rows[i].isCurrentUser,
+          ),
+      ],
+      rest: rest.isEmpty
+          ? null
+          : _OutlinedSheet(
+              child: Column(
+                children: [
+                  for (var i = 0; i < rest.length; i++) ...[
+                    _StandingRow(
+                      row: rest[i],
+                      rank: i + 4,
+                      initials: rest[i].isCurrentUser ? initials : null,
+                      photoUrl: rest[i].isCurrentUser ? photoUrl : null,
+                    ),
+                    if (i < rest.length - 1)
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: NuvoColors.divider,
+                        indent: 16,
+                        endIndent: 16,
+                      ),
+                  ],
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+/// Outlined container whose child is clipped *inside* the 2 px ink edge, so the
+/// border corners stay crisp (a plain `Container(border, clipBehavior)` clips
+/// the outer half of the border at each corner).
+class _OutlinedSheet extends StatelessWidget {
+  const _OutlinedSheet({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _arenaSurface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(NuvoRadii.lg - 2),
+        child: child,
+      ),
+    );
+  }
 }
 
 class _StandingRow extends StatelessWidget {

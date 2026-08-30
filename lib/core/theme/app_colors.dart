@@ -143,21 +143,33 @@ final class NuvoColors {
   static const Color blueBorder = Color(0xFFA9C8FF);
   static const Color blueOn = navy;
 
-  static const Color gold = Color(0xFFC49A52);
+  // Podium colours — richer and more distinct from each other than the old
+  // three muted browns.
+  static const Color gold = Color(0xFFE0A72E);
   static const Color brightGold = Color(0xFFFACC15);
-  static const Color silver = Color(0xFFA8A29A);
-  static const Color bronze = Color(0xFFA97752);
+  static const Color silver = Color(0xFF95A0B3);
+  static const Color bronze = Color(0xFFB2703C);
 
-  // ── Avatar colors — flat, muted, never gradients ─────────────────────────────
-  static const Color avatarTerracotta = Color(0xFFBE7B54);
-  static const Color avatarOchre = Color(0xFFC79A44);
-  static const Color avatarDustyBlue = Color(0xFF5E82A8);
-  static const Color avatarSage = Color(0xFF6E8F6C);
+  // ── Avatar colors — flat, saturated-but-not-neon, never gradients ────────────
+  // A wide, evenly-spread hue set so a crew of avatars reads as varied and
+  // lively rather than four muted browns. Deterministically assigned by id.
+  static const Color avatarTerracotta = Color(0xFFC96F4C);
+  static const Color avatarOchre = Color(0xFFCE9B33);
+  static const Color avatarDustyBlue = Color(0xFF4E7CB5);
+  static const Color avatarSage = Color(0xFF5E9E6B);
+  static const Color avatarPlum = Color(0xFF8A5CB0);
+  static const Color avatarTeal = Color(0xFF2FA3A3);
+  static const Color avatarCoral = Color(0xFFDA5D6E);
+  static const Color avatarIndigo = Color(0xFF5B63C4);
   static const List<Color> avatarPalette = [
-    avatarTerracotta,
-    avatarOchre,
     avatarDustyBlue,
+    avatarTerracotta,
     avatarSage,
+    avatarPlum,
+    avatarOchre,
+    avatarTeal,
+    avatarCoral,
+    avatarIndigo,
   ];
 
   // ── Race-state semantic aliases ───────────────────────────────────────────────
