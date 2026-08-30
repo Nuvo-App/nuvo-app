@@ -49,3 +49,7 @@ app.*.map.json
 android/key.properties
 *.jks
 *.keystore
+
+# Motion-QA experiment output — generated, huge, never commit
+test/motion_qa/lab/
+test/motion_qa/experiment_results/
