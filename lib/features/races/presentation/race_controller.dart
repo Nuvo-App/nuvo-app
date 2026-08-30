@@ -5,6 +5,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../data/ai_motion_models.dart';
+import '../data/motion_analysis_contract.dart';
 import '../data/race_api.dart';
 import '../data/race_models.dart';
 import '../data/race_repository.dart';
@@ -28,6 +29,19 @@ class RaceController extends StateNotifier<RaceState> {
   RaceController(this._repo) : super(const RaceState());
 
   final RaceRepository _repo;
+
+  Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
+      _repo.analyzeMotion(request);
+
+  Future<void> submitMotionTrainingExample({
+    required MotionAnalysisRequest request,
+    required String consentVersion,
+    String? label,
+  }) => _repo.submitMotionTrainingExample(
+    request: request,
+    consentVersion: consentVersion,
+    label: label,
+  );
   static const _cacheLifetime = Duration(minutes: 5);
   Future<void>? _loadInFlight;
   DateTime? _racesLoadedAt;

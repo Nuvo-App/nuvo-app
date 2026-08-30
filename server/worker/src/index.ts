@@ -6,6 +6,7 @@ import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
 import { arenaRouter } from './routes/arena';
+import { motionRouter } from './routes/motion';
 import { usersRouter } from './routes/users';
 import { crewRouter } from './routes/crew';
 import { reportsRouter } from './routes/reports';
@@ -67,6 +68,9 @@ app.route('/races', racesRouter);
 
 // ── Arena snapshot route ──────────────────────────────────────────────────────
 app.route('/arena', arenaRouter);
+
+// ── Motion analysis and training-data routes ────────────────────────────────
+app.route('/motion', motionRouter);
 
 // ── Onboarding complete ───────────────────────────────────────────────────────
 app.post('/onboarding/complete', requireAuth, async (c) => {

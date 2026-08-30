@@ -3,6 +3,7 @@ import '../../auth/data/secure_token_store.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
+import 'motion_analysis_contract.dart';
 import 'race_api.dart';
 import 'race_models.dart';
 
@@ -12,6 +13,22 @@ class RaceRepository {
   final RaceApi _api;
   final SecureTokenStore _store;
   final AuthApi _authApi;
+
+  Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
+      _withRefresh((token) => _api.analyzeMotion(token, request: request));
+
+  Future<void> submitMotionTrainingExample({
+    required MotionAnalysisRequest request,
+    required String consentVersion,
+    String? label,
+  }) => _withRefresh(
+    (token) => _api.submitMotionTrainingExample(
+      token,
+      request: request,
+      consentVersion: consentVersion,
+      label: label,
+    ),
+  );
 
   Future<T> _withRefresh<T>(Future<T> Function(String token) call) async {
     final token = await _store.getAccessToken();

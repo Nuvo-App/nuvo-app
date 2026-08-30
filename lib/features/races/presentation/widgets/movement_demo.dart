@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/theme/app_colors.dart';
 import 'nuvo_character_painter.dart';
 
 /// Movement-specific key-pose data for the pre-verification character demo.
@@ -48,10 +49,10 @@ class NuvoMovementAnimation extends StatefulWidget {
   const NuvoMovementAnimation({
     super.key,
     required this.demo,
-    this.bodyColor = const Color(0xFFEF4444),
-    this.accentColor = Colors.white,
-    this.outlineColor = Colors.white,
-    this.outlineWidth = 3.5,
+    this.bodyColor = NuvoColors.navy,
+    this.accentColor = NuvoColors.blue,
+    this.outlineColor = Colors.transparent,
+    this.outlineWidth = 0,
   });
 
   final MovementDemo demo;
@@ -97,15 +98,19 @@ class _NuvoMovementAnimationState extends State<NuvoMovementAnimation>
       animation: _controller,
       builder: (context, _) {
         final pose = widget.demo.poseAt(_controller.value);
-        return CustomPaint(
-          painter: NuvoCharacterPainter(
-            pose: pose,
-            bodyColor: widget.bodyColor,
-            accentColor: widget.accentColor,
-            outlineColor: widget.outlineColor,
-            outlineWidth: widget.outlineWidth,
+        final inset = math.max(8.0, widget.outlineWidth + 4.0);
+        return Padding(
+          padding: EdgeInsets.all(inset),
+          child: CustomPaint(
+            painter: NuvoCharacterPainter(
+              pose: pose,
+              bodyColor: widget.bodyColor,
+              accentColor: widget.accentColor,
+              outlineColor: widget.outlineColor,
+              outlineWidth: widget.outlineWidth,
+            ),
+            child: const SizedBox.expand(),
           ),
-          child: const SizedBox.expand(),
         );
       },
     );

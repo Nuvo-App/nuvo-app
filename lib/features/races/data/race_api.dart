@@ -5,6 +5,7 @@ import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
+import 'motion_analysis_contract.dart';
 import 'race_models.dart';
 
 const _kApiBase = String.fromEnvironment(
@@ -16,6 +17,29 @@ class RaceApi {
   RaceApi({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
+
+  Future<MotionAnalysisResult> analyzeMotion(
+    String token, {
+    required MotionAnalysisRequest request,
+  }) async {
+    final json = await _post('/motion/analyze', token, request.toJson());
+    return MotionAnalysisResult.fromJson(
+      json['result'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> submitMotionTrainingExample(
+    String token, {
+    required MotionAnalysisRequest request,
+    required String consentVersion,
+    String? label,
+  }) async {
+    final body = request.toJson()
+      ..['consentVersion'] = consentVersion
+      ..['frames'] = request.frames.map((frame) => frame.toJson()).toList();
+    if (label != null) body['label'] = label;
+    await _post('/motion/training/examples', token, body);
+  }
 
   Map<String, String> _headers(String token) => {
     'Content-Type': 'application/json',

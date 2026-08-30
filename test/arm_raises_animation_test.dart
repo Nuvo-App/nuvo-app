@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/core/theme/app_colors.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/presentation/widgets/arm_raises_animation.dart';
 import 'package:nuvo/features/races/presentation/widgets/movement_demo.dart';
@@ -231,6 +232,34 @@ void main() {
   });
 
   group('NuvoMovementAnimation for all preset demos', () {
+    testWidgets('uses Nuvo colors and keeps the character inside an inset', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 200,
+              height: 300,
+              child: NuvoMovementAnimation(demo: armRaisesDemo),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final painter =
+          tester.widget<CustomPaint>(find.byType(CustomPaint).last).painter
+              as NuvoCharacterPainter;
+      expect(painter.bodyColor, NuvoColors.navy);
+      expect(painter.accentColor, NuvoColors.blue);
+      expect(find.byType(Padding), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byType(CustomPaint).last).dy,
+        greaterThan(0),
+      );
+    });
+
     for (final definition in motionActivityDefinitions) {
       final demo = movementDemoForType(definition.type);
       final isPlank = definition.type.name == 'plankHold';
