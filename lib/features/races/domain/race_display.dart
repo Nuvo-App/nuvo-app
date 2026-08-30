@@ -94,25 +94,30 @@ List<RaceParticipant> serverRankedParticipants(Race race) {
   return participants;
 }
 
-int? rankForUser(Race race, String? userId) {
+/// 1-based position in the standings order. Ties are broken deterministically
+/// inside [serverRankedParticipants] (server rank, then progress, then join
+/// time), so **every racer gets a distinct number** — no shared "2nd, 2nd".
+/// Use this for all leaderboard display on active races.
+int? positionalRank(Race race, String? userId) {
   if (userId == null) return null;
-  for (final standing in race.finalStandings) {
-    if (standing.userId == userId) return standing.rank;
-  }
-  final participant = race.participantFor(userId);
-  if (participant?.rank != null) return participant!.rank;
   final ranked = serverRankedParticipants(race);
   final index = ranked.indexWhere((p) => p.userId == userId);
   return index == -1 ? null : index + 1;
 }
 
+int? rankForUser(Race race, String? userId) {
+  if (userId == null) return null;
+  // Completed races: the server's final standings are authoritative.
+  for (final standing in race.finalStandings) {
+    if (standing.userId == userId) return standing.rank;
+  }
+  // Active races: distinct positional rank, never a tie.
+  return positionalRank(race, userId);
+}
+
 String raceRankLabel(Race race, String? userId) {
   final rank = rankForUser(race, userId);
-  if (rank == null) return '--';
-  final tied =
-      race.participants.where((p) => p.rank == rank).length > 1 ||
-      race.finalStandings.where((p) => p.rank == rank).length > 1;
-  return tied ? 'Tied #$rank' : '#$rank';
+  return rank == null ? '--' : '#$rank';
 }
 
 String raceStatusLabel(Race race) {

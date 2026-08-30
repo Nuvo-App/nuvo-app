@@ -734,16 +734,15 @@ class _Standings extends StatelessWidget {
   final String? photoUrl;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
     decoration: BoxDecoration(
       color: _arenaSurface,
-      borderRadius: BorderRadius.circular(NuvoRadii.hero),
+      borderRadius: BorderRadius.circular(NuvoRadii.lg),
       border: Border.all(color: NuvoColors.navy, width: 2),
-      boxShadow: AppShadows.hardMedium,
     ),
+    clipBehavior: Clip.antiAlias,
     child: board.miniLeaderboard.isEmpty
         ? Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
             child: Text(
               'Your crew will appear here as they join the start line.',
               style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
@@ -751,7 +750,7 @@ class _Standings extends StatelessWidget {
           )
         : Column(
             children: [
-              for (var i = 0; i < board.miniLeaderboard.length; i++)
+              for (var i = 0; i < board.miniLeaderboard.length; i++) ...[
                 _StandingRow(
                   row: board.miniLeaderboard[i],
                   rank: i + 1,
@@ -762,6 +761,15 @@ class _Standings extends StatelessWidget {
                       ? photoUrl
                       : null,
                 ),
+                if (i < board.miniLeaderboard.length - 1)
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: NuvoColors.divider,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+              ],
             ],
           ),
   );
@@ -780,34 +788,10 @@ class _StandingRow extends StatelessWidget {
   final String? photoUrl;
   @override
   Widget build(BuildContext context) {
-    final rankColor = switch (rank) {
-      1 => NuvoColors.gold,
-      2 => NuvoColors.silver,
-      3 => NuvoColors.bronze,
-      _ => row.isCurrentUser ? _arenaBlue : _arenaLine,
-    };
-    final isTopThree = rank <= 3;
-    final isCurrentUser = row.isCurrentUser;
-    final selectedFill = isCurrentUser
-        ? (isTopThree ? rankColor : _arenaBlue)
-        : null;
-    final outlineColor = isTopThree
-        ? rankColor
-        : isCurrentUser
-        ? _arenaBlue
-        : null;
-    final textColor = isTopThree ? rankColor : _arenaMuted;
-
+    final me = row.isCurrentUser;
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: selectedFill,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: outlineColor != null
-            ? Border.all(color: outlineColor, width: 2)
-            : null,
-      ),
+      color: me ? NuvoColors.blueSurface : null,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
           SizedBox(
@@ -815,43 +799,38 @@ class _StandingRow extends StatelessWidget {
             child: Text(
               '$rank',
               style: AppTextStyles.labelMedium.copyWith(
-                color: selectedFill != null ? NuvoColors.white : textColor,
+                color: _arenaMuted,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
+          const SizedBox(width: 4),
           NuvoAvatar(
             initials: initials ?? _initials(row.label),
             photoUrl: photoUrl ?? row.profilePhotoUrl,
             size: 34,
             bgColor: _arenaSurfaceRaised,
-            textColor: selectedFill != null ? NuvoColors.white : _arenaText,
-            borderColor: selectedFill != null
-                ? NuvoColors.white
-                : (outlineColor ?? _arenaLine),
-            borderWidth: outlineColor != null ? 2 : 1,
+            textColor: _arenaText,
+            borderColor: me ? _arenaBlue : NuvoColors.navy,
+            borderWidth: me ? 2 : 1.5,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              row.label,
+              me ? 'You' : row.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: selectedFill != null
-                    ? NuvoColors.white
-                    : (row.isCurrentUser ? _arenaText : _arenaMuted),
-                fontWeight: row.isCurrentUser
-                    ? FontWeight.w700
-                    : FontWeight.w500,
+              style: AppTextStyles.titleMedium.copyWith(
+                fontSize: 15,
+                color: _arenaText,
               ),
             ),
           ),
           Text(
             row.value,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: selectedFill != null ? NuvoColors.white : textColor,
-              fontWeight: FontWeight.w700,
+            style: AppTextStyles.raceRowMeta.copyWith(
+              color: me ? _arenaBlue : _arenaMuted,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],

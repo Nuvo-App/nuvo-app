@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
 
@@ -51,27 +50,23 @@ class NuvoMoveLogItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final timeLabel = _timeAgo(createdAt);
 
-    return GestureDetector(
+    // Flat row — the containing list provides the single surface. No border,
+    // no shadow, no margin: shadows mean "tappable surface", and a log entry
+    // is content.
+    return InkWell(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.inkNavy, width: 2),
-          boxShadow: AppShadows.hardShadow3,
-        ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
             NuvoAvatar(
               initials: _initials,
               photoUrl: profilePhotoUrl,
-              size: NuvoAvatarSizes.lg,
-              borderColor: NuvoColors.white,
-              borderWidth: 2,
+              size: 36,
+              borderColor: NuvoColors.navy,
+              borderWidth: 1.5,
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,20 +91,11 @@ class NuvoMoveLogItem extends StatelessWidget {
             ),
             if (valueLabel != null) ...[
               const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isPositive
-                      ? NuvoColors.success.withValues(alpha: 0.10)
-                      : NuvoColors.danger.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  valueLabel!,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: isPositive ? NuvoColors.success : NuvoColors.danger,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Text(
+                valueLabel!,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: isPositive ? NuvoColors.successOn : NuvoColors.dangerOn,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],

@@ -175,7 +175,7 @@ void main() {
   });
 
   group('Rank rendering', () {
-    test('uses backend ranks before local score sorting', () {
+    test('active ranks are distinct positional — never a shared "2, 2"', () {
       final race = makeRace(
         status: 'active',
         participants: [
@@ -185,13 +185,18 @@ void main() {
         ],
       );
 
-      expect(rankForUser(race, 'user-c'), 2);
+      // Server sent user-a and user-c both at rank 2; the UI shows one above
+      // the other (deterministic tiebreak: progress, then join time).
       expect(serverRankedParticipants(race).map((p) => p.userId), [
         'user-b',
         'user-a',
         'user-c',
       ]);
-      expect(raceRankLabel(race, 'user-a'), 'Tied #2');
+      expect(rankForUser(race, 'user-b'), 1);
+      expect(rankForUser(race, 'user-a'), 2);
+      expect(rankForUser(race, 'user-c'), 3);
+      expect(raceRankLabel(race, 'user-a'), '#2');
+      expect(raceRankLabel(race, 'user-c'), '#3');
     });
 
     test(
@@ -213,7 +218,7 @@ void main() {
       },
     );
 
-    test('raceRankLabel shows Tied prefix for tied participants', () {
+    test('equal scores get distinct ranks, not a shared "Tied #1"', () {
       final race = makeRace(
         status: 'active',
         participants: [
@@ -221,7 +226,11 @@ void main() {
           participant(userId: 'user-b', score: 10, percent: 67, rank: 1),
         ],
       );
-      expect(raceRankLabel(race, 'user-a'), 'Tied #1');
+      final labels = {
+        raceRankLabel(race, 'user-a'),
+        raceRankLabel(race, 'user-b'),
+      };
+      expect(labels, {'#1', '#2'});
     });
 
     test('single participant at rank 1 has no tied prefix', () {
