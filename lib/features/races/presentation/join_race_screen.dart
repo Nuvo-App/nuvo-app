@@ -45,7 +45,8 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
       final race = await ref
           .read(raceControllerProvider.notifier)
           .joinRaceByCode(code);
-      if (mounted) context.push('/race/${race.id}');
+      // Replace the join flow — you're in the race now.
+      if (mounted) context.go('/race/${race.id}');
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {

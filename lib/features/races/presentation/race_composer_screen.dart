@@ -91,8 +91,9 @@ Future<Race> createRaceForComposerDraft({
     proofRequirement: payload['proofRequirement'] as String,
     proofReviewMode: payload['proofReviewMode'] as String,
     visibility: payload['visibility'] as String,
-    aiActivityType: payload['aiActivityType'] as String,
-    activityId: payload['activityId'] as String,
+    // Absent for manual goals — no camera activity is involved.
+    aiActivityType: payload['aiActivityType'] as String?,
+    activityId: payload['activityId'] as String?,
     metric: payload['metric'] as String,
     format: payload['format'] as String,
     recurrence: payload['recurrence'] as String,
@@ -246,7 +247,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       }
     } else if (!draft.isValidToCreate) {
       setState(() {
-        _error = 'Choose a supported activity.';
+        _error = draft.isManual
+            ? 'Name the goal and how it is measured.'
+            : 'Choose a supported activity.';
         _lastApiError = null;
       });
       return;
@@ -272,10 +275,12 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         ref.read(firstRaceGuideProvider.notifier).state =
             FirstRaceGuideStep.raceDetail;
       }
+      // Replace the composer stack — the race now exists, so back should not
+      // return to the (stale) draft flow. Matches create_race_screen.
       if (wantsInvite) {
-        context.push('/race/${race.id}/invite');
+        context.go('/race/${race.id}/invite');
       } else {
-        context.push('/race/${race.id}');
+        context.go('/race/${race.id}');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -559,7 +564,6 @@ class _ProgressLine extends StatelessWidget {
 
 class _PageShell extends StatelessWidget {
   const _PageShell({
-    super.key,
     required this.question,
     required this.support,
     required this.body,
@@ -825,18 +829,40 @@ class _ActivityPage extends ConsumerStatefulWidget {
 
 class _ActivityPageState extends ConsumerState<_ActivityPage> {
   final _searchController = TextEditingController();
+  final _manualNameController = TextEditingController();
+  final _manualUnitController = TextEditingController();
   String _searchQuery = '';
   MovementCategory? _selectedCategory; // null = All
 
   @override
   void initState() {
     super.initState();
+    _manualNameController.text = widget.draft.manualGoalName ?? '';
+    _manualUnitController.text = widget.draft.manualUnit ?? '';
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _manualNameController.dispose();
+    _manualUnitController.dispose();
     super.dispose();
+  }
+
+  void _setKind(RaceGoalKind kind) {
+    if (widget.draft.goalKind == kind) return;
+    widget.onDraftChanged(widget.draft.copyWith(goalKind: kind));
+    setState(() {});
+  }
+
+  void _syncManual() {
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        goalKind: RaceGoalKind.manual,
+        manualGoalName: _manualNameController.text.trim(),
+        manualUnit: _manualUnitController.text.trim(),
+      ),
+    );
   }
 
   void _select(MotionActivityDefinition activity) {
@@ -858,65 +884,192 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isManual = widget.draft.goalKind == RaceGoalKind.manual;
     return _PageShell(
       question: 'What are you competing in?',
-      support: 'Pick a movement for your crew.',
+      support: isManual
+          ? 'Name the goal and how it is measured.'
+          : 'Pick a movement for your crew.',
       ctaLabel: 'Set the finish line',
-      onCta: widget.onNext,
+      onCta: () {
+        if (isManual) _syncManual();
+        widget.onNext();
+      },
       body: KeyedSubtree(
         key: FirstRaceGuideKeys.composerActivity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Search bar ───────────────────────────────────────────────────
-            _SearchBar(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _searchQuery = value),
-            ),
+            _GoalKindToggle(kind: widget.draft.goalKind, onChanged: _setKind),
             const SizedBox(height: 16),
-
-            // ── Search results OR browse ────────────────────────────────────
-            if (_searchQuery.isNotEmpty)
-              _SearchResults(
-                query: _searchQuery,
-                selectedType: widget.draft.activity.type,
-                onSelect: _select,
-              )
-            else ...[
-              _CategoryTabs(
-                categories: activeCategories,
-                selected: _selectedCategory,
-                onSelect: (cat) => setState(() => _selectedCategory = cat),
+            if (isManual) ...[
+              _ComposerField(
+                controller: _manualNameController,
+                label: 'Goal',
+                hint: 'e.g. Read, Meditate, Cold plunge',
+                onChanged: (_) => _syncManual(),
               ),
-              const SizedBox(height: 14),
-              _ActivityGrid(
-                activities: _selectedCategory == null
-                    ? motionActivityDefinitions
-                    : activitiesByCategory(_selectedCategory!),
-                selectedType: widget.draft.activity.type,
-                onSelect: _select,
+              const SizedBox(height: 12),
+              _ComposerField(
+                controller: _manualUnitController,
+                label: 'Measured in',
+                hint: 'e.g. pages, minutes, days',
+                onChanged: (_) => _syncManual(),
               ),
-            ],
-
-            // ── Teach a movement (demoted: text link, not a competing button) ─
-            const SizedBox(height: 16),
-            Center(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => context.push('/internal/teach-movement'),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Text(
-                    'Teach a movement',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(height: 12),
+              Text(
+                'Racers log their own progress. Nuvo keeps the leaderboard; '
+                'your crew keeps each other honest.',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
+            ] else ...[
+              _SearchBar(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+              const SizedBox(height: 16),
+              if (_searchQuery.isNotEmpty)
+                _SearchResults(
+                  query: _searchQuery,
+                  selectedType: widget.draft.activity.type,
+                  onSelect: _select,
+                )
+              else ...[
+                _CategoryTabs(
+                  categories: activeCategories,
+                  selected: _selectedCategory,
+                  onSelect: (cat) => setState(() => _selectedCategory = cat),
+                ),
+                const SizedBox(height: 14),
+                _ActivityGrid(
+                  activities: _selectedCategory == null
+                      ? motionActivityDefinitions
+                      : activitiesByCategory(_selectedCategory!),
+                  selectedType: widget.draft.activity.type,
+                  onSelect: _select,
+                ),
+              ],
+              const SizedBox(height: 16),
+              Center(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => context.push('/internal/teach-movement'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Text(
+                      'Teach a movement',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Movement (camera) vs custom manual goal.
+class _GoalKindToggle extends StatelessWidget {
+  const _GoalKindToggle({required this.kind, required this.onChanged});
+  final RaceGoalKind kind;
+  final ValueChanged<RaceGoalKind> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget seg(RaceGoalKind k, IconData icon, String label) {
+      final selected = kind == k;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onChanged(k),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? NuvoColors.actionBlue : Colors.transparent,
+              borderRadius: BorderRadius.circular(NuvoRadii.sm),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: selected ? NuvoColors.white : NuvoColors.muted,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: selected ? NuvoColors.white : NuvoColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: Row(
+        children: [
+          seg(RaceGoalKind.movement, Icons.directions_run_rounded, 'Movement'),
+          seg(RaceGoalKind.manual, Icons.flag_rounded, 'Custom goal'),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerField extends StatelessWidget {
+  const _ComposerField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.onChanged,
+  });
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: NuvoColors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.navy, width: 2),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.navy, width: 2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.blue, width: 2),
         ),
       ),
     );
@@ -932,31 +1085,32 @@ class _SearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: NuvoColors.white,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.navy, width: 2),
-      ),
-      child: TextField(
-        controller: controller,
-        onChanged: onChanged,
-        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
-        decoration: InputDecoration(
-          hintText: 'Search movements',
-          hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            color: NuvoColors.muted,
-            size: 20,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(NuvoRadii.lg),
+      borderSide: const BorderSide(color: NuvoColors.navy, width: 2),
+    );
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+      decoration: InputDecoration(
+        hintText: 'Search movements',
+        hintStyle: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          color: NuvoColors.muted,
+          size: 20,
         ),
+        filled: true,
+        fillColor: NuvoColors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: border,
+        enabledBorder: border,
+        focusedBorder: border,
+        errorBorder: border,
       ),
     );
   }
@@ -1091,7 +1245,6 @@ class _CompactActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final targetLabel = activity.targetLabel(activity.defaultTarget);
     return PressableScale(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1131,14 +1284,6 @@ class _CompactActivityCard extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              targetLabel,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.muted,
-                fontWeight: FontWeight.w500,
-              ),
             ),
           ],
         ),
@@ -1288,9 +1433,15 @@ class _GoalPageState extends State<_GoalPage> {
     return '$_target';
   }
 
-  List<int> get _suggestedTargets => widget.draft.isCustom
+  List<int> get _suggestedTargets => widget.draft.isCustom || widget.draft.isManual
       ? const [5, 10, 25, 50]
       : widget.draft.activity.suggestedTargets;
+
+  String get _unitWord => widget.draft.isManual
+      ? (widget.draft.manualUnit?.trim().isNotEmpty == true
+            ? widget.draft.manualUnit!.trim()
+            : 'done')
+      : widget.draft.metric.label;
 
   @override
   Widget build(BuildContext context) {
@@ -1298,7 +1449,7 @@ class _GoalPageState extends State<_GoalPage> {
 
     return _PageShell(
       question: 'Set the finish line.',
-      support: 'How many ${widget.draft.metric.label} to win?',
+      support: 'How many $_unitWord to win?',
       ctaLabel: 'Invite racers',
       onCta: widget.onNext,
       body: KeyedSubtree(
@@ -1310,7 +1461,7 @@ class _GoalPageState extends State<_GoalPage> {
               displayValue: _displayTarget,
               unitLabel: isSeconds
                   ? widget.draft.displayActivityName.toUpperCase()
-                  : widget.draft.metric.label.toUpperCase(),
+                  : _unitWord.toUpperCase(),
               editing: _editing,
               editCtrl: _editCtrl,
               editFocus: _editFocus,

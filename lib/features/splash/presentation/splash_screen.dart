@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/asset_paths.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
@@ -30,6 +33,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   bool _navigated = false;
   bool _continueRequested = false;
   bool _framesPrecached = false;
+  bool _showOfflineRetry = false;
   Timer? _autoContinueTimer;
 
   @override
@@ -124,6 +128,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final authState = ref.read(authControllerProvider);
     if (authState.status == AuthStatus.loading) return;
 
+    // Held tokens, but the server was unreachable on launch. Do not navigate
+    // and do not log out — show the retry affordance.
+    if (authState.status == AuthStatus.offline) {
+      if (mounted && !_showOfflineRetry) setState(() => _showOfflineRetry = true);
+      return;
+    }
+    if (_showOfflineRetry && mounted) setState(() => _showOfflineRetry = false);
+
     final user = authState.user;
     if (user != null && isNuvoStoreDemoEmail(user.email)) {
       // testing@getnuvo.net must always start fresh from the splash screen
@@ -135,16 +147,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _navigated = true;
     if (user != null) {
       if (user.isDemo ||
-          isNuvoStoreDemoEmail(user.email) ||
           ref.read(demoReplayProvider) ||
           authState.guideFirstRace) {
         ref.read(demoReplayProvider.notifier).state = true;
         context.go('/welcome/intro');
         return;
       }
-      context.go(
-        user.onboardingComplete ? '/arena' : '/onboarding/profile',
-      );
+      // Router redirect (auth_gate) owns onboarding / first-race routing; go to
+      // the app entry and let it place the user identically for every provider.
+      context.go('/arena');
     } else {
       context.go('/welcome/intro');
     }
@@ -181,15 +192,37 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               progress: _ambientController.value,
             ),
             child: SafeArea(
-              child: Center(
-                child: _framesPrecached
-                    ? _LaunchMark(
-                        frameProgress: _frameController.value,
-                        settleProgress: Curves.easeOutCubic.transform(
-                          _settleController.value,
+              child: Stack(
+                children: [
+                  Center(
+                    child: _framesPrecached
+                        ? _LaunchMark(
+                            frameProgress: _frameController.value,
+                            settleProgress: Curves.easeOutCubic.transform(
+                              _settleController.value,
+                            ),
+                          )
+                        : const SizedBox(width: 280, height: 280),
+                  ),
+                  if (_showOfflineRetry)
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 0, 28, 40),
+                        child: _OfflineRetry(
+                          onRetry: () {
+                            setState(() {
+                              _showOfflineRetry = false;
+                              _navigated = false;
+                            });
+                            ref
+                                .read(authControllerProvider.notifier)
+                                .retryRestore();
+                          },
                         ),
-                      )
-                    : const SizedBox(width: 280, height: 280),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -284,6 +317,41 @@ class _LaunchMark extends StatelessWidget {
 
 class SplashScreenStateAccess {
   static const frameCount = AssetPaths.splashFrameCount;
+}
+
+/// Shown on the splash when the app holds a saved session but could not reach
+/// the server on launch. The user is still signed in — this only offers a
+/// retry, it never routes to sign-in.
+class _OfflineRetry extends StatelessWidget {
+  const _OfflineRetry({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          "Couldn't reach Nuvo",
+          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Check your connection — you are still signed in.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        ),
+        const SizedBox(height: 16),
+        NuvoPrimaryButton(
+          label: 'Retry',
+          icon: Icons.refresh_rounded,
+          expand: true,
+          onPressed: onRetry,
+        ),
+      ],
+    );
+  }
 }
 
 class _LaunchAtmospherePainter extends CustomPainter {

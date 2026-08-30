@@ -14,7 +14,8 @@ class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<AuthUser?> restoreSession() async => const AuthUser(
+  Future<RestoreResult> restoreSession() async =>
+      RestoreOk(const AuthUser(
     id: 'user-1',
     email: 'test@getnuvo.net',
     fullName: 'Test User',
@@ -22,7 +23,7 @@ class _FakeAuthRepo extends AuthRepository {
     onboardingComplete: false,
     hasMemberPass: false,
     termsAccepted: false,
-  );
+  ));
 
   @override
   Future<bool> checkUsername(String username) async => true;

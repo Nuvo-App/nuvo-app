@@ -34,10 +34,9 @@ class SecureTokenStore {
         _secureStorage.write(key: _refreshKey, value: refreshToken),
       ]);
     } catch (e) {
-      debugPrint(
-        '[TokenStore] native saveTokens failed (${e.runtimeType}) — clearing',
-      );
-      await _nativeClearAll();
+      // Do NOT wipe storage here — a transient Keychain error while writing
+      // must not also destroy an existing valid session.
+      debugPrint('[TokenStore] native saveTokens failed (${e.runtimeType})');
       rethrow;
     }
   }
@@ -52,10 +51,25 @@ class SecureTokenStore {
       await _secureStorage.write(key: _accessKey, value: token);
     } catch (e) {
       debugPrint(
-        '[TokenStore] native saveAccessToken failed (${e.runtimeType}) — clearing',
+        '[TokenStore] native saveAccessToken failed (${e.runtimeType})',
       );
-      await _nativeClearAll();
       rethrow;
+    }
+  }
+
+  /// Read a key, retrying once on a transient Keychain error before giving up.
+  /// Never wipes storage.
+  Future<String?> _readNative(String key) async {
+    try {
+      return await _secureStorage.read(key: key);
+    } catch (e) {
+      debugPrint('[TokenStore] native read($key) failed once (${e.runtimeType})');
+      try {
+        return await _secureStorage.read(key: key);
+      } catch (e2) {
+        debugPrint('[TokenStore] native read($key) failed twice (${e2.runtimeType})');
+        return null;
+      }
     }
   }
 
@@ -67,17 +81,7 @@ class SecureTokenStore {
       debugPrint('[TokenStore] web access token exists: ${token != null}');
       return token;
     }
-    try {
-      final exists = await _secureStorage.containsKey(key: _accessKey);
-      debugPrint('[TokenStore] native access token exists: $exists');
-      return await _secureStorage.read(key: _accessKey);
-    } catch (e) {
-      debugPrint(
-        '[TokenStore] native access token read failed (${e.runtimeType}) — clearing',
-      );
-      await _nativeClearAll();
-      return null;
-    }
+    return _readNative(_accessKey);
   }
 
   Future<String?> getRefreshToken() async {
@@ -86,17 +90,7 @@ class SecureTokenStore {
       debugPrint('[TokenStore] web refresh token exists: ${token != null}');
       return token;
     }
-    try {
-      final exists = await _secureStorage.containsKey(key: _refreshKey);
-      debugPrint('[TokenStore] native refresh token exists: $exists');
-      return await _secureStorage.read(key: _refreshKey);
-    } catch (e) {
-      debugPrint(
-        '[TokenStore] native refresh token read failed (${e.runtimeType}) — clearing',
-      );
-      await _nativeClearAll();
-      return null;
-    }
+    return _readNative(_refreshKey);
   }
 
   // ── Clear ─────────────────────────────────────────────────────────────────
@@ -108,14 +102,13 @@ class SecureTokenStore {
       debugPrint('[TokenStore] web: tokens cleared');
       return;
     }
-    await _nativeClearAll();
-  }
-
-  Future<void> _nativeClearAll() async {
     try {
-      await _secureStorage.deleteAll();
+      await Future.wait([
+        _secureStorage.delete(key: _accessKey),
+        _secureStorage.delete(key: _refreshKey),
+      ]);
     } catch (e) {
-      debugPrint('[TokenStore] native deleteAll failed (${e.runtimeType})');
+      debugPrint('[TokenStore] native clear failed (${e.runtimeType})');
     }
   }
 }

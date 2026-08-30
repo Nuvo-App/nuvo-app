@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/nuvo_responsive.dart';
 import 'router.dart';
 
 class NuvoApp extends ConsumerWidget {
@@ -28,8 +29,10 @@ class NuvoApp extends ConsumerWidget {
 }
 
 Widget _appBuilder(BuildContext context, Widget? child) {
-  final content = _KeyboardDismissScope(
-    child: child ?? const SizedBox.shrink(),
+  final content = NuvoTextScaleScope(
+    child: _KeyboardDismissScope(
+      child: child ?? const SizedBox.shrink(),
+    ),
   );
   if (kIsWeb) return _webPreviewBuilder(context, content);
   return content;

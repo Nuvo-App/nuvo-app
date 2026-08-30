@@ -156,7 +156,7 @@ class NuvoBottomNav extends StatelessWidget {
 }
 
 class _NavItem {
-  const _NavItem({this.icon, this.asset, required this.label});
+  const _NavItem({this.icon, required this.label}) : asset = null;
 
   final IconData? icon;
   final String? asset;

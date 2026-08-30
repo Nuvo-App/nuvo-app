@@ -4,24 +4,71 @@ import 'auth_api.dart';
 import 'auth_models.dart';
 import 'secure_token_store.dart';
 
+/// Outcome of an attempt to restore a session on launch.
+sealed class RestoreResult {
+  const RestoreResult();
+}
+
+/// A valid session was restored.
+class RestoreOk extends RestoreResult {
+  const RestoreOk(this.user);
+  final AuthUser user;
+}
+
+/// There is definitively no session (no stored token, or the server rejected
+/// the refresh/identity with a 401/404). Tokens have been cleared.
+class RestoreNoSession extends RestoreResult {
+  const RestoreNoSession();
+}
+
+/// We hold a refresh token but could not reach the server (offline, timeout,
+/// 5xx). Tokens are KEPT — the caller should show a retry affordance, never
+/// log the user out.
+class RestoreUnreachable extends RestoreResult {
+  const RestoreUnreachable();
+}
+
 class AuthRepository {
   AuthRepository(this._api, this._store);
 
   final AuthApi _api;
   final SecureTokenStore _store;
 
-  // Attempts to restore a session from stored refresh token.
-  // Returns the authenticated user or null if no stored session.
-  Future<AuthUser?> restoreSession() async {
+  /// Attempts to restore a session from the stored refresh token.
+  ///
+  /// Only clears tokens on a *definitive* rejection (401/404). Transient
+  /// failures (network, 5xx) return [RestoreUnreachable] and keep the tokens so
+  /// a launch with no connectivity does not silently sign the user out.
+  Future<RestoreResult> restoreSession() async {
     final refreshToken = await _store.getRefreshToken();
-    if (refreshToken == null) return null;
+    if (refreshToken == null) return const RestoreNoSession();
+
+    final String accessToken;
     try {
-      final accessToken = await _api.refreshSession(refreshToken);
-      await _store.saveAccessToken(accessToken);
-      return await _api.getMe(accessToken, resetDemo: true);
-    } on ApiException {
-      await _store.clear();
-      return null;
+      accessToken = await _api.refreshSession(refreshToken);
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        await _store.clear();
+        return const RestoreNoSession();
+      }
+      return const RestoreUnreachable();
+    } catch (_) {
+      return const RestoreUnreachable();
+    }
+
+    await _store.saveAccessToken(accessToken);
+
+    try {
+      final user = await _api.getMe(accessToken);
+      return RestoreOk(user);
+    } on ApiException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 404) {
+        await _store.clear();
+        return const RestoreNoSession();
+      }
+      return const RestoreUnreachable();
+    } catch (_) {
+      return const RestoreUnreachable();
     }
   }
 

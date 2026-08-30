@@ -450,7 +450,7 @@ class _ProgressReadout extends StatelessWidget {
           Text(
             '$currentProgress',
             key: const ValueKey('track-view-current-progress'),
-            style: TextStyle(
+            style: const TextStyle(
               color: _kArenaBlue,
               fontSize: 72,
               fontWeight: FontWeight.w900,
@@ -471,7 +471,7 @@ class _ProgressReadout extends StatelessWidget {
           ),
           Text(
             '$goal',
-            style: TextStyle(
+            style: const TextStyle(
               color: _kArenaText,
               fontSize: 66,
               fontWeight: FontWeight.w800,

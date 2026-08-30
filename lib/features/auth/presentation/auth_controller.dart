@@ -7,7 +7,15 @@ import '../data/auth_models.dart';
 import '../data/auth_repository.dart';
 import '../data/secure_token_store.dart';
 
-enum AuthStatus { loading, authenticated, unauthenticated }
+enum AuthStatus {
+  loading,
+  authenticated,
+  unauthenticated,
+
+  /// We hold stored tokens but could not reach the server on launch. The user
+  /// is NOT logged out — the splash offers a retry.
+  offline,
+}
 
 bool isNuvoStoreDemoEmail(String email) =>
     email.trim().toLowerCase() == 'testing@getnuvo.net';
@@ -35,27 +43,38 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> _init() async {
     debugPrint('[AuthController] restoring session');
+    if (mounted && state.status != AuthStatus.loading) {
+      state = const AuthState(status: AuthStatus.loading);
+    }
     try {
-      final user = await _repo.restoreSession();
-      debugPrint(
-        '[AuthController] restore result: ${user != null ? 'authenticated uid=${user.id}' : 'no session'}',
-      );
-      if (mounted) {
-        state = user != null
-            ? AuthState(
-                status: AuthStatus.authenticated,
-                user: user,
-                guideFirstRace: isNuvoStoreDemoEmail(user.email),
-              )
-            : const AuthState(status: AuthStatus.unauthenticated);
-      }
+      final result = await _repo.restoreSession();
+      debugPrint('[AuthController] restore result: ${result.runtimeType}');
+      if (!mounted) return;
+      state = switch (result) {
+        RestoreOk(:final user) => AuthState(
+          status: AuthStatus.authenticated,
+          user: user,
+          guideFirstRace: isNuvoStoreDemoEmail(user.email),
+        ),
+        RestoreNoSession() => const AuthState(
+          status: AuthStatus.unauthenticated,
+        ),
+        // Keep tokens; the splash shows a retry rather than logging out.
+        RestoreUnreachable() => const AuthState(status: AuthStatus.offline),
+      };
     } catch (e) {
       debugPrint('[AuthController] restore error (${e.runtimeType})');
+      // An unexpected error is not proof the session is invalid — treat it as
+      // offline so a retry is possible.
       if (mounted) {
-        state = const AuthState(status: AuthStatus.unauthenticated);
+        state = const AuthState(status: AuthStatus.offline);
       }
     }
   }
+
+  /// Re-run session restore. Used by the splash "retry" affordance when the
+  /// first launch attempt could not reach the server.
+  Future<void> retryRestore() => _init();
 
   Future<void> startEmailAuth(String email) => _repo.startEmailAuth(email);
 

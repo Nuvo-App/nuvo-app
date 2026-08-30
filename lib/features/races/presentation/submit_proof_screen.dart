@@ -10,9 +10,13 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../auth/data/auth_api.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/race_display.dart';
+import 'board_moved_screen.dart';
 import 'race_controller.dart';
 import 'widgets/preset_movement_demos.dart';
 
@@ -29,6 +33,76 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   bool _raceLoading = true;
   String? _raceError;
   bool _navigating = false;
+
+  // Manual / non-camera goal logging.
+  final _logController = TextEditingController();
+  final _noteController = TextEditingController();
+  bool _submittingManual = false;
+  String? _manualError;
+
+  @override
+  void dispose() {
+    _logController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitManual(Race race) async {
+    final value = int.tryParse(_logController.text.trim());
+    if (value == null || value <= 0) {
+      setState(() => _manualError = 'Enter how much you completed.');
+      return;
+    }
+    setState(() {
+      _submittingManual = true;
+      _manualError = null;
+    });
+    HapticFeedback.mediumImpact();
+    try {
+      final note = _noteController.text.trim();
+      final updated = await ref
+          .read(raceControllerProvider.notifier)
+          .submitProof(
+            widget.raceId,
+            proofType: 'manual',
+            note: note.isEmpty ? null : note,
+            value: value,
+          );
+      if (!mounted) return;
+      final proof = updated.recentProofs.isNotEmpty
+          ? updated.recentProofs.first
+          : null;
+      context.pushReplacement(
+        '/race/${widget.raceId}/board-moved',
+        extra: BoardMovedArgs(
+          raceId: widget.raceId,
+          raceName: updated.displayTitle,
+          value: value,
+          unit: updated.unit,
+          status: proof?.verificationStatus ?? 'accepted',
+          rankBefore: proof?.rankBefore,
+          rankAfter: proof?.rankAfter ?? rankForUser(updated, _uid),
+          peoplePassed: proof?.peoplePassed,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _manualError = e.message;
+          _submittingManual = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _manualError = 'Could not log your progress. Try again.';
+          _submittingManual = false;
+        });
+      }
+    }
+  }
+
+  String? get _uid => ref.read(authControllerProvider).user?.id;
 
   @override
   void initState() {
@@ -158,7 +232,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   }
 
   List<Widget> _bottomBarActions(Race? race) {
-    final backToRace = NuvoGhostButton(
+    final backToRace = NuvoTertiaryButton(
       label: 'Back to race',
       expand: true,
       onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
@@ -183,11 +257,15 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     final eligibility = resolveCameraVerification(race);
     if (!eligibility.isCameraVerifiable) {
       return [
-        NuvoGhostButton(
-          label: 'View race',
+        NuvoPrimaryButton(
+          label: 'Log progress',
+          icon: Icons.check_rounded,
           expand: true,
-          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+          loading: _submittingManual,
+          onPressed: _submittingManual ? null : () => _submitManual(race),
         ),
+        const SizedBox(height: 10),
+        backToRace,
       ];
     }
 
@@ -270,7 +348,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       const SizedBox(height: 24),
 
       Text(
-        'Submit proof',
+        eligibility.isCameraVerifiable ? 'Submit proof' : 'Log progress',
         style: AppTextStyles.headlineLarge.copyWith(
           fontSize: 32,
           letterSpacing: -0.9,
@@ -283,21 +361,25 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
-      // The unsupported case states its reason once, inside the card below.
-      if (eligibility.isCameraVerifiable) ...[
-        const SizedBox(height: 4),
-        Text(
-          'Camera counts and verifies automatically.',
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-        ),
-      ],
+      const SizedBox(height: 4),
+      Text(
+        eligibility.isCameraVerifiable
+            ? 'Camera counts and verifies automatically.'
+            : 'Add how much you completed toward the finish line.',
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+      ),
 
       const SizedBox(height: 24),
 
       if (eligibility.isCameraVerifiable)
         _MoveCheckCard(race: race, eligibility: eligibility)
       else
-        _UnsupportedVerificationCard(message: eligibility.unsupportedMessage),
+        _ManualLogCard(
+          race: race,
+          valueController: _logController,
+          noteController: _noteController,
+          error: _manualError,
+        ),
     ];
   }
 
@@ -570,44 +652,74 @@ class _SetupLine extends StatelessWidget {
   }
 }
 
-class _UnsupportedVerificationCard extends StatelessWidget {
-  const _UnsupportedVerificationCard({required this.message});
+/// Manual progress entry for non-camera goals (manual / honor / check-in).
+class _ManualLogCard extends StatelessWidget {
+  const _ManualLogCard({
+    required this.race,
+    required this.valueController,
+    required this.noteController,
+    required this.error,
+  });
 
-  final String message;
+  final Race race;
+  final TextEditingController valueController;
+  final TextEditingController noteController;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
+    final unit = race.unit?.trim().isNotEmpty == true ? race.unit! : 'done';
+    final target = race.targetValue;
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: NuvoColors.navy, width: 2),
         boxShadow: AppShadows.hardSmall,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: NuvoColors.icyBlue,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.videocam_off_rounded,
-              color: NuvoColors.navy,
-              size: 22,
-            ),
+          Row(
+            children: [
+              Text(
+                'Finish line',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                target != null ? '$target $unit' : 'No set target',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: NuvoColors.navy,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              message,
-              style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy),
-            ),
+          const SizedBox(height: 16),
+          NuvoTextInput(
+            controller: valueController,
+            label: 'How much did you complete? ($unit)',
+            keyboardType: TextInputType.number,
           ),
+          const SizedBox(height: 12),
+          NuvoTextInput(
+            controller: noteController,
+            label: 'Add a note (optional)',
+            maxLines: 2,
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              error!,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.danger,
+              ),
+            ),
+          ],
         ],
       ),
     );

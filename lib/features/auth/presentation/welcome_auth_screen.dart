@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -428,6 +429,80 @@ String _proofDisplayName(String proof) => switch (proof) {
   _ => proof,
 };
 
+/// One shared shell for every third-party provider button so Apple, Google
+/// (and email above) read as the same control — same height, border, shadow,
+/// Manrope label — only the leading glyph differs.
+class _ProviderButton extends StatelessWidget {
+  const _ProviderButton({
+    required this.label,
+    required this.glyph,
+    required this.loading,
+    required this.error,
+    required this.onPressed,
+  });
+
+  final String label;
+  final Widget glyph;
+  final bool loading;
+  final String? error;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              error!,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
+            ),
+          ),
+        GestureDetector(
+          onTap: loading ? null : onPressed,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 160),
+            opacity: loading ? 0.55 : 1,
+            child: Container(
+              height: 54,
+              width: double.infinity,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: NuvoColors.surface,
+                borderRadius: BorderRadius.circular(NuvoRadii.button),
+                border: Border.all(color: NuvoColors.navy, width: 2),
+                boxShadow: AppShadows.hardSmall,
+              ),
+              child: loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        glyph,
+                        const SizedBox(width: 10),
+                        Text(
+                          label,
+                          style: AppTextStyles.buttonLabel.copyWith(
+                            color: NuvoColors.navy,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _AppleButton extends StatelessWidget {
   const _AppleButton({
     required this.loading,
@@ -440,46 +515,12 @@ class _AppleButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      if (error != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            error!,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
-          ),
-        ),
-      loading
-          ? Container(
-              height: 52,
-              width: double.infinity,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(NuvoRadii.md),
-              ),
-              child: const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: NuvoColors.white,
-                  strokeWidth: 2,
-                ),
-              ),
-            )
-          : SizedBox(
-              height: 52,
-              width: double.infinity,
-              child: SignInWithAppleButton(
-                onPressed: onPressed,
-                height: 52,
-                style: SignInWithAppleButtonStyle.black,
-                borderRadius: BorderRadius.circular(NuvoRadii.md),
-              ),
-            ),
-    ],
+  Widget build(BuildContext context) => _ProviderButton(
+    label: 'Continue with Apple',
+    glyph: const Icon(Icons.apple, size: 22, color: NuvoColors.navy),
+    loading: loading,
+    error: error,
+    onPressed: onPressed,
   );
 }
 
@@ -494,53 +535,12 @@ class _GoogleButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      if (error != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(
-            error!,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
-          ),
-        ),
-      GestureDetector(
-        onTap: loading ? null : onPressed,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 180),
-          opacity: loading ? .55 : 1,
-          child: Container(
-            height: 52,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: NuvoColors.white,
-              borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.action,
-            ),
-            child: loading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const _GoogleGIcon(),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Continue with Google',
-                        style: AppTextStyles.labelLarge.copyWith(
-                          color: NuvoColors.navy,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    ],
+  Widget build(BuildContext context) => _ProviderButton(
+    label: 'Continue with Google',
+    glyph: const _GoogleGIcon(),
+    loading: loading,
+    error: error,
+    onPressed: onPressed,
   );
 }
 

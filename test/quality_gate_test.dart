@@ -20,7 +20,8 @@ import 'package:nuvo/features/races/presentation/race_controller.dart';
 class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
   @override
-  Future<AuthUser?> restoreSession() async => const AuthUser(
+  Future<RestoreResult> restoreSession() async =>
+      RestoreOk(const AuthUser(
     id: 'user-1',
     email: 'test@getnuvo.net',
     fullName: 'Test User',
@@ -28,7 +29,7 @@ class _FakeAuthRepo extends AuthRepository {
     onboardingComplete: true,
     hasMemberPass: true,
     termsAccepted: true,
-  );
+  ));
 }
 
 class _StubRaceRepo extends RaceRepository {

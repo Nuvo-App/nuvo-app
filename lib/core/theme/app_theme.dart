@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 import 'app_geometry.dart';
 import 'app_text_styles.dart';
+import 'nuvo_tokens.dart';
 
 abstract final class AppTheme {
   static const SystemUiOverlayStyle overlay = SystemUiOverlayStyle(
@@ -40,6 +41,7 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: NuvoColors.page,
       canvasColor: NuvoColors.page,
       colorScheme: colorScheme,
+      extensions: const [NuvoSemanticColors.standard],
       visualDensity: VisualDensity.adaptivePlatformDensity,
       splashFactory: InkRipple.splashFactory,
       fontFamily: GoogleFonts.manrope().fontFamily,
@@ -111,6 +113,9 @@ abstract final class AppTheme {
           color: NuvoColors.blue,
         ),
       ),
+      // Stray Material buttons should still read as physical Nuvo controls —
+      // a modest elevation + navy shadow — even before a screen is migrated to
+      // the NuvoButton widgets. Prefer the NuvoButton widgets for new work.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: NuvoColors.blue,
@@ -119,11 +124,12 @@ abstract final class AppTheme {
           disabledForegroundColor: NuvoColors.disabledText,
           padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 17),
           textStyle: AppTextStyles.buttonLabel,
+          side: const BorderSide(color: NuvoColors.navy, width: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NuvoRadii.button),
           ),
-          elevation: 0,
-          shadowColor: Colors.transparent,
+          elevation: 3,
+          shadowColor: NuvoColors.navy,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -136,15 +142,22 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NuvoRadii.button),
           ),
+          elevation: 2,
+          shadowColor: NuvoColors.navy,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: NuvoColors.blue,
+          backgroundColor: NuvoTokens.gray100,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           textStyle: AppTextStyles.buttonLabel,
+          side: const BorderSide(color: NuvoTokens.gray300, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(NuvoRadii.md),
           ),
+          elevation: 1,
+          shadowColor: NuvoColors.navy,
         ),
       ),
       chipTheme: ChipThemeData(

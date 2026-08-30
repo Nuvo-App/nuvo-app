@@ -47,13 +47,16 @@ final class NuvoTokens {
   /// Bronze — third place only.
   static const Color bronze = Color(0xFFB67A44);
 
-  /// Green — finished, verified, completed. Never buttons.
-  static const Color green = Color(0xFF23B26D);
+  /// Green — finished, verified, completed. Now allowed on success buttons.
+  static const Color green = NuvoColors.success;
+  static const Color greenBright = NuvoColors.successBright;
 
-  /// Red — passed by opponent, recording, warning.
-  static const Color red = Color(0xFFF04F59);
+  /// Red — failure, rejected, destructive.
+  static const Color red = NuvoColors.danger;
+  static const Color redBright = NuvoColors.dangerBright;
 
-  /// Orange — almost finished.
+  /// Amber — needs attention / almost finished / in review.
+  static const Color amber = NuvoColors.warning;
   static const Color orange = Color(0xFFFF8C3A);
 
   // ── Gray scale ─────────────────────────────────────────────────────────────

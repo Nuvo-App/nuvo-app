@@ -169,12 +169,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           RaceSettingsScreen(raceId: state.pathParameters['id']!),
         ),
       ),
+      // Legacy alias — "Edit race" and "Race settings" were once separate
+      // screens; they are now one. Keep the path working for old links.
       GoRoute(
         path: '/race/:id/edit',
-        pageBuilder: (_, state) => _authPage(
-          state,
-          RaceSettingsScreen(raceId: state.pathParameters['id']!),
-        ),
+        redirect: (_, state) => '/race/${state.pathParameters['id']}/settings',
       ),
       GoRoute(
         path: '/race/:id/invite',

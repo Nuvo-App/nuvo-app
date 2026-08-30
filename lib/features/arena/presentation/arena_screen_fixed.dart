@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -171,7 +172,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onJoin: () => context.push('/races/join'),
                             ),
                             const SizedBox(height: 30),
-                            _SectionLabel(title: 'Leaderboard'),
+                            const _SectionLabel(title: 'Leaderboard'),
                             const SizedBox(height: 12),
                             _Standings(
                               board: activeBoard,
@@ -206,8 +207,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final result = <ArenaBoard>[];
     if (snapshot.focusBoard != null) result.add(snapshot.focusBoard!);
     for (final board in snapshot.liveBoards) {
-      if (result.every((existing) => existing.id != board.id))
+      if (result.every((existing) => existing.id != board.id)) {
         result.add(board);
+      }
     }
     if (result.isEmpty) result.addAll(snapshot.results);
     return result;
@@ -228,10 +230,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
       );
     }
     switch (board.primaryActionType) {
-      case 'submit_proof':
-        context.push('/race/${board.id}/proof');
       case 'start_race':
         context.push('/races/new');
+      // Both "submit proof" and "open board" land on the race page — the
+      // leaderboard. Verifying is the pinned action there, so every race tap
+      // in the app opens the same screen.
       default:
         context.push('/race/${board.id}');
     }
@@ -251,6 +254,13 @@ class _ArenaHeader extends StatelessWidget {
   const _ArenaHeader({required this.greeting});
   final String greeting;
 
+  static String _timeGreeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,14 +269,14 @@ class _ArenaHeader extends StatelessWidget {
         'Arena',
         style: AppTextStyles.displayMedium.copyWith(
           color: _arenaText,
-          fontSize: 44,
+          fontSize: context.rs(44),
           height: .98,
           letterSpacing: 0,
         ),
       ),
       const SizedBox(height: 6),
       Text(
-        'Good evening, $greeting',
+        '${_timeGreeting()}, $greeting',
         style: AppTextStyles.titleLarge.copyWith(
           color: _arenaMuted,
           fontWeight: FontWeight.w500,
@@ -878,7 +888,7 @@ class _ActivityRow extends StatelessWidget {
         Container(
           width: 32,
           height: 32,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: _arenaSurface,
             shape: BoxShape.circle,
           ),
@@ -922,35 +932,22 @@ class _ArenaButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool filled;
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: filled ? _arenaBlue : Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: filled ? _arenaBlue : _arenaLine),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: _arenaText,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Icon(icon, size: 16, color: _arenaText),
-        ],
-      ),
-    ),
-  );
+  Widget build(BuildContext context) {
+    if (filled) {
+      return NuvoPrimaryButton(
+        label: label,
+        icon: icon,
+        expand: true,
+        onPressed: onTap,
+      );
+    }
+    return NuvoSecondaryButton(
+      label: label,
+      icon: icon,
+      expand: true,
+      onPressed: onTap,
+    );
+  }
 }
 
 class _LoadingState extends StatelessWidget {

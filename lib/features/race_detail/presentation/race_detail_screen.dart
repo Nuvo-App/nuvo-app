@@ -11,11 +11,13 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/nuvo_board_components.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_move_log_item.dart';
+import '../../../core/widgets/nuvo_podium.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
@@ -386,37 +388,58 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           }
         : null;
 
+    final showBottomBar =
+        !myRaceComplete && onPrimary != null && primaryLabel != 'Unsupported';
+
     final screen = Scaffold(
       backgroundColor: NuvoColors.pageIce,
+      bottomNavigationBar: showBottomBar
+          ? _VerifyBar(
+              key: FirstRaceGuideKeys.racePrimary,
+              label: primaryLabel,
+              loading: _busy,
+              onPressed: onPrimary,
+            )
+          : null,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 56),
+            padding: EdgeInsets.fromLTRB(18, 16, 18, showBottomBar ? 24 : 56),
             children: [
-              _RaceSummaryCard(
-                race: race,
-                myProgress: myProgress,
-                isParticipant: isParticipant,
-                userId: user?.id,
-                rankLabel: raceRankLabel(race, user?.id),
-                chaseCopy: heroChaseCopy,
-                subcopy: _heroSubcopy(
+              if (myRaceComplete)
+                _RaceSummaryCard(
                   race: race,
+                  myProgress: myProgress,
+                  isParticipant: isParticipant,
                   userId: user?.id,
-                  recentMoveCount: recentMoveCount,
+                  rankLabel: raceRankLabel(race, user?.id),
+                  chaseCopy: heroChaseCopy,
+                  subcopy: _heroSubcopy(
+                    race: race,
+                    userId: user?.id,
+                    recentMoveCount: recentMoveCount,
+                  ),
+                  badgeLabel: eligibility.movementDefinition?.title,
+                  daysLeft: null,
+                  primaryLabel: primaryLabel,
+                  loading: _busy,
+                  onPrimary: onPrimary,
+                  onBack: () => safePopOrGo(context, '/arena'),
+                  onSettings: isOwner
+                      ? () => context.push('/race/${race.id}/settings')
+                      : null,
+                )
+              else
+                _LiveRaceHeader(
+                  race: race,
+                  eligibility: eligibility,
+                  onBack: () => safePopOrGo(context, '/arena'),
+                  onMenu: isOwner
+                      ? () => context.push('/race/${race.id}/settings')
+                      : null,
                 ),
-                badgeLabel: eligibility.movementDefinition?.title,
-                daysLeft: myRaceComplete ? null : _daysLeft(race.finishLineAt),
-                primaryLabel: primaryLabel,
-                loading: _busy,
-                onPrimary: onPrimary,
-                onBack: () => safePopOrGo(context, '/arena'),
-                onSettings: isOwner
-                    ? () => context.push('/race/${race.id}/settings')
-                    : null,
-              ),
 
               if (raceIsActive(race) && !eligibility.isCameraVerifiable) ...[
                 const SizedBox(height: 12),
@@ -441,9 +464,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   userId: user?.id,
                 ),
               ] else ...[
-                const SizedBox(height: 20),
-                const _SectionLabel(label: 'The board'),
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
+                const _SectionLabel(label: 'Live standings'),
+                const SizedBox(height: 16),
                 if (sorted.isEmpty)
                   Text(
                     'No one on the board yet. Invite crew to race.',
@@ -451,12 +474,48 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                       color: NuvoColors.muted,
                     ),
                   )
+                else if (sorted.length >= 2)
+                  NuvoPodium(
+                    top: [
+                      for (final p in sorted.take(3))
+                        NuvoPodiumEntry(
+                          rank: p.rank ?? sorted.indexOf(p) + 1,
+                          name: p.displayName,
+                          statLabel: raceProgressLabel(race, p),
+                          photoUrl: p.profilePhotoUrl,
+                          avatarSeedId: p.userId,
+                          isCurrentUser: p.userId == user?.id,
+                        ),
+                    ],
+                    rest: sorted.length > 3
+                        ? _LeaderboardGroup(
+                            race: race,
+                            participants: sorted.sublist(3),
+                            userId: user?.id,
+                            rankOffset: 3,
+                          )
+                        : null,
+                  )
                 else
                   _LeaderboardGroup(
                     race: race,
                     participants: sorted,
                     userId: user?.id,
                   ),
+              ],
+
+              // ── Your progress (the focal card) ─────────────────────────────
+              if (isParticipant && !myRaceComplete && race.targetValue != null) ...[
+                const SizedBox(height: 20),
+                _YourProgressCard(
+                  progressValue: myPart?.progressValue ?? 0,
+                  targetValue: race.targetValue!,
+                  unit: raceMetricLabel(race),
+                  rankLabel: raceRankLabel(race, user.id),
+                  chaseCopy: chase?.chaseCopy,
+                  leaderGap: chase?.leaderGap,
+                  isLeading: (chase?.myRank ?? 99) == 1,
+                ),
               ],
 
               if (race.participantCount > 1) ...[
@@ -470,7 +529,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               ],
 
               // ── Path to goal (demoted below leaderboard) ────────────────
-              if (isParticipant && !myRaceComplete) ...[
+              if (isParticipant && !myRaceComplete && race.targetValue == null) ...[
                 const SizedBox(height: 24),
                 const _SectionLabel(label: 'Path to goal'),
                 const SizedBox(height: 12),
@@ -560,12 +619,6 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 _ManageRow(
                   icon: Icons.edit_rounded,
                   label: 'Edit race',
-                  onTap: () => context.push('/race/${race.id}/edit'),
-                ),
-                const SizedBox(height: 8),
-                _ManageRow(
-                  icon: Icons.tune_rounded,
-                  label: 'Race settings',
                   onTap: () => context.push('/race/${race.id}/settings'),
                 ),
                 const SizedBox(height: 8),
@@ -611,6 +664,241 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               'Tap Verify now to submit your first proof and see your progress update.',
         ),
       ],
+    );
+  }
+}
+
+// ── Live race header (active races) ──────────────────────────────────────────
+
+class _LiveRaceHeader extends StatelessWidget {
+  const _LiveRaceHeader({
+    required this.race,
+    required this.eligibility,
+    required this.onBack,
+    this.onMenu,
+  });
+
+  final Race race;
+  final CameraVerificationEligibility eligibility;
+  final VoidCallback onBack;
+  final VoidCallback? onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = race.targetValue;
+    final unit = raceMetricLabel(race);
+    final subtitle = target != null
+        ? 'First to $target $unit'
+        : eligibility.movementDefinition?.title ?? 'Keep moving to the finish';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            NuvoBackButton(onPressed: onBack),
+            const Spacer(),
+            if (onMenu != null)
+              NuvoIconAction(
+                icon: Icons.more_horiz_rounded,
+                onTap: onMenu!,
+                semanticLabel: 'Race settings',
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                race.displayTitle,
+                style: AppTextStyles.displaySmall.copyWith(
+                  color: NuvoColors.navy,
+                  fontSize: context.rs(32),
+                  height: 1.06,
+                  letterSpacing: -0.8,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: _RacerCountChip(count: race.participantCount),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+        ),
+      ],
+    );
+  }
+}
+
+class _RacerCountChip extends StatelessWidget {
+  const _RacerCountChip({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: NuvoColors.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        border: Border.all(color: NuvoColors.blueBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.groups_rounded, size: 16, color: NuvoColors.blue),
+          const SizedBox(width: 6),
+          Text(
+            '$count ${count == 1 ? 'racer' : 'racers'}',
+            style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Your progress card (the focal element) ───────────────────────────────────
+
+class _YourProgressCard extends StatelessWidget {
+  const _YourProgressCard({
+    required this.progressValue,
+    required this.targetValue,
+    required this.unit,
+    required this.rankLabel,
+    this.chaseCopy,
+    this.leaderGap,
+    this.isLeading = false,
+  });
+
+  final int progressValue;
+  final int targetValue;
+  final String unit;
+  final String rankLabel;
+  final String? chaseCopy;
+  final int? leaderGap;
+  final bool isLeading;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = targetValue <= 0
+        ? 0.0
+        : (progressValue / targetValue).clamp(0.0, 1.0);
+    final remaining = (targetValue - progressValue).clamp(0, targetValue);
+    final gapLine = isLeading && (leaderGap ?? 0) > 0
+        ? 'Leading by $leaderGap $unit'
+        : (leaderGap ?? 0) > 0
+        ? '$leaderGap $unit behind the leader'
+        : chaseCopy;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'YOUR PROGRESS',
+            style: AppTextStyles.eyebrow.copyWith(color: NuvoColors.blue),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$progressValue / $targetValue $unit',
+                style: AppTextStyles.statLarge(
+                  context.rs(30),
+                  color: NuvoColors.blue,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                rankLabel,
+                style: AppTextStyles.statLarge(
+                  context.rs(26),
+                  color: NuvoColors.navy,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(NuvoRadii.pill),
+            child: LinearProgressIndicator(
+              value: pct,
+              minHeight: 8,
+              color: NuvoColors.blue,
+              backgroundColor: NuvoColors.trackBg,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            remaining > 0
+                ? '$remaining $unit to the finish'
+                : 'Finish line reached',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: NuvoColors.navy,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (gapLine != null && gapLine.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              gapLine,
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Pinned verify bar ───────────────────────────────────────────────────────
+
+class _VerifyBar extends StatelessWidget {
+  const _VerifyBar({
+    super.key,
+    required this.label,
+    required this.loading,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: NuvoColors.pageIce,
+      padding: EdgeInsets.fromLTRB(
+        18,
+        10,
+        18,
+        10 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: NuvoPrimaryButton(
+        label: label,
+        icon: Icons.arrow_forward_rounded,
+        expand: true,
+        loading: loading,
+        onPressed: onPressed,
+      ),
     );
   }
 }
@@ -934,11 +1222,16 @@ class _LeaderboardGroup extends StatelessWidget {
     required this.race,
     required this.participants,
     this.userId,
+    this.rankOffset = 0,
   });
 
   final Race race;
   final List<RaceParticipant> participants;
   final String? userId;
+
+  /// Number of higher-ranked participants not in [participants] (e.g. the top 3
+  /// shown on the podium), so fallback ranks continue correctly.
+  final int rankOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -956,7 +1249,7 @@ class _LeaderboardGroup extends StatelessWidget {
               _LeaderboardCompactRow(
                 race: race,
                 participant: participants[i],
-                rank: participants[i].rank ?? i + 1,
+                rank: participants[i].rank ?? rankOffset + i + 1,
                 isCurrentUser:
                     userId != null && participants[i].userId == userId,
                 isNearestOpponent:

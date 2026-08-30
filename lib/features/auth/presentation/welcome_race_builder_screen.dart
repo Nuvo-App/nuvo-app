@@ -1040,9 +1040,9 @@ class _HeroRaceVisual extends StatelessWidget {
                         child: Container(
                           height: compact ? 34 : 38,
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: NuvoColors.blue,
-                            borderRadius: const BorderRadius.vertical(
+                            borderRadius: BorderRadius.vertical(
                               top: Radius.circular(12),
                             ),
                           ),
@@ -1282,9 +1282,8 @@ class _RankRow extends StatelessWidget {
     required this.score,
     this.height = 58,
     this.active = false,
-    this.ghost = false,
     this.emphasis = false,
-  });
+  }) : ghost = false;
 
   final String rank;
   final String name;
@@ -1350,37 +1349,6 @@ class _RankRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RevealCaption extends StatelessWidget {
-  const _RevealCaption({
-    required this.text,
-    required this.progress,
-    this.accent = false,
-  });
-
-  final String text;
-  final double progress;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final eased = Curves.easeOutCubic.transform(progress.clamp(0.0, 1.0));
-    return Opacity(
-      opacity: eased,
-      child: Transform.translate(
-        offset: Offset(0, 12 * (1 - eased)),
-        child: Text(
-          text,
-          style: AppTextStyles.brandLabel.copyWith(
-            color: accent ? NuvoColors.blue : NuvoColors.navy,
-            letterSpacing: 2.1,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
       ),
     );
   }
@@ -1661,8 +1629,8 @@ class _GoalPage extends StatelessWidget {
                   SizedBox(
                     height: compact ? 100 : 128,
                     width: double.infinity,
-                    child: CustomPaint(
-                      painter: const _RacePathPainter(progress: 0),
+                    child: const CustomPaint(
+                      painter: _RacePathPainter(progress: 0),
                     ),
                   ),
                 ],
@@ -2156,7 +2124,7 @@ class _PracticePosePainter extends CustomPainter {
     final head = const Offset(0, -34);
     final chest = const Offset(0, -7);
     final hip = const Offset(0, 22);
-    final shoulder = Offset(0, -12);
+    final shoulder = const Offset(0, -12);
     final leftElbow = Offset(-25 - swing * 5, -2 + reach);
     final rightElbow = Offset(27 + swing * 4, -18 - reach);
     final leftHand = Offset(-38 - swing * 8, 20 + reach * .4);

@@ -263,7 +263,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             ),
             const SizedBox(height: 18),
             Text(
-              'Race settings',
+              'Edit race',
               style: AppTextStyles.headlineLarge.copyWith(
                 fontSize: 32,
                 letterSpacing: -0.9,
@@ -271,7 +271,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Edit your race details and rules.',
+              'Change your race details, rules, and status.',
               style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 24),
@@ -351,18 +351,6 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                 ),
               ],
             ),
-            if (!isCameraRace)
-              _Section(
-                title: 'Moves',
-                children: [
-                  _Menu(
-                    label: 'Move method',
-                    value: 'unsupported',
-                    values: const {'unsupported': 'unsupported movement'},
-                    onChanged: (_) {},
-                  ),
-                ],
-              ),
             _Section(
               title: 'Visibility',
               children: [

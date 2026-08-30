@@ -23,8 +23,12 @@ import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/pose_detector_service.dart';
 import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
+import '../data/motion_analysis_contract.dart';
+import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity_catalog.dart';
+import '../domain/race_display.dart';
+import 'board_moved_screen.dart';
 
 import 'custom_pose/pose_skeleton_overlay.dart';
 import 'race_controller.dart';
@@ -55,6 +59,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   CameraDescription? _selectedCamera;
   AiMotionProofStatus _status = AiMotionProofStatus.setup;
   AiMotionResult? _result;
+  MotionAnalysisResult? _serverAnalysis;
+  final List<NuvoPoseFrame> _capturedFrames = <NuvoPoseFrame>[];
   CustomPoseRuntimeResult? _customResult;
   bool _isCustom = false;
   String? _customMovementName;
@@ -349,6 +355,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _runtime.start();
     _elapsed = Duration.zero;
     _debugFrameCount = 0;
+    _capturedFrames.clear();
+    _serverAnalysis = null;
     _resetRepFlash();
     _skeletonHold.clear();
     _debugLog(
@@ -398,6 +406,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       );
       if (_disposed || _status != AiMotionProofStatus.recording) return;
       if (frame == null) return;
+      // Keep a bounded landmark-only trace for server analysis and future
+      // consented training. Camera pixels never leave the device.
+      if (_capturedFrames.length < 900) _capturedFrames.add(frame);
       final output = _runtime.update(frame);
       if (_isCustom) {
         _customUpdate = output.customPoseUpdate;
@@ -497,6 +508,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             : AiMotionProofStatus.aiFailed;
         _message = null;
       });
+      unawaited(_analyzeCapturedMotion());
       if (acceptedResult.isVerified) _scheduleAutoSubmit();
       return;
     }
@@ -525,7 +537,31 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           : AiMotionProofStatus.aiFailed;
       _message = null;
     });
+    unawaited(_analyzeCapturedMotion());
     if (acceptedResult.isVerified) _scheduleAutoSubmit();
+  }
+
+  Future<void> _analyzeCapturedMotion() async {
+    if (_capturedFrames.length < 2 || !mounted) return;
+    try {
+      final result = await ref
+          .read(raceControllerProvider.notifier)
+          .analyzeMotion(
+            MotionAnalysisRequest(
+              motionId: _isCustom
+                  ? (_customMovementName ?? 'custom')
+                  : _activity.backendValue,
+              frames: List<NuvoPoseFrame>.unmodifiable(_capturedFrames),
+              targetReps: _targetValue > 0 ? _targetValue : null,
+              durationMs: _elapsed.inMilliseconds,
+            ),
+          );
+      if (mounted) setState(() => _serverAnalysis = result);
+    } catch (error) {
+      // Local ML Kit/validator results remain authoritative while the server
+      // prototype is unavailable. This is expected during early development.
+      _debugLog('serverMotionAnalysisUnavailable error=$error');
+    }
   }
 
   void _scheduleAutoSubmit() {
@@ -550,7 +586,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       try {
         final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
         _clientSubmissionId = clientSubmissionId;
-        await ref
+        final race = await ref
             .read(raceControllerProvider.notifier)
             .submitCustomPoseProof(
               widget.raceId,
@@ -559,7 +595,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             );
         if (!mounted) return;
         setState(() => _status = AiMotionProofStatus.submitted);
-        context.go('/race/${widget.raceId}');
+        _goToCelebration(race, result.count, result.verificationStatus);
       } on ApiException catch (e) {
         if (!mounted) return;
         setState(() {
@@ -585,7 +621,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     try {
       final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
       _clientSubmissionId = clientSubmissionId;
-      await ref
+      final race = await ref
           .read(raceControllerProvider.notifier)
           .submitAiMotionProof(
             widget.raceId,
@@ -595,7 +631,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           );
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);
-      context.go('/race/${widget.raceId}');
+      _goToCelebration(race, result.detectedReps, 'ai_verified');
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -609,6 +645,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _message = 'Verified proof could not be submitted. Try again.';
       });
     }
+  }
+
+  void _goToCelebration(Race race, int value, String status) {
+    if (!mounted) return;
+    final uid = ref.read(authControllerProvider).user?.id;
+    final proof =
+        race.recentProofs.isNotEmpty ? race.recentProofs.first : null;
+    context.pushReplacement(
+      '/race/${widget.raceId}/board-moved',
+      extra: BoardMovedArgs(
+        raceId: widget.raceId,
+        raceName: race.displayTitle,
+        value: value,
+        unit: race.unit,
+        status: proof?.verificationStatus ?? status,
+        rankBefore: proof?.rankBefore,
+        rankAfter: proof?.rankAfter ?? rankForUser(race, uid),
+        peoplePassed: proof?.peoplePassed,
+      ),
+    );
   }
 
   AiMotionResult _acceptPartialMotionResult(AiMotionResult result) {
@@ -665,6 +721,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await _stopImageStream();
     setState(() {
       _result = null;
+      _serverAnalysis = null;
+      _capturedFrames.clear();
       _customResult = null;
       _customUpdate = null;
       _message = null;
@@ -1308,6 +1366,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   color: NuvoColors.white.withValues(alpha: 0.78),
                 ),
               ),
+              if (_serverAnalysis?.coaching.isNotEmpty == true) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _serverAnalysis!.coaching.first,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.white.withValues(alpha: 0.72),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ],
           ),
         ),
@@ -1362,7 +1430,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Keep the camera view clear and try again.',
+                      _serverAnalysis != null &&
+                              _serverAnalysis!.failureReasons.isNotEmpty
+                          ? _serverAnalysis!.failureReasons.first
+                          : 'Keep the camera view clear and try again.',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: NuvoColors.white.withValues(alpha: 0.6),
                       ),

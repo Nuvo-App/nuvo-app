@@ -12,7 +12,7 @@ import 'multi_phase_definitions.dart';
 /// work order here. [validatePresetWorkOrders] verifies this invariant.
 final presetMovementWorkOrders = [
   // ── Pushups ────────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.pushUps,
     family: MovementFactoryFamily.customRep,
     requiredLandmarks: [
@@ -41,7 +41,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Squats ─────────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.squats,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -63,7 +63,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Jumping Jacks ──────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.jumpingJacks,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -85,7 +85,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Lunges ─────────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.lunges,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -109,7 +109,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Plank Hold ─────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.plankHold,
     family: MovementFactoryFamily.hold,
     requiredLandmarks: [
@@ -136,7 +136,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── High Knees ─────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.highKnees,
     family: MovementFactoryFamily.alternatingSideRep,
     requiredLandmarks: ['leftHip', 'rightHip', 'leftKnee', 'rightKnee'],
@@ -152,7 +152,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Arm Raises ─────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.armRaises,
     family: MovementFactoryFamily.simpleStateRep,
     requiredLandmarks: [
@@ -182,7 +182,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Sumo Squats ────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.sumoSquats,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -204,7 +204,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Side Lunges ────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.sideLunges,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -228,7 +228,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Deep Squats ────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.deepSquats,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -254,7 +254,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Squat Jacks ────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.squatJacks,
     family: MovementFactoryFamily.configurableRep,
     requiredLandmarks: [
@@ -312,7 +312,7 @@ final presetMovementWorkOrders = [
   ),
 
   // ── Lunge Jumps ─────────────────────────────────────────────────────────────
-  MovementWorkOrder(
+  const MovementWorkOrder(
     type: MotionActivityType.lungeJumps,
     family: MovementFactoryFamily.multiPhaseSequence,
     requiredLandmarks: [

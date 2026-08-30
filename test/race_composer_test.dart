@@ -184,6 +184,32 @@ void main() {
       expect(payload['title'], 'Akshay vs Akaash');
     });
 
+    test('manual goal produces a non-camera payload', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        goalKind: RaceGoalKind.manual,
+        manualGoalName: 'Read',
+        manualUnit: 'pages',
+        targetValue: 300,
+      );
+      expect(draft.isManual, isTrue);
+      expect(draft.isValidToCreate, isTrue);
+      final payload = draft.toCreatePayload();
+      expect(payload['proofRequirement'], 'manual');
+      expect(payload['proofMode'], 'manual');
+      expect(payload['unit'], 'pages');
+      expect(payload['targetValue'], 300);
+      expect(payload.containsKey('activityId'), isFalse);
+      expect(payload['title'], 'First to 300 pages');
+    });
+
+    test('manual goal without name or unit is not valid to create', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        goalKind: RaceGoalKind.manual,
+        targetValue: 10,
+      );
+      expect(draft.isValidToCreate, isFalse);
+    });
+
     test('payload title, targetValue and activityId are consistent', () {
       final draft = draftForActivity(_jacks).copyWith(targetValue: 15);
       final payload = draft.toCreatePayload();

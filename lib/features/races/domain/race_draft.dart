@@ -6,6 +6,15 @@ import 'motion_activity_catalog.dart';
 String generatedTitle(MotionActivityDefinition activity, int targetValue) =>
     'First to $targetValue ${activity.title}';
 
+/// What kind of goal the race tracks.
+enum RaceGoalKind {
+  /// A supported movement counted and verified by the camera.
+  movement,
+
+  /// A non-physical / honor goal — progress is logged manually.
+  manual,
+}
+
 class RaceDraft {
   const RaceDraft({
     required this.title,
@@ -18,7 +27,21 @@ class RaceDraft {
     this.visibility = 'invite_code',
     this.customActivityName,
     this.verifierSpec,
+    this.goalKind = RaceGoalKind.movement,
+    this.manualGoalName,
+    this.manualUnit,
   });
+
+  /// Movement (camera) or manual (honor-logged) goal.
+  final RaceGoalKind goalKind;
+
+  /// For [RaceGoalKind.manual]: what the goal is ("Read", "Meditate", …).
+  final String? manualGoalName;
+
+  /// For [RaceGoalKind.manual]: the free-text unit ("pages", "minutes", "days").
+  final String? manualUnit;
+
+  bool get isManual => goalKind == RaceGoalKind.manual;
 
   final String title;
   final MotionActivityDefinition activity;
@@ -43,18 +66,27 @@ class RaceDraft {
   bool get isValidToCreate {
     if (resolvedTitle.trim().isEmpty) return false;
     if (targetValue <= 0) return false;
+    if (isManual) {
+      return (manualGoalName ?? '').trim().isNotEmpty &&
+          (manualUnit ?? '').trim().isNotEmpty;
+    }
     if (isCustom) {
       return verifierSpec != null && customActivityName!.isNotEmpty;
     }
     return activity.type.backendValue.isNotEmpty;
   }
 
-  /// Activity name to show in review pages (preset or custom).
-  String get displayActivityName =>
-      isCustom ? customActivityName! : activity.title;
+  /// Activity name to show in review pages (preset, custom, or manual).
+  String get displayActivityName => isManual
+      ? (manualGoalName ?? 'Custom goal')
+      : isCustom
+      ? customActivityName!
+      : activity.title;
 
   /// System-generated title for this draft, ignoring any manual name override.
-  String get generatedTitleText => isCustom
+  String get generatedTitleText => isManual
+      ? 'First to $targetValue ${manualUnit ?? 'done'}'
+      : isCustom
       ? 'First to $targetValue $customActivityName'
       : generatedTitle(activity, targetValue);
 
@@ -72,6 +104,9 @@ class RaceDraft {
     String? visibility,
     String? customActivityName,
     CustomPoseVerifierSpec? verifierSpec,
+    RaceGoalKind? goalKind,
+    String? manualGoalName,
+    String? manualUnit,
   }) {
     final nextActivity = activity ?? this.activity;
     final nextTarget = targetValue ?? this.targetValue;
@@ -88,6 +123,9 @@ class RaceDraft {
       visibility: visibility ?? this.visibility,
       customActivityName: customActivityName ?? this.customActivityName,
       verifierSpec: verifierSpec ?? this.verifierSpec,
+      goalKind: goalKind ?? this.goalKind,
+      manualGoalName: manualGoalName ?? this.manualGoalName,
+      manualUnit: manualUnit ?? this.manualUnit,
     );
   }
 
@@ -117,6 +155,7 @@ class RaceDraft {
         'Custom races must be created with createCustomRace, not toCreatePayload.',
       );
     }
+    if (isManual) return _manualCreatePayload();
     return {
       'title': resolvedTitle,
       'description': '${activity.title} race verified by camera.',
@@ -133,6 +172,26 @@ class RaceDraft {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'aiActivityType': activity.type.backendValue,
+      'visibility': visibility,
+    };
+  }
+
+  Map<String, dynamic> _manualCreatePayload() {
+    final unit = (manualUnit ?? 'done').trim();
+    return {
+      'title': resolvedTitle,
+      'description': '${manualGoalName ?? 'Custom goal'} — progress logged manually.',
+      'category': 'goal',
+      'goalType': format.backendValue,
+      'targetValue': targetValue,
+      'unit': unit,
+      'targetUnit': unit,
+      'metric': 'reps',
+      'format': format.backendValue,
+      'recurrence': recurrence.backendValue,
+      'proofRequirement': 'manual',
+      'proofReviewMode': 'auto_accept',
+      'proofMode': 'manual',
       'visibility': visibility,
     };
   }

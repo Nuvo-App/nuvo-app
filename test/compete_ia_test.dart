@@ -21,7 +21,8 @@ class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<AuthUser?> restoreSession() async => const AuthUser(
+  Future<RestoreResult> restoreSession() async =>
+      RestoreOk(const AuthUser(
     id: 'user-1',
     email: 'test@getnuvo.net',
     fullName: 'Test User',
@@ -29,7 +30,7 @@ class _FakeAuthRepo extends AuthRepository {
     onboardingComplete: true,
     hasMemberPass: true,
     termsAccepted: true,
-  );
+  ));
 }
 
 class _StubRaceRepo extends RaceRepository {
@@ -229,7 +230,7 @@ void main() {
     testWidgets('empty state preserved', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
-      expect(find.text('No races yet.'), findsOneWidget);
+      expect(find.text('Your first finish line'), findsOneWidget);
     });
 
     testWidgets('error state preserved with friendly copy', (tester) async {

@@ -75,9 +75,10 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
     final user = ref.watch(authControllerProvider).user;
     final uid = user?.id;
 
-    final cameraRaces = raceState.races
-        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
-        .toList();
+    // Camera and non-camera (manual / check-in) goals both surface here — a
+    // manual race is still "ready to move", it just logs progress instead of
+    // opening the camera.
+    final cameraRaces = raceState.races;
 
     final readyRaces = cameraRaces.where((race) {
       final myPart = uid != null ? race.participantFor(uid) : null;

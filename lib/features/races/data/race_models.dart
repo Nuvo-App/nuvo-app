@@ -453,7 +453,9 @@ class RaceProof {
     framesAnalyzed: json['framesAnalyzed'] as int?,
     validPoseFrames: json['validPoseFrames'] as int?,
     durationMs: json['durationMs'] as int?,
-    verificationStatus: json['verificationStatus'] as String? ?? 'accepted',
+    // Never default a missing/unknown status to a success — an absent verdict
+    // must surface for review, not silently credit the leaderboard.
+    verificationStatus: json['verificationStatus'] as String? ?? 'needs_review',
     verificationSummary: json['verificationSummary'] as String?,
     reviewedBy: json['reviewedBy'] as String?,
     reviewedAt: json['reviewedAt'] as String?,

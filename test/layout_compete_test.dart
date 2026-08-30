@@ -18,7 +18,8 @@ class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<AuthUser?> restoreSession() async => const AuthUser(
+  Future<RestoreResult> restoreSession() async =>
+      RestoreOk(const AuthUser(
     id: 'user-1',
     email: 'test@getnuvo.net',
     fullName: 'Test User',
@@ -26,7 +27,7 @@ class _FakeAuthRepo extends AuthRepository {
     onboardingComplete: true,
     hasMemberPass: true,
     termsAccepted: true,
-  );
+  ));
 }
 
 class _StubRaceRepo extends RaceRepository {
@@ -75,8 +76,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      // Empty state should show "No races yet." when there are no races.
-      expect(find.text('No races yet.'), findsOneWidget);
+      // Empty state should show its headline when there are no races.
+      expect(find.text('Your first finish line'), findsOneWidget);
     });
 
     testWidgets('no overflow on normal iPhone with empty races', (

@@ -18,13 +18,14 @@ class RouterNotifier extends ChangeNotifier {
     final authState = _ref.read(authControllerProvider);
     final loc = state.matchedLocation;
 
-    // While auth is being determined, never render protected routes — they
-    // would try to access secure storage concurrently with the auth restore
-    // and can corrupt the session (race condition on web). Send them to
-    // /splash which shows the loading state harmlessly.
-    if (authState.status == AuthStatus.loading) {
+    // While auth is being determined — or we hold tokens but could not reach
+    // the server — never render protected routes (they would hit secure
+    // storage concurrently with the restore and can corrupt the session on
+    // web). Send them to /splash, which shows the loading / retry state.
+    if (authState.status == AuthStatus.loading ||
+        authState.status == AuthStatus.offline) {
       final dest = _isProtected(loc) ? '/splash' : null;
-      debugPrint('[Router] loading → $loc : redirect=$dest');
+      debugPrint('[Router] ${authState.status.name} → $loc : redirect=$dest');
       return dest;
     }
 
@@ -36,29 +37,34 @@ class RouterNotifier extends ChangeNotifier {
       return dest;
     }
 
-    // Authenticated
+    // ── Authenticated ────────────────────────────────────────────────────────
+    // The destination is identical for every provider (email, Google, Apple):
+    // it depends only on onboarding state and the first-race guide flag, never
+    // on which route the sign-in happened to originate from.
     final user = authState.user!;
     debugPrint('[Router] authenticated uid=${user.id} → $loc');
     final replayingDemo = _ref.read(demoReplayProvider);
-    if (user.onboardingComplete &&
-        replayingDemo &&
-        (loc == '/welcome/intro' || loc == '/welcome')) {
+
+    // Demo replay deliberately keeps the user in the pre-auth race builder.
+    if (replayingDemo && (loc == '/welcome/intro' || loc == '/welcome')) {
       return null;
     }
-    if ((user.isDemo || authState.guideFirstRace) && loc.startsWith('/auth/')) {
-      return '/welcome/intro';
+
+    if (!user.onboardingComplete) {
+      if (_isAuthPreOnboarding(loc) || loc == '/welcome/intro') {
+        return '/onboarding/profile';
+      }
+      return null;
     }
-    if (user.onboardingComplete &&
-        (user.isDemo || authState.guideFirstRace) &&
-        loc == '/welcome') {
-      _ref.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.competeStart;
-      return '/compete';
-    }
-    if (user.onboardingComplete) {
-      if (_isAuthOrOnboarding(loc)) return '/arena';
-    } else {
-      if (_isAuthPreOnboarding(loc)) return '/onboarding/profile';
+
+    // Onboarded: hand auth / onboarding / intro routes back to the app.
+    if (_isAuthOrOnboarding(loc) || loc == '/welcome/intro') {
+      if (authState.guideFirstRace) {
+        _ref.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.competeStart;
+        return '/compete';
+      }
+      return '/arena';
     }
 
     return null;

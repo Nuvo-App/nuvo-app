@@ -13,7 +13,6 @@ import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
-import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/create_race_screen.dart';
 import '../../races/presentation/race_controller.dart';
@@ -51,9 +50,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     final user = ref.watch(authControllerProvider).user;
     final uid = user?.id;
 
-    final cameraRaces = raceState.races
-        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
-        .toList();
+    // Every race the user is in — camera (movement) and non-camera (manual /
+    // check-in / photo) goals alike. Non-camera races were previously hidden
+    // here, which made non-physical goals impossible to act on.
+    final cameraRaces = raceState.races;
     final active = cameraRaces.where(raceIsActive).toList();
     final waiting = active.where((race) => race.participantCount <= 1).toList();
     final inMotion = active.where((race) => race.participantCount > 1).toList();
@@ -65,10 +65,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     final inMotionRows = inMotion
         .where((race) => race.id != needsAttention?.id)
         .toList();
-    final finished = raceState.races
-        .where(raceIsCompleted)
-        .where((race) => resolveCameraVerification(race).isCameraVerifiable)
-        .toList();
+    final finished = raceState.races.where(raceIsCompleted).toList();
 
     final screen = Scaffold(
       backgroundColor: NuvoColors.page,
@@ -122,7 +119,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                           ref.read(raceControllerProvider.notifier).loadRaces(),
                     )
                   else if (raceState.races.isEmpty || cameraRaces.isEmpty)
-                    _EmptyState(onStart: () => context.push('/races/new'))
+                    _EmptyState(
+                      onStart: () => context.push('/races/new'),
+                      onJoin: () => context.push('/races/join'),
+                    )
                   else ...[
                     if (needsAttention != null) ...[
                       _buildFeaturedCard(needsAttention, uid),
@@ -238,11 +238,12 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
       racerStack: racerStack,
       rank: rank,
       showRank: hasProof,
-      actionLabel: hasProof ? 'View leaderboard' : 'Submit proof',
-      ctaIcon: hasProof ? null : Icons.camera_alt_outlined,
-      onOpen: () => context.push(
-        hasProof ? '/race/${race.id}' : '/race/${race.id}/proof',
-      ),
+      actionLabel: hasProof ? 'View leaderboard' : 'Open race',
+      ctaIcon: null,
+      // Always open the race board (the leaderboard). Logging progress /
+      // verifying happens from the pinned action on that screen — every
+      // "open a race" tap in the app lands in the same place.
+      onOpen: () => context.push('/race/${race.id}'),
     );
   }
 
@@ -667,7 +668,7 @@ class _QuickStarts extends StatelessWidget {
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.only(right: NuvoSpacing.pageHorizontal),
             itemCount: _items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: NuvoSpacing.sm),
+            separatorBuilder: (_, _) => const SizedBox(width: NuvoSpacing.sm),
             itemBuilder: (_, index) {
               final item = _items[index];
               return _QuickStartChip(
@@ -753,8 +754,9 @@ class _QuickStartChip extends StatelessWidget {
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onStart});
+  const _EmptyState({required this.onStart, this.onJoin});
   final VoidCallback onStart;
+  final VoidCallback? onJoin;
 
   @override
   Widget build(BuildContext context) {
@@ -765,8 +767,9 @@ class _EmptyState extends StatelessWidget {
           width: 52,
           height: 52,
           decoration: BoxDecoration(
-            color: NuvoColors.blue.withValues(alpha: 0.10),
+            color: NuvoColors.blueSurface,
             borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: Border.all(color: NuvoColors.blueBorder),
           ),
           child: const NuvoIcon(
             NuvoIconType.flag,
@@ -776,12 +779,13 @@ class _EmptyState extends StatelessWidget {
         ),
         const SizedBox(height: NuvoSpacing.xl),
         Text(
-          'No races yet.',
+          'Your first finish line',
           style: AppTextStyles.headlineMedium.copyWith(color: NuvoColors.navy),
         ),
         const SizedBox(height: NuvoSpacing.sm),
         Text(
-          'Start a race, set a finish line, and pull in your crew.',
+          'Pick a goal — pushups, a plank, a daily check-in — set the finish '
+          'line, and pull in your crew. Every proof you log moves the board.',
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
         ),
         const SizedBox(height: NuvoSpacing.xl),
@@ -790,6 +794,14 @@ class _EmptyState extends StatelessWidget {
           expand: true,
           onPressed: onStart,
         ),
+        if (onJoin != null) ...[
+          const SizedBox(height: NuvoSpacing.sm),
+          NuvoSecondaryButton(
+            label: 'Join with a code',
+            expand: true,
+            onPressed: onJoin,
+          ),
+        ],
       ],
     );
   }
