@@ -377,17 +377,22 @@ screen, not just trust the generator.
 
 ## K. Git / repository
 
-- **A 442 MB blob** (`test/motion_qa/lab/EXPERIMENTS.jsonl`) is in an older
-  commit and blocks `git push`. Clearing it is history rewriting — **the
-  owner's call**: `git filter-repo --path test/motion_qa/lab/EXPERIMENTS.jsonl
-  --invert-paths --force`, then re-add the remote and push. Do not do this
-  unasked.
-- Current work is on branch `nuvo-visual/compete-design`, **not** `main`.
-- **Commit/push only when the user asks.** ("deploy and do everything" has been
-  treated as authorizing commits on the feature branch, not `main`, not a
-  history rewrite.)
-- Never `git checkout`/`stash pop` in a way that can drop the user's unrelated
-  uncommitted work — inspect `git status` first.
+- **History was rebuilt on 2026-08-31** (commit `2eb952c`). `origin/main` used
+  to be 3 stale commits and the 128-commit local history carried a 463 MB blob
+  (`test/motion_qa/lab/EXPERIMENTS.jsonl`) that blocked every push. With 0 users
+  and speed the priority, `main` was reset to a fresh 7-commit checkpoint of the
+  current tree (orphan branch → force-push). The full pre-reset history is kept
+  locally on `backup/full-history-pre-checkpoint-20260831` + tag
+  `checkpoint-backup-20260831`.
+- **Remote moved**: `origin` is now `https://github.com/Nuvo-App/nuvo-app.git`
+  (was `side-swifter/nuvo`).
+- **Workflow now**: work on `main`, push directly to `main`, commit aggressively
+  as milestones land (`motion-v2: <what>`). No PRs. This is a deliberate
+  fast-iteration choice for the pre-launch sprint, not the long-term process.
+- `.gitignore` now also excludes `**/node_modules/`, `server/worker/build/`,
+  `**/.dev.vars` (real Worker secrets — `.example` is safe), model checkpoints.
+- Never `git checkout`/`stash pop` in a way that can drop uncommitted work —
+  inspect `git status` first.
 
 ---
 
