@@ -1,3 +1,7 @@
+// Arena next-move snapshot state. Same shape and rules as RaceController
+// (docs/agents/08 provider graph, docs/agents/10 §A1): StateNotifierProvider is
+// not recreated on sign-out, so clearSnapshot() must null the cache timestamp
+// AND the in-flight future or a hung load wedges the tab until an app kill.
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

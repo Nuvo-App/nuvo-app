@@ -3,6 +3,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // On web: uses window.localStorage via package:web (no WebCrypto, no DomException).
 // On native: stub — all paths go through flutter_secure_storage.
+//
+// RULE (pitfall B1, docs/agents/10-pitfalls-and-fixes.md §B): storage errors are
+// transient. Retry a read once; NEVER wipe tokens on a read/write error. clear()
+// deletes only the two Nuvo keys — never deleteAll() / the whole Keychain. A
+// single flaky Keychain read used to log every user out on cold launch.
 import '_ls_stub.dart' if (dart.library.html) '_ls_web.dart' as ls;
 
 class SecureTokenStore {

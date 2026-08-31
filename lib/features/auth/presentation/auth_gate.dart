@@ -1,3 +1,11 @@
+// The route guard. See docs/NAVIGATION_MAP.md rules 7-8 and
+// docs/agents/10-pitfalls-and-fixes.md §B2.
+//
+// RULE: the authenticated landing destination depends ONLY on
+// user.onboardingComplete + authState.guideFirstRace — NEVER on which route
+// sign-in started from. Email (/auth/verify), Google and Apple (/welcome) must
+// all land in the same place. Do not reintroduce a `loc.startsWith('/auth/')`
+// branch — that was bug B2 ("email login behaves differently from Google").
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show BuildContext, ChangeNotifier;
 import 'package:flutter_riverpod/flutter_riverpod.dart';

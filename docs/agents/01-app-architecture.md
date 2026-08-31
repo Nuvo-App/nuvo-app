@@ -1,5 +1,10 @@
 # Flutter app architecture and feature map
 
+Companion references: [`08-codebase-navigation.md`](08-codebase-navigation.md)
+(directory deep-map, provider graph, "where do I change X"),
+[`12-screen-reference.md`](12-screen-reference.md) (every route → file →
+primary action → states).
+
 ## Entry and routing
 
 - `lib/main.dart` initializes Flutter, locks portrait orientation, applies system UI styling, and mounts `ProviderScope`.

@@ -6,8 +6,32 @@
 flutter pub get
 dart format --set-exit-if-changed lib test
 flutter analyze --no-fatal-infos
-flutter test
+flutter test --concurrency=4 test/*.dart test/arena/
 ```
+
+**Do NOT run `flutter test` bare.** It executes `test/motion_qa/`, which
+includes long-run search harnesses (`motion_lab_overnight_test.dart`,
+`motion_lab_validation_test.dart`, …) that run hundreds of thousands of
+iterations and write ~1 GB of artifacts — a runaway. Run the explicit set above;
+only run `test/motion_qa/` when that is the task. See
+[`10-pitfalls-and-fixes.md`](10-pitfalls-and-fixes.md) §I1.
+
+**Judge a change by NEW failures only.** There is a standing set of pre-existing
+failures (≈37 focused / ≈40 full; the extra are out-of-scope ML-threshold tests).
+Capture a baseline on the untouched tree, then diff:
+
+```bash
+flutter test --concurrency=4 test/*.dart test/arena/ 2>&1 \
+  | grep -oE "test/[a-z_/]+\.dart: [A-Za-z].*\[E\]" | sed 's/ \[E\]$//' | sort -u > /tmp/base_f.txt
+# ...make the change, re-run into /tmp/cur_f.txt...
+comm -13 /tmp/base_f.txt /tmp/cur_f.txt        # must be empty
+```
+
+Strip the trailing ` [E]` before diffing. `timeout` is not on macOS (`gtimeout`
+or omit). When you change a repository method signature, `rg` for
+`extends AuthRepository` / `extends RaceRepository` and fix every test double in
+the same commit. When you change user-facing copy, update the asserting test to
+the new string — never weaken it to `findsWidgets`.
 
 The repository baseline documents four pre-existing info findings in `auth_controller.dart`. Do not add new warnings/errors or “fix” the baseline incidentally.
 

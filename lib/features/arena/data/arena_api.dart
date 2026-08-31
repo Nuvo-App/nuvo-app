@@ -1,3 +1,7 @@
+// Arena snapshot endpoint. Same rules as race_api.dart: every request has a
+// 20 s hard timeout (a raw un-timed _client call hangs a stalled socket
+// forever), transport errors map to ApiException, JSON decode tolerates
+// non-JSON error bodies. See docs/agents/10-pitfalls-and-fixes.md §A1.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

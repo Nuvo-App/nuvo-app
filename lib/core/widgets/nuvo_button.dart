@@ -22,6 +22,13 @@ import 'pressable_scale.dart';
 /// | `NuvoTertiaryButton`| gray-100          | gray-300| hardSmall   |
 /// | `NuvoSuccessButton` | success surface   | success | hardSmall   |
 /// | `NuvoDangerButton`  | danger surface    | danger  | hardSmall   |
+///
+/// Labels auto-shrink, never truncate: [_buttonContent] wraps the label in a
+/// `FittedBox(scaleDown)` so a narrow button scales the text down instead of
+/// clipping to "Submit…" (pitfall D2). Don't add `overflow: ellipsis` to a
+/// label or restructure a layout to fit one. Height only grows on phones
+/// ≥ 430 px wide, capped at 1.10× ([_buttonShell]) so test surfaces keep the
+/// designed height. Full cookbook: docs/agents/09-widget-and-token-reference.md.
 
 Widget _buttonContent({
   required String label,

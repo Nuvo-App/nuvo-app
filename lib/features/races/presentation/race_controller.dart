@@ -1,3 +1,16 @@
+// Shared race state. See docs/agents/08-codebase-navigation.md (provider graph)
+// and docs/agents/10-pitfalls-and-fixes.md §A1.
+//
+// This is a StateNotifierProvider — it is NOT recreated on sign-out; only its
+// `state` is reset (by clearRaces()). Any internal field that must not survive a
+// session (the cache timestamp, the in-flight future) MUST be nulled in
+// clearRaces(), or a load hung across sign-out wedges the races tab until the
+// app is killed.
+//
+// loadRaces(): 5-minute cache + single-flight de-dup. force:false respects the
+// cache; force:true always refetches. Every screen reads state via
+// raceControllerProvider and calls mutations via .notifier — never a second
+// source of truth, never a direct RaceApi call.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_api.dart';

@@ -1,5 +1,13 @@
 # Nuvo architecture at a glance
 
+> **New to this codebase?** After this file, read — in order —
+> [`08-codebase-navigation.md`](08-codebase-navigation.md) (where everything is),
+> [`10-pitfalls-and-fixes.md`](10-pitfalls-and-fixes.md) (what breaks and why),
+> and the recipe in [`11-adding-a-feature.md`](11-adding-a-feature.md) that
+> matches your task. [`12-screen-reference.md`](12-screen-reference.md) is the
+> per-screen lookup; [`09-widget-and-token-reference.md`](09-widget-and-token-reference.md)
+> is the library cookbook.
+
 ## Product loop
 
 Nuvo’s loop is: **set a finish line → pull in your crew → submit proof → move the leaderboard**.

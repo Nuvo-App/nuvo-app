@@ -1,3 +1,12 @@
+// HTTP + JSON for race endpoints. One method per endpoint; each takes a `token`.
+// Callers go through RaceRepository (token injection + 401 retry), never here
+// directly. See docs/agents/03-data-auth-and-backend.md and
+// docs/agents/10-pitfalls-and-fixes.md §A1.
+//
+// EVERY request goes through _guard() (20 s hard timeout → ApiException on
+// TimeoutException/SocketException/ClientException) and _decode() (tolerates
+// non-JSON / empty error bodies). A raw `_client.get(...)` with no timeout will
+// hang a stalled socket forever and wedge the races tab — do not add one.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';

@@ -14,6 +14,18 @@ This is the operational map for agents working on Nuvo, an app that turns real-l
    - races, proof, movement, or camera: [`04-race-and-ai-motion.md`](04-race-and-ai-motion.md)
    - tests, builds, or release: [`05-testing-and-release.md`](05-testing-and-release.md)
    - agent change safety: [`06-change-safety-and-maintenance.md`](06-change-safety-and-maintenance.md)
+   - camera-AI direction / non-negotiables: [`07-ui-refinement-and-camera-ai-migration.md`](07-ui-refinement-and-camera-ai-migration.md)
+
+## Fast-onboarding set (read these to stop re-deriving context)
+
+| Doc | Use it for |
+|---|---|
+| [`08-codebase-navigation.md`](08-codebase-navigation.md) | where any file/provider/flow lives; the 4-layer rule; file-naming glossary; "trace a feature in 3 greps" |
+| [`09-widget-and-token-reference.md`](09-widget-and-token-reference.md) | how to use the shared widgets & tokens (buttons, empty/error states, podium, colours, shadows, responsive, clipped-corner fix) |
+| [`10-pitfalls-and-fixes.md`](10-pitfalls-and-fixes.md) | **every issue this codebase has hit** — symptom → root cause → fix → the rule that stops it recurring. Read the relevant section before touching networking, auth, routing, layout scaling, or tests. |
+| [`11-adding-a-feature.md`](11-adding-a-feature.md) | step-by-step recipes: tweak a screen, add a field / API call / screen / widget / proof type; the pre-commit checklist |
+| [`12-screen-reference.md`](12-screen-reference.md) | every route/screen: file, primary action, states, shared widgets, data source |
+| [`../NAVIGATION_MAP.md`](../NAVIGATION_MAP.md) | the route table, navigation graph, and which verb (`go` / `push` / `pushReplacement` / `safePopOrGo`) |
 
 ## Source-of-truth rule
 

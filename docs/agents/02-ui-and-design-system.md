@@ -6,6 +6,11 @@ Read `docs/design/NUVO_DESIGN_SYSTEM.md`, `docs/NUVO_DESIGN_SYSTEM_INVENTORY.md`
 
 `docs/FULL_APP_AUDIT_2026-08.md` is the current running list of known UI/UX debt
 and what has been fixed — check it before "discovering" an issue.
+[`09-widget-and-token-reference.md`](09-widget-and-token-reference.md) is the
+day-to-day "how do I use this widget/token" cookbook;
+[`10-pitfalls-and-fixes.md`](10-pitfalls-and-fixes.md) §E/§F covers the Flutter
+rendering + colour-system traps (clipped corners, transparent buttons, shimmer +
+`pumpAndSettle`, the three token systems).
 
 **Semantic colour + depth rules (enforced):**
 - Blue is neutral / brand / primary-action — never a success or failure signal.

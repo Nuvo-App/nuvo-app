@@ -1,3 +1,11 @@
+// Route registration. BEFORE adding/moving/removing a route or changing a
+// navigation verb, read docs/NAVIGATION_MAP.md (route table, graph, verb rules,
+// the 10 rules) and update it in the same change.
+//
+// Invariants: one route per screen (aliases are `redirect:`, never a 2nd
+// pageBuilder — see /race/:id/edit); every "open a race" tap lands on /race/:id;
+// pushed routes use one of the existing _authPage/_detailPage/_cameraPage/
+// _tabPage builders; routes that need `extra:` have a null-safe fallback.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
