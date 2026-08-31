@@ -1,0 +1,19 @@
+{
+  "name": "nuvo-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "rm -rf .tmp-test-dist && tsc --module commonjs --moduleResolution node --outDir .tmp-test-dist --noEmit false && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.103.0"
+  }
+}

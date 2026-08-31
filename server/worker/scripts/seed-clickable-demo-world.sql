@@ -1,0 +1,11 @@
+-- Deprecated.
+--
+-- The previous clickable-demo seed wrote pre-V2 manual races and legacy units.
+-- Do not run it against local or remote D1.
+--
+-- Use the Phase 1 Race System V2 seed instead:
+--   wrangler d1 execute nuvo_db --local --file=./scripts/demo_seed.sql
+--
+-- Remote D1 writes require explicit operator approval and should use a
+-- reviewed, environment-specific seed file.
+SELECT 'Use scripts/demo_seed.sql for Race System V2 local demo data.' AS message;

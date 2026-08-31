@@ -1,0 +1,730 @@
+import { Hono } from 'hono';
+import type { AppEnv, UserRow, ProfileRow, EmailCodeRow, SessionRow, AuthIdentityRow } from '../types';
+import { requireAuth, signJwt } from '../lib/jwt';
+import {
+  generateId,
+  generateOtp,
+  hashValue,
+  generateRefreshToken,
+  generateMemberId,
+  memberIdToSlug,
+} from '../lib/crypto';
+import { verifyGoogleIdToken } from '../lib/google';
+import { verifyAppleIdToken } from '../lib/apple';
+import { sendVerificationCode } from '../lib/resend';
+import { normalizeEmail, isValidEmail } from '../lib/validation';
+
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const ACCESS_TOKEN_TTL_S = 15 * 60; // 15 minutes
+const REFRESH_TOKEN_TTL_S = 30 * 24 * 60 * 60; // 30 days
+const TEST_DEMO_EMAIL = 'testing@getnuvo.net';
+const TEST_DEMO_RACES = [
+  ['First to 25 Pushups', 'pushups', 25, 'reps'],
+  ['Squat Sunday', 'squats', 75, 'reps'],
+  ['Jumping Jack Sprint', 'jumping_jacks', 60, 'reps'],
+  ['Lunge Ladder', 'lunges', 40, 'reps'],
+  ['Plank Hold Wars', 'plank', 180, 'seconds'],
+  ['Morning Mobility', 'custom', 15, 'minutes'],
+  ['Crew Conditioning', 'pushups', 100, 'reps'],
+  ['Weekend Finish Line', 'squats', 100, 'reps'],
+  ['Core Control', 'plank', 120, 'seconds'],
+  ['Final Rep Race', 'jumping_jacks', 100, 'reps'],
+] as const;
+
+export const authRouter = new Hono<AppEnv>();
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+async function ensureProfileAndPass(db: D1Database, userId: string): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO profiles (user_id, created_at, updated_at)
+       VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id) DO NOTHING`,
+    )
+    .bind(userId)
+    .run();
+
+  const existing = await db
+    .prepare('SELECT id FROM member_passes WHERE user_id = ?')
+    .bind(userId)
+    .first<{ id: string }>();
+
+  if (!existing) {
+    const memberId = generateMemberId();
+    const passSlug = memberIdToSlug(memberId);
+    await db
+      .prepare(
+        `INSERT INTO member_passes (id, user_id, member_id, pass_slug, created_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      )
+      .bind(generateId(), userId, memberId, passSlug)
+      .run();
+  }
+}
+
+async function ensureDemoPerson(db: D1Database, userId: string): Promise<string> {
+  const existing = await db.prepare('SELECT id FROM people WHERE user_id = ?').bind(userId).first<{ id: string }>();
+  if (existing) return existing.id;
+  const profile = await db.prepare('SELECT full_name, username FROM profiles WHERE user_id = ?').bind(userId).first<{ full_name: string | null; username: string | null }>();
+  const personId = generateId();
+  await db.prepare(
+    `INSERT INTO people (id, person_key, user_id, display_name, created_at, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+  ).bind(personId, `user-${userId}`, userId, profile?.full_name ?? profile?.username ?? 'Racer').run();
+  return personId;
+}
+
+async function seedTestDemoRaces(db: D1Database, userId: string): Promise<void> {
+  const otherUsers = await db.prepare(`SELECT id FROM users WHERE id != ? AND status = 'active' ORDER BY created_at ASC LIMIT 3`).bind(userId).all<{ id: string }>();
+  const racerIds = [userId, ...otherUsers.results.map((row) => row.id)];
+  const personIds = new Map<string, string>();
+  for (const racerId of racerIds) personIds.set(racerId, await ensureDemoPerson(db, racerId));
+
+  const statements: D1PreparedStatement[] = [];
+  for (const [index, [title, movementType, targetValue, targetUnit]] of TEST_DEMO_RACES.entries()) {
+    const raceId = generateId();
+    const activityId = movementType === 'custom' ? null : movementType;
+    const metric = targetUnit === 'seconds' ? 'seconds' : targetUnit === 'minutes' ? 'minutes' : 'reps';
+    statements.push(db.prepare(
+      `INSERT INTO races (
+         id, creator_id, title, description, race_type, movement_type, verification_type,
+         target_value, target_unit, activity_id, metric, format, scoring_rule,
+         verification_method, timezone, recurrence, status, visibility, start_at, end_at,
+         created_at, updated_at
+       ) VALUES (?, ?, ?, ?, 'first_to_target', ?, 'movecheck', ?, ?, ?, ?, 'first_to_goal',
+         'cumulative_sum', 'camera_pose', 'America/New_York', 'none', 'active', 'public_demo',
+         NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    ).bind(raceId, userId, title, 'A Nuvo race for your crew. First to the finish line wins.', movementType === 'custom' ? null : movementType, targetValue, targetUnit, activityId, metric));
+
+    for (const [racerIndex, racerId] of racerIds.entries()) {
+      statements.push(db.prepare(
+        `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at)
+         VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+      ).bind(generateId(), raceId, racerId, personIds.get(racerId), racerIndex === 0 ? 'creator' : 'racer'));
+      statements.push(db.prepare(
+        `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, rank_cache, updated_at)
+         VALUES (?, ?, ?, ?, 0, ?, CURRENT_TIMESTAMP)`,
+      ).bind(generateId(), raceId, racerId, racerIndex === 0 ? (index % 3) * 5 : ((index + racerIndex) % 4) * 3, racerIndex + 1));
+    }
+  }
+  await db.batch(statements);
+}
+
+/**
+ * Reset the isolated App Store / Google review account at sign-in time.
+ * This is deliberately email-gated and never runs for normal users.
+ */
+async function resetTestDemoAccount(
+  db: D1Database,
+  userId: string,
+  email: string,
+): Promise<void> {
+  if (email !== TEST_DEMO_EMAIL) return;
+
+  const ownedRaces = await db
+    .prepare('SELECT id FROM races WHERE creator_id = ?')
+    .bind(userId)
+    .all<{ id: string }>();
+
+  for (const race of ownedRaces.results) {
+    await db.batch([
+      db.prepare('DELETE FROM race_invites WHERE race_id = ?').bind(race.id),
+      db.prepare('DELETE FROM move_logs WHERE race_id = ?').bind(race.id),
+      db.prepare('DELETE FROM race_progress WHERE race_id = ?').bind(race.id),
+      db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id),
+      db.prepare('DELETE FROM race_members WHERE race_id = ?').bind(race.id),
+      db.prepare('DELETE FROM races WHERE id = ?').bind(race.id),
+    ]);
+  }
+
+  await db.batch([
+    db.prepare('DELETE FROM move_logs WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM race_progress WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM race_members WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM race_invites WHERE created_by = ?').bind(userId),
+    db.prepare('DELETE FROM crew_connections WHERE user_id = ? OR crew_user_id = ?').bind(userId, userId),
+    db.prepare(
+      `UPDATE profiles
+       SET full_name = NULL, username = NULL, avatar_url = NULL,
+           avatar_object_key = NULL, onboarding_complete = 0, is_demo = 1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+    ).bind(userId),
+    db.prepare(
+      `UPDATE users
+       SET demo_world_enabled = 1,
+           demo_world_seed = ?,
+           demo_world_variant = 'summer_v1',
+           last_login_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+    ).bind(TEST_DEMO_EMAIL, userId),
+  ]);
+
+  await seedTestDemoRaces(db, userId);
+}
+
+async function createSession(
+  db: D1Database,
+  userId: string,
+  jwtSecret: string,
+  deviceLabel?: string,
+): Promise<{ accessToken: string; refreshToken: string }> {
+  const refreshToken = generateRefreshToken();
+  const refreshTokenHash = await hashValue(refreshToken);
+  const sessionId = generateId();
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_S * 1000).toISOString();
+
+  await db
+    .prepare(
+      `INSERT INTO sessions (id, user_id, refresh_token_hash, device_label, expires_at, created_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+    .bind(sessionId, userId, refreshTokenHash, deviceLabel ?? null, expiresAt)
+    .run();
+
+  const now = Math.floor(Date.now() / 1000);
+  const accessToken = await signJwt(
+    { sub: userId, iat: now, exp: now + ACCESS_TOKEN_TTL_S },
+    jwtSecret,
+  );
+
+  return { accessToken, refreshToken };
+}
+
+async function buildUserObject(db: D1Database, userId: string, email: string) {
+  const profile = await db
+    .prepare('SELECT * FROM profiles WHERE user_id = ?')
+    .bind(userId)
+    .first<ProfileRow>();
+  const pass = await db
+    .prepare('SELECT id FROM member_passes WHERE user_id = ?')
+    .bind(userId)
+    .first<{ id: string }>();
+
+  return {
+    id: userId,
+    email,
+    isDemo: email.trim().toLowerCase() === TEST_DEMO_EMAIL || profile?.is_demo === 1,
+    fullName: profile?.full_name ?? null,
+    username: profile?.username ?? null,
+    profilePhotoUrl: profile?.avatar_url ?? null,
+    onboardingComplete: Boolean(profile?.onboarding_complete),
+    hasMemberPass: Boolean(pass),
+    termsAccepted: true, // Dev override until the onboarding redo wires terms acceptance
+  };
+}
+
+async function hardDeleteAccount(db: D1Database, r2: R2Bucket, userId: string): Promise<void> {
+  const user = await db.prepare('SELECT primary_email FROM users WHERE id = ?').bind(userId).first<UserRow>();
+
+  // Delete the current and any prior profile photos from R2.
+  const objectKeys = await db.prepare('SELECT object_key FROM media_objects WHERE owner_user_id = ?').bind(userId).all<{ object_key: string }>();
+  for (const row of objectKeys.results) {
+    try { await r2.delete(row.object_key); } catch { /* ignore R2 errors */ }
+  }
+  await db.prepare('DELETE FROM media_objects WHERE owner_user_id = ?').bind(userId).run();
+
+  // Anonymize race memberships the user was part of so shared races remain intact.
+  await db.prepare(
+    `UPDATE race_members
+     SET cached_display_name = 'Deleted User', cached_avatar_url = NULL
+     WHERE user_id = ?`,
+  ).bind(userId).run();
+
+  // Remove optional personal notes from move logs; aggregate values remain.
+  await db.prepare('UPDATE move_logs SET summary = NULL WHERE user_id = ?').bind(userId).run();
+
+  // Soft-delete races the user created that have no other active participants.
+  const ownedRaces = await db
+    .prepare('SELECT id FROM races WHERE creator_id = ? AND deleted_at IS NULL')
+    .bind(userId)
+    .all<{ id: string }>();
+  for (const race of ownedRaces.results) {
+    const countRow = await db
+      .prepare('SELECT COUNT(*) as cnt FROM race_members WHERE race_id = ? AND status = \'active\' AND user_id != ?')
+      .bind(race.id, userId)
+      .first<{ cnt: number }>();
+    if (countRow && countRow.cnt === 0) {
+      await db.prepare('UPDATE races SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_members WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_progress WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM move_logs WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_invites WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
+    }
+  }
+
+  // Delete user-specific records.
+  await db.prepare('DELETE FROM auth_identities WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+  if (user?.primary_email) {
+    await db.prepare('DELETE FROM email_codes WHERE email = ?').bind(user.primary_email).run();
+  }
+  await db.prepare('DELETE FROM crew_connections WHERE user_id = ? OR crew_user_id = ?').bind(userId, userId).run();
+  await db.prepare('DELETE FROM member_passes WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?').bind(userId, userId).run();
+
+  // Finally, mark the account deleted and remove the email identifier.
+  await db.prepare(
+    `UPDATE users
+     SET status = 'deleted', primary_email = NULL, demo_world_enabled = 0,
+         demo_world_seed = NULL, demo_world_variant = NULL, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(userId).run();
+}
+
+async function findOrCreateUser(
+  db: D1Database,
+  email: string,
+): Promise<UserRow> {
+  let user = await db
+    .prepare('SELECT * FROM users WHERE primary_email = ?')
+    .bind(email)
+    .first<UserRow>();
+
+  if (!user) {
+    const userId = generateId();
+    await db
+      .prepare(
+        `INSERT INTO users (id, primary_email, status, created_at, updated_at, last_login_at)
+         VALUES (?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      )
+      .bind(userId, email)
+      .run();
+    user = await db
+      .prepare('SELECT * FROM users WHERE id = ?')
+      .bind(userId)
+      .first<UserRow>();
+  } else {
+    await db
+      .prepare(
+        'UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      )
+      .bind(user.id)
+      .run();
+  }
+
+  if (!user) throw new Error('Failed to find or create user');
+  return user;
+}
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
+// POST /auth/email/start
+authRouter.post('/email/start', async (c) => {
+  let body: { email?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  // Always return the same generic message regardless of email validity
+  const GENERIC_OK = {
+    ok: true,
+    message: 'If that email can receive mail, a code has been sent.',
+  } as const;
+
+  const rawEmail = typeof body.email === 'string' ? body.email : '';
+  if (!rawEmail || !isValidEmail(rawEmail)) {
+    return c.json(GENERIC_OK);
+  }
+
+  const email = normalizeEmail(rawEmail);
+  const code = generateOtp();
+  const codeHash = await hashValue(code);
+  const id = generateId();
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS).toISOString();
+
+  await c.env.DB.prepare(
+    `INSERT INTO email_codes (id, email, code_hash, attempts, expires_at, created_at)
+     VALUES (?, ?, ?, 0, ?, CURRENT_TIMESTAMP)`,
+  )
+    .bind(id, email, codeHash, expiresAt)
+    .run();
+
+  try {
+    await sendVerificationCode(email, code, c.env.RESEND_API_KEY, c.env.RESEND_FROM_EMAIL);
+  } catch (err) {
+    // Log that sending failed but do not expose it to the caller or leak the code
+    console.error('[resend] send failed status:', err instanceof Error ? err.message : 'unknown');
+  }
+
+  return c.json(GENERIC_OK);
+});
+
+// POST /auth/email/verify
+authRouter.post('/email/verify', async (c) => {
+  let body: { email?: unknown; code?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown; code?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  const rawEmail = typeof body.email === 'string' ? body.email : '';
+  const rawCode = typeof body.code === 'string' ? body.code.trim() : '';
+
+  if (!rawEmail || !rawCode) {
+    return c.json({ ok: false, error: 'email and code are required' }, 400);
+  }
+
+  const email = normalizeEmail(rawEmail);
+
+  const codeRow = await c.env.DB.prepare(
+    `SELECT * FROM email_codes
+     WHERE email = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+     ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(email)
+    .first<EmailCodeRow>();
+
+  // Generic error — never reveal whether the email exists
+  const INVALID = { ok: false, error: 'Invalid or expired code' } as const;
+
+  if (!codeRow) return c.json(INVALID, 401);
+
+  if (codeRow.attempts >= MAX_OTP_ATTEMPTS) {
+    return c.json({ ok: false, error: 'Too many attempts. Request a new code.' }, 429);
+  }
+
+  // Increment attempts before comparing — prevents brute-force timing abuse
+  await c.env.DB.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE id = ?')
+    .bind(codeRow.id)
+    .run();
+
+  const providedHash = await hashValue(rawCode);
+  if (providedHash !== codeRow.code_hash) {
+    return c.json(INVALID, 401);
+  }
+
+  await c.env.DB.prepare('UPDATE email_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .bind(codeRow.id)
+    .run();
+
+  const user = await findOrCreateUser(c.env.DB, email);
+  await resetTestDemoAccount(c.env.DB, user.id, email);
+
+  // Ensure email identity row exists
+  const existingIdentity = await c.env.DB.prepare(
+    "SELECT id FROM auth_identities WHERE user_id = ? AND provider = 'email'",
+  )
+    .bind(user.id)
+    .first<{ id: string }>();
+
+  if (!existingIdentity) {
+    await c.env.DB.prepare(
+      `INSERT INTO auth_identities (id, user_id, provider, email, email_verified, created_at)
+       VALUES (?, ?, 'email', ?, 1, CURRENT_TIMESTAMP)`,
+    )
+      .bind(generateId(), user.id, email)
+      .run();
+  }
+
+  await ensureProfileAndPass(c.env.DB, user.id);
+
+  const { accessToken, refreshToken } = await createSession(c.env.DB, user.id, c.env.JWT_SECRET);
+  const userObj = await buildUserObject(c.env.DB, user.id, email);
+
+  return c.json({ accessToken, refreshToken, user: userObj });
+});
+
+// POST /auth/google
+authRouter.post('/google', async (c) => {
+  let body: { idToken?: unknown };
+  try {
+    body = await c.req.json<{ idToken?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  const idToken = typeof body.idToken === 'string' ? body.idToken : '';
+  if (!idToken) {
+    return c.json({ ok: false, error: 'idToken required' }, 400);
+  }
+
+  let googleInfo;
+  try {
+    googleInfo = await verifyGoogleIdToken(idToken, c.env.GOOGLE_IOS_CLIENT_ID);
+  } catch {
+    // Do not expose verification failure details
+    return c.json({ ok: false, error: 'Google sign-in failed' }, 401);
+  }
+
+  const email = normalizeEmail(googleInfo.email);
+  const user = await findOrCreateUser(c.env.DB, email);
+  await resetTestDemoAccount(c.env.DB, user.id, email);
+
+  // Upsert Google identity
+  const existingIdentity = await c.env.DB.prepare(
+    "SELECT id FROM auth_identities WHERE user_id = ? AND provider = 'google'",
+  )
+    .bind(user.id)
+    .first<AuthIdentityRow>();
+
+  if (!existingIdentity) {
+    await c.env.DB.prepare(
+      `INSERT INTO auth_identities
+         (id, user_id, provider, provider_user_id, email, email_verified, display_name, avatar_url, created_at)
+       VALUES (?, ?, 'google', ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)`,
+    )
+      .bind(generateId(), user.id, googleInfo.sub, email, googleInfo.name ?? null, googleInfo.picture ?? null)
+      .run();
+  } else {
+    await c.env.DB.prepare(
+      'UPDATE auth_identities SET display_name = ?, avatar_url = ? WHERE id = ?',
+    )
+      .bind(googleInfo.name ?? null, googleInfo.picture ?? null, existingIdentity.id)
+      .run();
+  }
+
+  await ensureProfileAndPass(c.env.DB, user.id);
+
+  const { accessToken, refreshToken } = await createSession(c.env.DB, user.id, c.env.JWT_SECRET);
+  const userObj = await buildUserObject(c.env.DB, user.id, email);
+
+  return c.json({ accessToken, refreshToken, user: userObj });
+});
+
+// POST /auth/apple
+authRouter.post('/apple', async (c) => {
+  let body: { idToken?: unknown; fullName?: unknown };
+  try {
+    body = await c.req.json<{ idToken?: unknown; fullName?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  const idToken = typeof body.idToken === 'string' ? body.idToken : '';
+  if (!idToken) {
+    return c.json({ ok: false, error: 'idToken required' }, 400);
+  }
+  const fullName = typeof body.fullName === 'string' ? body.fullName : null;
+
+  let appleInfo;
+  try {
+    appleInfo = await verifyAppleIdToken(idToken, c.env.APPLE_BUNDLE_ID);
+  } catch {
+    return c.json({ ok: false, error: 'Apple sign-in failed' }, 401);
+  }
+
+  const email = normalizeEmail(appleInfo.email);
+  const user = await findOrCreateUser(c.env.DB, email);
+  await resetTestDemoAccount(c.env.DB, user.id, email);
+
+  // Upsert Apple identity
+  const existingIdentity = await c.env.DB.prepare(
+    "SELECT id FROM auth_identities WHERE user_id = ? AND provider = 'apple'",
+  )
+    .bind(user.id)
+    .first<{ id: string }>();
+
+  if (!existingIdentity) {
+    await c.env.DB.prepare(
+      `INSERT INTO auth_identities
+         (id, user_id, provider, provider_user_id, email, email_verified, display_name, created_at)
+       VALUES (?, ?, 'apple', ?, ?, 1, ?, CURRENT_TIMESTAMP)`,
+    )
+      .bind(generateId(), user.id, appleInfo.sub, email, fullName)
+      .run();
+  } else {
+    await c.env.DB.prepare(
+      'UPDATE auth_identities SET display_name = COALESCE(?, display_name) WHERE id = ?',
+    )
+      .bind(fullName, existingIdentity.id)
+      .run();
+  }
+
+  await ensureProfileAndPass(c.env.DB, user.id);
+
+  if (fullName) {
+    await c.env.DB.prepare(
+      `UPDATE profiles
+       SET full_name = COALESCE(full_name, ?), updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ?`,
+    )
+      .bind(fullName, user.id)
+      .run();
+  }
+
+  const { accessToken, refreshToken } = await createSession(c.env.DB, user.id, c.env.JWT_SECRET);
+  const userObj = await buildUserObject(c.env.DB, user.id, email);
+
+  return c.json({ accessToken, refreshToken, user: userObj });
+});
+
+// POST /auth/reviewer
+//
+// Release-review escape hatch for app-store review only. This is not a public
+// password system: it is limited to one configured review email and compares
+// against a Cloudflare secret hash.
+authRouter.post('/reviewer', async (c) => {
+  let body: { email?: unknown; password?: unknown };
+  try {
+    body = await c.req.json<{ email?: unknown; password?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  const requestedEmail = normalizeEmail(typeof body.email === 'string' ? body.email : '');
+  const email =
+    requestedEmail === 'testing@getnuvo' || requestedEmail === 'testing@getnuvo.net'
+      ? 'team@getnuvo.net'
+      : requestedEmail;
+  const password = typeof body.password === 'string' ? body.password : '';
+  const expectedHash = c.env.REVIEWER_PASSWORD_HASH;
+  const INVALID = { ok: false, error: 'Invalid review credentials' } as const;
+
+  if (
+    email !== 'team@getnuvo.net' ||
+    !password ||
+    !expectedHash ||
+    (await hashValue(password)) !== expectedHash
+  ) {
+    return c.json(INVALID, 401);
+  }
+
+  const user = await findOrCreateUser(c.env.DB, email);
+
+  await c.env.DB.prepare(
+    `UPDATE users
+     SET status = 'active',
+         terms_accepted_at = COALESCE(terms_accepted_at, CURRENT_TIMESTAMP),
+         demo_world_enabled = 0,
+         demo_world_seed = NULL,
+         demo_world_variant = NULL,
+         last_login_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  )
+    .bind(user.id)
+    .run();
+
+  await ensureProfileAndPass(c.env.DB, user.id);
+
+  await c.env.DB.prepare(
+    `UPDATE profiles
+     SET full_name = COALESCE(full_name, 'Nuvo Review'),
+         username = COALESCE(username, 'nuvoreview'),
+         onboarding_complete = 1,
+         is_demo = 1,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = ?`,
+  )
+    .bind(user.id)
+    .run();
+
+  const existingIdentity = await c.env.DB.prepare(
+    "SELECT id FROM auth_identities WHERE user_id = ? AND provider = 'reviewer'",
+  )
+    .bind(user.id)
+    .first<{ id: string }>();
+
+  if (!existingIdentity) {
+    await c.env.DB.prepare(
+      `INSERT INTO auth_identities
+         (id, user_id, provider, provider_user_id, email, email_verified, display_name, avatar_url, created_at)
+       VALUES (?, ?, 'reviewer', ?, ?, 1, 'Nuvo Review', NULL, CURRENT_TIMESTAMP)`,
+    )
+      .bind(generateId(), user.id, 'team@getnuvo.net', email)
+      .run();
+  }
+
+  const { accessToken, refreshToken } = await createSession(
+    c.env.DB,
+    user.id,
+    c.env.JWT_SECRET,
+    'app-store-review',
+  );
+  const userObj = await buildUserObject(c.env.DB, user.id, email);
+
+  return c.json({ accessToken, refreshToken, user: userObj });
+});
+
+// POST /auth/refresh
+authRouter.post('/refresh', async (c) => {
+  let body: { refreshToken?: unknown };
+  try {
+    body = await c.req.json<{ refreshToken?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid request body' }, 400);
+  }
+
+  const rawToken = typeof body.refreshToken === 'string' ? body.refreshToken : '';
+  if (!rawToken) {
+    return c.json({ ok: false, error: 'refreshToken required' }, 400);
+  }
+
+  const tokenHash = await hashValue(rawToken);
+
+  const session = await c.env.DB.prepare(
+    `SELECT * FROM sessions
+     WHERE refresh_token_hash = ? AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+     LIMIT 1`,
+  )
+    .bind(tokenHash)
+    .first<SessionRow>();
+
+  if (!session) {
+    return c.json({ ok: false, error: 'Session expired or invalid' }, 401);
+  }
+
+  await c.env.DB.prepare('UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .bind(session.id)
+    .run();
+
+  const now = Math.floor(Date.now() / 1000);
+  const accessToken = await signJwt(
+    { sub: session.user_id, iat: now, exp: now + ACCESS_TOKEN_TTL_S },
+    c.env.JWT_SECRET,
+  );
+
+  return c.json({ accessToken });
+});
+
+// POST /auth/logout  (requires auth)
+authRouter.post('/logout', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  await c.env.DB.prepare(
+    'UPDATE sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL',
+  )
+    .bind(userId)
+    .run();
+  return c.json({ ok: true });
+});
+
+// GET /auth/me  (requires auth)
+authRouter.get('/me', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
+    .bind(userId)
+    .first<UserRow>();
+  if (!user || user.status === 'deleted') {
+    return c.json({ ok: false, error: 'User not found' }, 404);
+  }
+  if (c.req.query('resetDemo') === '1') {
+    await resetTestDemoAccount(c.env.DB, userId, user.primary_email ?? '');
+  }
+  const userObj = await buildUserObject(c.env.DB, userId, user.primary_email ?? '');
+  return c.json({ user: userObj });
+});
+
+// POST /auth/terms  (requires auth)
+authRouter.post('/terms', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  await c.env.DB.prepare(
+    'UPDATE users SET terms_accepted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+  ).bind(userId).run();
+  return c.json({ ok: true });
+});
+
+// DELETE /auth/account  (requires auth — hard delete / anonymization)
+authRouter.delete('/account', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  await hardDeleteAccount(c.env.DB, c.env.PROFILE_PHOTOS, userId);
+  return c.json({ ok: true });
+});
