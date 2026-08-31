@@ -1,0 +1,607 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/navigation/nuvo_navigation.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../auth/data/auth_api.dart';
+import '../../auth/presentation/auth_controller.dart';
+import '../data/race_models.dart';
+import '../domain/camera_verification_resolver.dart';
+import 'race_controller.dart';
+
+class RaceSettingsScreen extends ConsumerStatefulWidget {
+  const RaceSettingsScreen({super.key, required this.raceId});
+
+  final String raceId;
+
+  @override
+  ConsumerState<RaceSettingsScreen> createState() => _RaceSettingsScreenState();
+}
+
+class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _targetController = TextEditingController();
+  final _unitController = TextEditingController();
+  final _rulesController = TextEditingController();
+  final _startLineController = TextEditingController();
+  final _finishLineController = TextEditingController();
+
+  Race? _race;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+  String _goalType = 'manual';
+  String _proofRequirement = 'manual';
+  String _proofReviewMode = 'auto_accept';
+  String _visibility = 'private';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _categoryController.dispose();
+    _targetController.dispose();
+    _unitController.dispose();
+    _rulesController.dispose();
+    _startLineController.dispose();
+    _finishLineController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .getRaceDetail(widget.raceId);
+      if (!mounted) return;
+      _race = race;
+      _titleController.text = race.title;
+      _descriptionController.text = race.description ?? '';
+      _categoryController.text = race.category ?? '';
+      _targetController.text = race.targetValue?.toString() ?? '';
+      _unitController.text = race.unit ?? '';
+      _rulesController.text = race.rules ?? '';
+      _startLineController.text = race.startLineAt ?? '';
+      _finishLineController.text = race.finishLineAt ?? '';
+      _goalType = race.goalType;
+      _proofRequirement = resolveCameraVerification(race).isCameraVerifiable
+          ? 'ai_check'
+          : race.proofRequirement;
+      _proofReviewMode = race.proofReviewMode;
+      _visibility = race.visibility;
+      setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not load race settings.';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      setState(() => _error = 'Race title is required.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final target = int.tryParse(_targetController.text.trim());
+      final existingRace = _race;
+      final eligibility = existingRace == null
+          ? null
+          : resolveCameraVerification(existingRace);
+      final race = await ref
+          .read(raceControllerProvider.notifier)
+          .updateRace(
+            widget.raceId,
+            title: title,
+            description: _descriptionController.text.trim(),
+            category: _categoryController.text.trim(),
+            goalType: _goalType,
+            targetValue: target,
+            unit: eligibility?.isCameraVerifiable == true
+                ? _unitForEligibility(eligibility!)
+                : _unitController.text.trim(),
+            startLineAt: _startLineController.text.trim(),
+            finishLineAt: _finishLineController.text.trim(),
+            rules: _rulesController.text.trim(),
+            proofRequirement: eligibility?.isCameraVerifiable == true
+                ? 'ai_check'
+                : _proofRequirement,
+            proofReviewMode: _proofReviewMode,
+            visibility: _visibility,
+          );
+      if (mounted) context.go('/race/${race.id}');
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _saving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not save changes.';
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _runLifecycleAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required Future<void> Function() action,
+    bool returnToArena = false,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: NuvoColors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep race'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await action();
+      if (!mounted) return;
+      context.go(returnToArena ? '/arena' : '/race/${widget.raceId}');
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _saving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not update this race.';
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authControllerProvider).user;
+    final isOwner = _race?.creatorId == user?.id;
+    final eligibility = _race == null
+        ? null
+        : resolveCameraVerification(_race!);
+    final isCameraRace = eligibility?.isCameraVerifiable == true;
+
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: NuvoColors.page,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_race == null) {
+      return Scaffold(
+        backgroundColor: NuvoColors.page,
+        body: SafeArea(
+          child: NuvoErrorState(
+            message: _error ?? 'Race settings could not load.',
+            onRetry: _load,
+          ),
+        ),
+      );
+    }
+
+    if (!isOwner) {
+      return Scaffold(
+        backgroundColor: NuvoColors.page,
+        body: SafeArea(
+          child: NuvoErrorState(
+            message: 'Only the race creator can edit race settings.',
+            onRetry: () => context.go('/race/${widget.raceId}'),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: NuvoColors.page,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: NuvoBackButton(
+                onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Edit race',
+              style: AppTextStyles.headlineLarge.copyWith(
+                fontSize: 32,
+                letterSpacing: -0.9,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Change your race details, rules, and status.',
+              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+            ),
+            const SizedBox(height: 24),
+            _Section(
+              title: 'Basic details',
+              children: [
+                _Input(controller: _titleController, label: 'Title'),
+                _Input(
+                  controller: _descriptionController,
+                  label: 'Description',
+                  maxLines: 3,
+                ),
+                _Input(controller: _categoryController, label: 'Category'),
+              ],
+            ),
+            _Section(
+              title: 'Goal',
+              children: isCameraRace
+                  ? [
+                      _MovementSummary(eligibility: eligibility!),
+                      _Input(
+                        controller: _targetController,
+                        label: 'Target',
+                        hint: _targetHint(eligibility),
+                        keyboardType: TextInputType.number,
+                      ),
+                      _Input(
+                        controller: _startLineController,
+                        label: 'Start',
+                        hint: 'Add start date',
+                      ),
+                      _Input(
+                        controller: _finishLineController,
+                        label: 'Finish',
+                        hint: 'Add finish date',
+                      ),
+                    ]
+                  : [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _Input(
+                              controller: _targetController,
+                              label: 'Target value',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _Input(
+                              controller: _unitController,
+                              label: 'Unit',
+                            ),
+                          ),
+                        ],
+                      ),
+                      _Input(
+                        controller: _startLineController,
+                        label: 'Start',
+                        hint: 'Add start date',
+                      ),
+                      _Input(
+                        controller: _finishLineController,
+                        label: 'Finish',
+                        hint: 'Add finish date',
+                      ),
+                    ],
+            ),
+            _Section(
+              title: 'Rules',
+              children: [
+                _Input(
+                  controller: _rulesController,
+                  label: 'Race rules',
+                  hint: 'How the winner is decided.',
+                  maxLines: 5,
+                ),
+              ],
+            ),
+            _Section(
+              title: 'Visibility',
+              children: [
+                _Menu(
+                  label: 'Who can join',
+                  value: _visibility,
+                  values: const {
+                    'private': 'private',
+                    'crew_only': 'crew only',
+                    'invite_code': 'invite code',
+                  },
+                  onChanged: (value) => setState(() => _visibility = value),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              Text(
+                _error!,
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.danger,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            NuvoPrimaryButton(
+              label: 'Save changes',
+              icon: Icons.check_rounded,
+              expand: true,
+              loading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+            const SizedBox(height: 12),
+            NuvoOutlineButton(
+              label: 'Back to race',
+              expand: true,
+              onPressed: _saving
+                  ? null
+                  : () => context.go('/race/${widget.raceId}'),
+            ),
+            const SizedBox(height: 26),
+            _Section(
+              title: 'Race status',
+              children: [
+                NuvoGhostButton(
+                  label: 'Archive race',
+                  icon: Icons.archive_rounded,
+                  expand: true,
+                  onPressed: _saving
+                      ? null
+                      : () => _runLifecycleAction(
+                          title: 'Archive race?',
+                          message:
+                              'Archived races leave active competition but remain in your race history.',
+                          confirmLabel: 'Archive',
+                          action: () => ref
+                              .read(raceControllerProvider.notifier)
+                              .archiveRace(widget.raceId),
+                        ),
+                ),
+                NuvoGhostButton(
+                  label: 'Cancel race',
+                  icon: Icons.cancel_rounded,
+                  expand: true,
+                  onPressed: _saving
+                      ? null
+                      : () => _runLifecycleAction(
+                          title: 'Cancel race?',
+                          message:
+                              'Cancel this race only if the start line or rules no longer apply.',
+                          confirmLabel: 'Cancel race',
+                          action: () => ref
+                              .read(raceControllerProvider.notifier)
+                              .cancelRace(widget.raceId),
+                        ),
+                ),
+                NuvoDangerButton(
+                  label: 'Delete race',
+                  icon: Icons.delete_outline_rounded,
+                  expand: true,
+                  loading: _saving,
+                  onPressed: _saving
+                      ? null
+                      : () => _runLifecycleAction(
+                          title: 'Delete race?',
+                          message:
+                              'This removes the race from your arena. Race history is preserved.',
+                          confirmLabel: 'Delete',
+                          returnToArena: true,
+                          action: () => ref
+                              .read(raceControllerProvider.notifier)
+                              .deleteRace(widget.raceId),
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTextStyles.titleLarge),
+          const SizedBox(height: 12),
+          ...children.expand((child) => [child, const SizedBox(height: 12)]),
+        ],
+      ),
+    );
+  }
+}
+
+class _Input extends StatelessWidget {
+  const _Input({
+    required this.controller,
+    required this.label,
+    this.hint,
+    this.maxLines = 1,
+    this.keyboardType,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final int maxLines;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) {
+    return NuvoTextInput(
+      controller: controller,
+      label: label,
+      hint: hint,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+    );
+  }
+}
+
+class _Menu extends StatelessWidget {
+  const _Menu({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final Map<String, String> values;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: values.containsKey(value) ? value : values.keys.first,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+        hintStyle: AppTextStyles.bodyMedium.copyWith(
+          color: NuvoColors.textMuted,
+        ),
+        filled: true,
+        fillColor: NuvoColors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
+        ),
+      ),
+      items: [
+        for (final entry in values.entries)
+          DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+      ],
+      onChanged: (value) {
+        if (value != null) onChanged(value);
+      },
+    );
+  }
+}
+
+class _MovementSummary extends StatelessWidget {
+  const _MovementSummary({required this.eligibility});
+
+  final CameraVerificationEligibility eligibility;
+
+  @override
+  Widget build(BuildContext context) {
+    final movement = eligibility.movementDefinition;
+    final unit = _unitForEligibility(eligibility);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NuvoColors.navy, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Movement',
+            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            movement?.title ?? 'Unsupported movement',
+            style: AppTextStyles.titleMedium,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Target uses $unit.',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _unitForEligibility(CameraVerificationEligibility eligibility) {
+  return eligibility.movementDefinition?.isHold == true ? 'seconds' : 'reps';
+}
+
+String _targetHint(CameraVerificationEligibility eligibility) {
+  final unit = _unitForEligibility(eligibility);
+  final target = eligibility.movementDefinition?.defaultTarget;
+  return target == null ? unit : '$target $unit';
+}
