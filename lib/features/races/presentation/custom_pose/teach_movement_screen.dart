@@ -891,9 +891,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   Map<String, dynamic> _debugMovementReport() {
     final streamState = _poseStream.state;
     final result = _customTestResult;
+    final spec = _effectiveSpec;
     return {
       'generatedAtIso8601': DateTime.now().toUtc().toIso8601String(),
       'teaching': _flow.debugReport(),
+      // Replayable fixtures — paste into test/motion_qa/fixtures/custom/ to
+      // re-run the builder / runtime offline against a real capture.
+      if (_flow.currentCalibration() != null)
+        'calibrationFixture': _flow.currentCalibration()!.toJson(),
+      if (spec != null) 'learnedSpecFixture': spec.toJson(),
       'poseStream': {
         'framesReceived': streamState.framesReceived,
         'framesProcessed': streamState.framesProcessed,
