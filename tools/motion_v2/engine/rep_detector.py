@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(_HERE, ".."))
 from adapter.nuvo_to_h36m import frames_to_h36m  # noqa: E402
 from mb_encoder import encode  # noqa: E402
 from experiments.lib_repr import per_frame_embedding  # noqa: E402
-from engine.taught_motion import TaughtMotionV2  # noqa: E402
+from engine.taught_motion import TaughtMotionV2, traj_similarity  # noqa: E402
 from experiments.lib_repr import _l2n, resample_seq  # noqa: E402
 
 _MIN_BURST = 5          # frames
@@ -58,22 +58,20 @@ class RepDetectorV2:
         # median demo length is the natural window; clamp to the stream.
         W = int(np.clip(np.median(self.motion.demo_lengths) if self.motion.demo_lengths else C,
                         _MIN_BURST, max(_MIN_BURST + 1, T)))
-        step = max(1, W // 8)
+        # sweep a range of window sizes (speed invariance) at a coarse stride
         scored = []  # (center, score, start, end)
-        for start in range(0, max(1, T - W + 1), step):
-            end = min(T, start + W)
-            win = resample_seq(en[start:end], C)            # (C,512)
-            # diagonal-ish alignment score: mean of per-position best cosine in a
-            # small forward band (tolerates speed differences)
-            S = win @ canon.T                               # (C,C)
-            band = np.array([S[i, max(0, i - 2):min(C, i + 3)].max() for i in range(C)])
-            scored.append((start + W // 2, float(band.mean()), start, end))
+        for wscale in (0.7, 1.0, 1.4):
+            w = int(np.clip(W * wscale, _MIN_BURST, T))
+            step = max(1, w // 6)
+            for start in range(0, max(1, T - w + 1), step):
+                end = min(T, start + w)
+                ts = traj_similarity(en[start:end], canon)
+                scored.append((start + w // 2, ts, start, end))
         if not scored:
             return []
         centers = np.array([s[0] for s in scored])
         vals = np.array([s[1] for s in scored])
-        thr = max(self.motion.accept_traj_sim if hasattr(self.motion, "accept_traj_sim") else 0.0,
-                  np.percentile(vals, 60), 0.75)
+        thr = max(1.0 - self.motion.accept_traj_dist * 1.5, np.percentile(vals, 80))
         # non-max suppression: peaks above thr, separated by >= W*0.55
         order = np.argsort(-vals)
         picks = []

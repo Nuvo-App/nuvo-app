@@ -8,7 +8,8 @@ import numpy as np
 
 
 def _l2n(v: np.ndarray, axis=-1, eps=1e-8) -> np.ndarray:
-    return v / (np.linalg.norm(v, axis=axis, keepdims=True) + eps)
+    v = np.nan_to_num(np.asarray(v, np.float64))
+    return (v / (np.linalg.norm(v, axis=axis, keepdims=True) + eps)).astype(np.float32)
 
 
 # ---- reductions: (T,17,512) -> fixed-size descriptor -------------------------
