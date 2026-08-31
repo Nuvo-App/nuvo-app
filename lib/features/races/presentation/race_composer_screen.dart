@@ -951,24 +951,76 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                   onSelect: _select,
                 ),
               ],
-              const SizedBox(height: 16),
-              Center(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => context.push('/internal/teach-movement'),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Text(
-                      'Teach a movement',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
-                        fontWeight: FontWeight.w600,
-                      ),
+              const SizedBox(height: 18),
+              _TeachNuvoCard(onTap: () => context.push('/races/teach')),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Entry into the Teach Nuvo flow from the activity step — for movements that
+/// aren't in the preset list. Reached at `/races/teach`.
+class _TeachNuvoCard extends StatelessWidget {
+  const _TeachNuvoCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      scale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: NuvoColors.blueSurface,
+          borderRadius: BorderRadius.circular(NuvoRadii.card),
+          border: Border.all(color: NuvoColors.blueBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: NuvoColors.blue,
+                borderRadius: BorderRadius.circular(NuvoRadii.badge),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: NuvoColors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "Don't see your movement?",
+                    style: AppTextStyles.raceRowTitle.copyWith(
+                      color: NuvoColors.navy,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Teach Nuvo — show it 3 times and race on it.',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: NuvoColors.navy,
+            ),
           ],
         ),
       ),

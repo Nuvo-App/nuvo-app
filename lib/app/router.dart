@@ -153,8 +153,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/races/join',
         pageBuilder: (_, state) => _authPage(state, const JoinRaceScreen()),
       ),
+      // Teach Nuvo — the custom-movement capture flow. Public entry is
+      // /races/teach (reached from the race composer's activity step).
       GoRoute(
-        path: '/internal/teach-movement',
+        path: '/races/teach',
         pageBuilder: (_, state) => _cameraPage(
           state,
           TeachMovementScreen(
@@ -162,6 +164,11 @@ final routerProvider = Provider<GoRouter>((ref) {
                 kDebugMode && state.uri.queryParameters['fixture'] == 'ready',
           ),
         ),
+      ),
+      // Legacy alias — keep old links / bookmarks working.
+      GoRoute(
+        path: '/internal/teach-movement',
+        redirect: (_, state) => '/races/teach${state.uri.hasQuery ? '?${state.uri.query}' : ''}',
       ),
       GoRoute(
         path: '/race/:id',
