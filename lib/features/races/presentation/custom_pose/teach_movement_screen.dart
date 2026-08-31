@@ -104,7 +104,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive) {
-      if (_flow.stage == TeachMovementStage.capturing) {
+      if (_flow.stage == TeachMovementStage.recording ||
+          _flow.stage == TeachMovementStage.holdStill ||
+          _flow.stage == TeachMovementStage.capturing) {
         _flow.markInterrupted();
       }
       if (_testingVerifier) {
@@ -648,6 +650,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       TeachMovementStage.countdown => ('Get ready', NuvoColors.muted),
       TeachMovementStage.startPose => ('Waiting for start', NuvoColors.muted),
       TeachMovementStage.readyToRecord => ('Ready', NuvoColors.white),
+      TeachMovementStage.holdStill => ('Hold still', NuvoColors.white),
       TeachMovementStage.recording => ('Recording', NuvoColors.white),
       TeachMovementStage.building => ('Learning', NuvoColors.muted),
       _ => ('', NuvoColors.muted),
@@ -810,9 +813,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _cameraActionButton() {
     final stage = _flow.stage;
-    if (stage == TeachMovementStage.startPose) {
+    if (stage == TeachMovementStage.startPose ||
+        stage == TeachMovementStage.holdStill) {
       return const NuvoPrimaryButton(
-        label: 'Hold still',
+        label: 'Hold still…',
         expand: true,
         onPressed: null,
       );
@@ -843,9 +847,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Widget _secondaryActionButton() {
-    if (_flow.stage == TeachMovementStage.recording) {
+    if (_flow.stage == TeachMovementStage.recording ||
+        _flow.stage == TeachMovementStage.holdStill) {
       return NuvoOutlineButton(
-        label: 'Cancel recording',
+        label: 'Cancel',
         expand: true,
         onPressed: _cancelRecording,
       );
