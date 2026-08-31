@@ -13,6 +13,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_geometry.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
+import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
 import '../../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
@@ -62,7 +63,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   final List<Map<String, dynamic>> _runtimeDiagnostics = [];
   Timer? _uiUpdateTimer;
   Timer? _skeletonExpiryTimer;
-  static const int _testTarget = 1;
+  static const int _testTarget = 5;
   static const int _skeletonHoldMs = 900;
   static const int _uiThrottleMs = 100;
   final _skeletonHold = SkeletonFrameHold(
@@ -592,19 +593,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _statusPill(),
         const SizedBox(height: 12),
         _cameraPreviewCard(showPreview),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
+        Center(
+          child: NuvoRepPulse(
+            count: _customUpdate?.count ?? 0,
+            target: _testTarget,
+            accent: NuvoColors.blue,
+          ),
+        ),
+        const SizedBox(height: 10),
         Text(
           status,
           style: AppTextStyles.titleMedium,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 8),
-        Text(
-          _flow.message,
-          style: AppTextStyles.bodyLarge,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         NuvoPrimaryButton(
           label: 'Stop test',
           expand: true,

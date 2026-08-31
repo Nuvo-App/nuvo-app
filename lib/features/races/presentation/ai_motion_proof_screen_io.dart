@@ -1478,7 +1478,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '+$_streakCount',
+                      '+1',
                       style: AppTextStyles.displayLarge.copyWith(
                         fontSize: 200,
                         height: 0.9,
