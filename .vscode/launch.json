@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Nuvo – Web Preview",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "-d",
+        "web-server",
+        "--web-hostname",
+        "0.0.0.0",
+        "--web-port",
+        "8080"
+      ]
+    }
+  ]
+}

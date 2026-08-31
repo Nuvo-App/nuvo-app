@@ -1,0 +1,78 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+server/worker/.tmp-test-dist/
+
+# Node / Worker build & deps
+**/node_modules/
+server/worker/build/
+server/worker/dist/
+server/worker/.wrangler/
+
+# Secrets — never commit real values (.example / .dev.vars.example are safe templates)
+**/.dev.vars
+!**/.dev.vars.example
+*.pem
+*.p8
+*.p12
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# Local model checkpoints / large ML artifacts (fetch via setup script instead)
+motion-v2/checkpoints/
+motion-v2/weights/
+*.ckpt
+*.safetensors
+# NOTE: test/motion_qa/models/pose_landmarker.task (~5.7 MB) is an intentional test fixture — kept.
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Android release signing
+android/key.properties
+*.jks
+*.keystore
+
+# Motion-QA experiment output — generated, huge, never commit
+test/motion_qa/lab/
+test/motion_qa/experiment_results/
