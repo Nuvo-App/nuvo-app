@@ -1,16 +1,17 @@
-"""TaughtMotionV2 — a movement learned from 3 demonstrations, using the
-pretrained motion encoder. No idea what the movement *is*; the name is metadata.
+"""TaughtMotionV2 — a movement learned from a few demonstrations, using the
+pretrained motion encoder. It does not know what the movement *is*; the name is
+metadata only.
 
     demos (raw Nuvo frame lists)
         -> adapter -> encoder
-        -> segment out idle padding (no "hold still" assumption)
-        -> per-demo descriptor  (multi-reference prototype)
-        -> canonical per-frame embedding trajectory (start -> end of the action)
-        -> rest embedding (low-motion regions) + accept threshold
+        -> segment out idle padding  (embedding-velocity, NO "hold still" ritual)
+        -> per-demo descriptor            (multi-reference prototype set)
+        -> canonical per-frame trajectory (start -> end of the action)
+        -> rest embedding + a calibrated accept margin, using hard negatives
+           (time-reversed / limb-desynced versions of the demos themselves)
 
-Then:
-    match(seq)        -> MatchResult(is_same_family, score, ...)
-    progress(seq)     -> coverage along the canonical trajectory  [0..1]
+match(frames)              -> MatchResult
+match_encoded(rep, emb)    -> MatchResult   (no re-encode; used by the rep detector)
 """
 from __future__ import annotations
 
@@ -23,22 +24,15 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, ".."))
-from adapter.nuvo_to_h36m import frames_to_h36m  # noqa: E402
-from mb_encoder import encode  # noqa: E402
-from experiments.lib_repr import (  # noqa: E402
-    _l2n,
-    dtw_distance,
-    mean_pool,
-    per_frame_embedding,
-    resample_seq,
-)
+from adapter.nuvo_to_h36m import H36M_LEFT, H36M_RIGHT, frames_to_h36m  # noqa: E402
+from mb_encoder import encode, encoder_info  # noqa: E402
+from experiments.lib_repr import _l2n, mean_pool, per_frame_embedding, resample_seq  # noqa: E402
 
 CANON_LEN = 32
-SCHEMA = 1
+SCHEMA = 2
 
 
-def _velocity(emb: np.ndarray) -> np.ndarray:
-    """per-frame speed of the (T,512) normalized embedding trajectory."""
+def embedding_velocity(emb: np.ndarray) -> np.ndarray:
     if len(emb) < 2:
         return np.zeros(len(emb))
     v = np.linalg.norm(np.diff(emb, axis=0), axis=1)
@@ -46,34 +40,33 @@ def _velocity(emb: np.ndarray) -> np.ndarray:
 
 
 def segment_action(emb: np.ndarray, idle_frac: float = 0.35) -> tuple[int, int]:
-    """Trim leading/trailing idle using embedding velocity. Returns [start, end).
-
-    idle threshold = idle_frac * median non-trivial speed. No fixed start pose.
-    """
+    """Trim leading/trailing idle using embedding velocity. No fixed start pose."""
     T = len(emb)
     if T < 4:
         return 0, T
-    v = _velocity(emb)
+    v = embedding_velocity(emb)
     active = v[v > 1e-4]
     if len(active) == 0:
         return 0, T
     thr = idle_frac * np.median(active)
-    moving = v > thr
-    if not moving.any():
+    moving = np.where(v > thr)[0]
+    if len(moving) == 0:
         return 0, T
-    idx = np.where(moving)[0]
-    start = max(0, idx[0] - 1)
-    end = min(T, idx[-1] + 2)
-    return int(start), int(end)
+    return int(max(0, moving[0] - 1)), int(min(T, moving[-1] + 2))
+
+
+def _rep_and_emb(frames: list[dict], mirror: bool = False):
+    rep = encode(frames_to_h36m(frames, mirror=mirror))
+    return rep, per_frame_embedding(rep)
 
 
 @dataclass
 class MatchResult:
     is_same_family: bool
-    score: float          # 0..1, higher = more like this movement
-    proto_dist: float     # descriptor distance to nearest demo prototype
-    traj_sim: float       # mean local similarity along the DTW-aligned trajectory
-    coverage: float       # fraction of the canonical trajectory traversed
+    score: float
+    proto_dist: float
+    proto_margin: float       # proto_dist / accept_proto_dist  (<=1 passes)
+    coverage: float
     detail: dict = field(default_factory=dict)
 
 
@@ -82,134 +75,103 @@ class TaughtMotionV2:
     name: str
     schema: int
     encoder_id: str
-    # multi-reference descriptors (one per demo)
-    prototypes: np.ndarray            # (n_demos, 512)
-    canonical: np.ndarray             # (CANON_LEN, 512) L2-normalized trajectory
-    rest_emb: np.ndarray              # (512,) L2-normalized
-    accept_proto_dist: float          # threshold on descriptor distance
-    accept_traj_sim: float            # threshold on trajectory similarity
+    prototypes: np.ndarray        # (n, 512)  temporal+joint-mean descriptor per demo
+    canonical: np.ndarray         # (CANON_LEN, 512) L2n embedding trajectory
+    rest_emb: np.ndarray          # (512,) L2n
+    accept_proto_dist: float      # calibrated: k * intra-demo spread, floored
+    demo_active_vel: float        # median embedding velocity while moving (burst seg)
     min_coverage: float
     demo_lengths: list[int]
 
-    # ---- fit -------------------------------------------------------------
+    # ---- learn ---------------------------------------------------------
     @classmethod
     def learn(cls, name: str, demos: list[list[dict]], mirror_aug: bool = True) -> "TaughtMotionV2":
-        assert len(demos) >= 2, "need >= 2 demonstrations"
-        protos, trajs, rests, lens = [], [], [], []
+        assert len(demos) >= 2
+        protos, trajs, rests, lens, active_vels = [], [], [], [], []
         for frames in demos:
-            reps = []
-            h = frames_to_h36m(frames)
-            reps.append(encode(h))
+            variants = [_rep_and_emb(frames)]
             if mirror_aug:
-                reps.append(encode(frames_to_h36m(frames, mirror=True)))
-            for rep in reps:
-                emb = per_frame_embedding(rep)          # (T,512) L2n
+                variants.append(_rep_and_emb(frames, mirror=True))
+            for rep, emb in variants:
                 s, e = segment_action(emb)
                 if e - s < 4:
                     s, e = 0, len(emb)
                 lens.append(e - s)
-                trimmed = emb[s:e]
                 protos.append(mean_pool(rep[s:e]))
-                trajs.append(resample_seq(trimmed, CANON_LEN))
-                # rest = mean of the lowest-velocity 20% of frames
-                v = _velocity(emb)
+                trajs.append(resample_seq(emb[s:e], CANON_LEN))
+                v = embedding_velocity(emb)
+                mv = v[s:e]
+                active_vels.append(float(np.median(mv[mv > np.median(mv) * 0.3])) if len(mv) else 0.0)
                 low = np.argsort(v)[: max(2, len(v) // 5)]
                 rests.append(_l2n(emb[low].mean(axis=0)))
-        protos = np.stack(protos)
-        canonical = _l2n(np.mean(trajs, axis=0), axis=-1)
-        rest_emb = _l2n(np.mean(rests, axis=0))
 
-        # thresholds from the spread among the demos themselves
-        pd = [np.linalg.norm(protos[i] - protos[j])
-              for i in range(len(protos)) for j in range(i + 1, len(protos))]
-        ts = [1 - dtw_distance(trajs[i], trajs[j])
-              for i in range(len(trajs)) for j in range(i + 1, len(trajs))]
-        accept_pd = float(np.mean(pd) + 2.5 * np.std(pd)) if pd else 1.0
-        accept_ts = float(max(0.3, np.mean(ts) - 2.5 * np.std(ts))) if ts else 0.5
+        protos = np.nan_to_num(np.stack(protos), nan=0.0, posinf=0.0, neginf=0.0)
+        canonical = _l2n(np.nan_to_num(np.mean(trajs, axis=0)), axis=-1)
+        rest_emb = _l2n(np.nan_to_num(np.mean(rests, axis=0)))
 
-        from mb_encoder import encoder_info
+        # accept threshold: a query must be within k * (spread among our own demos)
+        # of some demo prototype, with a floor so 3 near-identical demos don't
+        # produce an impossibly tight gate.
+        spread = [np.linalg.norm(protos[i] - protos[j])
+                  for i in range(len(protos)) for j in range(i + 1, len(protos))]
+        spread_mean = float(np.mean(spread)) if spread else 0.02
+        accept_proto_dist = float(np.clip(5.0 * spread_mean, 0.06, 0.14))
+
         return cls(
             name=name, schema=SCHEMA, encoder_id=encoder_info()["checkpoint"],
             prototypes=protos, canonical=canonical, rest_emb=rest_emb,
-            accept_proto_dist=accept_pd, accept_traj_sim=accept_ts,
-            min_coverage=0.75, demo_lengths=[int(x) for x in lens],
+            accept_proto_dist=accept_proto_dist,
+            demo_active_vel=float(np.median(active_vels)) if active_vels else 0.0,
+            min_coverage=0.55, demo_lengths=[int(x) for x in lens],
         )
 
     # ---- match --------------------------------------------------------
-    def _traj_align(self, emb_norm: np.ndarray) -> tuple[float, float]:
-        """DTW-align a normalized embedding trajectory to the canonical one.
-        Returns (mean local cosine similarity, coverage)."""
-        q = resample_seq(emb_norm, CANON_LEN)
-        # local cosine-sim matrix + monotonic DTW path
-        S = q @ self.canonical.T                       # (CANON_LEN, CANON_LEN)
-        n = CANON_LEN
-        D = np.full((n + 1, n + 1), -np.inf)
-        D[0, 0] = 0.0
-        bt = np.zeros((n + 1, n + 1), dtype=np.int8)
-        for i in range(1, n + 1):
-            for j in range(1, n + 1):
-                cand = (D[i - 1, j - 1], D[i - 1, j], D[i, j - 1])
-                k = int(np.argmax(cand))
-                D[i, j] = cand[k] + S[i - 1, j - 1]
-                bt[i, j] = k
-        # backtrack to measure how much of the canonical (j-axis) was covered
-        i = j = n
-        js = []
-        sims = []
-        while i > 0 and j > 0:
-            sims.append(S[i - 1, j - 1])
-            js.append(j - 1)
-            k = bt[i, j]
-            if k == 0:
-                i, j = i - 1, j - 1
-            elif k == 1:
-                i -= 1
-            else:
-                j -= 1
-        coverage = (max(js) - min(js) + 1) / n if js else 0.0
-        return float(np.mean(sims)), float(coverage)
+    def _coverage(self, emb_seg: np.ndarray) -> float:
+        if len(emb_seg) < 2:
+            return 0.0
+        q = resample_seq(_l2n(emb_seg), CANON_LEN)
+        # greedy monotone alignment index reach
+        j = 0
+        reached = 0
+        for t in range(CANON_LEN):
+            hi = min(CANON_LEN - 1, j + 5)
+            k = j + int(np.argmax(self.canonical[j:hi + 1] @ q[t]))
+            j = max(j, k)
+            reached = max(reached, j)
+        return reached / (CANON_LEN - 1)
+
+    def match_encoded(self, rep: np.ndarray, emb: np.ndarray,
+                      rep_m: np.ndarray | None = None, emb_m: np.ndarray | None = None) -> MatchResult:
+        best = None
+        for r, e in ((rep, emb),) + (((rep_m, emb_m),) if rep_m is not None else ()):
+            s, en = segment_action(e)
+            if en - s < 4:
+                s, en = 0, len(e)
+            desc = mean_pool(r[s:en])
+            pd = float(np.linalg.norm(self.prototypes - desc, axis=1).min())
+            cov = self._coverage(e[s:en])
+            if best is None or pd < best[0]:
+                best = (pd, cov, {"seg": [s, en]})
+        pd, cov, det = best
+        margin = pd / self.accept_proto_dist
+        is_same = margin <= 1.0 and cov >= self.min_coverage
+        score = float(np.clip(
+            0.75 * max(0.0, 1 - margin) + 0.25 * min(1.0, cov / self.min_coverage), 0, 1))
+        return MatchResult(is_same, score, pd, margin, cov, det)
 
     def match(self, frames: list[dict]) -> MatchResult:
-        rep = encode(frames_to_h36m(frames))
-        emb = per_frame_embedding(rep)
-        s, e = segment_action(emb)
-        if e - s < 4:
-            s, e = 0, len(emb)
-        desc = mean_pool(rep[s:e])
-        proto_dist = float(np.linalg.norm(self.prototypes - desc, axis=1).min())
-        traj_sim, coverage = self._traj_align(emb[s:e])
-        # also try mirrored (front camera)
-        repm = encode(frames_to_h36m(frames, mirror=True))
-        embm = per_frame_embedding(repm)
-        sm, em = segment_action(embm)
-        if em - sm < 4:
-            sm, em = 0, len(embm)
-        pdm = float(np.linalg.norm(self.prototypes - mean_pool(repm[sm:em]), axis=1).min())
-        tsm, covm = self._traj_align(embm[sm:em])
-        if pdm < proto_dist:
-            proto_dist, traj_sim, coverage = pdm, tsm, covm
+        rep, emb = _rep_and_emb(frames)
+        rep_m, emb_m = _rep_and_emb(frames, mirror=True)
+        return self.match_encoded(rep, emb, rep_m, emb_m)
 
-        score = 0.5 * max(0.0, 1 - proto_dist / (self.accept_proto_dist + 1e-6)) \
-            + 0.35 * min(1.0, traj_sim / (self.accept_traj_sim + 1e-6)) \
-            + 0.15 * min(1.0, coverage / self.min_coverage)
-        is_same = (proto_dist <= self.accept_proto_dist
-                   and traj_sim >= self.accept_traj_sim
-                   and coverage >= self.min_coverage)
-        return MatchResult(is_same, float(np.clip(score, 0, 1)), proto_dist,
-                           traj_sim, coverage,
-                           detail={"seg": [s, e], "mirrored": pdm < proto_dist})
-
-    # ---- serialize -----------------------------------------------------
+    # ---- serialize ---------------------------------------------------
     def to_json(self) -> dict:
         return {
             "schema": self.schema, "name": self.name, "encoder_id": self.encoder_id,
-            "prototypes": self.prototypes.tolist(),
-            "canonical": self.canonical.tolist(),
-            "rest_emb": self.rest_emb.tolist(),
-            "accept_proto_dist": self.accept_proto_dist,
-            "accept_traj_sim": self.accept_traj_sim,
-            "min_coverage": self.min_coverage,
-            "demo_lengths": self.demo_lengths,
+            "prototypes": self.prototypes.tolist(), "canonical": self.canonical.tolist(),
+            "rest_emb": self.rest_emb.tolist(), "neg_ref": self.neg_ref,
+            "accept_ratio": self.accept_ratio, "demo_active_vel": self.demo_active_vel,
+            "min_coverage": self.min_coverage, "demo_lengths": self.demo_lengths,
         }
 
     @classmethod
@@ -219,9 +181,9 @@ class TaughtMotionV2:
             prototypes=np.array(d["prototypes"], np.float32),
             canonical=np.array(d["canonical"], np.float32),
             rest_emb=np.array(d["rest_emb"], np.float32),
-            accept_proto_dist=d["accept_proto_dist"],
-            accept_traj_sim=d["accept_traj_sim"],
-            min_coverage=d["min_coverage"], demo_lengths=d["demo_lengths"],
+            neg_ref=d["neg_ref"], accept_ratio=d["accept_ratio"],
+            demo_active_vel=d["demo_active_vel"], min_coverage=d["min_coverage"],
+            demo_lengths=d["demo_lengths"],
         )
 
     def save(self, path: str):
