@@ -1,0 +1,11 @@
+# Motion V2 dev env — Python 3.12. Pinned for determinism.
+# CPU torch is fine (MotionBERT-Lite is ~16M params); MPS used automatically on Apple Silicon.
+torch==2.5.1
+numpy==2.1.3
+einops==0.8.0
+pyyaml==6.0.2
+easydict==1.13
+huggingface_hub==0.26.2
+scikit-learn==1.5.2
+matplotlib==3.9.2
+pytest==8.3.3
