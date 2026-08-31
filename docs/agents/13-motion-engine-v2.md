@@ -48,10 +48,10 @@ PER MOVEMENT  TaughtMotionV2 — prototypes + canonical trajectory + rest emb,
 | 1 encoder bootstrap | ✅ MotionBERT-Lite loads, `smoke_test.py` passes |
 | 2 model decision | ✅ `reports/00` — MotionBERT-Lite, license caveat tracked (H36M non-commercial → re-pretrain before ship) |
 | 3 skeleton adapter | ✅ `adapter/`, 11 tests, viz looks right |
-| 5 representation | ✅ `reports/01` — encoder separates motion classes, 3.78 sd, `mean_pool` best |
-| 6 3-shot `match()` | ✅ synthetic: TP 3/3, FP 0. proto_margin separates same/different ~20× |
+| 5 representation | ✅ `reports/01`,`03` — action-finetuned backbone (`release_action`, default) beats lite: DTW LOO 0.67→1.0 |
+| 6 3-shot `match()` | ✅ synthetic TP 3/3 · TN 6/6 · FP 0 · FN 0, stable across both encoders + threshold schemes. two AND-ed signals: proto_dist + normalized-DTW traj_dist |
 | 7 segmentation | ✅ embedding-velocity trim — **no "hold still" ritual** |
-| 8 rep detection | ~ works (matched filter + re-encode per burst); jumping_jack exact, others undercount on smooth synthetic; FP low |
+| 8 rep detection | ~ isolated reps exact, FP 0; multi-rep undercounts on smooth synthetic (NMS spacing) — needs real inter-rep gaps |
 | 4 raw fixture export | ✅ Flutter side + Python loader |
 | 9 V1 vs V2 benchmark | ⏳ blocked on real fixtures (V1 is Dart) |
 | 10 phone | ⏳ after `match()` validates on real fixtures |
