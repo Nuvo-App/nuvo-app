@@ -298,10 +298,14 @@ class NuvoOutlineButton extends StatelessWidget {
       enabled: enabled,
       expand: expand,
       child: iconOnly
-          ? Center(
-              child: icon == null
-                  ? leadingWidget
-                  : Icon(icon, color: NuvoColors.navy, size: 22),
+          ? Semantics(
+              label: label.isEmpty ? null : label,
+              button: true,
+              child: Center(
+                child: icon == null
+                    ? leadingWidget
+                    : Icon(icon, color: NuvoColors.navy, size: 22),
+              ),
             )
           : _buttonContent(
               label: label,

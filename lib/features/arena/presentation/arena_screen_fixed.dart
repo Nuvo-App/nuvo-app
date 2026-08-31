@@ -683,10 +683,11 @@ class _QuickActions extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onJoin;
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) => Row(
     children: [
-      if (onSubmit != null)
-        NuvoPrimaryButton(
+      Expanded(
+        flex: 4,
+        child: NuvoPrimaryButton(
           leadingWidget: const Icon(
             Icons.camera_alt_outlined,
             color: NuvoColors.white,
@@ -695,29 +696,28 @@ class _QuickActions extends StatelessWidget {
           onPressed: onSubmit,
           expand: true,
         ),
-      if (onSubmit != null) const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: NuvoSecondaryButton(
-              icon: Icons.add_rounded,
-              label: 'New race',
-              small: true,
-              expand: true,
-              onPressed: onStart,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: NuvoSecondaryButton(
-              icon: Icons.group_add_outlined,
-              label: 'Join',
-              small: true,
-              expand: true,
-              onPressed: onJoin,
-            ),
-          ),
-        ],
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        flex: 2,
+        child: NuvoOutlineButton(
+          icon: Icons.add_rounded,
+          label: 'New race',
+          iconOnly: true,
+          onPressed: onStart,
+          expand: true,
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        flex: 2,
+        child: NuvoOutlineButton(
+          icon: Icons.group_add_outlined,
+          label: 'Join',
+          iconOnly: true,
+          onPressed: onJoin,
+          expand: true,
+        ),
       ),
     ],
   );
