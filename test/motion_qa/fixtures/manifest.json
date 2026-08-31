@@ -1,0 +1,1435 @@
+{
+  "generatedAt": "2026-08-19T00:54:35.156920",
+  "totalFixtures": 110,
+  "baseFixtures": 10,
+  "augmentedFixtures": 100,
+  "fixtures": [
+    {
+      "id": "jsq_clean_3",
+      "file": "jsq_clean_3.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3",
+      "file": "jsq_noisy_3.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_very_noisy_2",
+      "file": "jsq_very_noisy_2.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_minimal_1",
+      "file": "jsq_minimal_1.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3",
+      "file": "squat_confuser_3.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3",
+      "file": "jump_confuser_3.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3",
+      "file": "jacks_confuser_3.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3",
+      "file": "partial_confuser_3.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2",
+      "file": "ljs_clean_2.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_noisy_2",
+      "file": "ljs_noisy_2.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_clean_3__drop_frames",
+      "file": "jsq_clean_3__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__duplicate_frames",
+      "file": "jsq_clean_3__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__time_stretch",
+      "file": "jsq_clean_3__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__time_compress",
+      "file": "jsq_clean_3__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 2,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=3 detected=2"
+      ]
+    },
+    {
+      "id": "jsq_clean_3__coordinate_jitter",
+      "file": "jsq_clean_3__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__confidence_degradation",
+      "file": "jsq_clean_3__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__ankle_dropout",
+      "file": "jsq_clean_3__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__body_translation",
+      "file": "jsq_clean_3__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__scale_change",
+      "file": "jsq_clean_3__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_clean_3__mirror",
+      "file": "jsq_clean_3__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__drop_frames",
+      "file": "jsq_noisy_3__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 2,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=3 detected=2"
+      ]
+    },
+    {
+      "id": "jsq_noisy_3__duplicate_frames",
+      "file": "jsq_noisy_3__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__time_stretch",
+      "file": "jsq_noisy_3__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__time_compress",
+      "file": "jsq_noisy_3__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 2,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=3 detected=2"
+      ]
+    },
+    {
+      "id": "jsq_noisy_3__coordinate_jitter",
+      "file": "jsq_noisy_3__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__confidence_degradation",
+      "file": "jsq_noisy_3__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__ankle_dropout",
+      "file": "jsq_noisy_3__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 2,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=3 detected=2"
+      ]
+    },
+    {
+      "id": "jsq_noisy_3__body_translation",
+      "file": "jsq_noisy_3__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__scale_change",
+      "file": "jsq_noisy_3__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_noisy_3__mirror",
+      "file": "jsq_noisy_3__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 3,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 3,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_very_noisy_2__drop_frames",
+      "file": "jsq_very_noisy_2__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__duplicate_frames",
+      "file": "jsq_very_noisy_2__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__time_stretch",
+      "file": "jsq_very_noisy_2__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__time_compress",
+      "file": "jsq_very_noisy_2__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": false,
+      "failureReasons": [
+        "airborne_never_detected",
+        "undercounted: expected=2 detected=0"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__coordinate_jitter",
+      "file": "jsq_very_noisy_2__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__confidence_degradation",
+      "file": "jsq_very_noisy_2__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__ankle_dropout",
+      "file": "jsq_very_noisy_2__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__body_translation",
+      "file": "jsq_very_noisy_2__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__scale_change",
+      "file": "jsq_very_noisy_2__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_very_noisy_2__mirror",
+      "file": "jsq_very_noisy_2__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "jsq_minimal_1__drop_frames",
+      "file": "jsq_minimal_1__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__duplicate_frames",
+      "file": "jsq_minimal_1__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__time_stretch",
+      "file": "jsq_minimal_1__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__time_compress",
+      "file": "jsq_minimal_1__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__coordinate_jitter",
+      "file": "jsq_minimal_1__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__confidence_degradation",
+      "file": "jsq_minimal_1__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__ankle_dropout",
+      "file": "jsq_minimal_1__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__body_translation",
+      "file": "jsq_minimal_1__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__scale_change",
+      "file": "jsq_minimal_1__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jsq_minimal_1__mirror",
+      "file": "jsq_minimal_1__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 1,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 1,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__drop_frames",
+      "file": "squat_confuser_3__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__duplicate_frames",
+      "file": "squat_confuser_3__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__time_stretch",
+      "file": "squat_confuser_3__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__time_compress",
+      "file": "squat_confuser_3__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__coordinate_jitter",
+      "file": "squat_confuser_3__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__confidence_degradation",
+      "file": "squat_confuser_3__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__ankle_dropout",
+      "file": "squat_confuser_3__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__body_translation",
+      "file": "squat_confuser_3__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__scale_change",
+      "file": "squat_confuser_3__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "squat_confuser_3__mirror",
+      "file": "squat_confuser_3__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__drop_frames",
+      "file": "jump_confuser_3__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__duplicate_frames",
+      "file": "jump_confuser_3__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__time_stretch",
+      "file": "jump_confuser_3__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__time_compress",
+      "file": "jump_confuser_3__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__coordinate_jitter",
+      "file": "jump_confuser_3__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__confidence_degradation",
+      "file": "jump_confuser_3__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__ankle_dropout",
+      "file": "jump_confuser_3__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__body_translation",
+      "file": "jump_confuser_3__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__scale_change",
+      "file": "jump_confuser_3__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jump_confuser_3__mirror",
+      "file": "jump_confuser_3__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__drop_frames",
+      "file": "jacks_confuser_3__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__duplicate_frames",
+      "file": "jacks_confuser_3__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__time_stretch",
+      "file": "jacks_confuser_3__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__time_compress",
+      "file": "jacks_confuser_3__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__coordinate_jitter",
+      "file": "jacks_confuser_3__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__confidence_degradation",
+      "file": "jacks_confuser_3__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__ankle_dropout",
+      "file": "jacks_confuser_3__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__body_translation",
+      "file": "jacks_confuser_3__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__scale_change",
+      "file": "jacks_confuser_3__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "jacks_confuser_3__mirror",
+      "file": "jacks_confuser_3__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__drop_frames",
+      "file": "partial_confuser_3__drop_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__duplicate_frames",
+      "file": "partial_confuser_3__duplicate_frames.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__time_stretch",
+      "file": "partial_confuser_3__time_stretch.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__time_compress",
+      "file": "partial_confuser_3__time_compress.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__coordinate_jitter",
+      "file": "partial_confuser_3__coordinate_jitter.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__confidence_degradation",
+      "file": "partial_confuser_3__confidence_degradation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__ankle_dropout",
+      "file": "partial_confuser_3__ankle_dropout.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__body_translation",
+      "file": "partial_confuser_3__body_translation.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__scale_change",
+      "file": "partial_confuser_3__scale_change.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "partial_confuser_3__mirror",
+      "file": "partial_confuser_3__mirror.json",
+      "movement": "jump_squats",
+      "expectedReps": 0,
+      "shouldMatch": false,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 0,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__drop_frames",
+      "file": "ljs_clean_2__drop_frames.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__duplicate_frames",
+      "file": "ljs_clean_2__duplicate_frames.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__time_stretch",
+      "file": "ljs_clean_2__time_stretch.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__time_compress",
+      "file": "ljs_clean_2__time_compress.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": false,
+      "failureReasons": [
+        "stuck_in_idle: 8 frames idle after start",
+        "undercounted: expected=2 detected=0"
+      ]
+    },
+    {
+      "id": "ljs_clean_2__coordinate_jitter",
+      "file": "ljs_clean_2__coordinate_jitter.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__confidence_degradation",
+      "file": "ljs_clean_2__confidence_degradation.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__ankle_dropout",
+      "file": "ljs_clean_2__ankle_dropout.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__body_translation",
+      "file": "ljs_clean_2__body_translation.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__scale_change",
+      "file": "ljs_clean_2__scale_change.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_clean_2__mirror",
+      "file": "ljs_clean_2__mirror.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 2,
+      "matched": true,
+      "failureReasons": []
+    },
+    {
+      "id": "ljs_noisy_2__drop_frames",
+      "file": "ljs_noisy_2__drop_frames.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__drop_frames",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__duplicate_frames",
+      "file": "ljs_noisy_2__duplicate_frames.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__duplicate_frames",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__time_stretch",
+      "file": "ljs_noisy_2__time_stretch.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_stretch",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__time_compress",
+      "file": "ljs_noisy_2__time_compress.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__time_compress",
+      "detectedReps": 0,
+      "matched": false,
+      "failureReasons": [
+        "stuck_in_idle: 8 frames idle after start",
+        "undercounted: expected=2 detected=0"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__coordinate_jitter",
+      "file": "ljs_noisy_2__coordinate_jitter.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__coordinate_jitter",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "stuck_in_idle: 11 frames idle after start",
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__confidence_degradation",
+      "file": "ljs_noisy_2__confidence_degradation.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__confidence_degradation",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__ankle_dropout",
+      "file": "ljs_noisy_2__ankle_dropout.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__ankle_dropout",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__body_translation",
+      "file": "ljs_noisy_2__body_translation.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__body_translation",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__scale_change",
+      "file": "ljs_noisy_2__scale_change.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__scale_change",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    },
+    {
+      "id": "ljs_noisy_2__mirror",
+      "file": "ljs_noisy_2__mirror.json",
+      "movement": "lunge_jumps",
+      "expectedReps": 2,
+      "shouldMatch": true,
+      "source": "nuvo_synthetic_factory__mirror",
+      "detectedReps": 1,
+      "matched": false,
+      "failureReasons": [
+        "undercounted: expected=2 detected=1"
+      ]
+    }
+  ],
+  "reports": {
+    "jump_squats": {
+      "movement": "Jump Squat",
+      "positive": {
+        "total": 44,
+        "accepted": 29,
+        "rejected": 15,
+        "acceptRate": 0.6590909090909091
+      },
+      "falseAccepts": {
+        "normal_squat": 0,
+        "plain_jump": 0,
+        "jumping_jack": 0,
+        "partial_squat": 0
+      },
+      "failureReasons": {
+        "undercounted": 15,
+        "airborne_never_detected": 1
+      },
+      "robustness": [
+        {
+          "variant": "drop_frames",
+          "total": 8,
+          "correct": 6,
+          "rate": 0.75
+        },
+        {
+          "variant": "duplicate_frames",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        },
+        {
+          "variant": "time_stretch",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        },
+        {
+          "variant": "time_compress",
+          "total": 8,
+          "correct": 5,
+          "rate": 0.625
+        },
+        {
+          "variant": "coordinate_jitter",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        },
+        {
+          "variant": "confidence_degradation",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        },
+        {
+          "variant": "ankle_dropout",
+          "total": 8,
+          "correct": 6,
+          "rate": 0.75
+        },
+        {
+          "variant": "body_translation",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        },
+        {
+          "variant": "scale_change",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        },
+        {
+          "variant": "mirror",
+          "total": 8,
+          "correct": 7,
+          "rate": 0.875
+        }
+      ]
+    },
+    "lunge_jumps": {
+      "movement": "Lunge Jump",
+      "positive": {
+        "total": 22,
+        "accepted": 10,
+        "rejected": 12,
+        "acceptRate": 0.45454545454545453
+      },
+      "falseAccepts": {},
+      "failureReasons": {
+        "undercounted": 12,
+        "stuck_in_idle": 3
+      },
+      "robustness": [
+        {
+          "variant": "drop_frames",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "duplicate_frames",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "time_stretch",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "time_compress",
+          "total": 2,
+          "correct": 0,
+          "rate": 0.0
+        },
+        {
+          "variant": "coordinate_jitter",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "confidence_degradation",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "ankle_dropout",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "body_translation",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "scale_change",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        },
+        {
+          "variant": "mirror",
+          "total": 2,
+          "correct": 1,
+          "rate": 0.5
+        }
+      ]
+    }
+  }
+}

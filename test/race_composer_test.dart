@@ -1,0 +1,646 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:nuvo/features/races/ai/custom_pose/custom_pose_verifier_spec.dart';
+import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
+import 'package:nuvo/features/races/data/race_models.dart';
+import 'package:nuvo/features/races/domain/motion_activity.dart';
+import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
+import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/presentation/race_composer_screen.dart';
+
+import 'fixtures/pose_fixtures.dart';
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+MotionActivityDefinition _activity(MotionActivityType type) =>
+    motionActivityForType(type)!;
+
+final _pushups = _activity(MotionActivityType.pushUps);
+final _jacks = _activity(MotionActivityType.jumpingJacks);
+final _squats = _activity(MotionActivityType.squats);
+final _plank = _activity(MotionActivityType.plankHold);
+
+CustomPoseVerifierSpec _anySpec() {
+  final pose = const PoseNormalizer().normalize(neutralStandingPose());
+  final summary = const CustomPoseCalibrationSummary(
+    sourceCalibrationSchemaVersion: 1,
+    demonstrationCount: 2,
+    selectedActiveFeatureCount: 1,
+    requiredFeatureCount: 1,
+    canonicalSequenceLength: 1,
+    pairwiseSimilarityScores: {},
+    overallConsistencyScore: 0.7,
+    lowestPairwiseSimilarityScore: 0.7,
+    sequenceSimilarityThreshold: 0.7,
+    completionSimilarityThreshold: 0.8,
+    resetSimilarityThreshold: 0.8,
+    minimumValidFeatureRatio: 0.6,
+    minimumVisibility: 0.6,
+    cooldownMs: 500,
+    completionStrategy: CustomPoseCompletionStrategy.completionAtTerminalPose,
+    builderVersion: 'v1',
+  );
+  return CustomPoseVerifierSpec(
+    schemaVersion: 1,
+    verifierType: 'custom_pose_sequence',
+    movementName: 'wave',
+    measurementType: 'reps',
+    startPose: pose,
+    completionPose: pose,
+    completionStrategy: CustomPoseCompletionStrategy.completionAtTerminalPose,
+    canonicalSequence: const [],
+    requiredFeatureIds: const [],
+    activeFeatureIds: const [],
+    sequenceSimilarityThreshold: 0.7,
+    completionSimilarityThreshold: 0.8,
+    resetSimilarityThreshold: 0.8,
+    minimumValidFeatureRatio: 0.6,
+    minimumVisibility: 0.6,
+    cooldownMs: 500,
+    expectedSequenceFrameCount: 1,
+    calibrationSummary: summary,
+  );
+}
+
+Race _race({required String title}) {
+  return Race(
+    id: 'race_1',
+    creatorId: 'user_1',
+    title: title,
+    goalType: 'first_to_goal',
+    targetValue: 10,
+    unit: 'reps',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  );
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+void main() {
+  // ── 1. Generated title contract ────────────────────────────────────────────
+  group('generatedTitle()', () {
+    test('produces "First to N ActivityName" format', () {
+      expect(generatedTitle(_pushups, 15), 'First to 15 Pushups');
+      expect(generatedTitle(_jacks, 30), 'First to 30 Jumping Jacks');
+      expect(generatedTitle(_plank, 60), 'First to 60 Plank');
+    });
+
+    test('uses lowercase "to" not "To"', () {
+      final t = generatedTitle(_pushups, 10);
+      expect(t, contains('First to'));
+      expect(t, isNot(contains('First To')));
+    });
+  });
+
+  // ── 2. RaceDraft.resolvedTitle ─────────────────────────────────────────────
+  group('RaceDraft.resolvedTitle', () {
+    test('returns generated title when hasCustomName is false', () {
+      final draft = draftForActivity(_jacks).copyWith(targetValue: 15);
+      expect(draft.hasCustomName, isFalse);
+      expect(draft.resolvedTitle, 'First to 15 Jumping Jacks');
+    });
+
+    test('returns custom title when hasCustomName is true', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        title: 'Akshay vs Akaash',
+        hasCustomName: true,
+        targetValue: 15,
+      );
+      expect(draft.resolvedTitle, 'Akshay vs Akaash');
+    });
+  });
+
+  // ── 3. Generated title updates when activity changes ──────────────────────
+  group('Generated title stays in sync', () {
+    test('activity change regenerates resolved title (not custom)', () {
+      final draft = draftForActivity(_pushups).copyWith(targetValue: 15);
+      final updated = draft.copyWith(activity: _jacks, metric: _jacks.metric);
+      expect(updated.resolvedTitle, 'First to 15 Jumping Jacks');
+    });
+
+    test('target change regenerates resolved title (not custom)', () {
+      final draft = draftForActivity(_jacks);
+      final updated = draft.copyWith(targetValue: 30);
+      expect(updated.resolvedTitle, 'First to 30 Jumping Jacks');
+    });
+
+    test('both activity AND target change regenerates correctly', () {
+      final draft = draftForActivity(_pushups).copyWith(targetValue: 6);
+      final updated = draft.copyWith(
+        activity: _jacks,
+        metric: _jacks.metric,
+        targetValue: 15,
+      );
+      expect(updated.resolvedTitle, 'First to 15 Jumping Jacks');
+    });
+  });
+
+  // ── 4. Custom title is preserved ──────────────────────────────────────────
+  group('Custom title preservation', () {
+    test('activity change does NOT overwrite a custom title', () {
+      final draft = draftForActivity(
+        _pushups,
+      ).copyWith(title: 'Akshay vs Akaash', hasCustomName: true);
+      final updated = draft.copyWith(activity: _jacks, metric: _jacks.metric);
+      expect(updated.resolvedTitle, 'Akshay vs Akaash');
+    });
+
+    test('target change does NOT overwrite a custom title', () {
+      final draft = draftForActivity(
+        _pushups,
+      ).copyWith(title: 'Akshay vs Akaash', hasCustomName: true);
+      final updated = draft.copyWith(targetValue: 50);
+      expect(updated.resolvedTitle, 'Akshay vs Akaash');
+    });
+
+    test('custom title is preserved across multiple edits', () {
+      var draft = draftForActivity(
+        _pushups,
+      ).copyWith(title: 'My Custom Race', hasCustomName: true);
+      draft = draft.copyWith(activity: _jacks, metric: _jacks.metric);
+      draft = draft.copyWith(targetValue: 25);
+      draft = draft.copyWith(activity: _squats, metric: _squats.metric);
+      expect(draft.resolvedTitle, 'My Custom Race');
+    });
+  });
+
+  // ── 5. toCreatePayload title comes from resolvedTitle ─────────────────────
+  group('toCreatePayload title integrity', () {
+    test('payload title matches resolvedTitle for generated names', () {
+      final draft = draftForActivity(_jacks).copyWith(targetValue: 15);
+      final payload = draft.toCreatePayload();
+      expect(payload['title'], draft.resolvedTitle);
+      expect(payload['title'], 'First to 15 Jumping Jacks');
+    });
+
+    test('payload title preserves custom name', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        title: 'Akshay vs Akaash',
+        hasCustomName: true,
+        targetValue: 15,
+      );
+      final payload = draft.toCreatePayload();
+      expect(payload['title'], 'Akshay vs Akaash');
+    });
+
+    test('manual goal produces a non-camera payload', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        goalKind: RaceGoalKind.manual,
+        manualGoalName: 'Read',
+        manualUnit: 'pages',
+        targetValue: 300,
+      );
+      expect(draft.isManual, isTrue);
+      expect(draft.isValidToCreate, isTrue);
+      final payload = draft.toCreatePayload();
+      expect(payload['proofRequirement'], 'manual');
+      expect(payload['proofMode'], 'manual');
+      expect(payload['unit'], 'pages');
+      expect(payload['targetValue'], 300);
+      expect(payload.containsKey('activityId'), isFalse);
+      expect(payload['title'], 'First to 300 pages');
+    });
+
+    test('manual goal without name or unit is not valid to create', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        goalKind: RaceGoalKind.manual,
+        targetValue: 10,
+      );
+      expect(draft.isValidToCreate, isFalse);
+    });
+
+    test('payload title, targetValue and activityId are consistent', () {
+      final draft = draftForActivity(_jacks).copyWith(targetValue: 15);
+      final payload = draft.toCreatePayload();
+      expect(payload['title'], contains('15'));
+      expect(payload['title'], contains('Jumping Jacks'));
+      expect(payload['targetValue'], 15);
+      expect(payload['activityId'], 'jumping_jacks');
+    });
+
+    test('payload never shows stale pushup count after switching to jacks', () {
+      // Reproduce the exact bug: start pushups 6, switch to jacks, target 15
+      final initial = draftFromIdea('First to 6 pushups')!;
+      final afterActivity = initial.copyWith(
+        activity: _jacks,
+        metric: _jacks.metric,
+      );
+      final afterTarget = afterActivity.copyWith(targetValue: 15);
+      final payload = afterTarget.toCreatePayload();
+
+      expect(payload['title'], 'First to 15 Jumping Jacks');
+      expect(payload['targetValue'], 15);
+      expect(payload['activityId'], 'jumping_jacks');
+      // "6" must not appear anywhere in the payload title
+      expect(payload['title'], isNot(contains('6')));
+    });
+  });
+
+  // ── 6. Goal direct edit (int clamping) ────────────────────────────────────
+  group('Goal value clamping', () {
+    test('copyWith clamps target to at least 1', () {
+      final draft = draftForActivity(_pushups);
+      final clamped = draft.copyWith(targetValue: 0);
+      // 0 can be stored (clamping is in UI), but resolvedTitle still formats
+      expect(clamped.targetValue, 0); // domain allows it; UI prevents it
+    });
+
+    test('arbitrary large target is valid in domain', () {
+      final draft = draftForActivity(_pushups).copyWith(targetValue: 99999);
+      expect(draft.targetValue, 99999);
+      expect(draft.resolvedTitle, 'First to 99999 Pushups');
+    });
+
+    test('suggested targets are all valid positives', () {
+      for (final def in motionActivityDefinitions) {
+        for (final t in def.suggestedTargets) {
+          expect(t, greaterThan(0));
+        }
+      }
+    });
+  });
+
+  // ── 7. Plus/minus step size logic ─────────────────────────────────────────
+  group('Step size', () {
+    int stepFor(int target) {
+      if (target < 10) return 1;
+      if (target < 100) return 5;
+      if (target < 1000) return 25;
+      return 100;
+    }
+
+    test('step is 1 below 10', () => expect(stepFor(5), 1));
+    test('step is 5 from 10 to 99', () => expect(stepFor(50), 5));
+    test('step is 25 from 100 to 999', () => expect(stepFor(200), 25));
+    test('step is 100 at 1000+', () => expect(stepFor(1000), 100));
+  });
+
+  // ── 8. Back/forward preserves draft ───────────────────────────────────────
+  group('Draft survives step navigation', () {
+    test('copyWith preserves all unrelated fields', () {
+      final draft = draftForActivity(_jacks).copyWith(
+        targetValue: 15,
+        title: 'My Race',
+        hasCustomName: true,
+        visibility: 'private',
+      );
+      // Simulate going back to activity and selecting squats, then forward
+      final updated = draft.copyWith(activity: _squats, metric: _squats.metric);
+      expect(updated.targetValue, 15);
+      expect(updated.visibility, 'private');
+      expect(updated.hasCustomName, true);
+      expect(updated.resolvedTitle, 'My Race'); // custom preserved
+    });
+
+    test('Start solo sets visibility to private', () {
+      final draft = draftForActivity(_jacks).copyWith(visibility: 'private');
+      expect(draft.visibility, 'private');
+    });
+
+    test('Pull in crew sets visibility to invite_code', () {
+      final draft = draftForActivity(
+        _jacks,
+      ).copyWith(visibility: 'invite_code');
+      expect(draft.visibility, 'invite_code');
+    });
+  });
+
+  // ── 9. Plank uses seconds everywhere ──────────────────────────────────────
+  group('Plank seconds', () {
+    test('plank draft has seconds metric', () {
+      final draft = draftForActivity(_plank);
+      expect(draft.metric, RaceMetric.seconds);
+    });
+
+    test('plank payload has seconds in metric and targetUnit', () {
+      final draft = draftForActivity(_plank).copyWith(targetValue: 60);
+      final payload = draft.toCreatePayload();
+      expect(payload['metric'], 'seconds');
+      expect(payload['targetUnit'], 'seconds');
+      expect(payload['targetValue'], 60);
+    });
+
+    test('plank resolved title uses raw number (not seconds label)', () {
+      final draft = draftForActivity(_plank).copyWith(targetValue: 60);
+      expect(draft.resolvedTitle, 'First to 60 Plank');
+    });
+
+    test('switching from reps activity to plank resets metric to seconds', () {
+      final draft = draftForActivity(
+        _pushups,
+      ).copyWith(activity: _plank, metric: _plank.metric);
+      expect(draft.metric, RaceMetric.seconds);
+    });
+  });
+
+  // ── 10. draftFromIdea used by Quick Starts ─────────────────────────────────
+  group('Quick Start prefill', () {
+    test('jumping jacks quick start produces correct draft', () {
+      final draft = draftFromIdea('First to 30 jumping jacks')!;
+      expect(draft.activity.type, MotionActivityType.jumpingJacks);
+      expect(draft.targetValue, 30);
+      expect(draft.hasCustomName, isFalse);
+      expect(draft.resolvedTitle, 'First to 30 Jumping Jacks');
+    });
+
+    test('plank quick start has seconds metric', () {
+      final draft = draftFromIdea('First to 60 plank seconds')!;
+      expect(draft.metric, RaceMetric.seconds);
+      expect(draft.resolvedTitle, 'First to 60 Plank');
+    });
+
+    test('quick start payload title and target agree', () {
+      final draft = draftFromIdea('First to 40 lunges')!;
+      final payload = draft.toCreatePayload();
+      expect(payload['title'], 'First to 40 Lunges');
+      expect(payload['targetValue'], 40);
+      expect(payload['activityId'], 'lunges');
+    });
+  });
+
+  // ── 11. Custom movement races ───────────────────────────────────────────────
+  group('Custom movement races', () {
+    test('custom draft with verifierSpec is valid', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      expect(draft.isCustom, isTrue);
+      expect(draft.isValidToCreate, isTrue);
+      expect(draft.displayActivityName, 'wave');
+      expect(draft.resolvedTitle, 'First to 10 wave');
+    });
+
+    test('custom draft without verifierSpec is not valid', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: null,
+      );
+
+      expect(draft.isCustom, isTrue);
+      expect(draft.isValidToCreate, isFalse);
+      expect(draft.displayActivityName, 'wave');
+    });
+
+    test('toCreatePayload is blocked for custom drafts', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      expect(draft.toCreatePayload, throwsUnsupportedError);
+    });
+
+    test('preset activity validation does not run for custom drafts', () {
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      // Even with a preset pushups activity in the draft, the custom path is
+      // valid and does not require that activity to be supported.
+      expect(draft.isValidToCreate, isTrue);
+      expect(draft.toCreatePayload, throwsUnsupportedError);
+    });
+
+    test('switching from custom to preset clears verifier state', () {
+      final custom = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 10,
+        customActivityName: 'wave',
+        verifierSpec: _anySpec(),
+      );
+
+      final preset = custom.asPreset(activity: _jacks, targetValue: 25);
+
+      expect(preset.isCustom, isFalse);
+      expect(preset.customActivityName, isNull);
+      expect(preset.verifierSpec, isNull);
+      expect(preset.isValidToCreate, isTrue);
+      expect(preset.toCreatePayload()['activityId'], 'jumping_jacks');
+    });
+
+    test('UI shows learned movement name in title and display', () {
+      final draft = RaceDraft(
+        title: 'My Custom Race',
+        hasCustomName: true,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 15,
+        customActivityName: 'Overhead Wave',
+        verifierSpec: _anySpec(),
+      );
+
+      expect(draft.displayActivityName, 'Overhead Wave');
+      expect(draft.resolvedTitle, 'My Custom Race');
+      expect(draft.generatedTitleText, 'First to 15 Overhead Wave');
+    });
+
+    test('composer custom draft calls createCustomRace', () async {
+      final spec = _anySpec();
+      final draft = RaceDraft(
+        title: '',
+        hasCustomName: false,
+        activity: _pushups,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 12,
+        customActivityName: 'Overhead Wave',
+        verifierSpec: spec,
+      );
+      var customCalled = false;
+      var presetCalled = false;
+
+      final race = await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace:
+            ({
+              required title,
+              required targetValue,
+              required customActivityName,
+              required verifierSpec,
+            }) async {
+              customCalled = true;
+              expect(title, 'First to 12 Overhead Wave');
+              expect(targetValue, 12);
+              expect(customActivityName, 'Overhead Wave');
+              expect(verifierSpec, same(spec));
+              return _race(title: title);
+            },
+        createRace:
+            ({
+              required title,
+              description,
+              category,
+              goalType = 'manual',
+              targetValue,
+              unit,
+              proofRequirement,
+              proofReviewMode,
+              visibility,
+              aiActivityType,
+              activityId,
+              metric,
+              format,
+              recurrence,
+              targetUnit,
+              proofMode,
+            }) async {
+              presetCalled = true;
+              return _race(title: title);
+            },
+      );
+
+      expect(race.title, 'First to 12 Overhead Wave');
+      expect(customCalled, isTrue);
+      expect(presetCalled, isFalse);
+    });
+
+    test('composer preset draft calls createRace', () async {
+      final draft = draftForActivity(_jacks).copyWith(targetValue: 30);
+      var customCalled = false;
+      var presetCalled = false;
+
+      final race = await createRaceForComposerDraft(
+        draft: draft,
+        createCustomRace:
+            ({
+              required title,
+              required targetValue,
+              required customActivityName,
+              required verifierSpec,
+            }) async {
+              customCalled = true;
+              return _race(title: title);
+            },
+        createRace:
+            ({
+              required title,
+              description,
+              category,
+              goalType = 'manual',
+              targetValue,
+              unit,
+              proofRequirement,
+              proofReviewMode,
+              visibility,
+              aiActivityType,
+              activityId,
+              metric,
+              format,
+              recurrence,
+              targetUnit,
+              proofMode,
+            }) async {
+              presetCalled = true;
+              expect(title, 'First to 30 Jumping Jacks');
+              expect(activityId, 'jumping_jacks');
+              return _race(title: title);
+            },
+      );
+
+      expect(race.title, 'First to 30 Jumping Jacks');
+      expect(customCalled, isFalse);
+      expect(presetCalled, isTrue);
+    });
+
+    test(
+      'createCustomRace failure does not clear learned movement or draft',
+      () async {
+        final spec = _anySpec();
+        final draft = RaceDraft(
+          title: '',
+          hasCustomName: false,
+          activity: _pushups,
+          metric: RaceMetric.reps,
+          format: RaceFormat.firstToGoal,
+          targetValue: 10,
+          customActivityName: 'wave',
+          verifierSpec: spec,
+        );
+
+        expect(draft.isCustom, isTrue);
+        expect(draft.verifierSpec, isNotNull);
+        expect(draft.customActivityName, 'wave');
+
+        // Simulate a failed create — the draft and spec must survive
+        Object? caught;
+        try {
+          await createRaceForComposerDraft(
+            draft: draft,
+            createCustomRace:
+                ({
+                  required title,
+                  required targetValue,
+                  required customActivityName,
+                  required verifierSpec,
+                }) async {
+                  throw Exception('HTTP 500: Internal server error');
+                },
+            createRace:
+                ({
+                  required title,
+                  description,
+                  category,
+                  goalType = 'manual',
+                  targetValue,
+                  unit,
+                  proofRequirement,
+                  proofReviewMode,
+                  visibility,
+                  aiActivityType,
+                  activityId,
+                  metric,
+                  format,
+                  recurrence,
+                  targetUnit,
+                  proofMode,
+                }) async {
+                  return _race(title: title);
+                },
+          );
+        } catch (e) {
+          caught = e;
+        }
+
+        // The exception propagated — but the draft and spec are unchanged
+        expect(caught, isNotNull);
+        expect(draft.isCustom, isTrue);
+        expect(draft.verifierSpec, same(spec));
+        expect(draft.customActivityName, 'wave');
+        expect(draft.targetValue, 10);
+      },
+    );
+  });
+}

@@ -1,0 +1,1661 @@
+{
+  "fixtures": [
+    {
+      "id": "yt_deep_squat_001",
+      "movement": "deep_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 187,
+      "detected_rep_windows": 4,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 4,
+          "end_frame": 10,
+          "failures": [
+            "HIP_DESCENT_SIGNAL_WEAK"
+          ],
+          "concept_summary": {
+            "standing_like": 2,
+            "athletic_stance": 1,
+            "grounded_candidate": 2,
+            "legs_closing": 7,
+            "knees_flexing": 1,
+            "landing_candidate": 1,
+            "knees_extending": 2,
+            "feet_rising": 1,
+            "airborne_candidate": 3,
+            "hips_ascending": 2
+          },
+          "window_frames": 7
+        },
+        {
+          "rep": 2,
+          "start_frame": 11,
+          "end_frame": 30,
+          "failures": [
+            "HIP_DESCENT_SIGNAL_WEAK"
+          ],
+          "concept_summary": {
+            "standing_like": 11,
+            "hips_ascending": 9,
+            "airborne_candidate": 19,
+            "legs_closing": 18,
+            "feet_rising": 6,
+            "camera_translation_likely": 5,
+            "knees_extending": 4,
+            "athletic_stance": 1,
+            "grounded_candidate": 1,
+            "landing_candidate": 1
+          },
+          "window_frames": 20
+        },
+        {
+          "rep": 3,
+          "start_frame": 31,
+          "end_frame": 78,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 46,
+            "legs_closing": 48,
+            "athletic_stance": 4,
+            "hips_ascending": 2,
+            "hips_descending": 7,
+            "feet_rising": 3,
+            "airborne_candidate": 1,
+            "knees_flexing": 1,
+            "camera_translation_likely": 2
+          },
+          "window_frames": 48
+        },
+        {
+          "rep": 4,
+          "start_frame": 79,
+          "end_frame": 101,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "athletic_stance": 12,
+            "knees_flexing": 5,
+            "hips_descending": 4,
+            "legs_closing": 23,
+            "knees_extending": 6,
+            "hips_ascending": 2,
+            "feet_rising": 8,
+            "airborne_candidate": 11,
+            "standing_like": 4,
+            "grounded_candidate": 2,
+            "body_rising_fast": 1,
+            "camera_translation_likely": 1
+          },
+          "window_frames": 23
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 9,
+        "camera_translation_pct": 4.8
+      },
+      "confidence": {
+        "ankle_avg": 0.5446,
+        "knee_avg": 0.6519,
+        "hip_avg": 0.9965,
+        "ankle_low_frames": 98,
+        "knee_low_frames": 43
+      },
+      "signal_distributions": {
+        "hkr_min": -0.1801,
+        "hkr_max": 2.3068,
+        "hkr_mean": 0.6036,
+        "airborne_rise_max": 2.7196,
+        "airborne_rise_mean": 0.0117
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_deep_squat_002",
+      "movement": "deep_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 29,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.0774,
+        "knee_avg": 0.1347,
+        "hip_avg": 0.3462,
+        "ankle_low_frames": 276,
+        "knee_low_frames": 273
+      },
+      "signal_distributions": {
+        "hkr_min": -0.4224,
+        "hkr_max": -0.3371,
+        "hkr_mean": -0.3726,
+        "airborne_rise_max": 0.0,
+        "airborne_rise_mean": -0.0086
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_deep_squat_003",
+      "movement": "deep_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.837,
+        "knee_avg": 0.926,
+        "hip_avg": 0.9997,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -0.4232,
+        "hkr_max": 0.7999,
+        "hkr_mean": 0.3707,
+        "airborne_rise_max": 0.3137,
+        "airborne_rise_mean": -0.0203
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jump_squat_001",
+      "movement": "jump_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 170,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.6832,
+        "knee_avg": 0.6704,
+        "hip_avg": 0.9932,
+        "ankle_low_frames": 2,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.0,
+        "hkr_max": 3.0,
+        "hkr_mean": 0.8018,
+        "airborne_rise_max": 6.7057,
+        "airborne_rise_mean": -0.3377
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jump_squat_002",
+      "movement": "jump_squats",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 37,
+        "camera_translation_pct": 12.3
+      },
+      "confidence": {
+        "ankle_avg": 0.9516,
+        "knee_avg": 0.9538,
+        "hip_avg": 0.9999,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -0.2042,
+        "hkr_max": 0.8196,
+        "hkr_mean": 0.4377,
+        "airborne_rise_max": 0.213,
+        "airborne_rise_mean": -0.2348
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jump_squat_003",
+      "movement": "jump_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 296,
+      "valid_frames": 296,
+      "detected_rep_windows": 2,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 0,
+          "end_frame": 44,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 23,
+            "grounded_candidate": 32,
+            "athletic_stance": 3,
+            "knees_flexing": 9,
+            "hips_descending": 5,
+            "knees_extending": 7,
+            "hips_ascending": 8,
+            "camera_translation_likely": 6,
+            "airborne_candidate": 12,
+            "legs_spreading": 4,
+            "landing_candidate": 1
+          },
+          "window_frames": 45
+        },
+        {
+          "rep": 2,
+          "start_frame": 45,
+          "end_frame": 263,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 109,
+            "hips_descending": 51,
+            "grounded_candidate": 136,
+            "legs_spreading": 86,
+            "camera_translation_likely": 44,
+            "athletic_stance": 8,
+            "knees_flexing": 39,
+            "knees_extending": 37,
+            "hips_ascending": 53,
+            "airborne_candidate": 76,
+            "landing_candidate": 5,
+            "feet_rising": 5
+          },
+          "window_frames": 219
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 52,
+        "camera_translation_pct": 17.6
+      },
+      "confidence": {
+        "ankle_avg": 0.9904,
+        "knee_avg": 0.9949,
+        "hip_avg": 0.9999,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.0399,
+        "hkr_max": 0.8512,
+        "hkr_mean": 0.6035,
+        "airborne_rise_max": 0.5965,
+        "airborne_rise_mean": 0.1101
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jump_squat_004",
+      "movement": "jump_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 57,
+        "camera_translation_pct": 19.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9836,
+        "knee_avg": 0.9903,
+        "hip_avg": 0.9998,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -0.0033,
+        "hkr_max": 1.0166,
+        "hkr_mean": 0.656,
+        "airborne_rise_max": 0.2752,
+        "airborne_rise_mean": 0.0706
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jump_squat_005",
+      "movement": "jump_squats",
+      "expected_reps": 10,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 45,
+        "camera_translation_pct": 15.0
+      },
+      "confidence": {
+        "ankle_avg": 0.8705,
+        "knee_avg": 0.8985,
+        "hip_avg": 0.9998,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -0.1529,
+        "hkr_max": 0.7729,
+        "hkr_mean": 0.5045,
+        "airborne_rise_max": 0.8064,
+        "airborne_rise_mean": 0.2037
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jump_squat_006",
+      "movement": "jump_squats",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 297,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 13,
+        "camera_translation_pct": 4.4
+      },
+      "confidence": {
+        "ankle_avg": 0.8562,
+        "knee_avg": 0.9196,
+        "hip_avg": 0.9995,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -2.0,
+        "hkr_max": 0.7208,
+        "hkr_mean": 0.154,
+        "airborne_rise_max": 0.2325,
+        "airborne_rise_mean": 0.0067
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jumping_jack_001",
+      "movement": "jumping_jacks",
+      "expected_reps": 8,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9661,
+        "knee_avg": 0.9738,
+        "hip_avg": 0.9997,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.7797,
+        "hkr_max": 0.8285,
+        "hkr_mean": 0.8062,
+        "airborne_rise_max": 0.1284,
+        "airborne_rise_mean": 0.048
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jumping_jack_002",
+      "movement": "jumping_jacks",
+      "expected_reps": 10,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 245,
+      "detected_rep_windows": 3,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 13,
+          "end_frame": 62,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 31,
+            "athletic_stance": 15,
+            "grounded_candidate": 6,
+            "legs_closing": 13,
+            "landing_candidate": 1,
+            "feet_rising": 4,
+            "legs_spreading": 21,
+            "hips_descending": 3,
+            "camera_translation_likely": 1,
+            "hips_ascending": 2,
+            "knees_extending": 1,
+            "airborne_candidate": 1
+          },
+          "window_frames": 43
+        },
+        {
+          "rep": 2,
+          "start_frame": 66,
+          "end_frame": 183,
+          "failures": [
+            "ANKLE_CONFIDENCE_LOSS",
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "airborne_candidate": 14,
+            "legs_closing": 17,
+            "pose_outlier": 15,
+            "standing_like": 63,
+            "feet_rising": 4,
+            "hips_ascending": 7,
+            "body_rising_fast": 1,
+            "camera_translation_likely": 1,
+            "legs_spreading": 15,
+            "hips_descending": 8,
+            "knees_extending": 2,
+            "grounded_candidate": 1,
+            "ankle_confidence_loss": 42
+          },
+          "window_frames": 74
+        },
+        {
+          "rep": 3,
+          "start_frame": 184,
+          "end_frame": 233,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 38,
+            "hips_ascending": 13,
+            "airborne_candidate": 7,
+            "legs_closing": 7,
+            "camera_translation_likely": 8,
+            "knees_extending": 1,
+            "feet_rising": 5,
+            "legs_spreading": 33,
+            "hips_descending": 6,
+            "body_rising_fast": 1
+          },
+          "window_frames": 49
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 12,
+        "camera_translation_pct": 4.9
+      },
+      "confidence": {
+        "ankle_avg": 0.746,
+        "knee_avg": 0.8026,
+        "hip_avg": 0.9899,
+        "ankle_low_frames": 55,
+        "knee_low_frames": 17
+      },
+      "signal_distributions": {
+        "hkr_min": -0.3938,
+        "hkr_max": 3.0,
+        "hkr_mean": 0.9939,
+        "airborne_rise_max": 2.1073,
+        "airborne_rise_mean": -0.1103
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jumping_jack_003",
+      "movement": "jumping_jacks",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 298,
+      "detected_rep_windows": 15,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 0,
+          "end_frame": 35,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "grounded_candidate": 26,
+            "legs_closing": 22,
+            "standing_like": 11,
+            "hips_ascending": 7,
+            "camera_translation_likely": 7,
+            "legs_spreading": 10,
+            "hips_descending": 3,
+            "landing_candidate": 1,
+            "body_rising_fast": 1,
+            "feet_rising": 1,
+            "airborne_candidate": 3
+          },
+          "window_frames": 36
+        },
+        {
+          "rep": 2,
+          "start_frame": 36,
+          "end_frame": 60,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 12,
+            "airborne_candidate": 11,
+            "legs_closing": 10,
+            "hips_descending": 6,
+            "camera_translation_likely": 8,
+            "hips_ascending": 6,
+            "body_rising_fast": 1,
+            "legs_spreading": 9,
+            "grounded_candidate": 3
+          },
+          "window_frames": 25
+        },
+        {
+          "rep": 3,
+          "start_frame": 61,
+          "end_frame": 84,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 14,
+            "airborne_candidate": 14,
+            "legs_closing": 9,
+            "hips_descending": 7,
+            "camera_translation_likely": 12,
+            "hips_ascending": 9,
+            "body_rising_fast": 1,
+            "feet_rising": 1,
+            "legs_spreading": 10
+          },
+          "window_frames": 24
+        },
+        {
+          "rep": 4,
+          "start_frame": 85,
+          "end_frame": 108,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 11,
+            "airborne_candidate": 15,
+            "legs_closing": 10,
+            "hips_descending": 7,
+            "camera_translation_likely": 7,
+            "hips_ascending": 8,
+            "body_rising_fast": 2,
+            "feet_rising": 1,
+            "legs_spreading": 11
+          },
+          "window_frames": 24
+        },
+        {
+          "rep": 5,
+          "start_frame": 109,
+          "end_frame": 129,
+          "failures": [
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "standing_like": 14,
+            "airborne_candidate": 17,
+            "legs_closing": 10,
+            "hips_descending": 6,
+            "camera_translation_likely": 6,
+            "hips_ascending": 4,
+            "legs_spreading": 7,
+            "body_rising_fast": 1,
+            "feet_rising": 1,
+            "pose_outlier": 2
+          },
+          "window_frames": 20
+        },
+        {
+          "rep": 6,
+          "start_frame": 130,
+          "end_frame": 134,
+          "failures": [
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "standing_like": 3,
+            "airborne_candidate": 5,
+            "legs_closing": 3,
+            "pose_outlier": 2,
+            "hips_ascending": 2,
+            "camera_translation_likely": 1,
+            "body_rising_fast": 1,
+            "feet_rising": 2,
+            "legs_spreading": 1,
+            "hips_descending": 2,
+            "knees_flexing": 1
+          },
+          "window_frames": 5
+        },
+        {
+          "rep": 7,
+          "start_frame": 136,
+          "end_frame": 143,
+          "failures": [
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "knees_extending": 4,
+            "hips_ascending": 3,
+            "airborne_candidate": 8,
+            "legs_closing": 7,
+            "knees_flexing": 1,
+            "hips_descending": 2,
+            "camera_translation_likely": 3,
+            "feet_rising": 2,
+            "standing_like": 3,
+            "body_rising_fast": 1,
+            "legs_spreading": 1,
+            "pose_outlier": 1
+          },
+          "window_frames": 8
+        },
+        {
+          "rep": 8,
+          "start_frame": 144,
+          "end_frame": 151,
+          "failures": [
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "standing_like": 2,
+            "hips_descending": 3,
+            "airborne_candidate": 8,
+            "legs_closing": 3,
+            "camera_translation_likely": 2,
+            "pose_outlier": 2,
+            "knees_extending": 5,
+            "hips_ascending": 5,
+            "body_rising_fast": 2,
+            "feet_rising": 4,
+            "legs_spreading": 3
+          },
+          "window_frames": 8
+        },
+        {
+          "rep": 9,
+          "start_frame": 152,
+          "end_frame": 159,
+          "failures": [
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "knees_extending": 3,
+            "hips_ascending": 4,
+            "airborne_candidate": 8,
+            "legs_closing": 4,
+            "knees_flexing": 1,
+            "hips_descending": 3,
+            "feet_rising": 1,
+            "pose_outlier": 1,
+            "body_rising_fast": 3,
+            "legs_spreading": 4,
+            "standing_like": 2,
+            "camera_translation_likely": 1
+          },
+          "window_frames": 8
+        },
+        {
+          "rep": 10,
+          "start_frame": 160,
+          "end_frame": 174,
+          "failures": [
+            "POSE_OUTLIER"
+          ],
+          "concept_summary": {
+            "standing_like": 6,
+            "hips_descending": 8,
+            "airborne_candidate": 15,
+            "legs_closing": 5,
+            "camera_translation_likely": 2,
+            "feet_rising": 9,
+            "hips_ascending": 2,
+            "body_rising_fast": 2,
+            "legs_spreading": 10,
+            "knees_flexing": 1,
+            "knees_extending": 1,
+            "pose_outlier": 1,
+            "athletic_stance": 1
+          },
+          "window_frames": 15
+        },
+        {
+          "rep": 11,
+          "start_frame": 175,
+          "end_frame": 184,
+          "failures": [
+            "STANDING_PRIMITIVE_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "feet_rising": 4,
+            "airborne_candidate": 10,
+            "legs_closing": 2,
+            "hips_ascending": 4,
+            "body_rising_fast": 4,
+            "legs_spreading": 8,
+            "knees_extending": 2,
+            "hips_descending": 1,
+            "camera_translation_likely": 1
+          },
+          "window_frames": 10
+        },
+        {
+          "rep": 12,
+          "start_frame": 185,
+          "end_frame": 205,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "knees_flexing": 1,
+            "hips_descending": 6,
+            "feet_rising": 6,
+            "airborne_candidate": 11,
+            "legs_closing": 3,
+            "camera_translation_likely": 6,
+            "hips_ascending": 9,
+            "legs_spreading": 15,
+            "body_rising_fast": 5,
+            "standing_like": 2
+          },
+          "window_frames": 20
+        },
+        {
+          "rep": 13,
+          "start_frame": 206,
+          "end_frame": 230,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 12,
+            "hips_ascending": 9,
+            "airborne_candidate": 21,
+            "legs_closing": 10,
+            "hips_descending": 6,
+            "camera_translation_likely": 11,
+            "legs_spreading": 10,
+            "body_rising_fast": 1
+          },
+          "window_frames": 25
+        },
+        {
+          "rep": 14,
+          "start_frame": 231,
+          "end_frame": 253,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 11,
+            "airborne_candidate": 23,
+            "legs_closing": 9,
+            "hips_descending": 7,
+            "camera_translation_likely": 7,
+            "hips_ascending": 8,
+            "legs_spreading": 9,
+            "body_rising_fast": 1
+          },
+          "window_frames": 23
+        },
+        {
+          "rep": 15,
+          "start_frame": 254,
+          "end_frame": 277,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 11,
+            "airborne_candidate": 24,
+            "legs_closing": 9,
+            "hips_descending": 6,
+            "camera_translation_likely": 6,
+            "hips_ascending": 7,
+            "legs_spreading": 10
+          },
+          "window_frames": 24
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 82,
+        "camera_translation_pct": 27.5
+      },
+      "confidence": {
+        "ankle_avg": 0.9394,
+        "knee_avg": 0.9364,
+        "hip_avg": 0.9997,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -2.0,
+        "hkr_max": 3.0,
+        "hkr_mean": 0.6478,
+        "airborne_rise_max": 4.5673,
+        "airborne_rise_mean": 0.5591
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_jumping_jack_004",
+      "movement": "jumping_jacks",
+      "expected_reps": 8,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9708,
+        "knee_avg": 0.9914,
+        "hip_avg": 0.9996,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.7558,
+        "hkr_max": 0.8529,
+        "hkr_mean": 0.8143,
+        "airborne_rise_max": 0.0362,
+        "airborne_rise_mean": 0.0158
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_lunge_001",
+      "movement": "lunges",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9751,
+        "knee_avg": 0.9895,
+        "hip_avg": 0.9997,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.6574,
+        "hkr_max": 0.7852,
+        "hkr_mean": 0.7384,
+        "airborne_rise_max": 0.0,
+        "airborne_rise_mean": -0.3529
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_lunge_002",
+      "movement": "lunges",
+      "expected_reps": 4,
+      "camera_view": "side",
+      "total_frames": 300,
+      "valid_frames": 299,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 5,
+        "camera_translation_pct": 1.7
+      },
+      "confidence": {
+        "ankle_avg": 0.9322,
+        "knee_avg": 0.8937,
+        "hip_avg": 0.9997,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.0056,
+        "hkr_max": 1.1417,
+        "hkr_mean": 0.5092,
+        "airborne_rise_max": 0.285,
+        "airborne_rise_mean": -0.9183
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_lunge_003",
+      "movement": "lunges",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 205,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 7,
+        "camera_translation_pct": 3.4
+      },
+      "confidence": {
+        "ankle_avg": 0.636,
+        "knee_avg": 0.6575,
+        "hip_avg": 0.8732,
+        "ankle_low_frames": 108,
+        "knee_low_frames": 104
+      },
+      "signal_distributions": {
+        "hkr_min": -0.2057,
+        "hkr_max": 0.7737,
+        "hkr_mean": 0.5302,
+        "airborne_rise_max": 0.3661,
+        "airborne_rise_mean": -0.1832
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_lunge_jump_001",
+      "movement": "lunge_jumps",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 9,
+        "camera_translation_pct": 3.0
+      },
+      "confidence": {
+        "ankle_avg": 0.714,
+        "knee_avg": 0.968,
+        "hip_avg": 0.9998,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.4267,
+        "hkr_max": 0.7885,
+        "hkr_mean": 0.6283,
+        "airborne_rise_max": 0.1503,
+        "airborne_rise_mean": -0.023
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_lunge_jump_002",
+      "movement": "lunge_jumps",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 41,
+      "valid_frames": 41,
+      "detected_rep_windows": 2,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 0,
+          "end_frame": 8,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 4,
+            "grounded_candidate": 2,
+            "legs_closing": 8,
+            "feet_rising": 4,
+            "airborne_candidate": 6,
+            "athletic_stance": 1,
+            "knees_flexing": 2,
+            "hips_descending": 2,
+            "landing_candidate": 1
+          },
+          "window_frames": 9
+        },
+        {
+          "rep": 2,
+          "start_frame": 9,
+          "end_frame": 39,
+          "failures": [
+            "AIRBORNE_FALSE_POSITIVE_CAMERA_SWAY"
+          ],
+          "concept_summary": {
+            "standing_like": 12,
+            "hips_descending": 9,
+            "camera_translation_likely": 10,
+            "legs_closing": 22,
+            "feet_rising": 8,
+            "hips_ascending": 9,
+            "body_rising_fast": 1,
+            "grounded_candidate": 3,
+            "airborne_candidate": 6,
+            "knees_flexing": 3,
+            "landing_candidate": 1
+          },
+          "window_frames": 31
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 11,
+        "camera_translation_pct": 26.8
+      },
+      "confidence": {
+        "ankle_avg": 0.8504,
+        "knee_avg": 0.9623,
+        "hip_avg": 0.9999,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.2254,
+        "hkr_max": 0.8219,
+        "hkr_mean": 0.644,
+        "airborne_rise_max": 0.8983,
+        "airborne_rise_mean": -0.105
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_lunge_jump_003",
+      "movement": "lunge_jumps",
+      "expected_reps": 4,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 20,
+        "camera_translation_pct": 6.7
+      },
+      "confidence": {
+        "ankle_avg": 0.966,
+        "knee_avg": 0.9443,
+        "hip_avg": 0.9999,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.2772,
+        "hkr_max": 0.7736,
+        "hkr_mean": 0.4656,
+        "airborne_rise_max": 0.1724,
+        "airborne_rise_mean": 0.0415
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_001",
+      "movement": "normal_squats",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 297,
+      "detected_rep_windows": 2,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 0,
+          "end_frame": 205,
+          "failures": [
+            "STANDING_PRIMITIVE_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "grounded_candidate": 206,
+            "hips_descending": 16,
+            "knees_flexing": 27,
+            "knees_extending": 23,
+            "hips_ascending": 28,
+            "legs_closing": 2
+          },
+          "window_frames": 206
+        },
+        {
+          "rep": 2,
+          "start_frame": 206,
+          "end_frame": 294,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "hips_ascending": 13,
+            "legs_closing": 86,
+            "body_rising_fast": 1,
+            "feet_rising": 1,
+            "airborne_candidate": 21,
+            "camera_translation_likely": 1,
+            "grounded_candidate": 34,
+            "standing_like": 10,
+            "athletic_stance": 6,
+            "knees_flexing": 16,
+            "hips_descending": 4,
+            "knees_extending": 12
+          },
+          "window_frames": 86
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 1,
+        "camera_translation_pct": 0.3
+      },
+      "confidence": {
+        "ankle_avg": 0.9264,
+        "knee_avg": 0.917,
+        "hip_avg": 0.9972,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -0.1319,
+        "hkr_max": 0.7119,
+        "hkr_mean": 0.3787,
+        "airborne_rise_max": 0.2883,
+        "airborne_rise_mean": 0.0557
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_002",
+      "movement": "normal_squats",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.8748,
+        "knee_avg": 0.9657,
+        "hip_avg": 0.9988,
+        "ankle_low_frames": 1,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.6809,
+        "hkr_max": 0.822,
+        "hkr_mean": 0.7389,
+        "airborne_rise_max": 0.2297,
+        "airborne_rise_mean": 0.0606
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_003",
+      "movement": "normal_squats",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 6,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 0,
+          "end_frame": 31,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "grounded_candidate": 23,
+            "legs_closing": 32,
+            "standing_like": 2,
+            "athletic_stance": 6,
+            "hips_descending": 11,
+            "knees_flexing": 10,
+            "knees_extending": 8,
+            "hips_ascending": 7
+          },
+          "window_frames": 32
+        },
+        {
+          "rep": 2,
+          "start_frame": 32,
+          "end_frame": 73,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "athletic_stance": 7,
+            "legs_closing": 42,
+            "standing_like": 19,
+            "hips_ascending": 7,
+            "hips_descending": 11,
+            "knees_flexing": 8,
+            "knees_extending": 9
+          },
+          "window_frames": 42
+        },
+        {
+          "rep": 3,
+          "start_frame": 74,
+          "end_frame": 117,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 24,
+            "athletic_stance": 7,
+            "hips_ascending": 11,
+            "legs_closing": 44,
+            "hips_descending": 10,
+            "knees_flexing": 5,
+            "knees_extending": 6
+          },
+          "window_frames": 44
+        },
+        {
+          "rep": 4,
+          "start_frame": 118,
+          "end_frame": 163,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 27,
+            "athletic_stance": 1,
+            "hips_ascending": 11,
+            "legs_closing": 46,
+            "hips_descending": 13,
+            "knees_flexing": 4,
+            "knees_extending": 5
+          },
+          "window_frames": 46
+        },
+        {
+          "rep": 5,
+          "start_frame": 164,
+          "end_frame": 208,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 29,
+            "hips_ascending": 11,
+            "legs_closing": 45,
+            "hips_descending": 10,
+            "knees_flexing": 3,
+            "knees_extending": 2,
+            "athletic_stance": 2
+          },
+          "window_frames": 45
+        },
+        {
+          "rep": 6,
+          "start_frame": 209,
+          "end_frame": 255,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "legs_closing": 47,
+            "standing_like": 24,
+            "hips_ascending": 11,
+            "hips_descending": 13,
+            "athletic_stance": 6,
+            "knees_flexing": 8,
+            "knees_extending": 10
+          },
+          "window_frames": 47
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9409,
+        "knee_avg": 0.9713,
+        "hip_avg": 0.9998,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": -0.3277,
+        "hkr_max": 0.8386,
+        "hkr_mean": 0.4967,
+        "airborne_rise_max": 0.0,
+        "airborne_rise_mean": -0.5533
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_004",
+      "movement": "normal_squats",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 202,
+      "valid_frames": 179,
+      "detected_rep_windows": 3,
+      "rep_analysis": [
+        {
+          "rep": 1,
+          "start_frame": 23,
+          "end_frame": 63,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 11,
+            "grounded_candidate": 41,
+            "hips_descending": 9,
+            "knees_flexing": 6,
+            "knees_extending": 7,
+            "hips_ascending": 7,
+            "athletic_stance": 2
+          },
+          "window_frames": 41
+        },
+        {
+          "rep": 2,
+          "start_frame": 64,
+          "end_frame": 124,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 31,
+            "hips_ascending": 10,
+            "grounded_candidate": 61,
+            "hips_descending": 10,
+            "knees_flexing": 5,
+            "knees_extending": 8,
+            "athletic_stance": 1
+          },
+          "window_frames": 61
+        },
+        {
+          "rep": 3,
+          "start_frame": 125,
+          "end_frame": 193,
+          "failures": [
+            "TEMPORAL_STABILITY_TOO_STRICT"
+          ],
+          "concept_summary": {
+            "standing_like": 40,
+            "hips_ascending": 9,
+            "grounded_candidate": 69,
+            "hips_descending": 10,
+            "knees_flexing": 4,
+            "knees_extending": 7,
+            "athletic_stance": 1
+          },
+          "window_frames": 69
+        }
+      ],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9032,
+        "knee_avg": 0.8828,
+        "hip_avg": 0.9997,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.1238,
+        "hkr_max": 0.7971,
+        "hkr_mean": 0.5874,
+        "airborne_rise_max": 0.0476,
+        "airborne_rise_mean": -0.0093
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_005",
+      "movement": "normal_squats",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 67,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.1885,
+        "knee_avg": 0.2275,
+        "hip_avg": 0.9059,
+        "ankle_low_frames": 238,
+        "knee_low_frames": 237
+      },
+      "signal_distributions": {
+        "hkr_min": -0.0609,
+        "hkr_max": 0.9,
+        "hkr_mean": 0.5599,
+        "airborne_rise_max": 0.0224,
+        "airborne_rise_mean": -0.0391
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_jack_001",
+      "movement": "squat_jacks",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 237,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 5,
+        "camera_translation_pct": 2.1
+      },
+      "confidence": {
+        "ankle_avg": 0.9704,
+        "knee_avg": 0.9884,
+        "hip_avg": 0.9999,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.3312,
+        "hkr_max": 0.8445,
+        "hkr_mean": 0.5463,
+        "airborne_rise_max": 0.3693,
+        "airborne_rise_mean": 0.205
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_squat_jack_002",
+      "movement": "squat_jacks",
+      "expected_reps": 5,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 147,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 28,
+        "camera_translation_pct": 19.0
+      },
+      "confidence": {
+        "ankle_avg": 0.8782,
+        "knee_avg": 0.8988,
+        "hip_avg": 0.9976,
+        "ankle_low_frames": 3,
+        "knee_low_frames": 2
+      },
+      "signal_distributions": {
+        "hkr_min": 0.1655,
+        "hkr_max": 1.0495,
+        "hkr_mean": 0.6832,
+        "airborne_rise_max": 0.0,
+        "airborne_rise_mean": -1.305
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_vertical_jump_001",
+      "movement": "vertical_jumps",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9689,
+        "knee_avg": 0.9742,
+        "hip_avg": 0.9998,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.6006,
+        "hkr_max": 0.7258,
+        "hkr_mean": 0.6722,
+        "airborne_rise_max": 0.0502,
+        "airborne_rise_mean": -0.0221
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_vertical_jump_002",
+      "movement": "vertical_jumps",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 291,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 33,
+        "camera_translation_pct": 11.3
+      },
+      "confidence": {
+        "ankle_avg": 0.8357,
+        "knee_avg": 0.7791,
+        "hip_avg": 0.9995,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.2111,
+        "hkr_max": 0.8175,
+        "hkr_mean": 0.6511,
+        "airborne_rise_max": 0.0,
+        "airborne_rise_mean": -0.8713
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_vertical_jump_003",
+      "movement": "vertical_jumps",
+      "expected_reps": 3,
+      "camera_view": "front",
+      "total_frames": 300,
+      "valid_frames": 300,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0.0
+      },
+      "confidence": {
+        "ankle_avg": 0.9568,
+        "knee_avg": 0.9472,
+        "hip_avg": 0.9998,
+        "ankle_low_frames": 0,
+        "knee_low_frames": 0
+      },
+      "signal_distributions": {
+        "hkr_min": 0.7248,
+        "hkr_max": 0.7918,
+        "hkr_mean": 0.7437,
+        "airborne_rise_max": 0.0582,
+        "airborne_rise_mean": 0.0005
+      },
+      "failure_counts": null
+    },
+    {
+      "id": "yt_vertical_jump_004",
+      "movement": "vertical_jumps",
+      "expected_reps": 3,
+      "camera_view": "side",
+      "total_frames": 300,
+      "valid_frames": 0,
+      "detected_rep_windows": 0,
+      "rep_analysis": [],
+      "camera_motion": {
+        "camera_translation_frames": 0,
+        "camera_translation_pct": 0
+      },
+      "confidence": {
+        "ankle_avg": 0.0222,
+        "knee_avg": 0.0607,
+        "hip_avg": 0.0352,
+        "ankle_low_frames": 300,
+        "knee_low_frames": 300
+      },
+      "signal_distributions": {
+        "hkr_min": 0,
+        "hkr_max": 0,
+        "hkr_mean": 0,
+        "airborne_rise_max": 0,
+        "airborne_rise_mean": 0
+      },
+      "failure_counts": null
+    }
+  ],
+  "failure_taxonomy": {
+    "TEMPORAL_STABILITY_TOO_STRICT": 25,
+    "POSE_OUTLIER": 7,
+    "HIP_DESCENT_SIGNAL_WEAK": 2,
+    "STANDING_PRIMITIVE_TOO_STRICT": 2,
+    "ANKLE_CONFIDENCE_LOSS": 1,
+    "AIRBORNE_FALSE_POSITIVE_CAMERA_SWAY": 1
+  },
+  "summary": {
+    "total_fixtures": 30,
+    "by_movement": {
+      "deep_squats": 3,
+      "jump_squats": 6,
+      "jumping_jacks": 4,
+      "lunges": 3,
+      "lunge_jumps": 3,
+      "normal_squats": 5,
+      "squat_jacks": 2,
+      "vertical_jumps": 4
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# Motion-QA experiment harnesses and lab tooling. These are research scripts —
+# console output, mutable experiment identifiers and terse control flow are
+# intentional here. Relax the lints that only make sense for app code so the
+# top-level `flutter analyze` signal stays about production issues.
+include: ../../analysis_options.yaml
+
+linter:
+  rules:
+    avoid_print: false
+    prefer_const_constructors: false
+    non_constant_identifier_names: false
+    curly_braces_in_flow_control_structures: false
+    unnecessary_string_interpolations: false
