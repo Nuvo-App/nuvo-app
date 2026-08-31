@@ -15,6 +15,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
+import '../../data/ai_motion_models.dart';
 import '../../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
@@ -70,6 +71,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     holdDuration: const Duration(milliseconds: _skeletonHoldMs),
   );
   bool _learnedWrittenToProvider = false;
+
+  // Raw pose-stream capture for Motion V2 fixtures (tools/motion_v2). One list
+  // of serialized NuvoPoseFrames per accepted demonstration. Diagnostics only.
+  final List<List<Map<String, dynamic>>> _rawDemos = [];
+  List<Map<String, dynamic>> _rawCurrent = [];
+  int _rawAcceptedSnapshot = 0;
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
@@ -211,6 +218,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         return;
       }
       _flow.addFrame(pose, frame.createdAt);
+      if (_showDiagnostics && _flow.stage == TeachMovementStage.recording) {
+        _rawCurrent.add(_serializeRawFrame(frame));
+      }
       if (_flow.isBodyVisiblePose(pose)) {
         _skeletonHold.show(frame, now);
         _scheduleSkeletonExpiry();
@@ -333,11 +343,20 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _startRecording() {
+    _rawCurrent = [];
+    _rawAcceptedSnapshot = _flow.acceptedCount;
     _flow.startRecordingExample();
   }
 
   void _finishRecording() {
     _flow.stopRecordingExample();
+    // Keep the raw stream only if this recording was accepted as a demo.
+    if (_showDiagnostics &&
+        _flow.acceptedCount > _rawAcceptedSnapshot &&
+        _rawCurrent.length >= 4) {
+      _rawDemos.add(List.of(_rawCurrent));
+    }
+    _rawCurrent = [];
     if (_flow.stage == TeachMovementStage.readyToRecord &&
         _flow.acceptedCount >= _flow.requiredExampleCount &&
         _flow.canLearn) {
@@ -346,7 +365,20 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _cancelRecording() {
+    _rawCurrent = [];
     _flow.cancelRecordingExample();
+  }
+
+  static Map<String, dynamic> _serializeRawFrame(NuvoPoseFrame frame) {
+    return {
+      't': frame.createdAt.millisecondsSinceEpoch,
+      'w': frame.imageWidth,
+      'h': frame.imageHeight,
+      'points': {
+        for (final e in frame.points.entries)
+          e.key: [e.value.x, e.value.y, e.value.z, e.value.likelihood],
+      },
+    };
   }
 
   Future<void> _submitName() async {
@@ -380,6 +412,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customUpdate = null;
     _customTestResult = null;
     _runtimeDiagnostics.clear();
+    _rawDemos.clear();
+    _rawCurrent = [];
 
     _testingVerifier = false;
 
@@ -403,6 +437,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customUpdate = null;
     _customTestResult = null;
     _runtimeDiagnostics.clear();
+    _rawDemos.clear();
+    _rawCurrent = [];
 
     _testingVerifier = false;
 
@@ -437,6 +473,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customUpdate = null;
     _customTestResult = null;
     _runtimeDiagnostics.clear();
+    _rawDemos.clear();
+    _rawCurrent = [];
     _ensureCameraStream();
     setState(() {});
   }
@@ -458,6 +496,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customRuntime = runtime;
     _customUpdate = runtime.lastUpdate;
     _runtimeDiagnostics.clear();
+    _rawDemos.clear();
+    _rawCurrent = [];
     _recordRuntimeDiagnostic(_customUpdate);
     _customTestResult = null;
 
@@ -896,10 +936,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       'generatedAtIso8601': DateTime.now().toUtc().toIso8601String(),
       'teaching': _flow.debugReport(),
       // Replayable fixtures — paste into test/motion_qa/fixtures/custom/ to
-      // re-run the builder / runtime offline against a real capture.
+      // re-run the V1 builder / runtime offline against a real capture.
       if (_flow.currentCalibration() != null)
         'calibrationFixture': _flow.currentCalibration()!.toJson(),
       if (spec != null) 'learnedSpecFixture': spec.toJson(),
+      // Raw pose stream per demo — the Motion V2 input (tools/motion_v2).
+      // Image-normalized landmarks, NOT V1-normalized. points: {name:[x,y,z,likelihood]}.
+      if (_rawDemos.isNotEmpty)
+        'rawStreamFixture': {
+          'movementName': _flow.movementName,
+          'schema': 1,
+          'demos': _rawDemos,
+        },
       'poseStream': {
         'framesReceived': streamState.framesReceived,
         'framesProcessed': streamState.framesProcessed,
