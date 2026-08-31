@@ -25,6 +25,7 @@ This is the operational map for agents working on Nuvo, an app that turns real-l
 | [`10-pitfalls-and-fixes.md`](10-pitfalls-and-fixes.md) | **every issue this codebase has hit** — symptom → root cause → fix → the rule that stops it recurring. Read the relevant section before touching networking, auth, routing, layout scaling, or tests. |
 | [`11-adding-a-feature.md`](11-adding-a-feature.md) | step-by-step recipes: tweak a screen, add a field / API call / screen / widget / proof type; the pre-commit checklist |
 | [`12-screen-reference.md`](12-screen-reference.md) | every route/screen: file, primary action, states, shared widgets, data source |
+| [`13-motion-engine-v2.md`](13-motion-engine-v2.md) | Motion V2 (Teach Nuvo pretrained-encoder rebuild) — architecture, status, `tools/motion_v2/`, rules for continuing |
 | [`../NAVIGATION_MAP.md`](../NAVIGATION_MAP.md) | the route table, navigation graph, and which verb (`go` / `push` / `pushReplacement` / `safePopOrGo`) |
 
 ## Source-of-truth rule
