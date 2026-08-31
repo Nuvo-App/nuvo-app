@@ -73,7 +73,7 @@ def main():
     for n in names:
         taught[n] = TaughtMotionV2.learn(n, demos_for(n))
         t = taught[n]
-        print(f"learned {n}: accept_pd={t.accept_proto_dist:.3f} "
+        print(f"learned {n}: accept_pd={t.accept_proto_dist:.3f} accept_td={t.accept_traj_dist:.4f} "
               f"active_vel={t.demo_active_vel:.4f} demo_lengths={t.demo_lengths}")
 
     lines = ["# Motion V2 — STEP 6+8: 3-shot learner + generic rep detection (synthetic)", "",
@@ -81,7 +81,7 @@ def main():
 
     # ---- match: same-family vs cross ----
     lines += ["## match() — same-family recognition", "",
-              "| taught | query | is_same_family | score | proto_dist | neg_ratio | coverage |",
+              "| taught | query | is_same_family | score | proto_dist | margin | traj_sim |",
               "|---|---|---|---|---|---|---|"]
     match_tp = match_tn = match_fp = match_fn = 0
     for tn in names:
@@ -100,7 +100,7 @@ def main():
                 match_tn += 1
             mark = "" if ok else "  ❌"
             lines.append(f"| {tn} | {qn} | {m.is_same_family} | {m.score:.2f} | "
-                         f"{m.proto_dist:.3f} | {m.proto_margin:.2f} | {m.coverage:.2f}{mark} |")
+                         f"{m.proto_dist:.3f} | {m.proto_margin:.2f} | {m.traj_sim:.2f}{mark} |")
     lines += ["", f"match: TP={match_tp} TN={match_tn} FP={match_fp} FN={match_fn}", ""]
 
     # ---- rep counting ----
