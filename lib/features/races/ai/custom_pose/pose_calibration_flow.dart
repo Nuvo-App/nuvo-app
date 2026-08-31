@@ -540,9 +540,11 @@ class SingleSessionTeachingCapture {
     _notify();
   }
 
-  void _tryBuild() {
-    if (_startPose == null || _accepted.length < 2) return;
-    final calibration = CustomPoseCalibration(
+  /// Reconstructs the [CustomPoseCalibration] from the current start pose +
+  /// accepted demonstrations. Returns null until at least 2 demos exist.
+  CustomPoseCalibration? currentCalibration() {
+    if (_startPose == null || _accepted.length < 2) return null;
+    return CustomPoseCalibration(
       schemaVersion: poseCalibrationSchemaVersion,
       movementName: _movementName,
       startPose: _startPose!,
@@ -561,6 +563,11 @@ class SingleSessionTeachingCapture {
         deviceNote: _captureDeviceNote,
       ),
     );
+  }
+
+  void _tryBuild() {
+    final calibration = currentCalibration();
+    if (calibration == null) return;
     _buildResult = _builder.build(calibration);
   }
 
