@@ -10,6 +10,7 @@ import 'pose_demonstration_capture.dart';
 import 'pose_repetition_splitter.dart';
 import 'pose_sequence_frame.dart';
 import 'pose_similarity.dart';
+import 'stable_pose_capture.dart';
 
 enum TeachMovementStage {
   name,
@@ -17,6 +18,7 @@ enum TeachMovementStage {
   countdown,
   startPose,
   readyToRecord,
+  holdStill,
   recording,
   capturing,
   building,
@@ -50,6 +52,15 @@ class SingleSessionTeachingCapture {
   NormalizedPose? _startPose;
   final List<NormalizedPose> _startPoseSamples = [];
   bool _startPoseLocked = false;
+
+  /// Runs in parallel with the start of example 1's recording: if the opening
+  /// frames hold still, that clean pose becomes the reset/arm pose. Without it
+  /// the "start pose" was the average of the first frames of recording 1 —
+  /// i.e. mid-motion if the person moved immediately — and the live runtime
+  /// could then never arm. (`holdStill` stage is reserved, not currently used.)
+  StablePoseCapture? _startPoseCapture;
+  int _holdStillFrames = 0;
+  static const int _holdStillFallbackFrames = 45; // ~1.5s at ~30fps
   String _movementName = '';
   String _message = '';
   CustomPoseBuildResult? _buildResult;
@@ -289,6 +300,29 @@ class SingleSessionTeachingCapture {
 
     if (_stage == TeachMovementStage.recording) {
       _current?.addFrame(pose, now);
+
+      // Parallel start-pose settle (example 1 only): if the opening frames of
+      // the recording hold still, take that clean pose as the reset/arm pose.
+      final settle = _startPoseCapture;
+      if (settle != null && !_startPoseLocked) {
+        _holdStillFrames++;
+        if (pose.isValid) {
+          final s = settle.addFrame(pose, now);
+          if (s.captured && s.pose != null) {
+            _startPose = s.pose;
+            _startPoseSamples.clear();
+            _startPoseLocked = true;
+            _startPoseCapture = null;
+          }
+        }
+        // Give up looking for a still pose after the fallback window — fall
+        // through to the legacy first-frames average below.
+        if (_startPoseCapture != null &&
+            _holdStillFrames >= _holdStillFallbackFrames) {
+          _startPoseCapture = null;
+        }
+      }
+
       if (pose.isValid && !_startPoseLocked) {
         _startPoseSamples.add(pose);
         if (_startPoseSamples.length == 1) {
@@ -316,6 +350,17 @@ class SingleSessionTeachingCapture {
     if (_startPose == null) {
       _startPoseSamples.clear();
       _startPoseLocked = false;
+      _holdStillFrames = 0;
+      // Recording rolls immediately (nothing is gated), but in parallel we look
+      // for a *still* starting pose in the opening frames of example 1. If the
+      // person held their start position even briefly, that clean pose becomes
+      // the reset/arm pose the live runtime needs — instead of a mid-motion
+      // frame. Leading still frames are trimmed by the builder later.
+      _startPoseCapture = StablePoseCapture(
+        requiredStableFrames: 4,
+        timeout: const Duration(seconds: 3),
+        stabilityThreshold: 0.9,
+      );
     }
     final index = _accepted.length + _rejected.length + 1;
     _current = PoseDemonstrationCapture(
@@ -333,9 +378,14 @@ class SingleSessionTeachingCapture {
   void stopRecordingExample() => stopRecordingExampleAt(_now());
 
   void cancelRecordingExample() {
-    if (_stage != TeachMovementStage.recording) return;
+    if (_stage != TeachMovementStage.recording &&
+        _stage != TeachMovementStage.holdStill) {
+      return;
+    }
     _clipStartedAt = null;
     _current = null;
+    _startPoseCapture = null;
+    _holdStillFrames = 0;
     _lastRejection = null;
     _stage = TeachMovementStage.readyToRecord;
     _message = _exampleInstruction(_accepted.length);
@@ -714,7 +764,10 @@ class SingleSessionTeachingCapture {
     _clipStartedAt = null;
     _current?.interrupt();
     _current = null;
-    if (_stage == TeachMovementStage.recording) {
+    _startPoseCapture = null;
+    _holdStillFrames = 0;
+    if (_stage == TeachMovementStage.recording ||
+        _stage == TeachMovementStage.holdStill) {
       _stage = TeachMovementStage.readyToRecord;
       _message = 'Recording stopped. Try again.';
       _notify();
@@ -734,6 +787,8 @@ class SingleSessionTeachingCapture {
       _message = _exampleInstruction(_accepted.length);
     } else if (_stage == TeachMovementStage.recording) {
       _message = _recordingMessage();
+    } else if (_stage == TeachMovementStage.holdStill) {
+      _message = 'Hold your starting position still…';
     }
     _notify();
   }

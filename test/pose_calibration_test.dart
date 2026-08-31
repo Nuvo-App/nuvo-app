@@ -13,6 +13,7 @@ import 'package:nuvo/features/races/ai/custom_pose/pose_calibration_quality.dart
 import 'package:nuvo/features/races/ai/custom_pose/pose_demonstration_capture.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_sequence_frame.dart';
+import 'package:nuvo/features/races/ai/custom_pose/pose_similarity.dart';
 import 'package:nuvo/features/races/ai/custom_pose/stable_pose_capture.dart';
 import 'package:nuvo/features/races/presentation/custom_pose/pose_skeleton_overlay.dart';
 
@@ -579,6 +580,40 @@ void main() {
       capture.startRecordingExample();
 
       expect(capture.isRecording, isTrue);
+    });
+
+    test('start pose settles on the still opening pose, not a mid-motion frame',
+        () {
+      var now = DateTime.utc(2026, 1, 1);
+      final capture = SingleSessionTeachingCapture(now: () => now);
+      capture.setMovementName('Arms overhead');
+      capture.startRecordingExample();
+
+      // Hold the neutral standing pose for the opening frames...
+      final still = normalizer.normalize(neutralStandingPose());
+      for (var i = 0; i < 8; i++) {
+        capture.addFrame(still, now.add(Duration(milliseconds: 60 * i)));
+      }
+      // ...then move.
+      for (var i = 0; i < 6; i++) {
+        capture.addFrame(
+          normalizer.normalize(armsOverheadPose()),
+          now.add(Duration(milliseconds: 60 * (8 + i))),
+        );
+      }
+      now = now.add(const Duration(milliseconds: 900));
+      capture.stopRecordingExample();
+
+      // The locked start pose should be (near) the still standing pose, i.e.
+      // highly similar to it — not the arms-overhead end pose.
+      const sim = PoseSimilarity(minValidFeatureRatio: 0.3);
+      final toStill = sim.compare(capture.startPose!, still);
+      final toEnd = sim.compare(
+        capture.startPose!,
+        normalizer.normalize(armsOverheadPose()),
+      );
+      expect(toStill.similarity, greaterThan(0.9));
+      expect(toStill.similarity, greaterThan(toEnd.similarity));
     });
 
     test('two valid manual examples build a real verifier spec', () {
