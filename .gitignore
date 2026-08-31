@@ -57,6 +57,15 @@ motion-v2/weights/
 *.safetensors
 # NOTE: test/motion_qa/models/pose_landmarker.task (~5.7 MB) is an intentional test fixture — kept.
 
+# Motion Engine V2 — downloaded / generated, reproduced by tools/motion_v2/scripts/setup.sh
+tools/motion_v2/.venv/
+tools/motion_v2/vendor/
+tools/motion_v2/checkpoints/
+tools/motion_v2/**/__pycache__/
+tools/motion_v2/**/*.bin
+tools/motion_v2/experiments/_out/
+tools/motion_v2/.pytest_cache/
+
 # Symbolication related
 app.*.symbols
 
