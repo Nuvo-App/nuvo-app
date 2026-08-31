@@ -1,0 +1,5 @@
+# Local tooling only. Pin the production image separately in Vertex AI.
+torch>=2.4,<3
+numpy>=1.26,<3
+scikit-learn>=1.5,<2
+pytest>=8,<9
