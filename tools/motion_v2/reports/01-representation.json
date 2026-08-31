@@ -1,0 +1,130 @@
+[
+  {
+    "strategy": "mean_pool / euclid",
+    "same_mean": 0.0079,
+    "cross_mean": 0.1068,
+    "separation": 0.0989,
+    "separation_sd": 3.78,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean_pool / euclid_l2n",
+    "same_mean": 0.0145,
+    "cross_mean": 0.0961,
+    "separation": 0.0816,
+    "separation_sd": 2.979,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "temporal_stats / euclid_l2n",
+    "same_mean": 0.0643,
+    "cross_mean": 0.2773,
+    "separation": 0.213,
+    "separation_sd": 2.618,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "temporal_stats / euclid",
+    "same_mean": 0.3924,
+    "cross_mean": 1.6664,
+    "separation": 1.2741,
+    "separation_sd": 2.579,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "velocity_energy / euclid",
+    "same_mean": 0.0397,
+    "cross_mean": 0.1193,
+    "separation": 0.0795,
+    "separation_sd": 2.43,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "temporal_stats / cosine",
+    "same_mean": 0.0082,
+    "cross_mean": 0.0389,
+    "separation": 0.0307,
+    "separation_sd": 2.247,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean+velocity / euclid_l2n",
+    "same_mean": 0.0551,
+    "cross_mean": 0.2124,
+    "separation": 0.1573,
+    "separation_sd": 2.136,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean_pool_joints / euclid_l2n",
+    "same_mean": 0.0544,
+    "cross_mean": 0.2114,
+    "separation": 0.1571,
+    "separation_sd": 2.134,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean+velocity / euclid",
+    "same_mean": 0.3349,
+    "cross_mean": 1.2629,
+    "separation": 0.928,
+    "separation_sd": 2.075,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean_pool_joints / euclid",
+    "same_mean": 0.3311,
+    "cross_mean": 1.2572,
+    "separation": 0.9262,
+    "separation_sd": 2.073,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean_pool / cosine",
+    "same_mean": 0.0002,
+    "cross_mean": 0.0053,
+    "separation": 0.0051,
+    "separation_sd": 2.026,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean+velocity / cosine",
+    "same_mean": 0.0062,
+    "cross_mean": 0.0233,
+    "separation": 0.0172,
+    "separation_sd": 1.587,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "mean_pool_joints / cosine",
+    "same_mean": 0.0061,
+    "cross_mean": 0.0231,
+    "separation": 0.017,
+    "separation_sd": 1.582,
+    "loo_3shot_acc": 1.0
+  },
+  {
+    "strategy": "velocity_energy / euclid_l2n",
+    "same_mean": 0.31,
+    "cross_mean": 0.7493,
+    "separation": 0.4393,
+    "separation_sd": 1.288,
+    "loo_3shot_acc": 0.889
+  },
+  {
+    "strategy": "per_frame_emb / dtw",
+    "same_mean": 0.0022,
+    "cross_mean": 0.0047,
+    "separation": 0.0025,
+    "separation_sd": 0.886,
+    "loo_3shot_acc": 0.667
+  },
+  {
+    "strategy": "velocity_energy / cosine",
+    "same_mean": 0.1557,
+    "cross_mean": 0.2893,
+    "separation": 0.1336,
+    "separation_sd": 0.558,
+    "loo_3shot_acc": 0.889
+  }
+]
