@@ -35,7 +35,10 @@ snapshot_download(
 snapshot_download(
     "$HF_REPO", revision="$HF_REV",
     local_dir="checkpoints/MotionBERT",
-    allow_patterns=["checkpoint/pretrain/MB_lite/**", "checkpoint/pretrain/MB_release/**"],
+    allow_patterns=[
+        "checkpoint/pretrain/MB_lite/**",                       # lite_pretrain variant
+        "checkpoint/action/FT_MB_release_MB_ft_NTU60_xsub/**",  # release_action variant (default)
+    ],
 )
 print("ok")
 PYEOF
