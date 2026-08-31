@@ -16,6 +16,7 @@ import '../../../core/widgets/nuvo_board_components.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
+import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_move_log_item.dart';
 import '../../../core/widgets/nuvo_podium.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -454,11 +455,16 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               ] else ...[
                 const SizedBox(height: 26),
                 if (sorted.isEmpty)
-                  Text(
-                    'No one on the board yet. Invite crew to race.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.muted,
-                    ),
+                  NuvoEmptyState(
+                    icon: Icons.group_add_rounded,
+                    title: 'No one on the board yet',
+                    body: 'Invite your crew — the leaderboard fills in as '
+                        'people join and log their first move.',
+                    ctaLabel: isOwner ? 'Invite crew' : null,
+                    onCta: isOwner
+                        ? () => _goToInviteCrew(race.id)
+                        : null,
+                    compact: true,
                   )
                 else if (sorted.length >= 2)
                   NuvoPodium(

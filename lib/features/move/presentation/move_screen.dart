@@ -6,7 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
-import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -285,18 +285,21 @@ class _SegmentedControl extends StatelessWidget {
             label: 'Ready',
             count: readyCount,
             selected: segment == _VerifySegment.ready,
+            color: NuvoColors.blue,
             onTap: () => onChanged(_VerifySegment.ready),
           ),
           _SegmentTab(
             label: 'Completed',
             count: completedCount,
             selected: segment == _VerifySegment.completed,
+            color: NuvoColors.success,
             onTap: () => onChanged(_VerifySegment.completed),
           ),
           _SegmentTab(
             label: 'Recent',
             count: recentCount,
             selected: segment == _VerifySegment.recent,
+            color: NuvoColors.warning,
             onTap: () => onChanged(_VerifySegment.recent),
           ),
         ],
@@ -310,12 +313,14 @@ class _SegmentTab extends StatelessWidget {
     required this.label,
     required this.count,
     required this.selected,
+    required this.color,
     required this.onTap,
   });
 
   final String label;
   final int count;
   final bool selected;
+  final Color color;
   final VoidCallback onTap;
 
   @override
@@ -328,11 +333,8 @@ class _SegmentTab extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? NuvoColors.actionBlue : Colors.transparent,
+            color: selected ? color : Colors.transparent,
             borderRadius: BorderRadius.circular(NuvoRadii.xs),
-            border: selected
-                ? Border.all(color: NuvoColors.actionBlue, width: 1)
-                : null,
           ),
           child: Column(
             children: [
@@ -860,41 +862,14 @@ class _SegmentEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: NuvoColors.panelLight,
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
-          ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: NuvoColors.muted, size: 22),
-        ),
-        const SizedBox(height: NuvoSpacing.lg),
-        Text(
-          title,
-          style: AppTextStyles.titleMedium.copyWith(
-            color: NuvoColors.navy,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: NuvoSpacing.xs),
-        Text(
-          subtitle,
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-        ),
-        if (actionLabel != null && onAction != null) ...[
-          const SizedBox(height: NuvoSpacing.lg),
-          NuvoPrimaryButton(
-            label: actionLabel!,
-            small: true,
-            onPressed: onAction,
-          ),
-        ],
-      ],
+    return NuvoEmptyState(
+      icon: icon,
+      title: title,
+      body: subtitle,
+      ctaLabel: actionLabel,
+      onCta: onAction,
+      accent: NuvoColors.warning,
+      compact: true,
     );
   }
 }
@@ -907,36 +882,13 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: NuvoColors.blue.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(NuvoRadii.card),
-          ),
-          child: const Icon(
-            Icons.directions_run_rounded,
-            color: NuvoColors.blue,
-            size: 24,
-          ),
-        ),
-        const SizedBox(height: NuvoSpacing.xl),
-        Text('No active races yet.', style: AppTextStyles.titleLarge),
-        const SizedBox(height: 6),
-        Text(
-          'Start a race to begin logging moves.',
-          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-        ),
-        const SizedBox(height: NuvoSpacing.xl),
-        NuvoPrimaryButton(
-          label: 'Start a race',
-          expand: true,
-          onPressed: onStart,
-        ),
-      ],
+    return NuvoEmptyState(
+      icon: Icons.directions_run_rounded,
+      title: 'Nothing to verify yet',
+      body: 'Create a race, then log your moves here. Nuvo checks each one and '
+          'moves the leaderboard.',
+      ctaLabel: 'Create a race',
+      onCta: onStart,
     );
   }
 }

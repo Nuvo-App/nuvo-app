@@ -55,6 +55,10 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/branding/nuvo_app_icon.png"
+  # iOS 18 appearance variants (from Icon Composer "export all").
+  image_path_ios_dark_transparent: "assets/branding/nuvo_app_icon_dark.png"
+  image_path_ios_tinted_grayscale: "assets/branding/nuvo_app_icon_tinted.png"
+  desaturate_tinted_to_grayscale_ios: true
   remove_alpha_ios: true
   web:
     generate: false

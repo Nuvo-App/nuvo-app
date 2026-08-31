@@ -10,17 +10,18 @@ import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_podium.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../data/arena_models.dart';
 import 'arena_controller.dart';
 
 const _arenaBackground = NuvoColors.page;
 const _arenaSurface = NuvoColors.surface;
-const _arenaSurfaceRaised = NuvoColors.panelLight;
 const _arenaLine = NuvoColors.border;
 const _arenaText = NuvoColors.navy;
 const _arenaMuted = NuvoColors.textMuted;
@@ -177,6 +178,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             const SizedBox(height: 12),
                             _Standings(
                               board: activeBoard,
+                              // Prefer the authoritative race so this shows the
+                              // exact same standings as the race page.
+                              race: raceById[activeBoard.id],
                               currentUserId: user?.id,
                               initials: user?.avatarInitials ?? '?',
                               photoUrl: user?.profilePhotoUrl,
@@ -679,11 +683,10 @@ class _QuickActions extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onJoin;
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => Column(
     children: [
-      Expanded(
-        flex: 4,
-        child: NuvoPrimaryButton(
+      if (onSubmit != null)
+        NuvoPrimaryButton(
           leadingWidget: const Icon(
             Icons.camera_alt_outlined,
             color: NuvoColors.white,
@@ -691,32 +694,30 @@ class _QuickActions extends StatelessWidget {
           label: 'Submit proof',
           onPressed: onSubmit,
           expand: true,
-          small: false,
         ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        flex: 2,
-        child: NuvoOutlineButton(
-          icon: Icons.add_rounded,
-          label: '',
-          iconOnly: true,
-          onPressed: onStart,
-          expand: true,
-          small: false,
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        flex: 2,
-        child: NuvoOutlineButton(
-          icon: Icons.group_add_outlined,
-          label: '',
-          iconOnly: true,
-          onPressed: onJoin,
-          expand: true,
-          small: false,
-        ),
+      if (onSubmit != null) const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: NuvoSecondaryButton(
+              icon: Icons.add_rounded,
+              label: 'New race',
+              small: true,
+              expand: true,
+              onPressed: onStart,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: NuvoSecondaryButton(
+              icon: Icons.group_add_outlined,
+              label: 'Join',
+              small: true,
+              expand: true,
+              onPressed: onJoin,
+            ),
+          ),
+        ],
       ),
     ],
   );
@@ -727,16 +728,47 @@ class _Standings extends StatelessWidget {
     required this.board,
     required this.currentUserId,
     required this.initials,
+    this.race,
     this.photoUrl,
   });
   final ArenaBoard board;
+  final Race? race;
   final String? currentUserId;
   final String initials;
   final String? photoUrl;
+
   @override
   Widget build(BuildContext context) {
-    final rows = board.miniLeaderboard;
-    if (rows.isEmpty) {
+    // When the real race is loaded, build from serverRankedParticipants so the
+    // Arena shows the *exact* same standings (people, order, scores) as the
+    // race page. Fall back to the arena snapshot's mini leaderboard.
+    final r = race;
+    final entries = <_LbEntry>[
+      if (r != null && r.participants.isNotEmpty)
+        for (final (i, p) in serverRankedParticipants(r).indexed)
+          _LbEntry(
+            rank: i + 1,
+            name: p.userId == currentUserId ? 'You' : p.displayName,
+            stat: raceProgressLabel(r, p),
+            photoUrl: p.userId == currentUserId ? photoUrl : p.profilePhotoUrl,
+            initials: p.userId == currentUserId ? initials : null,
+            seed: p.userId,
+            isMe: p.userId == currentUserId,
+          )
+      else
+        for (final (i, row) in board.miniLeaderboard.indexed)
+          _LbEntry(
+            rank: i + 1,
+            name: row.isCurrentUser ? 'You' : row.label,
+            stat: row.value,
+            photoUrl: row.isCurrentUser ? photoUrl : row.profilePhotoUrl,
+            initials: row.isCurrentUser ? initials : null,
+            seed: row.label,
+            isMe: row.isCurrentUser,
+          ),
+    ];
+
+    if (entries.isEmpty) {
       return _OutlinedSheet(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
@@ -748,23 +780,19 @@ class _Standings extends StatelessWidget {
       );
     }
 
-    final rest = rows.length > 3 ? rows.sublist(3) : const <ArenaMiniLeaderboardRow>[];
+    final rest = entries.length > 3 ? entries.sublist(3) : const <_LbEntry>[];
 
-    // Same NuvoPodium as the race page, so tapping "See race board" lands on a
-    // screen that reads the same.
     return NuvoPodium(
       top: [
-        for (var i = 0; i < rows.length && i < 3; i++)
+        for (final e in entries.take(3))
           NuvoPodiumEntry(
-            rank: i + 1,
-            name: rows[i].label,
-            statLabel: rows[i].value,
-            photoUrl: rows[i].isCurrentUser
-                ? photoUrl
-                : rows[i].profilePhotoUrl,
-            initials: rows[i].isCurrentUser ? initials : null,
-            avatarSeedId: rows[i].label,
-            isCurrentUser: rows[i].isCurrentUser,
+            rank: e.rank,
+            name: e.name,
+            statLabel: e.stat,
+            photoUrl: e.photoUrl,
+            initials: e.initials,
+            avatarSeedId: e.seed,
+            isCurrentUser: e.isMe,
           ),
       ],
       rest: rest.isEmpty
@@ -773,12 +801,7 @@ class _Standings extends StatelessWidget {
               child: Column(
                 children: [
                   for (var i = 0; i < rest.length; i++) ...[
-                    _StandingRow(
-                      row: rest[i],
-                      rank: i + 4,
-                      initials: rest[i].isCurrentUser ? initials : null,
-                      photoUrl: rest[i].isCurrentUser ? photoUrl : null,
-                    ),
+                    _StandingRow(entry: rest[i]),
                     if (i < rest.length - 1)
                       const Divider(
                         height: 1,
@@ -793,6 +816,25 @@ class _Standings extends StatelessWidget {
             ),
     );
   }
+}
+
+class _LbEntry {
+  const _LbEntry({
+    required this.rank,
+    required this.name,
+    required this.stat,
+    required this.seed,
+    required this.isMe,
+    this.photoUrl,
+    this.initials,
+  });
+  final int rank;
+  final String name;
+  final String stat;
+  final String seed;
+  final bool isMe;
+  final String? photoUrl;
+  final String? initials;
 }
 
 /// Outlined container whose child is clipped *inside* the 2 px ink edge, so the
@@ -819,19 +861,11 @@ class _OutlinedSheet extends StatelessWidget {
 }
 
 class _StandingRow extends StatelessWidget {
-  const _StandingRow({
-    required this.row,
-    required this.rank,
-    this.initials,
-    this.photoUrl,
-  });
-  final ArenaMiniLeaderboardRow row;
-  final int rank;
-  final String? initials;
-  final String? photoUrl;
+  const _StandingRow({required this.entry});
+  final _LbEntry entry;
   @override
   Widget build(BuildContext context) {
-    final me = row.isCurrentUser;
+    final me = entry.isMe;
     return Container(
       color: me ? NuvoColors.blueSurface : null,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -840,7 +874,7 @@ class _StandingRow extends StatelessWidget {
           SizedBox(
             width: 22,
             child: Text(
-              '$rank',
+              '${entry.rank}',
               style: AppTextStyles.labelMedium.copyWith(
                 color: _arenaMuted,
                 fontWeight: FontWeight.w800,
@@ -849,18 +883,18 @@ class _StandingRow extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           NuvoAvatar(
-            initials: initials ?? _initials(row.label),
-            photoUrl: photoUrl ?? row.profilePhotoUrl,
+            initials: entry.initials ?? _initials(entry.name),
+            photoUrl: entry.photoUrl,
             size: 34,
-            bgColor: _arenaSurfaceRaised,
-            textColor: _arenaText,
+            bgColor: nuvoAvatarColorFor(entry.seed),
+            textColor: NuvoColors.white,
             borderColor: me ? _arenaBlue : NuvoColors.navy,
             borderWidth: me ? 2 : 1.5,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              me ? 'You' : row.label,
+              entry.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.titleMedium.copyWith(
@@ -870,7 +904,7 @@ class _StandingRow extends StatelessWidget {
             ),
           ),
           Text(
-            row.value,
+            entry.stat,
             style: AppTextStyles.raceRowMeta.copyWith(
               color: me ? _arenaBlue : _arenaMuted,
               fontWeight: FontWeight.w800,
@@ -947,22 +981,12 @@ class _ArenaButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onTap,
-    this.filled = false,
   });
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  final bool filled;
   @override
   Widget build(BuildContext context) {
-    if (filled) {
-      return NuvoPrimaryButton(
-        label: label,
-        icon: icon,
-        expand: true,
-        onPressed: onTap,
-      );
-    }
     return NuvoSecondaryButton(
       label: label,
       icon: icon,
@@ -1026,38 +1050,16 @@ class _EmptyState extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onJoin;
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(24, 30, 24, 120),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'A clear start line.',
-            style: AppTextStyles.headlineMedium.copyWith(color: _arenaText),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start a race or join your crew to put something on the board.',
-            style: AppTextStyles.bodyMedium.copyWith(color: _arenaMuted),
-          ),
-          const SizedBox(height: 22),
-          _ArenaButton(
-            label: 'Start a race',
-            icon: Icons.arrow_forward_rounded,
-            onTap: onStart,
-            filled: true,
-          ),
-          const SizedBox(height: 10),
-          _ArenaButton(
-            label: 'Join with code',
-            icon: Icons.login_rounded,
-            onTap: onJoin,
-          ),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => NuvoEmptyState(
+    icon: Icons.flag_rounded,
+    title: 'Nothing on the board yet',
+    body: 'Create a race and pull in your crew — this is where your next move '
+        'shows up once one is live.',
+    ctaLabel: 'Create a race',
+    onCta: onStart,
+    secondaryLabel: 'Join with a code',
+    onSecondary: onJoin,
+    align: TextAlign.center,
   );
 }
 

@@ -198,6 +198,10 @@ class RaceController extends StateNotifier<RaceState> {
 
   void clearRaces() {
     _racesLoadedAt = null;
+    // Drop any in-flight load so the next sign-in starts a fresh request
+    // instead of awaiting a future tied to the previous session (which could
+    // be hung on a stalled socket and wedge the races tab until an app kill).
+    _loadInFlight = null;
     if (mounted) state = const RaceState();
   }
 

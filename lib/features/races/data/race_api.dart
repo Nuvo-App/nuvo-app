@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart';
@@ -41,24 +43,65 @@ class RaceApi {
     await _post('/motion/training/examples', token, body);
   }
 
+  /// Every network call fails fast instead of hanging a stalled socket
+  /// indefinitely — a hung request used to wedge the whole races tab until the
+  /// app was killed.
+  static const _requestTimeout = Duration(seconds: 20);
+
   Map<String, String> _headers(String token) => {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer $token',
   };
 
-  Future<Map<String, dynamic>> _get(String path, String token) async {
-    final res = await _client.get(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(token),
-    );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+  /// Runs [send] with a hard timeout and maps transport failures to a clean
+  /// [ApiException] the UI can show.
+  Future<http.Response> _guard(Future<http.Response> Function() send) async {
+    try {
+      return await send().timeout(_requestTimeout);
+    } on TimeoutException {
+      throw const ApiException(
+        408,
+        'The network timed out. Check your connection and try again.',
+      );
+    } on SocketException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
+    }
+  }
+
+  /// Decodes a JSON body, tolerating non-JSON error pages (Cloudflare 5xx,
+  /// empty bodies) instead of throwing an opaque FormatException.
+  Map<String, dynamic> _decode(http.Response res) {
+    Map<String, dynamic>? parsed;
+    if (res.body.isNotEmpty) {
+      try {
+        final value = jsonDecode(res.body);
+        if (value is Map<String, dynamic>) parsed = value;
+      } catch (_) {
+        parsed = null;
+      }
+    }
     if (res.statusCode >= 400) {
       throw ApiException(
         res.statusCode,
-        json['error'] as String? ?? 'Request failed',
+        parsed?['error'] as String? ?? 'Request failed',
       );
     }
-    return json;
+    return parsed ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> _get(String path, String token) async {
+    final res = await _guard(
+      () => _client.get(Uri.parse('$_kApiBase$path'), headers: _headers(token)),
+    );
+    return _decode(res);
   }
 
   Future<Map<String, dynamic>> _post(
@@ -66,19 +109,14 @@ class RaceApi {
     String token,
     Map<String, dynamic> body,
   ) async {
-    final res = await _client.post(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(token),
-      body: jsonEncode(body),
+    final res = await _guard(
+      () => _client.post(
+        Uri.parse('$_kApiBase$path'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      ),
     );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
-      );
-    }
-    return json;
+    return _decode(res);
   }
 
   Future<Map<String, dynamic>> _patch(
@@ -86,34 +124,22 @@ class RaceApi {
     String token,
     Map<String, dynamic> body,
   ) async {
-    final res = await _client.patch(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(token),
-      body: jsonEncode(body),
+    final res = await _guard(
+      () => _client.patch(
+        Uri.parse('$_kApiBase$path'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      ),
     );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
-      );
-    }
-    return json;
+    return _decode(res);
   }
 
   Future<Map<String, dynamic>> _delete(String path, String token) async {
-    final res = await _client.delete(
-      Uri.parse('$_kApiBase$path'),
-      headers: _headers(token),
+    final res = await _guard(
+      () =>
+          _client.delete(Uri.parse('$_kApiBase$path'), headers: _headers(token)),
     );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
-      );
-    }
-    return json;
+    return _decode(res);
   }
 
   Future<List<Race>> getRaces(String token) async {
@@ -127,14 +153,8 @@ class RaceApi {
     final uri = Uri.parse(
       '$_kApiBase/users/search',
     ).replace(queryParameters: {'q': query});
-    final res = await _client.get(uri, headers: _headers(token));
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 400) {
-      throw ApiException(
-        res.statusCode,
-        json['error'] as String? ?? 'Request failed',
-      );
-    }
+    final res = await _guard(() => _client.get(uri, headers: _headers(token)));
+    final json = _decode(res);
     return (json['users'] as List<dynamic>)
         .map((u) => PublicUser.fromJson(u as Map<String, dynamic>))
         .toList();

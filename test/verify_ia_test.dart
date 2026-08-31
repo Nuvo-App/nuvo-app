@@ -320,10 +320,10 @@ void main() {
       expect(find.text("Couldn't load your races."), findsOneWidget);
     });
 
-    testWidgets('all-empty state shows "No active races yet."', (tester) async {
+    testWidgets('all-empty state shows the create-a-race prompt', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
-      expect(find.text('No active races yet.'), findsOneWidget);
+      expect(find.text('Nothing to verify yet'), findsOneWidget);
     });
 
     testWidgets('small viewport (375x667) does not overflow', (tester) async {

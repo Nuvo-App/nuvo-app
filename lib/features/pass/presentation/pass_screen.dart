@@ -254,7 +254,10 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 const SizedBox(height: 20),
 
                 // ── Find people ──────────────────────────────────────────
-                const _SectionLabel(label: 'Find people'),
+                const _SectionLabel(
+                  label: 'Find people',
+                  accent: NuvoColors.blue,
+                ),
                 const SizedBox(height: 10),
                 NuvoSearchField(
                   controller: _searchController,
@@ -285,13 +288,21 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
                 // ── Your crew ────────────────────────────────────────────
                 if (closest != null) ...[
-                  const _SectionLabel(label: 'Closest race'),
+                  const _SectionLabel(
+                    label: 'Closest race',
+                    accent: NuvoColors.warning,
+                  ),
                   const SizedBox(height: 10),
                   _ClosestRaceCard(closest: closest),
                   const SizedBox(height: 20),
                 ],
 
-                const _SectionLabel(label: 'Your crew'),
+                _SectionLabel(
+                  label: 'Your crew',
+                  accent: _crew.isEmpty
+                      ? NuvoColors.blue
+                      : NuvoColors.success,
+                ),
                 const SizedBox(height: 10),
                 if (_crew.isEmpty)
                   const _EmptyNote(
@@ -311,18 +322,32 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 // ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.label});
+  const _SectionLabel({required this.label, this.accent = NuvoColors.blue});
   final String label;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: AppTextStyles.titleMedium.copyWith(
-        color: NuvoColors.navy,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.2,
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 16,
+          decoration: BoxDecoration(
+            color: accent,
+            borderRadius: BorderRadius.circular(NuvoRadii.pill),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: NuvoColors.navy,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -338,6 +363,12 @@ class _ClosestRaceCard extends StatelessWidget {
     final me = closest.me;
     final crewMember = closest.crewMember;
     final ahead = me.progressPercent >= crewMember.progressPercent;
+    final tied = closest.gap == 0;
+    final statusColor = tied
+        ? NuvoColors.warning
+        : ahead
+            ? NuvoColors.success
+            : NuvoColors.danger;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -357,11 +388,24 @@ class _ClosestRaceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 3),
-          Text(
-            closest.gap == 0
-                ? "You're tied"
-                : '${closest.gap} ${closest.gap == 1 ? 'point' : 'points'} apart',
-            style: AppTextStyles.titleLarge,
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                tied
+                    ? "You're tied"
+                    : '${closest.gap} ${closest.gap == 1 ? 'point' : 'points'} apart',
+                style: AppTextStyles.titleLarge,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           _ComparisonTrack(
@@ -375,7 +419,10 @@ class _ClosestRaceCard extends StatelessWidget {
             ahead
                 ? "You're ahead in this race."
                 : '${crewMember.displayName.split(' ').first} is ahead in this race.',
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: statusColor,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -508,7 +555,7 @@ class _CrewHeader extends StatelessWidget {
               ? 'Your start line is open'
               : '$crewCount ${crewCount == 1 ? 'person' : 'people'} in your crew',
           style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
+            color: crewCount == 0 ? NuvoColors.muted : NuvoColors.successOn,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -704,8 +751,10 @@ class _PeopleSurface extends StatelessWidget {
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
         border: NuvoBorders.hero,
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(children: children),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(NuvoRadii.lg - 2),
+        child: Column(children: children),
+      ),
     );
   }
 }

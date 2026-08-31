@@ -235,16 +235,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     child: Row(
                       children: [
-                        _HeaderStat(value: activeCount, label: 'Active'),
+                        _HeaderStat(
+                          value: activeCount,
+                          label: 'Active',
+                          color: NuvoColors.blue,
+                        ),
                         _HeaderDivider(),
-                        _HeaderStat(value: finishedCount, label: 'Finished'),
+                        _HeaderStat(
+                          value: finishedCount,
+                          label: 'Finished',
+                          color: NuvoColors.success,
+                        ),
                         _HeaderDivider(),
-                        _HeaderStat(value: moveCount, label: 'Moves'),
+                        _HeaderStat(
+                          value: moveCount,
+                          label: 'Moves',
+                          color: NuvoColors.warning,
+                        ),
                         _HeaderDivider(),
                         _HeaderStat(
                           value: avgProgress,
                           label: 'Avg',
                           suffix: '%',
+                          color: NuvoColors.gold,
                         ),
                       ],
                     ),
@@ -395,10 +408,12 @@ class _HeaderStat extends StatelessWidget {
     required this.value,
     required this.label,
     this.suffix = '',
+    this.color = NuvoColors.navy,
   });
   final int value;
   final String label;
   final String suffix;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -414,7 +429,7 @@ class _HeaderStat extends StatelessWidget {
               '${animated.round()}$suffix',
               style: AppTextStyles.number(
                 24,
-                color: NuvoColors.navy,
+                color: color,
                 weight: FontWeight.w800,
               ),
             ),

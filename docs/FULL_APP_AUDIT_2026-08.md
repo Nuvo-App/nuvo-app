@@ -460,6 +460,39 @@ counter file is validator-adjacent).
 `UPLOAD_PUBLIC_URL`, `[TokenStore] …`, `[AuthApi] …`, `[Router] …` run in profile
 builds. Gate behind `kDebugMode` or a logger.
 
+### B9 — Network calls hang forever; races tab can wedge until app kill · P0 · Fixed
+Reported: after sign-out → sign-in, Arena loaded but Compete showed a blank grey
+area with no skeleton, and only an app restart (after a long wait) recovered it.
+
+Root causes:
+1. **No HTTP timeout anywhere.** `RaceApi`, `AuthApi`, `ArenaApi` all call
+   `http.Client` with no `.timeout(...)`. A stalled socket (cold launch, flaky
+   Wi-Fi, VPN) hangs the request — and therefore `getRaces()` / `fetchArenaSnapshot()`
+   / `restoreSession()` — indefinitely.
+2. **`_loadInFlight` was never cleared on sign-out.** `RaceController.clearRaces()`
+   / `ArenaController.clearSnapshot()` reset state + `_…LoadedAt` but kept the
+   in-flight future. If a load was hung when the user signed out, the next
+   sign-in's `loadRaces(force: false)` returned that dead future and never issued
+   a fresh request — the tab stayed empty/non-loading/non-error forever.
+3. **CompeteScreen never triggered its own load.** It was a pure `ref.watch`
+   consumer; the only load triggers were provider-creation and the auth listener.
+   When those were wedged (cause 2) the screen had no way to self-heal.
+4. **No skeleton.** Compete's only loading affordance was a bare
+   `CircularProgressIndicator` gated on `loading && races.isEmpty`; in the wedged
+   state neither was true, so the user saw nothing.
+5. Minor: `_get`/`_post` called `jsonDecode(res.body)` before the status check, so
+   a non-JSON error page (Cloudflare 5xx HTML, empty 502) threw an opaque
+   `FormatException` instead of a clean `ApiException`.
+
+Fixes: 20 s hard timeout on every request in all three API clients, mapping
+`TimeoutException` / `SocketException` / `ClientException` → `ApiException`
+(408 / 0) with friendly copy; `clearRaces()` / `clearSnapshot()` now also null
+`_loadInFlight`; `CompeteScreen.initState` kicks `loadRaces(force: false)` when
+the tab is genuinely cold (empty, not loading, no error); Compete loading state
+is now a shimmer skeleton (`_CompeteSkeleton`); JSON decode tolerates non-JSON
+bodies. `restoreSession` already treats a 408 as `RestoreUnreachable` (keeps
+tokens, offline retry) rather than a logout.
+
 ---
 
 ## 6. Prioritised backlog

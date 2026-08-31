@@ -52,11 +52,13 @@ void main() {
     expect(find.text('LEADERBOARD'), findsOneWidget);
     expect(find.text('Submit proof'), findsWidgets);
     expect(find.text('Start'), findsNothing);
-    expect(find.text('Join'), findsNothing);
+    // Quick actions below the board: New race + Join (secondary tier).
+    expect(find.text('New race'), findsOneWidget);
+    expect(find.text('Join'), findsOneWidget);
     expect(find.byIcon(Icons.add_rounded), findsOneWidget);
     expect(find.byIcon(Icons.group_add_outlined), findsOneWidget);
     expect(find.byType(NuvoPrimaryButton), findsOneWidget);
-    expect(find.byType(NuvoOutlineButton), findsNWidgets(2));
+    expect(find.byType(NuvoSecondaryButton), findsNWidgets(2));
     expect(find.text('More races'), findsNothing);
   });
 

@@ -115,7 +115,7 @@ void main() {
       await tester.pumpWidget(_buildApp(_PendingRaceRepo()));
       // PendingRaceRepo never completes so loading state persists.
       await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byKey(const ValueKey('compete-skeleton')), findsOneWidget);
     });
 
     testWidgets('shows race content when loaded with data', (tester) async {
@@ -131,7 +131,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byType(NuvoErrorState), findsNothing);
-      expect(find.text('Your first finish line'), findsOneWidget);
+      expect(find.text('No races yet'), findsOneWidget);
     });
 
     testWidgets('shows NuvoErrorState (not raw text) on load failure', (

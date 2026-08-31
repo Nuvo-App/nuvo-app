@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -43,6 +44,24 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
   bool _finishedExpanded = false;
 
   static const _racesCap = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    // Self-heal: make sure a load is running whenever Compete is shown. The
+    // provider-level trigger can miss (e.g. a load that was in flight across a
+    // sign-out), which previously left this tab blank with no way to recover
+    // short of killing the app.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = ref.read(raceControllerProvider);
+      // Only kick a load when the tab is genuinely cold — never stomp an
+      // in-flight load, a populated list, or an error the user should see.
+      if (state.races.isEmpty && state.error == null && !state.loading) {
+        ref.read(raceControllerProvider.notifier).loadRaces(force: false);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,20 +122,13 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   if (raceState.loading && raceState.races.isEmpty)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 48),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: NuvoColors.blue,
-                        ),
-                      ),
-                    )
+                    const _CompeteSkeleton(key: ValueKey('compete-skeleton'))
                   else if (raceState.error != null && raceState.races.isEmpty)
                     NuvoErrorState(
                       message: "Couldn't load your races.",
-                      onRetry: () =>
-                          ref.read(raceControllerProvider.notifier).loadRaces(),
+                      onRetry: () => ref
+                          .read(raceControllerProvider.notifier)
+                          .loadRaces(),
                     )
                   else if (raceState.races.isEmpty || cameraRaces.isEmpty)
                     _EmptyState(
@@ -751,6 +763,45 @@ class _QuickStartChip extends StatelessWidget {
   }
 }
 
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+
+class _CompeteSkeleton extends StatelessWidget {
+  const _CompeteSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget block(double height, {double? width, double radius = NuvoRadii.md}) =>
+        Container(
+          height: height,
+          width: width,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(radius),
+          ),
+        );
+
+    return Shimmer.fromColors(
+      baseColor: NuvoColors.divider,
+      highlightColor: NuvoColors.surface,
+      period: const Duration(milliseconds: 1400),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          block(150, radius: NuvoRadii.lg),
+          const SizedBox(height: NuvoSpacing.xxl),
+          block(16, width: 140, radius: NuvoRadii.badge),
+          const SizedBox(height: NuvoSpacing.sm),
+          block(64),
+          const SizedBox(height: NuvoSpacing.xs),
+          block(64),
+          const SizedBox(height: NuvoSpacing.xs),
+          block(64),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
@@ -760,49 +811,16 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: NuvoColors.blueSurface,
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: Border.all(color: NuvoColors.blueBorder),
-          ),
-          child: const NuvoIcon(
-            NuvoIconType.flag,
-            color: NuvoColors.blue,
-            size: 22,
-          ),
-        ),
-        const SizedBox(height: NuvoSpacing.xl),
-        Text(
-          'Your first finish line',
-          style: AppTextStyles.headlineMedium.copyWith(color: NuvoColors.navy),
-        ),
-        const SizedBox(height: NuvoSpacing.sm),
-        Text(
-          'Pick a goal — pushups, a plank, a daily check-in — set the finish '
-          'line, and pull in your crew. Every proof you log moves the board.',
-          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-        ),
-        const SizedBox(height: NuvoSpacing.xl),
-        NuvoPrimaryButton(
-          label: 'Start a race',
-          expand: true,
-          onPressed: onStart,
-        ),
-        if (onJoin != null) ...[
-          const SizedBox(height: NuvoSpacing.sm),
-          NuvoSecondaryButton(
-            label: 'Join with a code',
-            expand: true,
-            onPressed: onJoin,
-          ),
-        ],
-      ],
+    return NuvoEmptyState(
+      icon: Icons.flag_rounded,
+      title: 'No races yet',
+      body: 'Create one to set a finish line — pushups, a plank, a daily '
+          'check-in — then pull in your crew. Every proof you log moves the '
+          'board.',
+      ctaLabel: 'Create a race',
+      onCta: onStart,
+      secondaryLabel: onJoin != null ? 'Join with a code' : null,
+      onSecondary: onJoin,
     );
   }
 }

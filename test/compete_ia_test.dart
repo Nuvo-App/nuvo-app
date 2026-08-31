@@ -224,13 +224,13 @@ void main() {
     testWidgets('loading state preserved', (tester) async {
       await tester.pumpWidget(_buildApp(_PendingRaceRepo()));
       await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byKey(const ValueKey('compete-skeleton')), findsOneWidget);
     });
 
     testWidgets('empty state preserved', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
-      expect(find.text('Your first finish line'), findsOneWidget);
+      expect(find.text('No races yet'), findsOneWidget);
     });
 
     testWidgets('error state preserved with friendly copy', (tester) async {

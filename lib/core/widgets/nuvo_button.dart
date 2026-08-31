@@ -46,11 +46,18 @@ Widget _buttonContent({
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
       if (leadingWidget != null) ...[leadingWidget, const SizedBox(width: 9)],
+      // A button label must never truncate to "Submit…". When the button is
+      // narrower than the label, shrink the text to fit instead of clipping it.
       Flexible(
-        child: Text(
-          label,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.buttonLabel.copyWith(color: textColor),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            style: AppTextStyles.buttonLabel.copyWith(color: textColor),
+          ),
         ),
       ),
       if (icon != null) ...[

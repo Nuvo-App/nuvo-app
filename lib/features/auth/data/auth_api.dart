@@ -1,7 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'auth_models.dart';
+
+/// Every auth request fails fast rather than hanging a stalled socket — a hung
+/// refresh/me call used to leave the app on a grey screen indefinitely.
+const _kAuthRequestTimeout = Duration(seconds: 20);
+
+Never _throwTransport(Object error) {
+  if (error is TimeoutException) {
+    throw const ApiException(
+      408,
+      'The network timed out. Check your connection and try again.',
+    );
+  }
+  if (error is SocketException || error is http.ClientException) {
+    throw const ApiException(
+      0,
+      "Can't reach Nuvo. Check your connection and try again.",
+    );
+  }
+  throw error;
+}
 
 // Compile-time injectable base URL.
 // Run with: flutter run --dart-define=NUVO_API_BASE_URL=http://localhost:8787
@@ -36,11 +58,13 @@ class AuthApi {
   }) async {
     final url = '$_kApiBase$path';
     try {
-      final res = await _client.post(
-        Uri.parse(url),
-        headers: _headers(accessToken: accessToken),
-        body: jsonEncode(body),
-      );
+      final res = await _client
+          .post(
+            Uri.parse(url),
+            headers: _headers(accessToken: accessToken),
+            body: jsonEncode(body),
+          )
+          .timeout(_kAuthRequestTimeout);
       debugPrint('[AuthApi] POST $path → ${res.statusCode}');
       if (res.statusCode >= 400) {
         final snippet = res.body.length > 200
@@ -58,18 +82,20 @@ class AuthApi {
       return json;
     } catch (e) {
       if (e is ApiException) rethrow;
-      // Network-level failure (CORS blocked, no connectivity, etc.)
+      // Network-level failure (timeout, no connectivity, CORS blocked, etc.)
       debugPrint('[AuthApi] POST $path network error (${e.runtimeType}): $e');
-      rethrow;
+      _throwTransport(e);
     }
   }
 
   Future<Map<String, dynamic>> _get(String path, {String? accessToken}) async {
     try {
-      final res = await _client.get(
-        Uri.parse('$_kApiBase$path'),
-        headers: _headers(accessToken: accessToken),
-      );
+      final res = await _client
+          .get(
+            Uri.parse('$_kApiBase$path'),
+            headers: _headers(accessToken: accessToken),
+          )
+          .timeout(_kAuthRequestTimeout);
       debugPrint('[AuthApi] GET $path → ${res.statusCode}');
       if (res.statusCode >= 400) {
         final snippet = res.body.length > 200
@@ -88,7 +114,7 @@ class AuthApi {
     } catch (e) {
       if (e is ApiException) rethrow;
       debugPrint('[AuthApi] GET $path network error (${e.runtimeType}): $e');
-      rethrow;
+      _throwTransport(e);
     }
   }
 
@@ -98,10 +124,12 @@ class AuthApi {
   }) async {
     final url = '$_kApiBase$path';
     try {
-      final res = await _client.delete(
-        Uri.parse(url),
-        headers: _headers(accessToken: accessToken),
-      );
+      final res = await _client
+          .delete(
+            Uri.parse(url),
+            headers: _headers(accessToken: accessToken),
+          )
+          .timeout(_kAuthRequestTimeout);
       debugPrint('[AuthApi] DELETE $path → ${res.statusCode}');
       if (res.statusCode >= 400) {
         final snippet = res.body.length > 200
@@ -127,9 +155,9 @@ class AuthApi {
       }
     } catch (e) {
       if (e is ApiException) rethrow;
-      // Network-level failure (CORS blocked, no connectivity, etc.)
+      // Network-level failure (timeout, no connectivity, CORS blocked, etc.)
       debugPrint('[AuthApi] DELETE $path network error (${e.runtimeType}): $e');
-      rethrow;
+      _throwTransport(e);
     }
   }
 
@@ -243,11 +271,19 @@ class AuthApi {
     Uint8List bytes,
     String contentType,
   ) async {
-    final res = await _client.put(
-      Uri.parse(signedUrl),
-      headers: {'Content-Type': contentType},
-      body: bytes,
-    );
+    final http.Response res;
+    try {
+      res = await _client
+          .put(
+            Uri.parse(signedUrl),
+            headers: {'Content-Type': contentType},
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 60));
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      _throwTransport(e);
+    }
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, 'Photo upload failed');
     }

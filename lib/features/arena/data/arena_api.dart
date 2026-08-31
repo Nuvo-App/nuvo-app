@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -20,15 +22,41 @@ class ArenaApi {
     'Authorization': 'Bearer $token',
   };
 
+  /// Fails fast instead of hanging a stalled socket indefinitely.
+  static const _requestTimeout = Duration(seconds: 20);
+
   Future<ArenaSnapshot> fetchArenaSnapshot(String token) async {
-    final res = await _client.get(
-      Uri.parse('$_kApiBase/arena'),
-      headers: _headers(token),
-    );
+    final http.Response res;
+    try {
+      res = await _client
+          .get(Uri.parse('$_kApiBase/arena'), headers: _headers(token))
+          .timeout(_requestTimeout);
+    } on TimeoutException {
+      throw const ApiException(
+        408,
+        'The network timed out. Check your connection and try again.',
+      );
+    } on SocketException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        0,
+        "Can't reach Nuvo. Check your connection and try again.",
+      );
+    }
     debugPrint(
       '[ArenaApi] status=${res.statusCode} body=${res.body.length > 300 ? res.body.substring(0, 300) : res.body}',
     );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    Map<String, dynamic> json;
+    try {
+      final decoded = jsonDecode(res.body);
+      json = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    } catch (_) {
+      json = <String, dynamic>{};
+    }
     if (res.statusCode >= 400) {
       throw ApiException(
         res.statusCode,

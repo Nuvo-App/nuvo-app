@@ -84,6 +84,9 @@ class ArenaController extends StateNotifier<ArenaState> {
 
   void clearSnapshot() {
     _snapshotLoadedAt = null;
+    // Drop any in-flight load so the next sign-in starts fresh rather than
+    // awaiting a future from the previous session.
+    _loadInFlight = null;
     if (mounted) state = const ArenaState();
   }
 }

@@ -77,7 +77,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       // Empty state should show its headline when there are no races.
-      expect(find.text('Your first finish line'), findsOneWidget);
+      expect(find.text('No races yet'), findsOneWidget);
     });
 
     testWidgets('no overflow on normal iPhone with empty races', (
