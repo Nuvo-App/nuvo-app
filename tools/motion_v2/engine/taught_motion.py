@@ -25,7 +25,7 @@ import numpy as np
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, ".."))
-from adapter.nuvo_to_h36m import frames_to_h36m  # noqa: E402
+from adapter.nuvo_to_h36m import frames_to_h36m, region_activity  # noqa: E402
 from mb_encoder import encode, encoder_info  # noqa: E402
 from experiments.lib_repr import (  # noqa: E402
     _l2n, dtw_distance, mean_pool, per_frame_embedding, resample_seq,
@@ -98,13 +98,19 @@ class TaughtMotionV2:
     accept_traj_dist: float
     demo_active_vel: float
     demo_lengths: list[int]
+    demo_region_activity: dict = field(default_factory=dict)
 
     # ---- learn --------------------------------------------------------
     @classmethod
     def learn(cls, name, demos, mirror_aug=True) -> "TaughtMotionV2":
         assert len(demos) >= 2
         protos, trajs, rests, lens, vels = [], [], [], [], []
+        region_acc, region_n = {}, 0
         for frames in demos:
+            ra = region_activity(frames_to_h36m(frames))
+            for k, val in ra.items():
+                region_acc[k] = region_acc.get(k, 0.0) + val
+            region_n += 1
             variants = [_rep_and_emb(frames)] + ([_rep_and_emb(frames, mirror=True)] if mirror_aug else [])
             for rep, emb in variants:
                 s, e = segment_action(emb)
@@ -141,6 +147,7 @@ class TaughtMotionV2:
             accept_proto_dist=accept_proto_dist, accept_traj_dist=accept_traj_dist,
             demo_active_vel=float(np.median(vels)) if vels else 0.0,
             demo_lengths=[int(x) for x in lens],
+            demo_region_activity={k: (v / region_n if region_n else 0.0) for k, v in region_acc.items()},
         )
 
     # ---- match ------------------------------------------------------
@@ -175,6 +182,7 @@ class TaughtMotionV2:
             "rest_emb": self.rest_emb.tolist(),
             "accept_proto_dist": self.accept_proto_dist, "accept_traj_dist": self.accept_traj_dist,
             "demo_active_vel": self.demo_active_vel, "demo_lengths": self.demo_lengths,
+            "region_activity": self.demo_region_activity,
         }
 
     @classmethod
@@ -186,6 +194,7 @@ class TaughtMotionV2:
             rest_emb=np.array(d["rest_emb"], np.float32),
             accept_proto_dist=d["accept_proto_dist"], accept_traj_dist=d["accept_traj_dist"],
             demo_active_vel=d["demo_active_vel"], demo_lengths=d["demo_lengths"],
+            demo_region_activity=d.get("region_activity", {}),
         )
 
     def save(self, path):

@@ -56,6 +56,7 @@ class TaughtMotionV2 {
     required this.acceptTrajDist,
     required this.demoActiveVel,
     required this.demoLengths,
+    this.demoRegionActivity = const {},
     this.schema = kSchema,
   });
 
@@ -68,6 +69,12 @@ class TaughtMotionV2 {
   final double acceptTrajDist;
   final double demoActiveVel;
   final List<int> demoLengths;
+
+  /// Per-body-region motion magnitude of the demonstrations (see
+  /// [regionActivity]). Diagnostics only — tells the failure explainer which
+  /// region *should* have moved. Never used in the match decision.
+  final Map<String, double> demoRegionActivity;
+
   final int schema;
 
   // ---- learn ----
@@ -85,10 +92,19 @@ class TaughtMotionV2 {
     final lens = <int>[];
     final vels = <double>[];
 
+    final regionAcc = <String, double>{};
+    var regionN = 0;
+
     for (final frames in demos) {
       final variants = <bool>[false, if (mirrorAug) true];
       for (final mir in variants) {
-        final rep = await encoder.encode(framesToH36m(frames, mirror: mir));
+        final h36m = framesToH36m(frames, mirror: mir);
+        if (!mir) {
+          final ra = regionActivity(h36m);
+          ra.forEach((k, v) => regionAcc[k] = (regionAcc[k] ?? 0) + v);
+          regionN++;
+        }
+        final rep = await encoder.encode(h36m);
         final emb = perFrameEmbedding(rep);
         var seg = segmentAction(emb);
         var s = seg.start, e = seg.end;
@@ -128,6 +144,11 @@ class TaughtMotionV2 {
     final tdOwn = [for (final t in trajs) trajDistance(t, canonical)];
     final atd = _clip(median(tdOwn) * 3.0 + 5e-4, 1e-3, 0.05);
 
+    final regionAvg = <String, double>{
+      for (final e in regionAcc.entries)
+        e.key: regionN == 0 ? 0.0 : e.value / regionN,
+    };
+
     return TaughtMotionV2(
       name: name,
       encoderId: encoderId,
@@ -138,6 +159,7 @@ class TaughtMotionV2 {
       acceptTrajDist: atd,
       demoActiveVel: vels.isEmpty ? 0.0 : median(vels),
       demoLengths: lens,
+      demoRegionActivity: regionAvg,
     );
   }
 
@@ -219,6 +241,7 @@ class TaughtMotionV2 {
         'accept_traj_dist': acceptTrajDist,
         'demo_active_vel': demoActiveVel,
         'demo_lengths': demoLengths,
+        'region_activity': demoRegionActivity,
       };
 
   factory TaughtMotionV2.fromJson(Map<String, dynamic> d) {
@@ -234,6 +257,10 @@ class TaughtMotionV2 {
       acceptTrajDist: (d['accept_traj_dist'] as num).toDouble(),
       demoActiveVel: (d['demo_active_vel'] as num?)?.toDouble() ?? 0.0,
       demoLengths: [for (final x in (d['demo_lengths'] as List? ?? const [])) (x as num).toInt()],
+      demoRegionActivity: {
+        for (final e in ((d['region_activity'] as Map?) ?? const {}).entries)
+          e.key as String: (e.value as num).toDouble(),
+      },
       schema: (d['schema'] as num?)?.toInt() ?? kSchema,
     );
   }

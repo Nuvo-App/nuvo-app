@@ -176,3 +176,44 @@ List<Float32List> sliceSeq(List<Float32List> seq, int s, int e) =>
 
 List<List<Float32List>> sliceRep(List<List<Float32List>> rep, int s, int e) =>
     rep.sublist(s, e);
+
+// ── Body-region diagnostics ──────────────────────────────────────────────────
+
+/// h36m joint indices per understandable body region (see nuvo_to_h36m.dart:
+/// 0 root 7 belly 8 neck 9 nose 10 head 11-13 left arm 14-16 right arm
+/// 1-3 right leg 4-6 left leg).
+const Map<String, List<int>> kH36mRegions = {
+  'head': [9, 10],
+  'left arm': [11, 12, 13],
+  'right arm': [14, 15, 16],
+  'torso': [0, 7, 8],
+  'left leg': [4, 5, 6],
+  'right leg': [1, 2, 3],
+};
+
+/// Per-region motion magnitude over an h36m sequence (each row 17*3 joint-major
+/// x,y,conf) — mean frame-to-frame joint travel. Generic; no per-exercise rules.
+/// Used to tell "your right arm barely moved" from "wrong path".
+Map<String, double> regionActivity(List<Float32List> seq) {
+  final out = <String, double>{};
+  kH36mRegions.forEach((region, joints) {
+    var sum = 0.0;
+    var cnt = 0;
+    for (final j in joints) {
+      double? px, py;
+      for (var t = 0; t < seq.length; t++) {
+        final x = seq[t][j * 3], y = seq[t][j * 3 + 1], c = seq[t][j * 3 + 2];
+        if (c == 0) continue;
+        final lpx = px, lpy = py;
+        if (lpx != null && lpy != null) {
+          sum += math.sqrt((x - lpx) * (x - lpx) + (y - lpy) * (y - lpy));
+          cnt++;
+        }
+        px = x;
+        py = y;
+      }
+    }
+    out[region] = cnt == 0 ? 0.0 : sum / cnt;
+  });
+  return out;
+}

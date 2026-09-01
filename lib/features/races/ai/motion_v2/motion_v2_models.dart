@@ -21,6 +21,99 @@ const String kMotionV2ServiceUrl = String.fromEnvironment(
 
 enum MotionV2RuntimeState { warmingUp, neutral, matching, returning, error }
 
+/// Lifecycle of one detected attempt at the taught movement — so a failure at
+/// 5% ("never started") is distinguishable from a failure at 85% ("almost").
+enum MotionAttemptOutcome { idle, inProgress, success, failed }
+
+/// Internal diagnostic categories — NEVER shown to users verbatim (see
+/// [MotionAttemptResult.userFeedback] for the message the user sees).
+enum MotionFailureCategory {
+  none,
+  poseNotTrackable,
+  partialBodyMissing,
+  cameraDistanceChangedTooMuch,
+  motionNeverStarted,
+  motionIncomplete,
+  trajectoryMismatch,
+  wrongMotion,
+  motionTooFast,
+  motionStalled,
+  lostTrackingMidMotion,
+}
+
+/// Structured explanation of one attempt — the "why" behind a rep that did or
+/// did not count. Carried on [MotionV2RuntimeResult.attempt].
+class MotionAttemptResult {
+  const MotionAttemptResult({
+    this.outcome = MotionAttemptOutcome.idle,
+    this.failureCategory = MotionFailureCategory.none,
+    this.poseReadiness = 'no_person',
+    this.maxProgress = 0,
+    this.prototypeDistance,
+    this.prototypeThreshold,
+    this.trajectoryDistance,
+    this.trajectoryThreshold,
+    this.durationMs = 0,
+    this.expectedDurationMinMs = 0,
+    this.expectedDurationMaxMs = 0,
+    this.missingRegions = const [],
+    this.regionErrors = const {},
+    this.primaryMismatchRegion,
+    this.cameraDistanceChange = 0,
+    this.rootTranslation = 0,
+    this.encoderLatencyMs = 0,
+    this.userFeedback = '',
+  });
+
+  final MotionAttemptOutcome outcome;
+  final MotionFailureCategory failureCategory;
+  final String poseReadiness;
+  final double maxProgress;
+  final double? prototypeDistance;
+  final double? prototypeThreshold;
+  final double? trajectoryDistance;
+  final double? trajectoryThreshold;
+  final int durationMs;
+  final int expectedDurationMinMs;
+  final int expectedDurationMaxMs;
+  final List<String> missingRegions;
+  final Map<String, double> regionErrors;
+  final String? primaryMismatchRegion;
+  final double cameraDistanceChange;
+  final double rootTranslation;
+  final double encoderLatencyMs;
+
+  /// The short, high-confidence instruction to show the user. Empty when there
+  /// is nothing worth saying yet.
+  final String userFeedback;
+
+  static const empty = MotionAttemptResult();
+
+  Map<String, dynamic> toJson() => {
+        'outcome': outcome.name,
+        'failureCategory': failureCategory.name,
+        'poseReadiness': poseReadiness,
+        'maxProgress': double.parse(maxProgress.toStringAsFixed(3)),
+        if (prototypeDistance != null) 'prototypeDistance': prototypeDistance,
+        if (prototypeThreshold != null) 'prototypeThreshold': prototypeThreshold,
+        if (trajectoryDistance != null) 'trajectoryDistance': trajectoryDistance,
+        if (trajectoryThreshold != null)
+          'trajectoryThreshold': trajectoryThreshold,
+        'durationMs': durationMs,
+        'expectedDurationMs': [expectedDurationMinMs, expectedDurationMaxMs],
+        'missingRegions': missingRegions,
+        'regionErrors': regionErrors
+            .map((k, v) => MapEntry(k, double.parse(v.toStringAsFixed(3)))),
+        if (primaryMismatchRegion != null)
+          'primaryMismatchRegion': primaryMismatchRegion,
+        'cameraDistanceChange':
+            double.parse(cameraDistanceChange.toStringAsFixed(4)),
+        'rootTranslation': double.parse(rootTranslation.toStringAsFixed(4)),
+        'encoderLatencyMs': double.parse(encoderLatencyMs.toStringAsFixed(1)),
+        'userFeedback': userFeedback,
+      };
+}
+
 MotionV2RuntimeState _stateFromRaw(String? raw) => switch (raw) {
   'warming_up' => MotionV2RuntimeState.warmingUp,
   'matched' => MotionV2RuntimeState.matching,
@@ -68,6 +161,9 @@ class MotionV2RuntimeResult {
     this.trajSim,
     this.rootDrift,
     this.scaleSpread,
+    this.poseGuidance = '',
+    this.poseReadiness = 'ready',
+    this.attempt = MotionAttemptResult.empty,
   });
 
   final bool matched;
@@ -87,6 +183,16 @@ class MotionV2RuntimeResult {
   /// removed before the encoder saw the frames. Never affects recognition.
   final double? rootDrift;
   final double? scaleSpread;
+
+  /// Live camera-readiness guidance for the big on-screen message ('Move back',
+  /// 'Step closer', 'Ready', …) and its [PoseReadiness] name.
+  final String poseGuidance;
+  final String poseReadiness;
+
+  /// The current attempt lifecycle + failure explanation (see
+  /// [MotionAttemptResult]). `userFeedback` here is what the user should see
+  /// when a rep does not land.
+  final MotionAttemptResult attempt;
 
   static const empty = MotionV2RuntimeResult(
     matched: false, newRep: false, count: 0, confidence: 0, motionProgress: 0,
@@ -119,6 +225,9 @@ class MotionV2RuntimeResult {
     if (trajSim != null) 'trajSim': trajSim,
     if (rootDrift != null) 'rootDrift': rootDrift,
     if (scaleSpread != null) 'scaleSpread': scaleSpread,
+    'poseReadiness': poseReadiness,
+    if (poseGuidance.isNotEmpty) 'poseGuidance': poseGuidance,
+    'attempt': attempt.toJson(),
   };
 }
 
