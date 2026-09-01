@@ -53,6 +53,7 @@ PER MOVEMENT  TaughtMotionV2 — prototypes + canonical trajectory + rest emb,
 | 7 segmentation | ✅ embedding-velocity trim — **no "hold still" ritual** |
 | 8 rep detection | ~ isolated reps exact, FP 0; multi-rep undercounts on smooth synthetic (NMS spacing) — needs real inter-rep gaps |
 | 4 raw fixture export | ✅ Flutter side + Python loader |
+| **MVP wired into the app** | ✅ dev inference service (`tools/motion_v2/service/`) + Flutter `MotionVerifierV2` / `MotionV2ServiceClient` + Teach Nuvo test mode behind `--dart-define=NUVO_MOTION_V2=true`. Learn → session → streamed frames → `newRep` → `NuvoRepPulse` `+1`. `test_service.py`: invented motion recognized, unrelated → 0. |
 | 9 V1 vs V2 benchmark | ⏳ blocked on real fixtures (V1 is Dart) |
 | 10 phone | ⏳ after `match()` validates on real fixtures |
 
@@ -82,6 +83,8 @@ PER MOVEMENT  TaughtMotionV2 — prototypes + canonical trajectory + rest emb,
 3. Tune STEP 8 (NMS spacing, match threshold) on real data.
 4. STEP 9 benchmark: a Dart harness runs V1 (`CustomPoseSequenceRuntime`) on the
    same fixtures; compare reps / FP / FN / latency.
-5. STEP 10: port `TaughtMotionV2` + `RepDetectorV2` to Dart (or run the encoder
-   on-device via LiteRT/ONNX), wire into `ai_motion_proof_screen_io.dart` behind
-   a `verifierType == 'motion_v2'` branch, feed `NuvoRepPulse`.
+5. **MVP is wired** — run `tools/motion_v2/service/app.py`, launch with
+   `--dart-define=NUVO_MOTION_V2=true --dart-define=NUVO_MOTION_V2_URL=http://<mac-ip>:8799`,
+   Teach an invented movement, Test it → `+1`. Then: Project A (continuous
+   `+1`), Project B (race `verifier_spec_json`), Project D (on-device inference
+   replaces the service).
