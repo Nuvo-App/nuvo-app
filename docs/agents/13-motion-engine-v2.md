@@ -75,16 +75,73 @@ PER MOVEMENT  TaughtMotionV2 — prototypes + canonical trajectory + rest emb,
   Fine for evaluation; before V2 is the shipping verifier, re-pretrain the
   backbone on permissive data (AMASS subsets + flywheel captures) or swap it.
 
-## Next concrete steps
+## CURRENT TASK — remove the Mac service, make V2 the default on-device engine
 
-1. Capture real fixtures (`tools/motion_v2/fixtures/README.md`) — ≥2 movements,
-   include *similar* pairs.
-2. `python experiments/exp10_real.py` → `reports/10-real.md`.
-3. Tune STEP 8 (NMS spacing, match threshold) on real data.
-4. STEP 9 benchmark: a Dart harness runs V1 (`CustomPoseSequenceRuntime`) on the
-   same fixtures; compare reps / FP / FN / latency.
-5. **MVP is wired** — run `tools/motion_v2/service/app.py`, launch with
-   `--dart-define=NUVO_MOTION_V2=true --dart-define=NUVO_MOTION_V2_URL=http://<mac-ip>:8799`,
-   Teach an invented movement, Test it → `+1`. Then: Project A (continuous
-   `+1`), Project B (race `verifier_spec_json`), Project D (on-device inference
-   replaces the service).
+Owner directive: `flutter run --release` must Teach + recognize a new movement
+with **no Python process, no dart-define, no LAN IP**. V2 becomes the default
+Teach Nuvo engine; V1 drops behind `NUVO_DIAGNOSTICS`. `tools/motion_v2/` stays
+as reference/research; the HTTP service stays as a diagnostics/comparison tool
+only.
+
+### Runtime decision (research done this session)
+
+- Flutter ONNX plugins on pub: **`onnxruntime` 1.4.1** (android/ios/macos/…,
+  mature) and **`flutter_onnxruntime` 1.8.4** (adds web, actively maintained).
+- `bukuroo/MotionBERT-3d-ONNX` on HF confirms DSTformer exports to ONNX cleanly
+  (they ship 27/81/243-frame pose3d exports). We need our own export of the
+  **backbone `return_rep`** output, not the pose3d head.
+- **Route: ONNX Runtime Mobile.** Core ML is an iOS-only second export; revisit
+  only if ORT latency is unacceptable.
+
+### Checkpoints (push each to main)
+
+1. `motion-v2: export production encoder runtime`
+   `tools/motion_v2/scripts/export_onnx.py` — export `release_action` (and
+   `lite_pretrain`) backbone with `return_rep=True`, fixed seq len (try 64;
+   chunk longer inputs in Dart like `mb_encoder.encode`). Verify
+   onnxruntime-CPU output vs PyTorch < 1e-3 abs. int8 dynamic-quantize; record
+   size (fp32 ~170MB / int8 ~43MB for 42M; lite int8 ~16MB). Golden fixtures for
+   Dart parity.
+2. `motion-v2: add native inference bridge`
+   Add the ORT plugin to `pubspec.yaml` (owner-directed). `MotionV2OnnxEncoder`
+   loads the bundled `.onnx` from `assets/models/`, `encode(seq)->(T,17,512)`.
+   Measure load time + per-inference ms on device.
+3. `motion-v2: port three-shot learner to app runtime`
+   Dart port of the deterministic pipeline (all in
+   `lib/features/races/ai/motion_v2/engine/`):
+   `nuvo_to_h36m` (joint map + MotionBERT `crop_scale`), `per_frame_embedding`,
+   `mean_pool`, `resample_seq`, `dtw_distance`, `segment_action`,
+   `traj_distance`, `TaughtMotionV2.learn` / `.match`, `StreamingMotionV2`.
+   Parity tests vs Python golden JSON (embeddings, proto/traj distances, match
+   decision, learned thresholds).
+4. `motion-v2: make V2 default Teach Nuvo engine`
+   Drop `kMotionV2Enabled`; `TeachMovementScreen` uses `MotionV2NativeRuntime`
+   by default. V1 (`CustomPoseSequenceRuntime`) only when `NUVO_DIAGNOSTICS`.
+   Remove dev-only UX (service URL, "Python service" copy, connection errors).
+5. `motion-v2: remove local service runtime dependency`
+   `MotionV2ServiceClient` kept but only reachable from the diagnostics panel
+   (native-vs-Python compare). Release runtime never touches it.
+6. `motion-v2: verify release-mode custom motion flow`
+   `flutter build ios --release` / `apk --release` succeeds; run the 10-point
+   acceptance checklist from the directive. Model-size + latency numbers in
+   `reports/`.
+
+### Parity rule
+
+Do NOT swap the working encoder for a weaker approximation to ship. If exact
+MotionBERT export fails, prove it with a real failed export/benchmark first.
+42M `release_action` is the reference; if it's too heavy on-device, THEN
+evaluate int8 → lite variant → distillation — not V1.
+
+### Model packaging
+
+Bundle for now (`assets/models/motion_v2_encoder.onnx`), measure app-size
+impact. Move to OTA model delivery later if size is unreasonable.
+
+### After this: Project A — continuous rep detection.
+
+## Deferred (still valuable, not blocking)
+
+- Real fixtures (`tools/motion_v2/fixtures/README.md`) + `exp10_real.py`.
+- STEP 8 NMS tuning on real data.
+- STEP 9 V1-vs-V2 benchmark.
