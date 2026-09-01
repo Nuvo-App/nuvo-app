@@ -925,6 +925,13 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                 ),
               ),
             ] else ...[
+              _TeachNuvoCard(onTap: () => context.push('/races/teach')),
+              const SizedBox(height: 18),
+              Text(
+                'Or pick a movement Nuvo already knows',
+                style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              ),
+              const SizedBox(height: 12),
               _SearchBar(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _searchQuery = value),
@@ -951,8 +958,6 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                   onSelect: _select,
                 ),
               ],
-              const SizedBox(height: 18),
-              _TeachNuvoCard(onTap: () => context.push('/races/teach')),
             ],
           ],
         ),
