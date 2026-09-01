@@ -26,6 +26,7 @@ class RaceDraft {
     this.recurrence = RaceRecurrence.none,
     this.visibility = 'invite_code',
     this.customActivityName,
+    this.customUnit,
     this.verifierSpec,
     this.goalKind = RaceGoalKind.movement,
     this.manualGoalName,
@@ -56,6 +57,10 @@ class RaceDraft {
 
   /// Populated only for races created from a Teach Nuvo custom movement.
   final String? customActivityName;
+
+  /// Free-text unit for a custom movement ("reps", "rounds", …). Display only.
+  final String? customUnit;
+
   final CustomPoseVerifierSpec? verifierSpec;
 
   bool get isCustom =>
@@ -103,6 +108,7 @@ class RaceDraft {
     RaceRecurrence? recurrence,
     String? visibility,
     String? customActivityName,
+    String? customUnit,
     CustomPoseVerifierSpec? verifierSpec,
     RaceGoalKind? goalKind,
     String? manualGoalName,
@@ -122,6 +128,7 @@ class RaceDraft {
       recurrence: recurrence ?? this.recurrence,
       visibility: visibility ?? this.visibility,
       customActivityName: customActivityName ?? this.customActivityName,
+      customUnit: customUnit ?? this.customUnit,
       verifierSpec: verifierSpec ?? this.verifierSpec,
       goalKind: goalKind ?? this.goalKind,
       manualGoalName: manualGoalName ?? this.manualGoalName,
