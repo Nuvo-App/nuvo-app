@@ -80,6 +80,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   List<NuvoPoseFrame> _rawCurrent = [];
   int _rawAcceptedSnapshot = 0;
 
+  // ── Deterministic teach flow ───────────────────────────────────────────────
+  // The user drives every step: Record → Stop → Save example, ×3, then an
+  // explicit "Learn movement" tap. Nothing auto-builds and nothing navigates
+  // until the user taps "Use this movement" on the learned screen.
+  static const int _requiredExamples = 3;
+  // Examples the user has explicitly confirmed with "Save example".
+  int _confirmedExamples = 0;
+  // A recording just stopped and was accepted — waiting on "Save example".
+  bool _awaitingExampleSave = false;
+  // The user tapped "Learn movement"; build is running.
+  bool _learnRequested = false;
+
   // ── Motion V2 — the default custom-motion engine (on-device ONNX) ────────
   MotionV2NativeRuntime? _v2;
   TaughtMotionV2Spec? _v2Spec;
@@ -373,19 +385,36 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _finishRecording() {
     _flow.stopRecordingExample();
+    final accepted = _flow.acceptedCount > _rawAcceptedSnapshot;
     // Keep the raw stream only if this recording was accepted as a demo.
     if ((_showDiagnostics || _useMotionV2) &&
-        _flow.acceptedCount > _rawAcceptedSnapshot &&
+        accepted &&
         _rawCurrent.length >= 4) {
       _rawDemos.add(List.of(_rawCurrent));
     }
     _rawCurrent = [];
-    if (_flow.stage == TeachMovementStage.readyToRecord &&
-        _flow.acceptedCount >= _flow.requiredExampleCount &&
-        _flow.canLearn) {
-      _flow.buildWhenReady();
-      if (_useMotionV2) unawaited(_learnMotionV2());
-    }
+    // Deterministic: an accepted recording waits for an explicit "Save example"
+    // tap. Nothing auto-builds — the user taps "Learn movement" after 3 saves.
+    setState(() => _awaitingExampleSave = accepted);
+  }
+
+  void _saveExample() {
+    _confirmedExamples = _flow.acceptedCount;
+    setState(() => _awaitingExampleSave = false);
+  }
+
+  void _redoExample() {
+    _flow.removeLastAccepted();
+    if (_rawDemos.length > _confirmedExamples) _rawDemos.removeLast();
+    _rawAcceptedSnapshot = _flow.acceptedCount;
+    setState(() => _awaitingExampleSave = false);
+  }
+
+  void _learnMovement() {
+    if (_confirmedExamples < _requiredExamples || !_flow.canLearn) return;
+    setState(() => _learnRequested = true);
+    _flow.buildWhenReady();
+    if (_useMotionV2) unawaited(_learnMotionV2());
   }
 
   // ── Motion V2 — on-device learn ──────────────────────────────────────────
@@ -486,8 +515,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _requestSetState();
   }
 
+  void _resetTeachFlags() {
+    _confirmedExamples = 0;
+    _awaitingExampleSave = false;
+    _learnRequested = false;
+    _v2Spec = null;
+    _v2Learning = false;
+    _v2Error = null;
+    _rawAcceptedSnapshot = 0;
+  }
+
   void _restart() {
     _flow.restart();
+    _resetTeachFlags();
     _raceTitleController.clear();
     _raceTargetController.text = '10';
     _customRuntime?.dispose();
@@ -512,6 +552,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _changeName() {
     _flow.resetToName();
+    _resetTeachFlags();
     _nameController.clear();
     _raceTitleController.clear();
     _raceTargetController.text = '10';
@@ -550,6 +591,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _clearExamples() {
     _flow.clearExamples();
+    _resetTeachFlags();
 
     _customRuntime?.dispose();
     _customRuntime = null;
@@ -689,6 +731,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
               _nameStep()
             else if (_flow.stage == TeachMovementStage.learned ||
                 _flow.stage == TeachMovementStage.failed ||
+                _flow.stage == TeachMovementStage.building ||
+                _learnRequested ||
                 _debugReadyFixture)
               _summaryStep()
             else
@@ -831,11 +875,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         const SizedBox(height: 12),
         _cameraPreviewCard(showPreview),
         const SizedBox(height: 16),
-        Text(
-          _flow.message,
-          style: AppTextStyles.titleMedium,
-          textAlign: TextAlign.center,
-        ),
+        _teachProgressHeader(),
         const SizedBox(height: 20),
         _cameraActionButton(),
         const SizedBox(height: 12),
@@ -1012,16 +1052,45 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: dots);
   }
 
+  Widget _teachProgressHeader() {
+    final String title;
+    final String? sub;
+    if (_flow.stage == TeachMovementStage.building || _learnRequested) {
+      title = 'Learning your movement…';
+      sub = null;
+    } else if (_awaitingExampleSave) {
+      title = 'Example ${_flow.acceptedCount} recorded';
+      sub = 'Save it, or redo if that one felt wrong.';
+    } else if (_confirmedExamples >= _requiredExamples) {
+      title = '$_requiredExamples of $_requiredExamples examples saved';
+      sub = 'Tap Learn movement when you\'re ready.';
+    } else if (_flow.stage == TeachMovementStage.recording) {
+      title =
+          'Recording example ${_confirmedExamples + 1} of $_requiredExamples';
+      sub = 'Do the movement once, then tap Stop.';
+    } else {
+      title = 'Example ${_confirmedExamples + 1} of $_requiredExamples';
+      sub = _flow.lastExampleRejected
+          ? _flow.message
+          : 'Tap Record, do the movement once, then Stop.';
+    }
+    return Column(
+      children: [
+        Text(title, style: AppTextStyles.titleMedium, textAlign: TextAlign.center),
+        if (sub != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            sub,
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _cameraActionButton() {
     final stage = _flow.stage;
-    if (stage == TeachMovementStage.startPose ||
-        stage == TeachMovementStage.holdStill) {
-      return const NuvoPrimaryButton(
-        label: 'Hold still…',
-        expand: true,
-        onPressed: null,
-      );
-    }
     if (stage == TeachMovementStage.recording) {
       return NuvoPrimaryButton(
         label: 'Stop',
@@ -1029,13 +1098,26 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         onPressed: _finishRecording,
       );
     }
-    if (stage == TeachMovementStage.building) {
+    if (stage == TeachMovementStage.building || _learnRequested) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (stage == TeachMovementStage.readyToRecord) {
-      final hasProgress = _flow.acceptedCount > 0 || _flow.lastExampleRejected;
+    if (_awaitingExampleSave) {
       return NuvoPrimaryButton(
-        label: hasProgress ? 'Record again' : 'Record',
+        label: 'Save example',
+        expand: true,
+        onPressed: _saveExample,
+      );
+    }
+    if (_confirmedExamples >= _requiredExamples) {
+      return NuvoPrimaryButton(
+        label: 'Learn movement',
+        expand: true,
+        onPressed: _flow.canLearn ? _learnMovement : null,
+      );
+    }
+    if (stage == TeachMovementStage.readyToRecord) {
+      return NuvoPrimaryButton(
+        label: 'Record example ${_confirmedExamples + 1}',
         expand: true,
         onPressed: _cameraReady ? _startRecording : null,
       );
@@ -1048,12 +1130,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Widget _secondaryActionButton() {
-    if (_flow.stage == TeachMovementStage.recording ||
-        _flow.stage == TeachMovementStage.holdStill) {
+    if (_flow.stage == TeachMovementStage.recording) {
       return NuvoOutlineButton(
         label: 'Cancel',
         expand: true,
         onPressed: _cancelRecording,
+      );
+    }
+    if (_awaitingExampleSave) {
+      return NuvoOutlineButton(
+        label: 'Redo this example',
+        expand: true,
+        onPressed: _redoExample,
       );
     }
     return const SizedBox.shrink();
@@ -1232,7 +1320,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _v2SummaryStep() {
     final learned = _v2Spec != null;
-    final building = _flow.stage == TeachMovementStage.building || _v2Learning;
+    final building = _flow.stage == TeachMovementStage.building ||
+        _v2Learning ||
+        (_learnRequested && !learned && _v2Error == null &&
+            _flow.stage != TeachMovementStage.failed);
     final failed = _flow.stage == TeachMovementStage.failed && !learned && !building;
     final testResult = _customTestResult;
     return Column(
@@ -1303,7 +1394,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Widget _summaryStep() {
-    if (_useMotionV2 && !_debugReadyFixture) return _v2SummaryStep();
+    if (_useMotionV2 &&
+        !_debugReadyFixture &&
+        (_v2Spec != null ||
+            _v2Learning ||
+            _learnRequested ||
+            _v2Error != null ||
+            _effectiveSpec == null)) {
+      return _v2SummaryStep();
+    }
     final spec = _effectiveSpec;
     final movementName = _flow.movementName;
     final testResult = _customTestResult;
