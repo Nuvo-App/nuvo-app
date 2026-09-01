@@ -4,11 +4,16 @@
 /// directly. See `tools/motion_v2/` and `docs/agents/13-motion-engine-v2.md`.
 library;
 
-/// Config (compile-time). The V2 path is off unless `NUVO_MOTION_V2=true`.
+/// Motion V2 is the **default** custom‑motion engine and runs fully on‑device
+/// (`MotionV2NativeRuntime` → bundled ONNX MotionBERT). No flag, no service.
 ///
-///   flutter run --dart-define=NUVO_MOTION_V2=true \
-///               --dart-define=NUVO_MOTION_V2_URL=http://192.168.1.20:8799
-const bool kMotionV2Enabled = bool.fromEnvironment('NUVO_MOTION_V2');
+/// `--dart-define=NUVO_FORCE_V1=true` forces the legacy geometric verifier
+/// (`CustomPoseSequenceRuntime`) — internal troubleshooting / comparison only.
+const bool kMotionV1Forced = bool.fromEnvironment('NUVO_FORCE_V1');
+
+/// The dev HTTP service (`tools/motion_v2/service/`) — reachable **only** from
+/// the diagnostics panel for native‑vs‑Python comparison. Never on the normal
+/// runtime path.
 const String kMotionV2ServiceUrl = String.fromEnvironment(
   'NUVO_MOTION_V2_URL',
   defaultValue: 'http://localhost:8799',

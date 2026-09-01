@@ -107,7 +107,7 @@ void main() {
 
     test('dtwDistance cross ~ golden', () {
       final a = _clip16(l2normSeq(perFrameEmbedding(demos[0])));
-      final b = _clip16(l2normSeq(perFrameEmbedding(_rep(m["testB_rep"] as List))));
+      final b = _clip16(l2normSeq(perFrameEmbedding(_rep(m['testB_rep'] as List))));
       expect(dtwDistance(a, b), closeTo((m['dtw_cross'] as num).toDouble(), 1e-5));
     });
 
