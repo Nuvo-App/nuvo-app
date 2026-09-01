@@ -115,9 +115,15 @@ final _composerDraftProvider = StateProvider.autoDispose<RaceDraft>(
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class RaceComposerScreen extends ConsumerStatefulWidget {
-  const RaceComposerScreen({super.key, this.prefill});
+  const RaceComposerScreen({super.key, this.prefill, this.fromTeach = false});
 
   final RaceCreatePrefill? prefill;
+
+  /// True only when the user arrived by tapping "Use this movement" at the end
+  /// of the Teach Nuvo flow. A stale learned movement left in session state
+  /// must NOT silently drop the user onto the review step of a race they never
+  /// started building.
+  final bool fromTeach;
 
   @override
   ConsumerState<RaceComposerScreen> createState() => _RaceComposerScreenState();
@@ -140,7 +146,16 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     super.initState();
     final learned = ref.read(learnedCustomMovementProvider);
     _learnedProviderPresentOnInit = learned != null;
-    if (learned != null) {
+    if (learned != null && !widget.fromTeach) {
+      // Opened fresh ("Start a race") with an abandoned taught movement still
+      // in session state — start from the top and forget it.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(learnedCustomMovementProvider.notifier).state = null;
+        }
+      });
+    }
+    if (learned != null && widget.fromTeach) {
       final draft = RaceDraft(
         title: '',
         hasCustomName: false,
