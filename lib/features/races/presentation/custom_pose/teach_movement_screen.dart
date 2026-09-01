@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
 import '../../ai/motion_v2/motion_v2_models.dart';
 import '../../ai/motion_v2/motion_v2_native_runtime.dart';
+import '../../ai/motion_v2/pose_quality.dart';
 import '../../data/ai_motion_models.dart';
 import '../../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
@@ -122,6 +124,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   final List<NuvoPoseFrame> _v2Batch = [];
   bool _v2Busy = false;
   static const int _v2BatchSize = 4;
+
+  // ── Live camera-readiness guidance (shared PoseQuality evaluator) ───────────
+  PoseQuality _captureQuality = PoseQuality.noFrame;
+  final List<NuvoPoseFrame> _recentFrames = [];
+  // Rough capture-quality counters for the diagnostic report.
+  int _poseFrameCount = 0;
+  int _poseFrameValid = 0;
+  DateTime? _firstPoseAt;
+  SelfValidationReport? _selfValidation;
+  // The last frames of a failed live attempt, kept as a replayable fixture.
+  List<NuvoPoseFrame> _lastFailedAttemptFrames = const [];
+  final List<NuvoPoseFrame> _v2AttemptWindow = [];
 
   /// Motion V2 is the default; V1 only when explicitly forced for troubleshooting.
   bool get _useMotionV2 => !kMotionV1Forced;
@@ -275,11 +289,22 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       final pose = update.pose;
       if (frame == null || pose == null) {
         _flow.markFrameMissing();
+        if (!_testingVerifier) _captureQuality = PoseQuality.noFrame;
         _expireSkeletonIfNeeded(now);
         _requestSetState();
         return;
       }
       _flow.addFrame(pose, frame.createdAt);
+      _poseFrameCount++;
+      _firstPoseAt ??= now;
+      // Live camera-readiness (used for the big on-screen guidance during
+      // capture; the streaming session owns it during the live test).
+      _recentFrames.add(frame);
+      if (_recentFrames.length > 6) _recentFrames.removeAt(0);
+      if (!_testingVerifier) {
+        _captureQuality = evaluatePoseQuality(frame, recent: _recentFrames);
+        if (_captureQuality.trackable) _poseFrameValid++;
+      }
       if ((_showDiagnostics || _useMotionV2) &&
           _flow.stage == TeachMovementStage.recording) {
         _rawCurrent.add(frame);
@@ -466,9 +491,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
       await _v2?.dispose();
       _v2 = runtime;
+      _selfValidation = runtime.lastSelfValidation;
       if (!mounted) return;
       setState(() {
         _v2Spec = spec;
+        _v2Learning = false;
+      });
+    } on MotionV2LearnException catch (e) {
+      // Self-validation failed — the spec is junk. Keep the report for the
+      // debug bundle, show the user something actionable.
+      _selfValidation = e.report;
+      await runtime.dispose();
+      if (!mounted) return;
+      setState(() {
+        _v2Error = "Let's record that again — the three examples were too "
+            'different for Nuvo to learn from.';
         _v2Learning = false;
       });
     } on MotionV2Exception catch (e) {
@@ -493,10 +530,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _v2Busy = true;
     final batch = List<NuvoPoseFrame>.of(_v2Batch);
     _v2Batch.clear();
+    _v2AttemptWindow.addAll(batch);
+    if (_v2AttemptWindow.length > 90) {
+      _v2AttemptWindow.removeRange(0, _v2AttemptWindow.length - 90);
+    }
     try {
       final r = await _v2!.update(batch);
       if (!mounted || !_testingVerifier) return;
       final firedRep = r.newRep;
+      // Keep the frames of a failed attempt as a replayable fixture.
+      if (r.attempt.outcome == MotionAttemptOutcome.failed) {
+        _lastFailedAttemptFrames = List<NuvoPoseFrame>.of(_v2AttemptWindow);
+      } else if (r.attempt.outcome == MotionAttemptOutcome.success ||
+          r.state == MotionV2RuntimeState.neutral) {
+        _v2AttemptWindow.clear();
+      }
       setState(() {
         _v2Result = r;
         if (firedRep) _v2Count = r.count;
@@ -556,6 +604,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _v2Learning = false;
     _v2Error = null;
     _rawAcceptedSnapshot = 0;
+    _selfValidation = null;
+    _lastFailedAttemptFrames = const [];
+    _v2AttemptWindow.clear();
+    _poseFrameCount = 0;
+    _poseFrameValid = 0;
+    _firstPoseAt = null;
   }
 
   void _restart() {
@@ -880,8 +934,39 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  /// One large, high-confidence instruction over the camera. Pose problems win
+  /// (you can't recognise a movement you can't track), then movement feedback.
+  Widget _bigGuidance(String text, {Color? color}) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: (color ?? NuvoColors.navy).withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+      ),
+      child: Text(
+        text.toUpperCase(),
+        textAlign: TextAlign.center,
+        style: AppTextStyles.titleLarge.copyWith(color: NuvoColors.white),
+      ),
+    );
+  }
+
   List<Widget> _immersiveCaptureControls() {
+    final recording = _flow.stage == TeachMovementStage.recording;
+    // Not recording + camera not ready → guide the user (Move back / Step
+    // closer / Step into frame / Hold still). While recording, show progress.
+    final guide = (!recording && !_captureQuality.isReady)
+        ? _captureQuality.guidance
+        : '';
     return [
+      if (guide.isNotEmpty) ...[
+        _bigGuidance(guide,
+            color: _captureQuality.readiness == PoseReadiness.unstable
+                ? NuvoColors.blue
+                : NuvoColors.danger),
+        const SizedBox(height: 12),
+      ],
       _teachProgressHeader(),
       const SizedBox(height: 16),
       _cameraActionButton(),
@@ -892,20 +977,34 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   List<Widget> _immersiveTestControls(bool v2) {
-    final status = v2 ? _v2StatusLabel() : _nuvoTestStatus(update: _customUpdate);
+    final r = _v2Result;
+    // Priority: pose problem → last attempt's feedback → "keep going" → status.
+    String message;
+    Color? color;
+    if (v2 && r.poseReadiness != 'ready' && r.poseGuidance.isNotEmpty) {
+      message = r.poseGuidance;
+      color = NuvoColors.danger;
+    } else if (v2 && r.attempt.outcome == MotionAttemptOutcome.inProgress) {
+      message = 'Keep going';
+      color = NuvoColors.blue;
+    } else if (v2 &&
+        r.attempt.outcome == MotionAttemptOutcome.failed &&
+        r.attempt.userFeedback.isNotEmpty) {
+      message = r.attempt.userFeedback;
+      color = NuvoColors.danger;
+    } else {
+      message = v2 ? _v2StatusLabel() : _nuvoTestStatus(update: _customUpdate);
+      color = null;
+    }
     return [
+      _bigGuidance(message, color: color),
+      const SizedBox(height: 12),
       Center(
         child: NuvoRepPulse(
           count: v2 ? _v2Count : (_customUpdate?.count ?? 0),
           target: _testTarget,
           accent: NuvoColors.blue,
         ),
-      ),
-      const SizedBox(height: 8),
-      Text(
-        status,
-        style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
-        textAlign: TextAlign.center,
       ),
       const SizedBox(height: 14),
       NuvoPrimaryButton(
@@ -1005,31 +1104,130 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           row('protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}  margin: ${r.protoMargin?.toStringAsFixed(2) ?? '-'}'),
           row('trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   buffer: ${r.bufferFrames}f'),
           row('camera drift: ${r.rootDrift?.toStringAsFixed(3) ?? '-'}   scale spread: ${r.scaleSpread?.toStringAsFixed(3) ?? '-'} (removed before recognition)'),
+          row('pose: ${r.poseReadiness}${r.poseGuidance.isEmpty ? '' : ' — ${r.poseGuidance}'}'),
+          row('attempt: ${r.attempt.outcome.name}  maxProgress: ${r.attempt.maxProgress.toStringAsFixed(2)}'
+              '${r.attempt.failureCategory == MotionFailureCategory.none ? '' : '  → ${r.attempt.failureCategory.name}'}'),
+          if (r.attempt.userFeedback.isNotEmpty)
+            row('feedback: "${r.attempt.userFeedback}"'),
+          if (r.attempt.primaryMismatchRegion != null)
+            row('primary mismatch: ${r.attempt.primaryMismatchRegion}'),
+          if (_selfValidation != null)
+            row('self-validation: ${_selfValidation!.passed ? 'passed' : 'FAILED'} ${_selfValidation!.perDemo}'),
           row('encoder latency: ${r.inferenceLatency.inMilliseconds}ms'),
           if (_v2Error != null) row('error: $_v2Error'),
           const SizedBox(height: 8),
           NuvoOutlineButton(
             label: 'Copy Motion V2 debug',
             expand: true,
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(
-                text: const JsonEncoder.withIndent('  ').convert({
-                  'spec': _v2Spec?.toJson(),
-                  'lastResult': _v2Result.toDiagnosticsJson(),
-                  'count': _v2Count,
-                  'error': _v2Error,
-                }),
-              ));
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Motion V2 debug copied.')),
-                );
-              }
-            },
+            onPressed: _copyMotionV2Debug,
           ),
+          if (kNuvoDiagnosticsEnabled && _lastFailedAttemptFrames.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            NuvoOutlineButton(
+              label: 'Copy failed-attempt fixture (${_lastFailedAttemptFrames.length}f)',
+              expand: true,
+              onPressed: _copyFailedAttemptFixture,
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// The full structured diagnostic bundle — enough to answer "which stage
+  /// failed" without guessing (see docs/agents/13 PART 12).
+  Map<String, dynamic> _motionV2DebugReport() {
+    final r = _v2Result;
+    final period = _firstPoseAt == null || _poseFrameCount < 2
+        ? null
+        : DateTime.now().difference(_firstPoseAt!).inMilliseconds /
+            math.max(1, _poseFrameCount - 1);
+    return {
+      'captureQuality': {
+        'poseFrameCount': _poseFrameCount,
+        'trackableFrameRatio': _poseFrameCount == 0
+            ? 0
+            : _poseFrameValid / _poseFrameCount,
+        'estFrameIntervalMs': period,
+        'estFps': period == null || period <= 0 ? null : 1000 / period,
+        'current': _captureQuality.toJson(),
+        'rootTranslationMagnitude': r.rootDrift,
+        'scaleChangeFraction': r.scaleSpread,
+      },
+      'teaching': {
+        'demoCount': _rawDemos.length,
+        'demoFrameCounts': [for (final d in _rawDemos) d.length],
+        'demoRegionActivity': _v2Spec?.json['region_activity'],
+        'demoLengths': _v2Spec?.json['demo_lengths'],
+        'demoActiveVel': _v2Spec?.json['demo_active_vel'],
+        'acceptProtoDist': _v2Spec?.json['accept_proto_dist'],
+        'acceptTrajDist': _v2Spec?.json['accept_traj_dist'],
+        'selfValidation': _selfValidation?.toJson(),
+      },
+      'liveAttempt': r.attempt.toJson()
+        ..addAll({
+          'lastState': r.state.name,
+          'lastConfidence': r.confidence,
+          'lastProtoMargin': r.protoMargin,
+          'lastTrajSim': r.trajSim,
+          'count': _v2Count,
+        }),
+      'inference': {
+        'model': _v2?.encoderId ?? 'release_action',
+        'runtime': 'onnxruntime (native)',
+        'encoderLoaded': _v2?.encoderLoaded ?? false,
+        'lastInferenceMs': r.inferenceLatency.inMilliseconds,
+        'bufferFrames': r.bufferFrames,
+      },
+      'error': _v2Error,
+    };
+  }
+
+  Future<void> _copyMotionV2Debug() async {
+    final bundle = {
+      'report': _motionV2DebugReport(),
+      'spec': _v2Spec?.toJson(),
+      'lastResult': _v2Result.toDiagnosticsJson(),
+      if (kNuvoDiagnosticsEnabled && _lastFailedAttemptFrames.isNotEmpty)
+        'failedAttemptFixture': _failedAttemptFixture(),
+    };
+    await Clipboard.setData(ClipboardData(
+      text: const JsonEncoder.withIndent('  ').convert(bundle),
+    ));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Motion V2 debug copied.')),
+      );
+    }
+  }
+
+  /// Everything needed to replay a failed attempt offline: raw pose frames,
+  /// the taught spec, the attempt boundaries + outcome, runtime diagnostics.
+  Map<String, dynamic> _failedAttemptFixture() => {
+        'schema': 'motion_v2_failed_attempt/1',
+        'movementName': _flow.movementName,
+        'expectedOutcome': 'match',
+        'spec': _v2Spec?.toJson(),
+        'attempt': _v2Result.attempt.toJson(),
+        'diagnostics': _motionV2DebugReport(),
+        'rawFrames': [
+          for (final f in _lastFailedAttemptFrames) _serializeRawFrame(f),
+        ],
+        'demos': [
+          for (final d in _rawDemos)
+            [for (final f in d) _serializeRawFrame(f)],
+        ],
+      };
+
+  Future<void> _copyFailedAttemptFixture() async {
+    await Clipboard.setData(ClipboardData(
+      text: const JsonEncoder.withIndent('  ').convert(_failedAttemptFixture()),
+    ));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed-attempt fixture copied.')),
+      );
+    }
   }
 
   // ignore: unused_element
@@ -1258,7 +1456,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       return NuvoPrimaryButton(
         label: 'Record example ${_confirmedExamples + 1}',
         expand: true,
-        onPressed: _cameraReady ? _startRecording : null,
+        onPressed: (_cameraReady &&
+                (_captureQuality.trackable ||
+                    _captureQuality.readiness == PoseReadiness.unstable))
+            ? _startRecording
+            : null,
       );
     }
     return NuvoOutlineButton(

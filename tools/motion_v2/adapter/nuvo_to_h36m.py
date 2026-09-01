@@ -204,6 +204,38 @@ def frames_to_h36m(
     return seq
 
 
+# h36m joint indices per understandable body region.
+H36M_REGIONS = {
+    "head": [9, 10],
+    "left arm": [11, 12, 13],
+    "right arm": [14, 15, 16],
+    "torso": [0, 7, 8],
+    "left leg": [4, 5, 6],
+    "right leg": [1, 2, 3],
+}
+
+
+def region_activity(seq_h36m: np.ndarray) -> dict:
+    """Per-region mean frame-to-frame joint travel over an h36m sequence.
+    Diagnostics only — tells the failure explainer which region *should* have
+    moved. Generic; no per-exercise rules. 1:1 with Dart `regionActivity`."""
+    out = {}
+    for region, joints in H36M_REGIONS.items():
+        total, count = 0.0, 0
+        for j in joints:
+            prev = None
+            for t in range(seq_h36m.shape[0]):
+                x, y, c = seq_h36m[t, j]
+                if c == 0:
+                    continue
+                if prev is not None:
+                    total += float(np.hypot(x - prev[0], y - prev[1]))
+                    count += 1
+                prev = (x, y)
+        out[region] = (total / count) if count else 0.0
+    return out
+
+
 def coverage(seq_h36m: np.ndarray) -> dict:
     """Per-joint fraction of frames with confidence > 0, for diagnostics."""
     if seq_h36m.shape[0] == 0:
