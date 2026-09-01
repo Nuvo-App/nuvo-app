@@ -19,11 +19,16 @@ import 'taught_motion_v2.dart';
 ///  - a structured [MotionAttemptResult] for every failed attempt, so a
 ///    failure at 5% ("never started") is distinguishable from 85% ("almost").
 class StreamingMotionV2 {
-  StreamingMotionV2(this.motion, this.encoder, {double fpsHint = 15.0})
+  StreamingMotionV2(this.motion, this.encoder,
+      {double fpsHint = 15.0, this.background})
       : _bufCap = math.max(30, (5.0 * fpsHint).round());
 
   final TaughtMotionV2 motion;
   final MotionEncoderV2 encoder;
+
+  /// Generic-motion anchors for the separation margin (see MotionV2Background).
+  final List<Float32List>? background;
+
   final int _bufCap;
 
   static const int _minFrames = 8;
@@ -112,7 +117,8 @@ class StreamingMotionV2 {
     final repM = await encoder.encode(hm);
     final emb = perFrameEmbedding(rep);
     final embM = perFrameEmbedding(repM);
-    final m = motion.matchEncoded(rep, emb, repM: repM, embM: embM);
+    final m = motion.matchEncoded(rep, emb,
+        repM: repM, embM: embM, background: background);
 
     final seg = segmentAction(emb);
     final activeLen = seg.end - seg.start;
@@ -179,7 +185,8 @@ class StreamingMotionV2 {
         trajSim: m.trajSim,
         rootDrift: hDiag.diag.rootTranslationMagnitude,
         scaleSpread: hDiag.diag.scaleChangeFraction,
-        pq: pq);
+        pq: pq,
+        match: m);
     _last = r;
     return r;
   }
@@ -339,6 +346,7 @@ class StreamingMotionV2 {
     double? rootDrift,
     double? scaleSpread,
     required PoseQuality pq,
+    MatchResultV2? match,
   }) {
     // The message the user should see: pose problem first (can't recognise a
     // movement you can't track), then the last attempt's feedback, then status.
@@ -346,6 +354,10 @@ class StreamingMotionV2 {
         ? const MotionAttemptResult(outcome: MotionAttemptOutcome.inProgress)
         : _lastAttempt;
     return MotionV2RuntimeResult(
+      votes: match?.votes ?? 0,
+      separation: match?.separation,
+      decision: match?.decision ?? 'reject',
+      perReference: [for (final p in match?.perRef ?? const []) p.toJson()],
       matched: state == MotionV2RuntimeState.matching,
       newRep: newRep,
       count: _count,

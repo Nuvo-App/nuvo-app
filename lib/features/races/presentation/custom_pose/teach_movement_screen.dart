@@ -1099,6 +1099,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           row('model: ${_v2?.encoderId ?? 'release_action'}   spec: ${_v2Spec?.encoder ?? '-'} v${_v2Spec?.version ?? '-'}'),
           row('frames buffered: ${r.bufferFrames}   last inference: ${r.inferenceLatency.inMilliseconds}ms'),
           row('last protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}   last trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   last match: ${r.matched}'),
+          row('matcher: ${r.votes}/3 references agreed   separation: ${r.separation?.toStringAsFixed(2) ?? '-'}   -> ${r.decision}'),
+          for (var i = 0; i < r.perReference.length; i++)
+            row('  ref $i: proto ${r.perReference[i]['proto']}  traj ${r.perReference[i]['traj']}  ${r.perReference[i]['matches'] == true ? 'MATCH' : 'no'}'),
           row('state: ${r.state.name}   count: ${r.count}   newRep: ${r.newRep}'),
           row('confidence: ${r.confidence.toStringAsFixed(2)}   progress: ${r.motionProgress.toStringAsFixed(2)}'),
           row('protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}  margin: ${r.protoMargin?.toStringAsFixed(2) ?? '-'}'),
@@ -1157,11 +1160,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       'teaching': {
         'demoCount': _rawDemos.length,
         'demoFrameCounts': [for (final d in _rawDemos) d.length],
+        'schema': _v2Spec?.json['schema'],
+        'referenceCount': (_v2Spec?.json['references'] as List?)?.length,
         'demoRegionActivity': _v2Spec?.json['region_activity'],
         'demoLengths': _v2Spec?.json['demo_lengths'],
         'demoActiveVel': _v2Spec?.json['demo_active_vel'],
-        'acceptProtoDist': _v2Spec?.json['accept_proto_dist'],
-        'acceptTrajDist': _v2Spec?.json['accept_traj_dist'],
+        'protoSpread': _v2Spec?.json['proto_spread'],
+        'trajSpread': _v2Spec?.json['traj_spread'],
+        'protoSpreadMax': _v2Spec?.json['proto_spread_max'],
+        'trajSpreadMax': _v2Spec?.json['traj_spread_max'],
         'selfValidation': _selfValidation?.toJson(),
       },
       'liveAttempt': r.attempt.toJson()

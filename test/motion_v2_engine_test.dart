@@ -119,18 +119,27 @@ void main() {
     });
   });
 
-  group('matchEncoded decision parity (Python golden spec + reps)', () {
+  group('multi-reference matchEncoded parity (Python golden spec + reps)', () {
     final m = _load('motion_v2_math_golden.json');
     final learn = m['learn'] as Map<String, dynamic>;
     final motion = TaughtMotionV2(
       name: 'golden',
       encoderId: 'test',
-      prototypes: _seq(learn['prototypes'] as List),
-      canonical: _seq(learn['canonical'] as List),
+      references: [
+        for (final r in learn['references'] as List)
+          MotionReference(
+            proto: Float32List.fromList(
+                [for (final x in (r as Map)['proto'] as List) (x as num).toDouble()]),
+            traj: _seq(r['traj'] as List),
+            length: (r['length'] as num).toInt(),
+          ),
+      ],
+      protoSpread: (learn['proto_spread'] as num).toDouble(),
+      trajSpread: (learn['traj_spread'] as num).toDouble(),
+      protoSpreadMax: (learn['proto_spread_max'] as num).toDouble(),
+      trajSpreadMax: (learn['traj_spread_max'] as num).toDouble(),
       restEmb: Float32List.fromList(
           [for (final x in learn['rest_emb'] as List) (x as num).toDouble()]),
-      acceptProtoDist: (learn['accept_proto_dist'] as num).toDouble(),
-      acceptTrajDist: (learn['accept_traj_dist'] as num).toDouble(),
       demoActiveVel: 0,
       demoLengths: [for (final x in learn['demo_lengths'] as List) x as int],
     );
@@ -140,26 +149,34 @@ void main() {
       final r = motion.matchEncoded(rep, perFrameEmbedding(rep));
       final want = m[key] as Map<String, dynamic>;
       expect(r.isSameFamily, want['is_same'], reason: '$key is_same');
-      expect(r.protoMargin, closeTo((want['proto_margin'] as num).toDouble(), 1e-3),
+      expect(r.votes, want['votes'], reason: '$key votes');
+      // golden stores raw min(pm) / min(tm); MatchResultV2 exposes protoMargin
+      // pre-divided by kVoteK and trajSim = 1 - bestTd.
+      expect(r.protoMargin * kVoteK,
+          closeTo((want['proto_margin'] as num).toDouble(), 1e-3),
           reason: '$key proto_margin');
-      expect(r.trajSim, closeTo(1.0 - (want['traj_margin'] as num).toDouble() * motion.acceptTrajDist, 3e-3),
-          reason: '$key traj');
+      final gotTm = (1.0 - r.trajSim) /
+          (motion.trajSpread < kTrajFloor ? kTrajFloor : motion.trajSpread);
+      expect(gotTm, closeTo((want['traj_margin'] as num).toDouble(), 3e-3),
+          reason: '$key traj_margin');
     }
 
     test('match_A', () => check('match_A', m['testA_rep'] as List));
     test('match_B', () => check('match_B', m['testB_rep'] as List));
   });
 
-  group('spec round-trip is byte-compatible with Python', () {
-    test('fromJson/toJson stable + decisions loadable', () {
+  group('spec round-trip (schema 4, Python-compatible)', () {
+    test('fromJson/toJson stable', () {
       final g = _load('motion_v2_golden.json');
       final spec = TaughtMotionV2.fromJson(g['spec'] as Map<String, dynamic>);
-      expect(spec.canonical.length, kCanonLen);
-      expect(spec.prototypes.length, 6); // 3 demos x mirror
-      final j = spec.toJson();
-      final again = TaughtMotionV2.fromJson(j);
-      expect(again.acceptProtoDist, spec.acceptProtoDist);
-      expect(again.acceptTrajDist, spec.acceptTrajDist);
+      expect(spec.schema, 4);
+      expect(spec.references.length, 3);
+      expect(spec.references.first.traj.length, kCanonLen);
+      expect(spec.prototypes.length, 3);
+      final again = TaughtMotionV2.fromJson(spec.toJson());
+      expect(again.protoSpread, spec.protoSpread);
+      expect(again.trajSpread, spec.trajSpread);
+      expect(again.references.length, spec.references.length);
     });
   });
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../data/ai_motion_models.dart';
+import 'engine/motion_v2_background.dart';
 import 'engine/motion_v2_math.dart';
 import 'engine/motion_v2_onnx_encoder.dart';
 import 'engine/nuvo_to_h36m.dart';
@@ -18,17 +19,20 @@ class SelfValidationReport {
   const SelfValidationReport({
     required this.passed,
     required this.perDemo,
+    this.leaveOneOut = const [],
     required this.worstProtoMargin,
     required this.worstTrajMargin,
   });
   final bool passed;
   final List<bool> perDemo;
+  final List<bool> leaveOneOut;
   final double worstProtoMargin;
   final double worstTrajMargin;
 
   Map<String, dynamic> toJson() => {
         'passed': passed,
         'perDemo': perDemo,
+        'leaveOneOut': leaveOneOut,
         'worstProtoMargin': double.parse(worstProtoMargin.toStringAsFixed(3)),
         'worstTrajMargin': double.parse(worstTrajMargin.toStringAsFixed(3)),
       };
@@ -52,9 +56,13 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   MotionEncoderV2? _encoder;
   StreamingMotionV2? _session;
   TaughtMotionV2? _motion;
+  List<Float32List>? _background;
 
   Future<MotionEncoderV2> _enc() async =>
       _encoder ??= _injected ?? await MotionV2OnnxEncoder.load();
+
+  Future<List<Float32List>?> _bg() async =>
+      _background ??= await MotionV2Background.load();
 
   /// Load-time health signal for diagnostics.
   bool get encoderLoaded => _encoder != null;
@@ -69,6 +77,7 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       throw const MotionV2Exception('Need at least 2 demonstrations.');
     }
     final enc = await _enc();
+    final bg = await _bg();
     final motion = await TaughtMotionV2.learn(
       name: movementName,
       demos: demos,
@@ -76,9 +85,10 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       encoderId: 'release_action',
     );
 
-    // Self-validation: replay each demo through the fresh verifier. If it can't
-    // recognize its own demonstrations, the learn produced junk — don't ship it.
-    final report = await _selfValidate(motion, demos, enc);
+    // Self-validation: every demo must be recognized from the fresh verifier
+    // AND recoverable from the other two (leave-one-out). If not, the three
+    // examples don't define one stable movement — don't ship a blur.
+    final report = await _selfValidate(motion, demos, enc, bg);
     _lastSelfValidation = report;
     if (!report.passed) {
       throw MotionV2LearnException(
@@ -101,39 +111,69 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   SelfValidationReport? _lastSelfValidation;
   SelfValidationReport? get lastSelfValidation => _lastSelfValidation;
 
+  Future<({List<List<Float32List>> rep, List<List<Float32List>> repM,
+          List<Float32List> emb, List<Float32List> embM})>
+      _encodeBoth(MotionEncoderV2 enc, List<NuvoPoseFrame> demo) async {
+    final rep = await enc.encode(framesToH36m(demo));
+    final repM = await enc.encode(framesToH36m(demo, mirror: true));
+    return (
+      rep: rep,
+      repM: repM,
+      emb: perFrameEmbedding(rep),
+      embM: perFrameEmbedding(repM)
+    );
+  }
+
   Future<SelfValidationReport> _selfValidate(
     TaughtMotionV2 motion,
     List<List<NuvoPoseFrame>> demos,
     MotionEncoderV2 enc,
+    List<Float32List>? bg,
   ) async {
+    final encoded = <
+        ({List<List<Float32List>> rep, List<List<Float32List>> repM,
+          List<Float32List> emb, List<Float32List> embM})>[];
+    for (final d in demos) {
+      encoded.add(await _encodeBoth(enc, d));
+    }
+
     final perDemo = <bool>[];
     var worstPm = 0.0, worstTm = 0.0;
-    for (final demo in demos) {
+    for (final e in encoded) {
+      final r = motion.matchEncoded(e.rep, e.emb,
+          repM: e.repM, embM: e.embM, background: bg);
+      perDemo.add(r.isSameFamily);
+      if (r.protoMargin > worstPm) worstPm = r.protoMargin;
+      final tm = motion.acceptTrajDist <= 0
+          ? 0.0
+          : (1.0 - r.trajSim) / motion.acceptTrajDist;
+      if (tm > worstTm) worstTm = tm;
+    }
+
+    // Leave-one-out: each demo must be recognizable from the other two.
+    final loo = <bool>[];
+    for (var i = 0; i < demos.length; i++) {
+      final others = [for (var j = 0; j < demos.length; j++) if (j != i) demos[j]];
       try {
-        final rep = await enc.encode(framesToH36m(demo));
-        final repM = await enc.encode(framesToH36m(demo, mirror: true));
-        final r = motion.matchEncoded(
-          rep,
-          perFrameEmbedding(rep),
-          repM: repM,
-          embM: perFrameEmbedding(repM),
-        );
-        perDemo.add(r.isSameFamily);
-        worstPm = worstPm < r.protoMargin ? r.protoMargin : worstPm;
-        final tm = motion.acceptTrajDist <= 0
-            ? 0.0
-            : (1.0 - r.trajSim) / motion.acceptTrajDist;
-        worstTm = worstTm < tm ? tm : worstTm;
+        final two = await TaughtMotionV2.learn(
+          name: '_loo', demos: [others[0], others[1], others[0]], encoder: enc,
+          encoderId: 'release_action');
+        final r = two.matchEncoded(encoded[i].rep, encoded[i].emb,
+            repM: encoded[i].repM, embM: encoded[i].embM, background: bg);
+        loo.add(r.isSameFamily);
       } catch (e) {
-        if (kDebugMode) debugPrint('self-validate demo error: $e');
-        perDemo.add(false);
+        if (kDebugMode) debugPrint('LOO demo $i error: $e');
+        loo.add(false);
       }
     }
-    // Permissive: pass if a clear majority of demos are recognized.
-    final ok = perDemo.where((x) => x).length >= (demos.length - (demos.length ~/ 3));
+
+    final need = demos.length - (demos.length ~/ 3); // majority
+    final passed = perDemo.where((x) => x).length >= need &&
+        loo.where((x) => x).length >= need;
     return SelfValidationReport(
-      passed: ok,
+      passed: passed,
       perDemo: perDemo,
+      leaveOneOut: loo,
       worstProtoMargin: worstPm,
       worstTrajMargin: worstTm,
     );
@@ -142,8 +182,9 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   @override
   Future<void> load(TaughtMotionV2Spec spec) async {
     final enc = await _enc();
+    final bg = await _bg();
     _motion = TaughtMotionV2.fromJson(spec.json);
-    _session = StreamingMotionV2(_motion!, enc);
+    _session = StreamingMotionV2(_motion!, enc, background: bg);
   }
 
   @override

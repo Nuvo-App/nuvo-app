@@ -81,8 +81,9 @@ def adapter_golden():
     mt, mo = motion.match(test), motion.match(other)
     spec = motion.to_json()
     # round the big arrays to keep the file small
-    spec["prototypes"] = rd(spec["prototypes"], 5)
-    spec["canonical"] = rd(spec["canonical"], 5)
+    for ref in spec["references"]:
+        ref["proto"] = rd(ref["proto"], 5)
+        ref["traj"] = rd(ref["traj"], 5)
     spec["rest_emb"] = rd(spec["rest_emb"], 5)
 
     g = {
@@ -143,52 +144,61 @@ def math_golden():
         "segment_full": list(segment_action(emb(r0))),
     }
 
-    # learn + match on the fake reps (mirror aug OFF so it's deterministic w/o encoder)
-    from engine.taught_motion import mean_pool as mp  # noqa
-    protos, trajs, rests, lens, vels = [], [], [], [], []
-    from engine.taught_motion import embedding_velocity
+    # Multi-reference learn + match on the fake reps (schema 4). No encoder, no
+    # background bank -> the separation-rescue path is off, decision = 2-of-3.
+    from engine.taught_motion import (  # noqa
+        DTW_BAND, PROTO_FLOOR, TRAJ_FLOOR, VOTE_K, Reference, embedding_velocity,
+        mean_pool as mp,
+    )
+    refs, rests, lens, vels = [], [], [], []
     for rep in demosA:
         e = emb(rep)
         s, en = segment_action(e)
         if en - s < 4:
             s, en = 0, len(e)
         lens.append(en - s)
-        protos.append(mp(rep[s:en]))
-        trajs.append(resample_seq(_l2n(e[s:en]), CANON_LEN))
+        refs.append(Reference(mp(rep[s:en]), resample_seq(_l2n(e[s:en]), CANON_LEN), en - s))
         v = embedding_velocity(e)
         mv = v[s:en]
         vels.append(float(np.median(mv[mv > np.median(mv) * 0.3])) if len(mv) else 0.0)
         low = np.argsort(v)[: max(2, len(v) // 5)]
         rests.append(_l2n(e[low].mean(axis=0)))
-    protos = np.stack(protos)
-    canonical = _l2n(np.mean(trajs, axis=0), axis=-1)
     rest_emb = _l2n(np.mean(rests, axis=0))
-    pd_spread = [np.linalg.norm(protos[i] - protos[j])
-                 for i in range(len(protos)) for j in range(i + 1, len(protos))]
-    mag = float(np.median(np.linalg.norm(protos, axis=1)))
-    apd = float(np.clip(4.0 * (np.mean(pd_spread) if pd_spread else 0.02), 0.04 * mag, 0.15 * mag))
-    td_own = [traj_distance(trajs[i], canonical) for i in range(len(trajs))]
-    atd = float(np.clip(float(np.median(td_own)) * 3.0 + 5e-4, 1e-3, 0.05))
+    pd_pairs = [float(np.linalg.norm(refs[i].proto - refs[j].proto))
+                for i in range(len(refs)) for j in range(i + 1, len(refs))]
+    td_pairs = [float(dtw_distance(refs[i].traj, refs[j].traj, band=DTW_BAND))
+                for i in range(len(refs)) for j in range(i + 1, len(refs))]
+    proto_spread = float(np.median(pd_pairs))
+    traj_spread = float(np.median(td_pairs))
+    ps = max(proto_spread, PROTO_FLOOR)
+    ts = max(traj_spread, TRAJ_FLOOR)
 
     def match(rep):
         e = emb(rep)
         s, en = segment_action(e)
         if en - s < 4:
             s, en = 0, len(e)
-        pdist = float(np.linalg.norm(protos - mp(rep[s:en]), axis=1).min())
-        td = traj_distance(e[s:en], canonical)
-        return (pdist / apd <= 1.0 and td / atd <= 1.0, round(pdist / apd, 5), round(td / atd, 5))
+        desc = mp(rep[s:en])
+        pms, tms = [], []
+        for ref in refs:
+            pms.append(float(np.linalg.norm(ref.proto - desc)) / ps)
+            tms.append(traj_distance(e[s:en], ref.traj, band=DTW_BAND) / ts)
+        votes = sum(1 for pm, tm in zip(pms, tms) if pm <= VOTE_K and tm <= VOTE_K)
+        return (votes >= 2, round(min(pms), 5), round(min(tms), 5), votes)
 
     mg["learn"] = {
-        "prototypes": rd(protos, 6), "canonical": rd(canonical, 6),
+        "references": [{"proto": rd(r.proto, 6), "traj": rd(r.traj, 6),
+                        "length": int(r.length)} for r in refs],
         "rest_emb": rd(rest_emb, 6),
-        "accept_proto_dist": round(apd, 6), "accept_traj_dist": round(atd, 6),
+        "proto_spread": round(proto_spread, 6), "traj_spread": round(traj_spread, 6),
+        "proto_spread_max": round(float(np.max(pd_pairs)), 6),
+        "traj_spread_max": round(float(np.max(td_pairs)), 6),
         "demo_lengths": [int(x) for x in lens],
     }
-    okA, pmA, tmA = match(testA)
-    okB, pmB, tmB = match(testB)
-    mg["match_A"] = {"is_same": okA, "proto_margin": pmA, "traj_margin": tmA}
-    mg["match_B"] = {"is_same": okB, "proto_margin": pmB, "traj_margin": tmB}
+    okA, pmA, tmA, vA = match(testA)
+    okB, pmB, tmB, vB = match(testB)
+    mg["match_A"] = {"is_same": okA, "proto_margin": pmA, "traj_margin": tmA, "votes": vA}
+    mg["match_B"] = {"is_same": okB, "proto_margin": pmB, "traj_margin": tmB, "votes": vB}
     mg["demosA_reps"] = [rd(r, 6) for r in demosA]
     mg["testA_rep"] = rd(testA, 6)
     mg["testB_rep"] = rd(testB, 6)
