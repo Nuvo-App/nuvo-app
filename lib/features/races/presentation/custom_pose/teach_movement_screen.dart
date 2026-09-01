@@ -30,10 +30,30 @@ import 'pose_skeleton_overlay.dart';
 const bool kNuvoDiagnosticsEnabled = bool.fromEnvironment('NUVO_DIAGNOSTICS');
 const _debugFixtureFeatureId = 'angle.left_hip';
 
+/// Arguments passed by the race composer when it opens Teach Nuvo as its
+/// required training stage. When [movementName] is set the screen skips its own
+/// name step and opens straight on "Example 1 of 3".
+class TeachMovementArgs {
+  const TeachMovementArgs({required this.movementName, this.unit});
+  final String movementName;
+  final String? unit;
+}
+
 class TeachMovementScreen extends ConsumerStatefulWidget {
-  const TeachMovementScreen({super.key, this.seedReadyFixture = false});
+  const TeachMovementScreen({
+    super.key,
+    this.seedReadyFixture = false,
+    this.args,
+  });
 
   final bool seedReadyFixture;
+
+  /// Non-null when launched from the race composer. Carries the movement name
+  /// (already collected) so the user isn't asked for it twice, and the screen
+  /// returns its [CustomPoseVerifierSpec] via `Navigator.pop`.
+  final TeachMovementArgs? args;
+
+  bool get returnsSpec => args != null;
 
   @override
   ConsumerState<TeachMovementScreen> createState() =>
@@ -118,6 +138,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if (kDebugMode && widget.seedReadyFixture) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _seedDebugReadyFixture();
+      });
+      return;
+    }
+    // Launched from the composer with the movement already named — skip our own
+    // name step and open straight on "Example 1 of 3".
+    final preset = widget.args?.movementName.trim() ?? '';
+    if (preset.isNotEmpty) {
+      _nameController.text = preset;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_flow.setMovementName(preset) == null) {
+          _initializeCamera();
+        }
       });
     }
   }
@@ -551,6 +584,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _changeName() {
+    // The composer owns the movement name — go back there to change it.
+    if (widget.returnsSpec) {
+      if (context.canPop()) context.pop();
+      return;
+    }
     _flow.resetToName();
     _resetTeachFlags();
     _nameController.clear();
@@ -1513,8 +1551,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final spec = _effectiveSpec;
     if (spec == null || _navigating) return;
     setState(() => _navigating = true);
+
+    // Launched from the composer as its training stage → hand the spec back and
+    // let the composer resume. Never push a second composer.
+    if (widget.returnsSpec) {
+      context.pop(spec);
+      return;
+    }
+
     try {
-      await context.push('/races/new', extra: 'from_teach');
+      await context.push('/races/new');
     } finally {
       if (mounted) setState(() => _navigating = false);
     }

@@ -20,8 +20,8 @@ import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
 import 'create_race_screen.dart';
-import 'custom_pose/learned_custom_movement_provider.dart';
 import 'custom_pose/recent_movements_provider.dart';
+import 'custom_pose/teach_movement_screen.dart';
 import 'race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
@@ -104,7 +104,10 @@ Future<Race> createRaceForComposerDraft({
 
 // ── Step enum ─────────────────────────────────────────────────────────────────
 
-enum _Step { name, activity, goal, racers, review }
+/// Composer stages. `train` is visited ONLY for a custom (Teach Nuvo) movement,
+/// and only after the movement name is set. A custom race cannot advance past
+/// `train` until `draft.verifierSpec != null`.
+enum _Step { name, activity, train, goal, racers, review }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -115,15 +118,9 @@ final _composerDraftProvider = StateProvider.autoDispose<RaceDraft>(
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class RaceComposerScreen extends ConsumerStatefulWidget {
-  const RaceComposerScreen({super.key, this.prefill, this.fromTeach = false});
+  const RaceComposerScreen({super.key, this.prefill});
 
   final RaceCreatePrefill? prefill;
-
-  /// True only when the user arrived by tapping "Use this movement" at the end
-  /// of the Teach Nuvo flow. A stale learned movement left in session state
-  /// must NOT silently drop the user onto the review step of a race they never
-  /// started building.
-  final bool fromTeach;
 
   @override
   ConsumerState<RaceComposerScreen> createState() => _RaceComposerScreenState();
@@ -134,7 +131,6 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   _Step _step = _Step.name;
   bool _loading = false;
   String? _error;
-  bool _learnedProviderPresentOnInit = false;
   String? _lastApiError;
   int? _lastApiStatusCode;
   String _lastCreatePathUsed = 'none';
@@ -144,45 +140,18 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   @override
   void initState() {
     super.initState();
-    final learned = ref.read(learnedCustomMovementProvider);
-    _learnedProviderPresentOnInit = learned != null;
-    if (learned != null && !widget.fromTeach) {
-      // Opened fresh ("Start a race") with an abandoned taught movement still
-      // in session state — start from the top and forget it.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ref.read(learnedCustomMovementProvider.notifier).state = null;
+    _pageController = PageController();
+    // A learned movement in session state is DATA, not a navigation trigger.
+    // Never let it jump the composer to a later step.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final prefill = widget.prefill;
+      if (prefill != null) {
+        final parsed = draftFromIdea(prefill.idea);
+        if (parsed != null) {
+          ref.read(_composerDraftProvider.notifier).state = parsed;
         }
-      });
-    }
-    if (learned != null && widget.fromTeach) {
-      final draft = RaceDraft(
-        title: '',
-        hasCustomName: false,
-        activity: motionActivityDefinitions.first,
-        metric: RaceMetric.reps,
-        format: RaceFormat.firstToGoal,
-        targetValue: 10,
-        customActivityName: learned.movementName,
-        verifierSpec: learned.verifierSpec,
-      );
-      _step = _Step.review;
-      _pageController = PageController(
-        initialPage: _steps.indexOf(_Step.review),
-      );
-      ref.read(_composerDraftProvider.notifier).state = draft;
-    } else {
-      _pageController = PageController();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final prefill = widget.prefill;
-        if (prefill != null) {
-          final parsed = draftFromIdea(prefill.idea);
-          if (parsed != null) {
-            ref.read(_composerDraftProvider.notifier).state = parsed;
-          }
-        }
-      });
-    }
+      }
+    });
   }
 
   @override
@@ -191,9 +160,28 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     super.dispose();
   }
 
+  /// The stages this race actually visits. `train` only exists once the draft
+  /// is a custom (Teach Nuvo) movement.
+  List<_Step> get _visibleSteps {
+    final custom = ref.read(_composerDraftProvider).isCustom;
+    return [
+      _Step.name,
+      _Step.activity,
+      if (custom) _Step.train,
+      _Step.goal,
+      _Step.racers,
+      _Step.review,
+    ];
+  }
+
   void _goToStep(_Step target) {
     _dismissKeyboard();
-    final idx = _steps.indexOf(target);
+    if (kDebugMode || kNuvoDiagnosticsEnabled) {
+      final custom = ref.read(_composerDraftProvider).isCustom;
+      debugPrint('COMPOSER TRANSITION: ${_step.name} → ${target.name} '
+          '(${custom ? 'custom' : 'preset'})');
+    }
+    final idx = _steps.indexOf(target); // PageView keeps all pages; index by enum
     setState(() => _step = target);
     _pageController.animateToPage(
       idx,
@@ -202,31 +190,46 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     );
   }
 
-  void _advance() {
+  void _syncGuide(_Step step) {
+    final next = switch (step) {
+      _Step.name => FirstRaceGuideStep.composerActivity,
+      _Step.activity => FirstRaceGuideStep.composerGoal,
+      _Step.train => FirstRaceGuideStep.composerGoal,
+      _Step.goal => FirstRaceGuideStep.composerRacers,
+      _Step.racers => FirstRaceGuideStep.composerReview,
+      _Step.review => null,
+    };
+    if (next == null) return;
     final guide = ref.read(firstRaceGuideProvider);
-    if (guide == FirstRaceGuideStep.composerName) {
-      ref.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.composerActivity;
-    } else if (guide == FirstRaceGuideStep.composerActivity) {
-      ref.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.composerGoal;
-    } else if (guide == FirstRaceGuideStep.composerGoal) {
-      ref.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.composerRacers;
-    } else if (guide == FirstRaceGuideStep.composerRacers) {
-      ref.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.composerReview;
+    const order = [
+      FirstRaceGuideStep.composerName,
+      FirstRaceGuideStep.composerActivity,
+      FirstRaceGuideStep.composerGoal,
+      FirstRaceGuideStep.composerRacers,
+      FirstRaceGuideStep.composerReview,
+    ];
+    if (order.contains(guide) && order.indexOf(next) > order.indexOf(guide)) {
+      ref.read(firstRaceGuideProvider.notifier).state = next;
     }
-    final idx = _steps.indexOf(_step);
-    if (idx < _steps.length - 1) {
-      _goToStep(_steps[idx + 1]);
+  }
+
+  /// Advance to the next visible stage. For a custom movement the composer will
+  /// NOT move past [_Step.train] until `draft.verifierSpec != null` — the
+  /// train page's CTA is the only thing that calls `_advance` from there.
+  void _advance() {
+    _syncGuide(_step);
+    final v = _visibleSteps;
+    final i = v.indexOf(_step);
+    if (i >= 0 && i < v.length - 1) {
+      _goToStep(v[i + 1]);
     }
   }
 
   void _retreat() {
-    final idx = _steps.indexOf(_step);
-    if (idx > 0) {
-      _goToStep(_steps[idx - 1]);
+    final v = _visibleSteps;
+    final i = v.indexOf(_step);
+    if (i > 0) {
+      _goToStep(v[i - 1]);
     } else {
       _dismissKeyboard();
       safePopOrGo(context, '/compete');
@@ -240,10 +243,18 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     _lastCreatePathUsed = draft.isCustom ? 'custom' : 'preset';
     if (draft.isCustom) {
       if (draft.verifierSpec == null || draft.customActivityName == null) {
+        // Invariant broken before we ever hit the backend — send the user back
+        // to the training stage instead of showing a server "couldn't create".
+        assert(() {
+          debugPrint('COMPOSER GUARD: custom race with no verifierSpec — '
+              'returning to train step');
+          return true;
+        }());
         setState(() {
-          _error = 'No learned movement found. Teach a movement first.';
+          _error = 'Teach Nuvo this movement first — record it 3 times.';
           _lastApiError = null;
         });
+        _goToStep(_Step.train);
         return;
       }
       if (draft.resolvedTitle.trim().isEmpty) {
@@ -281,9 +292,6 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         createRace: controller.createRace,
       );
       if (!mounted) return;
-      if (draft.isCustom) {
-        ref.read(learnedCustomMovementProvider.notifier).state = null;
-      }
       final wantsInvite = draft.visibility == 'invite_code';
       if (ref.read(firstRaceGuideProvider) ==
           FirstRaceGuideStep.composerReview) {
@@ -349,9 +357,8 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       }
     }
     return {
-      'providerPresentOnInit': _learnedProviderPresentOnInit,
-      'providerPresentNow': ref.read(learnedCustomMovementProvider) != null,
       'step': _step.name,
+      'visibleSteps': [for (final s in _visibleSteps) s.name],
       'draft': {
         'isCustom': draft.isCustom,
         'customActivityName': draft.customActivityName,
@@ -390,7 +397,8 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   @override
   Widget build(BuildContext context) {
     final draft = ref.watch(_composerDraftProvider);
-    final stepIndex = _steps.indexOf(_step);
+    final visible = _visibleSteps;
+    final stepIndex = visible.indexOf(_step).clamp(0, visible.length - 1);
 
     final screen = Scaffold(
       backgroundColor: NuvoColors.page,
@@ -401,7 +409,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           children: [
             _ComposerTopBar(
               stepIndex: stepIndex,
-              totalSteps: _steps.length,
+              totalSteps: visible.length,
               onBack: _loading ? null : _retreat,
             ),
             Expanded(
@@ -416,6 +424,12 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                     onNext: _advance,
                   ),
                   _ActivityPage(
+                    draft: draft,
+                    onDraftChanged: (d) =>
+                        ref.read(_composerDraftProvider.notifier).state = d,
+                    onNext: _advance,
+                  ),
+                  _TrainPage(
                     draft: draft,
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
@@ -846,14 +860,23 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   final _searchController = TextEditingController();
   final _manualNameController = TextEditingController();
   final _manualUnitController = TextEditingController();
+  final _moveNameController = TextEditingController();
+  final _moveUnitController = TextEditingController();
   String _searchQuery = '';
   MovementCategory? _selectedCategory; // null = All
+
+  /// The user chose "Teach Nuvo a new movement" — collect its name + unit here,
+  /// then Continue advances to the required training stage.
+  bool _teachMode = false;
 
   @override
   void initState() {
     super.initState();
     _manualNameController.text = widget.draft.manualGoalName ?? '';
     _manualUnitController.text = widget.draft.manualUnit ?? '';
+    _moveNameController.text = widget.draft.customActivityName ?? '';
+    _moveUnitController.text = widget.draft.customUnit ?? 'reps';
+    _teachMode = widget.draft.isCustom;
   }
 
   @override
@@ -861,6 +884,8 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     _searchController.dispose();
     _manualNameController.dispose();
     _manualUnitController.dispose();
+    _moveNameController.dispose();
+    _moveUnitController.dispose();
     super.dispose();
   }
 
@@ -868,6 +893,18 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     if (widget.draft.goalKind == kind) return;
     widget.onDraftChanged(widget.draft.copyWith(goalKind: kind));
     setState(() {});
+  }
+
+  void _syncCustomMovement() {
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        goalKind: RaceGoalKind.movement,
+        customActivityName: _moveNameController.text.trim(),
+        customUnit: _moveUnitController.text.trim().isEmpty
+            ? 'reps'
+            : _moveUnitController.text.trim(),
+      ),
+    );
   }
 
   void _syncManual() {
@@ -891,6 +928,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         targetValue: keepTarget ? currentTarget : activity.defaultTarget,
       ),
     );
+    setState(() => _teachMode = false);
     // Record selection in recent movements
     ref
         .read(recentMovementIdsProvider.notifier)
@@ -900,6 +938,58 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   @override
   Widget build(BuildContext context) {
     final isManual = widget.draft.goalKind == RaceGoalKind.manual;
+
+    if (_teachMode && !isManual) {
+      final canContinue = _moveNameController.text.trim().isNotEmpty;
+      return _PageShell(
+        question: 'Your custom movement',
+        support: 'Name it and pick how it is counted. Next you\'ll teach it to '
+            'Nuvo.',
+        ctaLabel: 'Continue to training',
+        ctaEnabled: canContinue,
+        onCta: () {
+          _syncCustomMovement();
+          widget.onNext();
+        },
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _GoalKindToggle(kind: widget.draft.goalKind, onChanged: _setKind),
+            const SizedBox(height: 16),
+            _ComposerField(
+              controller: _moveNameController,
+              label: 'Movement name',
+              hint: 'e.g. Side reach, Star jump',
+              onChanged: (_) {
+                _syncCustomMovement();
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 12),
+            _ComposerField(
+              controller: _moveUnitController,
+              label: 'Counted in',
+              hint: 'reps',
+              onChanged: (_) => _syncCustomMovement(),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Nuvo watches you do it 3 times, learns the shape of the motion, '
+              'then counts every rep live.',
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => setState(() => _teachMode = false),
+              child: Text('Pick a preset movement instead',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: NuvoColors.navy)),
+            ),
+          ],
+        ),
+      );
+    }
+
     return _PageShell(
       question: 'What are you competing in?',
       support: isManual
@@ -940,7 +1030,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                 ),
               ),
             ] else ...[
-              _TeachNuvoCard(onTap: () => context.push('/races/teach')),
+              _TeachNuvoCard(onTap: () => setState(() => _teachMode = true)),
               const SizedBox(height: 18),
               Text(
                 'Or pick a movement Nuvo already knows',
@@ -1043,6 +1133,137 @@ class _TeachNuvoCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Step: Custom movement training (custom races only) ────────────────────────
+
+/// Required middle stage for a custom movement. The composer stays here until
+/// Teach Nuvo returns a real verifier spec via `Navigator.pop(spec)`. On first
+/// entry (no spec yet) it launches the training screen immediately so the flow
+/// feels continuous: name + unit → Continue → Example 1 of 3.
+class _TrainPage extends StatefulWidget {
+  const _TrainPage({
+    required this.draft,
+    required this.onDraftChanged,
+    required this.onNext,
+  });
+
+  final RaceDraft draft;
+  final ValueChanged<RaceDraft> onDraftChanged;
+  final VoidCallback onNext;
+
+  @override
+  State<_TrainPage> createState() => _TrainPageState();
+}
+
+class _TrainPageState extends State<_TrainPage> {
+  bool _launching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.draft.verifierSpec == null &&
+        (widget.draft.customActivityName ?? '').trim().isNotEmpty) {
+      _launching = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _train();
+      });
+    }
+  }
+
+  Future<void> _train() async {
+    final draft = widget.draft;
+    final spec = await context.push<CustomPoseVerifierSpec>(
+      '/races/teach',
+      extra: TeachMovementArgs(
+        movementName: draft.customActivityName ?? '',
+        unit: draft.customUnit,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _launching = false);
+    if (spec != null) {
+      widget.onDraftChanged(draft.copyWith(verifierSpec: spec));
+      widget.onNext();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final draft = widget.draft;
+    final trained = draft.verifierSpec != null;
+    final name = (draft.customActivityName ?? 'your movement').trim();
+    final onNext = widget.onNext;
+    return _PageShell(
+      question: trained ? '"$name" is ready' : 'Teach Nuvo "$name"',
+      support: trained
+          ? 'Nuvo learned the motion. Continue to set the target.'
+          : _launching
+              ? 'Opening the camera…'
+              : 'Record it 3 times so Nuvo can recognise every rep. This step '
+                  'is required before you can race on it.',
+      ctaLabel: trained
+          ? 'Continue'
+          : (_launching ? 'Opening…' : 'Start training'),
+      ctaEnabled: !_launching,
+      onCta: () {
+        if (trained) {
+          onNext();
+        } else {
+          _train();
+        }
+      },
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: trained
+                  ? NuvoColors.success.withValues(alpha: 0.08)
+                  : NuvoColors.blueSurface,
+              borderRadius: BorderRadius.circular(NuvoRadii.card),
+              border: Border.all(
+                color: trained ? NuvoColors.success : NuvoColors.blueBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  trained
+                      ? Icons.check_circle_rounded
+                      : Icons.videocam_rounded,
+                  color: trained ? NuvoColors.success : NuvoColors.blue,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    trained
+                        ? 'Movement trained — Nuvo learned "$name".'
+                        : 'Not trained yet. Tap Start training to record your '
+                            '3 examples, then test it.',
+                    style: AppTextStyles.bodyMedium
+                        .copyWith(color: NuvoColors.navy),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (trained) ...[
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _train,
+              child: Text(
+                'Retrain this movement',
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: NuvoColors.navy),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1513,6 +1734,10 @@ class _GoalPageState extends State<_GoalPage> {
       ? (widget.draft.manualUnit?.trim().isNotEmpty == true
             ? widget.draft.manualUnit!.trim()
             : 'done')
+      : widget.draft.isCustom
+      ? (widget.draft.customUnit?.trim().isNotEmpty == true
+            ? widget.draft.customUnit!.trim()
+            : 'reps')
       : widget.draft.metric.label;
 
   @override
