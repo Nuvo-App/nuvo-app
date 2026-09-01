@@ -1514,7 +1514,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if (spec == null || _navigating) return;
     setState(() => _navigating = true);
     try {
-      await context.push('/races/new');
+      await context.push('/races/new', extra: 'from_teach');
     } finally {
       if (mounted) setState(() => _navigating = false);
     }

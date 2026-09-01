@@ -146,6 +146,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             prefill: state.extra is RaceCreatePrefill
                 ? state.extra! as RaceCreatePrefill
                 : null,
+            fromTeach: state.extra == 'from_teach',
           ),
         ),
       ),
