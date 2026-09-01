@@ -62,7 +62,8 @@ class StreamingMotionV2 {
     }
     _sinceEval = 0;
 
-    final h = framesToH36m(_buf);
+    final hDiag = framesToH36mDiag(_buf);
+    final h = hDiag.seq;
     final hm = framesToH36m(_buf, mirror: true);
     final rep = await encoder.encode(h);
     final repM = await encoder.encode(hm);
@@ -96,7 +97,9 @@ class StreamingMotionV2 {
         : (_armed ? MotionV2RuntimeState.neutral : MotionV2RuntimeState.returning);
 
     final r = _result(newRep, m.score, prog, state, t0,
-        protoDist: m.protoDist, protoMargin: m.protoMargin, trajSim: m.trajSim);
+        protoDist: m.protoDist, protoMargin: m.protoMargin, trajSim: m.trajSim,
+        rootDrift: hDiag.diag.rootTranslationMagnitude,
+        scaleSpread: hDiag.diag.scaleChangeFraction);
     _last = r;
     return r;
   }
@@ -131,6 +134,8 @@ class StreamingMotionV2 {
     double? protoDist,
     double? protoMargin,
     double? trajSim,
+    double? rootDrift,
+    double? scaleSpread,
   }) {
     return MotionV2RuntimeResult(
       matched: state == MotionV2RuntimeState.matching,
@@ -144,6 +149,8 @@ class StreamingMotionV2 {
       protoDist: protoDist,
       protoMargin: protoMargin,
       trajSim: trajSim,
+      rootDrift: rootDrift,
+      scaleSpread: scaleSpread,
     );
   }
 }

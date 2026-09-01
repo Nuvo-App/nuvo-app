@@ -66,6 +66,8 @@ class MotionV2RuntimeResult {
     this.protoDist,
     this.protoMargin,
     this.trajSim,
+    this.rootDrift,
+    this.scaleSpread,
   });
 
   final bool matched;
@@ -79,6 +81,12 @@ class MotionV2RuntimeResult {
   final double? protoDist;
   final double? protoMargin;
   final double? trajSim;
+
+  /// Camera-quality diagnostics from [MotionInputDiagnostics] — the
+  /// within-window root drift / anatomical-scale spread the normalizer
+  /// removed before the encoder saw the frames. Never affects recognition.
+  final double? rootDrift;
+  final double? scaleSpread;
 
   static const empty = MotionV2RuntimeResult(
     matched: false, newRep: false, count: 0, confidence: 0, motionProgress: 0,
@@ -109,6 +117,8 @@ class MotionV2RuntimeResult {
     if (protoDist != null) 'protoDist': protoDist,
     if (protoMargin != null) 'protoMargin': protoMargin,
     if (trajSim != null) 'trajSim': trajSim,
+    if (rootDrift != null) 'rootDrift': rootDrift,
+    if (scaleSpread != null) 'scaleSpread': scaleSpread,
   };
 }
 
