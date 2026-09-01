@@ -15,6 +15,8 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
+import '../../ai/motion_v2/motion_v2_client.dart';
+import '../../ai/motion_v2/motion_v2_models.dart';
 import '../../data/ai_motion_models.dart';
 import '../../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
@@ -72,11 +74,24 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   );
   bool _learnedWrittenToProvider = false;
 
-  // Raw pose-stream capture for Motion V2 fixtures (tools/motion_v2). One list
-  // of serialized NuvoPoseFrames per accepted demonstration. Diagnostics only.
-  final List<List<Map<String, dynamic>>> _rawDemos = [];
-  List<Map<String, dynamic>> _rawCurrent = [];
+  // Raw pose-stream capture — one list of NuvoPoseFrames per accepted demo.
+  // Feeds Motion V2 (learn) + the fixture export in the debug report.
+  final List<List<NuvoPoseFrame>> _rawDemos = [];
+  List<NuvoPoseFrame> _rawCurrent = [];
   int _rawAcceptedSnapshot = 0;
+
+  // ── Motion V2 (behind --dart-define=NUVO_MOTION_V2=true) ──────────────────
+  MotionV2ServiceClient? _v2;
+  TaughtMotionV2Spec? _v2Spec;
+  bool _v2Learning = false;
+  String? _v2Error;
+  MotionV2RuntimeResult _v2Result = MotionV2RuntimeResult.empty;
+  int _v2Count = 0;
+  final List<NuvoPoseFrame> _v2Batch = [];
+  bool _v2Busy = false;
+  static const int _v2BatchSize = 4;
+
+  bool get _useMotionV2 => kMotionV2Enabled;
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
@@ -104,6 +119,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _stopCamera();
     _poseStream.dispose();
     _customRuntime?.dispose();
+    _v2?.dispose();
     _skeletonExpiryTimer?.cancel();
     super.dispose();
   }
@@ -218,8 +234,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         return;
       }
       _flow.addFrame(pose, frame.createdAt);
-      if (_showDiagnostics && _flow.stage == TeachMovementStage.recording) {
-        _rawCurrent.add(_serializeRawFrame(frame));
+      if ((_showDiagnostics || _useMotionV2) &&
+          _flow.stage == TeachMovementStage.recording) {
+        _rawCurrent.add(frame);
       }
       if (_flow.isBodyVisiblePose(pose)) {
         _skeletonHold.show(frame, now);
@@ -228,11 +245,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _expireSkeletonIfNeeded(now);
       }
       if (_testingVerifier) {
-        final update = _customRuntime?.update(frame);
-        _customUpdate = update?.customPoseUpdate;
-        _recordRuntimeDiagnostic(_customUpdate);
-        if (_customUpdate?.completed == true && _customTestResult == null) {
-          _completeVerifierTest();
+        if (_useMotionV2 && _v2Spec != null) {
+          _v2Batch.add(frame);
+          unawaited(_pumpMotionV2());
+        } else {
+          final update = _customRuntime?.update(frame);
+          _customUpdate = update?.customPoseUpdate;
+          _recordRuntimeDiagnostic(_customUpdate);
+          if (_customUpdate?.completed == true && _customTestResult == null) {
+            _completeVerifierTest();
+          }
         }
       }
       _requestSetState();
@@ -351,7 +373,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   void _finishRecording() {
     _flow.stopRecordingExample();
     // Keep the raw stream only if this recording was accepted as a demo.
-    if (_showDiagnostics &&
+    if ((_showDiagnostics || _useMotionV2) &&
         _flow.acceptedCount > _rawAcceptedSnapshot &&
         _rawCurrent.length >= 4) {
       _rawDemos.add(List.of(_rawCurrent));
@@ -361,6 +383,58 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _flow.acceptedCount >= _flow.requiredExampleCount &&
         _flow.canLearn) {
       _flow.buildWhenReady();
+      if (_useMotionV2) unawaited(_learnMotionV2());
+    }
+  }
+
+  // ── Motion V2 ────────────────────────────────────────────────────────────
+  Future<void> _learnMotionV2() async {
+    if (_v2Learning || _rawDemos.length < 2) return;
+    setState(() {
+      _v2Learning = true;
+      _v2Error = null;
+    });
+    final client = MotionV2ServiceClient();
+    try {
+      final spec = await client.learn(
+        movementName: _flow.movementName.isEmpty ? 'Custom movement' : _flow.movementName,
+        demos: _rawDemos.map((d) => List<NuvoPoseFrame>.of(d)).toList(),
+      );
+      await _v2?.dispose();
+      _v2 = client;
+      if (!mounted) return;
+      setState(() {
+        _v2Spec = spec;
+        _v2Learning = false;
+      });
+    } on MotionV2Exception catch (e) {
+      await client.dispose();
+      if (!mounted) return;
+      setState(() {
+        _v2Error = e.message;
+        _v2Learning = false;
+      });
+    }
+  }
+
+  Future<void> _pumpMotionV2() async {
+    if (_v2Busy || _v2Batch.length < _v2BatchSize || _v2 == null) return;
+    _v2Busy = true;
+    final batch = List<NuvoPoseFrame>.of(_v2Batch);
+    _v2Batch.clear();
+    try {
+      final r = await _v2!.update(batch);
+      if (!mounted || !_testingVerifier) return;
+      final firedRep = r.newRep;
+      setState(() {
+        _v2Result = r;
+        if (firedRep) _v2Count = r.count;
+      });
+      if (firedRep) HapticFeedback.lightImpact();
+    } on MotionV2Exception catch (e) {
+      if (mounted) setState(() => _v2Error = e.message);
+    } finally {
+      _v2Busy = false;
     }
   }
 
@@ -488,19 +562,32 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _startVerifierTest() async {
-    final spec = _effectiveSpec;
-    if (spec == null || _testingVerifier) return;
-    final runtime = CustomPoseSequenceRuntime(spec: spec, target: _testTarget)
-      ..start();
-    _customRuntime?.dispose();
-    _customRuntime = runtime;
-    _customUpdate = runtime.lastUpdate;
-    _runtimeDiagnostics.clear();
-    _rawDemos.clear();
-    _rawCurrent = [];
-    _recordRuntimeDiagnostic(_customUpdate);
-    _customTestResult = null;
+    if (_testingVerifier) return;
 
+    if (_useMotionV2 && _v2Spec != null) {
+      _customUpdate = null;
+      _v2Count = 0;
+      _v2Batch.clear();
+      _v2Result = MotionV2RuntimeResult.empty;
+      try {
+        await _v2!.reset();
+        await _v2!.load(_v2Spec!);
+      } on MotionV2Exception catch (e) {
+        if (mounted) setState(() => _v2Error = e.message);
+        return;
+      }
+    } else {
+      final spec = _effectiveSpec;
+      if (spec == null) return;
+      final runtime = CustomPoseSequenceRuntime(spec: spec, target: _testTarget)
+        ..start();
+      _customRuntime?.dispose();
+      _customRuntime = runtime;
+      _customUpdate = runtime.lastUpdate;
+      _runtimeDiagnostics.clear();
+      _recordRuntimeDiagnostic(_customUpdate);
+    }
+    _customTestResult = null;
     _cameraInterruptedDuringTest = false;
     setState(() {
       _testingVerifier = true;
@@ -515,6 +602,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   void _stopVerifierTest() {
     final runtime = _customRuntime;
     final result = runtime?.customResult();
+    _v2Batch.clear();
     setState(() {
       _customTestResult = result;
       _testingVerifier = false;
@@ -628,7 +716,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   Widget _testingStep() {
     final controller = _cameraController;
     final showPreview = controller != null && controller.value.isInitialized;
-    final status = _nuvoTestStatus(update: _customUpdate);
+    final v2 = _useMotionV2 && _v2Spec != null;
+    final status = v2
+        ? _v2StatusLabel()
+        : _nuvoTestStatus(update: _customUpdate);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -638,25 +729,83 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         const SizedBox(height: 18),
         Center(
           child: NuvoRepPulse(
-            count: _customUpdate?.count ?? 0,
+            count: v2 ? _v2Count : (_customUpdate?.count ?? 0),
             target: _testTarget,
             accent: NuvoColors.blue,
           ),
         ),
         const SizedBox(height: 10),
-        Text(
-          status,
-          style: AppTextStyles.titleMedium,
-          textAlign: TextAlign.center,
-        ),
+        Text(status, style: AppTextStyles.titleMedium, textAlign: TextAlign.center),
         const SizedBox(height: 16),
         NuvoPrimaryButton(
           label: 'Stop test',
           expand: true,
           onPressed: _stopVerifierTest,
         ),
-        if (_showDiagnostics) ...[const SizedBox(height: 12), _debugPanel()],
+        if (v2 && _showDiagnostics) ...[
+          const SizedBox(height: 12),
+          _motionV2DebugPanel(),
+        ],
+        if (!v2 && _showDiagnostics) ...[
+          const SizedBox(height: 12),
+          _debugPanel(),
+        ],
       ],
+    );
+  }
+
+  String _v2StatusLabel() {
+    if (_v2Error != null) return 'V2 service error';
+    return switch (_v2Result.state) {
+      MotionV2RuntimeState.warmingUp => 'Warming up…',
+      MotionV2RuntimeState.matching => 'Matched',
+      MotionV2RuntimeState.returning => 'Keep going',
+      _ => 'Do the movement',
+    };
+  }
+
+  Widget _motionV2DebugPanel() {
+    final r = _v2Result;
+    Text row(String s) => Text(s, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white));
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('MOTION V2', style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.blue)),
+          row('encoder: ${_v2Spec?.encoder ?? '-'}  ·  spec v${_v2Spec?.version ?? '-'}'),
+          row('state: ${r.state.name}   count: ${r.count}   newRep: ${r.newRep}'),
+          row('confidence: ${r.confidence.toStringAsFixed(2)}   progress: ${r.motionProgress.toStringAsFixed(2)}'),
+          row('protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}  margin: ${r.protoMargin?.toStringAsFixed(2) ?? '-'}'),
+          row('trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   buffer: ${r.bufferFrames}f'),
+          row('encoder latency: ${r.inferenceLatency.inMilliseconds}ms'),
+          if (_v2Error != null) row('error: $_v2Error'),
+          const SizedBox(height: 8),
+          NuvoOutlineButton(
+            label: 'Copy Motion V2 debug',
+            expand: true,
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(
+                text: const JsonEncoder.withIndent('  ').convert({
+                  'spec': _v2Spec?.toJson(),
+                  'lastResult': _v2Result.toDiagnosticsJson(),
+                  'count': _v2Count,
+                  'error': _v2Error,
+                }),
+              ));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Motion V2 debug copied.')),
+                );
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -946,7 +1095,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         'rawStreamFixture': {
           'movementName': _flow.movementName,
           'schema': 1,
-          'demos': _rawDemos,
+          'demos': _rawDemos
+              .map((d) => d.map(_serializeRawFrame).toList())
+              .toList(),
         },
       'poseStream': {
         'framesReceived': streamState.framesReceived,
