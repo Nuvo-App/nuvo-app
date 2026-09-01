@@ -174,13 +174,19 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     ];
   }
 
-  void _goToStep(_Step target) {
-    _dismissKeyboard();
+  void _logTransition(_Step from, _Step to, String reason) {
     if (kDebugMode || kNuvoDiagnosticsEnabled) {
       final custom = ref.read(_composerDraftProvider).isCustom;
-      debugPrint('COMPOSER TRANSITION: ${_step.name} → ${target.name} '
-          '(${custom ? 'custom' : 'preset'})');
+      debugPrint('RACE COMPOSER: ${from.name} -> ${to.name}  '
+          'reason: $reason  (${custom ? 'custom' : 'preset'})');
     }
+  }
+
+  /// The ONLY place `_step` changes. Every call passes an explicit [reason];
+  /// nothing navigates from a provider value, a listener, or a post-frame peek.
+  void _goToStep(_Step target, {required String reason}) {
+    _dismissKeyboard();
+    _logTransition(_step, target, reason);
     final idx = _steps.indexOf(target); // PageView keeps all pages; index by enum
     setState(() => _step = target);
     _pageController.animateToPage(
@@ -213,23 +219,61 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     }
   }
 
-  /// Advance to the next visible stage. For a custom movement the composer will
-  /// NOT move past [_Step.train] until `draft.verifierSpec != null` — the
-  /// train page's CTA is the only thing that calls `_advance` from there.
-  void _advance() {
+  /// Advance to the next visible stage in response to a step's CTA.
+  ///
+  /// Custom movement: `activity` → `train` opens Teach Nuvo immediately and the
+  /// composer stays on `train` until Teach Nuvo returns a verifier spec via
+  /// `Navigator.pop`. Nothing else moves the composer forward.
+  void _advance({String? reason}) {
     _syncGuide(_step);
+    final draft = ref.read(_composerDraftProvider);
+    final r = reason ??
+        switch (_step) {
+          _Step.name => 'race named',
+          _Step.activity =>
+            draft.isCustom ? 'custom movement named' : 'preset activity chosen',
+          _Step.train => 'movement trained',
+          _Step.goal => 'target set',
+          _Step.racers => 'participants set',
+          _Step.review => 'review',
+        };
     final v = _visibleSteps;
     final i = v.indexOf(_step);
-    if (i >= 0 && i < v.length - 1) {
-      _goToStep(v[i + 1]);
+    if (i < 0 || i >= v.length - 1) return;
+    final next = v[i + 1];
+    if (next == _Step.train && draft.verifierSpec == null) {
+      _openTraining(reason: r);
+      return;
     }
+    _goToStep(next, reason: r);
+  }
+
+  /// Custom-movement training stage. Explicit: only ever called from
+  /// `_advance` (the activity step's "Continue to training" button) or the
+  /// train page's retry button.
+  Future<void> _openTraining({String reason = 'continue to training'}) async {
+    final draft = ref.read(_composerDraftProvider);
+    final name = (draft.customActivityName ?? '').trim();
+    if (name.isEmpty) return;
+    _goToStep(_Step.train, reason: reason);
+    final spec = await context.push<CustomPoseVerifierSpec>(
+      '/races/teach',
+      extra: TeachMovementArgs(movementName: name, unit: draft.customUnit),
+    );
+    if (!mounted) return;
+    if (spec != null) {
+      ref.read(_composerDraftProvider.notifier).state =
+          ref.read(_composerDraftProvider).copyWith(verifierSpec: spec);
+      _goToStep(_Step.goal, reason: 'teach nuvo returned verifier spec');
+    }
+    // spec == null → user backed out; stay on `train` (retry button visible).
   }
 
   void _retreat() {
     final v = _visibleSteps;
     final i = v.indexOf(_step);
     if (i > 0) {
-      _goToStep(v[i - 1]);
+      _goToStep(v[i - 1], reason: 'back button');
     } else {
       _dismissKeyboard();
       safePopOrGo(context, '/compete');
@@ -254,7 +298,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           _error = 'Teach Nuvo this movement first — record it 3 times.';
           _lastApiError = null;
         });
-        _goToStep(_Step.train);
+        _goToStep(_Step.train, reason: 'create guard: no verifier spec');
         return;
       }
       if (draft.resolvedTitle.trim().isEmpty) {
@@ -431,9 +475,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                   ),
                   _TrainPage(
                     draft: draft,
-                    onDraftChanged: (d) =>
-                        ref.read(_composerDraftProvider.notifier).state = d,
-                    onNext: _advance,
+                    onTrain: () => _openTraining(reason: 'train page retry'),
+                    onContinue: () =>
+                        _advance(reason: 'train page continue (already trained)'),
                   ),
                   _GoalPage(
                     draft: draft,
@@ -452,7 +496,8 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                     loading: _loading,
                     error: _error,
                     onStart: _startRace,
-                    onEditStep: _goToStep,
+                    onEditStep: (s) =>
+                        _goToStep(s, reason: 'review: edit step'),
                     showDiagnostics: kDebugMode || kNuvoDiagnosticsEnabled,
                     onCopyDiagnostics: () =>
                         _copyRaceComposerDebugReport(draft),
@@ -1140,82 +1185,36 @@ class _TeachNuvoCard extends StatelessWidget {
 
 // ── Step: Custom movement training (custom races only) ────────────────────────
 
-/// Required middle stage for a custom movement. The composer stays here until
-/// Teach Nuvo returns a real verifier spec via `Navigator.pop(spec)`. On first
-/// entry (no spec yet) it launches the training screen immediately so the flow
-/// feels continuous: name + unit → Continue → Example 1 of 3.
-class _TrainPage extends StatefulWidget {
+/// Required middle stage for a custom movement. The composer (`_openTraining`)
+/// owns launching Teach Nuvo and the `train → goal` transition; this page is a
+/// pure status + retry view. It never navigates or mutates the draft.
+class _TrainPage extends StatelessWidget {
   const _TrainPage({
     required this.draft,
-    required this.onDraftChanged,
-    required this.onNext,
+    required this.onTrain,
+    required this.onContinue,
   });
 
   final RaceDraft draft;
-  final ValueChanged<RaceDraft> onDraftChanged;
-  final VoidCallback onNext;
 
-  @override
-  State<_TrainPage> createState() => _TrainPageState();
-}
+  /// Launch / relaunch Teach Nuvo (composer handles the result).
+  final VoidCallback onTrain;
 
-class _TrainPageState extends State<_TrainPage> {
-  bool _launching = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.draft.verifierSpec == null &&
-        (widget.draft.customActivityName ?? '').trim().isNotEmpty) {
-      _launching = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _train();
-      });
-    }
-  }
-
-  Future<void> _train() async {
-    final draft = widget.draft;
-    final spec = await context.push<CustomPoseVerifierSpec>(
-      '/races/teach',
-      extra: TeachMovementArgs(
-        movementName: draft.customActivityName ?? '',
-        unit: draft.customUnit,
-      ),
-    );
-    if (!mounted) return;
-    setState(() => _launching = false);
-    if (spec != null) {
-      widget.onDraftChanged(draft.copyWith(verifierSpec: spec));
-      widget.onNext();
-    }
-  }
+  /// Already trained — proceed to the target step.
+  final VoidCallback onContinue;
 
   @override
   Widget build(BuildContext context) {
-    final draft = widget.draft;
     final trained = draft.verifierSpec != null;
     final name = (draft.customActivityName ?? 'your movement').trim();
-    final onNext = widget.onNext;
     return _PageShell(
       question: trained ? '"$name" is ready' : 'Teach Nuvo "$name"',
       support: trained
           ? 'Nuvo learned the motion. Continue to set the target.'
-          : _launching
-              ? 'Opening the camera…'
-              : 'Record it 3 times so Nuvo can recognise every rep. This step '
-                  'is required before you can race on it.',
-      ctaLabel: trained
-          ? 'Continue'
-          : (_launching ? 'Opening…' : 'Start training'),
-      ctaEnabled: !_launching,
-      onCta: () {
-        if (trained) {
-          onNext();
-        } else {
-          _train();
-        }
-      },
+          : 'Record it 3 times so Nuvo can recognise every rep. This step '
+              'is required before you can race on it.',
+      ctaLabel: trained ? 'Continue' : 'Start training',
+      onCta: trained ? onContinue : onTrain,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1255,7 +1254,7 @@ class _TrainPageState extends State<_TrainPage> {
           if (trained) ...[
             const SizedBox(height: 12),
             TextButton(
-              onPressed: _train,
+              onPressed: onTrain,
               child: Text(
                 'Retrain this movement',
                 style: AppTextStyles.bodyMedium

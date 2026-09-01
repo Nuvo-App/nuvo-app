@@ -745,8 +745,44 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     });
   }
 
+  bool get _isSummaryStage =>
+      _flow.stage == TeachMovementStage.learned ||
+      _flow.stage == TeachMovementStage.failed ||
+      _flow.stage == TeachMovementStage.building ||
+      _learnRequested ||
+      _debugReadyFixture;
+
   @override
   Widget build(BuildContext context) {
+    // The camera is the product. Capture + live-test run full-screen, matching
+    // the verification camera (`ai_motion_proof_screen_io`). Naming and the
+    // learned/summary screens stay on the light sheet.
+    final immersive = !_debugReadyFixture &&
+        (_testingVerifier ||
+            (_flow.stage != TeachMovementStage.name && !_isSummaryStage));
+    return immersive ? _immersiveScaffold() : _sheetScaffold();
+  }
+
+  Widget _teachScrim({required bool top}) => IgnorePointer(
+        child: Align(
+          alignment: top ? Alignment.topCenter : Alignment.bottomCenter,
+          child: Container(
+            height: top ? 160 : 300,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: top ? Alignment.topCenter : Alignment.bottomCenter,
+                end: top ? Alignment.bottomCenter : Alignment.topCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.55),
+                  Colors.black.withValues(alpha: 0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+  Widget _sheetScaffold() {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
@@ -762,21 +798,154 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
               style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 20),
-            if (_testingVerifier)
-              _testingStep()
-            else if (_flow.stage == TeachMovementStage.name &&
-                !_debugReadyFixture)
+            if (_flow.stage == TeachMovementStage.name && !_debugReadyFixture)
               _nameStep()
-            else if (_flow.stage == TeachMovementStage.learned ||
-                _flow.stage == TeachMovementStage.failed ||
-                _flow.stage == TeachMovementStage.building ||
-                _learnRequested ||
-                _debugReadyFixture)
-              _summaryStep()
             else
-              _cameraStep(),
+              _summaryStep(),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Full-screen camera surface with controls layered over it.
+  Widget _immersiveScaffold() {
+    final controller = _cameraController;
+    final ready = controller != null && controller.value.isInitialized;
+    final testing = _testingVerifier;
+    final v2 = _useMotionV2 && _v2Spec != null;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (ready)
+            _cameraPreview(controller)
+          else
+            Center(
+              child: Text(
+                _flow.message.isNotEmpty ? _flow.message : 'Starting camera…',
+                style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.white),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          _teachScrim(top: true),
+          _teachScrim(top: false),
+
+          // Top row: back + movement name.
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: Row(
+                children: [
+                  _immersiveIcon(Icons.arrow_back_rounded, () {
+                    if (testing) {
+                      _stopVerifierTest();
+                    } else if (context.canPop()) {
+                      context.pop();
+                    }
+                  }),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: _immersivePill(
+                      testing
+                          ? 'Testing "${_flow.movementName}"'
+                          : 'Teach "${_flow.movementName}"',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Bottom controls.
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: testing
+                      ? _immersiveTestControls(v2)
+                      : _immersiveCaptureControls(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _immersiveCaptureControls() {
+    return [
+      _teachProgressHeader(),
+      const SizedBox(height: 16),
+      _cameraActionButton(),
+      const SizedBox(height: 10),
+      _secondaryActionButton(),
+      if (_showDiagnostics) ...[const SizedBox(height: 12), _debugPanel()],
+    ];
+  }
+
+  List<Widget> _immersiveTestControls(bool v2) {
+    final status = v2 ? _v2StatusLabel() : _nuvoTestStatus(update: _customUpdate);
+    return [
+      Center(
+        child: NuvoRepPulse(
+          count: v2 ? _v2Count : (_customUpdate?.count ?? 0),
+          target: _testTarget,
+          accent: NuvoColors.blue,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        status,
+        style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 14),
+      NuvoPrimaryButton(
+        label: 'Stop test',
+        expand: true,
+        onPressed: _stopVerifierTest,
+      ),
+      if (_showDiagnostics) ...[
+        const SizedBox(height: 12),
+        v2 ? _motionV2DebugPanel() : _debugPanel(),
+      ],
+    ];
+  }
+
+  Widget _immersiveIcon(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: NuvoColors.navy.withValues(alpha: 0.55),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: NuvoColors.white, size: 22),
+      ),
+    );
+  }
+
+  Widget _immersivePill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+      ),
+      child: Text(
+        text,
+        overflow: TextOverflow.ellipsis,
+        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
       ),
     );
   }
@@ -800,47 +969,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           expand: true,
           onPressed: _submitName,
         ),
-      ],
-    );
-  }
-
-  Widget _testingStep() {
-    final controller = _cameraController;
-    final showPreview = controller != null && controller.value.isInitialized;
-    final v2 = _useMotionV2 && _v2Spec != null;
-    final status = v2
-        ? _v2StatusLabel()
-        : _nuvoTestStatus(update: _customUpdate);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _statusPill(),
-        const SizedBox(height: 12),
-        _cameraPreviewCard(showPreview),
-        const SizedBox(height: 18),
-        Center(
-          child: NuvoRepPulse(
-            count: v2 ? _v2Count : (_customUpdate?.count ?? 0),
-            target: _testTarget,
-            accent: NuvoColors.blue,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(status, style: AppTextStyles.titleMedium, textAlign: TextAlign.center),
-        const SizedBox(height: 16),
-        NuvoPrimaryButton(
-          label: 'Stop test',
-          expand: true,
-          onPressed: _stopVerifierTest,
-        ),
-        if (v2 && _showDiagnostics) ...[
-          const SizedBox(height: 12),
-          _motionV2DebugPanel(),
-        ],
-        if (!v2 && _showDiagnostics) ...[
-          const SizedBox(height: 12),
-          _debugPanel(),
-        ],
       ],
     );
   }
@@ -876,6 +1004,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           row('confidence: ${r.confidence.toStringAsFixed(2)}   progress: ${r.motionProgress.toStringAsFixed(2)}'),
           row('protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}  margin: ${r.protoMargin?.toStringAsFixed(2) ?? '-'}'),
           row('trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   buffer: ${r.bufferFrames}f'),
+          row('camera drift: ${r.rootDrift?.toStringAsFixed(3) ?? '-'}   scale spread: ${r.scaleSpread?.toStringAsFixed(3) ?? '-'} (removed before recognition)'),
           row('encoder latency: ${r.inferenceLatency.inMilliseconds}ms'),
           if (_v2Error != null) row('error: $_v2Error'),
           const SizedBox(height: 8),
@@ -903,26 +1032,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  Widget _cameraStep() {
-    final controller = _cameraController;
-    final showPreview = controller != null && controller.value.isInitialized;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _statusPill(),
-        const SizedBox(height: 12),
-        _cameraPreviewCard(showPreview),
-        const SizedBox(height: 16),
-        _teachProgressHeader(),
-        const SizedBox(height: 20),
-        _cameraActionButton(),
-        const SizedBox(height: 12),
-        _secondaryActionButton(),
-        if (_showDiagnostics) ...[const SizedBox(height: 14), _debugPanel()],
-      ],
-    );
-  }
-
+  // ignore: unused_element
   Widget _statusPill() {
     final (label, color) = switch (_flow.stage) {
       TeachMovementStage.setup => ('Ready to start', NuvoColors.muted),
@@ -1000,28 +1110,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
-  Widget _cameraPreviewCard(bool showPreview) {
-    final controller = _cameraController;
-    return Container(
-      height: 420,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-      ),
-      child: showPreview && controller != null
-          ? _cameraPreview(controller)
-          : Center(
-              child: Text(
-                _flow.message.isNotEmpty ? _flow.message : 'Starting camera...',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: NuvoColors.white,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-    );
-  }
 
   Widget _cameraPreview(CameraController controller) {
     final previewSize = controller.value.previewSize;
@@ -1112,18 +1200,31 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           ? _flow.message
           : 'Tap Record, do the movement once, then Stop.';
     }
-    return Column(
-      children: [
-        Text(title, style: AppTextStyles.titleMedium, textAlign: TextAlign.center),
-        if (sub != null) ...[
-          const SizedBox(height: 6),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: NuvoColors.navy.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Text(
-            sub,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            title,
+            style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
             textAlign: TextAlign.center,
           ),
+          if (sub != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              sub,
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: NuvoColors.white.withValues(alpha: 0.75)),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
