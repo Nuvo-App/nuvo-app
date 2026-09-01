@@ -138,6 +138,24 @@ evaluate int8 → lite variant → distillation — not V1.
 Bundle for now (`assets/models/motion_v2_encoder.onnx`), measure app-size
 impact. Move to OTA model delivery later if size is unreasonable.
 
+### Status — checkpoints 1-6 landed
+
+- `3e79940` — native V2 is the default Teach Nuvo engine. No flag, no service.
+  `NUVO_FORCE_V1` flips to the legacy geometric verifier for comparison only.
+- ONNX Runtime: `onnxruntime` ^1.4.1 pub plugin → `onnxruntime-c` **1.15.1**
+  static xcframework, linked straight into the Runner binary (`_OrtGetApiBase`
+  present; +~30 MB). No separate framework.
+- Model: `assets/models/motion_v2_encoder.onnx` (81 MB fp16) bundles into
+  `App.framework/flutter_assets/assets/models/` — verified in the release .app.
+- `flutter build ios --release --no-codesign` **succeeds** (Runner.app 182 MB).
+- `flutter build apk --release` **fails** on `sign_in_with_apple` 5.0.0
+  (`Unresolved reference 'Registrar'` — pre-existing, unrelated to Motion V2;
+  needs a plugin bump or the v3-embedding shim).
+- Device inference latency: **not yet measured** — needs the physical run.
+  The diagnostics panel (`NUVO_DIAGNOSTICS` / debug) prints
+  `runtime / encoder / model / frames buffered / last inference ms /
+  last protoDist / last trajSim / last match / count` (STEP 8).
+
 ### After this: Project A — continuous rep detection.
 
 ## Deferred (still valuable, not blocking)
