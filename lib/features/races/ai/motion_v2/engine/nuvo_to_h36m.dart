@@ -116,6 +116,82 @@ void _fillGaps(List<Float32List> seq) {
   }
 }
 
+/// Diagnostics from [_rootScaleNormalize] — never affects recognition, only
+/// flags a bad camera setup (see [framesToH36mDiag]).
+class MotionInputDiagnostics {
+  const MotionInputDiagnostics({
+    required this.rootTranslationMagnitude,
+    required this.scaleChangeFraction,
+    required this.anatomicalScale,
+  });
+  final double rootTranslationMagnitude;
+  final double scaleChangeFraction;
+  final double anatomicalScale;
+}
+
+/// Body-relative, camera-distance-invariant 2D normalize. 1:1 port of
+/// `tools/motion_v2/adapter/nuvo_to_h36m.py: root_scale_normalize`.
+///
+/// 1) Subtract the per-frame hip-center root (H36M joint 0) from every joint —
+///    removes translation from walking, camera drift, or the phone moving.
+/// 2) Divide by a robust anatomical scale: the MEDIAN hip-center -> shoulder-
+///    center ("torso length") across the sequence — removes camera-distance
+///    changes (stepping closer/farther) without touching real articulation.
+///    Median (not per-frame) so one noisy frame can't rescale the rest.
+///
+/// Mutates [seq] in place. Whole-body camera translation/scale drift is
+/// discarded here, on purpose — it is not part of the taught motion.
+MotionInputDiagnostics _rootScaleNormalize(List<Float32List> seq) {
+  final torsoLengths = <double>[];
+  for (final f in seq) {
+    if (f[0 * 3 + 2] == 0 || f[8 * 3 + 2] == 0) continue;
+    final dx = f[8 * 3] - f[0 * 3];
+    final dy = f[8 * 3 + 1] - f[0 * 3 + 1];
+    final len = math.sqrt(dx * dx + dy * dy);
+    if (len > 1e-6) torsoLengths.add(len);
+  }
+  var scale = 1.0;
+  if (torsoLengths.isNotEmpty) {
+    final sorted = List<double>.of(torsoLengths)..sort();
+    final m = sorted.length;
+    scale = m.isOdd ? sorted[m ~/ 2] : (sorted[m ~/ 2 - 1] + sorted[m ~/ 2]) / 2.0;
+  }
+  if (scale < 1e-6) scale = 1.0;
+
+  double? firstRootX, firstRootY;
+  var rootDrift = 0.0;
+  for (final f in seq) {
+    if (f[0 * 3 + 2] == 0) continue;
+    final rx = f[0 * 3], ry = f[0 * 3 + 1];
+    firstRootX ??= rx;
+    firstRootY ??= ry;
+    final d = math.sqrt(math.pow(rx - firstRootX, 2) + math.pow(ry - firstRootY, 2));
+    if (d > rootDrift) rootDrift = d;
+  }
+
+  for (final f in seq) {
+    if (f[0 * 3 + 2] == 0) continue;
+    final rx = f[0 * 3], ry = f[0 * 3 + 1];
+    for (var j = 0; j < kNumJoints; j++) {
+      if (f[j * 3 + 2] == 0) continue;
+      f[j * 3] = (f[j * 3] - rx) / scale;
+      f[j * 3 + 1] = (f[j * 3 + 1] - ry) / scale;
+    }
+  }
+
+  var scaleSpread = 0.0;
+  if (torsoLengths.length >= 2) {
+    final mn = torsoLengths.reduce(math.min);
+    final mx = torsoLengths.reduce(math.max);
+    scaleSpread = (mx - mn) / scale;
+  }
+  return MotionInputDiagnostics(
+    rootTranslationMagnitude: rootDrift,
+    scaleChangeFraction: scaleSpread,
+    anatomicalScale: scale,
+  );
+}
+
 /// MotionBERT's exact 2D `crop_scale` normalizer (scale_range=[1,1]).
 /// Uses only conf!=0 coords for the bbox; leaves the confidence channel alone.
 void _cropScale(List<Float32List> seq) {
@@ -160,10 +236,29 @@ void _cropScale(List<Float32List> seq) {
 }
 
 /// Full pipeline. == np `frames_to_h36m(frames, mirror=mirror)`.
-List<Float32List> framesToH36m(List<NuvoPoseFrame> frames, {bool mirror = false}) {
-  if (frames.isEmpty) return const [];
+List<Float32List> framesToH36m(List<NuvoPoseFrame> frames, {bool mirror = false}) =>
+    framesToH36mDiag(frames, mirror: mirror).seq;
+
+/// Same as [framesToH36m] but also returns [MotionInputDiagnostics] — the
+/// per-call root drift / scale spread the camera actually saw, computed
+/// BEFORE it is normalized away. Never affects the returned sequence.
+({List<Float32List> seq, MotionInputDiagnostics diag}) framesToH36mDiag(
+  List<NuvoPoseFrame> frames, {
+  bool mirror = false,
+}) {
+  if (frames.isEmpty) {
+    return (
+      seq: const <Float32List>[],
+      diag: const MotionInputDiagnostics(
+        rootTranslationMagnitude: 0,
+        scaleChangeFraction: 0,
+        anatomicalScale: 1,
+      ),
+    );
+  }
   final seq = [for (final f in frames) _frameToH36m(f.points)];
   _fillGaps(seq);
+  final diag = _rootScaleNormalize(seq);
   _cropScale(seq);
   if (mirror) {
     for (final f in seq) {
@@ -180,7 +275,7 @@ List<Float32List> framesToH36m(List<NuvoPoseFrame> frames, {bool mirror = false}
       }
     }
   }
-  return seq;
+  return (seq: seq, diag: diag);
 }
 
 /// per-joint fraction of frames with confidence > 0.

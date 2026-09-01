@@ -92,6 +92,58 @@ def frame_to_h36m(points: dict) -> np.ndarray:
     return out
 
 
+def root_scale_normalize(seq: np.ndarray) -> tuple[np.ndarray, dict]:
+    """Body-relative, camera-distance-invariant 2D normalize.
+
+    1) Subtract the per-frame hip-center root (H36M joint 0) from every joint —
+       removes translation from walking, camera drift, or the phone moving.
+    2) Divide by a robust anatomical scale: the MEDIAN hip-center -> shoulder-
+       center ("torso length") across the sequence — removes camera-distance
+       changes (stepping closer/farther) without touching real articulation.
+       Median (not per-frame) so a single noisy frame can't rescale the rest.
+
+    Whole-body camera translation/scale drift is discarded here, on purpose —
+    it is not part of the taught motion. Real relative articulation (a joint
+    moving relative to the torso) survives untouched. Returns diagnostics
+    (root drift, scale spread) so a bad camera setup can be flagged without
+    ever teaching the drift as the movement.
+    """
+    root = seq[:, 0, :2]
+    root_conf = seq[:, 0, 2]
+    neck = seq[:, 8, :2]
+    neck_conf = seq[:, 8, 2]
+
+    valid_both = (root_conf > 0) & (neck_conf > 0)
+    torso_lengths = np.linalg.norm(neck[valid_both] - root[valid_both], axis=-1)
+    torso_lengths = torso_lengths[torso_lengths > 1e-6]
+    scale = float(np.median(torso_lengths)) if torso_lengths.size else 1.0
+    if scale < 1e-6:
+        scale = 1.0
+
+    out = seq.copy()
+    have_root = root_conf > 0
+    for j in range(NUM_JOINTS):
+        m = have_root & (out[:, j, 2] > 0)
+        out[m, j, 0] = (out[m, j, 0] - root[m, 0]) / scale
+        out[m, j, 1] = (out[m, j, 1] - root[m, 1]) / scale
+
+    valid_root = root[have_root]
+    root_drift = (
+        float(np.max(np.linalg.norm(valid_root - valid_root[0], axis=-1)))
+        if valid_root.shape[0] >= 2 else 0.0
+    )
+    scale_spread = (
+        float((torso_lengths.max() - torso_lengths.min()) / scale)
+        if torso_lengths.size >= 2 else 0.0
+    )
+    diagnostics = {
+        "root_translation_magnitude": round(root_drift, 5),
+        "scale_change_fraction": round(scale_spread, 5),
+        "anatomical_scale": round(scale, 5),
+    }
+    return out, diagnostics
+
+
 def _fill_gaps(seq: np.ndarray) -> np.ndarray:
     """Linearly interpolate short confidence gaps per joint; hold ends. Keeps
     confidence at the interpolated frames low so the encoder de-weights them."""
@@ -113,7 +165,9 @@ def _fill_gaps(seq: np.ndarray) -> np.ndarray:
     return out
 
 
-def frames_to_h36m(frames: Iterable[dict], *, mirror: bool = False) -> np.ndarray:
+def frames_to_h36m(
+    frames: Iterable[dict], *, mirror: bool = False, diagnostics: dict | None = None
+) -> np.ndarray:
     """List of Nuvo frame dicts -> (T, 17, 3), normalized to [-1,1] for MotionBERT.
 
     frames: each a dict with a "points" key (name -> {x,y,likelihood}) OR the
@@ -121,6 +175,15 @@ def frames_to_h36m(frames: Iterable[dict], *, mirror: bool = False) -> np.ndarra
     mirror: horizontally flip (front-camera). x -> -x after normalization, with
             left/right joints swapped. Off by default; the encoder is compared
             against both orientations downstream.
+    diagnostics: if a dict is passed, `root_scale_normalize`'s diagnostics
+            (root drift, scale spread) are written into it. Never affects the
+            returned array — for camera-quality diagnostics only.
+
+    Pipeline: adapt -> fill short confidence gaps -> subtract per-frame
+    hip-center root + divide by the sequence's anatomical scale (camera/body-
+    translation and camera-distance invariant) -> MotionBERT's `crop_scale`
+    fit into [-1,1]. The encoder sees relative articulated motion, not where
+    the person stood in the frame or how close they were to the camera.
     """
     raw = []
     for f in frames:
@@ -130,7 +193,10 @@ def frames_to_h36m(frames: Iterable[dict], *, mirror: bool = False) -> np.ndarra
     if seq.shape[0] == 0:
         return seq
     seq = _fill_gaps(seq)
-    seq = crop_scale(seq, scale_range=[1, 1])  # MotionBERT's exact 2D normalizer -> [-1,1]
+    seq, diag = root_scale_normalize(seq)
+    if diagnostics is not None:
+        diagnostics.update(diag)
+    seq = crop_scale(seq, scale_range=[1, 1])  # fit into MotionBERT's [-1,1] envelope
     seq = seq.astype(np.float32)
     if mirror:
         seq[..., 0] *= -1.0
