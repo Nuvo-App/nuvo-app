@@ -164,6 +164,10 @@ class MotionV2RuntimeResult {
     this.poseGuidance = '',
     this.poseReadiness = 'ready',
     this.attempt = MotionAttemptResult.empty,
+    this.votes = 0,
+    this.separation,
+    this.decision = 'reject',
+    this.perReference = const [],
   });
 
   final bool matched;
@@ -193,6 +197,14 @@ class MotionV2RuntimeResult {
   /// [MotionAttemptResult]). `userFeedback` here is what the user should see
   /// when a rep does not land.
   final MotionAttemptResult attempt;
+
+  /// Multi-reference matcher diagnostics for the last window: how many of the 3
+  /// taught references agreed, the separation margin against generic motion,
+  /// the decision path, and the per-reference proto/traj scores.
+  final int votes;
+  final double? separation;
+  final String decision; // '2of3_consensus' | 'separation_rescue' | 'reject'
+  final List<Map<String, dynamic>> perReference;
 
   static const empty = MotionV2RuntimeResult(
     matched: false, newRep: false, count: 0, confidence: 0, motionProgress: 0,
@@ -228,6 +240,12 @@ class MotionV2RuntimeResult {
     'poseReadiness': poseReadiness,
     if (poseGuidance.isNotEmpty) 'poseGuidance': poseGuidance,
     'attempt': attempt.toJson(),
+    'matcher': {
+      'votes': votes,
+      if (separation != null) 'separation': separation,
+      'decision': decision,
+      'perReference': perReference,
+    },
   };
 }
 

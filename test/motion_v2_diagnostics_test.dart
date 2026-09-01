@@ -128,6 +128,43 @@ void main() {
     });
   });
 
+  group('multi-reference matcher (schema 4) — decision plumbing', () {
+    // Build a spec straight from encoded references so we don't need ONNX.
+    Future<TaughtMotionV2> teach(List<List<NuvoPoseFrame>> demos) =>
+        TaughtMotionV2.learn(
+            name: 't', demos: demos, encoder: _ShapeEncoder());
+
+    test('a fresh performance of the taught motion passes 2-of-3 consensus',
+        () async {
+      final t = await teach([
+        _seq(() => neutralStandingPose(), () => armsOverheadPose()),
+        _seq(() => neutralStandingPose(dx: 0.02), () => armsOverheadPose()),
+        _seq(() => neutralStandingPose(), () => armsOverheadPose(dx: -0.02)),
+      ]);
+      final enc = _ShapeEncoder();
+      final live = _seq(() => neutralStandingPose(dx: 0.01),
+          () => armsOverheadPose(dx: 0.01));
+      final rep = await enc.encode(framesToH36m(live));
+      final r = t.matchEncoded(rep, perFrameEmbedding(rep));
+      expect(r.isSameFamily, isTrue,
+          reason: 'votes=${r.votes} decision=${r.decision}');
+      expect(r.perRef, hasLength(3));
+    });
+
+    test('spec serializes/deserializes with 3 references + spreads', () async {
+      final t = await teach([
+        _seq(() => neutralStandingPose(), () => armsOverheadPose()),
+        _seq(() => neutralStandingPose(), () => armsOverheadPose()),
+        _seq(() => neutralStandingPose(), () => armsOverheadPose()),
+      ]);
+      final round = TaughtMotionV2.fromJson(t.toJson());
+      expect(round.schema, 4);
+      expect(round.references, hasLength(3));
+      expect(round.protoSpread, t.protoSpread);
+      expect(round.trajSpreadMax, t.trajSpreadMax);
+    });
+  });
+
   group('regionActivity — generic per-region motion', () {
     test('an arm-only motion has more arm activity than leg activity', () {
       final h = framesToH36m(

@@ -75,7 +75,7 @@ class StreamingMotionV2:
         s, e = segment_action(emb)
         prog = self._progress(emb[s:e] if e - s >= 4 else emb)
 
-        if m.is_same_family and m.score >= self.motion.accept_traj_dist * 0 + 0.5:
+        if m.is_same_family and m.score >= 0.5:
             if self.s.armed and not self.s.in_match:
                 self.s.count += 1
                 new_rep = True
@@ -102,12 +102,13 @@ class StreamingMotionV2:
         if len(emb_seg) < 2:
             return 0.0
         from experiments.lib_repr import resample_seq
-        q = resample_seq(_l2n(emb_seg), len(self.motion.canonical))
+        canon = self.motion.references[0].traj
+        q = resample_seq(_l2n(emb_seg), len(canon))
         j = 0
-        C = len(self.motion.canonical)
+        C = len(canon)
         for t in range(C):
             hi = min(C - 1, j + 5)
-            j = max(j, j + int(np.argmax(self.motion.canonical[j:hi + 1] @ q[t])))
+            j = max(j, j + int(np.argmax(canon[j:hi + 1] @ q[t])))
         return j / (C - 1)
 
     def _result(self, new_rep, conf, prog, state, t0, cached=False, **extra):
