@@ -19,6 +19,7 @@ import '../../ai/camera_image_converter.dart';
 import '../../ai/motion_v2/motion_v2_models.dart';
 import '../../ai/motion_v2/motion_v2_native_runtime.dart';
 import '../../ai/motion_v2/pose_quality.dart';
+import '../../ai/motion_v2/pose_track.dart';
 import '../../data/ai_motion_models.dart';
 import '../../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
@@ -125,9 +126,17 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   bool _v2Busy = false;
   static const int _v2BatchSize = 4;
 
+  // ── Temporal pose tracking (smoothing + readiness hysteresis + motion start).
+  // The user taps Record first; the track decides when useful capture begins.
+  final PoseTrack _track = PoseTrack();
+  // Record tapped, waiting for the track to become READY (no frames saved yet).
+  bool _preparing = false;
+  // ~1s of smoothed frames kept so the movement's opening isn't lost.
+  final List<NuvoPoseFrame> _preRoll = [];
+  static const int _preRollCap = 18;
+
   // ── Live camera-readiness guidance (shared PoseQuality evaluator) ───────────
   PoseQuality _captureQuality = PoseQuality.noFrame;
-  final List<NuvoPoseFrame> _recentFrames = [];
   // Rough capture-quality counters for the diagnostic report.
   int _poseFrameCount = 0;
   int _poseFrameValid = 0;
@@ -285,11 +294,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _requestSetState();
         return;
       }
-      final frame = update.frame;
+      final rawFrame = update.frame;
       final pose = update.pose;
+      // Feed the temporal tracker every frame (null = a detector miss) so
+      // readiness hysteresis, smoothing and motion-start stay continuous.
+      final frame = _track.update(rawFrame, now);
       if (frame == null || pose == null) {
         _flow.markFrameMissing();
-        if (!_testingVerifier) _captureQuality = PoseQuality.noFrame;
+        if (!_testingVerifier) _captureQuality = _track.quality;
+        _maybeAutoStartCapture(now);
         _expireSkeletonIfNeeded(now);
         _requestSetState();
         return;
@@ -297,14 +310,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _flow.addFrame(pose, frame.createdAt);
       _poseFrameCount++;
       _firstPoseAt ??= now;
-      // Live camera-readiness (used for the big on-screen guidance during
-      // capture; the streaming session owns it during the live test).
-      _recentFrames.add(frame);
-      if (_recentFrames.length > 6) _recentFrames.removeAt(0);
+
       if (!_testingVerifier) {
-        _captureQuality = evaluatePoseQuality(frame, recent: _recentFrames);
-        if (_captureQuality.trackable) _poseFrameValid++;
+        _captureQuality = _track.quality;
+        if (_track.quality.trackable) _poseFrameValid++;
+        // rolling pre-roll of smoothed frames (the movement's opening)
+        _preRoll.add(frame);
+        if (_preRoll.length > _preRollCap) _preRoll.removeAt(0);
+        _maybeAutoStartCapture(now);
       }
+
       if ((_showDiagnostics || _useMotionV2) &&
           _flow.stage == TeachMovementStage.recording) {
         _rawCurrent.add(frame);
@@ -435,25 +450,65 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     await _initializeCamera(camera: next);
   }
 
+  /// "Record example N" — always pressable. Enters PREPARING; the camera is
+  /// live and tracking, but nothing is saved yet. The user can be standing too
+  /// close / out of frame here — guidance coaches them into position.
   void _startRecording() {
     _rawCurrent = [];
+    _preRoll.clear();
+    _rawAcceptedSnapshot = _flow.acceptedCount;
+    _track.armForCapture();
+    setState(() => _preparing = true);
+  }
+
+  /// Auto-transition PREPARING → capturing once the temporal tracker is READY.
+  void _maybeAutoStartCapture(DateTime now) {
+    if (!_preparing || _flow.stage == TeachMovementStage.recording) return;
+    if (!_track.isReady) return;
+    _preparing = false;
     _rawAcceptedSnapshot = _flow.acceptedCount;
     _flow.startRecordingExample();
+    // Seed with the pre-roll (minus this frame — the normal path adds it) so
+    // the movement's opening isn't lost even if Record was tapped late.
+    _rawCurrent = _preRoll.length > 1
+        ? List.of(_preRoll.sublist(0, _preRoll.length - 1))
+        : <NuvoPoseFrame>[];
+  }
+
+  void _cancelPreparing() {
+    setState(() => _preparing = false);
+    _preRoll.clear();
   }
 
   void _finishRecording() {
+    if (_preparing) {
+      _cancelPreparing();
+      return;
+    }
     _flow.stopRecordingExample();
     final accepted = _flow.acceptedCount > _rawAcceptedSnapshot;
-    // Keep the raw stream only if this recording was accepted as a demo.
-    if ((_showDiagnostics || _useMotionV2) &&
-        accepted &&
-        _rawCurrent.length >= 4) {
-      _rawDemos.add(List.of(_rawCurrent));
+    if ((_showDiagnostics || _useMotionV2) && accepted) {
+      final trimmed = _autoTrimSetup(_rawCurrent);
+      if (trimmed.length >= 4) _rawDemos.add(trimmed);
     }
     _rawCurrent = [];
+    _preRoll.clear();
     // Deterministic: an accepted recording waits for an explicit "Save example"
     // tap. Nothing auto-builds — the user taps "Learn movement" after 3 saves.
     setState(() => _awaitingExampleSave = accepted);
+  }
+
+  /// Drop the "walking into position / settling" frames before the movement
+  /// actually started. Keeps ~0.3s of lead-in. Forgiving: if no motion-start
+  /// was detected, return the buffer unchanged (the V2 learner segments too).
+  List<NuvoPoseFrame> _autoTrimSetup(List<NuvoPoseFrame> frames) {
+    final startedAt = _track.motionStartedAt;
+    if (startedAt == null || frames.length < 8) return List.of(frames);
+    final cutoff = startedAt.subtract(const Duration(milliseconds: 300));
+    var first = frames.indexWhere((f) => f.createdAt.isAfter(cutoff));
+    if (first <= 0) return List.of(frames);
+    first = math.min(first, frames.length - 6); // never trim to almost nothing
+    return frames.sublist(first);
   }
 
   void _saveExample() {
@@ -610,6 +665,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _poseFrameCount = 0;
     _poseFrameValid = 0;
     _firstPoseAt = null;
+    _preparing = false;
+    _preRoll.clear();
+    _track.reset();
   }
 
   void _restart() {
@@ -706,6 +764,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   void _startVerifierTest() async {
     if (_testingVerifier) return;
+    _track.reset();
+    _preparing = false;
+    _preRoll.clear();
 
     if (_useMotionV2 && _v2Spec != null) {
       _customUpdate = null;
@@ -954,17 +1015,31 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   List<Widget> _immersiveCaptureControls() {
     final recording = _flow.stage == TeachMovementStage.recording;
-    // Not recording + camera not ready → guide the user (Move back / Step
-    // closer / Step into frame / Hold still). While recording, show progress.
-    final guide = (!recording && !_captureQuality.isReady)
-        ? _captureQuality.guidance
-        : '';
+    // PREPARING → coach into position ("MOVE BACK" … "READY"). While recording
+    // and before motion starts → "READY — DO THE MOVEMENT". Otherwise the
+    // header carries it.
+    String guide = '';
+    Color guideColor = NuvoColors.danger;
+    if (_preparing) {
+      if (_track.isReady) {
+        guide = 'Ready — start the movement';
+        guideColor = NuvoColors.success;
+      } else {
+        guide = _track.quality.guidance;
+        guideColor = _track.quality.readiness == PoseReadiness.unstable
+            ? NuvoColors.blue
+            : NuvoColors.danger;
+      }
+    } else if (recording && !_track.motionStarted) {
+      guide = 'Ready — do the movement';
+      guideColor = NuvoColors.success;
+    } else if (recording && _track.motionStarted) {
+      guide = 'Recording your movement';
+      guideColor = NuvoColors.blue;
+    }
     return [
       if (guide.isNotEmpty) ...[
-        _bigGuidance(guide,
-            color: _captureQuality.readiness == PoseReadiness.unstable
-                ? NuvoColors.blue
-                : NuvoColors.danger),
+        _bigGuidance(guide, color: guideColor),
         const SizedBox(height: 12),
       ],
       _teachProgressHeader(),
@@ -1157,6 +1232,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         'rootTranslationMagnitude': r.rootDrift,
         'scaleChangeFraction': r.scaleSpread,
       },
+      'tracking': _track.toDiagnosticsJson()
+        ..addAll({
+          'preparing': _preparing,
+          'preRollFrames': _preRoll.length,
+        }),
       'teaching': {
         'demoCount': _rawDemos.length,
         'demoFrameCounts': [for (final d in _rawDemos) d.length],
@@ -1395,10 +1475,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     } else if (_confirmedExamples >= _requiredExamples) {
       title = '$_requiredExamples of $_requiredExamples examples saved';
       sub = 'Tap Learn movement when you\'re ready.';
+    } else if (_preparing) {
+      title = 'Example ${_confirmedExamples + 1} of $_requiredExamples';
+      sub = _track.isReady
+          ? 'Ready — start the movement'
+          : _track.quality.guidance;
     } else if (_flow.stage == TeachMovementStage.recording) {
-      title =
-          'Recording example ${_confirmedExamples + 1} of $_requiredExamples';
-      sub = 'Do the movement once, then tap Stop.';
+      title = _track.motionStarted
+          ? 'Recording your movement'
+          : 'Ready — do the movement';
+      sub = _track.motionStarted
+          ? 'Tap Stop when you\'re done.'
+          : 'Perform it once, then tap Stop.';
     } else {
       title = 'Example ${_confirmedExamples + 1} of $_requiredExamples';
       sub = _flow.lastExampleRejected
@@ -1435,7 +1523,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _cameraActionButton() {
     final stage = _flow.stage;
-    if (stage == TeachMovementStage.recording) {
+    if (_preparing || stage == TeachMovementStage.recording) {
       return NuvoPrimaryButton(
         label: 'Stop',
         expand: true,
@@ -1460,14 +1548,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
     }
     if (stage == TeachMovementStage.readyToRecord) {
+      // Always pressable — the user gets into position AFTER tapping Record.
       return NuvoPrimaryButton(
         label: 'Record example ${_confirmedExamples + 1}',
         expand: true,
-        onPressed: (_cameraReady &&
-                (_captureQuality.trackable ||
-                    _captureQuality.readiness == PoseReadiness.unstable))
-            ? _startRecording
-            : null,
+        onPressed: _cameraReady ? _startRecording : null,
       );
     }
     return NuvoOutlineButton(
@@ -1478,11 +1563,17 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Widget _secondaryActionButton() {
-    if (_flow.stage == TeachMovementStage.recording) {
+    if (_preparing || _flow.stage == TeachMovementStage.recording) {
       return NuvoOutlineButton(
         label: 'Cancel',
         expand: true,
-        onPressed: _cancelRecording,
+        onPressed: () {
+          if (_preparing) {
+            _cancelPreparing();
+          } else {
+            _cancelRecording();
+          }
+        },
       );
     }
     if (_awaitingExampleSave) {
