@@ -69,6 +69,19 @@ def test_custom_motion_accepts_a_new_performance(taught, background):
         )
 
 
+def test_long_recording_is_resampled_and_still_recognized(taught, background):
+    # 180 frames -> MAX_FRAMES (96). The 4th performance must still match.
+    t = taught["cross_body_reach"]
+    r = t.match(sn.cross_body_reach(T=180, seed=23), background=background)
+    assert r.is_same_family, (
+        f"resampled long perf rejected (votes={r.detail['votes']}, "
+        f"sep={r.detail['separation']})"
+    )
+    # a long unrelated recording must still be rejected
+    r = t.match(sn.squat(T=180, seed=23), background=background)
+    assert not r.is_same_family
+
+
 @pytest.mark.parametrize("neg_name", list(NEGATIVES))
 def test_custom_motion_rejects_every_unrelated_movement(taught, background, neg_name):
     if neg_name == "cross_body_reach":

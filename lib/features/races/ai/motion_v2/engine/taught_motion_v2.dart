@@ -17,6 +17,15 @@ abstract interface class MotionEncoderV2 {
 const int kCanonLen = 32;
 const int kSchema = 4;
 
+/// One demo already put through MotionBERT — the cached result every later
+/// learn step (references, calibration, self-validation, LOO) reuses so the
+/// encoder runs exactly once per demo.
+typedef MotionEncodedDemo = ({
+  List<List<Float32List>> rep, // (T, 17, D)
+  List<Float32List> emb, // (T, D) per-frame embedding
+  List<Float32List> h36m, // normalized adapter output (for region activity)
+});
+
 // ── matcher constants — measured in tools/motion_v2/experiments/exp_matcher.py,
 //    then locked. NOT ad-hoc tuning. 1:1 with engine/taught_motion.py. ──────────
 const double kDtwBand = 0.33; // tolerate a slower / faster performance
@@ -166,28 +175,46 @@ class TaughtMotionV2 {
   List<Float32List> get prototypes => [for (final r in references) r.proto];
 
   // ---- learn ----
+
+  /// Encodes each demo through MotionBERT **exactly once**, then delegates to
+  /// [learnFromEncoded]. `mirrorAug` is a no-op — references are the primary
+  /// view; the mirror path is a live-match-time robustness trick only.
   static Future<TaughtMotionV2> learn({
     required String name,
     required List<List<NuvoPoseFrame>> demos,
     required MotionEncoderV2 encoder,
     String encoderId = 'onnx',
-    bool mirrorAug = true, // kept for API compat; references use the primary view
+    bool mirrorAug = true,
   }) async {
     assert(demos.length >= 2);
+    final encoded = <MotionEncodedDemo>[];
+    for (final frames in demos) {
+      final h36m = framesToH36m(frames);
+      final rep = await encoder.encode(h36m);
+      encoded.add((rep: rep, emb: perFrameEmbedding(rep), h36m: h36m));
+    }
+    return learnFromEncoded(name: name, encoderId: encoderId, encoded: encoded);
+  }
+
+  /// Build the three-shot spec from already-encoded demos. Pure — no encoder,
+  /// no MotionBERT. Everything downstream of the 3 encoder passes (references,
+  /// pairwise calibration, self-validation, leave-one-out) runs on these.
+  static TaughtMotionV2 learnFromEncoded({
+    required String name,
+    required String encoderId,
+    required List<MotionEncodedDemo> encoded,
+  }) {
+    assert(encoded.length >= 2);
     final refs = <MotionReference>[];
     final rests = <Float32List>[];
     final vels = <double>[];
     final regionAcc = <String, double>{};
-    var regionN = 0;
 
-    for (final frames in demos) {
-      final h36m = framesToH36m(frames);
-      final ra = regionActivity(h36m);
+    for (final d in encoded) {
+      final ra = regionActivity(d.h36m);
       ra.forEach((k, v) => regionAcc[k] = (regionAcc[k] ?? 0) + v);
-      regionN++;
 
-      final rep = await encoder.encode(h36m);
-      final emb = perFrameEmbedding(rep);
+      final rep = d.rep, emb = d.emb;
       var seg = segmentAction(emb);
       var s = seg.start, e = seg.end;
       if (e - s < 4) {
@@ -210,6 +237,26 @@ class TaughtMotionV2 {
       rests.add(l2norm(_meanRows([for (var i = 0; i < k; i++) emb[order[i]]])));
     }
 
+    return _fromReferences(
+      name: name,
+      encoderId: encoderId,
+      refs: refs,
+      restEmb: l2norm(_meanRows(rests)),
+      demoActiveVel: vels.isEmpty ? 0.0 : median(vels),
+      demoRegionActivity: {
+        for (final e in regionAcc.entries) e.key: e.value / encoded.length,
+      },
+    );
+  }
+
+  static TaughtMotionV2 _fromReferences({
+    required String name,
+    required String encoderId,
+    required List<MotionReference> refs,
+    required Float32List restEmb,
+    required double demoActiveVel,
+    Map<String, double> demoRegionActivity = const {},
+  }) {
     final pdPairs = <double>[];
     final tdPairs = <double>[];
     for (var i = 0; i < refs.length; i++) {
@@ -218,12 +265,6 @@ class TaughtMotionV2 {
         tdPairs.add(dtwDistance(refs[i].traj, refs[j].traj, band: kDtwBand));
       }
     }
-
-    final regionAvg = <String, double>{
-      for (final e in regionAcc.entries)
-        e.key: regionN == 0 ? 0.0 : e.value / regionN,
-    };
-
     return TaughtMotionV2(
       name: name,
       encoderId: encoderId,
@@ -232,10 +273,28 @@ class TaughtMotionV2 {
       trajSpread: tdPairs.isEmpty ? 0.01 : median(tdPairs),
       protoSpreadMax: pdPairs.isEmpty ? 0.02 : pdPairs.reduce(math.max),
       trajSpreadMax: tdPairs.isEmpty ? 0.01 : tdPairs.reduce(math.max),
-      restEmb: l2norm(_meanRows(rests)),
-      demoActiveVel: vels.isEmpty ? 0.0 : median(vels),
+      restEmb: restEmb,
+      demoActiveVel: demoActiveVel,
       demoLengths: [for (final r in refs) r.length],
-      demoRegionActivity: regionAvg,
+      demoRegionActivity: demoRegionActivity,
+    );
+  }
+
+  /// A 2-reference spec that excludes reference [excludeIndex] — for
+  /// leave-one-out validation. Reuses the cached [MotionReference]s (one is
+  /// duplicated so the 3-way consensus math is unchanged); NO encoder work.
+  TaughtMotionV2 twoRefSubset(int excludeIndex) {
+    final others = [
+      for (var i = 0; i < references.length; i++)
+        if (i != excludeIndex) references[i]
+    ];
+    return _fromReferences(
+      name: '_loo',
+      encoderId: encoderId,
+      refs: [others[0], others.length > 1 ? others[1] : others[0], others[0]],
+      restEmb: restEmb,
+      demoActiveVel: demoActiveVel,
+      demoRegionActivity: demoRegionActivity,
     );
   }
 
