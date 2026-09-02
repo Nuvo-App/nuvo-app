@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../../../data/ai_motion_models.dart';
+import 'motion_v2_math.dart' show resampleSeq;
 
 /// Nuvo pose stream -> MotionBERT 17-joint H36M skeleton.
 /// 1:1 port of `tools/motion_v2/adapter/nuvo_to_h36m.py`. Parity-tested against
@@ -235,9 +236,19 @@ void _cropScale(List<Float32List> seq) {
   }
 }
 
+/// A user recording can hold far more frames than MotionBERT needs; a bounded
+/// sequence keeps encoder cost flat. Sequences longer than this are resampled
+/// down (accuracy verified in tools/motion_v2/experiments/exp_matcher.py).
+/// 0 disables resampling. Must match `frames_to_h36m`'s `MAX_FRAMES` in Python.
+const int kEncodeMaxFrames = 96;
+
 /// Full pipeline. == np `frames_to_h36m(frames, mirror=mirror)`.
-List<Float32List> framesToH36m(List<NuvoPoseFrame> frames, {bool mirror = false}) =>
-    framesToH36mDiag(frames, mirror: mirror).seq;
+List<Float32List> framesToH36m(
+  List<NuvoPoseFrame> frames, {
+  bool mirror = false,
+  int maxFrames = kEncodeMaxFrames,
+}) =>
+    framesToH36mDiag(frames, mirror: mirror, maxFrames: maxFrames).seq;
 
 /// Same as [framesToH36m] but also returns [MotionInputDiagnostics] — the
 /// per-call root drift / scale spread the camera actually saw, computed
@@ -245,6 +256,7 @@ List<Float32List> framesToH36m(List<NuvoPoseFrame> frames, {bool mirror = false}
 ({List<Float32List> seq, MotionInputDiagnostics diag}) framesToH36mDiag(
   List<NuvoPoseFrame> frames, {
   bool mirror = false,
+  int maxFrames = kEncodeMaxFrames,
 }) {
   if (frames.isEmpty) {
     return (
@@ -256,10 +268,13 @@ List<Float32List> framesToH36m(List<NuvoPoseFrame> frames, {bool mirror = false}
       ),
     );
   }
-  final seq = [for (final f in frames) _frameToH36m(f.points)];
+  var seq = [for (final f in frames) _frameToH36m(f.points)];
   _fillGaps(seq);
   final diag = _rootScaleNormalize(seq);
   _cropScale(seq);
+  if (maxFrames > 0 && seq.length > maxFrames) {
+    seq = resampleSeq(seq, maxFrames);
+  }
   if (mirror) {
     for (final f in seq) {
       for (var j = 0; j < kNumJoints; j++) {

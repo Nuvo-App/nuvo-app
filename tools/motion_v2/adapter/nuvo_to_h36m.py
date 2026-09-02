@@ -144,6 +144,24 @@ def root_scale_normalize(seq: np.ndarray) -> tuple[np.ndarray, dict]:
     return out, diagnostics
 
 
+# A user recording can hold far more frames than MotionBERT needs; a bounded
+# sequence keeps encoder cost flat. Must match Dart `kEncodeMaxFrames`.
+MAX_FRAMES = 96
+
+
+def _resample_seq(seq: np.ndarray, target: int) -> np.ndarray:
+    """Linear temporal resample of (T, 17, 3) -> (target, 17, 3). Bit-identical
+    to Dart `resampleSeq` (linspace + floor/ceil lerp)."""
+    T = seq.shape[0]
+    if T == target:
+        return seq
+    idx = np.linspace(0, T - 1, target)
+    lo = np.floor(idx).astype(int)
+    hi = np.minimum(lo + 1, T - 1)
+    w = (idx - lo)[:, None, None]
+    return (seq[lo] * (1 - w) + seq[hi] * w).astype(np.float32)
+
+
 def _fill_gaps(seq: np.ndarray) -> np.ndarray:
     """Linearly interpolate short confidence gaps per joint; hold ends. Keeps
     confidence at the interpolated frames low so the encoder de-weights them."""
@@ -198,6 +216,8 @@ def frames_to_h36m(
         diagnostics.update(diag)
     seq = crop_scale(seq, scale_range=[1, 1])  # fit into MotionBERT's [-1,1] envelope
     seq = seq.astype(np.float32)
+    if MAX_FRAMES > 0 and seq.shape[0] > MAX_FRAMES:
+        seq = _resample_seq(seq, MAX_FRAMES)
     if mirror:
         seq[..., 0] *= -1.0
         seq[..., H36M_LEFT + H36M_RIGHT, :] = seq[..., H36M_RIGHT + H36M_LEFT, :]

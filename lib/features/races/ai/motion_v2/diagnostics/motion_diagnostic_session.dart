@@ -278,6 +278,23 @@ class NuvoMotionDiagnosticSession {
       selfValidation!.forEach(kv);
     }
 
+    final lp = spec?['metadata']?['learnProfile'] as Map<String, dynamic>?;
+    if (lp != null) {
+      h('LEARN PROFILE');
+      kv('warm start', lp['warmStart']);
+      if (lp['warmStart'] != true) {
+        kv('model load', '${lp['modelLoadMs']} ms');
+        kv('session create', '${lp['sessionCreateMs']} ms');
+      }
+      kv('preprocess', '${lp['preprocessMs']} ms');
+      kv('encode (${lp['encoderPasses']} passes)',
+          '${lp['encodeMs']}  = ${lp['totalEncodeMs']} ms');
+      kv('build references', '${lp['buildRefsMs']} ms');
+      kv('self-validation', '${lp['selfValidateMs']} ms  (0 encoder passes)');
+      kv('leave-one-out', '${lp['looMs']} ms  (0 encoder passes)');
+      kv('TOTAL', '${lp['totalMs']} ms');
+    }
+
     if (spec != null) {
       h('LEARNED SPEC (three-shot)');
       kv('schema', spec!['schema']);

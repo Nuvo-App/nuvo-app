@@ -28,14 +28,27 @@ class MotionV2OnnxEncoder implements MotionEncoderV2 {
   int get dimRep => _dimRep;
 
   static OrtSession? _shared;
+
+  /// Cold-init timings (ms), for the learn profile. 0 once warm.
+  static int lastAssetLoadMs = 0;
+  static int lastSessionCreateMs = 0;
+  static bool get isWarm => _shared != null;
+
   static Future<MotionV2OnnxEncoder> load() async {
     if (_shared == null) {
+      final sw = Stopwatch()..start();
       OrtEnv.instance.init();
       final bytes = (await rootBundle.load(assetPath)).buffer.asUint8List();
+      lastAssetLoadMs = sw.elapsedMilliseconds;
+      sw.reset();
       final opts = OrtSessionOptions()
         ..setIntraOpNumThreads(2)
         ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
       _shared = OrtSession.fromBuffer(bytes, opts);
+      lastSessionCreateMs = sw.elapsedMilliseconds;
+    } else {
+      lastAssetLoadMs = 0;
+      lastSessionCreateMs = 0;
     }
     return MotionV2OnnxEncoder._(_shared!);
   }

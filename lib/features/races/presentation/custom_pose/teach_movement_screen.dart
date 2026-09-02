@@ -1496,7 +1496,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           if (r.attempt.primaryMismatchRegion != null)
             row('primary mismatch: ${r.attempt.primaryMismatchRegion}'),
           if (_selfValidation != null)
-            row('self-validation: ${_selfValidation!.passed ? 'passed' : 'FAILED'} ${_selfValidation!.perDemo}'),
+            row('self-validation: ${_selfValidation!.passed ? 'passed' : 'FAILED'} '
+                'demo=${_selfValidation!.perDemo} loo=${_selfValidation!.leaveOneOut}'),
+          if (_v2?.lastLearnProfile != null)
+            row('learn: ${_v2!.lastLearnProfile!.totalMs}ms '
+                '(${_v2!.lastLearnProfile!.encoderPasses} encodes '
+                '${_v2!.lastLearnProfile!.totalEncodeMs}ms, sv '
+                '${_v2!.lastLearnProfile!.selfValidateMs}ms, loo '
+                '${_v2!.lastLearnProfile!.looMs}ms)'),
           row('encoder latency: ${r.inferenceLatency.inMilliseconds}ms'),
           if (_v2Error != null) row('error: $_v2Error'),
           if (_savedSessionId != null) ...[

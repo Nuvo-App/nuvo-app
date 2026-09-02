@@ -46,6 +46,55 @@ class MotionV2LearnException implements Exception {
   String toString() => 'MotionV2LearnException: $message';
 }
 
+/// Where the Learn step's time went. Encoder should run 3x (once per demo).
+class LearnProfile {
+  int modelLoadMs = 0;
+  int sessionCreateMs = 0;
+  int preprocessMs = 0;
+  final List<int> encodeMs = [];
+  int buildRefsMs = 0;
+  int selfValidateMs = 0;
+  int looMs = 0;
+  int totalMs = 0;
+  bool warmStart = false;
+
+  int get totalEncodeMs => encodeMs.fold(0, (a, b) => a + b);
+  int get encoderPasses => encodeMs.length;
+
+  Map<String, dynamic> toJson() => {
+        'warmStart': warmStart,
+        'modelLoadMs': modelLoadMs,
+        'sessionCreateMs': sessionCreateMs,
+        'preprocessMs': preprocessMs,
+        'encodeMs': encodeMs,
+        'totalEncodeMs': totalEncodeMs,
+        'encoderPasses': encoderPasses,
+        'buildRefsMs': buildRefsMs,
+        'selfValidateMs': selfValidateMs,
+        'looMs': looMs,
+        'totalMs': totalMs,
+      };
+
+  String toText() {
+    final b = StringBuffer('Motion V2 Learn Profile'
+        ' (${warmStart ? "warm" : "cold"})\n');
+    if (!warmStart) {
+      b.writeln('  model load:        $modelLoadMs ms');
+      b.writeln('  session create:    $sessionCreateMs ms');
+    }
+    b.writeln('  preprocess demos:  $preprocessMs ms');
+    for (var i = 0; i < encodeMs.length; i++) {
+      b.writeln('  encode demo${i + 1}:      ${encodeMs[i]} ms');
+    }
+    b.writeln('  build references:  $buildRefsMs ms');
+    b.writeln('  self-validation:   $selfValidateMs ms  (0 encoder passes)');
+    b.writeln('  leave-one-out:     $looMs ms  (0 encoder passes)');
+    b.writeln('  TOTAL:             $totalMs ms  '
+        '($encoderPasses encoder passes)');
+    return b.toString();
+  }
+}
+
 /// The default Motion V2 runtime: everything on-device via ONNX Runtime.
 /// No Python service, no network. Implements the same [MotionVerifierV2] /
 /// [MotionLearnerV2] contract the callers already use.
@@ -68,6 +117,9 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   bool get encoderLoaded => _encoder != null;
   String get encoderId => _motion?.encoderId ?? 'release_action';
 
+  LearnProfile? _lastLearnProfile;
+  LearnProfile? get lastLearnProfile => _lastLearnProfile;
+
   @override
   Future<TaughtMotionV2Spec> learn({
     required String movementName,
@@ -76,26 +128,44 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
     if (demos.length < 2) {
       throw const MotionV2Exception('Need at least 2 demonstrations.');
     }
+    final p = LearnProfile()..warmStart = MotionV2OnnxEncoder.isWarm;
+    final total = Stopwatch()..start();
+
     final enc = await _enc();
     final bg = await _bg();
-    final motion = await TaughtMotionV2.learn(
-      name: movementName,
-      demos: demos,
-      encoder: enc,
-      encoderId: 'release_action',
-    );
+    p.modelLoadMs = MotionV2OnnxEncoder.lastAssetLoadMs;
+    p.sessionCreateMs = MotionV2OnnxEncoder.lastSessionCreateMs;
 
-    // Self-validation: every demo must be recognized from the fresh verifier
-    // AND recoverable from the other two (leave-one-out). If not, the three
-    // examples don't define one stable movement — don't ship a blur.
-    final report = await _selfValidate(motion, demos, enc, bg);
+    // ── ONE MotionBERT pass per demo. Everything after runs on these. ──
+    final encoded = <MotionEncodedDemo>[];
+    for (final frames in demos) {
+      final sw = Stopwatch()..start();
+      final h36m = framesToH36m(frames);
+      p.preprocessMs += sw.elapsedMilliseconds;
+      sw.reset();
+      final rep = await enc.encode(h36m);
+      p.encodeMs.add(sw.elapsedMilliseconds);
+      encoded.add((rep: rep, emb: perFrameEmbedding(rep), h36m: h36m));
+    }
+
+    final sw = Stopwatch()..start();
+    final motion = TaughtMotionV2.learnFromEncoded(
+      name: movementName, encoderId: 'release_action', encoded: encoded);
+    p.buildRefsMs = sw.elapsedMilliseconds;
+
+    // Self-validation + leave-one-out — pure matcher math on the cached
+    // embeddings. ZERO extra encoder passes.
+    final report = _selfValidate(motion, encoded, bg, p);
     _lastSelfValidation = report;
+
+    p.totalMs = total.elapsedMilliseconds;
+    _lastLearnProfile = p;
+    if (kDebugMode) debugPrint(p.toText());
+
     if (!report.passed) {
       throw MotionV2LearnException(
         'SELF_VALIDATION_FAILED: the model could not recognize its own '
-        'demonstrations (perDemo=${report.perDemo}, '
-        'worstProtoMargin=${report.worstProtoMargin.toStringAsFixed(2)}, '
-        'worstTrajMargin=${report.worstTrajMargin.toStringAsFixed(2)})',
+        'demonstrations (perDemo=${report.perDemo}, loo=${report.leaveOneOut})',
         report: report,
       );
     }
@@ -104,6 +174,7 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       ..['metadata'] = {
         'movementName': movementName,
         'selfValidation': report.toJson(),
+        'learnProfile': p.toJson(),
       };
     return TaughtMotionV2Spec.fromJson(json);
   }
@@ -111,37 +182,17 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   SelfValidationReport? _lastSelfValidation;
   SelfValidationReport? get lastSelfValidation => _lastSelfValidation;
 
-  Future<({List<List<Float32List>> rep, List<List<Float32List>> repM,
-          List<Float32List> emb, List<Float32List> embM})>
-      _encodeBoth(MotionEncoderV2 enc, List<NuvoPoseFrame> demo) async {
-    final rep = await enc.encode(framesToH36m(demo));
-    final repM = await enc.encode(framesToH36m(demo, mirror: true));
-    return (
-      rep: rep,
-      repM: repM,
-      emb: perFrameEmbedding(rep),
-      embM: perFrameEmbedding(repM)
-    );
-  }
-
-  Future<SelfValidationReport> _selfValidate(
+  SelfValidationReport _selfValidate(
     TaughtMotionV2 motion,
-    List<List<NuvoPoseFrame>> demos,
-    MotionEncoderV2 enc,
+    List<MotionEncodedDemo> encoded,
     List<Float32List>? bg,
-  ) async {
-    final encoded = <
-        ({List<List<Float32List>> rep, List<List<Float32List>> repM,
-          List<Float32List> emb, List<Float32List> embM})>[];
-    for (final d in demos) {
-      encoded.add(await _encodeBoth(enc, d));
-    }
-
+    LearnProfile p,
+  ) {
+    final swSv = Stopwatch()..start();
     final perDemo = <bool>[];
     var worstPm = 0.0, worstTm = 0.0;
     for (final e in encoded) {
-      final r = motion.matchEncoded(e.rep, e.emb,
-          repM: e.repM, embM: e.embM, background: bg);
+      final r = motion.matchEncoded(e.rep, e.emb, background: bg);
       perDemo.add(r.isSameFamily);
       if (r.protoMargin > worstPm) worstPm = r.protoMargin;
       final tm = motion.acceptTrajDist <= 0
@@ -149,29 +200,21 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
           : (1.0 - r.trajSim) / motion.acceptTrajDist;
       if (tm > worstTm) worstTm = tm;
     }
+    p.selfValidateMs = swSv.elapsedMilliseconds;
 
-    // Leave-one-out: each demo must be recognizable from the other two.
+    final swLoo = Stopwatch()..start();
     final loo = <bool>[];
-    for (var i = 0; i < demos.length; i++) {
-      final others = [for (var j = 0; j < demos.length; j++) if (j != i) demos[j]];
-      try {
-        final two = await TaughtMotionV2.learn(
-          name: '_loo', demos: [others[0], others[1], others[0]], encoder: enc,
-          encoderId: 'release_action');
-        final r = two.matchEncoded(encoded[i].rep, encoded[i].emb,
-            repM: encoded[i].repM, embM: encoded[i].embM, background: bg);
-        loo.add(r.isSameFamily);
-      } catch (e) {
-        if (kDebugMode) debugPrint('LOO demo $i error: $e');
-        loo.add(false);
-      }
+    for (var i = 0; i < encoded.length; i++) {
+      final two = motion.twoRefSubset(i); // cached refs, no encoder
+      final r = two.matchEncoded(encoded[i].rep, encoded[i].emb, background: bg);
+      loo.add(r.isSameFamily);
     }
+    p.looMs = swLoo.elapsedMilliseconds;
 
-    final need = demos.length - (demos.length ~/ 3); // majority
-    final passed = perDemo.where((x) => x).length >= need &&
-        loo.where((x) => x).length >= need;
+    final need = encoded.length - (encoded.length ~/ 3); // majority
     return SelfValidationReport(
-      passed: passed,
+      passed: perDemo.where((x) => x).length >= need &&
+          loo.where((x) => x).length >= need,
       perDemo: perDemo,
       leaveOneOut: loo,
       worstProtoMargin: worstPm,

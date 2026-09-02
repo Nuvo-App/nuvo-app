@@ -15,11 +15,14 @@ import 'fixtures/pose_fixtures.dart';
 /// produce similar embedding paths (and dissimilar ones don't). Enough to
 /// exercise learn / self-validation / attempt plumbing without ONNX.
 class _ShapeEncoder implements MotionEncoderV2 {
+  int calls = 0;
+
   @override
   int get dimRep => 16;
 
   @override
   Future<List<List<Float32List>>> encode(List<Float32List> h36mSeq) async {
+    calls++;
     return [
       for (final row in h36mSeq)
         [
@@ -106,6 +109,24 @@ void main() {
       expect(runtime.lastSelfValidation, isNotNull);
       expect(runtime.lastSelfValidation!.passed, isTrue);
       expect(runtime.lastSelfValidation!.perDemo, everyElement(isTrue));
+      expect(runtime.lastSelfValidation!.leaveOneOut, hasLength(3));
+    });
+
+    test('the encoder runs EXACTLY once per demo — no duplicate inference',
+        () async {
+      final enc = _ShapeEncoder();
+      final runtime = MotionV2NativeRuntime(encoder: enc);
+      final demos = [
+        for (var i = 0; i < 3; i++)
+          _seq(() => neutralStandingPose(), () => armsOverheadPose()),
+      ];
+      await runtime.learn(movementName: 'arms up', demos: demos);
+      expect(enc.calls, 3,
+          reason: 'learn + self-validation + LOO must reuse the 3 cached '
+              'embeddings, not re-encode');
+      final p = runtime.lastLearnProfile!;
+      expect(p.encoderPasses, 3);
+      expect(p.encodeMs, hasLength(3));
     });
 
     test('self-validation report has one entry per demo', () async {
