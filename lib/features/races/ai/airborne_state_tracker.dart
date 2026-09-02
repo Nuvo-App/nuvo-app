@@ -62,7 +62,11 @@ enum AirbornePhase {
 class AirborneStateTracker {
   AirborneStateTracker({
     this.baselineFrames = 4,
-    this.flightThresholdRatio = 0.25,
+    // Flight threshold = max(minFlightThreshold, torsoHeight * this). 0.18
+    // matches the documented spec + the tracker's regression tests and makes
+    // a real jump squat / lunge jump clear the bar; 0.25 was silently missing
+    // shallow-but-valid jumps. Used only by jump-squat / lunge-jump verifiers.
+    this.flightThresholdRatio = 0.18,
     this.groundedToleranceRatio = 0.10,
     this.minFlightThreshold = 0.025,
     this.minGroundedTolerance = 0.015,

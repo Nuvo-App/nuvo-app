@@ -897,12 +897,15 @@ class ArmRaisesValidator extends _BaseValidator {
     final rightHip = frame.point('rightHip')!;
     final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
     final hipY = (leftHip.y + rightHip.y) / 2;
-    final up =
-        leftWrist.y < shoulderY - 0.04 && rightWrist.y < shoulderY - 0.04;
-    final down =
-        leftWrist.y > shoulderY + 0.03 &&
-        rightWrist.y > shoulderY + 0.03 &&
-        leftWrist.y < hipY + 0.16;
+    // Body-scale-relative so the same raise reads consistently at any camera
+    // distance. torsoHeight is the shoulder→hip span; multipliers preserve the
+    // previous effective offsets (~0.04 / ~0.03 / ~0.16) for a standard torso.
+    final torsoHeight = (hipY - shoulderY).abs().clamp(0.12, 0.6);
+    final up = leftWrist.y < shoulderY - torsoHeight * 0.16 &&
+        rightWrist.y < shoulderY - torsoHeight * 0.16;
+    final down = leftWrist.y > shoulderY + torsoHeight * 0.12 &&
+        rightWrist.y > shoulderY + torsoHeight * 0.12 &&
+        leftWrist.y < hipY + torsoHeight * 0.64;
     final state = up
         ? _OpenClosedState.open
         : down
@@ -1051,10 +1054,18 @@ class HighKneesValidator extends _BaseValidator {
     final rightHip = frame.point('rightHip')!;
     final leftKnee = frame.point('leftKnee')!;
     final rightKnee = frame.point('rightKnee')!;
-    final leftRaised = leftKnee.y < leftHip.y + 0.02;
-    final rightRaised = rightKnee.y < rightHip.y + 0.02;
-    final leftLowered = leftKnee.y > leftHip.y + 0.12;
-    final rightLowered = rightKnee.y > rightHip.y + 0.12;
+    // Body-scale-relative thresholds so a knee lift reads the same whether the
+    // person is close to or far from the camera. hipWidth is stable in every
+    // frame (unlike hip-to-knee, which changes as the knee lifts). The
+    // multipliers keep the effective values (~0.02 / ~0.12) unchanged for a
+    // standard ~0.18 hip width.
+    final hipWidth = ((leftHip.x - rightHip.x).abs()).clamp(0.06, 0.5);
+    final raiseGap = hipWidth * 0.11;
+    final lowerGap = hipWidth * 0.67;
+    final leftRaised = leftKnee.y < leftHip.y + raiseGap;
+    final rightRaised = rightKnee.y < rightHip.y + raiseGap;
+    final leftLowered = leftKnee.y > leftHip.y + lowerGap;
+    final rightLowered = rightKnee.y > rightHip.y + lowerGap;
     if (leftLowered) _leftReady = true;
     if (rightLowered) _rightReady = true;
     if (leftRaised && _leftReady) {
