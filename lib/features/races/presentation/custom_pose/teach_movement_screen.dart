@@ -9,6 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_geometry.dart';
@@ -16,6 +19,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
+import '../../ai/motion_v2/diagnostics/motion_diagnostic_session.dart';
 import '../../ai/motion_v2/motion_v2_models.dart';
 import '../../ai/motion_v2/motion_v2_native_runtime.dart';
 import '../../ai/motion_v2/pose_quality.dart';
@@ -102,6 +106,22 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   final List<List<NuvoPoseFrame>> _rawDemos = [];
   List<NuvoPoseFrame> _rawCurrent = [];
   int _rawAcceptedSnapshot = 0;
+
+  // ── Diagnostic session recorder (behind NUVO_DIAGNOSTICS) ──────────────────
+  DateTime? _sessionStart;
+  // per-demo: unsmoothed + smoothed frame pairs and the tracking snapshot.
+  final List<Map<String, dynamic>> _demoDiag = [];
+  final List<NuvoPoseFrame> _diagCaptureRaw = [];
+  final List<NuvoPoseFrame> _diagCaptureSmoothed = [];
+  // live test
+  final List<Map<String, dynamic>> _liveTestFrames = [];
+  final List<Map<String, dynamic>> _matchTrace = [];
+  DateTime? _liveTestStart;
+  final Map<String, List<int>> _latencyMs = {};
+  int _framesReceived = 0;
+  int _framesProcessed = 0;
+  String? _savedSessionId;
+  String? _savedSessionPath;
 
   // ── Deterministic teach flow ───────────────────────────────────────────────
   // The user drives every step: Record → Stop → Save example, ×3, then an
@@ -281,6 +301,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     DeviceOrientation orientation,
   ) async {
     if (_disposed || !_cameraReady) return;
+    _framesReceived++;
     try {
       final update = await _poseStream.processCameraImage(
         image: image,
@@ -289,6 +310,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
       if (!mounted || _disposed) return;
       final now = DateTime.now();
+      _sessionStart ??= now;
       if (update.skipped) {
         _expireSkeletonIfNeeded(now);
         _requestSetState();
@@ -309,7 +331,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       }
       _flow.addFrame(pose, frame.createdAt);
       _poseFrameCount++;
+      _framesProcessed++;
       _firstPoseAt ??= now;
+      if (rawFrame != null) _recordDiagFrame(now, rawFrame, frame);
 
       if (!_testingVerifier) {
         _captureQuality = _track.quality;
@@ -490,6 +514,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if ((_showDiagnostics || _useMotionV2) && accepted) {
       final trimmed = _autoTrimSetup(_rawCurrent);
       if (trimmed.length >= 4) _rawDemos.add(trimmed);
+      _snapshotDemoDiag(trimmed);
     }
     _rawCurrent = [];
     _preRoll.clear();
@@ -600,6 +625,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           r.state == MotionV2RuntimeState.neutral) {
         _v2AttemptWindow.clear();
       }
+      if (kNuvoDiagnosticsEnabled) _recordMatchWindow(r);
+      _latencyMs
+          .putIfAbsent('encoder+matcher', () => [])
+          .add(r.inferenceLatency.inMilliseconds);
       setState(() {
         _v2Result = r;
         if (firedRep) _v2Count = r.count;
@@ -627,6 +656,266 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           e.key: [e.value.x, e.value.y, e.value.z, e.value.likelihood],
       },
     };
+  }
+
+  // ── Diagnostic session recording (behind NUVO_DIAGNOSTICS) ─────────────────
+
+  int _sessionMs(DateTime t) =>
+      t.difference(_sessionStart ?? t).inMilliseconds;
+
+  void _recordDiagFrame(DateTime now, NuvoPoseFrame raw, NuvoPoseFrame smoothed) {
+    if (!kNuvoDiagnosticsEnabled) return;
+    if (_testingVerifier) {
+      if (_liveTestFrames.length > 900) return;
+      _liveTestFrames.add({
+        't': _sessionMs(now),
+        'raw': _serializeRawFrame(raw)['points'],
+        'smoothed': _serializeRawFrame(smoothed)['points'],
+        'readiness': _track.quality.readiness.name,
+        'energy': _track.articulationEnergy,
+      });
+    } else if (_preparing || _flow.stage == TeachMovementStage.recording) {
+      if (_diagCaptureRaw.length > 900) return;
+      _diagCaptureRaw.add(raw);
+      _diagCaptureSmoothed.add(smoothed);
+    }
+  }
+
+  void _recordMatchWindow(MotionV2RuntimeResult r) {
+    final now = DateTime.now();
+    final proto = <double>[];
+    final traj = <double>[];
+    final votes = <bool>[];
+    for (final p in r.perReference) {
+      proto.add((p['proto'] as num?)?.toDouble() ?? -1);
+      traj.add((p['traj'] as num?)?.toDouble() ?? -1);
+      votes.add(p['matches'] == true);
+    }
+    _matchTrace.add(MotionDiagMatchWindow(
+      tMs: _sessionMs(now),
+      bufferFrames: r.bufferFrames,
+      protoDist: proto,
+      trajDist: traj,
+      votesList: votes,
+      separation: r.separation,
+      motionProgress: r.motionProgress,
+      decision: r.decision,
+      confidence: r.confidence,
+      state: r.state.name,
+      newRep: r.newRep,
+      count: r.count,
+      inferenceMs: r.inferenceLatency.inMilliseconds,
+    ).toJson());
+    if (_matchTrace.length > 600) _matchTrace.removeAt(0);
+  }
+
+  void _snapshotDemoDiag(List<NuvoPoseFrame> trimmed) {
+    if (!kNuvoDiagnosticsEnabled || _diagCaptureRaw.isEmpty) return;
+    final raw = List<NuvoPoseFrame>.of(_diagCaptureRaw);
+    final sm = List<NuvoPoseFrame>.of(_diagCaptureSmoothed);
+    final start = raw.first.createdAt, end = raw.last.createdAt;
+    final durMs = end.difference(start).inMilliseconds;
+    _demoDiag.add({
+      'index': _demoDiag.length + 1,
+      'startMs': _sessionMs(start),
+      'endMs': _sessionMs(end),
+      'rawFrameCount': raw.length,
+      'trimmedFrameCount': trimmed.length,
+      'estFps': durMs <= 0 ? 0.0 : (raw.length - 1) * 1000 / durMs,
+      'tracking': _track.toDiagnosticsJson(),
+      'segmentation': {
+        'motionStarted': _track.motionStarted,
+        'motionStartedAtMs': _track.motionStartedAt == null
+            ? null
+            : _sessionMs(_track.motionStartedAt!),
+        'preRollFrames': _preRoll.length,
+        'trimmedFromStart': raw.length - trimmed.length,
+      },
+      'rawFrames': [for (final f in raw) _serializeRawFrame(f)],
+      'smoothedFrames': [for (final f in sm) _serializeRawFrame(f)],
+    });
+    _diagCaptureRaw.clear();
+    _diagCaptureSmoothed.clear();
+  }
+
+  Map<String, double> _latencyStats(List<int> xs) {
+    if (xs.isEmpty) return const {};
+    final s = List<int>.of(xs)..sort();
+    double pct(double p) => s[(p * (s.length - 1)).round()].toDouble();
+    return {
+      'avg': s.reduce((a, b) => a + b) / s.length,
+      'p50': pct(0.5),
+      'p95': pct(0.95),
+      'max': s.last.toDouble(),
+      'n': s.length.toDouble(),
+    };
+  }
+
+  NuvoMotionDiagnosticSession _buildDiagnosticSession() {
+    final now = DateTime.now();
+    final id = NuvoMotionDiagnosticSession.newId(
+      now,
+      const Uuid().v4().replaceAll('-', '').substring(0, 6),
+    );
+    final demos = <MotionDiagDemo>[
+      for (final d in _demoDiag)
+        MotionDiagDemo(
+          index: d['index'] as int,
+          startMs: d['startMs'] as int,
+          endMs: d['endMs'] as int,
+          rawFrameCount: d['rawFrameCount'] as int,
+          trimmedFrameCount: d['trimmedFrameCount'] as int,
+          estFps: (d['estFps'] as num).toDouble(),
+          tracking: d['tracking'] as Map<String, dynamic>,
+          segmentation: d['segmentation'] as Map<String, dynamic>,
+          frames: [
+            for (var i = 0; i < (d['rawFrames'] as List).length; i++)
+              MotionDiagFrame(
+                tMs: ((d['rawFrames'] as List)[i]['t'] as num).toInt(),
+                raw: {
+                  for (final e
+                      in ((d['rawFrames'] as List)[i]['points'] as Map).entries)
+                    e.key as String:
+                        [for (final x in e.value as List) (x as num).toDouble()],
+                },
+                smoothed: i < (d['smoothedFrames'] as List).length
+                    ? {
+                        for (final e in ((d['smoothedFrames'] as List)[i]
+                                ['points'] as Map)
+                            .entries)
+                          e.key as String: [
+                            for (final x in e.value as List) (x as num).toDouble()
+                          ],
+                      }
+                    : null,
+              ),
+          ],
+        ),
+    ];
+
+    MotionDiagLiveTest? live;
+    if (_liveTestStart != null) {
+      live = MotionDiagLiveTest(
+        startMs: _sessionMs(_liveTestStart!),
+        endMs: _sessionMs(now),
+        finalCount: _v2Count,
+        finalAttempt: _v2Result.attempt.toJson()
+          ..addAll({
+            'lastDecision': _v2Result.decision,
+            'lastVotes': _v2Result.votes,
+            'lastSeparation': _v2Result.separation,
+          }),
+        matchTrace: [
+          for (final m in _matchTrace)
+            MotionDiagMatchWindow(
+              tMs: m['t'] as int,
+              bufferFrames: m['buffer'] as int,
+              protoDist: [for (final x in m['proto'] as List) (x as num).toDouble()],
+              trajDist: [for (final x in m['traj'] as List) (x as num).toDouble()],
+              votesList: [for (final x in m['voteList'] as List) x as bool],
+              separation: (m['separation'] as num?)?.toDouble(),
+              motionProgress: (m['progress'] as num).toDouble(),
+              decision: m['decision'] as String,
+              confidence: (m['confidence'] as num).toDouble(),
+              state: m['state'] as String,
+              newRep: m['newRep'] == true,
+              count: m['count'] as int,
+              inferenceMs: (m['inferenceMs'] as num).toInt(),
+            ),
+        ],
+        frames: [
+          for (final f in _liveTestFrames)
+            MotionDiagFrame(
+              tMs: f['t'] as int,
+              raw: {
+                for (final e in (f['raw'] as Map).entries)
+                  e.key as String:
+                      [for (final x in e.value as List) (x as num).toDouble()],
+              },
+              smoothed: {
+                for (final e in (f['smoothed'] as Map).entries)
+                  e.key as String:
+                      [for (final x in e.value as List) (x as num).toDouble()],
+              },
+              readiness: f['readiness'] as String?,
+              articulationEnergy: (f['energy'] as num?)?.toDouble(),
+            ),
+        ],
+      );
+    }
+
+    return NuvoMotionDiagnosticSession(
+      sessionId: id,
+      timestamp: now,
+      meta: {
+        'appVersion': const String.fromEnvironment('NUVO_APP_VERSION',
+            defaultValue: 'dev'),
+        'gitCommit': const String.fromEnvironment('NUVO_GIT_COMMIT',
+            defaultValue: 'unknown'),
+        'platform': Platform.operatingSystem,
+        'osVersion': Platform.operatingSystemVersion,
+        'buildMode': kReleaseMode
+            ? 'release'
+            : kProfileMode
+                ? 'profile'
+                : 'debug',
+        'motionV2Schema': _v2Spec?.json['schema'],
+        'encoder': _v2?.encoderId ?? 'release_action',
+        'onnxAsset': 'assets/models/motion_v2_encoder.onnx',
+        'matcher': 'multi_reference/schema4',
+        'normalization': 'root_scale_normalize',
+        'diagSchema': kMotionDiagSchema,
+      },
+      teaching: demos,
+      selfValidation: _selfValidation?.toJson(),
+      spec: _v2Spec?.toJson(),
+      liveTest: live,
+      performance: {
+        'framesReceived': _framesReceived,
+        'framesProcessed': _framesProcessed,
+        'framesDropped': _framesReceived - _framesProcessed,
+        'stages': {
+          for (final e in _latencyMs.entries) e.key: _latencyStats(e.value),
+        },
+      },
+    );
+  }
+
+  Future<void> _copyMotionV2Log() async {
+    final text = _buildDiagnosticSession().toLogText();
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Motion V2 log copied.')),
+      );
+    }
+  }
+
+  Future<void> _saveDiagnosticSession() async {
+    try {
+      final session = _buildDiagnosticSession();
+      final bytes = session.toGzipBytes();
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/${session.sessionId}.json.gz');
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      setState(() {
+        _savedSessionId = session.sessionId;
+        _savedSessionPath = file.path;
+      });
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/gzip')],
+        subject: 'Nuvo Motion V2 session ${session.sessionId}',
+        text: 'Motion V2 diagnostic session ${session.sessionId} '
+            '(${(bytes.length / 1024).toStringAsFixed(0)} KB gz)',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _submitName() async {
@@ -668,6 +957,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _preparing = false;
     _preRoll.clear();
     _track.reset();
+    _demoDiag.clear();
+    _diagCaptureRaw.clear();
+    _diagCaptureSmoothed.clear();
+    _liveTestFrames.clear();
+    _matchTrace.clear();
+    _latencyMs.clear();
+    _liveTestStart = null;
+    _savedSessionId = null;
+    _savedSessionPath = null;
+    _framesReceived = 0;
+    _framesProcessed = 0;
+    _sessionStart = null;
   }
 
   void _restart() {
@@ -767,6 +1068,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _track.reset();
     _preparing = false;
     _preRoll.clear();
+    _liveTestStart = DateTime.now();
+    _liveTestFrames.clear();
+    _matchTrace.clear();
+    _latencyMs.clear();
+    _savedSessionId = null;
 
     if (_useMotionV2 && _v2Spec != null) {
       _customUpdate = null;
@@ -1193,9 +1499,28 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             row('self-validation: ${_selfValidation!.passed ? 'passed' : 'FAILED'} ${_selfValidation!.perDemo}'),
           row('encoder latency: ${r.inferenceLatency.inMilliseconds}ms'),
           if (_v2Error != null) row('error: $_v2Error'),
+          if (_savedSessionId != null) ...[
+            row('session saved: $_savedSessionId'),
+            if (_savedSessionPath != null)
+              row('  -> ${_savedSessionPath!.split('/').last}'),
+          ],
           const SizedBox(height: 8),
           NuvoOutlineButton(
-            label: 'Copy Motion V2 debug',
+            label: 'Copy Motion V2 Log',
+            expand: true,
+            onPressed: _copyMotionV2Log,
+          ),
+          if (kNuvoDiagnosticsEnabled) ...[
+            const SizedBox(height: 8),
+            NuvoOutlineButton(
+              label: 'Save Diagnostic Session',
+              expand: true,
+              onPressed: _saveDiagnosticSession,
+            ),
+          ],
+          const SizedBox(height: 8),
+          NuvoOutlineButton(
+            label: 'Copy raw debug JSON',
             expand: true,
             onPressed: _copyMotionV2Debug,
           ),
