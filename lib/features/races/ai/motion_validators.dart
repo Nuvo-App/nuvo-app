@@ -858,8 +858,16 @@ class ArmRaisesValidator extends _BaseValidator {
   ArmRaisesValidator({required super.targetValue});
 
   _OpenClosedState _stableState = _OpenClosedState.unknown;
+  _OpenClosedState _candidateState = _OpenClosedState.unknown;
+  int _candidateFrames = 0;
   bool _raised = false;
   int _reps = 0;
+  double _lastWristRise = 0;
+
+  // A transition is only accepted after this many consecutive frames agree —
+  // a single noisy MLKit frame at the top or bottom can't flip the phase or
+  // add a rep. Mirrors PushupsValidator._phaseStableFrames.
+  static const _phaseStableFrames = 2;
 
   @override
   AiMotionActivity get activity => AiMotionActivity.armRaises;
@@ -883,9 +891,21 @@ class ArmRaisesValidator extends _BaseValidator {
   @override
   void resetState() {
     _stableState = _OpenClosedState.unknown;
+    _candidateState = _OpenClosedState.unknown;
+    _candidateFrames = 0;
     _raised = false;
     _reps = 0;
+    _lastWristRise = 0;
   }
+
+  @override
+  Map<String, double> get debugValues => {
+    ...super.debugValues,
+    'stableState': _stableState.index.toDouble(),
+    'raised': _raised ? 1 : 0,
+    'wristRise': _lastWristRise,
+    'count': _reps.toDouble(),
+  };
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
@@ -906,12 +926,27 @@ class ArmRaisesValidator extends _BaseValidator {
     final down = leftWrist.y > shoulderY + torsoHeight * 0.12 &&
         rightWrist.y > shoulderY + torsoHeight * 0.12 &&
         leftWrist.y < hipY + torsoHeight * 0.64;
+    _lastWristRise = shoulderY - (leftWrist.y + rightWrist.y) / 2;
     final state = up
         ? _OpenClosedState.open
         : down
         ? _OpenClosedState.closed
         : _OpenClosedState.unknown;
-    if (state == _OpenClosedState.unknown || state == _stableState) return;
+    if (state == _OpenClosedState.unknown || state == _stableState) {
+      _candidateState = _stableState;
+      _candidateFrames = 0;
+      return;
+    }
+    // Require _phaseStableFrames consecutive frames in the new state before
+    // accepting the transition (jitter tolerance at the top and bottom).
+    if (state == _candidateState) {
+      _candidateFrames++;
+    } else {
+      _candidateState = state;
+      _candidateFrames = 1;
+    }
+    if (_candidateFrames < _phaseStableFrames) return;
+
     _stableState = state;
     if (state == _OpenClosedState.open) _raised = true;
     if (state == _OpenClosedState.closed && _raised) {
@@ -955,9 +990,11 @@ class SquatsValidator extends _BaseValidator {
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
     final hipToKnee = PoseFeatureExtractor(frame).hipToKneeRatio();
-    final state = hipToKnee < 0.58
+    // Kept in lockstep with squatRepDefinition (see its comment for why the
+    // thresholds moved from 0.86/0.58 to 0.72/0.50).
+    final state = hipToKnee < 0.50
         ? MovementPhase.active
-        : hipToKnee > 0.86
+        : hipToKnee > 0.72
         ? MovementPhase.start
         : MovementPhase.unknown;
     _counter.update(state);
@@ -1023,6 +1060,18 @@ class HighKneesValidator extends _BaseValidator {
   bool _leftReady = true;
   bool _rightReady = true;
   int _count = 0;
+  // Consecutive frames each knee has read as "raised". A rep only counts once
+  // the knee has held above the line for _raiseStableFrames — a single noisy
+  // frame that clips the threshold can't add a count.
+  int _leftRaisedFrames = 0;
+  int _rightRaisedFrames = 0;
+  double _prevLeftKneeY = 1;
+  double _prevRightKneeY = 1;
+  double _lastLeftLift = 0;
+  double _lastRightLift = 0;
+  int _lastLeftDir = 0;
+
+  static const _raiseStableFrames = 2;
 
   @override
   AiMotionActivity get activity => AiMotionActivity.highKnees;
@@ -1046,7 +1095,25 @@ class HighKneesValidator extends _BaseValidator {
     _leftReady = true;
     _rightReady = true;
     _count = 0;
+    _leftRaisedFrames = 0;
+    _rightRaisedFrames = 0;
+    _prevLeftKneeY = 1;
+    _prevRightKneeY = 1;
+    _lastLeftLift = 0;
+    _lastRightLift = 0;
+    _lastLeftDir = 0;
   }
+
+  @override
+  Map<String, double> get debugValues => {
+    ...super.debugValues,
+    'leftLift': _lastLeftLift,
+    'rightLift': _lastRightLift,
+    'leftDir': _lastLeftDir.toDouble(),
+    'leftReady': _leftReady ? 1 : 0,
+    'rightReady': _rightReady ? 1 : 0,
+    'count': _count.toDouble(),
+  };
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
@@ -1062,17 +1129,35 @@ class HighKneesValidator extends _BaseValidator {
     final hipWidth = ((leftHip.x - rightHip.x).abs()).clamp(0.06, 0.5);
     final raiseGap = hipWidth * 0.11;
     final lowerGap = hipWidth * 0.67;
+    _lastLeftLift = leftHip.y - leftKnee.y;
+    _lastRightLift = rightHip.y - rightKnee.y;
     final leftRaised = leftKnee.y < leftHip.y + raiseGap;
     final rightRaised = rightKnee.y < rightHip.y + raiseGap;
     final leftLowered = leftKnee.y > leftHip.y + lowerGap;
     final rightLowered = rightKnee.y > rightHip.y + lowerGap;
+    // Direction, diagnostic only.
+    final avgKneeY = (leftKnee.y + rightKnee.y) / 2;
+    final prevAvg = (_prevLeftKneeY + _prevRightKneeY) / 2;
+    _lastLeftDir = avgKneeY < prevAvg - 0.004
+        ? -1
+        : (avgKneeY > prevAvg + 0.004 ? 1 : 0);
+    _prevLeftKneeY = leftKnee.y;
+    _prevRightKneeY = rightKnee.y;
+
     if (leftLowered) _leftReady = true;
     if (rightLowered) _rightReady = true;
-    if (leftRaised && _leftReady) {
+
+    // A knee that only jitters across the raise line never stacks two
+    // consecutive "raised" frames, so _raiseStableFrames alone rejects it —
+    // no separate direction gate needed for correctness.
+    _leftRaisedFrames = leftRaised ? _leftRaisedFrames + 1 : 0;
+    _rightRaisedFrames = rightRaised ? _rightRaisedFrames + 1 : 0;
+
+    if (_leftReady && _leftRaisedFrames >= _raiseStableFrames) {
       _count++;
       _leftReady = false;
     }
-    if (rightRaised && _rightReady) {
+    if (_rightReady && _rightRaisedFrames >= _raiseStableFrames) {
       _count++;
       _rightReady = false;
     }
@@ -1496,6 +1581,14 @@ class ConfigurableRepValidator extends _BaseValidator {
   MovementPhase _lastPhase = MovementPhase.unknown;
   double _lastHipToKneeRatio = 0;
   double _lastAnkleWidthToBodyWidth = 0;
+  double _lastLeftKneeAngle = 180;
+  double _lastRightKneeAngle = 180;
+  double _lastKneeSeparation = 0;
+  // -1 descending / deepening, +1 returning to start, 0 flat. Diagnostic only —
+  // never gates counting (RepCounterStateMachine owns the sequencing).
+  int _lastDirection = 0;
+  double _prevDepthSignal = 0;
+  int _repCountAtLastFrame = 0;
 
   @override
   AiMotionActivity get activity => definition.activity;
@@ -1522,6 +1615,12 @@ class ConfigurableRepValidator extends _BaseValidator {
     _lastPhase = MovementPhase.unknown;
     _lastHipToKneeRatio = 0;
     _lastAnkleWidthToBodyWidth = 0;
+    _lastLeftKneeAngle = 180;
+    _lastRightKneeAngle = 180;
+    _lastKneeSeparation = 0;
+    _lastDirection = 0;
+    _prevDepthSignal = 0;
+    _repCountAtLastFrame = 0;
   }
 
   @override
@@ -1550,9 +1649,29 @@ class ConfigurableRepValidator extends _BaseValidator {
     ])) {
       _lastAnkleWidthToBodyWidth = features.ankleWidth / features.bodyWidth;
     }
+    if (frame.hasPoints(const [
+      'leftHip',
+      'rightHip',
+      'leftKnee',
+      'rightKnee',
+      'leftAnkle',
+      'rightAnkle',
+    ])) {
+      _lastLeftKneeAngle = features.kneeAngle(left: true);
+      _lastRightKneeAngle = features.kneeAngle(left: false);
+      _lastKneeSeparation =
+          (frame.point('leftKnee')!.x - frame.point('rightKnee')!.x).abs() /
+              features.hipWidth;
+      // Direction of the descent signal (lower hipToKneeRatio = deeper).
+      // Small deadband so pose jitter reads as "flat", not oscillating.
+      final delta = _lastHipToKneeRatio - _prevDepthSignal;
+      _lastDirection = delta < -0.015 ? -1 : (delta > 0.015 ? 1 : 0);
+      _prevDepthSignal = _lastHipToKneeRatio;
+    }
     final phase = _measureState(features);
     _lastPhase = phase;
     _counter.update(phase, stableFrames: definition.stableFrames);
+    _repCountAtLastFrame = _counter.count;
   }
 
   @override
@@ -1560,7 +1679,12 @@ class ConfigurableRepValidator extends _BaseValidator {
     ...super.debugValues,
     'hipToKneeRatio': _lastHipToKneeRatio,
     'ankleWidthToBodyWidth': _lastAnkleWidthToBodyWidth,
+    'leftKneeAngle': _lastLeftKneeAngle,
+    'rightKneeAngle': _lastRightKneeAngle,
+    'kneeSeparation': _lastKneeSeparation,
+    'direction': _lastDirection.toDouble(),
     'phase': _lastPhase.index.toDouble(),
+    'count': _repCountAtLastFrame.toDouble(),
   };
 
   MovementPhase _measureState(PoseFeatureExtractor features) {
@@ -1581,7 +1705,21 @@ class ConfigurableRepValidator extends _BaseValidator {
 
 // ── Movement definitions ─────────────────────────────────────────────────────
 
-/// Squats: START when hips are high relative to knees, ACTIVE when deep.
+/// Squats: START when hips are high relative to knees (standing), ACTIVE when
+/// deep. This feeds [RepCounterStateMachine], which already provides the full
+/// temporal sequence: STANDING(start) -> DESCENDING(dead zone) -> DEPTH(active,
+/// latches _hitActive) -> ASCENDING(dead zone) -> STANDING(count +1, re-arm).
+/// 3 stable frames per transition suppress MLKit jitter; the count only fires
+/// on the return to a clearly-standing pose, so holding the bottom, shallow
+/// bends, jitter around a single threshold, and starting already-crouched all
+/// score 0.
+///
+/// hipToKneeRatio = (kneeY - hipY) / torsoHeight. On device a normally-
+/// proportioned person STANDING reads ~0.72-0.95 (torsoHeight is a large
+/// fraction of the frame), not the ~1.1 the old synthetic fixtures assumed —
+/// so the old start gate of 0.86 was frequently unreachable and no rep ever
+/// counted. 0.72 / 0.50 keeps a ~0.22 dead band for hysteresis while making
+/// the standing pose actually register.
 const squatRepDefinition = RepMovementDefinition(
   activity: AiMotionActivity.squats,
   requiredLandmarks: [
@@ -1596,12 +1734,12 @@ const squatRepDefinition = RepMovementDefinition(
   ],
   startCondition: ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.86,
+    0.72,
     greaterThan: true,
   ),
   activeCondition: ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.58,
+    0.50,
     greaterThan: false,
   ),
   stableFrames: 3,
@@ -1695,7 +1833,7 @@ const sumoSquatRepDefinition = RepMovementDefinition(
     'rightAnkle',
   ],
   startCondition: AndCondition([
-    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.86, greaterThan: true),
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.72, greaterThan: true),
     ComparisonCondition(
       PoseSignal.ankleWidthToBodyWidth,
       1.5,
@@ -1703,7 +1841,7 @@ const sumoSquatRepDefinition = RepMovementDefinition(
     ),
   ]),
   activeCondition: AndCondition([
-    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.58, greaterThan: false),
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.50, greaterThan: false),
     ComparisonCondition(
       PoseSignal.ankleWidthToBodyWidth,
       1.5,
@@ -1780,7 +1918,7 @@ const deepSquatRepDefinition = RepMovementDefinition(
   ],
   startCondition: ComparisonCondition(
     PoseSignal.hipToKneeRatio,
-    0.86,
+    0.72,
     greaterThan: true,
   ),
   activeCondition: ComparisonCondition(
@@ -1836,7 +1974,7 @@ const squatJackRepDefinition = RepMovementDefinition(
       1.18,
       greaterThan: false,
     ),
-    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.86, greaterThan: true),
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.72, greaterThan: true),
   ]),
   activeCondition: AndCondition([
     BooleanCondition(BooleanPoseSignal.wristsAboveShoulders),
@@ -1845,7 +1983,7 @@ const squatJackRepDefinition = RepMovementDefinition(
       1.38,
       greaterThan: true,
     ),
-    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.58, greaterThan: false),
+    ComparisonCondition(PoseSignal.hipToKneeRatio, 0.60, greaterThan: false),
   ]),
   stableFrames: 3,
   statusText: 'Tracking squat jacks',
