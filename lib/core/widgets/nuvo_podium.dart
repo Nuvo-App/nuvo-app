@@ -148,7 +148,7 @@ class _Place extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: 7 * s),
+        SizedBox(height: 9 * s),
         Text(
           e.isCurrentUser ? 'You' : e.name.split(' ').first,
           maxLines: 1,
@@ -159,7 +159,7 @@ class _Place extends StatelessWidget {
             fontSize: (raised ? 16 : 14) * s,
           ),
         ),
-        SizedBox(height: 2 * s),
+        SizedBox(height: 3 * s),
         Text(
           e.statLabel,
           maxLines: 1,
@@ -173,6 +173,9 @@ class _Place extends StatelessWidget {
             fontSize: 12 * s,
           ),
         ),
+        // A touch of breathing room under the rep count itself — the podium
+        // stays visually prominent without feeling clipped right at the number.
+        SizedBox(height: 4 * s),
       ],
     );
   }
