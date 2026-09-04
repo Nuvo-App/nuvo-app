@@ -148,7 +148,7 @@ class _Place extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: 9 * s),
+        SizedBox(height: 8 * s),
         Text(
           e.isCurrentUser ? 'You' : e.name.split(' ').first,
           maxLines: 1,
@@ -159,7 +159,7 @@ class _Place extends StatelessWidget {
             fontSize: (raised ? 16 : 14) * s,
           ),
         ),
-        SizedBox(height: 3 * s),
+        SizedBox(height: 2 * s),
         Text(
           e.statLabel,
           maxLines: 1,
