@@ -650,7 +650,13 @@ class PushupsValidator extends _BaseValidator {
   // frames catch a fast, real phase without allowing a single noisy frame to
   // count as a rep.
   static const _phaseStableFrames = 2;
-  static const _repCooldownFrames = 3;
+  // Frames right after a count where "active" (the bottom) can't re-trigger —
+  // a debounce against one bad MLKit read at the bottom, not a rep cooldown.
+  // Must stay < _phaseStableFrames: at _phaseStableFrames it can fully
+  // consume the very next rep's active-confirmation window, which silently
+  // dropped legitimately fast back-to-back pushups (found via
+  // test/fast_rep_replay_test.dart — 5 reps at the frame floor counted 3).
+  static const _repCooldownFrames = _phaseStableFrames - 1;
 
   final RepCounterStateMachine _counter = RepCounterStateMachine();
   double? _topShoulderY;
