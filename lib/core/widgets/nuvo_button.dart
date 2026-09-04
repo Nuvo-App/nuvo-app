@@ -197,6 +197,7 @@ class NuvoPrimaryButton extends StatelessWidget {
     this.small = false,
     this.flat = false,
     this.subtleLift = false,
+    this.height,
   });
 
   final String label;
@@ -206,6 +207,11 @@ class NuvoPrimaryButton extends StatelessWidget {
   final bool expand;
   final bool loading;
   final bool small;
+
+  /// Overrides the default 46/56 height for a screen that needs its own
+  /// emphasis (e.g. a chunkier hero action row) without changing every
+  /// other caller's default.
+  final double? height;
 
   /// Kept for API compatibility. A flat primary now still carries a shadow —
   /// the lighter [AppShadows.hardSmall] instead of the hero [AppShadows.hardMedium]
@@ -230,7 +236,7 @@ class NuvoPrimaryButton extends StatelessWidget {
     }
     return _buttonShell(
       context: context,
-      height: small ? 46 : 56,
+      height: height ?? (small ? 46 : 56),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: enabled ? NuvoColors.actionBlue : NuvoColors.disabledSurface,
       borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
@@ -276,6 +282,7 @@ class NuvoOutlineButton extends StatelessWidget {
     this.small = false,
     this.flat = false,
     this.iconOnly = false,
+    this.height,
   });
 
   final String label;
@@ -291,12 +298,15 @@ class NuvoOutlineButton extends StatelessWidget {
   /// Centers the icon independently when the control has no visible label.
   final bool iconOnly;
 
+  /// Overrides the default 46/56 height — see [NuvoPrimaryButton.height].
+  final double? height;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     return _buttonShell(
       context: context,
-      height: small ? 46 : 56,
+      height: height ?? (small ? 46 : 56),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoColors.surface,
       borderColor: enabled ? NuvoColors.navy : NuvoColors.border,

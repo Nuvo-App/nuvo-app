@@ -116,7 +116,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   // above the nav; see the tightened gaps below.
                   padding: EdgeInsets.fromLTRB(
                     NuvoSpacing.pageHorizontal,
-                    20,
+                    16,
                     NuvoSpacing.pageHorizontal,
                     NuvoBottomNav.bottomPadding(context),
                   ),
@@ -166,10 +166,10 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         },
                       ),
                       if (boards.length > 1) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         _PageDots(count: boards.length, selected: _boardPage),
                       ],
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 14),
                       KeyedSubtree(
                         key: ValueKey('board-sections-${activeBoard.id}'),
                         child: Column(
@@ -185,7 +185,10 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onStart: () => context.push('/races/new'),
                               onJoin: () => context.push('/races/join'),
                             ),
-                            const SizedBox(height: 18),
+                            // A little more breathing room here than a pure
+                            // compaction pass would use — this is a deliberate
+                            // section break, not blank space to squeeze out.
+                            const SizedBox(height: 26),
                             const _SectionLabel(title: 'Leaderboard'),
                             const SizedBox(height: 12),
                             _Standings(
@@ -707,6 +710,7 @@ class _QuickActions extends StatelessWidget {
           label: 'Submit proof',
           onPressed: onSubmit,
           expand: true,
+          height: 62,
         ),
       ),
       const SizedBox(width: 8),
@@ -718,6 +722,7 @@ class _QuickActions extends StatelessWidget {
           iconOnly: true,
           onPressed: onStart,
           expand: true,
+          height: 62,
         ),
       ),
       const SizedBox(width: 8),
@@ -729,6 +734,7 @@ class _QuickActions extends StatelessWidget {
           iconOnly: true,
           onPressed: onJoin,
           expand: true,
+          height: 62,
         ),
       ),
     ],
@@ -807,23 +813,29 @@ class _Standings extends StatelessWidget {
             isCurrentUser: e.isMe,
           ),
       ],
+      // Deliberate extra push beyond NuvoPodium's own top-3 -> rest gap: rank
+      // 4+ is normal scroll content and should read as clearly starting a
+      // new section below the first viewport, not half-visible at its edge.
       rest: rest.isEmpty
           ? null
-          : _OutlinedSheet(
-              child: Column(
-                children: [
-                  for (var i = 0; i < rest.length; i++) ...[
-                    _StandingRow(entry: rest[i]),
-                    if (i < rest.length - 1)
-                      const Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: NuvoColors.divider,
-                        indent: 16,
-                        endIndent: 16,
-                      ),
+          : Padding(
+              padding: const EdgeInsets.only(top: 28),
+              child: _OutlinedSheet(
+                child: Column(
+                  children: [
+                    for (var i = 0; i < rest.length; i++) ...[
+                      _StandingRow(entry: rest[i]),
+                      if (i < rest.length - 1)
+                        const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: NuvoColors.divider,
+                          indent: 16,
+                          endIndent: 16,
+                        ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
     );
