@@ -16,11 +16,13 @@ import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/rep_burst_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../ai/camera_image_converter.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/pose_detector_service.dart';
+import '../ai/rep_event_diagnostics.dart';
 import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
 import '../data/motion_analysis_contract.dart';
@@ -82,18 +84,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   // ── Live rep feedback ───────────────────────────────────────────────────────
   // Purely presentational. These only ever mirror the count the validator has
-  // already awarded — they never add to it or influence verification.
-  int _lastCountedValue = 0;
-  int _repFlashSeq = 0;
+  // already awarded — they never add to it or influence verification. The
+  // recognition path (_handleCameraFrame -> _runtime.update) runs unconditionally
+  // on every processed frame regardless of what any of this is doing; it never
+  // awaits an animation or checks an "isAnimating" flag. One-way data flow:
+  // motion engine -> rep events (output.count) -> this bookkeeping -> UI.
   DateTime? _repFlashAt;
   bool _targetCelebrated = false;
   int _targetCelebrationSeq = 0;
 
-  // ── Streak state ────────────────────────────────────────────────────────────
-  // Reps that land within this window of the previous rep grow the streak.
-  static const _streakTimeoutMs = 1400;
-  int _streakCount = 0;
-  DateTime? _lastRepAt;
+  // Burst/streak bookkeeping shared with NuvoRepPulse — reps landing within
+  // the window grow the same "+N" burst instead of each restarting at +1.
+  // Visual timing only; never fed back into recognition.
+  final _burst = RepBurstController();
+  int get _repFlashSeq => _burst.sequence;
+  int get _streakCount => _burst.streakCount;
+
+  // Diagnostics only (assert()-gated debug log below) — never read by
+  // counting or the burst UI. Answers "was a rep missed by perception, or
+  // just not shown?" from a device log.
+  final _repEventLog = RepEventLog();
 
   /// Hold movements score in seconds, so a per-second "+1" would be noise.
   bool get _usesRepFlash =>
@@ -101,10 +111,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       motionActivityForBackendValue(_activity.backendValue)?.isHold != true;
 
   /// True when the athlete has hit 2+ reps inside the streak window.
-  bool get _isOnStreak =>
-      _streakCount >= 2 &&
-      _lastRepAt != null &&
-      DateTime.now().difference(_lastRepAt!).inMilliseconds < _streakTimeoutMs;
+  bool get _isOnStreak => _burst.isOnStreak;
 
   String get _streakLabel {
     if (_streakCount < 5) return 'Keep going';
@@ -122,13 +129,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   void _resetRepFlash() {
-    _lastCountedValue = 0;
-    _repFlashSeq = 0;
     _repFlashAt = null;
     _targetCelebrated = false;
     _targetCelebrationSeq = 0;
-    _streakCount = 0;
-    _lastRepAt = null;
+    _burst.reset();
+    _repEventLog.clear();
   }
 
   void _scheduleSkeletonExpiry() {
@@ -358,6 +363,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _capturedFrames.clear();
     _serverAnalysis = null;
     _resetRepFlash();
+    _poseDetector.resetDiagnostics();
     _skeletonHold.clear();
     _debugLog(
       _isCustom
@@ -416,18 +422,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _skeletonHold.show(frame, DateTime.now());
       _scheduleSkeletonExpiry();
       // Mirror a newly awarded rep as live feedback. Reads the validator's
-      // count; never modifies it.
-      if (_usesRepFlash && output.count > _lastCountedValue) {
-        final now = DateTime.now();
-        final onStreak =
-            _lastRepAt != null &&
-            now.difference(_lastRepAt!).inMilliseconds < _streakTimeoutMs;
-        _streakCount = onStreak ? _streakCount + 1 : 1;
-        _lastRepAt = now;
-        _lastCountedValue = output.count;
-        _repFlashSeq++;
-        _repFlashAt = now;
-        HapticFeedback.lightImpact();
+      // count; never modifies it. This runs on every processed frame no
+      // matter what the burst/pulse animation below is doing — recognition
+      // never waits on presentation.
+      if (_usesRepFlash) {
+        final event = _burst.update(output.count);
+        if (event != null) {
+          _repFlashAt = DateTime.now();
+          _repEventLog.record(event);
+          // Fire-and-forget — never awaited, never blocks the next frame.
+          HapticFeedback.lightImpact();
+        }
       }
       // Finish line reached — fire once per recording.
       if (!_targetCelebrated &&
@@ -453,6 +458,19 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     'confidence=${output.confidence.toStringAsFixed(2)} '
                     'failedRule=${output.failedRuleReason.isEmpty ? 'none' : output.failedRuleReason} '
                     'debug=${output.debugValues}',
+        );
+        // Frame-pipeline + rep-event diagnostics — the answer to "was a fast
+        // rep lost by perception (framesDropped / low effectiveFps) or
+        // presentation (check repEvents intervals against effectiveVerifierFPS)?"
+        _debugLog(
+          'framesReceived=${_poseDetector.framesReceived} '
+          'framesProcessed=${_poseDetector.framesProcessed} '
+          'framesDropped=${_poseDetector.framesDropped} '
+          '(busy=${_poseDetector.framesDroppedBusy} '
+          'throttle=${_poseDetector.framesDroppedThrottle}) '
+          'effectiveVerifierFPS=${_poseDetector.effectiveFps.toStringAsFixed(1)} '
+          'lastRepIntervalMs=${_repEventLog.lastIntervalMs ?? '-'} '
+          'repEvents=[${_repEventLog.summary()}]',
         );
       }
       if (mounted) setState(() {});
@@ -1478,7 +1496,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '+1',
+                      // A rep that lands while this burst is still showing
+                      // grows the same badge — +1 -> +2 -> +3 — instead of
+                      // each rep restarting an isolated "+1".
+                      '+${_streakCount > 0 ? _streakCount : 1}',
                       style: AppTextStyles.displayLarge.copyWith(
                         fontSize: 200,
                         height: 0.9,

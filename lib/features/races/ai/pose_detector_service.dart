@@ -33,22 +33,63 @@ class PoseDetectorService {
 
   bool get isProcessingFrame => _isProcessingFrame;
 
+  // ── Diagnostics ────────────────────────────────────────────────────────────
+  // Answers "is a fast rep lost by perception (too few frames reach the
+  // verifier) or somewhere else?" — never read by recognition itself.
+  int framesReceived = 0;
+  int framesDroppedBusy = 0;
+  int framesDroppedThrottle = 0;
+  int framesProcessed = 0;
+  double _effectiveFps = 0;
+
+  /// EMA of the processed-frame rate — the actual rate the verifier sees,
+  /// which is what matters for "was a rep between two processed frames".
+  double get effectiveFps => _effectiveFps;
+
+  int get framesDropped => framesDroppedBusy + framesDroppedThrottle;
+
+  void resetDiagnostics() {
+    framesReceived = 0;
+    framesDroppedBusy = 0;
+    framesDroppedThrottle = 0;
+    framesProcessed = 0;
+    _effectiveFps = 0;
+  }
+
   Future<NuvoPoseFrame?> processCameraImage({
     required CameraImage image,
     required CameraDescription camera,
     required DeviceOrientation deviceOrientation,
   }) async {
-    if (_disposed || _isProcessingFrame) return null;
+    framesReceived++;
+    if (_disposed) return null;
+    if (_isProcessingFrame) {
+      framesDroppedBusy++;
+      return null;
+    }
 
     final now = DateTime.now();
     final lastProcessedAt = _lastProcessedAt;
     if (lastProcessedAt != null &&
         now.difference(lastProcessedAt) < _minFrameInterval) {
+      framesDroppedThrottle++;
       return null;
+    }
+    if (lastProcessedAt != null) {
+      final deltaMs = now.difference(lastProcessedAt).inMilliseconds;
+      if (deltaMs > 0) {
+        final instantFps = 1000 / deltaMs;
+        // Light EMA — responsive to a real FPS shift within ~5-10 frames,
+        // stable enough to read on a debug overlay.
+        _effectiveFps = _effectiveFps == 0
+            ? instantFps
+            : _effectiveFps * 0.8 + instantFps * 0.2;
+      }
     }
 
     _isProcessingFrame = true;
     _lastProcessedAt = now;
+    framesProcessed++;
     try {
       final inputImage = inputImageFromCameraImage(
         image: image,

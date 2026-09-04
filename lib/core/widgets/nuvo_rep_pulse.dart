@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/nuvo_responsive.dart';
+import 'rep_burst_controller.dart';
 
 /// The "Nuvo saw that" feedback for a live rep count.
 ///
@@ -47,6 +48,7 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
   int _shownCount = 0;
   int _pulseSeq = 0;
   bool _targetHit = false;
+  final _burst = RepBurstController();
 
   @override
   void initState() {
@@ -60,7 +62,8 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
     super.didUpdateWidget(old);
     if (widget.count > old.count) {
       _shownCount = widget.count;
-      _pulseSeq++;
+      final event = _burst.update(widget.count);
+      _pulseSeq = event?.sequence ?? _pulseSeq + 1;
       if (widget.haptics) HapticFeedback.lightImpact();
       final reached = widget.target > 0 && widget.count >= widget.target;
       if (reached && !_targetHit && widget.haptics) {
@@ -71,6 +74,7 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
       // A reset (new test / new attempt).
       _shownCount = widget.count;
       _targetHit = false;
+      _burst.reset();
     }
   }
 
@@ -107,13 +111,15 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
             ],
           ),
         ),
-        // "+1" punch — replays on every increment via the keyed animation.
+        // "+N" punch — replays on every increment via the keyed animation.
+        // N is the burst streak, not always 1: several reps landing close
+        // together (a fast set) morph +1 -> +2 -> +3 instead of restarting.
         if (_pulseSeq > 0)
           Positioned(
             top: -numberSize * 0.55,
             child: IgnorePointer(
               child: Text(
-                '+1',
+                '+${_burst.streakCount > 0 ? _burst.streakCount : 1}',
                 style: AppTextStyles.displayLarge.copyWith(
                   fontSize: numberSize * 0.7,
                   fontWeight: FontWeight.w900,
