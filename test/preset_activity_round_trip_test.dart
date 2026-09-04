@@ -192,6 +192,16 @@ void main() {
       ('squat_jacks', 'Squat Jacks', 'reps', 'front', 'count_reps'),
       ('jump_squats', 'Jump Squats', 'reps', 'front', 'count_reps'),
       ('lunge_jumps', 'Lunge Jumps', 'reps', 'front_or_angle', 'count_reps'),
+      ('running_in_place', 'Running in Place', 'reps', 'front', 'count_reps'),
+      ('treadmill_running', 'Treadmill Running', 'reps', 'front', 'count_reps'),
+      ('walking_in_place', 'Walking in Place', 'reps', 'front', 'count_reps'),
+      ('marching_in_place', 'Marching in Place', 'reps', 'front', 'count_reps'),
+      ('butt_kicks', 'Butt Kicks', 'reps', 'front', 'count_reps'),
+      ('mountain_climbers', 'Mountain Climbers', 'reps', 'front', 'count_reps'),
+      ('burpees', 'Burpees', 'reps', 'front', 'count_reps'),
+      ('step_ups', 'Step-Ups', 'reps', 'front', 'count_reps'),
+      ('calf_raises', 'Calf Raises', 'reps', 'front', 'count_reps'),
+      ('lateral_steps', 'Lateral Steps', 'reps', 'front', 'count_reps'),
     ];
 
     test('Flutter catalog has exactly the same preset IDs as backend', () {

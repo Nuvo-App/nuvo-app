@@ -264,6 +264,14 @@ void main() {
       final demo = movementDemoForType(definition.type);
       final isPlank = definition.type.name == 'plankHold';
 
+      // The preset-motion-expansion movements (running/walking/marching/
+      // burpees/etc.) don't have a hand-authored demo pose yet — see
+      // movementDemoForType's doc comment. That's an accepted interim state
+      // the pre-verify screen already handles (movementDemoForType(type) !=
+      // null gates whether the animation shows at all), not a bug — skip the
+      // animation-rendering assertions for them instead of forcing a null.
+      if (demo == null) continue;
+
       testWidgets('renders ${definition.type.name} demo without exceptions', (
         tester,
       ) async {

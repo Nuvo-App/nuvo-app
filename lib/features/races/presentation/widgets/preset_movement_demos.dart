@@ -788,5 +788,17 @@ MovementDemo? movementDemoForType(MotionActivityType type) {
     MotionActivityType.squatJacks => squatJacksDemo,
     MotionActivityType.jumpSquats => jumpSquatsDemo,
     MotionActivityType.lungeJumps => lungeJumpsDemo,
+    // No hand-authored demo pose yet for the new cadence/multi-phase
+    // presets — the pre-verify screen already handles a null demo.
+    MotionActivityType.runningInPlace => null,
+    MotionActivityType.treadmillRunning => null,
+    MotionActivityType.walkingInPlace => null,
+    MotionActivityType.marchingInPlace => null,
+    MotionActivityType.buttKicks => null,
+    MotionActivityType.mountainClimbers => null,
+    MotionActivityType.burpees => null,
+    MotionActivityType.stepUps => null,
+    MotionActivityType.calfRaises => null,
+    MotionActivityType.lateralSteps => null,
   };
 }

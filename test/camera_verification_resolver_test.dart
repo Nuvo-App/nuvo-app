@@ -35,9 +35,9 @@ Race _race({
 void main() {
   group('camera verification resolver', () {
     test(
-      'active preset catalog is exactly the thirteen camera-verified activities',
+      'active preset catalog is exactly the twenty-three camera-verified activities',
       () {
-        expect(motionActivityDefinitions.map((d) => d.type).toSet(), {
+        const expected = {
           MotionActivityType.pushUps,
           MotionActivityType.jumpingJacks,
           MotionActivityType.squats,
@@ -51,22 +51,20 @@ void main() {
           MotionActivityType.squatJacks,
           MotionActivityType.jumpSquats,
           MotionActivityType.lungeJumps,
-        });
-        expect(supportedMotionActivityTypes, {
-          MotionActivityType.pushUps,
-          MotionActivityType.jumpingJacks,
-          MotionActivityType.squats,
-          MotionActivityType.lunges,
-          MotionActivityType.plankHold,
-          MotionActivityType.highKnees,
-          MotionActivityType.armRaises,
-          MotionActivityType.sumoSquats,
-          MotionActivityType.sideLunges,
-          MotionActivityType.deepSquats,
-          MotionActivityType.squatJacks,
-          MotionActivityType.jumpSquats,
-          MotionActivityType.lungeJumps,
-        });
+          // preset-motion-expansion
+          MotionActivityType.runningInPlace,
+          MotionActivityType.treadmillRunning,
+          MotionActivityType.walkingInPlace,
+          MotionActivityType.marchingInPlace,
+          MotionActivityType.buttKicks,
+          MotionActivityType.mountainClimbers,
+          MotionActivityType.burpees,
+          MotionActivityType.stepUps,
+          MotionActivityType.calfRaises,
+          MotionActivityType.lateralSteps,
+        };
+        expect(motionActivityDefinitions.map((d) => d.type).toSet(), expected);
+        expect(supportedMotionActivityTypes, expected);
       },
     );
 
@@ -143,7 +141,7 @@ void main() {
 
     test('unsupported movements do not fall back to a preset', () {
       final eligibility = resolveCameraVerification(
-        _race(title: 'First to 10 Burpees', activityId: 'burpees'),
+        _race(title: 'First to 10 Cartwheels', activityId: 'cartwheels'),
       );
 
       expect(eligibility.isCameraVerifiable, isFalse);
@@ -154,7 +152,7 @@ void main() {
 
     test('explicit unsupported activity blocks legacy title inference', () {
       final eligibility = resolveCameraVerification(
-        _race(title: 'First to 10 Pushups', activityId: 'burpees'),
+        _race(title: 'First to 10 Pushups', activityId: 'cartwheels'),
       );
 
       expect(eligibility.isCameraVerifiable, isFalse);

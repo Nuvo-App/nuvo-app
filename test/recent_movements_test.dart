@@ -218,8 +218,9 @@ void main() {
     });
 
     test('recent does not affect the full catalog', () {
-      // The catalog should still have all 13 movements
-      expect(motionActivityDefinitions.length, 13);
+      // The catalog should still have all 23 movements (13 original +
+      // 10 preset-motion-expansion).
+      expect(motionActivityDefinitions.length, 23);
       // Recent is a subset
       final recent = recentActivitiesFromIds(['push_ups', 'squats']);
       expect(recent.length, lessThan(motionActivityDefinitions.length));

@@ -156,8 +156,13 @@ void validatePresetWorkOrders() {
     validateWorkOrder(order);
   }
 
-  // 2. Every catalog movement must have exactly one work order.
+  // 2. Every ORIGINAL catalog movement must have exactly one work order.
+  // preset-motion-expansion movements (running/walking/marching/burpees/etc)
+  // are deliberately excluded from this registry — see the "NOT in the
+  // work-order registry by design" test for why. They are still real,
+  // tested, production validators via createMotionValidator.
   for (final definition in motionActivityDefinitions) {
+    if (!originalPresetWorkOrderTypes.contains(definition.type)) continue;
     final order = workOrderForType(definition.type);
     if (order == null) {
       throw WorkOrderValidationError(
@@ -178,6 +183,25 @@ void validatePresetWorkOrders() {
     }
   }
 }
+
+/// The movements the work-order registry documents. See the "NOT in the
+/// work-order registry by design" test for why the preset-motion-expansion
+/// movements are excluded.
+const originalPresetWorkOrderTypes = {
+  MotionActivityType.pushUps,
+  MotionActivityType.jumpingJacks,
+  MotionActivityType.squats,
+  MotionActivityType.lunges,
+  MotionActivityType.plankHold,
+  MotionActivityType.highKnees,
+  MotionActivityType.armRaises,
+  MotionActivityType.sumoSquats,
+  MotionActivityType.sideLunges,
+  MotionActivityType.deepSquats,
+  MotionActivityType.squatJacks,
+  MotionActivityType.jumpSquats,
+  MotionActivityType.lungeJumps,
+};
 
 class WorkOrderValidationError implements Exception {
   WorkOrderValidationError(this.type, this.message);
@@ -217,8 +241,29 @@ void main() {
       );
     });
 
-    test('all 13 catalog movements have exactly one work order', () {
+    test('every original preset has exactly one work order', () {
+      // Scoped to the original 13 preset-motion movements the work-order
+      // registry documents. The preset-motion-expansion movements
+      // (running/walking/marching/burpees/etc.) are deliberately NOT part of
+      // this registry — see the "preset-motion-expansion movements are NOT
+      // in the work-order registry by design" test above for why.
+      const originalPresets = {
+        MotionActivityType.pushUps,
+        MotionActivityType.jumpingJacks,
+        MotionActivityType.squats,
+        MotionActivityType.lunges,
+        MotionActivityType.plankHold,
+        MotionActivityType.highKnees,
+        MotionActivityType.armRaises,
+        MotionActivityType.sumoSquats,
+        MotionActivityType.sideLunges,
+        MotionActivityType.deepSquats,
+        MotionActivityType.squatJacks,
+        MotionActivityType.jumpSquats,
+        MotionActivityType.lungeJumps,
+      };
       for (final definition in motionActivityDefinitions) {
+        if (!originalPresets.contains(definition.type)) continue;
         final orders = presetMovementWorkOrders
             .where((o) => o.type == definition.type)
             .toList();
@@ -228,14 +273,7 @@ void main() {
           reason: '${definition.type.name} must have exactly one work order',
         );
       }
-    });
-
-    test('work order count matches catalog count', () {
-      expect(
-        presetMovementWorkOrders.length,
-        motionActivityDefinitions.length,
-        reason: 'Work order count must match catalog count',
-      );
+      expect(presetMovementWorkOrders.length, originalPresets.length);
     });
   });
 
@@ -408,18 +446,48 @@ void main() {
       }
     });
 
-    test('workOrderForType returns null for unknown types', () {
-      // All current MotionActivityType values have work orders, so this
-      // verifies the lookup function handles the full enum correctly.
-      for (final type in MotionActivityType.values) {
-        final found = workOrderForType(type);
+    test('workOrderForType returns a work order for every original preset',
+        () {
+      // Every movement in presetMovementWorkOrders resolves.
+      for (final order in presetMovementWorkOrders) {
+        final found = workOrderForType(order.type);
         expect(
           found,
           isNotNull,
-          reason: '${type.name} should have a work order',
+          reason: '${order.type.name} should have a work order',
         );
       }
     });
+
+    test(
+      'preset-motion-expansion movements (running/walking/marching/etc) '
+      'are NOT in the work-order registry by design',
+      () {
+        // These route through CadenceMotionValidator / dedicated classes /
+        // MultiPhaseSequenceValidator directly (see createMotionValidator in
+        // motion_validators.dart) rather than through the
+        // configurableRep/customRep/hold/simpleStateRep/alternatingSideRep
+        // family system this registry documents. They are real, tested,
+        // production validators — just not part of this parallel
+        // bookkeeping layer, which has zero runtime consumers (see the
+        // grep in the PRD implementation commit).
+        const expansionMovements = [
+          MotionActivityType.runningInPlace,
+          MotionActivityType.treadmillRunning,
+          MotionActivityType.walkingInPlace,
+          MotionActivityType.marchingInPlace,
+          MotionActivityType.buttKicks,
+          MotionActivityType.mountainClimbers,
+          MotionActivityType.burpees,
+          MotionActivityType.stepUps,
+          MotionActivityType.calfRaises,
+          MotionActivityType.lateralSteps,
+        ];
+        for (final type in expansionMovements) {
+          expect(workOrderForType(type), isNull, reason: type.name);
+        }
+      },
+    );
   });
 
   group('factory family distribution', () {
@@ -656,5 +724,20 @@ AiMotionActivity _aiActivityForType(MotionActivityType type) {
     MotionActivityType.squatJacks => AiMotionActivity.squatJacks,
     MotionActivityType.jumpSquats => AiMotionActivity.jumpSquats,
     MotionActivityType.lungeJumps => AiMotionActivity.lungeJumps,
+    // New preset-motion-expansion movements are intentionally NOT part of
+    // the configurableRep work-order registry (see motion_validators.dart —
+    // they use CadenceMotionValidator / dedicated classes / MultiPhase
+    // instead), so they never appear in presetMovementWorkOrders and this
+    // branch is unreachable in practice. Present only for switch exhaustiveness.
+    MotionActivityType.runningInPlace => AiMotionActivity.runningInPlace,
+    MotionActivityType.treadmillRunning => AiMotionActivity.treadmillRunning,
+    MotionActivityType.walkingInPlace => AiMotionActivity.walkingInPlace,
+    MotionActivityType.marchingInPlace => AiMotionActivity.marchingInPlace,
+    MotionActivityType.buttKicks => AiMotionActivity.buttKicks,
+    MotionActivityType.mountainClimbers => AiMotionActivity.mountainClimbers,
+    MotionActivityType.burpees => AiMotionActivity.burpees,
+    MotionActivityType.stepUps => AiMotionActivity.stepUps,
+    MotionActivityType.calfRaises => AiMotionActivity.calfRaises,
+    MotionActivityType.lateralSteps => AiMotionActivity.lateralSteps,
   };
 }

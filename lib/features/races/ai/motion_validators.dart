@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import '../data/ai_motion_models.dart';
 import '../domain/motion_activity.dart';
 import 'airborne_state_tracker.dart';
+import 'cadence_detector.dart';
 import 'multi_phase_sequence_tracker.dart';
+import 'preset_motion/burpee_definition.dart';
 import 'preset_motion/multi_phase_definitions.dart';
 
 enum MovementType {
@@ -20,6 +22,16 @@ enum MovementType {
   squatJacks,
   jumpSquats,
   lungeJumps,
+  runningInPlace,
+  treadmillRunning,
+  walkingInPlace,
+  marchingInPlace,
+  buttKicks,
+  mountainClimbers,
+  burpees,
+  stepUps,
+  calfRaises,
+  lateralSteps,
   unsupported,
 }
 
@@ -148,6 +160,76 @@ const supportedMovementDefinitions = [
     unit: 'lunge jumps',
     defaultTarget: 10,
   ),
+  MovementDefinition(
+    type: MovementType.runningInPlace,
+    activity: AiMotionActivity.runningInPlace,
+    title: 'Running in place',
+    unit: 'steps',
+    defaultTarget: 50,
+  ),
+  MovementDefinition(
+    type: MovementType.treadmillRunning,
+    activity: AiMotionActivity.treadmillRunning,
+    title: 'Treadmill running',
+    unit: 'steps',
+    defaultTarget: 50,
+  ),
+  MovementDefinition(
+    type: MovementType.walkingInPlace,
+    activity: AiMotionActivity.walkingInPlace,
+    title: 'Walking in place',
+    unit: 'steps',
+    defaultTarget: 40,
+  ),
+  MovementDefinition(
+    type: MovementType.marchingInPlace,
+    activity: AiMotionActivity.marchingInPlace,
+    title: 'Marching in place',
+    unit: 'steps',
+    defaultTarget: 40,
+  ),
+  MovementDefinition(
+    type: MovementType.buttKicks,
+    activity: AiMotionActivity.buttKicks,
+    title: 'Butt kicks',
+    unit: 'kicks',
+    defaultTarget: 30,
+  ),
+  MovementDefinition(
+    type: MovementType.mountainClimbers,
+    activity: AiMotionActivity.mountainClimbers,
+    title: 'Mountain climbers',
+    unit: 'reps',
+    defaultTarget: 30,
+  ),
+  MovementDefinition(
+    type: MovementType.burpees,
+    activity: AiMotionActivity.burpees,
+    title: 'Burpees',
+    unit: 'burpees',
+    defaultTarget: 10,
+  ),
+  MovementDefinition(
+    type: MovementType.stepUps,
+    activity: AiMotionActivity.stepUps,
+    title: 'Step-ups',
+    unit: 'steps',
+    defaultTarget: 20,
+  ),
+  MovementDefinition(
+    type: MovementType.calfRaises,
+    activity: AiMotionActivity.calfRaises,
+    title: 'Calf raises',
+    unit: 'calf raises',
+    defaultTarget: 15,
+  ),
+  MovementDefinition(
+    type: MovementType.lateralSteps,
+    activity: AiMotionActivity.lateralSteps,
+    title: 'Lateral steps',
+    unit: 'steps',
+    defaultTarget: 30,
+  ),
 ];
 
 MovementDefinition? movementDefinitionForActivity(AiMotionActivity activity) {
@@ -181,6 +263,16 @@ AiMotionActivity? _aiMotionActivityForType(MotionActivityType type) {
     MotionActivityType.squatJacks => AiMotionActivity.squatJacks,
     MotionActivityType.jumpSquats => AiMotionActivity.jumpSquats,
     MotionActivityType.lungeJumps => AiMotionActivity.lungeJumps,
+    MotionActivityType.runningInPlace => AiMotionActivity.runningInPlace,
+    MotionActivityType.treadmillRunning => AiMotionActivity.treadmillRunning,
+    MotionActivityType.walkingInPlace => AiMotionActivity.walkingInPlace,
+    MotionActivityType.marchingInPlace => AiMotionActivity.marchingInPlace,
+    MotionActivityType.buttKicks => AiMotionActivity.buttKicks,
+    MotionActivityType.mountainClimbers => AiMotionActivity.mountainClimbers,
+    MotionActivityType.burpees => AiMotionActivity.burpees,
+    MotionActivityType.stepUps => AiMotionActivity.stepUps,
+    MotionActivityType.calfRaises => AiMotionActivity.calfRaises,
+    MotionActivityType.lateralSteps => AiMotionActivity.lateralSteps,
   };
 }
 
@@ -378,6 +470,48 @@ MotionValidator createMotionValidator(
     definitions: buildLungeJumpDefinitions,
     statusText: 'Tracking lunge jumps',
     coachingTextActive: 'Lunge, jump, switch legs',
+    coachingTextIncomplete: 'Full body needed',
+  ),
+  AiMotionActivity.runningInPlace => CadenceMotionValidator(
+    definition: runningInPlaceDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.treadmillRunning => CadenceMotionValidator(
+    definition: treadmillRunningDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.walkingInPlace => CadenceMotionValidator(
+    definition: walkingInPlaceDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.marchingInPlace => CadenceMotionValidator(
+    definition: marchingInPlaceDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.buttKicks => CadenceMotionValidator(
+    definition: buttKicksDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.mountainClimbers => CadenceMotionValidator(
+    definition: mountainClimbersDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.stepUps => CadenceMotionValidator(
+    definition: stepUpsDefinition,
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.lateralSteps => LateralStepsValidator(
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.calfRaises => CalfRaisesValidator(
+    targetValue: targetValue,
+  ),
+  AiMotionActivity.burpees => MultiPhaseSequenceValidator(
+    activity: AiMotionActivity.burpees,
+    targetValue: targetValue,
+    definitions: (_) => [buildBurpeeDefinition()],
+    statusText: 'Tracking burpees',
+    coachingTextActive: 'Crouch, hands down, then stand tall',
     coachingTextIncomplete: 'Full body needed',
   ),
 };
@@ -1996,3 +2130,447 @@ const squatJackRepDefinition = RepMovementDefinition(
   coachingTextActive: 'Jump wide, squat down, arms up — then return',
   coachingTextIncomplete: 'Full body · jump wide and squat',
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cadence movements: Running in Place, Treadmill Running, Walking in Place,
+// Marching in Place, Butt Kicks, Mountain Climbers, Step-Ups, Lateral Steps.
+//
+// New, dedicated to these movements — shares no code with Pushups / Jumping
+// Jacks / Plank, and does not touch RepCounterStateMachine or
+// ConfigurableRepValidator.
+//
+// COUNT SEMANTICS (documented once, applies to every cadence movement below):
+// one count = one confirmed alternation step (matches HighKneesValidator's
+// existing per-knee-raise granularity). A full left-right cycle is 2 counts.
+// See CadenceDetector's doc comment for the full rationale.
+// ─────────────────────────────────────────────────────────────────────────────
+
+typedef CadenceSideSignal = CadenceSide? Function(PoseFeatureExtractor features);
+
+class CadenceMovementDefinition {
+  const CadenceMovementDefinition({
+    required this.activity,
+    required this.requiredLandmarks,
+    required this.sideSignal,
+    required this.statusText,
+    required this.coachingTextActive,
+    required this.coachingTextIncomplete,
+    this.stableFrames = 2,
+  });
+
+  final AiMotionActivity activity;
+  final List<String> requiredLandmarks;
+  final CadenceSideSignal sideSignal;
+  final String statusText;
+  final String coachingTextActive;
+  final String coachingTextIncomplete;
+
+  /// Consecutive frames a side must read before it counts. Lower = faster
+  /// cadence supported, at the cost of more jitter tolerance. See
+  /// [CadenceDetector].
+  final int stableFrames;
+
+  String coachingText(bool fullBodyVisible) =>
+      fullBodyVisible ? coachingTextActive : coachingTextIncomplete;
+}
+
+/// Generic cadence-counting validator driven by a [CadenceMovementDefinition].
+/// Extends [_BaseValidator] for frame-counting, visibility, confidence, and
+/// finish behavior — the same contract every other preset validator honors.
+class CadenceMotionValidator extends _BaseValidator {
+  CadenceMotionValidator({required this.definition, required super.targetValue})
+      : _cadence = CadenceDetector(stableFrames: definition.stableFrames);
+
+  final CadenceMovementDefinition definition;
+  final CadenceDetector _cadence;
+  CadenceSide? _lastMeasuredSide;
+
+  @override
+  AiMotionActivity get activity => definition.activity;
+  @override
+  int get currentValue => math.min(_cadence.cycles, targetValue);
+  @override
+  String get statusText => definition.statusText;
+  @override
+  String get coachingText => definition.coachingText(fullBodyVisible);
+  @override
+  List<String> get criticalPoints => definition.requiredLandmarks;
+
+  @override
+  void resetState() {
+    _cadence.reset();
+    _lastMeasuredSide = null;
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
+    _lastMeasuredSide = definition.sideSignal(features);
+    _cadence.update(_lastMeasuredSide);
+  }
+
+  @override
+  Map<String, double> get debugValues => {
+        ...super.debugValues,
+        'currentSide': _sideCode(_cadence.currentSide),
+        'measuredSide': _sideCode(_lastMeasuredSide),
+        'cycles': _cadence.cycles.toDouble(),
+      };
+
+  double _sideCode(CadenceSide? side) =>
+      side == null ? -1 : (side == CadenceSide.left ? 0 : 1);
+}
+
+const _cadenceLegLandmarks = [
+  'leftHip',
+  'rightHip',
+  'leftKnee',
+  'rightKnee',
+];
+
+/// Alternating knee-elevation signal shared by Running / Walking / Marching /
+/// Step-Ups. [raiseFraction] is a fraction of hip width — smaller means the
+/// knee must rise closer to hip level (a bigger, more deliberate lift; used
+/// for Marching), larger means a shallow lift already counts (Walking).
+/// Body-scale-relative throughout — no raw pixel offsets (see the High
+/// Knees / Arm Raises camera-distance lesson).
+CadenceSide? kneeAlternationSide(
+  PoseFeatureExtractor f, {
+  required double raiseFraction,
+}) {
+  final leftHip = f.frame.point('leftHip')!;
+  final rightHip = f.frame.point('rightHip')!;
+  final leftKnee = f.frame.point('leftKnee')!;
+  final rightKnee = f.frame.point('rightKnee')!;
+  final hipWidth = f.hipWidth.clamp(0.06, 0.5);
+  final raiseGap = hipWidth * raiseFraction;
+  final leftRaised = leftKnee.y < leftHip.y + raiseGap;
+  final rightRaised = rightKnee.y < rightHip.y + raiseGap;
+  if (leftRaised == rightRaised) return null; // neither, or both — ambiguous
+  return leftRaised ? CadenceSide.left : CadenceSide.right;
+}
+
+/// Marching in Place: a deliberate, high knee lift. Uses the smallest
+/// raiseFraction (knee must get closest to hip level) of the cadence family.
+final marchingInPlaceDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.marchingInPlace,
+  requiredLandmarks: _cadenceLegLandmarks,
+  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.05),
+  statusText: 'Tracking marching',
+  coachingTextActive: 'Lift each knee up high, alternating sides',
+  coachingTextIncomplete: 'Lower body needed',
+);
+
+/// Running in Place: alternating knee lift at a faster, lower-amplitude
+/// cadence than marching.
+final runningInPlaceDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.runningInPlace,
+  requiredLandmarks: _cadenceLegLandmarks,
+  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.20),
+  statusText: 'Tracking running in place',
+  coachingTextActive: 'Keep your feet moving',
+  coachingTextIncomplete: 'Lower body needed',
+  stableFrames: 2,
+);
+
+/// Treadmill Running: the SAME body-relative gait signal as Running in
+/// Place — this deliberately does not (and cannot, from pose alone) detect
+/// a treadmill; it infers running motion from the body and is invariant to
+/// global root translation because it only ever compares a knee's Y to its
+/// own hip's Y, never to a fixed frame position. Kept as its own catalog
+/// entry/definition per product requirement, not merged into Running in
+/// Place, even though the detection is currently identical.
+final treadmillRunningDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.treadmillRunning,
+  requiredLandmarks: _cadenceLegLandmarks,
+  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.20),
+  statusText: 'Tracking treadmill running',
+  coachingTextActive: 'Keep your feet moving',
+  coachingTextIncomplete: 'Lower body needed',
+);
+
+/// Walking in Place: the shallowest, most lenient lift in the family.
+final walkingInPlaceDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.walkingInPlace,
+  requiredLandmarks: _cadenceLegLandmarks,
+  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.35),
+  statusText: 'Tracking walking in place',
+  coachingTextActive: 'Step in place, alternating feet',
+  coachingTextIncomplete: 'Lower body needed',
+);
+
+/// Step-Ups: pose-only tracking cannot see the physical box/step, so this
+/// reuses the marching-style deliberate-lift signal. KNOWN LIMITATION: this
+/// is geometrically very close to Marching in Place and, at a shallow step
+/// height, High Knees — see test/cadence_replay_test.dart for the measured
+/// cross-confusion rather than a claimed clean separation.
+final stepUpsDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.stepUps,
+  requiredLandmarks: _cadenceLegLandmarks,
+  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.05),
+  statusText: 'Tracking step-ups',
+  coachingTextActive: 'Step up and alternate legs',
+  coachingTextIncomplete: 'Lower body needed',
+);
+
+const _buttKickLandmarks = [
+  'leftHip',
+  'rightHip',
+  'leftKnee',
+  'rightKnee',
+  'leftAnkle',
+  'rightAnkle',
+];
+
+/// Butt Kicks: heel-to-glute — sharp KNEE flexion while the thigh stays
+/// down. This is the discriminator from High Knees / Marching, which raise
+/// the thigh (hip flexion) rather than folding the shin back (knee flexion).
+CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
+  final leftHip = f.frame.point('leftHip')!;
+  final rightHip = f.frame.point('rightHip')!;
+  final leftKnee = f.frame.point('leftKnee')!;
+  final rightKnee = f.frame.point('rightKnee')!;
+  final hipWidth = f.hipWidth.clamp(0.06, 0.5);
+  final thighDownGap = hipWidth * 0.35;
+  final leftThighDown = leftKnee.y > leftHip.y + thighDownGap;
+  final rightThighDown = rightKnee.y > rightHip.y + thighDownGap;
+  final leftKick = f.kneeAngle(left: true) < 60 && leftThighDown;
+  final rightKick = f.kneeAngle(left: false) < 60 && rightThighDown;
+  if (leftKick == rightKick) return null;
+  return leftKick ? CadenceSide.left : CadenceSide.right;
+}
+
+const buttKicksDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.buttKicks,
+  requiredLandmarks: _buttKickLandmarks,
+  sideSignal: _buttKickSide,
+  statusText: 'Tracking butt kicks',
+  coachingTextActive: 'Kick your heels back toward your glutes',
+  coachingTextIncomplete: 'Lower body needed',
+);
+
+const _mountainClimberLandmarks = [
+  'leftShoulder',
+  'rightShoulder',
+  'leftWrist',
+  'rightWrist',
+  'leftHip',
+  'rightHip',
+  'leftKnee',
+  'rightKnee',
+];
+
+/// Mountain Climbers: alternating knee drive, gated by a plank-like hand
+/// placement (wrists at/below shoulder height) — this context gate is what
+/// rejects standing High Knees, which never plants the hands down.
+CadenceSide? _mountainClimberSide(PoseFeatureExtractor f) {
+  final leftShoulder = f.frame.point('leftShoulder')!;
+  final rightShoulder = f.frame.point('rightShoulder')!;
+  final leftWrist = f.frame.point('leftWrist')!;
+  final rightWrist = f.frame.point('rightWrist')!;
+  final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+  final wristY = (leftWrist.y + rightWrist.y) / 2;
+  // Planted hands read close to SHOULDER height (arms extended straight down
+  // supporting the body). Relaxed standing arms also hang "below shoulder
+  // height" but close to HIP height — so the discriminator has to be
+  // "close to the shoulder", not merely "not above the shoulder", or every
+  // standing pose with arms at the sides would satisfy it.
+  final handsPlanted = (wristY - shoulderY).abs() < f.torsoHeight * 0.35;
+  if (!handsPlanted) return null;
+  return kneeAlternationSide(f, raiseFraction: 0.20);
+}
+
+const mountainClimbersDefinition = CadenceMovementDefinition(
+  activity: AiMotionActivity.mountainClimbers,
+  requiredLandmarks: _mountainClimberLandmarks,
+  sideSignal: _mountainClimberSide,
+  statusText: 'Tracking mountain climbers',
+  coachingTextActive: 'Drive your knees in, alternating sides',
+  coachingTextIncomplete: 'Hands planted + lower body needed',
+);
+
+/// Lateral Steps / Side Steps: alternating LEFT/RIGHT stepping direction
+/// away from a slowly-adapting center baseline (not "which leg is raised" —
+/// a side step barely lifts the knee). The baseline is required as instance
+/// state (an EMA, like AirborneStateTracker's standing baseline), so this is
+/// its own dedicated validator rather than a pure CadenceMovementDefinition
+/// signal function.
+class LateralStepsValidator extends _BaseValidator {
+  LateralStepsValidator({required super.targetValue})
+      : _cadence = CadenceDetector(stableFrames: 3);
+
+  final CadenceDetector _cadence;
+  double? _baselineCenterX;
+  double _lastOffset = 0;
+  CadenceSide? _lastMeasuredSide;
+
+  // Fraction of hip width the ankle-center must deviate from baseline to
+  // count as an intentional step (vs a small positioning correction).
+  static const _stepFraction = 0.55;
+  static const _neutralFraction = 0.20;
+  static const _baselineEmaAlpha = 0.15;
+
+  @override
+  AiMotionActivity get activity => AiMotionActivity.lateralSteps;
+  @override
+  int get currentValue => math.min(_cadence.cycles, targetValue);
+  @override
+  String get statusText => 'Tracking lateral steps';
+  @override
+  String get coachingText =>
+      fullBodyVisible ? 'Step out to the side, alternating directions' : 'Full body needed';
+  @override
+  List<String> get criticalPoints => const [
+        'leftHip',
+        'rightHip',
+        'leftAnkle',
+        'rightAnkle',
+      ];
+
+  @override
+  void resetState() {
+    _cadence.reset();
+    _baselineCenterX = null;
+    _lastOffset = 0;
+    _lastMeasuredSide = null;
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final leftHip = frame.point('leftHip')!;
+    final rightHip = frame.point('rightHip')!;
+    final leftAnkle = frame.point('leftAnkle')!;
+    final rightAnkle = frame.point('rightAnkle')!;
+    final hipWidth = (leftHip.x - rightHip.x).abs().clamp(0.06, 0.5);
+    final ankleCenterX = (leftAnkle.x + rightAnkle.x) / 2;
+
+    _baselineCenterX ??= ankleCenterX;
+    final offset = ankleCenterX - _baselineCenterX!;
+    _lastOffset = offset;
+
+    final stepThreshold = hipWidth * _stepFraction;
+    final neutralThreshold = hipWidth * _neutralFraction;
+
+    CadenceSide? side;
+    if (offset > stepThreshold) {
+      side = CadenceSide.right;
+    } else if (offset < -stepThreshold) {
+      side = CadenceSide.left;
+    }
+    _lastMeasuredSide = side;
+    _cadence.update(side);
+
+    // Baseline only re-centers while near-neutral, so it adapts to a slow
+    // camera/positioning drift without absorbing an intentional step.
+    if (offset.abs() < neutralThreshold) {
+      _baselineCenterX =
+          _baselineCenterX! * (1 - _baselineEmaAlpha) + ankleCenterX * _baselineEmaAlpha;
+    }
+  }
+
+  @override
+  Map<String, double> get debugValues => {
+        ...super.debugValues,
+        'offset': _lastOffset,
+        'currentSide': _lastMeasuredSide == null
+            ? -1
+            : (_lastMeasuredSide == CadenceSide.left ? 0 : 1),
+        'cycles': _cadence.cycles.toDouble(),
+      };
+}
+
+/// Calf Raises: small-amplitude rise onto the toes. Uses a rolling ankle-Y
+/// baseline (mirrors AirborneStateTracker's standing-baseline EMA) rather
+/// than a fixed constant, so it adapts to the person's actual standing
+/// position instead of a guessed absolute value — and gates on extended
+/// knees so a squat can't be mistaken for a calf raise. Reuses
+/// RepCounterStateMachine (read-only) for the actual counting — this is
+/// exactly the low-risk reuse pattern PushupsValidator already establishes:
+/// a movement-specific analyzeValidFrame feeding the shared, unmodified
+/// counter.
+class CalfRaisesValidator extends _BaseValidator {
+  CalfRaisesValidator({required super.targetValue});
+
+  final RepCounterStateMachine _counter = RepCounterStateMachine();
+  double? _baselineAnkleY;
+  double _lastRise = 0;
+
+  static const _riseFraction = 0.10; // rise threshold, fraction of torsoHeight
+  static const _lowerFraction = 0.04; // must fall back below this to re-arm
+  static const _baselineEmaAlpha = 0.12;
+
+  @override
+  AiMotionActivity get activity => AiMotionActivity.calfRaises;
+  @override
+  int get currentValue => math.min(_counter.count, targetValue);
+  @override
+  String get statusText => 'Tracking calf raises';
+  @override
+  String get coachingText =>
+      fullBodyVisible ? 'Rise onto your toes, then lower fully' : 'Lower body needed';
+  @override
+  List<String> get criticalPoints => const [
+        // Shoulders are required here (unlike the cadence movements) because
+        // torsoHeight (shoulder-to-hip span) is the body-scale reference the
+        // small calf-raise amplitude is measured against.
+        'leftShoulder',
+        'rightShoulder',
+        'leftHip',
+        'rightHip',
+        'leftKnee',
+        'rightKnee',
+        'leftAnkle',
+        'rightAnkle',
+      ];
+
+  @override
+  void resetState() {
+    _counter.reset();
+    _baselineAnkleY = null;
+    _lastRise = 0;
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final features = PoseFeatureExtractor(frame);
+    final ankleY = features.ankleY;
+    final kneesExtended =
+        features.kneeAngle(left: true) > 150 && features.kneeAngle(left: false) > 150;
+
+    _baselineAnkleY ??= ankleY;
+    final rise = _baselineAnkleY! - ankleY; // positive = ankle rose (body lifted)
+    _lastRise = rise;
+
+    final riseThreshold = features.torsoHeight * _riseFraction;
+    final lowerThreshold = features.torsoHeight * _lowerFraction;
+
+    if (!kneesExtended) {
+      // Knees bending means this is not a calf raise (likely a squat) —
+      // don't let it register as either phase, and don't drift the baseline.
+      _counter.update(MovementPhase.unknown);
+      return;
+    }
+
+    final phase = rise > riseThreshold
+        ? MovementPhase.active
+        : rise < lowerThreshold
+            ? MovementPhase.start
+            : MovementPhase.unknown;
+    _counter.update(phase, stableFrames: 3);
+
+    // Baseline re-centers only while clearly down — same rationale as
+    // AirborneStateTracker's grounded EMA: track the true standing position
+    // without absorbing the raise itself.
+    if (phase == MovementPhase.start) {
+      _baselineAnkleY =
+          _baselineAnkleY! * (1 - _baselineEmaAlpha) + ankleY * _baselineEmaAlpha;
+    }
+  }
+
+  @override
+  Map<String, double> get debugValues => {
+        ...super.debugValues,
+        'rise': _lastRise,
+        'count': _counter.count.toDouble(),
+      };
+}

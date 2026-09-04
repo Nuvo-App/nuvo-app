@@ -273,7 +273,7 @@ test('deterministic ordering: lower score first then joined_at breaks further ti
 test('activity and metric normalization do not fall back to jumping jacks', () => {
   assert.equal(normalizeActivityId('pushups'), 'push_ups');
   assert.equal(normalizeActivityId('jumping jacks'), 'jumping_jacks');
-  assert.equal(normalizeActivityId('burpees'), undefined);
+  assert.equal(normalizeActivityId('cartwheels'), undefined);
   assert.equal(normalizeMetric('pushups', activityForId('push_ups')), 'reps');
   assert.equal(normalizeMetric('seconds', activityForId('plank_hold')), 'seconds');
 });
@@ -288,7 +288,7 @@ test('plank uses seconds metric, not reps', () => {
 // ── Validation ────────────────────────────────────────────────────────────────
 
 test('validation rejects unsupported activities and invalid combinations', () => {
-  assert.deepEqual(configFromBody({ activityId: 'burpees', metric: 'reps', format: 'first_to_goal', targetValue: 10 }), { error: 'Choose a supported activity.' });
+  assert.deepEqual(configFromBody({ activityId: 'cartwheels', metric: 'reps', format: 'first_to_goal', targetValue: 10 }), { error: 'Choose a supported activity.' });
   assert.deepEqual(configFromBody({ activityId: 'plank_hold', metric: 'reps', format: 'first_to_goal', targetValue: 60 }), { error: 'Plank cannot use that metric.' });
 
   const valid = configFromBody({ activityId: 'squats', metric: 'reps', format: 'first_to_goal', targetValue: 15 });
@@ -684,5 +684,7 @@ test('existing five preset activities still normalize correctly (regression)', (
   assert.equal(normalizeActivityId('lunges'), 'lunges');
   assert.equal(normalizeActivityId('plank_hold'), 'plank_hold');
   assert.equal(normalizeActivityId('plank'), 'plank_hold');
-  assert.equal(normalizeActivityId('burpees'), undefined);
+  // Burpees is now a supported preset (see preset-motion-expansion) — the
+  // regression guard is that the ORIGINAL five still normalize correctly.
+  assert.equal(normalizeActivityId('burpees'), 'burpees');
 });

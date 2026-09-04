@@ -20,7 +20,17 @@ enum MotionActivityType {
   deepSquats('deep_squats'),
   squatJacks('squat_jacks'),
   jumpSquats('jump_squats'),
-  lungeJumps('lunge_jumps');
+  lungeJumps('lunge_jumps'),
+  runningInPlace('running_in_place'),
+  treadmillRunning('treadmill_running'),
+  walkingInPlace('walking_in_place'),
+  marchingInPlace('marching_in_place'),
+  buttKicks('butt_kicks'),
+  mountainClimbers('mountain_climbers'),
+  burpees('burpees'),
+  stepUps('step_ups'),
+  calfRaises('calf_raises'),
+  lateralSteps('lateral_steps');
 
   const MotionActivityType(this.backendValue);
 
@@ -39,6 +49,28 @@ enum MotionActivityType {
     if (normalized == 'squat jack') return MotionActivityType.squatJacks;
     if (normalized == 'jump squat') return MotionActivityType.jumpSquats;
     if (normalized == 'lunge jump') return MotionActivityType.lungeJumps;
+    if (normalized == 'run in place' || normalized == 'running') {
+      return MotionActivityType.runningInPlace;
+    }
+    if (normalized == 'treadmill') return MotionActivityType.treadmillRunning;
+    if (normalized == 'walk in place' || normalized == 'walking') {
+      return MotionActivityType.walkingInPlace;
+    }
+    if (normalized == 'march in place' || normalized == 'marching') {
+      return MotionActivityType.marchingInPlace;
+    }
+    if (normalized == 'butt kick') return MotionActivityType.buttKicks;
+    if (normalized == 'mountain climber') {
+      return MotionActivityType.mountainClimbers;
+    }
+    if (normalized == 'burpee') return MotionActivityType.burpees;
+    if (normalized == 'step up' || normalized == 'stepup') {
+      return MotionActivityType.stepUps;
+    }
+    if (normalized == 'calf raise') return MotionActivityType.calfRaises;
+    if (normalized == 'lateral step' || normalized == 'side step') {
+      return MotionActivityType.lateralSteps;
+    }
     for (final type in MotionActivityType.values) {
       if (type.backendValue == normalized) return type;
     }
