@@ -111,9 +111,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 )
               else
                 SliverPadding(
+                  // Compressed from NuvoSpacing.xxxl (32) — the first
+                  // viewport needs to fit the full top-three leaderboard
+                  // above the nav; see the tightened gaps below.
                   padding: EdgeInsets.fromLTRB(
                     NuvoSpacing.pageHorizontal,
-                    NuvoSpacing.xxxl,
+                    20,
                     NuvoSpacing.pageHorizontal,
                     NuvoBottomNav.bottomPadding(context),
                   ),
@@ -128,9 +131,18 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       const SizedBox(height: 12),
                       LayoutBuilder(
                         builder: (context, constraints) {
+                          // Compressed from 344/336 — mostly by removing the
+                          // redundant racer-count line (it duplicated
+                          // _RaceDetails' avatar line below) and tightening
+                          // internal gaps, not by shrinking typography or the
+                          // "See race board" footer. Title/chase copy keep
+                          // real headroom for a 2-line wrap; the hero
+                          // Container clips to its rounded corners as a
+                          // safety net, but this value is chosen to not need
+                          // it in normal content.
                           final heroHeight = constraints.maxWidth < 360
-                              ? 344.0
-                              : 336.0;
+                              ? 292.0
+                              : 284.0;
                           return SizedBox(
                             height: heroHeight,
                             child: PageView.builder(
@@ -154,10 +166,10 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                         },
                       ),
                       if (boards.length > 1) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _PageDots(count: boards.length, selected: _boardPage),
                       ],
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 18),
                       KeyedSubtree(
                         key: ValueKey('board-sections-${activeBoard.id}'),
                         child: Column(
@@ -173,7 +185,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onStart: () => context.push('/races/new'),
                               onJoin: () => context.push('/races/join'),
                             ),
-                            const SizedBox(height: 30),
+                            const SizedBox(height: 18),
                             const _SectionLabel(title: 'Leaderboard'),
                             const SizedBox(height: 12),
                             _Standings(
@@ -395,7 +407,7 @@ class _NextMoveHero extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -410,7 +422,7 @@ class _NextMoveHero extends StatelessWidget {
                       letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -427,38 +439,29 @@ class _NextMoveHero extends StatelessWidget {
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.only(left: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _progressSuffix(board.progressLabel),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.headlineMedium.copyWith(
-                                  color: _arenaText,
-                                  fontSize: 24,
-                                  letterSpacing: 0,
-                                ),
-                              ),
-                              Text(
-                                '${board.racerCount ?? 1} racing',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: _arenaMuted,
-                                ),
-                              ),
-                            ],
+                          // The racer count lived here too, duplicating
+                          // _RaceDetails' avatar-cluster line below — removed
+                          // rather than shown twice in the same card.
+                          child: Text(
+                            _progressSuffix(board.progressLabel),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.headlineMedium.copyWith(
+                              color: _arenaText,
+                              fontSize: 24,
+                              letterSpacing: 0,
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   _RaceProgressTrack(
                     key: ValueKey('progress-${board.id}'),
                     progress: pct / 100,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   // Flexible so the hero absorbs a two-line chase line, a long
                   // title, or a larger OS text size by shrinking here instead
                   // of overflowing the fixed hero height.
@@ -473,7 +476,7 @@ class _NextMoveHero extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _RaceDetails(board: board),
                 ],
               ),
@@ -482,7 +485,9 @@ class _NextMoveHero extends StatelessWidget {
           GestureDetector(
             onTap: onOpen,
             child: Container(
-              height: 58,
+              // A real tappable footer, not squeezed — trimmed from 58 only
+              // enough to stay a footer, not a control.
+              height: 52,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               color: _arenaBlue,
               child: Row(
@@ -531,6 +536,10 @@ class _RaceProgressTrack extends StatelessWidget {
     duration: const Duration(milliseconds: 700),
     curve: Curves.easeOutCubic,
     builder: (context, animatedProgress, child) => SizedBox(
+      // Left at 42 — the flag-pole artwork in _RaceProgressPainter uses
+      // absolute pixel offsets (not size-relative), so shrinking this
+      // risks clipping it. The gap/padding trims above and heroHeight
+      // reduction below carry the height savings instead.
       height: 42,
       child: CustomPaint(
         painter: _RaceProgressPainter(progress: animatedProgress),
@@ -572,7 +581,10 @@ class _RaceDetails extends StatelessWidget {
         ],
         Expanded(
           child: Text(
-            total > 0 ? '$total on the board · $detail' : detail,
+            // Compact: "N racers", not "N on the board" — the card no
+            // longer repeats the racer count elsewhere, so this is the one
+            // place it's said.
+            total > 0 ? '$total racers · $detail' : detail,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.labelSmall.copyWith(
