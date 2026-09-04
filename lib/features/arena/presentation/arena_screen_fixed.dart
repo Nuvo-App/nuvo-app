@@ -140,9 +140,16 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           // Container clips to its rounded corners as a
                           // safety net, but this value is chosen to not need
                           // it in normal content.
+                          //
+                          // Bumped +20 (312/304) as a final surgical viewport-
+                          // composition nudge — pushes the page down just
+                          // enough that rank 4+ lands fully below the fold.
+                          // Internal card padding/gaps are unchanged; the
+                          // extra room is absorbed by the Expanded content
+                          // area, not spread across explicit gaps.
                           final heroHeight = constraints.maxWidth < 360
-                              ? 292.0
-                              : 284.0;
+                              ? 312.0
+                              : 304.0;
                           return SizedBox(
                             height: heroHeight,
                             child: PageView.builder(
