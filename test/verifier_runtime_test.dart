@@ -124,7 +124,7 @@ void main() {
 
     test('unsupported activity does not fall back to a preset', () {
       final eligibility = resolveCameraVerification(
-        _race(title: 'First to 10 Burpees', activityId: 'burpees'),
+        _race(title: 'First to 10 Cartwheels', activityId: 'cartwheels'),
       );
       final resolution = resolver.resolve(eligibility: eligibility);
 

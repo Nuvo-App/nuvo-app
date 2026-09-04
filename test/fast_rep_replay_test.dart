@@ -328,6 +328,65 @@ void main() {
     });
   });
 
+  // ── preset-motion-expansion movements ──────────────────────────────────────
+  Map<String, NuvoPosePoint> cadenceStand() => {
+        'leftHip': _p(0.42, 0.52),
+        'rightHip': _p(0.58, 0.52),
+        'leftKnee': _p(0.42, 0.75),
+        'rightKnee': _p(0.58, 0.75),
+      };
+  Map<String, NuvoPosePoint> cadenceLeftUp() {
+    final m = cadenceStand();
+    m['leftKnee'] = _p(0.42, 0.53); // deep-tier lift, well inside marching's gate
+    return m;
+  }
+
+  Map<String, NuvoPosePoint> cadenceRightUp() {
+    final m = cadenceStand();
+    m['rightKnee'] = _p(0.58, 0.53);
+    return m;
+  }
+
+  group('Running in Place — frame-budget floor (CadenceDetector.stableFrames = 2)',
+      () {
+    test('5 fast alternating steps at the floor -> exactly 5', () {
+      final v = createMotionValidator(AiMotionActivity.runningInPlace, 10);
+      v.start();
+      var t = 0;
+      void hold(Map<String, NuvoPosePoint> Function() pose, int n) {
+        for (var i = 0; i < n; i++) {
+          v.update(NuvoPoseFrame(
+            points: pose(),
+            imageWidth: 1000,
+            imageHeight: 1000,
+            createdAt: DateTime.utc(2026).add(Duration(milliseconds: 33 * t++)),
+          ));
+        }
+      }
+
+      hold(cadenceLeftUp, 2); // baseline, no count
+      for (var i = 0; i < 5; i++) {
+        hold(i.isEven ? cadenceRightUp : cadenceLeftUp, 2);
+      }
+      expect(v.currentValue, 5);
+    });
+
+    test('below the floor (hold=1, never 2 consecutive) does not count', () {
+      final v = createMotionValidator(AiMotionActivity.runningInPlace, 10);
+      v.start();
+      var t = 0;
+      for (var i = 0; i < 10; i++) {
+        v.update(NuvoPoseFrame(
+          points: i.isEven ? cadenceLeftUp() : cadenceRightUp(),
+          imageWidth: 1000,
+          imageHeight: 1000,
+          createdAt: DateTime.utc(2026).add(Duration(milliseconds: 33 * t++)),
+        ));
+      }
+      expect(v.currentValue, 0);
+    });
+  });
+
   test(
     'summary: every movement counts 5 back-to-back reps at its exact frame floor '
     '(no missed / no double-counted reps), and rejects one frame short of it. '

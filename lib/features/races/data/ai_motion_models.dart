@@ -11,7 +11,17 @@ enum AiMotionActivity {
   deepSquats,
   squatJacks,
   jumpSquats,
-  lungeJumps;
+  lungeJumps,
+  runningInPlace,
+  treadmillRunning,
+  walkingInPlace,
+  marchingInPlace,
+  buttKicks,
+  mountainClimbers,
+  burpees,
+  stepUps,
+  calfRaises,
+  lateralSteps;
 
   String get backendValue => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping_jacks',
@@ -27,6 +37,16 @@ enum AiMotionActivity {
     AiMotionActivity.squatJacks => 'squat_jacks',
     AiMotionActivity.jumpSquats => 'jump_squats',
     AiMotionActivity.lungeJumps => 'lunge_jumps',
+    AiMotionActivity.runningInPlace => 'running_in_place',
+    AiMotionActivity.treadmillRunning => 'treadmill_running',
+    AiMotionActivity.walkingInPlace => 'walking_in_place',
+    AiMotionActivity.marchingInPlace => 'marching_in_place',
+    AiMotionActivity.buttKicks => 'butt_kicks',
+    AiMotionActivity.mountainClimbers => 'mountain_climbers',
+    AiMotionActivity.burpees => 'burpees',
+    AiMotionActivity.stepUps => 'step_ups',
+    AiMotionActivity.calfRaises => 'calf_raises',
+    AiMotionActivity.lateralSteps => 'lateral_steps',
   };
 
   String get label => switch (this) {
@@ -43,6 +63,16 @@ enum AiMotionActivity {
     AiMotionActivity.squatJacks => 'squat jacks',
     AiMotionActivity.jumpSquats => 'jump squats',
     AiMotionActivity.lungeJumps => 'lunge jumps',
+    AiMotionActivity.runningInPlace => 'running in place',
+    AiMotionActivity.treadmillRunning => 'treadmill running',
+    AiMotionActivity.walkingInPlace => 'walking in place',
+    AiMotionActivity.marchingInPlace => 'marching in place',
+    AiMotionActivity.buttKicks => 'butt kicks',
+    AiMotionActivity.mountainClimbers => 'mountain climbers',
+    AiMotionActivity.burpees => 'burpees',
+    AiMotionActivity.stepUps => 'step-ups',
+    AiMotionActivity.calfRaises => 'calf raises',
+    AiMotionActivity.lateralSteps => 'lateral steps',
   };
 
   static AiMotionActivity fromBackendValue(String value) => switch (value) {
@@ -58,6 +88,25 @@ enum AiMotionActivity {
     'squat_jacks' || 'squat jacks' => AiMotionActivity.squatJacks,
     'jump_squats' || 'jump squats' => AiMotionActivity.jumpSquats,
     'lunge_jumps' || 'lunge jumps' => AiMotionActivity.lungeJumps,
+    'running_in_place' || 'running in place' =>
+      AiMotionActivity.runningInPlace,
+    'treadmill_running' || 'treadmill running' =>
+      AiMotionActivity.treadmillRunning,
+    'walking_in_place' || 'walking in place' =>
+      AiMotionActivity.walkingInPlace,
+    'marching_in_place' || 'marching in place' =>
+      AiMotionActivity.marchingInPlace,
+    'butt_kicks' || 'butt kicks' => AiMotionActivity.buttKicks,
+    'mountain_climbers' || 'mountain climbers' =>
+      AiMotionActivity.mountainClimbers,
+    'burpees' || 'burpee' => AiMotionActivity.burpees,
+    'step_ups' || 'step ups' || 'step-ups' => AiMotionActivity.stepUps,
+    'calf_raises' || 'calf raises' => AiMotionActivity.calfRaises,
+    'lateral_steps' ||
+    'lateral steps' ||
+    'side_steps' ||
+    'side steps' =>
+      AiMotionActivity.lateralSteps,
     _ => AiMotionActivity.pushUps,
   };
 }

@@ -341,6 +341,266 @@ const motionActivityDefinitions = [
     featured: false,
     sortPriority: 8,
   ),
+  MotionActivityDefinition(
+    type: MotionActivityType.runningInPlace,
+    title: 'Running in Place',
+    metric: RaceMetric.reps,
+    suggestedTargets: [50, 100, 200, 400],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['running in place', 'run in place', 'running'],
+    proofLabel: 'running in place',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Alternate knees at a running cadence.',
+      'Stay roughly in place.',
+    ],
+    icon: Icons.directions_run_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.cardio,
+    featured: true,
+    sortPriority: 4,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.treadmillRunning,
+    title: 'Treadmill Running',
+    metric: RaceMetric.reps,
+    suggestedTargets: [50, 100, 200, 400],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['treadmill running', 'treadmill', 'running on treadmill'],
+    proofLabel: 'treadmill running',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Detected from your gait, not the treadmill.',
+      'Camera stays fixed on you as you run.',
+    ],
+    icon: Icons.directions_run_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.cardio,
+    featured: false,
+    sortPriority: 5,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.walkingInPlace,
+    title: 'Walking in Place',
+    metric: RaceMetric.reps,
+    suggestedTargets: [40, 80, 150, 300],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['walking in place', 'walk in place', 'walking'],
+    proofLabel: 'walking in place',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Step in place, alternating feet.',
+      'Stay roughly in place.',
+    ],
+    icon: Icons.directions_walk_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 9,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.marchingInPlace,
+    title: 'Marching in Place',
+    metric: RaceMetric.reps,
+    suggestedTargets: [40, 80, 150, 300],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['marching in place', 'march in place', 'marching'],
+    proofLabel: 'marching in place',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Lift each knee up high, alternating sides.',
+      'Stay roughly in place.',
+    ],
+    icon: Icons.directions_walk_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 10,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.buttKicks,
+    title: 'Butt Kicks',
+    metric: RaceMetric.reps,
+    suggestedTargets: [20, 40, 80, 150],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['butt kicks', 'butt kick', 'heel kicks', 'glute kicks'],
+    proofLabel: 'butt kicks',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Kick your heels back toward your glutes.',
+      'Alternate sides.',
+    ],
+    icon: Icons.bolt_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 11,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.mountainClimbers,
+    title: 'Mountain Climbers',
+    metric: RaceMetric.reps,
+    suggestedTargets: [20, 40, 80, 150],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['mountain climbers', 'mountain climber', 'climbers'],
+    proofLabel: 'mountain climbers',
+    cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body visible.',
+      'Hands planted, drive your knees in one at a time.',
+      'Alternate sides.',
+    ],
+    icon: Icons.terrain_rounded,
+    framingLabel: 'Full body · hands planted',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.fullBody,
+    featured: true,
+    sortPriority: 2,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.burpees,
+    title: 'Burpees',
+    metric: RaceMetric.reps,
+    suggestedTargets: [5, 10, 20, 40],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['burpees', 'burpee'],
+    proofLabel: 'burpees',
+    cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body visible.',
+      'Crouch down with hands toward the floor.',
+      'Stand tall to finish the rep.',
+    ],
+    icon: Icons.whatshot_rounded,
+    framingLabel: 'Full body centered in frame',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.fullBody,
+    featured: true,
+    sortPriority: 1,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.stepUps,
+    title: 'Step-Ups',
+    metric: RaceMetric.reps,
+    suggestedTargets: [20, 40, 80, 150],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['step ups', 'step-ups', 'step up'],
+    proofLabel: 'step-ups',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Step up and alternate legs.',
+      'Stay roughly in place.',
+    ],
+    icon: Icons.stairs_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 12,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.calfRaises,
+    title: 'Calf Raises',
+    metric: RaceMetric.reps,
+    suggestedTargets: [15, 25, 50, 100],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['calf raises', 'calf raise', 'heel raises'],
+    proofLabel: 'calf raises',
+    cameraInstruction: 'Lower body front view',
+    instructions: [
+      'Keep your lower body visible.',
+      'Rise onto your toes, then lower fully.',
+      'Keep your knees straight.',
+    ],
+    icon: Icons.height_rounded,
+    framingLabel: 'Lower body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 13,
+  ),
+  MotionActivityDefinition(
+    type: MotionActivityType.lateralSteps,
+    title: 'Lateral Steps',
+    metric: RaceMetric.reps,
+    suggestedTargets: [20, 40, 80, 150],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+      RaceFormat.timedAttempt,
+    ],
+    aliases: ['lateral steps', 'side steps', 'side step', 'lateral step'],
+    proofLabel: 'lateral steps',
+    cameraInstruction: 'Full body front view',
+    instructions: [
+      'Keep your full body visible.',
+      'Step side to side, alternating directions.',
+      'Take a deliberate step, not a small shuffle.',
+    ],
+    icon: Icons.swap_horiz_rounded,
+    framingLabel: 'Full body visible',
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    category: MovementCategory.lowerBody,
+    featured: false,
+    sortPriority: 14,
+  ),
 ];
 
 /// All preset movement types that support camera verification.
@@ -479,6 +739,40 @@ MotionActivityDefinition? inferSupportedMotionActivity(
   if (RegExp(r'(^|[^a-z])arm\s+raises?([^a-z]|$)').hasMatch(normalized) ||
       RegExp(r'(^|[^a-z])armraises?([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.armRaises);
+  }
+  if (RegExp(r'(^|[^a-z])treadmill([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.treadmillRunning);
+  }
+  if (RegExp(r'(^|[^a-z])running\s+in\s+place([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])run\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.runningInPlace);
+  }
+  if (RegExp(r'(^|[^a-z])walking\s+in\s+place([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])walk\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.walkingInPlace);
+  }
+  if (RegExp(r'(^|[^a-z])marching([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])march\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.marchingInPlace);
+  }
+  if (RegExp(r'(^|[^a-z])butt\s+kicks?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.buttKicks);
+  }
+  if (RegExp(r'(^|[^a-z])mountain\s+climbers?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.mountainClimbers);
+  }
+  if (RegExp(r'(^|[^a-z])burpees?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.burpees);
+  }
+  if (RegExp(r'(^|[^a-z])step\s*-?\s*ups?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.stepUps);
+  }
+  if (RegExp(r'(^|[^a-z])calf\s+raises?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.calfRaises);
+  }
+  if (RegExp(r'(^|[^a-z])lateral\s+steps?([^a-z]|$)').hasMatch(normalized) ||
+      RegExp(r'(^|[^a-z])side\s+steps?([^a-z]|$)').hasMatch(normalized)) {
+    return motionActivityForType(MotionActivityType.lateralSteps);
   }
   return null;
 }

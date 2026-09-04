@@ -31,7 +31,7 @@ void main() {
     });
 
     test('does not silently fall back for unsupported activities', () {
-      expect(draftFromIdea('First to 10 burpees'), isNull);
+      expect(draftFromIdea('First to 10 cartwheels'), isNull);
     });
 
     test('templates emit one shared structured create payload', () {
