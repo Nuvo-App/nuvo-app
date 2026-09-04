@@ -192,12 +192,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onStart: () => context.push('/races/new'),
                               onJoin: () => context.push('/races/join'),
                             ),
-                            // A little more breathing room here than a pure
-                            // compaction pass would use — this is a deliberate
-                            // section break, not blank space to squeeze out.
-                            const SizedBox(height: 26),
+                            // A deliberate section break, not blank space to
+                            // squeeze out — but not more than that either.
+                            const SizedBox(height: 20),
                             const _SectionLabel(title: 'Leaderboard'),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                             _Standings(
                               board: activeBoard,
                               // Prefer the authoritative race so this shows the
@@ -418,8 +417,13 @@ class _NextMoveHero extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              // Centered so the card's content reads as intentionally
+              // balanced in the available height instead of top-aligned
+              // with dead white space collecting below _RaceDetails.
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     board.title,
@@ -432,7 +436,7 @@ class _NextMoveHero extends StatelessWidget {
                       letterSpacing: 0,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -466,27 +470,33 @@ class _NextMoveHero extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _RaceProgressTrack(
                     key: ValueKey('progress-${board.id}'),
                     progress: pct / 100,
                   ),
-                  const SizedBox(height: 6),
-                  // Flexible so the hero absorbs a two-line chase line, a long
-                  // title, or a larger OS text size by shrinking here instead
-                  // of overflowing the fixed hero height.
-                  Flexible(
-                    child: Text(
-                      board.chaseCopy ?? board.boardContext,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: _arenaMuted,
-                        height: 1.3,
+                  // board.chaseCopy is a real personalized line ("You lead
+                  // Alex by 17 reps"). board.boardContext is a generic
+                  // fallback that, for most boards, just restates the racer
+                  // count in prose — the same fact _RaceDetails' avatar row
+                  // already states below. Only show this line when there is
+                  // real personalized content; otherwise the avatar row is
+                  // the one clean participant line, not one of three.
+                  if (board.chaseCopy != null) ...[
+                    const SizedBox(height: 6),
+                    Flexible(
+                      child: Text(
+                        board.chaseCopy!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: _arenaMuted,
+                          height: 1.3,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
+                  ],
+                  const SizedBox(height: 8),
                   _RaceDetails(board: board),
                 ],
               ),
