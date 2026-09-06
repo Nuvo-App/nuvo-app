@@ -131,25 +131,17 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       const SizedBox(height: 12),
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          // Compressed from 344/336 — mostly by removing the
-                          // redundant racer-count line (it duplicated
-                          // _RaceDetails' avatar line below) and tightening
-                          // internal gaps, not by shrinking typography or the
-                          // "See race board" footer. Title/chase copy keep
-                          // real headroom for a 2-line wrap; the hero
-                          // Container clips to its rounded corners as a
-                          // safety net, but this value is chosen to not need
-                          // it in normal content.
-                          //
-                          // Bumped +20 (312/304) as a final surgical viewport-
-                          // composition nudge — pushes the page down just
-                          // enough that rank 4+ lands fully below the fold.
-                          // Internal card padding/gaps are unchanged; the
-                          // extra room is absorbed by the Expanded content
-                          // area, not spread across explicit gaps.
+                          // Sized to the card's actual content (title ->
+                          // "0 / 6 reps" -> progress line -> avatar+racer
+                          // row -> footer — the chase-copy line is gone, see
+                          // _NextMoveHero), not used as a page-composition
+                          // spacer. A short margin over the 1-line-title
+                          // minimum covers a 2-line title/OS text scaling;
+                          // the hero Container's rounded-corner clip is the
+                          // fallback for anything past that, same as before.
                           final heroHeight = constraints.maxWidth < 360
-                              ? 312.0
-                              : 304.0;
+                              ? 258.0
+                              : 250.0;
                           return SizedBox(
                             height: heroHeight,
                             child: PageView.builder(
@@ -192,11 +184,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onStart: () => context.push('/races/new'),
                               onJoin: () => context.push('/races/join'),
                             ),
-                            // A deliberate section break, not blank space to
-                            // squeeze out — but not more than that either.
-                            const SizedBox(height: 20),
+                            // Shorter card reclaims real room here — the
+                            // leaderboard section gets to breathe instead of
+                            // rank 4+ getting exposed to fill the space.
+                            const SizedBox(height: 28),
                             const _SectionLabel(title: 'Leaderboard'),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 16),
                             _Standings(
                               board: activeBoard,
                               // Prefer the authoritative race so this shows the
@@ -475,28 +468,12 @@ class _NextMoveHero extends StatelessWidget {
                     key: ValueKey('progress-${board.id}'),
                     progress: pct / 100,
                   ),
-                  // board.chaseCopy is a real personalized line ("You lead
-                  // Alex by 17 reps"). board.boardContext is a generic
-                  // fallback that, for most boards, just restates the racer
-                  // count in prose — the same fact _RaceDetails' avatar row
-                  // already states below. Only show this line when there is
-                  // real personalized content; otherwise the avatar row is
-                  // the one clean participant line, not one of three.
-                  if (board.chaseCopy != null) ...[
-                    const SizedBox(height: 6),
-                    Flexible(
-                      child: Text(
-                        board.chaseCopy!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: _arenaMuted,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
+                  // The chase-copy/board-context line is gone entirely — the
+                  // card already states progress prominently ("0 / 6 reps")
+                  // and _RaceDetails states the participant count once,
+                  // below. A third restatement in prose added height without
+                  // adding information.
+                  const SizedBox(height: 10),
                   _RaceDetails(board: board),
                 ],
               ),
@@ -583,9 +560,6 @@ class _RaceDetails extends StatelessWidget {
         )
         .toList();
     final total = board.racerCount ?? board.miniLeaderboard.length;
-    final detail = board.daysLeft != null
-        ? '${board.daysLeft} days to finish'
-        : board.proofLabel ?? 'Keep moving toward the finish line';
 
     return Row(
       children: [
@@ -601,10 +575,10 @@ class _RaceDetails extends StatelessWidget {
         ],
         Expanded(
           child: Text(
-            // Compact: "N racers", not "N on the board" — the card no
-            // longer repeats the racer count elsewhere, so this is the one
-            // place it's said.
-            total > 0 ? '$total racers · $detail' : detail,
+            // One clean participant line — the card already shows progress
+            // ("0 / 6 reps") prominently, so this is just "N racers", not a
+            // compound restatement of the same facts.
+            total == 1 ? '1 racer' : '$total racers',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.labelSmall.copyWith(
@@ -727,7 +701,7 @@ class _QuickActions extends StatelessWidget {
           label: 'Submit proof',
           onPressed: onSubmit,
           expand: true,
-          height: 62,
+          height: 64,
         ),
       ),
       const SizedBox(width: 8),
@@ -739,7 +713,7 @@ class _QuickActions extends StatelessWidget {
           iconOnly: true,
           onPressed: onStart,
           expand: true,
-          height: 62,
+          height: 64,
         ),
       ),
       const SizedBox(width: 8),
@@ -751,7 +725,7 @@ class _QuickActions extends StatelessWidget {
           iconOnly: true,
           onPressed: onJoin,
           expand: true,
-          height: 62,
+          height: 64,
         ),
       ),
     ],
@@ -830,29 +804,25 @@ class _Standings extends StatelessWidget {
             isCurrentUser: e.isMe,
           ),
       ],
-      // Deliberate extra push beyond NuvoPodium's own top-3 -> rest gap: rank
-      // 4+ is normal scroll content and should read as clearly starting a
-      // new section below the first viewport, not half-visible at its edge.
+      // Rank 4+ is ordinary scroll content — the shorter card is what keeps
+      // it below the first viewport now, not an artificial spacer here.
       rest: rest.isEmpty
           ? null
-          : Padding(
-              padding: const EdgeInsets.only(top: 28),
-              child: _OutlinedSheet(
-                child: Column(
-                  children: [
-                    for (var i = 0; i < rest.length; i++) ...[
-                      _StandingRow(entry: rest[i]),
-                      if (i < rest.length - 1)
-                        const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: NuvoColors.divider,
-                          indent: 16,
-                          endIndent: 16,
-                        ),
-                    ],
+          : _OutlinedSheet(
+              child: Column(
+                children: [
+                  for (var i = 0; i < rest.length; i++) ...[
+                    _StandingRow(entry: rest[i]),
+                    if (i < rest.length - 1)
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: NuvoColors.divider,
+                        indent: 16,
+                        endIndent: 16,
+                      ),
                   ],
-                ),
+                ],
               ),
             ),
     );
