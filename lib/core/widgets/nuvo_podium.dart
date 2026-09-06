@@ -61,20 +61,20 @@ class NuvoPodium extends StatelessWidget {
           children: [
             Expanded(
               child: Padding(
-                padding: EdgeInsets.only(top: 18 * s),
+                padding: EdgeInsets.only(top: 22 * s),
                 child: _Place(entry: second, place: 2),
               ),
             ),
             Expanded(child: _Place(entry: first, place: 1, raised: true)),
             Expanded(
               child: Padding(
-                padding: EdgeInsets.only(top: 18 * s),
+                padding: EdgeInsets.only(top: 22 * s),
                 child: _Place(entry: third, place: 3),
               ),
             ),
           ],
         ),
-        if (rest != null) ...[SizedBox(height: 14 * s), rest!],
+        if (rest != null) ...[SizedBox(height: 22 * s), rest!],
       ],
     );
   }
@@ -148,7 +148,7 @@ class _Place extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: 8 * s),
+        SizedBox(height: 10 * s),
         Text(
           e.isCurrentUser ? 'You' : e.name.split(' ').first,
           maxLines: 1,
@@ -159,7 +159,7 @@ class _Place extends StatelessWidget {
             fontSize: (raised ? 16 : 14) * s,
           ),
         ),
-        SizedBox(height: 2 * s),
+        SizedBox(height: 3 * s),
         Text(
           e.statLabel,
           maxLines: 1,
