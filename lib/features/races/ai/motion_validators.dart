@@ -2200,13 +2200,32 @@ class CadenceMotionValidator extends _BaseValidator {
   void resetState() {
     _cadence.reset();
     _lastMeasuredSide = null;
+    _lastKneeStagger = 0;
+    _lastCountFrame = -1;
+    _repIntervalFrames = 0;
   }
+
+  double _lastKneeStagger = 0;
+  int _lastCountFrame = -1;
+  int _repIntervalFrames = 0;
 
   @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
     final features = PoseFeatureExtractor(frame);
+    // Diagnostic: the raw left/right knee-height stagger the gait signal keys
+    // on — a device log showing this hovering near 0 means "not enough knee
+    // lift", not "wrong movement".
+    if (frame.hasPoints(const ['leftKnee', 'rightKnee'])) {
+      _lastKneeStagger =
+          (frame.point('rightKnee')!.y - frame.point('leftKnee')!.y);
+    }
     _lastMeasuredSide = definition.sideSignal(features);
-    _cadence.update(_lastMeasuredSide);
+    final counted = _cadence.update(_lastMeasuredSide);
+    if (counted) {
+      _repIntervalFrames =
+          _lastCountFrame < 0 ? 0 : framesAnalyzed - _lastCountFrame;
+      _lastCountFrame = framesAnalyzed;
+    }
   }
 
   @override
@@ -2214,7 +2233,9 @@ class CadenceMotionValidator extends _BaseValidator {
         ...super.debugValues,
         'currentSide': _sideCode(_cadence.currentSide),
         'measuredSide': _sideCode(_lastMeasuredSide),
+        'kneeStagger': _lastKneeStagger,
         'cycles': _cadence.cycles.toDouble(),
+        'repIntervalFrames': _repIntervalFrames.toDouble(),
       };
 
   double _sideCode(CadenceSide? side) =>
@@ -2228,34 +2249,48 @@ const _cadenceLegLandmarks = [
   'rightKnee',
 ];
 
-/// Alternating knee-elevation signal shared by Running / Walking / Marching /
-/// Step-Ups. [raiseFraction] is a fraction of hip width — smaller means the
-/// knee must rise closer to hip level (a bigger, more deliberate lift; used
-/// for Marching), larger means a shallow lift already counts (Walking).
-/// Body-scale-relative throughout — no raw pixel offsets (see the High
-/// Knees / Arm Raises camera-distance lesson).
+/// Alternating-gait signal shared by Running / Walking / Marching / Step-Ups
+/// (and, behind a plank gate, Mountain Climbers).
+///
+/// The signal is the DIFFERENCE in height between the two knees, not either
+/// knee's proximity to its hip. On a real phone camera a normal running or
+/// marching cadence never brings a knee anywhere near hip level, so the old
+/// `knee.y < hip.y + hipWidth*f` gate essentially never armed. What does show
+/// reliably is one knee clearly higher than the other, alternating.
+///
+/// [liftFraction] is how staggered the knees must be, as a fraction of hip
+/// width: Walking ~0.30 (a shallow shuffle), Running ~0.55, Marching /
+/// Step-Ups ~0.65 (a deliberate high step). Body-scale-relative throughout —
+/// no raw pixel offsets.
+///
+/// KNOWN LIMITATION: from a front camera, Running / Marching / Step-Ups are
+/// nearly the same signal at nearly the same amplitude — the real-world
+/// difference is tempo, which is not measured here. These thresholds
+/// separate a shallow walk from a deliberate lift but do NOT cleanly
+/// separate a jog from a march. Cross-negatives in
+/// test/preset_motion_expansion_test.dart measure the overlap rather than
+/// claim it away.
 CadenceSide? kneeAlternationSide(
   PoseFeatureExtractor f, {
-  required double raiseFraction,
+  required double liftFraction,
 }) {
-  final leftHip = f.frame.point('leftHip')!;
-  final rightHip = f.frame.point('rightHip')!;
   final leftKnee = f.frame.point('leftKnee')!;
   final rightKnee = f.frame.point('rightKnee')!;
   final hipWidth = f.hipWidth.clamp(0.06, 0.5);
-  final raiseGap = hipWidth * raiseFraction;
-  final leftRaised = leftKnee.y < leftHip.y + raiseGap;
-  final rightRaised = rightKnee.y < rightHip.y + raiseGap;
-  if (leftRaised == rightRaised) return null; // neither, or both — ambiguous
-  return leftRaised ? CadenceSide.left : CadenceSide.right;
+  final threshold = hipWidth * liftFraction;
+  // y grows downward — a smaller y is a higher knee.
+  final diff = rightKnee.y - leftKnee.y; // > 0 => left knee is higher
+  if (diff > threshold) return CadenceSide.left;
+  if (diff < -threshold) return CadenceSide.right;
+  return null; // knees roughly level — mid-stride or standing
 }
 
-/// Marching in Place: a deliberate, high knee lift. Uses the smallest
-/// raiseFraction (knee must get closest to hip level) of the cadence family.
+/// Marching in Place: a deliberate, high knee lift — the largest knee-height
+/// stagger (liftFraction 0.95) of the cadence family.
 final marchingInPlaceDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.marchingInPlace,
   requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.05),
+  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.65),
   statusText: 'Tracking marching',
   coachingTextActive: 'Lift each knee up high, alternating sides',
   coachingTextIncomplete: 'Lower body needed',
@@ -2266,7 +2301,7 @@ final marchingInPlaceDefinition = CadenceMovementDefinition(
 final runningInPlaceDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.runningInPlace,
   requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.20),
+  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.55),
   statusText: 'Tracking running in place',
   coachingTextActive: 'Keep your feet moving',
   coachingTextIncomplete: 'Lower body needed',
@@ -2276,14 +2311,14 @@ final runningInPlaceDefinition = CadenceMovementDefinition(
 /// Treadmill Running: the SAME body-relative gait signal as Running in
 /// Place — this deliberately does not (and cannot, from pose alone) detect
 /// a treadmill; it infers running motion from the body and is invariant to
-/// global root translation because it only ever compares a knee's Y to its
-/// own hip's Y, never to a fixed frame position. Kept as its own catalog
-/// entry/definition per product requirement, not merged into Running in
-/// Place, even though the detection is currently identical.
+/// global root translation because it only ever compares the two knees'
+/// heights to each other, never to a fixed frame position. Kept as its own
+/// catalog entry/definition per product requirement, not merged into
+/// Running in Place, even though the detection is currently identical.
 final treadmillRunningDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.treadmillRunning,
   requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.20),
+  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.55),
   statusText: 'Tracking treadmill running',
   coachingTextActive: 'Keep your feet moving',
   coachingTextIncomplete: 'Lower body needed',
@@ -2293,7 +2328,7 @@ final treadmillRunningDefinition = CadenceMovementDefinition(
 final walkingInPlaceDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.walkingInPlace,
   requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.35),
+  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.30),
   statusText: 'Tracking walking in place',
   coachingTextActive: 'Step in place, alternating feet',
   coachingTextIncomplete: 'Lower body needed',
@@ -2301,13 +2336,13 @@ final walkingInPlaceDefinition = CadenceMovementDefinition(
 
 /// Step-Ups: pose-only tracking cannot see the physical box/step, so this
 /// reuses the marching-style deliberate-lift signal. KNOWN LIMITATION: this
-/// is geometrically very close to Marching in Place and, at a shallow step
-/// height, High Knees — see test/cadence_replay_test.dart for the measured
-/// cross-confusion rather than a claimed clean separation.
+/// is geometrically identical to Marching in Place and, at a shallow step
+/// height, close to High Knees — see test/preset_motion_expansion_test.dart
+/// for the measured cross-confusion rather than a claimed clean separation.
 final stepUpsDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.stepUps,
   requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, raiseFraction: 0.05),
+  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.65),
   statusText: 'Tracking step-ups',
   coachingTextActive: 'Step up and alternate legs',
   coachingTextIncomplete: 'Lower body needed',
@@ -2322,22 +2357,32 @@ const _buttKickLandmarks = [
   'rightAnkle',
 ];
 
-/// Butt Kicks: heel-to-glute — sharp KNEE flexion while the thigh stays
-/// down. This is the discriminator from High Knees / Marching, which raise
-/// the thigh (hip flexion) rather than folding the shin back (knee flexion).
+/// Butt Kicks: heel-to-glute — the shin folds back and UP so the ankle rises
+/// toward the knee/hip, while the thigh stays roughly down. The signal is the
+/// alternating ANKLE-height difference (not knee angle, which needs a
+/// well-tracked ankle behind the body — often the worst-tracked landmark in
+/// this movement). The thigh-down gate is what keeps a High Knee (thigh up,
+/// ankle also up but knee up too) from reading as a butt kick.
 CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
   final leftHip = f.frame.point('leftHip')!;
   final rightHip = f.frame.point('rightHip')!;
   final leftKnee = f.frame.point('leftKnee')!;
   final rightKnee = f.frame.point('rightKnee')!;
+  final leftAnkle = f.frame.point('leftAnkle')!;
+  final rightAnkle = f.frame.point('rightAnkle')!;
   final hipWidth = f.hipWidth.clamp(0.06, 0.5);
-  final thighDownGap = hipWidth * 0.35;
-  final leftThighDown = leftKnee.y > leftHip.y + thighDownGap;
-  final rightThighDown = rightKnee.y > rightHip.y + thighDownGap;
-  final leftKick = f.kneeAngle(left: true) < 60 && leftThighDown;
-  final rightKick = f.kneeAngle(left: false) < 60 && rightThighDown;
-  if (leftKick == rightKick) return null;
-  return leftKick ? CadenceSide.left : CadenceSide.right;
+
+  // Thigh stays down: reject the frame for a side whose knee has lifted a lot
+  // toward the hip (that's a knee raise, not a heel kick).
+  final leftKneeUp = leftKnee.y < leftHip.y + hipWidth * 0.55;
+  final rightKneeUp = rightKnee.y < rightHip.y + hipWidth * 0.55;
+
+  // Alternating ankle stagger — a smaller y is a higher ankle (heel up).
+  final threshold = hipWidth * 0.55;
+  final diff = rightAnkle.y - leftAnkle.y; // > 0 => left ankle is higher
+  if (diff > threshold && !leftKneeUp) return CadenceSide.left;
+  if (diff < -threshold && !rightKneeUp) return CadenceSide.right;
+  return null;
 }
 
 const buttKicksDefinition = CadenceMovementDefinition(
@@ -2370,14 +2415,15 @@ CadenceSide? _mountainClimberSide(PoseFeatureExtractor f) {
   final rightWrist = f.frame.point('rightWrist')!;
   final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
   final wristY = (leftWrist.y + rightWrist.y) / 2;
-  // Planted hands read close to SHOULDER height (arms extended straight down
-  // supporting the body). Relaxed standing arms also hang "below shoulder
-  // height" but close to HIP height — so the discriminator has to be
-  // "close to the shoulder", not merely "not above the shoulder", or every
-  // standing pose with arms at the sides would satisfy it.
-  final handsPlanted = (wristY - shoulderY).abs() < f.torsoHeight * 0.35;
-  if (!handsPlanted) return null;
-  return kneeAlternationSide(f, raiseFraction: 0.20);
+  // Plank context: the whole body sits LOW in the frame (a standing person's
+  // shoulders are near the top) and the hands are not raised above the
+  // shoulders. This is what rejects standing High Knees — where the
+  // shoulders are high and the arms swing — without depending on the exact
+  // wrist-to-shoulder offset, which a front-camera plank foreshortens badly.
+  final bodyIsLow = shoulderY > 0.35;
+  final handsNotRaised = wristY > shoulderY - 0.08;
+  if (!bodyIsLow || !handsNotRaised) return null;
+  return kneeAlternationSide(f, liftFraction: 0.55);
 }
 
 const mountainClimbersDefinition = CadenceMovementDefinition(
