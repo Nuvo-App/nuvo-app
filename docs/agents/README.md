@@ -26,6 +26,7 @@ This is the operational map for agents working on Nuvo, an app that turns real-l
 | [`11-adding-a-feature.md`](11-adding-a-feature.md) | step-by-step recipes: tweak a screen, add a field / API call / screen / widget / proof type; the pre-commit checklist |
 | [`12-screen-reference.md`](12-screen-reference.md) | every route/screen: file, primary action, states, shared widgets, data source |
 | [`13-motion-engine-v2.md`](13-motion-engine-v2.md) | Motion V2 (Teach Nuvo pretrained-encoder rebuild) — architecture, status, `tools/motion_v2/`, rules for continuing |
+| [`14-preset-motion-creation.md`](14-preset-motion-creation.md) | **the contract for adding a new preset motion** — registration checklist (all 16 layers incl. the Cloudflare Worker + deploy), verifier patterns, fast-rep / double-count / noise / cross-negative test requirements, count semantics, diagnostics, Definition-of-Done template. Read before "create a preset for X". |
 | [`../NAVIGATION_MAP.md`](../NAVIGATION_MAP.md) | the route table, navigation graph, and which verb (`go` / `push` / `pushReplacement` / `safePopOrGo`) |
 
 ## Source-of-truth rule

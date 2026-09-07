@@ -10,25 +10,20 @@ import 'package:nuvo/features/races/domain/race_draft.dart';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-/// The preset movements that must round-trip through every Flutter layer.
-const _presetCases = <(String, MotionActivityType, AiMotionActivity)>[
-  ('push_ups', MotionActivityType.pushUps, AiMotionActivity.pushUps),
-  ('squats', MotionActivityType.squats, AiMotionActivity.squats),
-  (
-    'jumping_jacks',
-    MotionActivityType.jumpingJacks,
-    AiMotionActivity.jumpingJacks,
-  ),
-  ('lunges', MotionActivityType.lunges, AiMotionActivity.lunges),
-  ('plank_hold', MotionActivityType.plankHold, AiMotionActivity.plankHold),
-  ('high_knees', MotionActivityType.highKnees, AiMotionActivity.highKnees),
-  ('arm_raises', MotionActivityType.armRaises, AiMotionActivity.armRaises),
-  ('sumo_squats', MotionActivityType.sumoSquats, AiMotionActivity.sumoSquats),
-  ('side_lunges', MotionActivityType.sideLunges, AiMotionActivity.sideLunges),
-  ('deep_squats', MotionActivityType.deepSquats, AiMotionActivity.deepSquats),
-  ('squat_jacks', MotionActivityType.squatJacks, AiMotionActivity.squatJacks),
-  ('jump_squats', MotionActivityType.jumpSquats, AiMotionActivity.jumpSquats),
-  ('lunge_jumps', MotionActivityType.lungeJumps, AiMotionActivity.lungeJumps),
+/// Every preset movement that must round-trip through every Flutter layer.
+///
+/// Derived from the production catalog (`motionActivityDefinitions`) so a new
+/// preset added there is automatically covered by every round-trip test
+/// below — the registration cannot silently diverge across layers. See also
+/// `test/preset_registration_contract_test.dart` and
+/// `docs/agents/PRESET_MOTION_CREATION.md`.
+final _presetCases = <(String, MotionActivityType, AiMotionActivity)>[
+  for (final def in motionActivityDefinitions)
+    (
+      def.type.backendValue,
+      def.type,
+      AiMotionActivity.fromBackendValue(def.type.backendValue),
+    ),
 ];
 
 /// Builds a backend JSON payload for a preset race, mirroring what the

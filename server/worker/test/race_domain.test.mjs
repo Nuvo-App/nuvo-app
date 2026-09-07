@@ -688,3 +688,50 @@ test('existing five preset activities still normalize correctly (regression)', (
   // regression guard is that the ORIGINAL five still normalize correctly.
   assert.equal(normalizeActivityId('burpees'), 'burpees');
 });
+
+const {
+  RACE_ACTIVITY_CATALOG,
+} = require('../.tmp-test-dist/domain/raceActivities.js');
+
+// Registration invariant: every activity in RACE_ACTIVITY_CATALOG must be
+// accepted by every gate on the race-creation path. This is the server-side
+// mirror of test/preset_registration_contract_test.dart — it prevents the
+// "client offers a preset the deployed Worker rejects with 'choose a
+// supported activity'" class of bug. NOTE: passing here only proves the
+// SOURCE is correct — the Worker must still be redeployed (`npm run deploy`)
+// for a catalog change to reach production.
+test('every RACE_ACTIVITY_CATALOG entry passes the full creation route', () => {
+  for (const activity of RACE_ACTIVITY_CATALOG) {
+    const id = activity.id;
+
+    assert.equal(normalizeActivityId(id), id, `${id}: normalizeActivityId`);
+    assert.ok(activityForId(id), `${id}: activityForId`);
+
+    const unit = activity.defaultMetric;
+    const config = configFromBody({
+      activityId: id,
+      metric: unit,
+      format: 'first_to_goal',
+      targetValue: 15,
+    });
+    assert.equal(
+      'error' in config,
+      false,
+      `${id}: configFromBody rejected it: ${JSON.stringify(config)}`,
+    );
+    assert.equal(config.activityId, id, `${id}: config.activityId`);
+    assert.equal(config.metric, unit, `${id}: config.metric`);
+  }
+});
+
+test('the 10 preset-motion-expansion activities are all in the catalog', () => {
+  const ids = new Set(RACE_ACTIVITY_CATALOG.map((a) => a.id));
+  for (const id of [
+    'running_in_place', 'treadmill_running', 'walking_in_place',
+    'marching_in_place', 'butt_kicks', 'mountain_climbers', 'burpees',
+    'step_ups', 'calf_raises', 'lateral_steps',
+  ]) {
+    assert.ok(ids.has(id), `${id} missing from RACE_ACTIVITY_CATALOG`);
+    assert.equal(normalizeActivityId(id), id, `${id}: normalizeActivityId`);
+  }
+});
