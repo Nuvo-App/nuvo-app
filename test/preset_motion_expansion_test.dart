@@ -153,10 +153,12 @@ Map<String, NuvoPosePoint> _mcDrive({required bool left}) {
 
 void main() {
   // ── Running / Treadmill / Walking / Marching / Step-Ups ──────────────────
-  // liftFraction in motion_validators: Walking 0.30, Running/Treadmill 0.55,
-  // Marching/Step-Ups 0.65 — measured against hip width (~0.18 here), so the
-  // knee-height stagger must exceed ~0.054 / ~0.099 / ~0.117. A real gait
-  // knee lift here is 0.14 (_gait lift 1.0), staggering the knees ~0.15.
+  // Walking / Marching / Step-Ups use kneeAlternationSide (liftFraction 0.30 /
+  // 0.65 / 0.65 vs hip width). Running / Treadmill use the stateful
+  // AlternatingGaitSignal: (Δx-centre)+Δy of the knee pair vs torso*0.18 —
+  // built from a real device session where the run showed up as a horizontal
+  // knee swing that the pure vertical reading missed. A synthetic front-on
+  // _gait lift 1.0 still staggers the knees ~0.15 vertically, above threshold.
   for (final (label, act, lift) in [
     ('Running in Place', AiMotionActivity.runningInPlace, 0.9),
     ('Treadmill Running', AiMotionActivity.treadmillRunning, 0.9),

@@ -2151,16 +2151,30 @@ class CadenceMovementDefinition {
   const CadenceMovementDefinition({
     required this.activity,
     required this.requiredLandmarks,
-    required this.sideSignal,
+    this.sideSignal,
+    this.gaitSignalFactory,
     required this.statusText,
     required this.coachingTextActive,
     required this.coachingTextIncomplete,
     this.stableFrames = 2,
-  });
+  }) : assert(
+          sideSignal != null || gaitSignalFactory != null,
+          'a cadence definition needs either a stateless sideSignal or a '
+          'stateful gaitSignalFactory',
+        );
 
   final AiMotionActivity activity;
   final List<String> requiredLandmarks;
-  final CadenceSideSignal sideSignal;
+
+  /// Stateless per-frame "which side" reading. Used by every cadence movement
+  /// except the ones that supply a [gaitSignalFactory].
+  final CadenceSideSignal? sideSignal;
+
+  /// Stateful gait signal (returns a fresh instance per verification). When
+  /// set it replaces [sideSignal] — Running / Treadmill use this so the
+  /// alternation reading survives a collapsed hip width and a horizontal-only
+  /// stride. See [AlternatingGaitSignal].
+  final AlternatingGaitSignal Function()? gaitSignalFactory;
   final String statusText;
   final String coachingTextActive;
   final String coachingTextIncomplete;
@@ -2179,10 +2193,14 @@ class CadenceMovementDefinition {
 /// finish behavior — the same contract every other preset validator honors.
 class CadenceMotionValidator extends _BaseValidator {
   CadenceMotionValidator({required this.definition, required super.targetValue})
-      : _cadence = CadenceDetector(stableFrames: definition.stableFrames);
+      : _cadence = CadenceDetector(stableFrames: definition.stableFrames),
+        _gaitSignal = definition.gaitSignalFactory?.call();
 
   final CadenceMovementDefinition definition;
   final CadenceDetector _cadence;
+
+  /// Non-null exactly when [definition] supplies a [gaitSignalFactory].
+  final AlternatingGaitSignal? _gaitSignal;
   CadenceSide? _lastMeasuredSide;
 
   @override
@@ -2199,6 +2217,7 @@ class CadenceMotionValidator extends _BaseValidator {
   @override
   void resetState() {
     _cadence.reset();
+    _gaitSignal?.reset();
     _lastMeasuredSide = null;
     _lastKneeStagger = 0;
     _lastCountFrame = -1;
@@ -2219,7 +2238,16 @@ class CadenceMotionValidator extends _BaseValidator {
       _lastKneeStagger =
           (frame.point('rightKnee')!.y - frame.point('leftKnee')!.y);
     }
-    _lastMeasuredSide = definition.sideSignal(features);
+    final gait = _gaitSignal;
+    _lastMeasuredSide = gait != null
+        ? gait.measure(features)
+        : definition.sideSignal!(features);
+    // A run that has produced clean alternation is unambiguously "moving";
+    // don't let a stale `missing_landmarks` from the pre-lock frames ride
+    // through to the diagnostic/telemetry result.
+    if (_lastMeasuredSide != null && lastFailureReason == 'missing_landmarks') {
+      lastFailureReason = '';
+    }
     final counted = _cadence.update(_lastMeasuredSide);
     if (counted) {
       _repIntervalFrames =
@@ -2234,6 +2262,7 @@ class CadenceMotionValidator extends _BaseValidator {
         'currentSide': _sideCode(_cadence.currentSide),
         'measuredSide': _sideCode(_lastMeasuredSide),
         'kneeStagger': _lastKneeStagger,
+        if (_gaitSignal case final g?) 'gaitSwing': g.lastSwing,
         'cycles': _cadence.cycles.toDouble(),
         'repIntervalFrames': _repIntervalFrames.toDouble(),
       };
@@ -2249,8 +2278,112 @@ const _cadenceLegLandmarks = [
   'rightKnee',
 ];
 
-/// Alternating-gait signal shared by Running / Walking / Marching / Step-Ups
-/// (and, behind a plank gate, Mountain Climbers).
+/// Running / Treadmill also need the shoulders — the [AlternatingGaitSignal]
+/// normalizes against torso height (hip↔shoulder), which is far more stable on
+/// a real phone camera than hip-width-in-x (that collapses to near-zero when
+/// the athlete is small in frame or slightly angled, which is exactly what
+/// starved the old knee-height signal).
+const _cadenceGaitLandmarks = [
+  'leftShoulder',
+  'rightShoulder',
+  'leftHip',
+  'rightHip',
+  'leftKnee',
+  'rightKnee',
+];
+
+/// Stateful alternating-gait detector for Running in Place / Treadmill
+/// Running.
+///
+/// ## Why this exists (real session ms_64c7b6ee…, 2026-09-07)
+/// A 37-second continuous run counted **2**. The pose stream showed ~77 clean
+/// alternating cycles — but almost entirely as a *horizontal* knee swing
+/// (Δx ≈ ±0.11 of frame) with only a tiny *vertical* knee stagger
+/// (Δy p10..p90 = −0.004..+0.038). The old [kneeAlternationSide] keys purely
+/// on Δy vs a hip-width threshold; hip-width had collapsed to ~0.02 so the
+/// threshold floored at 0.033 — above the signal's entire p90. Result: the
+/// "which leg" reading was `null` on ~95% of frames and never alternated.
+///
+/// ## What this does instead
+///   * body scale = torso height (hip↔shoulder), clamped — stable regardless
+///     of how small / angled the athlete is (hip-width-in-x is not);
+///   * signal = `(Δx - centreΔx) + Δy` of the knee pair, i.e. the combined
+///     horizontal + vertical swing. The two axes are positively correlated
+///     during a stride (the swinging knee goes forward *and* up) so summing
+///     reinforces the step and cancels common jitter. A front-camera
+///     high-knee march (Δy carries it) and this session's low, forward,
+///     small-in-frame run (Δx carries it) both land above threshold;
+///   * Δx is measured against a centre seeded from the first frame and then
+///     adapted only slowly, so a static wide stance / a lean is absorbed but
+///     the stride itself is not chased; Δy is used raw (a level-kneed rest
+///     pose already sits at ~0 and does not need a centre — subtracting a
+///     lagging one is what makes a return-to-neutral misread as the opposite
+///     side). A tiny very-slow term only trims a persistent vertical tilt;
+///   * a side is emitted only when that combined swing clears
+///     `torso * liftFraction`;
+///   * [CadenceDetector] still owns the stable-frame + alternation counting,
+///     so "one count = one confirmed alternating step" is unchanged and
+///     same-side / idle / one-sided motion still can't score.
+class AlternatingGaitSignal {
+  AlternatingGaitSignal({
+    this.liftFraction = 0.18,
+    this.horizontalCentreAlpha = 0.04,
+    this.verticalTiltAlpha = 0.01,
+  });
+
+  /// Combined swing, as a fraction of torso height, for a frame to read as one
+  /// side.
+  final double liftFraction;
+
+  /// Adaptation rate for the horizontal centre (a static stance width / lean).
+  /// Seeded from the first frame; slow enough not to chase the stride.
+  final double horizontalCentreAlpha;
+
+  /// Adaptation rate for the small vertical-tilt trim. Starts at 0 (a level
+  /// rest pose) and barely moves — it only cancels a persistent camera tilt,
+  /// never the stride.
+  final double verticalTiltAlpha;
+
+  double? _centreDx;
+  double _tiltDy = 0;
+  double _lastSwing = 0;
+
+  double get lastSwing => _lastSwing;
+
+  void reset() {
+    _centreDx = null;
+    _tiltDy = 0;
+    _lastSwing = 0;
+  }
+
+  CadenceSide? measure(PoseFeatureExtractor f) {
+    final leftKnee = f.frame.point('leftKnee');
+    final rightKnee = f.frame.point('rightKnee');
+    if (leftKnee == null || rightKnee == null) return null;
+
+    final dx = rightKnee.x - leftKnee.x;
+    final dy = rightKnee.y - leftKnee.y;
+
+    _centreDx ??= dx;
+    final devX = dx - _centreDx!;
+    _centreDx = _centreDx! + horizontalCentreAlpha * (dx - _centreDx!);
+    final devY = dy - _tiltDy;
+    _tiltDy += verticalTiltAlpha * (dy - _tiltDy);
+
+    final swing = devX + devY;
+    _lastSwing = swing;
+
+    final threshold = f.torsoHeight * liftFraction;
+    if (swing > threshold) return CadenceSide.left;
+    if (swing < -threshold) return CadenceSide.right;
+    return null;
+  }
+}
+
+/// Alternating-gait signal shared by Walking / Marching / Step-Ups (and,
+/// behind a plank gate, Mountain Climbers). Running in Place and Treadmill
+/// Running moved to the stateful [AlternatingGaitSignal] — see its doc for
+/// why the pure vertical reading here starved on a real phone camera.
 ///
 /// The signal is the DIFFERENCE in height between the two knees, not either
 /// knee's proximity to its hip. On a real phone camera a normal running or
@@ -2296,12 +2429,14 @@ final marchingInPlaceDefinition = CadenceMovementDefinition(
   coachingTextIncomplete: 'Lower body needed',
 );
 
-/// Running in Place: alternating knee lift at a faster, lower-amplitude
-/// cadence than marching.
-final runningInPlaceDefinition = CadenceMovementDefinition(
+/// Running in Place: alternating leg drive at a fast cadence. Uses the
+/// stateful [AlternatingGaitSignal] (torso-normalized, dominant-axis,
+/// baseline-relative) rather than the pure vertical knee-height reading —
+/// real phone-camera running shows up mostly as a horizontal knee swing.
+const runningInPlaceDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.runningInPlace,
-  requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.55),
+  requiredLandmarks: _cadenceGaitLandmarks,
+  gaitSignalFactory: AlternatingGaitSignal.new,
   statusText: 'Tracking running in place',
   coachingTextActive: 'Keep your feet moving',
   coachingTextIncomplete: 'Lower body needed',
@@ -2315,10 +2450,10 @@ final runningInPlaceDefinition = CadenceMovementDefinition(
 /// heights to each other, never to a fixed frame position. Kept as its own
 /// catalog entry/definition per product requirement, not merged into
 /// Running in Place, even though the detection is currently identical.
-final treadmillRunningDefinition = CadenceMovementDefinition(
+const treadmillRunningDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.treadmillRunning,
-  requiredLandmarks: _cadenceLegLandmarks,
-  sideSignal: (f) => kneeAlternationSide(f, liftFraction: 0.55),
+  requiredLandmarks: _cadenceGaitLandmarks,
+  gaitSignalFactory: AlternatingGaitSignal.new,
   statusText: 'Tracking treadmill running',
   coachingTextActive: 'Keep your feet moving',
   coachingTextIncomplete: 'Lower body needed',
