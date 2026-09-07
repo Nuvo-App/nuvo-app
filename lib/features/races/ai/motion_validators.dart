@@ -7,6 +7,7 @@ import 'cadence_detector.dart';
 import 'multi_phase_sequence_tracker.dart';
 import 'preset_motion/burpee_definition.dart';
 import 'preset_motion/multi_phase_definitions.dart';
+import 'virtual_distance_estimator.dart';
 
 enum MovementType {
   pushups,
@@ -2157,6 +2158,7 @@ class CadenceMovementDefinition {
     required this.coachingTextActive,
     required this.coachingTextIncomplete,
     this.stableFrames = 2,
+    this.measuresVirtualDistance = false,
   }) : assert(
           sideSignal != null || gaitSignalFactory != null,
           'a cadence definition needs either a stateless sideSignal or a '
@@ -2184,6 +2186,11 @@ class CadenceMovementDefinition {
   /// [CadenceDetector].
   final int stableFrames;
 
+  /// When true the validator's `currentValue` is an estimated virtual
+  /// distance in **metres** (via [VirtualDistanceEstimator]) instead of a raw
+  /// step count. The gait detection itself is unchanged. Treadmill Running.
+  final bool measuresVirtualDistance;
+
   String coachingText(bool fullBodyVisible) =>
       fullBodyVisible ? coachingTextActive : coachingTextIncomplete;
 }
@@ -2194,19 +2201,34 @@ class CadenceMovementDefinition {
 class CadenceMotionValidator extends _BaseValidator {
   CadenceMotionValidator({required this.definition, required super.targetValue})
       : _cadence = CadenceDetector(stableFrames: definition.stableFrames),
-        _gaitSignal = definition.gaitSignalFactory?.call();
+        _gaitSignal = definition.gaitSignalFactory?.call(),
+        _distance =
+            definition.measuresVirtualDistance ? VirtualDistanceEstimator() : null;
 
   final CadenceMovementDefinition definition;
   final CadenceDetector _cadence;
 
   /// Non-null exactly when [definition] supplies a [gaitSignalFactory].
   final AlternatingGaitSignal? _gaitSignal;
+
+  /// Non-null exactly when [definition.measuresVirtualDistance].
+  final VirtualDistanceEstimator? _distance;
+  DateTime? _firstFrameAt;
+
   CadenceSide? _lastMeasuredSide;
 
   @override
   AiMotionActivity get activity => definition.activity;
   @override
-  int get currentValue => math.min(_cadence.cycles, targetValue);
+  int get currentValue {
+    final d = _distance;
+    if (d != null) return math.min(d.metresRounded, targetValue);
+    return math.min(_cadence.cycles, targetValue);
+  }
+
+  /// Live virtual-distance readout for the verification UI (null for a plain
+  /// step-count cadence movement). Metres, pace (s/mile), cadence, intensity.
+  VirtualDistanceEstimator? get distanceEstimator => _distance;
   @override
   String get statusText => definition.statusText;
   @override
@@ -2218,6 +2240,8 @@ class CadenceMotionValidator extends _BaseValidator {
   void resetState() {
     _cadence.reset();
     _gaitSignal?.reset();
+    _distance?.reset();
+    _firstFrameAt = null;
     _lastMeasuredSide = null;
     _lastKneeStagger = 0;
     _lastCountFrame = -1;
@@ -2254,6 +2278,21 @@ class CadenceMotionValidator extends _BaseValidator {
           _lastCountFrame < 0 ? 0 : framesAnalyzed - _lastCountFrame;
       _lastCountFrame = framesAnalyzed;
     }
+
+    final estimator = _distance;
+    if (estimator != null) {
+      _firstFrameAt ??= frame.createdAt;
+      final elapsedMs =
+          frame.createdAt.difference(_firstFrameAt!).inMilliseconds;
+      estimator.onFrame(elapsedMs);
+      if (counted) {
+        estimator.onStep(
+          swingAmplitude: _gaitSignal?.lastSwing.abs() ?? _lastKneeStagger.abs(),
+          torsoHeight: features.torsoHeight,
+          elapsedMs: elapsedMs,
+        );
+      }
+    }
   }
 
   @override
@@ -2265,6 +2304,7 @@ class CadenceMotionValidator extends _BaseValidator {
         if (_gaitSignal case final g?) 'gaitSwing': g.lastSwing,
         'cycles': _cadence.cycles.toDouble(),
         'repIntervalFrames': _repIntervalFrames.toDouble(),
+        if (_distance case final d?) ...d.metrics,
       };
 
   double _sideCode(CadenceSide? side) =>
@@ -2454,6 +2494,7 @@ const treadmillRunningDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.treadmillRunning,
   requiredLandmarks: _cadenceGaitLandmarks,
   gaitSignalFactory: AlternatingGaitSignal.new,
+  measuresVirtualDistance: true,
   statusText: 'Tracking treadmill running',
   coachingTextActive: 'Keep your feet moving',
   coachingTextIncomplete: 'Lower body needed',

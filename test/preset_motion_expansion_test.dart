@@ -159,9 +159,10 @@ void main() {
   // built from a real device session where the run showed up as a horizontal
   // knee swing that the pure vertical reading missed. A synthetic front-on
   // _gait lift 1.0 still staggers the knees ~0.15 vertically, above threshold.
+  // Treadmill Running shares this gait signal but reports estimated virtual
+  // distance, not a step count — its own group is below.
   for (final (label, act, lift) in [
     ('Running in Place', AiMotionActivity.runningInPlace, 0.9),
-    ('Treadmill Running', AiMotionActivity.treadmillRunning, 0.9),
     ('Walking in Place', AiMotionActivity.walkingInPlace, 0.55),
     ('Marching in Place', AiMotionActivity.marchingInPlace, 1.0),
     ('Step-Ups', AiMotionActivity.stepUps, 1.0),
@@ -613,6 +614,52 @@ void main() {
         ],
       ]);
       expect(n, 0);
+    });
+  });
+
+  // Last group — uses shared RNG, so keep it after every step-count test so it
+  // can't shift their noise streams.
+  group('Treadmill Running — estimated virtual distance (metres)', () {
+    MotionValidator tm() =>
+        createMotionValidator(AiMotionActivity.treadmillRunning, 5000);
+
+    List<(Map<String, NuvoPosePoint> Function(), int)> runPhases(int cycles) => [
+          (() => _noisy(_stand()), 4),
+          for (var i = 0; i < cycles; i++) ...[
+            (() => _noisy(_gait(left: true, lift: 0.9)), 3),
+            (() => _noisy(_stand()), 1),
+            (() => _noisy(_gait(left: false, lift: 0.9)), 3),
+            (() => _noisy(_stand()), 1),
+          ],
+        ];
+
+    test('idle -> 0 metres', () {
+      expect(_run(tm(), [(() => _noisy(_stand(), jitter: 0.01), 80)]), 0);
+    });
+
+    test('left-only motion -> 0 metres', () {
+      expect(
+        _run(tm(), [
+          for (var i = 0; i < 10; i++) ...[
+            (() => _noisy(_gait(left: true, lift: 0.9)), 3),
+            (() => _noisy(_stand()), 2),
+          ],
+        ]),
+        0,
+      );
+    });
+
+    test('a real run accumulates a sane distance', () {
+      final n = _run(tm(), runPhases(12));
+      expect(n, greaterThan(8));
+      expect(n, lessThan(140));
+    });
+
+    test('more running -> more distance, no wild jump', () {
+      final short = _run(tm(), runPhases(6));
+      final long = _run(tm(), runPhases(18));
+      expect(long, greaterThan(short));
+      expect(long, lessThan(short * 5 + 20));
     });
   });
 }

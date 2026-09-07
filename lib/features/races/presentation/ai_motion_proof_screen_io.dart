@@ -33,6 +33,7 @@ import '../data/ai_motion_models.dart';
 import '../data/motion_analysis_contract.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
+import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
 import 'board_moved_screen.dart';
@@ -120,10 +121,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // just not shown?" from a device log.
   final _repEventLog = RepEventLog();
 
-  /// Hold movements score in seconds, so a per-second "+1" would be noise.
+  /// Hold movements score in seconds and distance races score in metres, so a
+  /// per-unit "+1" would be noise — those states show a live readout instead.
   bool get _usesRepFlash =>
-      _isCustom ||
-      motionActivityForBackendValue(_activity.backendValue)?.isHold != true;
+      !_isDistanceRace &&
+      (_isCustom ||
+          motionActivityForBackendValue(_activity.backendValue)?.isHold != true);
 
   /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak => _burst.isOnStreak;
@@ -454,6 +457,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // consented training. Camera pixels never leave the device.
       if (_capturedFrames.length < 900) _capturedFrames.add(frame);
       final output = _runtime.update(frame);
+      _liveMetrics = output.debugValues;
       _session?.recordFrame(
         frame,
         validatorState: output.validatorState,
@@ -829,8 +833,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       detectedReps: result.detectedReps,
       confidence: result.confidence,
       verificationStatus: 'ai_verified',
-      verificationSummary:
-          'Recorded ${result.detectedReps} ${result.activity.label}. You can continue this race later.',
+      verificationSummary: _isDistanceRace
+          ? 'Recorded ${formatMotionTarget(_measure, result.detectedReps, 'mi')}. You can continue this race later.'
+          : 'Recorded ${result.detectedReps} ${result.activity.label}. You can continue this race later.',
       framesAnalyzed: result.framesAnalyzed,
       validPoseFrames: result.validPoseFrames,
       durationMs: result.durationMs,
@@ -925,6 +930,47 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   int get _currentValue => _runtime.currentValue;
 
+  /// Latest verifier debug metrics — includes virtual distance / pace /
+  /// cadence / intensity for a distance race.
+  Map<String, double> _liveMetrics = const {};
+
+  MotionMeasurementType get _measure =>
+      MotionMeasurementType.values.asNameMap()[_measurementType] ??
+      MotionMeasurementType.repetitions;
+
+  bool get _isDistanceRace => _measure == MotionMeasurementType.distance;
+
+  String get _displayUnit =>
+      motionActivityForBackendValue(_activity.backendValue)?.unit ?? _metric;
+
+  /// "12 / 25 reps" · "0:45 / 2:00" · "0.12 / 0.25 mi".
+  String _progressText(int current, int target) => _isCustom
+      ? '$current / $target'
+      : formatMotionProgress(_measure, current, target, _displayUnit);
+
+  /// A single value: "12" · "45s" · "0.25 mi".
+  String _valueText(int v) =>
+      _isCustom ? '$v' : formatMotionGoalOption(_measure, v);
+
+  /// "8:42 /mi" while running a distance race, else null.
+  String? get _paceLabel {
+    if (!_isDistanceRace) return null;
+    final raw = _liveMetrics['paceSecPerMile'];
+    final pace = formatPacePerMile(raw == null || raw == 0 ? null : raw);
+    return pace == null ? null : '$pace /mi';
+  }
+
+  /// "Moderate" while running a distance race, else null.
+  String? get _intensityLabel {
+    if (!_isDistanceRace) return null;
+    return switch (_liveMetrics['intensity']?.round() ?? 0) {
+      0 => null,
+      1 => 'Easy',
+      2 => 'Moderate',
+      _ => 'Hard',
+    };
+  }
+
   String get _targetLabel {
     if (_isCustom) return '$_targetValue reps';
     final definition = motionActivityForBackendValue(_activity.backendValue);
@@ -935,14 +981,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String get _raceTotalLabel {
     final total = _raceTotalBefore + _currentValue;
     final target = _raceTargetValue;
-    final metricLabel = _isCustom
-        ? _metric
-        : motionActivityForBackendValue(_activity.backendValue)?.metric.label ??
-              _metric;
-    if (target != null && target > 0) {
-      return '$total / $target $metricLabel race total';
+    if (_isCustom) {
+      return target != null && target > 0
+          ? '$total / $target $_metric race total'
+          : '$total $_metric race total';
     }
-    return '$total $metricLabel race total';
+    if (target != null && target > 0) {
+      return '${_progressText(total, target)} race total';
+    }
+    return '${_valueText(total)} race total';
   }
 
   String get _movementTitle => _isCustom
@@ -1197,7 +1244,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '$_currentValue / $_targetValue',
+                        _progressText(_currentValue, _targetValue),
                         style: AppTextStyles.displayLarge.copyWith(
                           color: NuvoColors.white,
                         ),
@@ -1566,6 +1613,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     Text(
                       _isCustom
                           ? 'Detected $detected clean ${customResult?.movementName ?? _customMovementName ?? 'reps'} out of $_targetValue.'
+                          : _isDistanceRace
+                          ? 'You covered ${formatMotionTarget(_measure, detected, 'mi')} of $_targetLabel.'
                           : motionActivityForBackendValue(
                                   _activity.backendValue,
                                 )?.isHold ==
@@ -1692,6 +1741,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Widget _recordingHud() {
     final targetReached = _currentValue >= _targetValue;
+    final effort = [
+      ?_paceLabel,
+      ?_intensityLabel,
+    ].join('   ');
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1708,13 +1761,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '$_currentValue / $_targetValue',
+                  _progressText(_currentValue, _targetValue),
                   style: AppTextStyles.displayLarge.copyWith(
                     color: NuvoColors.white,
                   ),
                 ),
                 Text(
-                  targetReached ? 'FINISH LINE' : 'KEEP GOING',
+                  targetReached
+                      ? 'FINISH LINE'
+                      : effort.isNotEmpty
+                      ? effort
+                      : 'KEEP GOING',
                   style: AppTextStyles.titleLarge.copyWith(
                     color: NuvoColors.white,
                   ),
@@ -1889,6 +1946,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String _countedLabel(AiMotionResult? result) {
     final value = result?.detectedReps ?? _targetValue;
     final definition = motionActivityForBackendValue(_activity.backendValue);
+    if (_isDistanceRace) return formatMotionTarget(_measure, value, 'mi');
     if (definition?.isHold == true) return '$value seconds';
     final unit = definition?.unit ?? _activity.label;
     return '$value $unit';

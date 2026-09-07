@@ -1682,7 +1682,7 @@ class _GoalPageState extends State<_GoalPage> {
   void _startEdit() {
     setState(() {
       _editing = true;
-      _editCtrl.text = '$_target';
+      _editCtrl.text = _isDistance ? formatMiles(_target) : '$_target';
       _editCtrl.selection = TextSelection(
         baseOffset: 0,
         extentOffset: _editCtrl.text.length,
@@ -1692,9 +1692,17 @@ class _GoalPageState extends State<_GoalPage> {
   }
 
   void _commitEdit() {
-    final parsed = int.tryParse(_editCtrl.text.trim());
-    if (parsed != null && parsed > 0) {
-      _setTarget(parsed);
+    final text = _editCtrl.text.trim();
+    if (_isDistance) {
+      final miles = double.tryParse(text.replaceAll(RegExp(r'[^0-9.]'), ''));
+      if (miles != null && miles > 0) {
+        _setTarget((miles * 1609.344).round());
+      }
+    } else {
+      final parsed = int.tryParse(text);
+      if (parsed != null && parsed > 0) {
+        _setTarget(parsed);
+      }
     }
     if (mounted) {
       setState(() => _editing = false);
@@ -1704,7 +1712,17 @@ class _GoalPageState extends State<_GoalPage> {
   void _increment() => _setTarget(_target + _stepSize);
   void _decrement() => _setTarget((_target - _stepSize).clamp(1, 99999));
 
+  /// Measurement model for the selected preset (reps unless it's a distance /
+  /// duration activity like Treadmill Running / Plank).
+  MotionMeasurementType get _measure => widget.draft.isCustom ||
+          widget.draft.isManual
+      ? MotionMeasurementType.repetitions
+      : widget.draft.activity.resolvedMeasurementType;
+
+  bool get _isDistance => _measure == MotionMeasurementType.distance;
+
   int get _stepSize {
+    if (_isDistance) return 161; // ~0.1 mi in metres
     if (_target < 10) return 1;
     if (_target < 100) return 5;
     if (_target < 1000) return 25;
@@ -1722,6 +1740,7 @@ class _GoalPageState extends State<_GoalPage> {
   }
 
   String get _displayTarget {
+    if (_isDistance) return formatMiles(_target);
     if (widget.draft.metric == RaceMetric.seconds) {
       return _secondsDisplay(_target);
     }
@@ -1740,6 +1759,8 @@ class _GoalPageState extends State<_GoalPage> {
       ? (widget.draft.customUnit?.trim().isNotEmpty == true
             ? widget.draft.customUnit!.trim()
             : 'reps')
+      : _isDistance
+      ? 'mi'
       : widget.draft.activity.unit;
 
   /// Contextual question: "How many push-ups?", "How long?", "How many steps?".
@@ -1765,6 +1786,7 @@ class _GoalPageState extends State<_GoalPage> {
             // ── Big tappable number ──────────────────────────────────────────
             _GoalDisplay(
               displayValue: _displayTarget,
+              allowDecimal: _isDistance,
               unitLabel: isSeconds
                   ? widget.draft.displayActivityName.toUpperCase()
                   : _unitWord.toUpperCase(),
@@ -1783,9 +1805,13 @@ class _GoalPageState extends State<_GoalPage> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                for (final t in _suggestedTargets.take(4))
+                for (final t in _suggestedTargets.take(5))
                   _SuggestedTarget(
-                    value: isSeconds ? formatDurationShort(t) : '$t',
+                    value: _isDistance
+                        ? formatMotionGoalOption(_measure, t)
+                        : isSeconds
+                        ? formatDurationShort(t)
+                        : '$t',
                     selected: _target == t,
                     onTap: () {
                       _dismissKeyboard();
@@ -1831,9 +1857,11 @@ class _GoalDisplay extends StatelessWidget {
     required this.onCommitEdit,
     required this.onIncrement,
     required this.onDecrement,
+    this.allowDecimal = false,
   });
   final String displayValue;
   final String unitLabel;
+  final bool allowDecimal;
   final bool editing;
   final TextEditingController editCtrl;
   final FocusNode editFocus;
@@ -1874,7 +1902,9 @@ class _GoalDisplay extends StatelessWidget {
                     child: TextField(
                       controller: editCtrl,
                       focusNode: editFocus,
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.numberWithOptions(
+                        decimal: allowDecimal,
+                      ),
                       textInputAction: TextInputAction.done,
                       textAlign: TextAlign.center,
                       onSubmitted: (_) => onCommitEdit(),

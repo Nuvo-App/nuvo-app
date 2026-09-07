@@ -371,11 +371,12 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.treadmillRunning,
-    goalPromptOverride: 'How many steps?',
-    displayUnitOverride: 'steps',
+    // Distance goal: targets are METRES (0.25 mi, 0.5 mi, 1 mi, 2 mi, 5 km).
+    measurementType: MotionMeasurementType.distance,
+    goalPromptOverride: 'How far?',
     title: 'Treadmill Running',
     metric: RaceMetric.reps,
-    suggestedTargets: [50, 100, 200, 400],
+    suggestedTargets: [402, 805, 1609, 3219, 5000],
     supportedFormats: [
       RaceFormat.firstToGoal,
       RaceFormat.mostInWindow,
@@ -387,7 +388,7 @@ const motionActivityDefinitions = [
     cameraInstruction: 'Lower body front view',
     instructions: [
       'Keep your lower body visible.',
-      'Detected from your gait, not the treadmill.',
+      'Nuvo estimates your distance from how you run.',
       'Camera stays fixed on you as you run.',
     ],
     icon: Icons.directions_run_rounded,
