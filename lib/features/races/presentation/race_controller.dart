@@ -13,6 +13,7 @@
 // source of truth, never a direct RaceApi call.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../arena/presentation/arena_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
@@ -24,24 +25,51 @@ import '../data/race_models.dart';
 import '../data/race_repository.dart';
 
 class RaceState {
-  const RaceState({this.races = const [], this.loading = false, this.error});
+  const RaceState({
+    this.races = const [],
+    this.loading = false,
+    this.refreshing = false,
+    this.error,
+  });
 
   final List<Race> races;
+
+  /// First load, nothing cached yet — a screen may show a full skeleton.
   final bool loading;
+
+  /// A background revalidation while cached data is already on screen — a
+  /// screen should keep its content and, at most, show a subtle indicator.
+  final bool refreshing;
+
   final String? error;
 
-  RaceState copyWith({List<Race>? races, bool? loading, String? error}) =>
-      RaceState(
-        races: races ?? this.races,
-        loading: loading ?? this.loading,
-        error: error,
-      );
+  bool get hasData => races.isNotEmpty;
+
+  RaceState copyWith({
+    List<Race>? races,
+    bool? loading,
+    bool? refreshing,
+    String? error,
+  }) => RaceState(
+    races: races ?? this.races,
+    loading: loading ?? this.loading,
+    refreshing: refreshing ?? this.refreshing,
+    error: error,
+  );
 }
 
 class RaceController extends StateNotifier<RaceState> {
-  RaceController(this._repo) : super(const RaceState());
+  RaceController(this._repo, {this.onMutated}) : super(const RaceState());
 
   final RaceRepository _repo;
+
+  /// Called after any local write so sibling caches (Arena) can revalidate.
+  /// See docs/agents/18-data-freshness-contract.md.
+  final void Function()? onMutated;
+
+  /// How old cached data may be before [revalidate] refetches it in the
+  /// background. Short — this fires on screen focus and app resume.
+  static const _staleWindow = Duration(seconds: 45);
 
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _repo.analyzeMotion(request);
@@ -78,21 +106,52 @@ class RaceController extends StateNotifier<RaceState> {
     return request;
   }
 
+  /// Stale-while-revalidate entry point: call on screen focus and app resume.
+  /// Renders nothing itself — if the cache is fresh it's a no-op, otherwise it
+  /// kicks a background refresh while the current races stay on screen.
+  void revalidate() {
+    final at = _racesLoadedAt;
+    if (state.hasData &&
+        at != null &&
+        DateTime.now().difference(at) < _staleWindow) {
+      return;
+    }
+    loadRaces(force: true);
+  }
+
   void _clearInFlight(Future<void> request) {
     if (identical(_loadInFlight, request)) _loadInFlight = null;
   }
 
   Future<void> _fetchRaces() async {
-    if (mounted) state = RaceState(races: state.races, loading: true);
+    if (mounted) {
+      final haveData = state.hasData;
+      state = RaceState(
+        races: state.races,
+        loading: !haveData,
+        refreshing: haveData,
+      );
+    }
     try {
       final races = await _repo.getRaces();
       _racesLoadedAt = DateTime.now();
       if (mounted) state = RaceState(races: races);
     } on ApiException catch (e) {
-      if (mounted) state = state.copyWith(loading: false, error: e.message);
+      // Keep cached races visible on a failed background refresh.
+      if (mounted) {
+        state = state.copyWith(
+          loading: false,
+          refreshing: false,
+          error: state.hasData ? null : e.message,
+        );
+      }
     } catch (_) {
       if (mounted) {
-        state = state.copyWith(loading: false, error: 'Failed to load races.');
+        state = state.copyWith(
+          loading: false,
+          refreshing: false,
+          error: state.hasData ? null : 'Failed to load races.',
+        );
       }
     }
   }
@@ -142,6 +201,7 @@ class RaceController extends StateNotifier<RaceState> {
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
       _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
     return race;
   }
@@ -161,11 +221,19 @@ class RaceController extends StateNotifier<RaceState> {
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
       _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
     return race;
   }
 
-  Future<Race> getRaceDetail(String id) => _repo.getRaceDetail(id);
+  Future<Race> getRaceDetail(String id) async {
+    final race = await _repo.getRaceDetail(id);
+    // The detail response is the freshest view of this race (participants,
+    // progress, standings) — fold it into the canonical list so Compete /
+    // Arena / Move see it without their own refetch.
+    _upsertRace(race, silent: true);
+    return race;
+  }
 
   Future<Race> updateRace(
     String id, {
@@ -234,6 +302,8 @@ class RaceController extends StateNotifier<RaceState> {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
     return race;
   }
@@ -254,6 +324,8 @@ class RaceController extends StateNotifier<RaceState> {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
     return race;
   }
@@ -272,6 +344,8 @@ class RaceController extends StateNotifier<RaceState> {
       state = state.copyWith(
         races: state.races.map((r) => r.id == raceId ? race : r).toList(),
       );
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
     return race;
   }
@@ -294,6 +368,8 @@ class RaceController extends StateNotifier<RaceState> {
       state = state.copyWith(
         races: state.races.where((race) => race.id != id).toList(),
       );
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
   }
 
@@ -303,6 +379,8 @@ class RaceController extends StateNotifier<RaceState> {
       state = state.copyWith(
         races: state.races.where((race) => race.id != id).toList(),
       );
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
     }
   }
 
@@ -351,15 +429,20 @@ class RaceController extends StateNotifier<RaceState> {
     return race;
   }
 
-  void _upsertRace(Race race) {
+  /// [silent] skips the [onMutated] sibling-cache nudge — used when the update
+  /// is a read (getRaceDetail), not a user write.
+  void _upsertRace(Race race, {bool silent = false}) {
     if (!mounted) return;
-    _racesLoadedAt = DateTime.now();
     final exists = state.races.any((item) => item.id == race.id);
     state = state.copyWith(
       races: exists
           ? state.races.map((item) => item.id == race.id ? race : item).toList()
           : [race, ...state.races],
     );
+    if (!silent) {
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
+    }
   }
 }
 
@@ -377,7 +460,13 @@ final raceRepositoryProvider = Provider<RaceRepository>(
 
 final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
   (ref) {
-    final controller = RaceController(ref.watch(raceRepositoryProvider));
+    final controller = RaceController(
+      ref.watch(raceRepositoryProvider),
+      // Any race write immediately revalidates the Arena snapshot (it is
+      // derived from races) so a race created in the composer shows up in the
+      // Arena without the user navigating there and back.
+      onMutated: () => ref.read(arenaControllerProvider.notifier).markStale(),
+    );
     if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
       controller.loadRaces(force: false);
     }
