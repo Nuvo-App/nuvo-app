@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -131,17 +133,31 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       const SizedBox(height: 12),
                       LayoutBuilder(
                         builder: (context, constraints) {
-                          // Sized to the card's actual content (title ->
-                          // "0 / 6 reps" -> progress line -> avatar+racer
-                          // row -> footer — the chase-copy line is gone, see
-                          // _NextMoveHero), not used as a page-composition
-                          // spacer. A short margin over the 1-line-title
-                          // minimum covers a 2-line title/OS text scaling;
-                          // the hero Container's rounded-corner clip is the
-                          // fallback for anything past that, same as before.
-                          final heroHeight = constraints.maxWidth < 360
-                              ? 258.0
-                              : 250.0;
+                          // "Your Next Move" is the primary object on the
+                          // page. The card height is derived from a target
+                          // proportion (a touch taller than wide), then
+                          // bounded by the *usable* viewport so the first
+                          // composition still ends on the leaderboard — never
+                          // a fixed pixel height, so it holds proportions
+                          // across phone sizes. On a very small phone it hits
+                          // the floor and the page simply scrolls.
+                          final media = MediaQuery.of(context);
+                          final usableViewport = media.size.height -
+                              media.padding.top -
+                              NuvoBottomNav.bottomPadding(context);
+                          final desired = constraints.maxWidth * 1.16;
+                          // Never below the card's own content height (a
+                          // shorter box would clip); never past ~44% of the
+                          // usable viewport (past that the first composition
+                          // spills below the leaderboard). On a tiny phone
+                          // the floor wins and the page scrolls — allowed.
+                          const contentFloor = 284.0;
+                          final maxH = math.max(
+                            contentFloor,
+                            usableViewport * 0.46,
+                          );
+                          final heroHeight =
+                              desired.clamp(contentFloor, maxH).toDouble();
                           return SizedBox(
                             height: heroHeight,
                             child: PageView.builder(
@@ -156,6 +172,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                                     controller: _boardsController,
                                     index: index,
                                     board: boards[index],
+                                    heroHeight: heroHeight,
                                     isLast: index == boards.length - 1,
                                     onOpen: () =>
                                         _openBoard(context, boards[index]),
@@ -337,6 +354,7 @@ class _BoardCarouselItem extends StatelessWidget {
     required this.controller,
     required this.index,
     required this.board,
+    required this.heroHeight,
     required this.isLast,
     required this.onOpen,
   });
@@ -344,6 +362,7 @@ class _BoardCarouselItem extends StatelessWidget {
   final PageController controller;
   final int index;
   final ArenaBoard board;
+  final double heroHeight;
   final bool isLast;
   final VoidCallback onOpen;
 
@@ -374,17 +393,30 @@ class _BoardCarouselItem extends StatelessWidget {
         ),
       );
     },
-    child: _NextMoveHero(board: board, onOpen: onOpen),
+    child: _NextMoveHero(
+      board: board,
+      heroHeight: heroHeight,
+      onOpen: onOpen,
+    ),
   );
 }
 
 class _NextMoveHero extends StatelessWidget {
-  const _NextMoveHero({required this.board, required this.onOpen});
+  const _NextMoveHero({
+    required this.board,
+    required this.heroHeight,
+    required this.onOpen,
+  });
   final ArenaBoard board;
+  final double heroHeight;
   final VoidCallback onOpen;
   @override
   Widget build(BuildContext context) {
     final pct = (board.progressPercent ?? 0).clamp(0, 100);
+    // A taller card gets a bigger progress numeral and a bit more air; a
+    // floored card on a small phone stays compact.
+    final tall = heroHeight >= 300;
+    final progressFontSize = tall ? 66.0 : 56.0;
     final footerAvatars = board.miniLeaderboard
         .map(
           (row) =>
@@ -409,72 +441,78 @@ class _NextMoveHero extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-              // Centered so the card's content reads as intentionally
-              // balanced in the available height instead of top-aligned
-              // with dead white space collecting below _RaceDetails.
+              padding: EdgeInsets.fromLTRB(20, tall ? 18 : 12, 20, tall ? 14 : 4),
+              // Distributed, not centered: title anchors the top, the
+              // participant context anchors the bottom, and a taller card
+              // spreads the gap as intentional breathing room around the
+              // progress numeral — not a blank Spacer.
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: tall
+                    ? MainAxisAlignment.spaceBetween
+                    : MainAxisAlignment.center,
+                mainAxisSize: tall ? MainAxisSize.max : MainAxisSize.min,
                 children: [
-                  Text(
-                    board.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      color: _arenaText,
-                      fontSize: 28,
-                      height: 1.05,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  // Title + progress + track — the group that anchors the top.
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _progressValue(board.progressLabel, pct),
-                        style: AppTextStyles.displayMedium.copyWith(
-                          color: _arenaBlue,
-                          fontSize: 58,
-                          height: .85,
+                        board.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.headlineMedium.copyWith(
+                          color: _arenaText,
+                          fontSize: tall ? 30 : 28,
+                          height: 1.05,
                           letterSpacing: 0,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          // The racer count lived here too, duplicating
-                          // _RaceDetails' avatar-cluster line below — removed
-                          // rather than shown twice in the same card.
-                          child: Text(
-                            _progressSuffix(board.progressLabel),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.headlineMedium.copyWith(
-                              color: _arenaText,
-                              fontSize: 24,
+                      SizedBox(height: tall ? 10 : 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            _progressValue(board.progressLabel, pct),
+                            style: AppTextStyles.displayMedium.copyWith(
+                              color: _arenaBlue,
+                              fontSize: progressFontSize,
+                              height: .85,
                               letterSpacing: 0,
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Text(
+                                _progressSuffix(board.progressLabel),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.headlineMedium.copyWith(
+                                  color: _arenaText,
+                                  fontSize: 24,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: tall ? 14 : 6),
+                      _RaceProgressTrack(
+                        key: ValueKey('progress-${board.id}'),
+                        progress: pct / 100,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  _RaceProgressTrack(
-                    key: ValueKey('progress-${board.id}'),
-                    progress: pct / 100,
+                  // Participant context — anchors the bottom of the content
+                  // area. On a short card the whole column just centres.
+                  Padding(
+                    padding: EdgeInsets.only(top: tall ? 0 : 10),
+                    child: _RaceDetails(board: board),
                   ),
-                  // The chase-copy/board-context line is gone entirely — the
-                  // card already states progress prominently ("0 / 6 reps")
-                  // and _RaceDetails states the participant count once,
-                  // below. A third restatement in prose added height without
-                  // adding information.
-                  const SizedBox(height: 10),
-                  _RaceDetails(board: board),
                 ],
               ),
             ),
@@ -482,9 +520,9 @@ class _NextMoveHero extends StatelessWidget {
           GestureDetector(
             onTap: onOpen,
             child: Container(
-              // A real tappable footer, not squeezed — trimmed from 58 only
-              // enough to stay a footer, not a control.
-              height: 52,
+              // The chunky blue footer — a real tappable band, sized up with
+              // the card.
+              height: tall ? 58 : 52,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               color: _arenaBlue,
               child: Row(
