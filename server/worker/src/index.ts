@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth';
 import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
+import { RACE_ACTIVITY_CATALOG } from './domain/raceActivities';
 import { arenaRouter } from './routes/arena';
 import { motionRouter } from './routes/motion';
 import { usersRouter } from './routes/users';
@@ -46,6 +47,25 @@ app.use(
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (c) => c.json({ ok: true, service: 'nuvo-api', ts: Date.now() }));
+
+// ── Public race-activity catalog ──────────────────────────────────────────────
+// Unauthenticated on purpose: it's static, non-sensitive reference data, and
+// exposing it makes "is the deployed Worker's activity allowlist current?"
+// verifiable without creating a race. The `supported` list is the exact set a
+// preset race can be created with — if a client offers a preset that is not
+// here, `POST /races` will reject it with "Choose a supported activity".
+// Registered before `app.route('/races', ...)` so it bypasses that router's
+// auth middleware.
+app.get('/races/activities', (c) =>
+  c.json({
+    ok: true,
+    count: RACE_ACTIVITY_CATALOG.length,
+    supported: RACE_ACTIVITY_CATALOG.filter((a) => a.availability === 'supported').map(
+      (a) => a.id,
+    ),
+    activities: RACE_ACTIVITY_CATALOG,
+  }),
+);
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.route('/auth', authRouter);

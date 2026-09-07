@@ -3,7 +3,50 @@
 The source of truth for adding a new preset motion (e.g. "create a preset for
 jumping rope"). Follow this end to end — a preset is **not done when its
 validator test passes**, it is done when a race can be created, loaded, and
-verified through the whole route.
+verified through the whole route **on deployed production**.
+
+## Ownership rule — source-code complete ≠ task complete
+
+You own the whole stack: Flutter app, Cloudflare Worker, backend/domain
+validation, schemas, serialization, tests, scripts, docs, **and deployment
+configuration**. Do not restrict yourself to the file where the bug first
+appears; if the correct fix crosses three systems, change three systems — no
+client workaround because "the real fix is in the Worker".
+
+If a preset (or any change) touches deployable server code, the sequence is:
+
+```text
+implement client  →  implement verifier  →  register backend
+  →  test client   →  test Worker (npm test)
+    →  deploy the Worker yourself (npm run deploy)
+      →  verify the DEPLOYED version serves the change
+        →  DONE
+```
+
+**Deploy the Worker yourself.** `cd server/worker && npm test && npm run deploy`,
+then confirm `Current Version ID` and hit the deployed URL. Never finish with
+"one action on you: deploy the Worker". The only exception is a genuine
+credential/permission barrier — then attempt it, capture the actual failure,
+and report the concrete blocker.
+
+The historical failure this rule exists for: the 10 preset-motion-expansion
+activities shipped in the Flutter client and the Worker *source*, all tests
+passed — but the Worker was never redeployed, so production kept rejecting
+`POST /races` with `"Choose a supported activity."` for weeks. Source-complete,
+task-incomplete.
+
+### Verifying a deployed catalog change without an auth token
+
+`POST /races` needs a production JWT. To confirm the deployed Worker's activity
+allowlist is current without one, hit the public endpoint:
+
+```bash
+curl -s https://nuvo-api.getnuvoapp.workers.dev/races/activities | jq '.supported'
+```
+
+It returns the exact set `POST /races` will accept (same `RACE_ACTIVITY_CATALOG`,
+same bundle). If a new preset's id is in that list on production, `configFromBody`
+accepts it. `GET /health` confirms the Worker is serving.
 
 ---
 
@@ -52,8 +95,8 @@ catalog and checks every row — run it after any change here.
 | 10 | Camera-verification resolver | `lib/features/races/domain/camera_verification_resolver.dart` — **data-driven** off `supportedMotionActivityTypes`; nothing to add if #3 is done |
 | 11 | Verifier runtime resolver | `lib/features/races/ai/verifier_runtime.dart` — **data-driven** via `movementDefinitionForType`; nothing to add |
 | 12 | Race draft / create payload | `lib/features/races/domain/race_draft.dart` — **data-driven** via `activity.type.backendValue`; nothing to add |
-| 13 | **Backend allowlist** | `server/worker/src/domain/raceActivities.ts` → `RaceActivityId` union **and** `RACE_ACTIVITY_CATALOG` entry **and** `normalizeActivityId` (the `[...].includes(normalized)` list + any alias `if`s) **and** `normalizeMetric` reps-inference list |
-| 14 | **Deploy the Worker** | `cd server/worker && npm run deploy` — a `raceActivities.ts` change does **nothing in production** until the Worker is redeployed. This is the single most common failure: client ships the preset, deployed backend still returns `"Choose a supported activity."` |
+| 13 | **Backend allowlist** | `server/worker/src/domain/raceActivities.ts` → `RaceActivityId` union **and** `RACE_ACTIVITY_CATALOG` entry **and** `normalizeActivityId` (the `[...].includes(normalized)` list + any alias `if`s) **and** `normalizeMetric` reps-inference list. The public `GET /races/activities` endpoint (`src/index.ts`) is derived from `RACE_ACTIVITY_CATALOG` — nothing to add. |
+| 14 | **Deploy the Worker — you do this** | `cd server/worker && npm test && npm run deploy`, then `curl https://nuvo-api.getnuvoapp.workers.dev/races/activities` and confirm the new id is in `.supported`. A `raceActivities.ts` change does **nothing in production** until deployed. This is the single most common failure. Not the user's step — yours. |
 | 15 | Diagnostics | validator's `debugValues` (§J) |
 | 16 | Tests | §H, §I + add the movement to `test/preset_motion_expansion_test.dart` and (if a fixture list still exists anywhere) update it. The contract tests below auto-cover registration once #3 is done. |
 
@@ -315,8 +358,10 @@ appears in the composer picker
 ```
 
 Run `test/preset_registration_contract_test.dart` and read its `PRESET ROUTE
-AUDIT` — every row must be all-`yes`. Then verify the backend is **deployed**
-(§B #14).
+AUDIT` — every row must be all-`yes`. Then **deploy the Worker** (§B #14) and
+`curl` the production `/races/activities` to confirm the new id landed. A
+green local test proves the *source* is right, not that production is
+running it.
 
 ---
 
@@ -348,13 +393,14 @@ Identifier (backendValue):
 Verifier type:                 (rep state machine / cadence / multi-phase / hold)
 Count semantics:
 Goal unit:
-Registration points updated:   (list from §B — including "Worker deployed: yes/no")
+Registration points updated:   (list from §B)
 Verifier logic:                (state machine, thresholds, signal, reset)
 Fast-rep result:               (5 back-to-back at the frame floor)
 Double-count result:           (one rep + noisy ending → 1; held phase → no spam)
 Noise result:                  (jitter / dropout / scale / translation)
 Wrong-motion negatives:        (measured, with any accepted overlap named)
 Full-route create/load/proof:  (PRESET ROUTE AUDIT row)
+Worker:                        (tests: N/N  ·  deployed version id: ...  ·  /races/activities confirms id: yes)
 Known limitations:
 Build:                         (flutter analyze lib/ + flutter build ios --release + server npm test)
 Commit:
