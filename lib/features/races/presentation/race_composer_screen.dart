@@ -1682,7 +1682,9 @@ class _GoalPageState extends State<_GoalPage> {
   void _startEdit() {
     setState(() {
       _editing = true;
-      _editCtrl.text = _isDistance ? formatMiles(_target) : '$_target';
+      _editCtrl.text = (_isDistance && !_isShortDistance)
+          ? formatMiles(_target)
+          : '$_target';
       _editCtrl.selection = TextSelection(
         baseOffset: 0,
         extentOffset: _editCtrl.text.length,
@@ -1694,9 +1696,14 @@ class _GoalPageState extends State<_GoalPage> {
   void _commitEdit() {
     final text = _editCtrl.text.trim();
     if (_isDistance) {
-      final miles = double.tryParse(text.replaceAll(RegExp(r'[^0-9.]'), ''));
-      if (miles != null && miles > 0) {
-        _setTarget((miles * 1609.344).round());
+      // A decimal reads as miles ("0.5" → 805 m); a whole number reads as
+      // metres ("150" → 150 m). Either way the canonical value is metres.
+      final cleaned = text.replaceAll(RegExp(r'[^0-9.]'), '');
+      final n = double.tryParse(cleaned);
+      if (n != null && n > 0) {
+        _setTarget(
+          cleaned.contains('.') ? (n * 1609.344).round() : n.round(),
+        );
       }
     } else {
       final parsed = int.tryParse(text);
@@ -1721,7 +1728,12 @@ class _GoalPageState extends State<_GoalPage> {
 
   bool get _isDistance => _measure == MotionMeasurementType.distance;
 
+  /// A short distance goal shows / edits in whole metres; a longer one in
+  /// miles (matches [formatDistance]'s crossover).
+  bool get _isShortDistance => _isDistance && _target < kMetresMilesCrossover;
+
   int get _stepSize {
+    if (_isShortDistance) return 10; // 10 m steps for a sprint goal
     if (_isDistance) return 161; // ~0.1 mi in metres
     if (_target < 10) return 1;
     if (_target < 100) return 5;
@@ -1740,6 +1752,7 @@ class _GoalPageState extends State<_GoalPage> {
   }
 
   String get _displayTarget {
+    if (_isShortDistance) return '$_target';
     if (_isDistance) return formatMiles(_target);
     if (widget.draft.metric == RaceMetric.seconds) {
       return _secondsDisplay(_target);
@@ -1759,6 +1772,8 @@ class _GoalPageState extends State<_GoalPage> {
       ? (widget.draft.customUnit?.trim().isNotEmpty == true
             ? widget.draft.customUnit!.trim()
             : 'reps')
+      : _isShortDistance
+      ? 'm'
       : _isDistance
       ? 'mi'
       : widget.draft.activity.unit;
@@ -1800,12 +1815,12 @@ class _GoalPageState extends State<_GoalPage> {
             ),
             const SizedBox(height: 24),
 
-            // ── Suggested values ─────────────────────────────────────────────
+            // ── Suggested values (Wrap flows to a second row; not a scroller)
             Wrap(
               spacing: 10,
               runSpacing: 10,
               children: [
-                for (final t in _suggestedTargets.take(5))
+                for (final t in _suggestedTargets.take(_isDistance ? 7 : 5))
                   _SuggestedTarget(
                     value: _isDistance
                         ? formatMotionGoalOption(_measure, t)
