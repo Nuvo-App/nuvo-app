@@ -51,6 +51,86 @@ export interface CustomRaceConfig {
 
 const FORMATS = new Set<RaceFormat>(['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt']);
 const RECURRENCES = new Set<RaceRecurrence>(['none', 'daily', 'weekly']);
+
+/**
+ * Non-physical / honor-logged goals (pages read, hours studied, tasks done…).
+ * No AI Motion Proof — progress is user-logged. Stored with
+ * `verifier_type = MANUAL_VERIFIER_TYPE`. The wire `metric` is always `reps`
+ * (the score is an opaque cumulative integer); the human unit lives in
+ * `target_unit` for display.
+ */
+export const MANUAL_VERIFIER_TYPE = 'manual_log';
+
+const MANUAL_PROOF_REQUIREMENTS = new Set([
+  'manual',
+  'note',
+  'link',
+  'photo',
+  'photo_video',
+  'daily_check',
+  'habit_check',
+]);
+
+export interface ManualRaceConfig {
+  verifierType: typeof MANUAL_VERIFIER_TYPE;
+  metric: 'reps';
+  unit: string; // free-text display unit ("pages", "minutes", "days")
+  format: RaceFormat;
+  scoringRule: RaceScoringRule;
+  targetValue: number;
+  recurrence: RaceRecurrence;
+  timezone: string;
+  startsAt: string | null;
+  endsAt: string | null;
+}
+
+/**
+ * Returns a manual config when the body is an honor-logged goal:
+ *  - no supported preset activityId and no custom verifierType, and
+ *  - a manual-style proofRequirement / proofMode.
+ * Returns null when it's not a manual race, or an error string when it is but
+ * is malformed.
+ */
+export function manualConfigFromBody(
+  body: Record<string, unknown>,
+): ManualRaceConfig | null | { error: string } {
+  if (stringValue(body, 'verifierType', 'verifier_type')) return null;
+
+  const activityId = normalizeActivityId(stringValue(body, 'activityId', 'activity_id', 'aiActivityType'));
+  if (activityId && activityForId(activityId)?.availability === 'supported') return null;
+
+  const proof = (
+    stringValue(body, 'proofMode', 'proofRequirement', 'proof_requirement') ?? 'manual'
+  ).toLowerCase();
+  if (!MANUAL_PROOF_REQUIREMENTS.has(proof)) return null;
+
+  const targetValue = intValue(body, 'targetValue', 'target_value');
+  if (!targetValue) return { error: 'A goal amount is required.' };
+
+  const unitRaw = stringValue(body, 'unit', 'targetUnit', 'target_unit') ?? 'done';
+  const unit = unitRaw.slice(0, 24);
+
+  const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
+  const format = FORMATS.has(rawFormat as RaceFormat) ? (rawFormat as RaceFormat) : 'first_to_goal';
+
+  const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
+  const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence)
+    ? (recurrenceRaw as RaceRecurrence)
+    : 'none';
+
+  return {
+    verifierType: MANUAL_VERIFIER_TYPE,
+    metric: 'reps',
+    unit,
+    format,
+    scoringRule: scoringRuleForFormat(format),
+    targetValue,
+    recurrence,
+    timezone: stringValue(body, 'timezone') ?? 'America/New_York',
+    startsAt: stringValue(body, 'startsAt', 'startLineAt') ?? null,
+    endsAt: stringValue(body, 'endsAt', 'finishLineAt') ?? null,
+  };
+}
 const COMPLETION_STRATEGIES = new Set(['completionAtTerminalPose', 'completionAfterSequenceReturn']);
 
 function stringValue(body: Record<string, unknown>, ...keys: string[]): string | undefined {

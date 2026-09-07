@@ -541,13 +541,13 @@ test('custom race INSERT has matching column count, placeholder count, and bind 
 
   // Verify key bind positions match their columns
   const verifierTypeIdx = columns.indexOf('verifier_type');
-  assert.ok(bindArgs[verifierTypeIdx].includes('custom.verifierType'), `verifier_type bind must be custom.verifierType, got: ${bindArgs[verifierTypeIdx]}`);
+  assert.ok(bindArgs[verifierTypeIdx].includes('withVerifierType.type'), `verifier_type bind must be withVerifierType.type, got: ${bindArgs[verifierTypeIdx]}`);
   const verifierVersionIdx = columns.indexOf('verifier_version');
-  assert.ok(bindArgs[verifierVersionIdx].includes('custom.verifierVersion'), `verifier_version bind must be custom.verifierVersion`);
+  assert.ok(bindArgs[verifierVersionIdx].includes('withVerifierType.version'), `verifier_version bind must be withVerifierType.version`);
   const verifierSpecIdx = columns.indexOf('verifier_spec_json');
-  assert.ok(bindArgs[verifierSpecIdx].includes('custom.verifierSpecJson'), `verifier_spec_json bind must be custom.verifierSpecJson`);
+  assert.ok(bindArgs[verifierSpecIdx].includes('withVerifierType.spec'), `verifier_spec_json bind must be withVerifierType.spec`);
   const customActivityIdx = columns.indexOf('custom_activity_name');
-  assert.ok(bindArgs[customActivityIdx].includes('custom.customActivityName'), `custom_activity_name bind must be custom.customActivityName`);
+  assert.ok(bindArgs[customActivityIdx].includes('withVerifierType.name'), `custom_activity_name bind must be withVerifierType.name`);
 });
 
 test('POST /races wraps DB batch in try/catch for useful error responses', () => {
