@@ -1981,7 +1981,7 @@ void main() {
         expect(capture.acceptedCount, 1);
         expect(capture.stage, TeachMovementStage.readyToRecord);
         expect(capture.verifierSpec, isNull);
-        expect(capture.message, 'Show me that once more.');
+        expect(capture.message, 'Show Nuvo that once more.');
         final report = capture.debugReport();
         expect(report['detectedRepetitionCount'], 1);
       },

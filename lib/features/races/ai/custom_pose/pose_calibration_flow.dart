@@ -467,14 +467,14 @@ class SingleSessionTeachingCapture {
       _rejected.add(demo);
       _lastRejection = demo.rejectionReason;
       _stage = TeachMovementStage.readyToRecord;
-      _message = 'Show me that once more.';
+      _message = 'Show Nuvo that once more.';
       _notify();
       return;
     }
 
     if (_startPose == null) {
       _stage = TeachMovementStage.readyToRecord;
-      _message = 'Show me that once more.';
+      _message = 'Show Nuvo that once more.';
       _notify();
       return;
     }
@@ -495,7 +495,7 @@ class SingleSessionTeachingCapture {
 
     if (repetitions.length < 2) {
       _stage = TeachMovementStage.readyToRecord;
-      _message = 'Show me that once more.';
+      _message = 'Show Nuvo that once more.';
       _notify();
       return;
     }
@@ -611,9 +611,9 @@ class SingleSessionTeachingCapture {
   String _exampleInstruction(int savedCount) {
     return switch (savedCount) {
       0 => 'Show Nuvo the movement.',
-      1 => 'Do that again.',
-      2 => 'One more time.',
-      _ => 'Learn movement',
+      1 => 'Do that again — example 2 of 3.',
+      2 => 'One more — example 3 of 3.',
+      _ => 'That\'s enough — learn the movement.',
     };
   }
 

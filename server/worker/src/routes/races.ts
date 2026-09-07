@@ -16,6 +16,7 @@ import {
 import { applyVerifiedSubmission } from '../domain/raceScoring';
 import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
+import { resolveRaceMemberVisibility } from '../lib/privacy';
 
 export const racesRouter = new Hono<AppEnv>();
 racesRouter.use('*', requireAuth);
@@ -397,17 +398,31 @@ async function buildRaceResponse(
     for (const r of blockedBy.results) blockedMe.add(r.user_id);
   }
 
+  const blockedEitherWay = new Set<string>([...blockedByMe, ...blockedMe]);
+  // Being in the same race is itself an opt-in relationship: fellow racers see
+  // each other's race identity (name + photo) even with a private profile —
+  // a leaderboard / "someone passed you" is unreadable otherwise. Only when
+  // the viewer is themselves in this race; blocking still wins.
+  const coRacerIds = new Set<string>();
+  if (viewerUserId && participants.results.some((p) => p.user_id === viewerUserId)) {
+    for (const p of participants.results) {
+      if (p.user_id) coRacerIds.add(p.user_id);
+    }
+  }
+
   function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null } {
-    if (!viewerUserId || !row.user_id || row.user_id === viewerUserId) {
-      return { displayName: row.display_name, profilePhotoUrl: row.profile_photo_url };
-    }
-    if (blockedByMe.has(row.user_id) || blockedMe.has(row.user_id)) {
-      return { displayName: 'Private User', profilePhotoUrl: null };
-    }
-    if (row.private_profile && !allowedIds.has(row.user_id)) {
-      return { displayName: 'Private User', profilePhotoUrl: null };
-    }
-    return { displayName: row.display_name, profilePhotoUrl: row.profile_photo_url };
+    const v = resolveRaceMemberVisibility(
+      viewerUserId,
+      {
+        userId: row.user_id,
+        displayName: row.display_name,
+        username: row.username ?? null,
+        profilePhotoUrl: row.profile_photo_url,
+        privateProfile: Boolean(row.private_profile),
+      },
+      { crewIds: allowedIds, blockedEitherWay, coRacerIds },
+    );
+    return { displayName: v.displayName, profilePhotoUrl: v.profilePhotoUrl };
   }
 
   const proofRequirement = mapVerificationTypeToProofRequirement(race.verification_type);
