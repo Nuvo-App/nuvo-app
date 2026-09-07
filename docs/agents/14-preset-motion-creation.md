@@ -342,6 +342,41 @@ lift", not "wrong movement". The screen also logs, via `PoseDetectorService`:
 `framesReceived / framesProcessed / framesDropped / effectiveVerifierFPS` and a
 `RepEventLog` ring buffer of the last rep timestamps + intervals.
 
+### J2. Motion Session telemetry — every attempt is uploaded
+
+`ai_motion_proof_screen_io.dart` records **every** preset/custom verification
+attempt into a `MotionSessionArtifact`
+(`lib/features/races/ai/motion_session/`) — the landmark stream the verifier
+evaluated plus its decision trace (`rep_counted` / `validator_state` /
+`readiness` / `rejection` events with `debugValues` metrics) plus the final
+result, versions and device info. It is a schema-versioned, gzip'd document
+(`kMotionSessionSchema`); the same object feeds the debug-only "Share session"
+export and the automatic upload.
+
+- `MotionSessionRecorder`: `start()` with the camera, `recordFrame(...)` per
+  processed frame, `finish(...)` on result / `dispose` (abandoned →
+  `incomplete`), `build()` → artifact.
+- `MotionSessionUploadQueue` (`motionSessionUploadQueueProvider`): stages the
+  blob + a metadata sidecar under app-documents, uploads best-effort, retries
+  everything staged on the next launch / verification. Never awaited from the
+  frame path.
+- Wire: `POST /motion-sessions` (JWT) → R2 `motion-sessions/<user>/<id>.json.gz`
+  + D1 `motion_sessions` index row (migration `0013`).
+- Retrieval (support / coding agent), gated on `X-Internal-Key` ==
+  `INTERNAL_API_KEY` wrangler secret:
+  - `GET /internal/users/resolve?email=|username=|id=`
+  - `GET /internal/users/:id/motion-sessions[?activityId=&outcome=]`
+  - `GET /internal/users/:id/motion-sessions/latest[?activityId=]`
+  - `GET /internal/motion-sessions/:sessionId`
+  - `GET /internal/motion-sessions/failed`
+  - `GET /internal/activities/:activityId/motion-sessions/latest`
+  Each returns `{ session, metadata, artifact }` — the artifact is the
+  decompressed JSON, so no phone log is needed to diagnose.
+
+When adding a preset, nothing extra is required here — the recorder is
+activity-agnostic. Just make sure your validator's `debugValues` are
+meaningful (§J), because they land in the uploaded `events[].metrics`.
+
 ---
 
 ## K. Full-route acceptance — hard rule
