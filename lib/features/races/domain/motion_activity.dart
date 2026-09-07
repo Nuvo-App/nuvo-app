@@ -102,12 +102,15 @@ enum RaceMetric {
 /// deciding what "unit" means (that's how plank ended up showing "reps").
 ///
 /// Serialization stays on [RaceMetric] (`reps` | `seconds`) — the Worker only
-/// accepts those two — so [raceMetric] is the wire form. `distance` / `steps`
-/// / `calories` / `completion` are documented future types with no consumer
-/// yet (and would need Worker changes), so they are intentionally absent.
+/// accepts those two. [distance] therefore rides the wire as `reps` with the
+/// integer `target_value` / `progress_value` carrying **metres** (the server
+/// treats it as an opaque cumulative integer); the client knows from the
+/// activity catalog to render those metres as a running distance. `steps` /
+/// `calories` / `completion` are documented future types with no consumer yet.
 enum MotionMeasurementType {
   repetitions(RaceMetric.reps, 'reps'),
-  duration(RaceMetric.seconds, 'seconds');
+  duration(RaceMetric.seconds, 'seconds'),
+  distance(RaceMetric.reps, 'mi');
 
   const MotionMeasurementType(this.raceMetric, this.defaultPluralUnit);
 
@@ -118,6 +121,32 @@ enum MotionMeasurementType {
       m == RaceMetric.seconds
           ? MotionMeasurementType.duration
           : MotionMeasurementType.repetitions;
+}
+
+const double _metresPerMile = 1609.344;
+
+/// Metres → a trimmed mileage string: 402 → "0.25", 1609 → "1", 5000 → "3.11".
+String formatMiles(int metres) {
+  final miles = metres / _metresPerMile;
+  // Two decimals is the honest ceiling for a camera estimate — never imply
+  // more precision than that.
+  var s = miles.toStringAsFixed(2);
+  if (s.contains('.')) {
+    s = s.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  }
+  return s;
+}
+
+/// "8:42" from seconds-per-mile; null / out-of-range → null (caller hides it).
+String? formatPacePerMile(double? secondsPerMile) {
+  if (secondsPerMile == null ||
+      !secondsPerMile.isFinite ||
+      secondsPerMile < 180 ||
+      secondsPerMile > 1500) {
+    return null;
+  }
+  final total = secondsPerMile.round();
+  return '${total ~/ 60}:${(total % 60).toString().padLeft(2, '0')}';
 }
 
 /// "M:SS" clock form, always: "0:45", "2:00", "1:05".
@@ -144,38 +173,49 @@ String formatDurationLong(int seconds) {
   return '${m}m ${s}s';
 }
 
-/// The full goal label: "25 reps" / "40 steps" / "2 minutes".
+/// The full goal label: "25 reps" / "40 steps" / "2 minutes" / "0.25 mi".
 String formatMotionTarget(
   MotionMeasurementType type,
   int value,
   String pluralUnit,
 ) =>
-    type == MotionMeasurementType.duration
-        ? formatDurationLong(value)
-        : '$value $pluralUnit';
+    switch (type) {
+      MotionMeasurementType.duration => formatDurationLong(value),
+      MotionMeasurementType.distance => '${formatMiles(value)} mi',
+      MotionMeasurementType.repetitions => '$value $pluralUnit',
+    };
 
-/// Just the value for a composer suggestion chip: "25" / "45s" / "2 min".
+/// Just the value for a composer suggestion chip: "25" / "45s" / "0.25 mi".
 String formatMotionGoalOption(MotionMeasurementType type, int value) =>
-    type == MotionMeasurementType.duration
-        ? formatDurationShort(value)
-        : '$value';
+    switch (type) {
+      MotionMeasurementType.duration => formatDurationShort(value),
+      MotionMeasurementType.distance => '${formatMiles(value)} mi',
+      MotionMeasurementType.repetitions => '$value',
+    };
 
-/// Progress against a goal: "12 / 25 reps" / "0:45 / 2:00".
+/// Progress against a goal: "12 / 25 reps" / "0:45 / 2:00" / "0.12 / 0.25 mi".
 String formatMotionProgress(
   MotionMeasurementType type,
   int current,
   int target,
   String pluralUnit,
 ) =>
-    type == MotionMeasurementType.duration
-        ? '${formatClock(current)} / ${formatClock(target)}'
-        : '$current / $target $pluralUnit';
+    switch (type) {
+      MotionMeasurementType.duration =>
+        '${formatClock(current)} / ${formatClock(target)}',
+      MotionMeasurementType.distance =>
+        '${formatMiles(current)} / ${formatMiles(target)} mi',
+      MotionMeasurementType.repetitions => '$current / $target $pluralUnit',
+    };
 
 /// Default composer question when the activity doesn't override it.
 String defaultGoalPrompt(MotionMeasurementType type, String activityTitle) =>
-    type == MotionMeasurementType.duration
-        ? 'How long?'
-        : 'How many ${activityTitle.toLowerCase()}?';
+    switch (type) {
+      MotionMeasurementType.duration => 'How long?',
+      MotionMeasurementType.distance => 'How far?',
+      MotionMeasurementType.repetitions =>
+        'How many ${activityTitle.toLowerCase()}?',
+    };
 
 enum RaceFormat {
   firstToGoal('first_to_goal', 'First to the goal'),

@@ -37,7 +37,8 @@ const _countSemantics = <MotionActivityType, String>{
   // Cadence family — one count = one confirmed alternation step (matches
   // High Knees' per-raise granularity). A left+right cycle is 2.
   MotionActivityType.runningInPlace: 'one confirmed alternating step',
-  MotionActivityType.treadmillRunning: 'one confirmed alternating step',
+  MotionActivityType.treadmillRunning:
+      'estimated virtual distance in metres (gait -> stride -> distance)',
   MotionActivityType.walkingInPlace: 'one confirmed alternating step',
   MotionActivityType.marchingInPlace: 'one confirmed alternating step',
   MotionActivityType.buttKicks: 'one confirmed alternating heel kick',

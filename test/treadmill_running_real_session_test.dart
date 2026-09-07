@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/ai/motion_validators.dart';
+import 'package:nuvo/features/races/ai/virtual_distance_estimator.dart';
 import 'package:nuvo/features/races/data/ai_motion_models.dart';
+import 'package:nuvo/features/races/domain/motion_activity.dart';
 
 /// Regression guard built from a REAL failed cloud session
 /// (`ms_64c7b6eec7de438c9d2a4842cb38f3f4`, 2026-09-07): ~37s of continuous
@@ -55,20 +57,38 @@ void main() {
     expect(frames.length, 890);
   });
 
-  test('treadmill running now counts a real continuous run', () {
-    final count = replay(AiMotionActivity.treadmillRunning);
-    // Independent analysis of the landmark stream: ~77 alternating steps in
-    // ~37s. Anything in this band means the cadence is genuinely tracked
-    // (not the old stall at 2); the upper cap guards against a runaway
-    // double-count.
+  test('running in place now counts a real continuous run', () {
+    // Running in Place still reports a step count. Independent analysis of the
+    // landmark stream: ~77 alternating steps in ~37s (the old signal stalled
+    // at 2). Upper cap guards a runaway double-count.
+    final count = replay(AiMotionActivity.runningInPlace);
     expect(count, greaterThanOrEqualTo(30));
     expect(count, lessThanOrEqualTo(90));
   });
 
-  test('running in place shares the fixed signal', () {
-    final count = replay(AiMotionActivity.runningInPlace);
-    expect(count, greaterThanOrEqualTo(30));
-    expect(count, lessThanOrEqualTo(90));
+  test('treadmill running reports a plausible virtual distance + pace', () {
+    final v = createMotionValidator(AiMotionActivity.treadmillRunning, 5000)
+      ..start();
+    for (final f in frames) {
+      v.update(f);
+    }
+    final est = (v as dynamic).distanceEstimator as VirtualDistanceEstimator;
+
+    // ~37s of interval-style in-place running (~77 steps). A moderate forward
+    // jog would cover roughly 0.03–0.12 mi in that time.
+    final metres = est.metres;
+    expect(metres, greaterThan(40));
+    expect(metres, lessThan(200));
+    expect(v.currentValue, metres.round().clamp(0, 5000));
+
+    final pace = est.paceSecondsPerMile;
+    expect(pace, isNotNull);
+    expect(pace!, greaterThan(240), reason: 'not an impossible sprint');
+    expect(pace, lessThan(1200), reason: 'still a run, not a stroll');
+    expect(formatPacePerMile(pace), isNotNull);
+
+    expect(est.cadenceStepsPerMinute, greaterThan(90));
+    expect(est.cadenceStepsPerMinute, lessThan(230));
   });
 
   test('the session is horizontal-swing dominant (why the old signal starved)',
@@ -94,13 +114,14 @@ void main() {
     expect(maxAbsDx, greaterThan(maxAbsDy * 2)); // horizontal-dominant
   });
 
-  test('the finished result verifies against a goal of 50', () {
+  test('a 50 m distance goal is reached and verified', () {
     final v = createMotionValidator(AiMotionActivity.treadmillRunning, 50)
       ..start();
     for (final f in frames) {
       v.update(f);
     }
     final result = v.finish();
-    expect(result.detectedReps, greaterThanOrEqualTo(30));
+    expect(result.detectedReps, 50); // capped at the metre goal
+    expect(result.verificationStatus, 'ai_verified');
   });
 }

@@ -102,12 +102,11 @@ void main() {
       expect(plank.counterLabel(45, 120), '0:45 / 2:00');
     });
 
-    test('gait movements measure in steps, not reps', () {
+    test('step-cadence movements measure in steps, not reps', () {
       for (final t in [
         MotionActivityType.runningInPlace,
         MotionActivityType.walkingInPlace,
         MotionActivityType.marchingInPlace,
-        MotionActivityType.treadmillRunning,
       ]) {
         final def = motionActivityForType(t)!;
         expect(def.unit, 'steps', reason: t.name);
@@ -117,6 +116,19 @@ void main() {
         expect(def.resolvedMeasurementType.raceMetric, RaceMetric.reps,
             reason: t.name);
       }
+    });
+
+    test('treadmill running measures estimated distance', () {
+      final def = motionActivityForType(MotionActivityType.treadmillRunning)!;
+      expect(def.resolvedMeasurementType, MotionMeasurementType.distance);
+      expect(def.goalPrompt, 'How far?');
+      // suggested targets are metres; the label formats as miles
+      expect(def.targetLabel(1609), '1 mi');
+      expect(def.targetLabel(402), '0.25 mi');
+      expect(def.goalOptionLabel(805), '0.5 mi');
+      expect(def.counterLabel(402, 1609), '0.25 / 1 mi');
+      // still serializes on the reps wire metric
+      expect(def.resolvedMeasurementType.raceMetric, RaceMetric.reps);
     });
 
     test('pushups still ask "How many pushups?" and count reps', () {
