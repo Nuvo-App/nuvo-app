@@ -365,6 +365,33 @@ running it.
 
 ---
 
+## L2. Measurement model — the catalog owns "unit", not the screens
+
+`MotionActivityDefinition` carries the measurement model so the composer
+prompt, race card, leaderboard and progress all read one source (this is how
+plank ended up showing "reps" — every screen decided for itself):
+
+- `measurementType` — `MotionMeasurementType.repetitions` | `.duration`. Null →
+  derived from `metric` (so a `RaceMetric.seconds` activity like plank becomes
+  `duration` automatically). `distance` / `steps` / `calories` / `completion`
+  are documented future types with **no consumer and no Worker support** — do
+  not add them speculatively.
+- `goalPromptOverride` — the composer question. Null → `defaultGoalPrompt`:
+  repetitions → `"How many <title>?"`, duration → `"How long?"`. Gait movements
+  set `"How many steps?"`.
+- `displayUnitOverride` — the noun ("steps", "kicks"). Null →
+  `measurementType.defaultPluralUnit`. **Does not change serialization** — the
+  wire `metric` is always `measurementType.raceMetric` (`reps`/`seconds`), so
+  no Worker change is needed for a units tweak.
+
+Format via the helpers in `motion_activity.dart` (`formatMotionTarget`,
+`formatMotionProgress`, `formatMotionGoalOption`, `formatClock`,
+`formatDurationShort/Long`) and the `Race`-level wrappers in `race_display.dart`
+(`raceMeasurementType`, `raceDisplayUnit`, `raceProgressLabel`,
+`raceTargetLabel`, `raceScoreLabel`). Never hand-format `"$value $unit"` in a
+screen. `test/motion_measurement_test.dart` asserts every catalog entry has a
+sane model.
+
 ## L. Count semantics — must be explicit, one convention per family
 
 Documented in `test/preset_registration_contract_test.dart` `_countSemantics`

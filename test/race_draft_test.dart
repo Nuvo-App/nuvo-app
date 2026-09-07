@@ -77,10 +77,10 @@ void main() {
       expect(edited.activity.type, MotionActivityType.plankHold);
     });
 
-    test('plank target label formats as seconds, not reps', () {
+    test('plank target label formats as a clock time, not reps', () {
       final plank = motionActivityForType(MotionActivityType.plankHold)!;
-      expect(plank.targetLabel(60), '60 seconds');
-      expect(plank.targetLabel(300), '300 seconds');
+      expect(plank.targetLabel(60), '1 minute');
+      expect(plank.targetLabel(300), '5 minutes');
     });
 
     test('pushup target label formats as reps', () {
@@ -88,9 +88,9 @@ void main() {
       expect(pushups.targetLabel(15), '15 reps');
     });
 
-    test('plank counter label shows seconds', () {
+    test('plank counter label shows a clock time', () {
       final plank = motionActivityForType(MotionActivityType.plankHold)!;
-      expect(plank.counterLabel(45, 60), '45 / 60 seconds');
+      expect(plank.counterLabel(45, 60), '0:45 / 1:00');
     });
 
     test('squats counter label shows reps', () {
