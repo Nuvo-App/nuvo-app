@@ -330,6 +330,10 @@ void main() {
 
   // ── preset-motion-expansion movements ──────────────────────────────────────
   Map<String, NuvoPosePoint> cadenceStand() => {
+        // Shoulders included: Running / Treadmill now normalize the gait
+        // signal against torso height (hip↔shoulder).
+        'leftShoulder': _p(0.42, 0.30),
+        'rightShoulder': _p(0.58, 0.30),
         'leftHip': _p(0.42, 0.52),
         'rightHip': _p(0.58, 0.52),
         'leftKnee': _p(0.42, 0.75),

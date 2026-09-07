@@ -229,14 +229,35 @@ running/marching cadence **never brings a knee that high** — it was tuned to
 synthetic poses that lifted one thigh halfway to the hip. Nothing counted
 on-device.
 
-The fix reads the **difference in height between the two knees**
-(`rightKnee.y - leftKnee.y` vs `hipWidth * liftFraction`) — the actual
-alternating-gait signal, invariant to camera framing and absolute knee height.
-`liftFraction`: Walking `0.30`, Running/Treadmill `0.55`, Marching/Step-Ups
-`0.65`, Mountain Climbers `0.55`.
+Fix #1 (`kneeAlternationSide`) read the **difference in height between the two
+knees** (`rightKnee.y - leftKnee.y` vs `hipWidth * liftFraction`). Still used
+by Walking `0.30` / Marching `0.65` / Step-Ups `0.65` / Mountain Climbers
+`0.55`.
+
+Fix #2 (real session `ms_64c7b6ee…`, 2026-09-07): a 37 s continuous
+treadmill-style run counted **2 of ~77**. Two failures compounded — the
+athlete was small in frame so `hipWidth` collapsed to ~0.02 and the threshold
+floored at an absolute `0.033`; and the run showed up almost entirely as a
+**horizontal** knee swing (`Δx ≈ ±0.11`) with a near-zero vertical stagger
+(`Δy` p10..p90 = −0.004..+0.038), so a purely vertical signal sat in its dead
+zone. Running in Place + Treadmill Running now use the stateful
+`AlternatingGaitSignal`:
+
+- body scale = **torso height** (hip↔shoulder), clamped — stable when
+  hip-width-in-x is not (add shoulders to `requiredLandmarks`);
+- signal = `(Δx − centreΔx) + Δy` of the knee pair. The axes are positively
+  correlated mid-stride, so summing reinforces the step; `Δx` is measured
+  against a first-frame-seeded slow centre (absorbs a static stance / lean),
+  `Δy` is raw (a level rest pose already sits at ~0 — subtracting a lagging
+  centre is what makes a return-to-neutral misread as the opposite side);
+- side emitted when the swing clears `torso * 0.18`; `CadenceDetector` still
+  owns the stable-frame + alternation counting.
 
 Lesson: a good signal describes **what changes during the movement relative to
-the body**, not an idealised target pose.
+the body**, not an idealised target pose — and *which axis* carries that
+change depends on the camera, so don't bet the whole signal on one.
+Regression fixture: `test/fixtures/treadmill_running_session_ms_64c7b6ee.json`
++ `test/treadmill_running_real_session_test.dart`.
 
 ---
 
