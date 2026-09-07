@@ -46,7 +46,24 @@ class CameraVerificationEligibility {
       source == CameraVerificationSource.customVerifier;
 }
 
+/// Backend `verifier_type` for a non-physical / honor-logged goal.
+const manualLogVerifierType = 'manual_log';
+
 CameraVerificationEligibility resolveCameraVerification(Race race) {
+  // A non-physical goal is authoritatively not camera-verifiable — never let a
+  // movement-sounding title ("Run 5 miles this week") infer a camera flow.
+  if (race.verifierType == manualLogVerifierType || race.proofMode == 'manual') {
+    return CameraVerificationEligibility(
+      raceId: race.id,
+      raceTitle: race.title,
+      isCameraVerifiable: false,
+      movementType: null,
+      source: CameraVerificationSource.unresolved,
+      preferredCameraView: null,
+      instructions: const [],
+      reason: 'manual_goal',
+    );
+  }
   if (race.isCustomVerifierRace) {
     return _resolveCustomVerification(race);
   }

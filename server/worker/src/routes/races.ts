@@ -7,10 +7,12 @@ import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
 import {
   CUSTOM_VERIFIER_TYPE,
+  MANUAL_VERIFIER_TYPE,
   PRESET_VERIFIER_TYPE,
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  manualConfigFromBody,
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission } from '../domain/raceScoring';
@@ -267,10 +269,14 @@ function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
       targetValue: presetConfig.targetValue,
     };
   }
-  if (race.verifier_type !== CUSTOM_VERIFIER_TYPE) return null;
+  const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isManual = race.verifier_type === MANUAL_VERIFIER_TYPE;
+  if (!isCustom && !isManual) return null;
   const targetValue = positiveIntOrNull(race.target_value) ?? null;
   if (targetValue == null) return null;
-  const metric = normalizeMetric(race.metric ?? race.target_unit ?? 'reps', undefined);
+  // Manual races store a free-text unit in target_unit; the wire metric is
+  // always 'reps' (an opaque cumulative integer).
+  const metric = isManual ? 'reps' : normalizeMetric(race.metric ?? race.target_unit ?? 'reps', undefined);
   if (!metric) return null;
   const format = (((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as unknown) as RaceFormat;
   const scoringRule = ((race.scoring_rule ?? 'cumulative_sum') as unknown) as RaceScoringRule;
@@ -607,9 +613,18 @@ racesRouter.post('/', async (c) => {
     return c.json(badRequest(customConfig.error), 400);
   }
   const isCustomConfig = Boolean(customConfig);
-  const verificationType = isCustomConfig ? 'movecheck' : mapProofRequirementToVerificationType(verificationRaw);
-  const structuredConfig = isCustomConfig ? null : configFromBody(body);
-  if (!isCustomConfig && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
+
+  const manualConfig = isCustomConfig ? null : manualConfigFromBody(body);
+  if (manualConfig && 'error' in manualConfig) {
+    return c.json(badRequest(manualConfig.error), 400);
+  }
+  const manual = manualConfig && !('error' in manualConfig) ? manualConfig : null;
+
+  const verificationType = isCustomConfig
+    ? 'movecheck'
+    : mapProofRequirementToVerificationType(verificationRaw);
+  const structuredConfig = isCustomConfig || manual ? null : configFromBody(body);
+  if (!isCustomConfig && !manual && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
     return c.json(badRequest(structuredConfig.error), 400);
   }
 
@@ -617,25 +632,33 @@ racesRouter.post('/', async (c) => {
   const description = stringOrNull(body.description) ?? null;
   const config = structuredConfig && !('error' in structuredConfig) ? structuredConfig : null;
   const custom = customConfig && !('error' in customConfig) ? customConfig : null;
-  const raceType = config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
-  const targetValue = custom?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
-  const targetUnit = custom?.metric ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
-  const movementType = custom ? null : config?.activityId ?? stringOrNull(body.aiActivityType) ?? null;
+  const raceType = manual?.format ?? config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
+  const targetValue = custom?.targetValue ?? manual?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
+  // Manual races keep the human unit ("pages") in target_unit; the wire metric
+  // is always 'reps'.
+  const targetUnit = custom?.metric ?? manual?.unit ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
+  const movementType = custom || manual ? null : config?.activityId ?? stringOrNull(body.aiActivityType) ?? null;
   const visibility = typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility) ? body.visibility : 'private';
-  const startAt = custom?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
-  const endAt = custom?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
+  const startAt = custom?.startsAt ?? manual?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
+  const endAt = custom?.endsAt ?? manual?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
-  const raceFormat = custom?.format ?? config?.format ?? raceType;
-  const raceActivityId = custom ? null : config?.activityId ?? normalizeActivityId(movementType);
-  const raceMetric = custom?.metric ?? config?.metric ?? normalizeMetric(targetUnit, activityForId(normalizeActivityId(movementType)));
-  const raceScoringRule = custom?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum';
+  const raceFormat = custom?.format ?? manual?.format ?? config?.format ?? raceType;
+  const raceActivityId = custom || manual ? null : config?.activityId ?? normalizeActivityId(movementType);
+  const raceMetric = custom?.metric ?? manual?.metric ?? config?.metric ?? normalizeMetric(stringOrNull(body.metric) ?? targetUnit, activityForId(normalizeActivityId(movementType)));
+  const raceScoringRule = custom?.scoringRule ?? manual?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum';
   const raceAttemptDurationSeconds = custom?.attemptDurationSeconds ?? config?.attemptDurationSeconds ?? null;
   const raceAttemptLimit = custom?.attemptLimit ?? config?.attemptLimit ?? null;
   const raceVerificationMethod = custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType);
-  const raceTimezone = custom?.timezone ?? config?.timezone ?? 'America/New_York';
-  const raceRecurrence = custom?.recurrence ?? config?.recurrence ?? 'none';
+  const raceTimezone = custom?.timezone ?? manual?.timezone ?? config?.timezone ?? 'America/New_York';
+  const raceRecurrence = custom?.recurrence ?? manual?.recurrence ?? config?.recurrence ?? 'none';
 
-  const raceStmt = custom
+  const withVerifierType = custom
+    ? { type: custom.verifierType, version: custom.verifierVersion, spec: custom.verifierSpecJson, name: custom.customActivityName }
+    : manual
+      ? { type: MANUAL_VERIFIER_TYPE, version: null as number | null, spec: null as string | null, name: null as string | null }
+      : null;
+
+  const raceStmt = withVerifierType
     ? c.env.DB.prepare(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
@@ -660,10 +683,10 @@ racesRouter.post('/', async (c) => {
         raceAttemptDurationSeconds,
         raceAttemptLimit,
         raceVerificationMethod,
-        custom.verifierType,
-        custom.verifierVersion,
-        custom.verifierSpecJson,
-        custom.customActivityName,
+        withVerifierType.type,
+        withVerifierType.version,
+        withVerifierType.spec,
+        withVerifierType.name,
         raceTimezone,
         raceRecurrence,
         visibility,
@@ -1077,7 +1100,11 @@ racesRouter.post('/:id/proof', async (c) => {
   if (!race) return c.json(badRequest('Race not found'), 404);
   const config = raceConfigFromRow(race);
   const scoring = raceScoringConfigFromRow(race);
-  if (!scoring || (!config && race.verifier_type !== CUSTOM_VERIFIER_TYPE)) {
+  const isManualRace = race.verifier_type === MANUAL_VERIFIER_TYPE;
+  if (
+    !scoring ||
+    (!config && race.verifier_type !== CUSTOM_VERIFIER_TYPE && !isManualRace)
+  ) {
     return c.json(badRequest('Race is missing activity configuration'), 400);
   }
   const member = await c.env.DB.prepare(
