@@ -96,6 +96,87 @@ enum RaceMetric {
   }
 }
 
+/// How an activity's goal and progress are measured and phrased. The activity
+/// catalog owns this so the composer prompt, race display, leaderboard, and
+/// progress formatting all read from one source instead of each screen
+/// deciding what "unit" means (that's how plank ended up showing "reps").
+///
+/// Serialization stays on [RaceMetric] (`reps` | `seconds`) — the Worker only
+/// accepts those two — so [raceMetric] is the wire form. `distance` / `steps`
+/// / `calories` / `completion` are documented future types with no consumer
+/// yet (and would need Worker changes), so they are intentionally absent.
+enum MotionMeasurementType {
+  repetitions(RaceMetric.reps, 'reps'),
+  duration(RaceMetric.seconds, 'seconds');
+
+  const MotionMeasurementType(this.raceMetric, this.defaultPluralUnit);
+
+  final RaceMetric raceMetric;
+  final String defaultPluralUnit;
+
+  static MotionMeasurementType fromRaceMetric(RaceMetric m) =>
+      m == RaceMetric.seconds
+          ? MotionMeasurementType.duration
+          : MotionMeasurementType.repetitions;
+}
+
+/// "M:SS" clock form, always: "0:45", "2:00", "1:05".
+String formatClock(int seconds) {
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
+/// Compact duration for chips and inline: "45s" / "1 min" / "2 min" / "1:30".
+String formatDurationShort(int seconds) {
+  if (seconds < 60) return '${seconds}s';
+  if (seconds % 60 == 0) return '${seconds ~/ 60} min';
+  return formatClock(seconds);
+}
+
+/// Spoken duration for the win statement: "45 seconds" / "2 minutes" /
+/// "1m 30s".
+String formatDurationLong(int seconds) {
+  if (seconds < 60) return '$seconds ${seconds == 1 ? 'second' : 'seconds'}';
+  final m = seconds ~/ 60;
+  final s = seconds % 60;
+  if (s == 0) return '$m ${m == 1 ? 'minute' : 'minutes'}';
+  return '${m}m ${s}s';
+}
+
+/// The full goal label: "25 reps" / "40 steps" / "2 minutes".
+String formatMotionTarget(
+  MotionMeasurementType type,
+  int value,
+  String pluralUnit,
+) =>
+    type == MotionMeasurementType.duration
+        ? formatDurationLong(value)
+        : '$value $pluralUnit';
+
+/// Just the value for a composer suggestion chip: "25" / "45s" / "2 min".
+String formatMotionGoalOption(MotionMeasurementType type, int value) =>
+    type == MotionMeasurementType.duration
+        ? formatDurationShort(value)
+        : '$value';
+
+/// Progress against a goal: "12 / 25 reps" / "0:45 / 2:00".
+String formatMotionProgress(
+  MotionMeasurementType type,
+  int current,
+  int target,
+  String pluralUnit,
+) =>
+    type == MotionMeasurementType.duration
+        ? '${formatClock(current)} / ${formatClock(target)}'
+        : '$current / $target $pluralUnit';
+
+/// Default composer question when the activity doesn't override it.
+String defaultGoalPrompt(MotionMeasurementType type, String activityTitle) =>
+    type == MotionMeasurementType.duration
+        ? 'How long?'
+        : 'How many ${activityTitle.toLowerCase()}?';
+
 enum RaceFormat {
   firstToGoal('first_to_goal', 'First to the goal'),
   mostInWindow('most_in_window', 'Most before time runs out'),
@@ -152,6 +233,9 @@ class MotionActivityDefinition {
     this.isHold = false,
     this.featured = false,
     this.sortPriority = 100,
+    this.measurementType,
+    this.goalPromptOverride,
+    this.displayUnitOverride,
   });
 
   final MotionActivityType type;
@@ -177,14 +261,41 @@ class MotionActivityDefinition {
   /// Lower numbers sort first. Used for ordering within a category.
   final int sortPriority;
 
+  /// Explicit measurement model. Null → derived from [metric] (so
+  /// `RaceMetric.seconds` activities like plank become [duration]
+  /// automatically).
+  final MotionMeasurementType? measurementType;
+
+  /// Composer question override, e.g. "How many steps?" for gait movements
+  /// where "How many Running In Place?" reads badly. Null → [defaultGoalPrompt].
+  final String? goalPromptOverride;
+
+  /// Display noun override, e.g. "steps" / "kicks". Null → the measurement
+  /// type's default plural ("reps" / "seconds"). Does NOT affect
+  /// serialization — the wire metric is always [MotionMeasurementType.raceMetric].
+  final String? displayUnitOverride;
+
   int get defaultTarget => suggestedTargets.first;
 
-  String get unit => metric.label;
+  MotionMeasurementType get resolvedMeasurementType =>
+      measurementType ?? MotionMeasurementType.fromRaceMetric(metric);
 
-  String targetLabel(int target) => '$target ${metric.label}';
+  /// The noun shown to users ("reps", "steps", "seconds").
+  String get unit =>
+      displayUnitOverride ?? resolvedMeasurementType.defaultPluralUnit;
+
+  /// The composer's goal question ("How many push-ups?", "How long?").
+  String get goalPrompt =>
+      goalPromptOverride ?? defaultGoalPrompt(resolvedMeasurementType, title);
+
+  String targetLabel(int target) =>
+      formatMotionTarget(resolvedMeasurementType, target, unit);
+
+  String goalOptionLabel(int value) =>
+      formatMotionGoalOption(resolvedMeasurementType, value);
 
   String counterLabel(int current, int target) =>
-      '$current / $target ${metric.label}';
+      formatMotionProgress(resolvedMeasurementType, current, target, unit);
 }
 
 class ParsedRaceIdea {

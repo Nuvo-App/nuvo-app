@@ -343,6 +343,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.runningInPlace,
+    goalPromptOverride: 'How many steps?',
+    displayUnitOverride: 'steps',
     title: 'Running in Place',
     metric: RaceMetric.reps,
     suggestedTargets: [50, 100, 200, 400],
@@ -369,6 +371,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.treadmillRunning,
+    goalPromptOverride: 'How many steps?',
+    displayUnitOverride: 'steps',
     title: 'Treadmill Running',
     metric: RaceMetric.reps,
     suggestedTargets: [50, 100, 200, 400],
@@ -395,6 +399,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.walkingInPlace,
+    goalPromptOverride: 'How many steps?',
+    displayUnitOverride: 'steps',
     title: 'Walking in Place',
     metric: RaceMetric.reps,
     suggestedTargets: [40, 80, 150, 300],
@@ -421,6 +427,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.marchingInPlace,
+    goalPromptOverride: 'How many steps?',
+    displayUnitOverride: 'steps',
     title: 'Marching in Place',
     metric: RaceMetric.reps,
     suggestedTargets: [40, 80, 150, 300],
@@ -447,6 +455,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.buttKicks,
+    goalPromptOverride: 'How many kicks?',
+    displayUnitOverride: 'kicks',
     title: 'Butt Kicks',
     metric: RaceMetric.reps,
     suggestedTargets: [20, 40, 80, 150],
@@ -525,6 +535,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.stepUps,
+    goalPromptOverride: 'How many step-ups?',
+    displayUnitOverride: 'step-ups',
     title: 'Step-Ups',
     metric: RaceMetric.reps,
     suggestedTargets: [20, 40, 80, 150],
@@ -577,6 +589,8 @@ const motionActivityDefinitions = [
   ),
   MotionActivityDefinition(
     type: MotionActivityType.lateralSteps,
+    goalPromptOverride: 'How many side steps?',
+    displayUnitOverride: 'steps',
     title: 'Lateral Steps',
     metric: RaceMetric.reps,
     suggestedTargets: [20, 40, 80, 150],

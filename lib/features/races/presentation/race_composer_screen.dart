@@ -1712,10 +1712,13 @@ class _GoalPageState extends State<_GoalPage> {
   }
 
   String get _winStatement {
-    final activity = widget.draft.displayActivityName.toLowerCase();
-    final isSeconds = widget.draft.metric == RaceMetric.seconds;
-    final valueLabel = isSeconds ? _secondsDisplay(_target) : '$_target';
-    return 'First person to reach $valueLabel verified $activity wins.';
+    final activityName = widget.draft.displayActivityName.toLowerCase();
+    final valueLabel = widget.draft.isCustom || widget.draft.isManual
+        ? (widget.draft.metric == RaceMetric.seconds
+              ? _secondsDisplay(_target)
+              : '$_target $_unitWord')
+        : widget.draft.activity.targetLabel(_target);
+    return 'First to $valueLabel of verified $activityName wins.';
   }
 
   String get _displayTarget {
@@ -1737,15 +1740,22 @@ class _GoalPageState extends State<_GoalPage> {
       ? (widget.draft.customUnit?.trim().isNotEmpty == true
             ? widget.draft.customUnit!.trim()
             : 'reps')
-      : widget.draft.metric.label;
+      : widget.draft.activity.unit;
+
+  /// Contextual question: "How many push-ups?", "How long?", "How many steps?".
+  String get _goalPrompt {
+    if (widget.draft.isManual) return 'What is the goal?';
+    if (widget.draft.isCustom) return 'How many reps to win?';
+    return widget.draft.activity.goalPrompt;
+  }
 
   @override
   Widget build(BuildContext context) {
     final isSeconds = widget.draft.metric == RaceMetric.seconds;
 
     return _PageShell(
-      question: 'Set the finish line.',
-      support: 'How many $_unitWord to win?',
+      question: _goalPrompt,
+      support: 'First racer to reach it wins.',
       ctaLabel: 'Invite racers',
       onCta: widget.onNext,
       body: KeyedSubtree(
@@ -1775,7 +1785,7 @@ class _GoalPageState extends State<_GoalPage> {
               children: [
                 for (final t in _suggestedTargets.take(4))
                   _SuggestedTarget(
-                    value: isSeconds ? _secondsDisplay(t) : '$t',
+                    value: isSeconds ? formatDurationShort(t) : '$t',
                     selected: _target == t,
                     onTap: () {
                       _dismissKeyboard();
@@ -2147,11 +2157,13 @@ class _ReviewPage extends StatelessWidget {
   final VoidCallback onCopyDiagnostics;
 
   String get _finishLineLabel {
+    if (!draft.isCustom && !draft.isManual) {
+      return draft.activity.targetLabel(draft.targetValue);
+    }
     final isSeconds = draft.metric == RaceMetric.seconds;
-    final valueLabel = isSeconds
+    return isSeconds
         ? _secondsDisplay(draft.targetValue)
-        : '${draft.targetValue}';
-    return '$valueLabel ${draft.metric.label}';
+        : '${draft.targetValue} ${draft.metric.label}';
   }
 
   String get _winSubtitle {

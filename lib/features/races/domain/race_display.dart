@@ -30,6 +30,22 @@ RaceMetric raceMetric(Race race) {
 
 String raceMetricLabel(Race race) => raceMetric(race).label;
 
+/// The measurement model for a race — activity-driven, so a plank race
+/// formats as a duration ("0:45 / 2:00") and a pushup race as reps
+/// ("12 / 25 reps") without either screen deciding that itself.
+MotionMeasurementType raceMeasurementType(Race race) {
+  final activity = raceActivityDefinition(race);
+  if (activity != null) return activity.resolvedMeasurementType;
+  return MotionMeasurementType.fromRaceMetric(raceMetric(race));
+}
+
+/// The user-facing noun for a race's progress ("reps", "steps", "seconds").
+String raceDisplayUnit(Race race) {
+  final activity = raceActivityDefinition(race);
+  if (activity != null) return activity.unit;
+  return raceMeasurementType(race).defaultPluralUnit;
+}
+
 String raceActivityTitle(Race race) {
   if (race.isCustomVerifierRace) {
     final name =
@@ -61,23 +77,34 @@ int raceProgressPercent(Race race, RaceParticipant? participant) {
   return participant.progressPercent.clamp(0, 100);
 }
 
-String raceScoreLabel(Race race, int value) =>
-    '$value ${raceMetricLabel(race)}';
+String raceScoreLabel(Race race, int value) => formatMotionTarget(
+      raceMeasurementType(race),
+      value,
+      raceDisplayUnit(race),
+    );
 
 String raceProgressLabel(Race race, RaceParticipant? participant) {
   if (participant == null) return '0';
   final target = race.targetValue;
-  final metric = raceMetricLabel(race);
   if (target != null && target > 0) {
-    return '${participant.progressValue} / $target $metric';
+    return formatMotionProgress(
+      raceMeasurementType(race),
+      participant.progressValue,
+      target,
+      raceDisplayUnit(race),
+    );
   }
   return raceScoreLabel(race, participant.progressValue);
 }
 
 String raceTargetLabel(Race race) {
   final target = race.targetValue;
-  if (target == null) return raceMetricLabel(race);
-  return '$target ${raceMetricLabel(race)}';
+  if (target == null) return raceDisplayUnit(race);
+  return formatMotionTarget(
+    raceMeasurementType(race),
+    target,
+    raceDisplayUnit(race),
+  );
 }
 
 List<RaceParticipant> serverRankedParticipants(Race race) {

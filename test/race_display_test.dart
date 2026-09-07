@@ -106,7 +106,7 @@ void main() {
       expect(raceProgressPercent(race, me), 17);
     });
 
-    test('plank progress label uses seconds not reps', () {
+    test('plank progress label is a clock time, not reps', () {
       final race = makeRace(
         status: 'active',
         targetValue: 300,
@@ -117,7 +117,8 @@ void main() {
         ],
       );
       final me = race.participantFor('user-a');
-      expect(raceProgressLabel(race, me), '90 / 300 seconds');
+      // Duration activity -> clock form (was verbose '90 / 300 seconds').
+      expect(raceProgressLabel(race, me), '1:30 / 5:00');
     });
 
     test('over-target plank score preserved with visual percent capped', () {
@@ -132,7 +133,7 @@ void main() {
       );
       final me = race.participantFor('user-a');
       expect(raceProgressPercent(race, me), 100);
-      expect(raceProgressLabel(race, me), '75 / 60 seconds');
+      expect(raceProgressLabel(race, me), '1:15 / 1:00');
     });
 
     test('no target race: progress label shows just score and metric', () {

@@ -502,7 +502,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 _YourProgressCard(
                   progressValue: myPart?.progressValue ?? 0,
                   targetValue: race.targetValue!,
-                  unit: raceMetricLabel(race),
+                  unit: raceDisplayUnit(race),
                   rankLabel: raceRankLabel(race, user.id),
                   chaseCopy: chase?.chaseCopy,
                   leaderGap: chase?.leaderGap,
@@ -519,7 +519,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   progressPercent: myProgress,
                   progressValue: myPart?.progressValue,
                   targetValue: race.targetValue,
-                  unit: raceMetricLabel(race),
+                  unit: raceDisplayUnit(race),
                 ),
               ],
 
@@ -648,9 +648,8 @@ class _LiveRaceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = race.targetValue;
-    final unit = raceMetricLabel(race);
     final subtitle = target != null
-        ? 'First to $target $unit'
+        ? 'First to ${raceTargetLabel(race)}'
         : eligibility.movementDefinition?.title ?? 'Keep moving to the finish';
 
     final count = race.participantCount;
