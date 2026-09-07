@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
@@ -16,6 +18,18 @@ class RaceRepository {
 
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _withRefresh((token) => _api.analyzeMotion(token, request: request));
+
+  Future<void> uploadMotionSession({
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) =>
+      _withRefresh(
+        (token) => _api.uploadMotionSession(
+          token,
+          metadata: metadata,
+          gzipBytes: gzipBytes,
+        ),
+      );
 
   Future<void> submitMotionTrainingExample({
     required MotionAnalysisRequest request,

@@ -7,7 +7,8 @@ import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
 import { RACE_ACTIVITY_CATALOG } from './domain/raceActivities';
 import { arenaRouter } from './routes/arena';
-import { motionRouter } from './routes/motion';
+import { motionRouter, motionSessionsRouter } from './routes/motion';
+import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
 import { crewRouter } from './routes/crew';
 import { reportsRouter } from './routes/reports';
@@ -91,6 +92,10 @@ app.route('/arena', arenaRouter);
 
 // ── Motion analysis and training-data routes ────────────────────────────────
 app.route('/motion', motionRouter);
+
+// ── Motion Session telemetry ingest (authed) + internal lookup (X-Internal-Key)
+app.route('/motion-sessions', motionSessionsRouter);
+app.route('/internal', internalRouter);
 
 // ── Onboarding complete ───────────────────────────────────────────────────────
 app.post('/onboarding/complete', requireAuth, async (c) => {
