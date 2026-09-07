@@ -122,18 +122,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // just not shown?" from a device log.
   final _repEventLog = RepEventLog();
 
-  /// Milestone bursts are useful for reps and for a **short** distance sprint
-  /// (a "+1" per whole metre crossed — the metre is real, from the estimator,
-  /// not a fake gait step). For a hold, or a mile-scale run, the "+1" would be
-  /// noise / spam, so those states show a live readout instead. See
-  /// [motionProgressUsesMilestoneBursts].
+  /// Distance presentation (milestone spacing / pace) for this race's scale.
+  DistancePresentationPolicy get _distancePolicy =>
+      DistancePresentationPolicy.forTarget(_raceTarget);
+
+  /// Milestone bursts: reps always; a metre-scale distance sprint at the
+  /// scale-appropriate checkpoint spacing (see [DistancePresentationPolicy]);
+  /// never for a hold or a mile-scale run.
   bool get _usesRepFlash {
-    if (_isDistanceRace) {
-      return motionProgressUsesMilestoneBursts(
-        MotionMeasurementType.distance,
-        _raceTarget,
-      );
-    }
+    if (_isDistanceRace) return _distancePolicy.usesMilestoneBursts;
     return _isCustom ||
         motionActivityForBackendValue(_activity.backendValue)?.isHold != true;
   }
@@ -486,11 +483,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // matter what the burst/pulse animation below is doing — recognition
       // never waits on presentation.
       if (_usesRepFlash) {
-        // Reps: the validator's count. Short distance sprint: the displayed
-        // race progress in whole metres (real, from the estimator) — the
-        // burst reacts to a metre being crossed, it doesn't invent one.
-        final milestone =
-            _isDistanceRace ? _displayedRaceProgress : output.count;
+        // Reps: the validator's count. Distance sprint: how many scale-spaced
+        // checkpoints the *real* cumulative estimate has crossed — the burst
+        // reacts to a checkpoint, it doesn't claim a metre was measured.
+        final milestone = _isDistanceRace
+            ? _distancePolicy.milestonesCrossed(_displayedRaceProgress)
+            : output.count;
         final event = _burst.update(milestone);
         if (event != null) {
           _repFlashAt = DateTime.now();
@@ -1700,11 +1698,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
   }
 
-  /// "+N" burst shown the moment the validator awards a rep.
-  /// Keyed on [_repFlashSeq] so each counted rep replays the animation.
+  /// Burst shown the moment a checkpoint lands. For reps it's "+1 / +2 / +3"
+  /// (one per rep). For a distance sprint it's the checkpoint distance
+  /// ("15 m") — a milestone crossed, not a claim of one measured metre.
+  /// Keyed on [_repFlashSeq] so each lands with its own animation.
   Widget _repFlashOverlay() {
     final inStreak = _streakCount >= 2;
     final flashColor = inStreak ? NuvoColors.brightGold : NuvoColors.white;
+    final burstText = _isDistanceRace
+        ? '${_distancePolicy.metresAtMilestone(_distancePolicy.milestonesCrossed(_displayedRaceProgress))} m'
+        : '+${_streakCount > 0 ? _streakCount : 1}';
     final shadows = [
       const Shadow(
         color: Color(0xB3000000),
@@ -1725,12 +1728,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      // A rep that lands while this burst is still showing
-                      // grows the same badge — +1 -> +2 -> +3 — instead of
-                      // each rep restarting an isolated "+1".
-                      '+${_streakCount > 0 ? _streakCount : 1}',
+                      // Reps: a rep landing while this is still showing grows
+                      // the same badge (+1 -> +2 -> +3). Distance: the
+                      // checkpoint just crossed.
+                      burstText,
                       style: AppTextStyles.displayLarge.copyWith(
-                        fontSize: 200,
+                        fontSize: _isDistanceRace ? 120 : 200,
                         height: 0.9,
                         color: flashColor,
                         shadows: shadows,

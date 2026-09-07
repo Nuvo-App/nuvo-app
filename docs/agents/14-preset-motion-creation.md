@@ -448,6 +448,39 @@ Format via the helpers in `motion_activity.dart` (`formatMotionTarget`,
 screen. `test/motion_measurement_test.dart` asserts every catalog entry has a
 sane model.
 
+### L3. Continuation — a shared contract, not a per-verifier feature
+
+A verification session is another contribution to the **same cumulative race
+progress**. `ContinuationProgress`
+(`lib/features/races/domain/motion_progress_presentation.dart`):
+
+```
+sessionTarget        = raceTarget − startingRaceProgress   (verifier aims here)
+displayedProgress    = startingRaceProgress + sessionContribution   (what the athlete sees)
+contributionToSubmit = sessionContribution                 (only this is persisted)
+```
+
+The verifier machine still counts a session **from 0** toward `sessionTarget`,
+so any `createMotionValidator(...)` opens at `currentValue == 0` and a new
+preset gets continuation for free — the proof screen composes the baseline in.
+Never persist the whole displayed total. Guarded by
+`test/continuation_progress_test.dart` and
+`test/motion_progress_presentation_test.dart` (iterates every cumulative
+preset).
+
+### L4. Distance presentation — `DistancePresentationPolicy`
+
+Virtual distance is an estimate; the UI must not imply metre precision. The
+policy (same file) chooses, from the race target only:
+- `≤ 25 m` → milestone burst every **5 m**
+- `≤ 100 m` → every **10 m**
+- `< 400 m` → every **25 m**
+- `≥ 400 m` (mile-scale) → **no burst**, show distance + pace + intensity
+
+A milestone burst means "cumulative progress crossed a checkpoint", labelled
+with the checkpoint distance ("15 m") — never a "+1 m". Widgets read the
+policy; they never carry a threshold.
+
 ## L. Count semantics — must be explicit, one convention per family
 
 Documented in `test/preset_registration_contract_test.dart` `_countSemantics`

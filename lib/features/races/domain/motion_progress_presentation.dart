@@ -42,17 +42,62 @@ class ContinuationProgress {
 
 /// The single place that decides how a verification session *presents*
 /// progress, based on the measurement type and the race goal scale. Widgets
-/// read from here — they never carry their own threshold.
+/// read from here — they never carry a threshold of their own.
+///
+/// ## Why distance is special
+/// Virtual distance is an **estimate**. A "+1" every estimated metre would fire
+/// constantly at running speed and imply metre-level precision Nuvo does not
+/// have. So a distance milestone means "**cumulative progress crossed a
+/// presentation checkpoint**", spaced by the goal scale — never "one exact
+/// metre was measured". The large authoritative number underneath always
+/// shows the real cumulative estimate, updating smoothly.
+class DistancePresentationPolicy {
+  const DistancePresentationPolicy._(this.milestoneStepMetres, this.showsPace);
 
-/// Milestone "+1 / +2 / +3" bursts (the RepBurst visual) are shown when each
-/// milestone represents something the athlete can feel land:
-///  - reps / step-cadence goals: always (one rep = one +1)
-///  - a **short** distance sprint: yes — one +1 per whole metre crossed. The
-///    metre is real (accumulated by [VirtualDistanceEstimator]); the burst
-///    reacts to it, it does not fabricate it.
-///  - a mile-scale run: no — hundreds of +1s is noise. Show distance + pace +
-///    intensity instead.
-///  - a duration hold: no — a per-second +1 is noise.
+  /// Metres between milestone bursts. 0 → no burst animation (long runs).
+  final int milestoneStepMetres;
+
+  /// Show the pace + intensity line instead of / alongside bursts.
+  final bool showsPace;
+
+  bool get usesMilestoneBursts => milestoneStepMetres > 0;
+
+  /// Chosen from the race target. Thresholds are here, and only here.
+  factory DistancePresentationPolicy.forTarget(int targetMetres) {
+    if (targetMetres <= 0) {
+      return const DistancePresentationPolicy._(10, false);
+    }
+    if (targetMetres <= 25) {
+      return const DistancePresentationPolicy._(5, false);
+    }
+    if (targetMetres <= 100) {
+      return const DistancePresentationPolicy._(10, false);
+    }
+    if (targetMetres < kMetresMilesCrossover) {
+      // ~200 m band — milestones far enough apart to feel earned.
+      return const DistancePresentationPolicy._(25, false);
+    }
+    // Mile-scale: no metre bursts, pace + intensity carry the feedback.
+    return const DistancePresentationPolicy._(0, true);
+  }
+
+  /// How many milestone checkpoints [metres] of cumulative distance has
+  /// crossed. Feed this to the burst controller; it increments once per step.
+  int milestonesCrossed(int metres) =>
+      usesMilestoneBursts ? (metres < 0 ? 0 : metres) ~/ milestoneStepMetres : 0;
+
+  /// The distance a milestone index represents, for the burst label
+  /// ("15 m" — a checkpoint, not "+1").
+  int metresAtMilestone(int milestoneIndex) =>
+      milestoneIndex * milestoneStepMetres;
+}
+
+/// Milestone bursts (the RepBurst visual):
+///  - reps / step-cadence: always (one rep = one +1).
+///  - distance: only in a metre-scale sprint, spaced by
+///    [DistancePresentationPolicy] — the burst reacts to a *checkpoint*, not a
+///    fabricated metre.
+///  - duration hold: never (a per-second +1 is noise).
 bool motionProgressUsesMilestoneBursts(MotionMeasurementType type, int target) {
   switch (type) {
     case MotionMeasurementType.repetitions:
@@ -60,16 +105,14 @@ bool motionProgressUsesMilestoneBursts(MotionMeasurementType type, int target) {
     case MotionMeasurementType.duration:
       return false;
     case MotionMeasurementType.distance:
-      // Same crossover as the metres/miles formatter — a metre-scale goal.
-      return target > 0 && target < kMetresMilesCrossover;
+      return DistancePresentationPolicy.forTarget(target).usesMilestoneBursts;
   }
 }
 
-/// Whether the verification HUD should show the pace + intensity line
-/// (distance races that aren't in milestone-burst mode).
+/// Whether the verification HUD should show the pace + intensity line.
 bool motionProgressShowsPace(MotionMeasurementType type, int target) =>
     type == MotionMeasurementType.distance &&
-    !motionProgressUsesMilestoneBursts(type, target);
+    DistancePresentationPolicy.forTarget(target).showsPace;
 
 /// Coarse progress state for the "KEEP GOING / HALFWAY / ALMOST THERE / FINISH"
 /// line. Derived from real progress — restrained, not a game show.
