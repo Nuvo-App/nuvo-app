@@ -735,3 +735,22 @@ test('the 10 preset-motion-expansion activities are all in the catalog', () => {
     assert.equal(normalizeActivityId(id), id, `${id}: normalizeActivityId`);
   }
 });
+
+test('GET /races/activities exposes every catalog id (deployment-verifiable)', () => {
+  // Mirrors the public endpoint's payload shape so a curl against production
+  // can be checked against this list.
+  const supported = RACE_ACTIVITY_CATALOG
+    .filter((a) => a.availability === 'supported')
+    .map((a) => a.id);
+  for (const id of [
+    'push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold',
+    'high_knees', 'arm_raises', 'sumo_squats', 'side_lunges', 'deep_squats',
+    'squat_jacks', 'jump_squats', 'lunge_jumps',
+    'running_in_place', 'treadmill_running', 'walking_in_place',
+    'marching_in_place', 'butt_kicks', 'mountain_climbers', 'burpees',
+    'step_ups', 'calf_raises', 'lateral_steps',
+  ]) {
+    assert.ok(supported.includes(id), `${id} not in supported activities`);
+  }
+  assert.equal(supported.length, 23);
+});
