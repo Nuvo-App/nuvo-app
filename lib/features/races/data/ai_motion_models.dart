@@ -76,6 +76,7 @@ enum AiMotionActivity {
   };
 
   static AiMotionActivity fromBackendValue(String value) => switch (value) {
+    'jumping_jacks' || 'jumping jacks' => AiMotionActivity.jumpingJacks,
     'squats' => AiMotionActivity.squats,
     'high_knees' => AiMotionActivity.highKnees,
     'arm_raises' => AiMotionActivity.armRaises,
