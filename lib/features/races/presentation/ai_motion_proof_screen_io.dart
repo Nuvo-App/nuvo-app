@@ -34,6 +34,7 @@ import '../data/motion_analysis_contract.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
+import '../domain/motion_progress_presentation.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
 import 'board_moved_screen.dart';
@@ -121,12 +122,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // just not shown?" from a device log.
   final _repEventLog = RepEventLog();
 
-  /// Hold movements score in seconds and distance races score in metres, so a
-  /// per-unit "+1" would be noise — those states show a live readout instead.
-  bool get _usesRepFlash =>
-      !_isDistanceRace &&
-      (_isCustom ||
-          motionActivityForBackendValue(_activity.backendValue)?.isHold != true);
+  /// Milestone bursts are useful for reps and for a **short** distance sprint
+  /// (a "+1" per whole metre crossed — the metre is real, from the estimator,
+  /// not a fake gait step). For a hold, or a mile-scale run, the "+1" would be
+  /// noise / spam, so those states show a live readout instead. See
+  /// [motionProgressUsesMilestoneBursts].
+  bool get _usesRepFlash {
+    if (_isDistanceRace) {
+      return motionProgressUsesMilestoneBursts(
+        MotionMeasurementType.distance,
+        _raceTarget,
+      );
+    }
+    return _isCustom ||
+        motionActivityForBackendValue(_activity.backendValue)?.isHold != true;
+  }
 
   /// True when the athlete has hit 2+ reps inside the streak window.
   bool get _isOnStreak => _burst.isOnStreak;
@@ -476,7 +486,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // matter what the burst/pulse animation below is doing — recognition
       // never waits on presentation.
       if (_usesRepFlash) {
-        final event = _burst.update(output.count);
+        // Reps: the validator's count. Short distance sprint: the displayed
+        // race progress in whole metres (real, from the estimator) — the
+        // burst reacts to a metre being crossed, it doesn't invent one.
+        final milestone =
+            _isDistanceRace ? _displayedRaceProgress : output.count;
+        final event = _burst.update(milestone);
         if (event != null) {
           _repFlashAt = DateTime.now();
           _repEventLog.record(event);
@@ -926,8 +941,29 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _status == AiMotionProofStatus.submitting ||
       _status == AiMotionProofStatus.submitted;
 
+  /// The verifier's own target — the REMAINING amount this session must reach
+  /// to complete the race.
   int get _targetValue => _runtime.targetValue;
 
+  /// This session's contribution so far (starts at 0). Only this is submitted.
+  int get _sessionContribution => _runtime.currentValue;
+
+  int get _startingRaceProgress => _raceTotalBefore;
+
+  ContinuationProgress get _continuation => ContinuationProgress(
+        startingRaceProgress: _startingRaceProgress,
+        raceTarget: _raceTargetValue ?? (_startingRaceProgress + _targetValue),
+      );
+
+  /// The full race target (reps / seconds / metres).
+  int get _raceTarget => _continuation.raceTarget;
+
+  /// **Race progress**, continuing from where the athlete left off — the
+  /// primary number. Opens at `startingRaceProgress`, not zero.
+  int get _displayedRaceProgress =>
+      _continuation.displayedProgress(_sessionContribution);
+
+  /// Kept for the internal completion check / celebration timing.
   int get _currentValue => _runtime.currentValue;
 
   /// Latest verifier debug metrics — includes virtual distance / pace /
@@ -947,10 +983,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String _progressText(int current, int target) => _isCustom
       ? '$current / $target'
       : formatMotionProgress(_measure, current, target, _displayUnit);
-
-  /// A single value: "12" · "45s" · "0.25 mi".
-  String _valueText(int v) =>
-      _isCustom ? '$v' : formatMotionGoalOption(_measure, v);
 
   /// "8:42 /mi" while running a distance race, else null.
   String? get _paceLabel {
@@ -979,25 +1011,19 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     };
   }
 
+  /// The full race goal (not the session's remaining amount).
   String get _targetLabel {
-    if (_isCustom) return '$_targetValue reps';
+    if (_isCustom) return '$_raceTarget reps';
     final definition = motionActivityForBackendValue(_activity.backendValue);
-    return definition?.targetLabel(_targetValue) ??
-        '$_targetValue ${_activity.label}';
+    return definition?.targetLabel(_raceTarget) ??
+        '$_raceTarget ${_activity.label}';
   }
 
-  String get _raceTotalLabel {
-    final total = _raceTotalBefore + _currentValue;
-    final target = _raceTargetValue;
-    if (_isCustom) {
-      return target != null && target > 0
-          ? '$total / $target $_metric race total'
-          : '$total $_metric race total';
-    }
-    if (target != null && target > 0) {
-      return '${_progressText(total, target)} race total';
-    }
-    return '${_valueText(total)} race total';
+  /// The primary readout during a session: **race progress**, continuing from
+  /// where the athlete left off ("4 / 6 reps", "37 / 100 m").
+  String get _raceProgressReadout {
+    if (_isCustom) return '$_displayedRaceProgress / $_raceTarget $_metric';
+    return _progressText(_displayedRaceProgress, _raceTarget);
   }
 
   String get _movementTitle => _isCustom
@@ -1154,7 +1180,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _pill(
-                        recording ? _raceTotalLabel : 'Goal: $_targetLabel',
+                        recording ? _raceProgressReadout : 'Goal: $_targetLabel',
                         color: recording
                             ? (_currentValue >= _targetValue
                                   ? NuvoColors.success
@@ -1252,7 +1278,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _progressText(_currentValue, _targetValue),
+                        _raceProgressReadout,
                         style: AppTextStyles.displayLarge.copyWith(
                           color: NuvoColors.white,
                         ),
@@ -1347,7 +1373,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               children: [
                 _pill(
                   _status == AiMotionProofStatus.recording
-                      ? _raceTotalLabel
+                      ? _raceProgressReadout
                       : 'Goal: $_targetLabel',
                   color: _status == AiMotionProofStatus.recording
                       ? (_currentValue >= _targetValue
@@ -1621,16 +1647,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _isCustom
-                          ? 'Detected $detected clean ${customResult?.movementName ?? _customMovementName ?? 'reps'} out of $_targetValue.'
-                          : _isDistanceRace
-                          ? 'You covered ${formatMotionTarget(_measure, detected, 'mi')} of $_targetLabel.'
-                          : motionActivityForBackendValue(
-                                  _activity.backendValue,
-                                )?.isHold ==
-                                true
-                          ? 'Counted $detected valid seconds out of $_targetValue.'
-                          : 'Detected $detected clean ${_activity.label} out of $_targetValue.',
+                      // Race progress after this session (it continues from
+                      // wherever the athlete was, and only this session's
+                      // contribution was added).
+                      detected > 0
+                          ? "You're at ${_progressText(_startingRaceProgress + detected, _raceTarget)}. Keep going."
+                          : 'Nothing counted this time — line yourself up and try again.',
                       style: AppTextStyles.bodyLarge.copyWith(
                         color: NuvoColors.white.withValues(alpha: 0.78),
                       ),
@@ -1750,10 +1772,17 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Widget _recordingHud() {
-    final targetReached = _currentValue >= _targetValue;
+    // Pace + intensity only for a mile-scale run; a metre sprint shows the
+    // phase line ("HALFWAY", "ALMOST THERE") instead.
+    final showsPace = _isDistanceRace &&
+        motionProgressShowsPace(MotionMeasurementType.distance, _raceTarget);
+    final phaseLine = motionProgressPhase(
+      current: _displayedRaceProgress,
+      target: _raceTarget,
+    ).label;
     final effort = [
-      ?_paceLabel,
-      ?_intensityLabel,
+      if (showsPace) ?_paceLabel,
+      if (showsPace) ?_intensityLabel,
     ].join('   ');
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1771,17 +1800,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _progressText(_currentValue, _targetValue),
+                  _raceProgressReadout,
                   style: AppTextStyles.displayLarge.copyWith(
                     color: NuvoColors.white,
                   ),
                 ),
                 Text(
-                  targetReached
-                      ? 'FINISH LINE'
-                      : effort.isNotEmpty
-                      ? effort
-                      : 'KEEP GOING',
+                  effort.isNotEmpty ? effort : phaseLine,
                   style: AppTextStyles.titleLarge.copyWith(
                     color: NuvoColors.white,
                   ),

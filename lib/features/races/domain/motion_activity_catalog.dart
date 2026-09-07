@@ -376,7 +376,9 @@ const motionActivityDefinitions = [
     goalPromptOverride: 'How far?',
     title: 'Treadmill Running',
     metric: RaceMetric.reps,
-    suggestedTargets: [402, 805, 1609, 3219, 5000],
+    // Metres. Short goals up front (quick / sprint / testing races), then
+    // mile-scale. The composer's tappable number covers anything between.
+    suggestedTargets: [100, 200, 402, 805, 1609, 25, 50, 3219, 5000],
     supportedFormats: [
       RaceFormat.firstToGoal,
       RaceFormat.mostInWindow,

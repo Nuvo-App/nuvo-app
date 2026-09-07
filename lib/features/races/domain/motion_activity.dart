@@ -125,6 +125,11 @@ enum MotionMeasurementType {
 
 const double _metresPerMile = 1609.344;
 
+/// Below this a distance reads better in whole metres than in decimal miles
+/// ("150 m" not "0.09 mi"). 0.25 mi (the smallest mile-scale goal) is 402 m,
+/// so everything under a quarter mile stays metric.
+const int kMetresMilesCrossover = 400;
+
 /// Metres → a trimmed mileage string: 402 → "0.25", 1609 → "1", 5000 → "3.11".
 String formatMiles(int metres) {
   final miles = metres / _metresPerMile;
@@ -135,6 +140,25 @@ String formatMiles(int metres) {
     s = s.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
   }
   return s;
+}
+
+/// The one adaptive distance formatter — metres canonical, unit chosen for
+/// legibility. `< 400 m → "24 m"`, otherwise `"0.63 mi"`. Used everywhere a
+/// distance is shown (composer, verification, Arena, race detail, leaderboard,
+/// results, progress).
+String formatDistance(int metres) {
+  final m = metres < 0 ? 0 : metres;
+  if (m < kMetresMilesCrossover) return '$m m';
+  return '${formatMiles(m)} mi';
+}
+
+/// Distance progress against a goal — both sides in the unit the *goal* scale
+/// implies, so a 200 m race never flips to "0.12 mi" mid-run.
+String formatDistanceProgress(int current, int target) {
+  final metric = target < kMetresMilesCrossover;
+  final c = current < 0 ? 0 : current;
+  if (metric) return '$c / $target m';
+  return '${formatMiles(c)} / ${formatMiles(target)} mi';
 }
 
 /// "8:42" from seconds-per-mile; null / out-of-range → null (caller hides it).
@@ -181,19 +205,20 @@ String formatMotionTarget(
 ) =>
     switch (type) {
       MotionMeasurementType.duration => formatDurationLong(value),
-      MotionMeasurementType.distance => '${formatMiles(value)} mi',
+      MotionMeasurementType.distance => formatDistance(value),
       MotionMeasurementType.repetitions => '$value $pluralUnit',
     };
 
-/// Just the value for a composer suggestion chip: "25" / "45s" / "0.25 mi".
+/// Just the value for a composer suggestion chip: "25" / "45s" / "50 m" / "1 mi".
 String formatMotionGoalOption(MotionMeasurementType type, int value) =>
     switch (type) {
       MotionMeasurementType.duration => formatDurationShort(value),
-      MotionMeasurementType.distance => '${formatMiles(value)} mi',
+      MotionMeasurementType.distance => formatDistance(value),
       MotionMeasurementType.repetitions => '$value',
     };
 
-/// Progress against a goal: "12 / 25 reps" / "0:45 / 2:00" / "0.12 / 0.25 mi".
+/// Progress against a goal: "12 / 25 reps" / "0:45 / 2:00" / "45 / 200 m" /
+/// "0.12 / 0.25 mi".
 String formatMotionProgress(
   MotionMeasurementType type,
   int current,
@@ -203,8 +228,7 @@ String formatMotionProgress(
     switch (type) {
       MotionMeasurementType.duration =>
         '${formatClock(current)} / ${formatClock(target)}',
-      MotionMeasurementType.distance =>
-        '${formatMiles(current)} / ${formatMiles(target)} mi',
+      MotionMeasurementType.distance => formatDistanceProgress(current, target),
       MotionMeasurementType.repetitions => '$current / $target $pluralUnit',
     };
 

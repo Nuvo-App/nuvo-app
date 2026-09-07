@@ -376,6 +376,8 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       else
         _ManualLogCard(
           race: race,
+          startingProgress:
+              _uid == null ? 0 : race.participantFor(_uid!)?.progressValue ?? 0,
           valueController: _logController,
           noteController: _noteController,
           error: _manualError,
@@ -656,12 +658,16 @@ class _SetupLine extends StatelessWidget {
 class _ManualLogCard extends StatelessWidget {
   const _ManualLogCard({
     required this.race,
+    required this.startingProgress,
     required this.valueController,
     required this.noteController,
     required this.error,
   });
 
   final Race race;
+
+  /// Progress already banked on this race — the entry continues from here.
+  final int startingProgress;
   final TextEditingController valueController;
   final TextEditingController noteController;
   final String? error;
@@ -685,14 +691,20 @@ class _ManualLogCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                'Finish line',
+                startingProgress > 0 ? 'Your progress' : 'Finish line',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: NuvoColors.muted,
                 ),
               ),
               const Spacer(),
               Text(
-                target != null ? '$target $unit' : 'No set target',
+                target != null
+                    ? (startingProgress > 0
+                          ? '$startingProgress / $target $unit'
+                          : '$target $unit')
+                    : (startingProgress > 0
+                          ? '$startingProgress $unit'
+                          : 'No set target'),
                 style: AppTextStyles.titleMedium.copyWith(
                   color: NuvoColors.navy,
                 ),
@@ -702,7 +714,9 @@ class _ManualLogCard extends StatelessWidget {
           const SizedBox(height: 16),
           NuvoTextInput(
             controller: valueController,
-            label: 'How much did you complete? ($unit)',
+            label: startingProgress > 0
+                ? 'How much did you add this time? ($unit)'
+                : 'How much did you complete? ($unit)',
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 12),
