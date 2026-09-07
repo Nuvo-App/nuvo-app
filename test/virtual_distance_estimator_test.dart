@@ -111,6 +111,29 @@ void main() {
     expect(e.paceSecondsPerMile, isNull);
   });
 
+  test('average pace is exactly distance / moving-time (no drift)', () {
+    final e = _drive(startMs: 0, durationMs: 20000, stepMs: 400, swing: 0.10);
+    final miles = e.metres / 1609.344;
+    final avg = e.averagePaceSecondsPerMile!;
+    // avg (s/mi) * miles must equal the moving seconds it was derived from
+    expect(avg * miles, closeTo(e.movingSeconds, 0.5));
+    // and moving time excludes any idle: 20 s of steps every 0.4 s
+    expect(e.movingSeconds, closeTo(20.0, 1.0));
+  });
+
+  test('idle gap is excluded from moving time and pace', () {
+    final e = VirtualDistanceEstimator();
+    _drive(startMs: 0, durationMs: 6000, stepMs: 400, into: e); // 6 s running
+    final movingAfterFirst = e.movingSeconds;
+    for (var t = 6000; t < 16000; t += 33) {
+      e.onFrame(t); // 10 s idle
+    }
+    _drive(startMs: 16000, durationMs: 6000, stepMs: 400, into: e); // 6 s more
+    // ~12 s of moving time, not 22
+    expect(e.movingSeconds, lessThan(15));
+    expect(e.movingSeconds, greaterThan(movingAfterFirst));
+  });
+
   test('formatMiles / formatPacePerMile round sensibly', () {
     expect(formatMiles(1609), '1');
     expect(formatMiles(402), '0.25');

@@ -2315,13 +2315,13 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
                 state == CustomPoseRuntimeState.completionCandidate)
             ? 'Keep going'
             : 'Ready',
-      'Step back' => 'Move into position',
-      'Move into the starting position' => 'Move into position',
+      'Step back' => 'Move back',
+      'Move into the starting position' => 'Get in position',
       'Hold the starting position' => 'Ready',
-      'Begin the movement' => 'Do the movement',
+      'Begin the movement' => 'Start the movement',
       'Movement incomplete' => 'Try again',
       'Return to your starting position' => 'Keep going',
-      'Keep your full body visible' => 'Keep your full body visible',
+      'Keep your full body visible' => 'Get fully in frame',
       _ => 'Ready',
     };
   }

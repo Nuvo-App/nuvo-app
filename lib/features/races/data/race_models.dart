@@ -314,7 +314,7 @@ class RaceParticipant {
       RaceParticipant(
         id: json['id'] as String? ?? '',
         userId: json['userId'] as String? ?? '',
-        displayName: json['displayName'] as String? ?? 'Unknown',
+        displayName: json['displayName'] as String? ?? 'Nuvo member',
         progressValue: json['progressValue'] as int? ?? 0,
         progressPercent: json['progressPercent'] as int? ?? 0,
         rank: json['rank'] as int?,
@@ -343,7 +343,7 @@ class RaceFinalStanding {
   factory RaceFinalStanding.fromJson(Map<String, dynamic> json) =>
       RaceFinalStanding(
         userId: json['userId'] as String? ?? '',
-        displayName: json['displayName'] as String? ?? 'Unknown',
+        displayName: json['displayName'] as String? ?? 'Nuvo member',
         profilePhotoUrl: json['profilePhotoUrl'] as String?,
         rank: json['rank'] as int? ?? 0,
         scoreValue: json['scoreValue'] as int? ?? 0,
@@ -441,7 +441,7 @@ class RaceProof {
   factory RaceProof.fromJson(Map<String, dynamic> json) => RaceProof(
     id: json['id'] as String? ?? '',
     userId: json['userId'] as String? ?? '',
-    displayName: json['displayName'] as String? ?? 'Unknown',
+    displayName: json['displayName'] as String? ?? 'Nuvo member',
     proofType: json['proofType'] as String? ?? 'manual',
     aiActivityType: json['aiActivityType'] as String?,
     note: json['note'] as String?,

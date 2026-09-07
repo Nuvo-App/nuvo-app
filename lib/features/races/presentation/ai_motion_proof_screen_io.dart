@@ -960,6 +960,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return pace == null ? null : '$pace /mi';
   }
 
+  /// Whole-run average pace, for the result screen.
+  String? get _avgPaceLabel {
+    if (!_isDistanceRace) return null;
+    final raw = _liveMetrics['avgPaceSecPerMile'];
+    final pace = formatPacePerMile(raw == null || raw == 0 ? null : raw);
+    return pace == null ? null : '$pace /mi';
+  }
+
   /// "Moderate" while running a distance race, else null.
   String? get _intensityLabel {
     if (!_isDistanceRace) return null;
@@ -1557,6 +1565,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     ? 'Race updated'
                     : _status == AiMotionProofStatus.submitting
                     ? 'Adding to your race\u2026'
+                    : _isDistanceRace && _avgPaceLabel != null
+                    ? '${_avgPaceLabel!} average'
                     : 'Camera verified',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: NuvoColors.white.withValues(alpha: 0.78),

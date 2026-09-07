@@ -70,10 +70,12 @@ usersRouter.get('/search', async (c) => {
           isPrivate: Boolean(row.private_profile),
         };
       }
-      // Minimal card for private profiles.
+      // Minimal card for a private profile with no shared context: their
+      // handle (how you found them) but no real name / photo. Never a dead
+      // "Private User" string when there's a username to show.
       return {
         id: row.id,
-        displayName: 'Private User',
+        displayName: row.username ? `@${row.username}` : 'Private profile',
         username: row.username,
         memberId: row.member_id,
         initials: initialsFor(row.username, row.username, null),

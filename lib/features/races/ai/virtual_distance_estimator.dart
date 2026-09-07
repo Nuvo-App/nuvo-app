@@ -43,11 +43,18 @@ class VirtualDistanceEstimator {
   int? _lastStepMs;
   int _lastFrameMs = 0;
 
+  /// Wall time spent actually moving (sum of inter-step gaps, idle excluded).
+  /// `_metres / _movingSeconds` is the only definition of average pace used
+  /// anywhere — pace can never disagree with the distance it came from.
+  double _movingSeconds = 0;
+
   /// (elapsedMs, cumulative metres) at each confirmed step — the trailing
-  /// window for both cadence and pace.
+  /// window for the *current* cadence / pace readout. Cleared after an idle
+  /// gap so a resumed run's pace reflects the new effort, not the gap.
   final List<({int t, double m})> _window = [];
 
   double get metres => _metres;
+  double get movingSeconds => _movingSeconds;
 
   void reset() {
     _metres = 0;
@@ -55,6 +62,7 @@ class VirtualDistanceEstimator {
     _lastDriveFactor = 0;
     _lastStepMs = null;
     _lastFrameMs = 0;
+    _movingSeconds = 0;
     _window.clear();
   }
 
@@ -82,7 +90,20 @@ class VirtualDistanceEstimator {
     final driveFactor =
         ((swingAmplitude.abs() / scale) - _driveLo) / (_driveHi - _driveLo);
     _lastDriveFactor = driveFactor.clamp(0.0, 1.0);
+
+    final prevStepMs = _lastStepMs;
     _lastStepMs = elapsedMs;
+
+    // Count the gap since the last step as moving time — unless it was an idle
+    // pause, in which case start a fresh trailing window.
+    if (prevStepMs != null) {
+      final gapMs = elapsedMs - prevStepMs;
+      if (gapMs > 0 && gapMs <= _staleMs) {
+        _movingSeconds += gapMs / 1000.0;
+      } else if (gapMs > _staleMs) {
+        _window.clear();
+      }
+    }
 
     final hz = _cadenceHz;
     final cadenceStretch = 0.85 + 0.15 * ((hz - 1.5) / 1.5).clamp(0.0, 1.0);
@@ -111,14 +132,24 @@ class VirtualDistanceEstimator {
   bool get _isStale =>
       _lastStepMs == null || _lastFrameMs - _lastStepMs! > _staleMs;
 
-  /// Seconds per mile — derived from `cadence × stride` so it stays consistent
-  /// with the distance that is accumulating (a trailing-slope estimate drifts
-  /// against it). Null when stale / not enough signal.
+  /// Current pace, seconds per mile — the **distance covered over the moving
+  /// time**, taken over the trailing window so it tracks the current effort.
+  /// This is literally `Δtime / Δdistance` for the window, so it can never
+  /// disagree with the distance readout. Null when stale / not enough signal.
   double? get paceSecondsPerMile {
     if (_isStale || _window.length < 3) return null;
-    final speedMps = _cadenceHz * _smoothedStride;
-    if (speedMps < 0.4) return null;
-    return _metresPerMile / speedMps;
+    final windowSeconds = (_window.last.t - _window.first.t) / 1000.0;
+    final windowMiles = (_window.last.m - _window.first.m) / _metresPerMile;
+    if (windowSeconds < 2.0 || windowMiles <= 0) return null;
+    return windowSeconds / windowMiles;
+  }
+
+  /// Average pace over the whole run so far (moving time only). For the
+  /// summary / result — `metres` and `movingSeconds` are the same numbers the
+  /// UI showed, so this is exactly consistent with them.
+  double? get averagePaceSecondsPerMile {
+    if (_metres < 5 || _movingSeconds < 3) return null;
+    return _movingSeconds / (_metres / _metresPerMile);
   }
 
   /// 0 (idle) · 1 (easy) · 2 (moderate) · 3 (hard) — a coarse effort bucket
@@ -142,9 +173,11 @@ class VirtualDistanceEstimator {
   /// Snapshot for `debugValues` / telemetry.
   Map<String, double> get metrics => {
         'virtualDistanceM': _round(_metres),
+        'movingSeconds': _round(_movingSeconds),
         'cadenceSpm': _round(cadenceStepsPerMinute),
         'strideM': _round(_smoothedStride),
         'paceSecPerMile': _round(paceSecondsPerMile ?? 0),
+        'avgPaceSecPerMile': _round(averagePaceSecondsPerMile ?? 0),
         'intensity': intensityLevel.toDouble(),
       };
 

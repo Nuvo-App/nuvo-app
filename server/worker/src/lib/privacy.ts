@@ -51,6 +51,54 @@ export async function canViewFullProfile(
   return await isConnected(db, viewerUserId, targetUserId);
 }
 
+/**
+ * Race-identity visibility policy — the single source of truth for what a
+ * viewer sees for another user *inside a race they share*.
+ *
+ * Rules:
+ *  - self / no viewer            → real name + photo
+ *  - blocked (either direction)  → anonymized, always (wins over everything)
+ *  - viewer + target both in this race → real *race identity* (name + photo),
+ *      even if the target has a private profile. A leaderboard / "someone
+ *      passed you" is meaningless otherwise. The private profile still hides
+ *      the deeper profile screen (that path uses canViewFullProfile).
+ *  - private profile, no shared context (not crew, not co-racer) → anonymized
+ *  - otherwise                   → real name + photo
+ */
+export function resolveRaceMemberVisibility(
+  viewerUserId: string | undefined,
+  target: {
+    userId: string | null;
+    displayName: string | null;
+    username: string | null;
+    profilePhotoUrl: string | null;
+    privateProfile: boolean;
+  },
+  ctx: {
+    crewIds: Set<string>;
+    blockedEitherWay: Set<string>;
+    coRacerIds: Set<string>; // participants of the shared race, if viewer is in it
+  },
+): { displayName: string; profilePhotoUrl: string | null; anonymized: boolean } {
+  const realName =
+    (target.displayName ?? '').trim() && (target.displayName ?? '').trim() !== 'Unknown'
+      ? (target.displayName as string).trim()
+      : (target.username ?? '').trim() || 'Nuvo member';
+
+  if (!viewerUserId || !target.userId || target.userId === viewerUserId) {
+    return { displayName: realName, profilePhotoUrl: target.profilePhotoUrl, anonymized: false };
+  }
+  if (ctx.blockedEitherWay.has(target.userId)) {
+    return { displayName: 'Private User', profilePhotoUrl: null, anonymized: true };
+  }
+  const known =
+    ctx.crewIds.has(target.userId) || ctx.coRacerIds.has(target.userId);
+  if (target.privateProfile && !known) {
+    return { displayName: 'Private User', profilePhotoUrl: null, anonymized: true };
+  }
+  return { displayName: realName, profilePhotoUrl: target.profilePhotoUrl, anonymized: false };
+}
+
 export interface AnonymizedUser {
   displayName: string;
   username: string | null;
