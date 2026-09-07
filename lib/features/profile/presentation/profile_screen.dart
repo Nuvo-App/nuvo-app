@@ -8,6 +8,7 @@ import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -320,6 +321,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               color: NuvoColors.blue,
             ),
           ),
+        )
+      else if (raceState.races.isEmpty && raceState.error != null)
+        // Load failed with nothing cached — say so, don't imply "no races".
+        NuvoErrorState(
+          message: "Couldn't load your race history.",
+          onRetry: () =>
+              ref.read(raceControllerProvider.notifier).loadRaces(),
         )
       else if (raceState.races.isEmpty)
         Text(

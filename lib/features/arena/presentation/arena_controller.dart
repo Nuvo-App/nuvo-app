@@ -12,19 +12,34 @@ import '../data/arena_models.dart';
 import '../data/arena_repository.dart';
 
 class ArenaState {
-  const ArenaState({this.snapshot, this.loading = false, this.error});
+  const ArenaState({
+    this.snapshot,
+    this.loading = false,
+    this.refreshing = false,
+    this.error,
+  });
 
   final ArenaSnapshot? snapshot;
+
+  /// First load, nothing cached — a full skeleton is fine.
   final bool loading;
+
+  /// Background revalidation with a snapshot already on screen — keep it.
+  final bool refreshing;
+
   final String? error;
+
+  bool get hasData => snapshot != null;
 
   ArenaState copyWith({
     ArenaSnapshot? snapshot,
     bool? loading,
+    bool? refreshing,
     String? error,
   }) => ArenaState(
     snapshot: snapshot ?? this.snapshot,
     loading: loading ?? this.loading,
+    refreshing: refreshing ?? this.refreshing,
     error: error,
   );
 }
@@ -36,8 +51,28 @@ class ArenaController extends StateNotifier<ArenaState> {
   final ArenaRepository _repo;
   final VoidCallback? onSessionExpired;
   static const _cacheLifetime = Duration(minutes: 5);
+  static const _staleWindow = Duration(seconds: 45);
   Future<void>? _loadInFlight;
   DateTime? _snapshotLoadedAt;
+
+  /// SWR entry point — screen focus / app resume. No-op if fresh, otherwise a
+  /// background refresh while the current snapshot stays on screen.
+  void revalidate() {
+    final at = _snapshotLoadedAt;
+    if (state.hasData &&
+        at != null &&
+        DateTime.now().difference(at) < _staleWindow) {
+      return;
+    }
+    loadSnapshot(force: true);
+  }
+
+  /// A sibling cache (races) changed — the arena is derived from races, so
+  /// pull a fresh snapshot now rather than waiting for the user to open it.
+  void markStale() {
+    _snapshotLoadedAt = null;
+    if (mounted) loadSnapshot(force: true);
+  }
 
   Future<void> loadSnapshot({bool force = true}) {
     final loadedAt = _snapshotLoadedAt;
@@ -63,7 +98,14 @@ class ArenaController extends StateNotifier<ArenaState> {
   }
 
   Future<void> _fetchSnapshot() async {
-    if (mounted) state = ArenaState(snapshot: state.snapshot, loading: true);
+    if (mounted) {
+      final haveData = state.hasData;
+      state = ArenaState(
+        snapshot: state.snapshot,
+        loading: !haveData,
+        refreshing: haveData,
+      );
+    }
     try {
       final snapshot = await _repo.getArenaSnapshot();
       _snapshotLoadedAt = DateTime.now();
@@ -71,17 +113,26 @@ class ArenaController extends StateNotifier<ArenaState> {
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         debugPrint('[ArenaController] 401 — triggering session expiry');
-        if (mounted) state = state.copyWith(loading: false);
+        if (mounted) state = state.copyWith(loading: false, refreshing: false);
         onSessionExpired?.call();
         return;
       }
+      // Keep the cached snapshot visible on a failed background refresh.
       if (mounted) {
-        state = state.copyWith(loading: false, error: 'Couldn\'t load races.');
+        state = state.copyWith(
+          loading: false,
+          refreshing: false,
+          error: state.hasData ? null : 'Couldn\'t load races.',
+        );
       }
     } catch (e, st) {
       debugPrint('[ArenaController] unexpected error: $e\n$st');
       if (mounted) {
-        state = state.copyWith(loading: false, error: 'Couldn\'t load races.');
+        state = state.copyWith(
+          loading: false,
+          refreshing: false,
+          error: state.hasData ? null : 'Couldn\'t load races.',
+        );
       }
     }
   }
