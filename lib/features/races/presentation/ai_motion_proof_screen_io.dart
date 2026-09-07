@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -21,6 +23,9 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../ai/camera_image_converter.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
+import '../ai/motion_session/motion_session_artifact.dart';
+import '../ai/motion_session/motion_session_providers.dart';
+import '../ai/motion_session/motion_session_recorder.dart';
 import '../ai/pose_detector_service.dart';
 import '../ai/rep_event_diagnostics.dart';
 import '../ai/verifier_runtime.dart';
@@ -63,6 +68,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   AiMotionResult? _result;
   MotionAnalysisResult? _serverAnalysis;
   final List<NuvoPoseFrame> _capturedFrames = <NuvoPoseFrame>[];
+
+  // ── Motion session telemetry ────────────────────────────────────────────────
+  // Records the full attempt (landmarks + verifier decisions + result) into the
+  // same gzip artifact the manual "share session" action produces, then hands
+  // it to the non-blocking upload queue. Never gates the verification UI.
+  MotionSessionRecorder? _session;
+  MotionSessionArtifact? _lastArtifact;
+  bool _sessionFinalized = false;
+  String _raceTitle = '';
+  String _measurementType = 'repetitions';
   CustomPoseRuntimeResult? _customResult;
   bool _isCustom = false;
   String? _customMovementName;
@@ -151,6 +166,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Retry any motion sessions that failed to upload on a previous run.
+    unawaited(ref.read(motionSessionUploadQueueProvider).flush());
     _loadRace();
   }
 
@@ -222,6 +239,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _metric = race.metric ?? 'reps';
         _raceTotalBefore = myPart?.progressValue ?? 0;
         _raceTargetValue = race.targetValue;
+        _raceTitle = race.title;
+        _measurementType = raceMeasurementType(race).name;
       });
       // Skip redundant pre-camera panel — go straight to camera
       _initializeCamera();
@@ -248,6 +267,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   @override
   void dispose() {
     _disposed = true;
+    // Catch attempts abandoned before server analysis resolved.
+    _finalizeSession();
     WidgetsBinding.instance.removeObserver(this);
     _recordingTimer?.cancel();
     _skeletonExpiryTimer?.cancel();
@@ -362,6 +383,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _debugFrameCount = 0;
     _capturedFrames.clear();
     _serverAnalysis = null;
+    _sessionFinalized = false;
+    _session =
+        MotionSessionRecorder(
+          kind: _isCustom
+              ? MotionSessionKind.custom
+              : MotionSessionKind.preset,
+          activityId: _isCustom
+              ? (_customMovementName ?? 'custom')
+              : _activity.backendValue,
+          activityTitle: _raceTitle.isEmpty
+              ? (_customMovementName ?? _activity.backendValue)
+              : _raceTitle,
+          measurementType: _measurementType,
+          raceId: widget.raceId,
+          goalValue: _runtime.targetValue,
+          goalUnit: _metric,
+        )..start();
     _resetRepFlash();
     _poseDetector.resetDiagnostics();
     _skeletonHold.clear();
@@ -416,6 +454,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // consented training. Camera pixels never leave the device.
       if (_capturedFrames.length < 900) _capturedFrames.add(frame);
       final output = _runtime.update(frame);
+      _session?.recordFrame(
+        frame,
+        validatorState: output.validatorState,
+        count: output.count,
+        confidence: output.confidence,
+        failedRuleReason: output.failedRuleReason,
+        debugValues: output.debugValues,
+      );
       if (_isCustom) {
         _customUpdate = output.customPoseUpdate;
       }
@@ -579,6 +625,91 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // Local ML Kit/validator results remain authoritative while the server
       // prototype is unavailable. This is expected during early development.
       _debugLog('serverMotionAnalysisUnavailable error=$error');
+    } finally {
+      _finalizeSession();
+    }
+  }
+
+  /// Seal the recorded session and hand it to the upload queue. Idempotent —
+  /// called after server analysis resolves, and again from [dispose] to catch
+  /// attempts the athlete abandoned mid-verification (those are `incomplete`
+  /// and often the most useful to inspect).
+  MotionSessionArtifact? _finalizeSession() {
+    final session = _session;
+    if (session == null || _sessionFinalized) return null;
+    _sessionFinalized = true;
+
+    final MotionSessionOutcome outcome;
+    if (_status == AiMotionProofStatus.aiVerified) {
+      outcome = MotionSessionOutcome.verified;
+    } else if (_status == AiMotionProofStatus.aiFailed) {
+      outcome = MotionSessionOutcome.failed;
+    } else {
+      outcome = MotionSessionOutcome.incomplete;
+    }
+    final detected = _isCustom
+        ? (_customResult?.count ?? 0)
+        : (_result?.detectedReps ?? 0);
+    final confidence = _isCustom
+        ? _customResult?.confidence
+        : _result?.confidence;
+
+    session.updatePipeline(
+      framesReceived: _poseDetector.framesReceived,
+      framesProcessed: _poseDetector.framesProcessed,
+      effectiveFps: _poseDetector.effectiveFps,
+    );
+    session.finish(
+      outcome: outcome,
+      detectedValue: detected,
+      confidence: confidence,
+      failedRuleReason: _runtime.failedRuleReason,
+    );
+    final server = _serverAnalysis;
+    final artifact = session.build(
+      serverAnalysis: server == null
+          ? null
+          : {
+              'motionId': server.motionId,
+              'verdict': server.verdict,
+              'detectedReps': server.detectedReps,
+              'confidence': server.confidence,
+              'uncertainty': server.uncertainty,
+              'failureReasons': server.failureReasons,
+              'coaching': server.coaching,
+              'modelVersion': server.modelVersion,
+              'validatorVersion': server.validatorVersion,
+              'framesAnalyzed': server.framesAnalyzed,
+              'validPoseFrames': server.validPoseFrames,
+              'durationMs': server.durationMs,
+            },
+    );
+    _lastArtifact = artifact;
+    // Fire-and-forget: staging + upload happen off the UI path.
+    unawaited(
+      ref.read(motionSessionUploadQueueProvider).enqueue(artifact),
+    );
+    _debugLog('motionSessionQueued id=${artifact.sessionId} '
+        'outcome=${outcome.wire} frames=${artifact.frames.length}');
+    return artifact;
+  }
+
+  /// Manual export — the "Save Diagnostic Session" pathway for the preset
+  /// verifier. Consumes the exact same [MotionSessionArtifact] the auto-upload
+  /// queue does, so a shared file and a fetched cloud session are byte-identical.
+  Future<void> _shareSession() async {
+    final artifact = _lastArtifact ?? _finalizeSession() ?? _session?.build();
+    if (artifact == null) return;
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = await artifact.writeGzip(dir.path);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/gzip')],
+        text: artifact.toLogText(),
+        subject: 'Nuvo motion session ${artifact.sessionId}',
+      );
+    } catch (e) {
+      _debugLog('shareSession failed: $e');
     }
   }
 
@@ -1457,6 +1588,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 16),
+                      TextButton.icon(
+                        onPressed: _shareSession,
+                        icon: const Icon(
+                          Icons.ios_share_rounded,
+                          size: 18,
+                          color: NuvoColors.white,
+                        ),
+                        label: Text(
+                          'Share session',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: NuvoColors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 )
                 .animate()

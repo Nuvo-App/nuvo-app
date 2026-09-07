@@ -7,6 +7,9 @@ export type AppEnv = {
     RESEND_FROM_EMAIL: string;
     JWT_SECRET: string;
     REVIEWER_PASSWORD_HASH?: string;
+    // Shared secret gating the internal Motion Session lookup endpoints
+    // (`/internal/*`). Set via `wrangler secret put INTERNAL_API_KEY`.
+    INTERNAL_API_KEY?: string;
     API_BASE_URL: string;
     PROFILE_PHOTOS: R2Bucket;
   };

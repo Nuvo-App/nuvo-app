@@ -10,6 +10,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart';
@@ -37,6 +38,27 @@ class RaceApi {
     return MotionAnalysisResult.fromJson(
       json['result'] as Map<String, dynamic>,
     );
+  }
+
+  /// Uploads one gzip'd [MotionSessionArtifact] plus its searchable metadata.
+  /// The Worker stores the blob in R2 and indexes the metadata in D1.
+  Future<void> uploadMotionSession(
+    String token, {
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) async {
+    final res = await _guard(
+      () => _client.post(
+        Uri.parse('$_kApiBase/motion-sessions'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/gzip',
+          'X-Motion-Session': base64Encode(utf8.encode(jsonEncode(metadata))),
+        },
+        body: gzipBytes,
+      ),
+    );
+    _decode(res);
   }
 
   Future<void> submitMotionTrainingExample(

@@ -26,6 +26,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
@@ -500,6 +501,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               if (isParticipant && !myRaceComplete && race.targetValue != null) ...[
                 const SizedBox(height: 20),
                 _YourProgressCard(
+                  measurementType: raceMeasurementType(race),
                   progressValue: myPart?.progressValue ?? 0,
                   targetValue: race.targetValue!,
                   unit: raceDisplayUnit(race),
@@ -516,6 +518,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 const _SectionLabel(label: 'Path to goal'),
                 const SizedBox(height: 12),
                 _CheckpointPath(
+                  measurementType: raceMeasurementType(race),
                   progressPercent: myProgress,
                   progressValue: myPart?.progressValue,
                   targetValue: race.targetValue,
@@ -697,6 +700,7 @@ class _LiveRaceHeader extends StatelessWidget {
 
 class _YourProgressCard extends StatelessWidget {
   const _YourProgressCard({
+    required this.measurementType,
     required this.progressValue,
     required this.targetValue,
     required this.unit,
@@ -706,6 +710,7 @@ class _YourProgressCard extends StatelessWidget {
     this.isLeading = false,
   });
 
+  final MotionMeasurementType measurementType;
   final int progressValue;
   final int targetValue;
   final String unit;
@@ -720,10 +725,12 @@ class _YourProgressCard extends StatelessWidget {
         ? 0.0
         : (progressValue / targetValue).clamp(0.0, 1.0);
     final remaining = (targetValue - progressValue).clamp(0, targetValue);
-    final gapLine = isLeading && (leaderGap ?? 0) > 0
-        ? 'Leading by $leaderGap $unit'
-        : (leaderGap ?? 0) > 0
-        ? '$leaderGap $unit behind the leader'
+    final gap = leaderGap ?? 0;
+    final gapText = formatMotionTarget(measurementType, gap, unit);
+    final gapLine = isLeading && gap > 0
+        ? 'Leading by $gapText'
+        : gap > 0
+        ? '$gapText behind the leader'
         : chaseCopy;
     final done = remaining <= 0;
     // Green while you hold the lead or have crossed the line, blue otherwise.
@@ -749,7 +756,12 @@ class _YourProgressCard extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                '$progressValue / $targetValue $unit',
+                formatMotionProgress(
+                  measurementType,
+                  progressValue,
+                  targetValue,
+                  unit,
+                ),
                 style: AppTextStyles.statLarge(
                   context.rs(30),
                   color: accent,
@@ -778,7 +790,8 @@ class _YourProgressCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             remaining > 0
-                ? '$remaining $unit to the finish'
+                ? '${formatMotionTarget(measurementType, remaining, unit)} '
+                      'to the finish'
                 : 'Finish line reached',
             style: AppTextStyles.bodyMedium.copyWith(
               color: NuvoColors.navy,
@@ -1304,12 +1317,14 @@ class _Checkpoint {
 /// races, of 100%) — never invented milestone content.
 class _CheckpointPath extends StatelessWidget {
   const _CheckpointPath({
+    required this.measurementType,
     required this.progressPercent,
     required this.progressValue,
     required this.targetValue,
     required this.unit,
   });
 
+  final MotionMeasurementType measurementType;
   final int progressPercent;
   final int? progressValue;
   final int? targetValue;
@@ -1343,7 +1358,12 @@ class _CheckpointPath extends StatelessWidget {
         state = _NodeState.current;
         currentAssigned = true;
         sub = targetValue != null
-            ? '$progressValue / $targetValue ${unit ?? ''}'.trim()
+            ? formatMotionProgress(
+                measurementType,
+                progressValue ?? 0,
+                targetValue!,
+                unit ?? measurementType.defaultPluralUnit,
+              )
             : '$progressPercent% verified';
       } else {
         state = _NodeState.todo;
