@@ -493,8 +493,7 @@ MotionValidator createMotionValidator(
     definition: buttKicksDefinition,
     targetValue: targetValue,
   ),
-  AiMotionActivity.mountainClimbers => CadenceMotionValidator(
-    definition: mountainClimbersDefinition,
+  AiMotionActivity.mountainClimbers => MountainClimbersValidator(
     targetValue: targetValue,
   ),
   AiMotionActivity.stepUps => CadenceMotionValidator(
@@ -2570,46 +2569,141 @@ const buttKicksDefinition = CadenceMovementDefinition(
   coachingTextIncomplete: 'Lower body needed',
 );
 
-const _mountainClimberLandmarks = [
-  'leftShoulder',
-  'rightShoulder',
-  'leftWrist',
-  'rightWrist',
-  'leftHip',
-  'rightHip',
-  'leftKnee',
-  'rightKnee',
-];
+/// Mountain Climbers — rebuilt around **body-relative torso orientation +
+/// alternating knee drive along the torso axis** (2026-09, replacing the old
+/// `shoulderY > 0.35` screen-position gate + vertical knee-height signal,
+/// which failed whenever the plank did not sit low in frame and never saw the
+/// mostly-horizontal knee drive of a real climber).
+///
+/// A mountain climber is: a roughly plank-oriented torso, one knee driving
+/// toward the chest along that torso line, then alternating. The signal:
+///  - **plank context** = the shoulder→hip vector is meaningfully off
+///    vertical (`|Δy| / torsoLen`). Standing (High Knees) sits at ~0.95+;
+///    a plank at any camera angle is well below. No screen coordinate.
+///  - **knee drive** = projection of `(knee − hipCentre)` onto the torso
+///    axis, normalized by torso length — how far up toward the shoulders the
+///    knee is. The extended-back leg is strongly negative; a knee driving in
+///    rises toward 0. The active side is whichever knee is further driven.
+///  - [CadenceDetector] owns the stable-frame + alternation counting, so
+///    "1 count = 1 confirmed alternating knee drive" and idle plank / random
+///    knee jitter (no drive gap) can't score.
+class MountainClimbersValidator extends _BaseValidator {
+  MountainClimbersValidator({required super.targetValue});
 
-/// Mountain Climbers: alternating knee drive, gated by a plank-like hand
-/// placement (wrists at/below shoulder height) — this context gate is what
-/// rejects standing High Knees, which never plants the hands down.
-CadenceSide? _mountainClimberSide(PoseFeatureExtractor f) {
-  final leftShoulder = f.frame.point('leftShoulder')!;
-  final rightShoulder = f.frame.point('rightShoulder')!;
-  final leftWrist = f.frame.point('leftWrist')!;
-  final rightWrist = f.frame.point('rightWrist')!;
-  final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
-  final wristY = (leftWrist.y + rightWrist.y) / 2;
-  // Plank context: the whole body sits LOW in the frame (a standing person's
-  // shoulders are near the top) and the hands are not raised above the
-  // shoulders. This is what rejects standing High Knees — where the
-  // shoulders are high and the arms swing — without depending on the exact
-  // wrist-to-shoulder offset, which a front-camera plank foreshortens badly.
-  final bodyIsLow = shoulderY > 0.35;
-  final handsNotRaised = wristY > shoulderY - 0.08;
-  if (!bodyIsLow || !handsNotRaised) return null;
-  return kneeAlternationSide(f, liftFraction: 0.55);
+  final CadenceDetector _cadence = CadenceDetector(stableFrames: 2);
+  CadenceSide? _lastSide;
+  double _verticalness = 1;
+  double _torsoAngleDeg = 0;
+  double _leftDrive = 0;
+  double _rightDrive = 0;
+  double _lastGap = 0;
+  int _lastCountFrame = -1;
+  int _repIntervalFrames = 0;
+
+
+  /// Torso at least this far off vertical to read as a plank. Standing ≈ 0.95;
+  /// a front/3-4 plank ≈ 0.5-0.75; a side plank ≈ 0.1-0.3.
+  static const _plankVerticalnessMax = 0.88;
+
+  /// Drive-difference (already torso-normalized) for one knee to read as the
+  /// active side. The driving knee sits ~0.5-1 torso-length ahead of the
+  /// extended one.
+  static const _driveGap = 0.40;
+
+  @override
+  AiMotionActivity get activity => AiMotionActivity.mountainClimbers;
+  @override
+  int get currentValue => math.min(_cadence.cycles, targetValue);
+  @override
+  String get statusText => 'Tracking mountain climbers';
+  @override
+  String get coachingText => fullBodyVisible
+      ? (_verticalness >= _plankVerticalnessMax
+          ? 'Get into a plank, then drive your knees in'
+          : 'Drive your knees in, alternating sides')
+      : 'Full body needed';
+  @override
+  List<String> get criticalPoints => const [
+        'leftShoulder',
+        'rightShoulder',
+        'leftHip',
+        'rightHip',
+        'leftKnee',
+        'rightKnee',
+      ];
+
+  @override
+  void resetState() {
+    _cadence.reset();
+    _lastSide = null;
+    _verticalness = 1;
+    _torsoAngleDeg = 0;
+    _leftDrive = 0;
+    _rightDrive = 0;
+    _lastGap = 0;
+    _lastCountFrame = -1;
+    _repIntervalFrames = 0;
+  }
+
+  @override
+  void analyzeValidFrame(NuvoPoseFrame frame) {
+    final ls = frame.point('leftShoulder')!;
+    final rs = frame.point('rightShoulder')!;
+    final lh = frame.point('leftHip')!;
+    final rh = frame.point('rightHip')!;
+    final lk = frame.point('leftKnee')!;
+    final rk = frame.point('rightKnee')!;
+
+    final scx = (ls.x + rs.x) / 2, scy = (ls.y + rs.y) / 2;
+    final hcx = (lh.x + rh.x) / 2, hcy = (lh.y + rh.y) / 2;
+    final tx = scx - hcx, ty = scy - hcy;
+    final torsoLen = math.sqrt(tx * tx + ty * ty).clamp(0.06, 0.8);
+
+    _verticalness = ty.abs() / torsoLen;
+    _torsoAngleDeg = math.atan2(tx.abs(), ty.abs().clamp(1e-4, 1)) * 180 / math.pi;
+
+    double drive(NuvoPosePoint k) =>
+        ((k.x - hcx) * tx + (k.y - hcy) * ty) / (torsoLen * torsoLen);
+    _leftDrive = drive(lk);
+    _rightDrive = drive(rk);
+
+    // The drive gap has huge margin (~1 torso-length vs a 0.4 threshold), so
+    // the raw per-frame value is used directly — smoothing only lagged the
+    // fast alternation for no robustness gain. Noise tolerance comes from the
+    // CadenceDetector's stable-frame + alternation requirement.
+    _lastGap = _leftDrive - _rightDrive;
+    CadenceSide? side;
+    if (_verticalness < _plankVerticalnessMax) {
+      if (_lastGap > _driveGap) {
+        side = CadenceSide.left;
+      } else if (_lastGap < -_driveGap) {
+        side = CadenceSide.right;
+      }
+    }
+    _lastSide = side;
+    final counted = _cadence.update(side);
+    if (counted) {
+      _repIntervalFrames =
+          _lastCountFrame < 0 ? 0 : framesAnalyzed - _lastCountFrame;
+      _lastCountFrame = framesAnalyzed;
+    }
+  }
+
+  @override
+  Map<String, double> get debugValues => {
+        ...super.debugValues,
+        'torsoAngle': _torsoAngleDeg,
+        'plankContext': _verticalness < _plankVerticalnessMax ? 1 : 0,
+        'verticalness': _verticalness,
+        'leftKneeDrive': _leftDrive,
+        'rightKneeDrive': _rightDrive,
+        'currentSide': _lastSide == null
+            ? -1
+            : (_lastSide == CadenceSide.left ? 0 : 1),
+        'count': _cadence.cycles.toDouble(),
+        'repIntervalFrames': _repIntervalFrames.toDouble(),
+      };
 }
-
-const mountainClimbersDefinition = CadenceMovementDefinition(
-  activity: AiMotionActivity.mountainClimbers,
-  requiredLandmarks: _mountainClimberLandmarks,
-  sideSignal: _mountainClimberSide,
-  statusText: 'Tracking mountain climbers',
-  coachingTextActive: 'Drive your knees in, alternating sides',
-  coachingTextIncomplete: 'Hands planted + lower body needed',
-);
 
 /// Lateral Steps / Side Steps: alternating LEFT/RIGHT stepping direction
 /// away from a slowly-adapting center baseline (not "which leg is raised" —
