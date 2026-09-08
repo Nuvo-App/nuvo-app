@@ -2704,7 +2704,7 @@ class MountainClimbersValidator extends _BaseValidator {
 /// signal function.
 class LateralStepsValidator extends _BaseValidator {
   LateralStepsValidator({required super.targetValue})
-      : _cadence = CadenceDetector(stableFrames: 3);
+      : _cadence = CadenceDetector(stableFrames: 2);
 
   final CadenceDetector _cadence;
   double? _baselineCenterX;
@@ -2802,8 +2802,12 @@ class CalfRaisesValidator extends _BaseValidator {
   double? _baselineAnkleY;
   double _lastRise = 0;
 
-  static const _riseFraction = 0.10; // rise threshold, fraction of torsoHeight
-  static const _lowerFraction = 0.04; // must fall back below this to re-arm
+  // A calf raise is a small-amplitude motion — a real one lifts the body only
+  // ~3-4% of frame height, so the rise threshold has to sit low against torso
+  // height or a genuine raise never arms. The re-arm floor stays well below it
+  // for hysteresis.
+  static const _riseFraction = 0.07; // rise threshold, fraction of torsoHeight
+  static const _lowerFraction = 0.03; // must fall back below this to re-arm
   static const _baselineEmaAlpha = 0.12;
 
   @override
@@ -2863,7 +2867,11 @@ class CalfRaisesValidator extends _BaseValidator {
         : rise < lowerThreshold
             ? MovementPhase.start
             : MovementPhase.unknown;
-    _counter.update(phase, stableFrames: 3);
+    // stableFrames: 2 — a calf raise is a small, quick motion right above the
+    // landmark-noise floor; requiring 3 clean consecutive active frames drops
+    // real reps at a normal tempo. Hysteresis still comes from the separate
+    // rise / lower thresholds and the down-phase re-arm.
+    _counter.update(phase, stableFrames: 2);
 
     // Baseline re-centers only while clearly down — same rationale as
     // AirborneStateTracker's grounded EMA: track the true standing position
