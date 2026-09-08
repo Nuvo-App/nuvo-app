@@ -213,13 +213,26 @@ squad tables or UI.
 | Phase | Scope | State |
 |---|---|---|
 | A | migration, invite model+routes, token, AASA/fallback, `NuvoDestination`, pending-through-auth, `/invite/:token` | **done** (worker deployed `7b7bd807`) |
-| B | race Share sheet + QR + composer wiring | todo |
+| B | race Share sheet (QR + copy + share + code), race-detail + invite-crew wiring | **done** (`RaceShareSheet`, `showRaceShareSheet`) |
 | C | QR scanner + profile QR + camera-permission UX | todo |
 | D | crew requests inbox, public profile screen, `CrewController` | todo |
 | E | notifications table, `emitNotification`, inbox, `NotificationController` | todo |
 | F | FCM device tokens, permission UX, push send, tap routing | todo |
 | G | AASA verify on device, Android assetlinks fingerprint, web-fallback polish | partial (files shipped; portal + fingerprint pending) |
 | H | preferences screen, rate-limit hardening, diagnostics, beta surface | todo |
+
+### External dependencies the remaining phases need (cannot be done from code)
+- **Phase F (push):** a Firebase project + `GoogleService-Info.plist` (iOS) +
+  `google-services.json` (Android) + an APNs auth key (`.p8`) uploaded to
+  Firebase. The Worker also needs an FCM server credential
+  (`wrangler secret put FCM_SERVICE_ACCOUNT`). Until these exist, notifications
+  work fully in-app; push is dark.
+- **Phase G (iOS universal links):** "Associated Domains" capability toggled for
+  App ID `net.getnuvo.app` in the Apple Developer portal.
+- **Phase G (Android App Links):** the release keystore's SHA-256 in
+  `assetlinks.json`.
+- **App icon:** the source `.icon` project needs Apple's Icon Composer / a
+  proper export pipeline on the build machine.
 
 ### Known gaps (Phase A)
 - Live HTTP verification of the deployed endpoints was blocked by the build
