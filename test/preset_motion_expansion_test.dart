@@ -153,12 +153,12 @@ Map<String, NuvoPosePoint> _mcDrive({required bool left}) {
 
 void main() {
   // ── Running / Treadmill / Walking / Marching / Step-Ups ──────────────────
-  // Walking / Marching / Step-Ups use kneeAlternationSide (liftFraction 0.30 /
-  // 0.65 / 0.65 vs hip width). Running / Treadmill use the stateful
-  // AlternatingGaitSignal: (Δx-centre)+Δy of the knee pair vs torso*0.18 —
-  // built from a real device session where the run showed up as a horizontal
-  // knee swing that the pure vertical reading missed. A synthetic front-on
-  // _gait lift 1.0 still staggers the knees ~0.15 vertically, above threshold.
+  // The whole cadence family now shares the stateful AlternatingGaitSignal:
+  // (Δx-centre)+Δy of the knee pair vs torso*liftFraction — Walking 0.12,
+  // Running/Treadmill 0.18, Marching/Step-Ups 0.30. Torso-normalized, so it
+  // survives the athlete being small or slightly angled in frame (the old
+  // hip-width-scaled kneeAlternationSide collapsed there). A synthetic
+  // front-on _gait lift 1.0 still staggers the knees ~0.15 vertically.
   // Treadmill Running shares this gait signal but reports estimated virtual
   // distance, not a step count — its own group is below.
   for (final (label, act, lift) in [

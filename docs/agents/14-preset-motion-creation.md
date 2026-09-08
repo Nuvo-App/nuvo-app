@@ -234,6 +234,23 @@ knees** (`rightKnee.y - leftKnee.y` vs `hipWidth * liftFraction`). Still used
 by Walking `0.30` / Marching `0.65` / Step-Ups `0.65` / Mountain Climbers
 `0.55`.
 
+Fix #3 (full broken-motion repair pass, 2026-09-08): the whole cadence family
+(Walking, Marching, Step-Ups, Butt Kicks) moved off `hipWidth`-scaled thresholds
+onto torso-height normalization for the same "small / angled in frame" reason.
+`kneeAlternationSide` and `_cadenceLegLandmarks` are deleted. Walking / Marching /
+Step-Ups use `AlternatingGaitSignal` (`liftFraction` 0.12 / 0.30 / 0.30);
+`_buttKickSide` keeps its own alternating-ankle-stagger + thigh-down gate but
+scaled by torso height. **High Knees** was rebuilt the same way: knee lift as a
+fraction of torso height (`(hipY − kneeY) / torsoHeight`, rest ≈ −0.9, hip height
+≈ 0) with raise/re-arm hysteresis at −0.35 / −0.72, replacing
+`knee.y < hip.y + hipWidth * 0.11`. **Mountain Climbers** was rebuilt around a
+torso-orientation plank gate (`|Δy| / torsoLen`, standing ≈ 0.95+) plus knee
+drive projected onto the torso axis — no screen coordinate. **Calf Raises** is
+MARGINAL: a real raise lifts the body ~4 cm, barely above the landmark-noise
+floor; the verifier is the best available (torso-relative 0.07 rise threshold,
+EMA baseline, knee-extension gate) but is *not* product-proven — see
+`test/preset_quality_report_test.dart` for the real numbers.
+
 Fix #2 (real session `ms_64c7b6ee…`, 2026-09-07): a 37 s continuous
 treadmill-style run counted **2 of ~77**. Two failures compounded — the
 athlete was small in frame so `hipWidth` collapsed to ~0.02 and the threshold
