@@ -413,6 +413,16 @@ class RaceController extends StateNotifier<RaceState> {
     return race;
   }
 
+  /// Fold a race into the canonical cache after joining it through an invite
+  /// link / QR (the invite endpoint lives outside this repository). Fires the
+  /// sibling nudge so Arena / Compete update immediately, per the freshness
+  /// contract (docs/agents/18).
+  Future<Race> refreshJoinedRace(String raceId) async {
+    final race = await _repo.getRaceDetail(raceId);
+    _upsertRace(race); // non-silent: bump loadedAt + nudge Arena
+    return race;
+  }
+
   Future<Race> reviewProof(
     String raceId,
     String proofId, {

@@ -6,5 +6,16 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!--
+	  Universal links for Nuvo invite URLs (https://<host>/j/<token>).
+	  REQUIRES the "Associated Domains" capability to be enabled for the App ID
+	  (net.getnuvo.app) in the Apple Developer portal before a signed build will
+	  accept this entitlement. Custom-scheme links (nuvo://j/<token>) work today
+	  without the portal step. See docs/agents/19-social-platform-contract.md.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:nuvo-api.getnuvoapp.workers.dev</string>
+	</array>
 </dict>
 </plist>

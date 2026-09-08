@@ -27,6 +27,7 @@ dependencies:
   # Sharing & links
   share_plus: ^10.1.2
   url_launcher: ^6.3.1
+  app_links: ^6.3.2
 
   # Images
   cached_network_image: ^3.3.1

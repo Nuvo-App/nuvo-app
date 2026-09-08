@@ -1,6 +1,8 @@
 # Nuvo QR Codes & Sharing — Product + Technical Plan
 
-Status: **PLAN ONLY. Do not implement.** Reviewed with
+> **SUPERSEDED by [19-social-platform-contract.md](19-social-platform-contract.md).** Kept for design rationale only; where it disagrees with doc 19, doc 19 wins.
+
+Status: **SUPERSEDED by [19-social-platform-contract.md](19-social-platform-contract.md)** — kept for design rationale. Original note: PLAN ONLY. Reviewed with
 [15-crew-system-plan.md](15-crew-system-plan.md) and
 [16-notification-system-plan.md](16-notification-system-plan.md).
 

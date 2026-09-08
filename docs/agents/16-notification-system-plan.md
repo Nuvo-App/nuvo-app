@@ -1,6 +1,8 @@
 # Nuvo Notification System — Product + Technical Plan
 
-Status: **PLAN ONLY. Do not implement.** Reviewed with
+> **SUPERSEDED by [19-social-platform-contract.md](19-social-platform-contract.md).** Kept for design rationale only; where it disagrees with doc 19, doc 19 wins.
+
+Status: **SUPERSEDED by [19-social-platform-contract.md](19-social-platform-contract.md)** — kept for design rationale. Original note: PLAN ONLY. Reviewed with
 [15-crew-system-plan.md](15-crew-system-plan.md) and
 [17-qr-sharing-plan.md](17-qr-sharing-plan.md).
 
