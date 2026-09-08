@@ -2543,8 +2543,11 @@ CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
 
   // Alternating ankle stagger — a smaller y is a higher ankle (heel up). A
   // real heel-to-glute fold lifts the ankle by ~0.35+ torso; require a clear
-  // gap between the two ankles.
-  final threshold = torso * 0.28;
+  // gap between the two ankles. Kept modest (0.20) because the ankle is the
+  // worst-tracked landmark in this movement — a stricter gap loses real reps
+  // to noise, and the thigh-down gate below is what actually rejects a high
+  // knee, not this number.
+  final threshold = torso * 0.20;
   final diff = rightAnkle.y - leftAnkle.y; // > 0 => left ankle is higher
   if (diff > threshold && !leftKneeUp) return CadenceSide.left;
   if (diff < -threshold && !rightKneeUp) return CadenceSide.right;
