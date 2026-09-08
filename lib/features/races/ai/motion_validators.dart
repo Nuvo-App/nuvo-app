@@ -2501,6 +2501,8 @@ const stepUpsDefinition = CadenceMovementDefinition(
 );
 
 const _buttKickLandmarks = [
+  'leftShoulder',
+  'rightShoulder',
   'leftHip',
   'rightHip',
   'leftKnee',
@@ -2516,21 +2518,33 @@ const _buttKickLandmarks = [
 /// this movement). The thigh-down gate is what keeps a High Knee (thigh up,
 /// ankle also up but knee up too) from reading as a butt kick.
 CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
+  final leftShoulder = f.frame.point('leftShoulder')!;
+  final rightShoulder = f.frame.point('rightShoulder')!;
   final leftHip = f.frame.point('leftHip')!;
   final rightHip = f.frame.point('rightHip')!;
   final leftKnee = f.frame.point('leftKnee')!;
   final rightKnee = f.frame.point('rightKnee')!;
   final leftAnkle = f.frame.point('leftAnkle')!;
   final rightAnkle = f.frame.point('rightAnkle')!;
-  final hipWidth = f.hipWidth.clamp(0.06, 0.5);
 
-  // Thigh stays down: reject the frame for a side whose knee has lifted a lot
-  // toward the hip (that's a knee raise, not a heel kick).
-  final leftKneeUp = leftKnee.y < leftHip.y + hipWidth * 0.55;
-  final rightKneeUp = rightKnee.y < rightHip.y + hipWidth * 0.55;
+  // Body-scale reference: torso height (hip↔shoulder). Stable while the legs
+  // move, and it does not collapse the way hip-width-in-x does when the athlete
+  // is small in frame or slightly angled — the failure mode that starved the
+  // old hipWidth-scaled thresholds.
+  final shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+  final hipY = (leftHip.y + rightHip.y) / 2;
+  final torso = (hipY - shoulderY).abs().clamp(0.12, 0.6);
 
-  // Alternating ankle stagger — a smaller y is a higher ankle (heel up).
-  final threshold = hipWidth * 0.55;
+  // Thigh stays down: reject a side whose knee has lifted toward the hip
+  // (that's a knee raise, not a heel kick). Resting knee sits ~0.9 torso below
+  // the hip; anything above ~0.55 torso below is a real thigh lift.
+  final leftKneeUp = leftKnee.y < leftHip.y + torso * 0.55;
+  final rightKneeUp = rightKnee.y < rightHip.y + torso * 0.55;
+
+  // Alternating ankle stagger — a smaller y is a higher ankle (heel up). A
+  // real heel-to-glute fold lifts the ankle by ~0.35+ torso; require a clear
+  // gap between the two ankles.
+  final threshold = torso * 0.28;
   final diff = rightAnkle.y - leftAnkle.y; // > 0 => left ankle is higher
   if (diff > threshold && !leftKneeUp) return CadenceSide.left;
   if (diff < -threshold && !rightKneeUp) return CadenceSide.right;
