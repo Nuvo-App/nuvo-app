@@ -1,10 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -20,6 +18,7 @@ import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_move_log_item.dart';
 import '../../../core/widgets/nuvo_podium.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../social/presentation/race_share_sheet.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -123,48 +122,6 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
           _loading = false;
         });
       }
-    }
-  }
-
-  Future<void> _copyInviteCode() async {
-    final race = _race;
-    if (race == null) return;
-    var code = race.inviteCode;
-    if (code == null &&
-        race.creatorId == ref.read(authControllerProvider).user?.id) {
-      setState(() => _busy = true);
-      try {
-        code = await ref
-            .read(raceControllerProvider.notifier)
-            .createInviteCode(race.id);
-        final fresh = await ref
-            .read(raceControllerProvider.notifier)
-            .getRaceDetail(race.id);
-        if (mounted) setState(() => _race = fresh);
-      } catch (_) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not create invite code.')),
-          );
-        }
-      } finally {
-        if (mounted) setState(() => _busy = false);
-      }
-    }
-    if (code == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ask the race creator for an invite code.'),
-        ),
-      );
-      return;
-    }
-    await Clipboard.setData(ClipboardData(text: code));
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invite code copied.')));
     }
   }
 
@@ -589,14 +546,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 const SizedBox(height: 8),
                 _ManageRow(
                   icon: Icons.ios_share_rounded,
-                  label: 'Share race',
-                  onTap: () => Share.share('Racing "${race.title}" on Nuvo.'),
-                ),
-                const SizedBox(height: 8),
-                _ManageRow(
-                  icon: Icons.copy_rounded,
-                  label: 'Copy invite code',
-                  onTap: _copyInviteCode,
+                  label: 'Share race — link & QR',
+                  onTap: () => showRaceShareSheet(
+                    context,
+                    raceId: race.id,
+                    raceTitle: race.title,
+                  ),
                 ),
               ],
 
