@@ -136,12 +136,16 @@ Map<String, NuvoPosePoint> _squatDeep() => {
 
 // ── High Knees (dedicated, _raiseStableFrames = 2) ───────────────────────────
 Map<String, NuvoPosePoint> _hkDown() => {
+      'leftShoulder': _p(0.40, 0.32),
+      'rightShoulder': _p(0.60, 0.32),
       'leftHip': _p(0.42, 0.55),
       'rightHip': _p(0.58, 0.55),
       'leftKnee': _p(0.42, 0.78),
       'rightKnee': _p(0.58, 0.78),
     };
 Map<String, NuvoPosePoint> _hkLeftUp() => {
+      'leftShoulder': _p(0.40, 0.32),
+      'rightShoulder': _p(0.60, 0.32),
       'leftHip': _p(0.42, 0.55),
       'rightHip': _p(0.58, 0.55),
       'leftKnee': _p(0.42, 0.50),
