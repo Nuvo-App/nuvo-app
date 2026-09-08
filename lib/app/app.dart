@@ -6,18 +6,47 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/nuvo_responsive.dart';
+import '../features/auth/presentation/auth_controller.dart';
+import '../features/social/application/deep_link_controller.dart';
 import 'router.dart';
 
-class NuvoApp extends ConsumerWidget {
+class NuvoApp extends ConsumerStatefulWidget {
   const NuvoApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NuvoApp> createState() => _NuvoAppState();
+}
+
+class _NuvoAppState extends ConsumerState<NuvoApp> {
+  bool _deepLinksStarted = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final router = ref.watch(routerProvider);
+
+    // Start link intake once the router exists (handles the cold-start link).
+    if (!_deepLinksStarted) {
+      _deepLinksStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(deepLinkControllerProvider).start(router);
+      });
+    }
+
+    // When the user becomes authenticated, drain any destination that was
+    // stashed while they were logged out (link → sign-in → original target).
+    ref.listen<AuthState>(authControllerProvider, (prev, next) async {
+      final becameAuthed = prev?.status != AuthStatus.authenticated &&
+          next.status == AuthStatus.authenticated;
+      if (!becameAuthed || !(next.user?.onboardingComplete ?? false)) return;
+      final location = await ref.read(pendingDestinationStoreProvider).consume();
+      if (location != null && location.isNotEmpty) router.go(location);
+    });
+
     final app = MaterialApp.router(
       title: 'Nuvo',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      routerConfig: ref.watch(routerProvider),
+      routerConfig: router,
       builder: _appBuilder,
     );
 

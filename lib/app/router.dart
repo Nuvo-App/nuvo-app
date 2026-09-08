@@ -37,6 +37,7 @@ import '../features/races/presentation/board_moved_screen.dart';
 import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
+import '../features/social/presentation/invite_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
 // Native interactive page transition used on all pushed routes. CupertinoPage
@@ -84,6 +85,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/welcome',
         pageBuilder: (_, state) => _authPage(state, const WelcomeAuthScreen()),
+      ),
+
+      // ── Invite / universal-link landing ───────────────────────────────────
+      // Every QR scan, universal link, shared URL and web fallback resolves
+      // here (see lib/features/social). Renders logged-out (previews first).
+      GoRoute(
+        path: '/invite/:token',
+        pageBuilder: (_, state) => _detailPage(
+          state,
+          InviteScreen(token: state.pathParameters['token']!),
+        ),
       ),
 
       // ── Auth ──────────────────────────────────────────────────────────────
