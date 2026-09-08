@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -15,6 +14,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../social/presentation/race_share_sheet.dart';
 import '../data/race_models.dart';
 import 'race_controller.dart';
 
@@ -180,8 +180,6 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     }
   }
 
-  String get _shareText =>
-      'Join my Nuvo race: ${_race?.title ?? 'Nuvo race'}\nOpen Nuvo and enter code: ${_inviteCode ?? ''}';
 
   Future<void> _copyCode() async {
     final code = _inviteCode;
@@ -281,33 +279,43 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                           onPressed: () => _addToRace(user),
                         ),
                     const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Invite code'),
+                    const _SectionLabel(label: 'Share a link or QR'),
+                    const SizedBox(height: 10),
+                    const _SmallPanel(
+                      text:
+                          'Anyone with the link can preview the race and join — '
+                          'no code to type.',
+                    ),
+                    const SizedBox(height: 12),
+                    NuvoPrimaryButton(
+                      label: 'Share link & QR',
+                      icon: Icons.qr_code_rounded,
+                      expand: true,
+                      onPressed: () => showRaceShareSheet(
+                        context,
+                        raceId: widget.raceId,
+                        raceTitle: _race?.title ?? 'Nuvo race',
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const _SectionLabel(label: 'Or a typable code'),
                     const SizedBox(height: 10),
                     _InviteCodeCard(code: _inviteCode),
                     const SizedBox(height: 14),
                     if (_inviteCode == null)
-                      NuvoPrimaryButton(
-                        label: 'Create invite code',
+                      NuvoOutlineButton(
+                        label: _generating ? 'Creating…' : 'Create invite code',
                         icon: Icons.key_rounded,
                         expand: true,
-                        loading: _generating,
                         onPressed: _generating ? null : _createCode,
                       )
-                    else ...[
-                      NuvoPrimaryButton(
+                    else
+                      NuvoOutlineButton(
                         label: 'Copy code',
                         icon: Icons.copy_rounded,
                         expand: true,
                         onPressed: _copyCode,
                       ),
-                      const SizedBox(height: 12),
-                      NuvoOutlineButton(
-                        label: 'Share race',
-                        icon: Icons.ios_share_rounded,
-                        expand: true,
-                        onPressed: () => Share.share(_shareText),
-                      ),
-                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(
