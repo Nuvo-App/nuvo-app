@@ -76,6 +76,12 @@ class _State extends ConsumerState<NotificationsScreen> {
                       style: AppTextStyles.labelMedium
                           .copyWith(color: NuvoColors.blue)),
                 ),
+              IconButton(
+                onPressed: () => context.push('/settings/notifications'),
+                icon: const Icon(Icons.tune_rounded),
+                color: NuvoColors.textMuted,
+                tooltip: 'Notification settings',
+              ),
             ],
           ),
         ),

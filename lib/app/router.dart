@@ -38,6 +38,7 @@ import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/crew/presentation/public_profile_screen.dart';
+import '../features/notifications/presentation/notification_prefs_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
 import '../features/social/presentation/qr_scan_screen.dart';
@@ -114,6 +115,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         pageBuilder: (_, state) => _detailPage(state, const NotificationsScreen()),
+      ),
+      GoRoute(
+        path: '/settings/notifications',
+        pageBuilder: (_, state) =>
+            _authPage(state, const NotificationPrefsScreen()),
       ),
 
       // ── Auth ──────────────────────────────────────────────────────────────

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../notifications/application/push_service.dart';
 import '../../races/presentation/race_controller.dart';
 import '../application/deep_link_controller.dart';
 import '../data/invite_models.dart';
@@ -114,6 +117,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         /* navigation still proceeds; the detail screen will refetch */
       }
     }
+    // First race join / first crew connect is the contextual moment to ask
+    // for push permission (no-op until Firebase is configured).
+    unawaited(ref.read(pushServiceProvider).requestPermissionInContext());
     if (!mounted) return;
     if (result.connectionStatus == 'pending') {
       _showSnack('Request sent — you’ll connect once they accept.');

@@ -29,6 +29,12 @@ dependencies:
   url_launcher: ^6.3.1
   app_links: ^6.3.2
 
+  # Push (phase F). Dormant until GoogleService-Info.plist / google-services.json
+  # + the APNs key are added — PushService guards Firebase.initializeApp() and
+  # no-ops if it throws. See docs/agents/19 §10.
+  firebase_core: ^3.15.2
+  firebase_messaging: ^15.2.10
+
   # Images
   cached_network_image: ^3.3.1
   image_picker: ^1.1.2
