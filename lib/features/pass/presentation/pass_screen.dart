@@ -23,6 +23,7 @@ import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../crew/data/crew_api.dart' show ConnectOutcome;
+import '../../notifications/presentation/notification_bell.dart';
 import '../../social/presentation/my_qr_sheet.dart';
 import 'package:go_router/go_router.dart';
 
@@ -79,9 +80,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     try {
       final pass =
           await ref.read(authControllerProvider.notifier).getMemberPass();
-      // Crew + requests are owned by CrewController (docs/agents/18); just
-      // trigger a refresh — the list is read via ref.watch in build().
-      ref.read(crewControllerProvider.notifier).load(force: true);
+      // Crew + requests are owned by CrewController (docs/agents/18) — it
+      // auto-loads on auth and revalidates on tab focus (MainShell); this
+      // screen only reads it via ref.watch in build().
       if (mounted) {
         setState(() {
           _passInfo = pass;
@@ -630,7 +631,13 @@ class _CrewHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text('Crew', style: AppTextStyles.screenTitle),
+        Row(
+          children: [
+            Text('Crew', style: AppTextStyles.screenTitle),
+            const Spacer(),
+            const NotificationBell(),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
           'Your crew for races.',

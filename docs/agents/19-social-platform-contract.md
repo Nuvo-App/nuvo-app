@@ -216,7 +216,7 @@ squad tables or UI.
 | B | race Share sheet (QR + copy + share + code), race-detail + invite-crew wiring | **done** (`RaceShareSheet`, `showRaceShareSheet`) |
 | C | in-app QR scanner (`/scan`, ML Kit barcode on the pose GoogleMLKit runtime), "My code" QR on Pass, camera-permission states | **done** (`QrScanScreen`, `BarcodeScannerService`, `showMyQrSheet`) |
 | D | crew request lifecycle (worker `/crew/requests*` + `connectResult`), `CrewController` (doc-18), Pass requests section, `/u/:id` public profile | **done** (worker `fe350d85`) |
-| E | notifications table, `emitNotification`, inbox, `NotificationController` | todo |
+| E | `domain/notifications.ts` `emitNotification` (pref-checked, dedupe-idempotent) + `/notifications` routes (list/read/read-all/preferences); wired into 6 categories — `crew_request`, `crew_request_accepted`, `race_joined`, `race_invite`, `proof_accepted`, `proof_rejected`. `NotificationController` (doc-18) + `/notifications` inbox + `NotificationBell`. Push (F), `passed_on_leaderboard` / `race_starting` (cron) deferred. | **done** (worker `7848e36e`) |
 | F | FCM device tokens, permission UX, push send, tap routing | todo |
 | G | AASA verify on device, Android assetlinks fingerprint, web-fallback polish | partial (files shipped; portal + fingerprint pending) |
 | H | preferences screen, rate-limit hardening, diagnostics, beta surface | todo |

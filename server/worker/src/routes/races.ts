@@ -19,6 +19,7 @@ import { applyVerifiedSubmission } from '../domain/raceScoring';
 import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
+import { safeEmit } from '../domain/notifications';
 
 export const racesRouter = new Hono<AppEnv>();
 racesRouter.use('*', requireAuth);
@@ -187,6 +188,35 @@ async function ensureMember(db: D1Database, raceId: string, userId: string, role
     `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at, cached_display_name)
      VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
   ).bind(generateId(), raceId, userId, personId, role, displayName).run();
+}
+
+/** Emit `race_joined` to the creator iff `userId` was not already a member. */
+async function notifyRaceJoined(
+  c: Context<AppEnv>,
+  race: RaceRow,
+  userId: string,
+  wasMember: boolean,
+): Promise<void> {
+  if (wasMember || race.creator_id === userId) return;
+  const joiner = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
+  await safeEmit(c, {
+    userId: race.creator_id,
+    category: 'race_joined',
+    actorUserId: userId,
+    title: `${joiner} joined ${race.title}`,
+    dest: { type: 'race', id: race.id },
+    entityType: 'race',
+    entityId: race.id,
+    dedupeKey: `race_joined:${race.id}:${userId}`,
+  });
+}
+
+async function isRaceMember(db: D1Database, raceId: string, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?')
+    .bind(raceId, userId)
+    .first<{ id: string }>();
+  return Boolean(row);
 }
 
 async function ensureProgress(db: D1Database, raceId: string, userId: string): Promise<void> {
@@ -566,8 +596,10 @@ racesRouter.post('/join-code', async (c) => {
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
 
+  const wasMember = await isRaceMember(c.env.DB, race.id, userId);
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
+  await notifyRaceJoined(c, race, userId, wasMember);
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
 });
 
@@ -873,8 +905,10 @@ racesRouter.post('/:id/join', async (c) => {
   if (race.visibility === 'public_demo' && !race.public_join_enabled) {
     return c.json(badRequest('Joining is not enabled for this public race'), 403);
   }
+  const wasMember = await isRaceMember(c.env.DB, race.id, userId);
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
+  await notifyRaceJoined(c, race, userId, wasMember);
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
 });
 
@@ -902,8 +936,21 @@ racesRouter.post('/:id/participants', async (c) => {
   const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'").bind(targetUserId).first<{ id: string }>();
   if (!target) return c.json(badRequest('User not found'), 404);
 
+  const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
   await ensureMember(c.env.DB, race.id, targetUserId);
   await ensureProgress(c.env.DB, race.id, targetUserId);
+  if (!targetWasMember && targetUserId !== userId) {
+    await safeEmit(c, {
+      userId: targetUserId,
+      category: 'race_invite',
+      actorUserId: userId,
+      title: `You were added to ${race.title}`,
+      dest: { type: 'race', id: race.id },
+      entityType: 'race',
+      entityId: race.id,
+      dedupeKey: `race_invite:${race.id}:${targetUserId}`,
+    });
+  }
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
 });
 
@@ -931,8 +978,21 @@ racesRouter.post('/:id/members', async (c) => {
   const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'").bind(targetUserId).first<{ id: string }>();
   if (!target) return c.json(badRequest('User not found'), 404);
 
+  const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
   await ensureMember(c.env.DB, race.id, targetUserId);
   await ensureProgress(c.env.DB, race.id, targetUserId);
+  if (!targetWasMember && targetUserId !== userId) {
+    await safeEmit(c, {
+      userId: targetUserId,
+      category: 'race_invite',
+      actorUserId: userId,
+      title: `You were added to ${race.title}`,
+      dest: { type: 'race', id: race.id },
+      entityType: 'race',
+      entityId: race.id,
+      dedupeKey: `race_invite:${race.id}:${targetUserId}`,
+    });
+  }
   return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
 });
 
@@ -1357,6 +1417,23 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
 
   if (newStatus === 'verified' && move.status !== 'verified') {
     await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0);
+  }
+
+  // Notify the submitter of the review outcome (skip self-review).
+  if (move.user_id !== userId && (newStatus === 'verified' || newStatus === 'rejected')) {
+    await safeEmit(c, {
+      userId: move.user_id,
+      category: newStatus === 'verified' ? 'proof_accepted' : 'proof_rejected',
+      actorUserId: userId,
+      title:
+        newStatus === 'verified'
+          ? `Your proof for ${race.title} was accepted`
+          : `Your proof for ${race.title} needs another try`,
+      dest: { type: 'race', id: race.id },
+      entityType: 'move_log',
+      entityId: move.id,
+      dedupeKey: `proof_review:${move.id}:${newStatus}`,
+    });
   }
 
   const updated = await getRace(c.env.DB, race.id);

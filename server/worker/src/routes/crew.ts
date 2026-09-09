@@ -5,6 +5,15 @@ import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
 import { isBlocked, isProfilePrivate } from '../lib/privacy';
 import { connectResult } from '../domain/crewLifecycle';
+import { safeEmit } from '../domain/notifications';
+
+async function actorName(db: D1Database, userId: string): Promise<string> {
+  const row = await db
+    .prepare('SELECT full_name, username FROM profiles WHERE user_id = ?')
+    .bind(userId)
+    .first<{ full_name: string | null; username: string | null }>();
+  return row?.full_name || (row?.username ? `@${row.username}` : 'Someone');
+}
 
 export const crewRouter = new Hono<AppEnv>();
 
@@ -147,7 +156,19 @@ async function connectByUserId(c: Context<AppEnv>, crewUserId: string) {
   const targetPrivate = await isProfilePrivate(c.env.DB, crewUserId);
   const { mine, theirs, outcome } = connectResult(targetPrivate);
   await setConnection(c.env.DB, userId, crewUserId, mine, theirs, userId);
-  if (outcome === 'pending') return c.json({ ok: true, status: 'pending' });
+  if (outcome === 'pending') {
+    await safeEmit(c, {
+      userId: crewUserId,
+      category: 'crew_request',
+      actorUserId: userId,
+      title: `${await actorName(c.env.DB, userId)} wants to connect`,
+      dest: { type: 'profile', id: userId },
+      entityType: 'crew_request',
+      entityId: userId,
+      dedupeKey: `crew_request:${userId}`,
+    });
+    return c.json({ ok: true, status: 'pending' });
+  }
   const crewUser = await getCrewUser(c.env.DB, userId, crewUserId);
   return c.json({ ok: true, status: 'active', user: crewUser ? serializeCrewUser(crewUser) : null });
 }
@@ -180,6 +201,16 @@ crewRouter.post('/requests/:userId/accept', async (c) => {
     return c.json({ ok: false, error: 'This person is not available' }, 403);
   }
   await setConnection(c.env.DB, userId, otherId, 'active', 'active', row.requested_by ?? otherId);
+  await safeEmit(c, {
+    userId: otherId,
+    category: 'crew_request_accepted',
+    actorUserId: userId,
+    title: `${await actorName(c.env.DB, userId)} accepted your crew request`,
+    dest: { type: 'profile', id: userId },
+    entityType: 'crew',
+    entityId: userId,
+    dedupeKey: `crew_accepted:${userId}:${otherId}`,
+  });
   const crewUser = await getCrewUser(c.env.DB, userId, otherId);
   return c.json({ ok: true, status: 'active', user: crewUser ? serializeCrewUser(crewUser) : null });
 });
