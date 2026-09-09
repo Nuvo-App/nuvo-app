@@ -12,6 +12,11 @@ export type AppEnv = {
     INTERNAL_API_KEY?: string;
     API_BASE_URL: string;
     PROFILE_PHOTOS: R2Bucket;
+    // Push (phase F) — dormant until both are set via `wrangler secret put`.
+    // FCM_SERVICE_ACCOUNT = the FCM service-account JSON; FCM_PROJECT_ID = the
+    // Firebase project id. See server/worker/src/domain/push.ts.
+    FCM_SERVICE_ACCOUNT?: string;
+    FCM_PROJECT_ID?: string;
   };
   Variables: {
     userId: string;

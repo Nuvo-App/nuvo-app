@@ -8,8 +8,10 @@ import { isBlocked, isProfilePrivate, resolveRaceMemberVisibility } from '../lib
 import {
   ensureMember,
   ensureProgress,
+  getProfileName,
   getRace,
 } from '../domain/raceMembership';
+import { safeEmit } from '../domain/notifications';
 import {
   INVITE_KINDS,
   type InviteKind,
@@ -347,6 +349,19 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     const { created } = await ensureMember(c.env.DB, race.id, userId);
     await ensureProgress(c.env.DB, race.id, userId);
     await recordUse(c.env.DB, row, userId, alreadyUsed);
+    if (created && race.creator_id !== userId) {
+      const joiner = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
+      await safeEmit(c, {
+        userId: race.creator_id,
+        category: 'race_joined',
+        actorUserId: userId,
+        title: `${joiner} joined ${race.title}`,
+        dest: { type: 'race', id: race.id },
+        entityType: 'race',
+        entityId: race.id,
+        dedupeKey: `race_joined:${race.id}:${userId}`,
+      });
+    }
     return c.json({
       ok: true,
       kind: row.kind,
@@ -384,6 +399,19 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     userId,
   );
   await recordUse(c.env.DB, row, userId, alreadyUsed);
+  if (connectionStatus === 'pending') {
+    const who = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
+    await safeEmit(c, {
+      userId: targetUserId,
+      category: 'crew_request',
+      actorUserId: userId,
+      title: `${who} wants to connect`,
+      dest: { type: 'profile', id: userId },
+      entityType: 'crew_request',
+      entityId: userId,
+      dedupeKey: `crew_request:${userId}`,
+    });
+  }
 
   return c.json({
     ok: true,

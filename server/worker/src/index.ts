@@ -13,6 +13,8 @@ import { usersRouter } from './routes/users';
 import { crewRouter } from './routes/crew';
 import { reportsRouter } from './routes/reports';
 import { invitesRouter } from './routes/invites';
+import { notificationsRouter } from './routes/notifications';
+import { devicesRouter } from './routes/devices';
 import { requireAuth } from './lib/jwt';
 import { ALLOWED_WEB_ORIGINS } from './lib/response';
 import {
@@ -151,6 +153,8 @@ app.route('/pass', passRouter);
 app.route('/users', usersRouter);
 app.route('/crew', crewRouter);
 app.route('/invites', invitesRouter);
+app.route('/notifications', notificationsRouter);
+app.route('/devices', devicesRouter);
 
 // ── Reporting and safety routes ───────────────────────────────────────────────
 app.route('/reports', reportsRouter);

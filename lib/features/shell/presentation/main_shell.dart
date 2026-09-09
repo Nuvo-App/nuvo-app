@@ -7,6 +7,7 @@ import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../arena/presentation/arena_controller.dart';
 import '../../crew/application/crew_controller.dart';
+import '../../notifications/application/notification_controller.dart';
 import '../../races/presentation/race_controller.dart';
 
 /// Bottom-nav host. Also the app-wide **freshness trigger point**: on app
@@ -52,6 +53,7 @@ class _MainShellState extends ConsumerState<MainShell>
       ref.read(raceControllerProvider.notifier).revalidate();
       ref.read(arenaControllerProvider.notifier).revalidate();
       ref.read(crewControllerProvider.notifier).revalidate();
+      ref.read(notificationControllerProvider.notifier).revalidate();
     }
   }
 
@@ -73,6 +75,7 @@ class _MainShellState extends ConsumerState<MainShell>
         ref.read(raceControllerProvider.notifier).revalidate();
       case 3:
         ref.read(crewControllerProvider.notifier).revalidate();
+        ref.read(notificationControllerProvider.notifier).revalidate();
     }
     context.go(MainShell._paths[index]);
   }
