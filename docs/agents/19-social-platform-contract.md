@@ -214,8 +214,8 @@ squad tables or UI.
 |---|---|---|
 | A | migration, invite model+routes, token, AASA/fallback, `NuvoDestination`, pending-through-auth, `/invite/:token` | **done** (worker deployed `7b7bd807`) |
 | B | race Share sheet (QR + copy + share + code), race-detail + invite-crew wiring | **done** (`RaceShareSheet`, `showRaceShareSheet`) |
-| C | QR scanner + profile QR + camera-permission UX | todo |
-| D | crew requests inbox, public profile screen, `CrewController` | todo |
+| C | in-app QR scanner (`/scan`, ML Kit barcode on the pose GoogleMLKit runtime), "My code" QR on Pass, camera-permission states | **done** (`QrScanScreen`, `BarcodeScannerService`, `showMyQrSheet`) |
+| D | crew request lifecycle (worker `/crew/requests*` + `connectResult`), `CrewController` (doc-18), Pass requests section, `/u/:id` public profile | **done** (worker `fe350d85`) |
 | E | notifications table, `emitNotification`, inbox, `NotificationController` | todo |
 | F | FCM device tokens, permission UX, push send, tap routing | todo |
 | G | AASA verify on device, Android assetlinks fingerprint, web-fallback polish | partial (files shipped; portal + fingerprint pending) |

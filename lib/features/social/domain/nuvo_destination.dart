@@ -46,6 +46,8 @@ sealed class NuvoDestination {
         );
       case 'profile' when segments.length >= 2:
         return ProfileDestination(segments[1]);
+      case 'u' when segments.length >= 2:
+        return ProfileDestination(segments[1]);
       case 'pass':
         return const CrewDestination();
       case 'crew':
@@ -114,11 +116,8 @@ class ProfileDestination extends NuvoDestination {
 
   final String userId;
 
-  // A public "view this person" screen arrives with the crew phase (D). Until
-  // then a profile destination lands on the people surface — the userId is
-  // preserved on the object for when that screen exists.
   @override
-  String get location => '/pass?user=$userId';
+  String get location => '/u/$userId';
 
   @override
   bool operator ==(Object other) => other is ProfileDestination && other.userId == userId;
