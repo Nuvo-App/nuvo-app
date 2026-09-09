@@ -4,6 +4,7 @@ import type { AppEnv } from '../types';
 import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
 import { isBlocked, isProfilePrivate } from '../lib/privacy';
+import { connectResult } from '../domain/crewLifecycle';
 
 export const crewRouter = new Hono<AppEnv>();
 
@@ -144,13 +145,9 @@ async function connectByUserId(c: Context<AppEnv>, crewUserId: string) {
   }
 
   const targetPrivate = await isProfilePrivate(c.env.DB, crewUserId);
-  if (targetPrivate) {
-    // My row = pending (outgoing), their row = pending (incoming, they act on it).
-    await setConnection(c.env.DB, userId, crewUserId, 'pending', 'pending', userId);
-    return c.json({ ok: true, status: 'pending' });
-  }
-
-  await setConnection(c.env.DB, userId, crewUserId, 'active', 'active', userId);
+  const { mine, theirs, outcome } = connectResult(targetPrivate);
+  await setConnection(c.env.DB, userId, crewUserId, mine, theirs, userId);
+  if (outcome === 'pending') return c.json({ ok: true, status: 'pending' });
   const crewUser = await getCrewUser(c.env.DB, userId, crewUserId);
   return c.json({ ok: true, status: 'active', user: crewUser ? serializeCrewUser(crewUser) : null });
 }

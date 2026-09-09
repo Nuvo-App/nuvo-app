@@ -21,6 +21,8 @@ import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../crew/application/crew_controller.dart';
+import '../../crew/data/crew_api.dart' show ConnectOutcome;
 import '../../social/presentation/my_qr_sheet.dart';
 import 'package:go_router/go_router.dart';
 
@@ -48,7 +50,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
   PassInfo? _passInfo;
-  List<PublicUser> _crew = const [];
+  List<PublicUser> get _crew => ref.read(crewControllerProvider).members;
   List<PublicUser> _results = const [];
   Set<String> _adding = {};
   bool _loading = true;
@@ -75,16 +77,14 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       _error = null;
     });
     try {
-      final passFuture = ref
-          .read(authControllerProvider.notifier)
-          .getMemberPass();
-      final crewFuture = ref.read(raceControllerProvider.notifier).getCrew();
-      final pass = await passFuture;
-      final crew = await crewFuture;
+      final pass =
+          await ref.read(authControllerProvider.notifier).getMemberPass();
+      // Crew + requests are owned by CrewController (docs/agents/18); just
+      // trigger a refresh — the list is read via ref.watch in build().
+      ref.read(crewControllerProvider.notifier).load(force: true);
       if (mounted) {
         setState(() {
           _passInfo = pass;
-          _crew = crew;
           _loading = false;
         });
       }
@@ -147,13 +147,15 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   Future<void> _addCrew(PublicUser user) async {
     setState(() => _adding = {..._adding, user.id});
     try {
-      await ref.read(raceControllerProvider.notifier).addCrewUser(user.id);
-      final crew = await ref.read(raceControllerProvider.notifier).getCrew();
+      final outcome =
+          await ref.read(crewControllerProvider.notifier).add(user);
       if (mounted) {
-        setState(() {
-          _crew = crew;
-          _adding = _adding.where((id) => id != user.id).toSet();
-        });
+        setState(() => _adding = _adding.where((id) => id != user.id).toSet());
+        if (outcome == ConnectOutcome.pending) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Request sent.')),
+          );
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -163,6 +165,24 @@ class _PassScreenState extends ConsumerState<PassScreen> {
         );
       }
     }
+  }
+
+  Future<void> _acceptRequest(PublicUser user) async {
+    try {
+      await ref.read(crewControllerProvider.notifier).acceptRequest(user);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't accept the request.")),
+        );
+      }
+    }
+  }
+
+  Future<void> _declineRequest(PublicUser user) async {
+    try {
+      await ref.read(crewControllerProvider.notifier).declineRequest(user);
+    } catch (_) {/* best-effort */}
   }
 
   bool _isCrew(PublicUser user) => _crew.any((m) => m.id == user.id);
@@ -211,6 +231,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     final user = ref.watch(authControllerProvider).user;
     final profile = _buildProfile(user);
     final races = ref.watch(raceControllerProvider).races;
+    final crewState = ref.watch(crewControllerProvider);
+    final crew = crewState.members;
+    final requests = crewState.requests;
     final closest = user == null ? null : _closestCrewRace(races, user.id);
 
     return Scaffold(
@@ -325,19 +348,38 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   const SizedBox(height: 20),
                 ],
 
+                if (requests.isNotEmpty) ...[
+                  const _SectionLabel(
+                    label: 'Crew requests',
+                    accent: NuvoColors.warning,
+                  ),
+                  const SizedBox(height: 10),
+                  for (final r in requests)
+                    _CrewRequestRow(
+                      user: r,
+                      onAccept: () => _acceptRequest(r),
+                      onDecline: () => _declineRequest(r),
+                    ),
+                  const SizedBox(height: 20),
+                ],
+
                 _SectionLabel(
                   label: 'Your crew',
-                  accent: _crew.isEmpty
-                      ? NuvoColors.blue
-                      : NuvoColors.success,
+                  accent: crew.isEmpty ? NuvoColors.blue : NuvoColors.success,
                 ),
                 const SizedBox(height: 10),
-                if (_crew.isEmpty)
+                if (crewState.error != null && crew.isEmpty)
+                  NuvoErrorState(
+                    message: crewState.error!,
+                    onRetry: () =>
+                        ref.read(crewControllerProvider.notifier).load(force: true),
+                  )
+                else if (crew.isEmpty)
                   const _EmptyNote(
                     text: 'Search a username or member ID to add crew.',
                   )
                 else
-                  _CrewList(members: _crew),
+                  _CrewList(members: crew),
               ],
             ],
           ),
@@ -629,6 +671,7 @@ class _UserRow extends StatelessWidget {
     this.loading = false,
     this.actionLabel,
     this.onPressed,
+    this.onTap,
     this.isLast = false,
   });
 
@@ -637,13 +680,16 @@ class _UserRow extends StatelessWidget {
   final bool loading;
   final String? actionLabel;
   final VoidCallback? onPressed;
+  final VoidCallback? onTap;
   final bool isLast;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Padding(
+        InkWell(
+          onTap: onTap,
+          child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 11),
           child: Row(
             children: [
@@ -702,6 +748,7 @@ class _UserRow extends StatelessWidget {
             ],
           ),
         ),
+        ),
         if (!isLast)
           Divider(
             height: 1,
@@ -725,8 +772,68 @@ class _CrewList extends StatelessWidget {
     return _PeopleSurface(
       children: [
         for (var i = 0; i < members.length; i++)
-          _UserRow(user: members[i], isLast: i == members.length - 1),
+          _UserRow(
+            user: members[i],
+            isLast: i == members.length - 1,
+            onTap: () => context.push('/u/${members[i].id}'),
+          ),
       ],
+    );
+  }
+}
+
+class _CrewRequestRow extends StatelessWidget {
+  const _CrewRequestRow({
+    required this.user,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  final PublicUser user;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: NuvoColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: NuvoColors.border),
+      ),
+      child: Row(children: [
+        NuvoAvatar(
+          initials: user.initials,
+          photoUrl: user.profilePhotoUrl,
+          size: NuvoAvatarSizes.md,
+          bgColor: nuvoAvatarColorFor(user.id),
+          textColor: NuvoColors.white,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(user.displayName,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                      color: NuvoColors.navy, fontWeight: FontWeight.w700)),
+              Text('wants to connect',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: NuvoColors.textMuted)),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: onDecline,
+          icon: const Icon(Icons.close_rounded),
+          color: NuvoColors.textMuted,
+          visualDensity: VisualDensity.compact,
+        ),
+        const SizedBox(width: 4),
+        NuvoPrimaryButton(label: 'Accept', small: true, onPressed: onAccept),
+      ]),
     );
   }
 }

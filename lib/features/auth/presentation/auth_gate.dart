@@ -89,6 +89,7 @@ class RouterNotifier extends ChangeNotifier {
       loc.startsWith('/races/') ||
       loc.startsWith('/proof/') ||
       loc.startsWith('/scan') ||
+      loc.startsWith('/u/') ||
       loc.startsWith('/notifications') ||
       loc.startsWith('/onboarding/');
 

@@ -35,10 +35,9 @@ void main() {
     });
 
     test('profile / pass / notifications', () {
-      expect(
-        NuvoDestination.tryParse(Uri.parse('https://x.dev/profile/u1')),
-        isA<ProfileDestination>(),
-      );
+      final p = NuvoDestination.tryParse(Uri.parse('https://x.dev/profile/u1'));
+      expect(p, isA<ProfileDestination>());
+      expect(p!.location, '/u/u1');
       expect(
         NuvoDestination.tryParse(Uri.parse('nuvo://app/pass')),
         isA<CrewDestination>(),
