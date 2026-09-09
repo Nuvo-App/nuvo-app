@@ -32,6 +32,7 @@ This is the operational map for agents working on Nuvo, an app that turns real-l
 | [`17-qr-sharing-plan.md`](17-qr-sharing-plan.md) | **SUPERSEDED by 19** (design rationale only) — one universal-link invite model, AASA, preview-before-join, QR scanner, personal QR, deep-link cold start. |
 | [`18-data-freshness-contract.md`](18-data-freshness-contract.md) | **active contract** — canonical StateNotifiers, `loading`/`refreshing`/`empty`/`error`, `revalidate()` stale-while-revalidate on focus/resume, write-through sibling invalidation (`onMutated`). New data domains follow this; no page-specific refresh hacks. |
 | [`19-social-platform-contract.md`](19-social-platform-contract.md) | **active contract** — the whole social platform as one system: `NuvoDestination`, one deep-link router, pending-destination-through-auth, opaque invite tokens, `/invites` routes, universal links + AASA, crew lifecycle, notifications-as-domain-objects, FCM, privacy/blocking, freshness integration, future Squads. Read before touching sharing / QR / links / crew / notifications / push. |
+| [`20-push-setup.md`](20-push-setup.md) | the account-setup checklist to turn push on (Firebase project, APNs `.p8`, `FCM_*` worker secrets) + the remaining Apple-portal / Android-keystore steps. All code is wired; this is the credential list. |
 | [`../NAVIGATION_MAP.md`](../NAVIGATION_MAP.md) | the route table, navigation graph, and which verb (`go` / `push` / `pushReplacement` / `safePopOrGo`) |
 
 ## Source-of-truth rule

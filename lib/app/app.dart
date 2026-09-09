@@ -7,6 +7,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/nuvo_responsive.dart';
 import '../features/auth/presentation/auth_controller.dart';
+import '../features/notifications/application/push_service.dart';
 import '../features/social/application/deep_link_controller.dart';
 import 'router.dart';
 
@@ -24,20 +25,28 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
 
-    // Start link intake once the router exists (handles the cold-start link).
+    // Start link + push intake once the router exists (handles cold-start).
     if (!_deepLinksStarted) {
       _deepLinksStarted = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(deepLinkControllerProvider).start(router);
+        ref.read(pushServiceProvider).start(router); // dormant until Firebase configured
       });
     }
 
     // When the user becomes authenticated, drain any destination that was
     // stashed while they were logged out (link → sign-in → original target).
     ref.listen<AuthState>(authControllerProvider, (prev, next) async {
+      if (prev?.status == AuthStatus.authenticated &&
+          next.status == AuthStatus.unauthenticated) {
+        ref.read(pushServiceProvider).onSignedOut();
+        return;
+      }
       final becameAuthed = prev?.status != AuthStatus.authenticated &&
           next.status == AuthStatus.authenticated;
-      if (!becameAuthed || !(next.user?.onboardingComplete ?? false)) return;
+      if (!becameAuthed) return;
+      ref.read(pushServiceProvider).onSignedIn();
+      if (!(next.user?.onboardingComplete ?? false)) return;
       final location = await ref.read(pendingDestinationStoreProvider).consume();
       if (location != null && location.isNotEmpty) router.go(location);
     });
