@@ -21,6 +21,8 @@ import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../social/presentation/my_qr_sheet.dart';
+import 'package:go_router/go_router.dart';
 
 class _ClosestRace {
   const _ClosestRace({
@@ -265,6 +267,32 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   searching: _searching,
                   onChanged: _onSearchChanged,
                 ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: NuvoOutlineButton(
+                      label: 'Scan a code',
+                      icon: Icons.qr_code_scanner_rounded,
+                      onPressed: () => context.push('/scan'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: NuvoOutlineButton(
+                      label: 'My code',
+                      icon: Icons.qr_code_rounded,
+                      onPressed: () => showMyQrSheet(
+                        context,
+                        displayName: profile.name.isEmpty
+                            ? 'Your code'
+                            : profile.name,
+                        memberId: profile.memberId == '-'
+                            ? null
+                            : profile.memberId,
+                      ),
+                    ),
+                  ),
+                ]),
                 if (_results.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   _SearchResultList(

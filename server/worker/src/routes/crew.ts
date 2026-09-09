@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 import { generateId } from '../lib/crypto';
 import { requireAuth } from '../lib/jwt';
+import { isBlocked, isProfilePrivate } from '../lib/privacy';
 
 export const crewRouter = new Hono<AppEnv>();
 
@@ -15,6 +17,8 @@ interface CrewUserRow {
   member_id: string | null;
   primary_email: string | null;
   created_at: string;
+  requested_by?: string | null;
+  connection_id?: string;
 }
 
 function initialsFor(displayName: string | null, username: string | null, email: string | null): string {
@@ -36,49 +40,86 @@ function serializeCrewUser(row: CrewUserRow) {
   };
 }
 
+const CREW_USER_SELECT = `
+  SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at,
+         cc.requested_by, cc.id as connection_id
+  FROM crew_connections cc
+  JOIN users u ON u.id = cc.crew_user_id
+  LEFT JOIN profiles p ON p.user_id = u.id
+  LEFT JOIN member_passes mp ON mp.user_id = u.id
+`;
+
 async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
   return db
-    .prepare(
-      `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at
-       FROM crew_connections cc
-       JOIN users u ON u.id = cc.crew_user_id
-       LEFT JOIN profiles p ON p.user_id = u.id
-       LEFT JOIN member_passes mp ON mp.user_id = u.id
-       WHERE cc.user_id = ? AND cc.crew_user_id = ? AND cc.status = 'active'`,
-    )
+    .prepare(`${CREW_USER_SELECT} WHERE cc.user_id = ? AND cc.crew_user_id = ? AND cc.status = 'active'`)
     .bind(userId, crewUserId)
     .first<CrewUserRow>();
 }
 
-// GET /crew
+/**
+ * Write both directional rows for a connection at once. `mine` is the caller's
+ * outgoing row status; `theirs` is the other side's row. `requestedBy` is
+ * recorded once and never overwritten.
+ */
+async function setConnection(
+  db: D1Database,
+  a: string,
+  b: string,
+  mine: string,
+  theirs: string,
+  requestedBy: string,
+): Promise<void> {
+  const rows: Array<[string, string, string]> = [
+    [a, b, mine],
+    [b, a, theirs],
+  ];
+  for (const [u, cu, status] of rows) {
+    await db
+      .prepare(
+        `INSERT INTO crew_connections (id, user_id, crew_user_id, status, requested_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id, crew_user_id) DO UPDATE SET
+           status = excluded.status,
+           requested_by = COALESCE(crew_connections.requested_by, excluded.requested_by),
+           updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(generateId(), u, cu, status, requestedBy)
+      .run();
+  }
+}
+
+// GET /crew — active connections
 crewRouter.get('/', async (c) => {
   const userId = c.get('userId');
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at
-     FROM crew_connections cc
-     JOIN users u ON u.id = cc.crew_user_id
-     LEFT JOIN profiles p ON p.user_id = u.id
-     LEFT JOIN member_passes mp ON mp.user_id = u.id
-     WHERE cc.user_id = ? AND cc.status = 'active'
-     ORDER BY cc.created_at DESC`,
+    `${CREW_USER_SELECT} WHERE cc.user_id = ? AND cc.status = 'active' ORDER BY cc.created_at DESC`,
   )
     .bind(userId)
     .all<CrewUserRow>();
-
   return c.json({ ok: true, crew: rows.results.map(serializeCrewUser) });
 });
 
-// POST /crew/add
-crewRouter.post('/add', async (c) => {
+// GET /crew/requests — incoming pending requests (someone asked to connect with me)
+crewRouter.get('/requests', async (c) => {
   const userId = c.get('userId');
-  let body: { userId?: unknown };
-  try {
-    body = await c.req.json<{ userId?: unknown }>();
-  } catch {
-    return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
-  }
+  const rows = await c.env.DB.prepare(
+    `${CREW_USER_SELECT}
+     WHERE cc.user_id = ? AND cc.status = 'pending' AND cc.requested_by IS NOT NULL AND cc.requested_by != ?
+     ORDER BY cc.updated_at DESC, cc.created_at DESC`,
+  )
+    .bind(userId, userId)
+    .all<CrewUserRow>();
+  return c.json({
+    ok: true,
+    requests: rows.results.map((r) => ({
+      ...serializeCrewUser(r),
+      requestedBy: r.requested_by,
+    })),
+  });
+});
 
-  const crewUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
+async function connectByUserId(c: Context<AppEnv>, crewUserId: string) {
+  const userId = c.get('userId');
   if (!crewUserId) return c.json({ ok: false, error: 'userId is required' }, 400);
   if (crewUserId === userId) return c.json({ ok: false, error: 'You cannot add yourself to crew' }, 400);
 
@@ -87,37 +128,87 @@ crewRouter.post('/add', async (c) => {
     .first<{ id: string }>();
   if (!target) return c.json({ ok: false, error: 'User not found' }, 404);
 
-  await c.env.DB.prepare(
-    `INSERT INTO crew_connections (id, user_id, crew_user_id, status, created_at)
-     VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)
-     ON CONFLICT(user_id, crew_user_id) DO UPDATE SET status = 'active'`,
-  )
-    .bind(generateId(), userId, crewUserId)
-    .run();
+  if ((await isBlocked(c.env.DB, userId, crewUserId)) || (await isBlocked(c.env.DB, crewUserId, userId))) {
+    return c.json({ ok: false, error: 'This person is not available' }, 403);
+  }
 
-  // Demo-friendly mutual connection, while preserving one-way semantics if this fails later.
-  await c.env.DB.prepare(
-    `INSERT INTO crew_connections (id, user_id, crew_user_id, status, created_at)
-     VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)
-     ON CONFLICT(user_id, crew_user_id) DO UPDATE SET status = 'active'`,
+  // Already connected? no-op success.
+  const existing = await c.env.DB.prepare(
+    `SELECT status FROM crew_connections WHERE user_id = ? AND crew_user_id = ?`,
   )
-    .bind(generateId(), crewUserId, userId)
-    .run();
+    .bind(userId, crewUserId)
+    .first<{ status: string }>();
+  if (existing?.status === 'active') {
+    const crewUser = await getCrewUser(c.env.DB, userId, crewUserId);
+    return c.json({ ok: true, status: 'active', user: crewUser ? serializeCrewUser(crewUser) : null });
+  }
 
+  const targetPrivate = await isProfilePrivate(c.env.DB, crewUserId);
+  if (targetPrivate) {
+    // My row = pending (outgoing), their row = pending (incoming, they act on it).
+    await setConnection(c.env.DB, userId, crewUserId, 'pending', 'pending', userId);
+    return c.json({ ok: true, status: 'pending' });
+  }
+
+  await setConnection(c.env.DB, userId, crewUserId, 'active', 'active', userId);
   const crewUser = await getCrewUser(c.env.DB, userId, crewUserId);
-  return c.json({ ok: true, user: crewUser ? serializeCrewUser(crewUser) : null });
+  return c.json({ ok: true, status: 'active', user: crewUser ? serializeCrewUser(crewUser) : null });
+}
+
+// POST /crew/add  { userId }
+crewRouter.post('/add', async (c) => {
+  let body: { userId?: unknown };
+  try {
+    body = await c.req.json<{ userId?: unknown }>();
+  } catch {
+    return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
+  }
+  const crewUserId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  return connectByUserId(c, crewUserId);
 });
 
-// DELETE /crew/:userId
+// POST /crew/requests/:userId/accept
+crewRouter.post('/requests/:userId/accept', async (c) => {
+  const userId = c.get('userId');
+  const otherId = c.req.param('userId');
+  const row = await c.env.DB.prepare(
+    `SELECT status, requested_by FROM crew_connections WHERE user_id = ? AND crew_user_id = ?`,
+  )
+    .bind(userId, otherId)
+    .first<{ status: string; requested_by: string | null }>();
+  if (!row || row.status !== 'pending') {
+    return c.json({ ok: false, error: 'No pending request from this person' }, 404);
+  }
+  if ((await isBlocked(c.env.DB, userId, otherId)) || (await isBlocked(c.env.DB, otherId, userId))) {
+    return c.json({ ok: false, error: 'This person is not available' }, 403);
+  }
+  await setConnection(c.env.DB, userId, otherId, 'active', 'active', row.requested_by ?? otherId);
+  const crewUser = await getCrewUser(c.env.DB, userId, otherId);
+  return c.json({ ok: true, status: 'active', user: crewUser ? serializeCrewUser(crewUser) : null });
+});
+
+// POST /crew/requests/:userId/decline
+crewRouter.post('/requests/:userId/decline', async (c) => {
+  const userId = c.get('userId');
+  const otherId = c.req.param('userId');
+  await c.env.DB.prepare(
+    `UPDATE crew_connections SET status = 'declined', updated_at = CURRENT_TIMESTAMP
+     WHERE user_id IN (?, ?) AND crew_user_id IN (?, ?) AND status = 'pending'`,
+  )
+    .bind(userId, otherId, userId, otherId)
+    .run();
+  return c.json({ ok: true });
+});
+
+// DELETE /crew/:userId — remove a connection (either side)
 crewRouter.delete('/:userId', async (c) => {
   const userId = c.get('userId');
   const crewUserId = c.req.param('userId');
   await c.env.DB.prepare(
-    `UPDATE crew_connections
-     SET status = 'removed'
-     WHERE user_id = ? AND crew_user_id = ?`,
+    `UPDATE crew_connections SET status = 'removed', updated_at = CURRENT_TIMESTAMP
+     WHERE (user_id = ? AND crew_user_id = ?) OR (user_id = ? AND crew_user_id = ?)`,
   )
-    .bind(userId, crewUserId)
+    .bind(userId, crewUserId, crewUserId, userId)
     .run();
   return c.json({ ok: true });
 });
