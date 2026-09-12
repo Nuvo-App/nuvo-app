@@ -41,10 +41,11 @@ final class NuvoColors {
   static const Color coral = Color(0xFFC97968);
   static const Color sunshine = Color(0xFFD5AA63);
 
-  /// Secondary brand accent — matches the marketing site's `#ff6b21`.
-  /// Reserved for CTA emphasis and accent shadows only; never used as a
-  /// broad surface fill. Pairs with navy-deep text/border, never white text.
-  static const Color orange = Color(0xFFFF6B21);
+  /// Warning/shock orange — same hue as [warning] (#F69304), kept as its own
+  /// name for call sites (e.g. accent shadows) that reach for "orange"
+  /// directly. Reserved for warnings/emphasis, never a broad surface fill.
+  static const Color orange = warning;
+  static const Color orangeShadow = warningShadow;
 
   // ── Page & surfaces ───────────────────────────────────────────────────────────
   /// Main page background — clean soft white.
@@ -100,48 +101,59 @@ final class NuvoColors {
   // `Bright` accent (glows / progress fills), a `Surface` tint background, a
   // `Border` mid tint, and an `On` text colour for use on the surface tint.
 
-  /// Success — grass green (#3BC448 in the reference).
-  static const Color success = Color(0xFF3BC448);
-  static const Color successShadow = Color(0xFF1B8445);
-  static const Color successBright = Color(0xFF3BC448);
+  // ── Nuvo App Design Guide palette (5-6 core colors, used almost
+  // everywhere — avoid pure white/black elsewhere). Green = good/engaging,
+  // red = bad/empty, blue = brand (takes precedence in iconic app chrome),
+  // tan = sparing accent, yellow/orange = warning/shock. Never overwhelming.
+
+  /// Success — good / engaging connotation (#2ECC40).
+  static const Color success = Color(0xFF2ECC40);
+  static const Color successShadow = Color(0xFF008A43);
+  static const Color successBright = Color(0xFF2ECC40);
   static const Color successSurface = Color(0xFFE7F8E9);
   static const Color successBorder = Color(0xFF9EE0A6);
   static const Color successOn = Color(0xFF15602B);
 
-  /// Danger — assertive red (#DC2529).
-  static const Color danger = Color(0xFFDC2529);
-  static const Color dangerShadow = Color(0xFF841918);
-  static const Color dangerBright = Color(0xFFDC2529);
+  /// Danger — bad connotation / empty state (#E72025).
+  static const Color danger = Color(0xFFE72025);
+  static const Color dangerShadow = Color(0xFF8B1917);
+  static const Color dangerBright = Color(0xFFE72025);
   static const Color dangerSurface = Color(0xFFFCE8E8);
   static const Color dangerBorder = Color(0xFFF1AFAF);
   static const Color dangerOn = Color(0xFF991A1A);
 
-  /// Warning — orange (#EA8E1C).
-  static const Color warning = Color(0xFFEA8E1C);
+  /// Warning — orange, one of the two "shock the user" warning colors
+  /// (#F69304).
+  static const Color warning = Color(0xFFF69304);
   static const Color amber = warning;
-  static const Color warningShadow = Color(0xFFBF601E);
-  static const Color warningBright = Color(0xFFEA8E1C);
+  static const Color warningShadow = Color(0xFFF47603);
+  static const Color warningBright = Color(0xFFF69304);
   static const Color warningSurface = Color(0xFFFBEEDC);
   static const Color warningBorder = Color(0xFFEFC996);
   static const Color warningOn = Color(0xFF8A5210);
   static const Color amberTint = warningSurface;
 
-  /// Gold — the warm yellow warning alt (#F1C22D); also podium 1st.
-  static const Color goldWarn = Color(0xFFF1C22D);
-  static const Color goldWarnShadow = Color(0xFF9F8012);
+  /// Gold — the other warning/shock color, yellow (#FCCA1D); also podium 1st.
+  static const Color goldWarn = Color(0xFFFCCA1D);
+  static const Color goldWarnShadow = Color(0xFFC49E00);
 
-  /// Warm tan accent (#E2C9B5 fill, #D8AE87 edge). Sparing use — highlights,
-  /// premium/pass surfaces. Never a success/failure signal.
-  static const Color accent = Color(0xFFE2C9B5);
-  static const Color accentBorder = Color(0xFFD8AE87);
+  /// Warm tan accent (#EAD0BB fill, #E0B48C shadow/edge). Use very
+  /// minimally — never a success/failure signal.
+  static const Color accent = Color(0xFFEAD0BB);
+  static const Color accentBorder = Color(0xFFE0B48C);
   static const Color accentOn = navy;
 
-  /// Neutral (blue) role — reference fill #1961F2, hard-shadow #0A3B6B.
-  static const Color neutral = Color(0xFF1961F2);
-  static const Color neutralShadow = Color(0xFF0A3B6B);
+  /// Neutral (blue) role — the brand color; takes precedence in the app's
+  /// iconic chrome (bottom nav, primary CTAs). Fill #1264FF, shadow #003D71.
+  static const Color neutral = blue;
+  static const Color neutralShadow = Color(0xFF003D71);
   static const Color blueSurface = blueLight;
   static const Color blueBorder = Color(0xFFA9C8FF);
   static const Color blueOn = navy;
+
+  /// Alias of [neutralShadow] for call sites naming it after the role
+  /// instead of "neutral" (the brand color is `blue`, not a separate hue).
+  static const Color blueShadow = neutralShadow;
 
   // Podium colours — richer and more distinct from each other than the old
   // three muted browns.
