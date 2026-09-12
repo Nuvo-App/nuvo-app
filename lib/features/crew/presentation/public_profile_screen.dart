@@ -8,6 +8,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/theme/nuvo_entrance.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
@@ -182,30 +183,35 @@ class _State extends ConsumerState<PublicProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Spacer(),
-            Center(
-              child: NuvoAvatar(
-                photoUrl: card.profilePhotoUrl,
-                initials: card.initials,
-                size: 96,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(card.displayName,
-                textAlign: TextAlign.center, style: AppTextStyles.displaySmall),
-            if (card.username != null) ...[
-              const SizedBox(height: 4),
-              Text('@${card.username}',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: NuvoColors.textMuted)),
-            ],
-            if (card.memberId != null) ...[
-              const SizedBox(height: 2),
-              Text(card.memberId!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: NuvoColors.textMuted)),
-            ],
+            Column(
+              children: [
+                Center(
+                  child: NuvoAvatar(
+                    photoUrl: card.profilePhotoUrl,
+                    initials: card.initials,
+                    size: 96,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(card.displayName,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.displaySmall),
+                if (card.username != null) ...[
+                  const SizedBox(height: 4),
+                  Text('@${card.username}',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: NuvoColors.textMuted)),
+                ],
+                if (card.memberId != null) ...[
+                  const SizedBox(height: 2),
+                  Text(card.memberId!,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: NuvoColors.textMuted)),
+                ],
+              ],
+            ).nuvoEnter(),
             const Spacer(),
             _cta(card),
           ],
