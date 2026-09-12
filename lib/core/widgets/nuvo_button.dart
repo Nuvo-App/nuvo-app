@@ -84,7 +84,9 @@ Widget _buttonShell({
   required double radius,
   required Color color,
   Color? borderColor,
-  double borderWidth = 2,
+  // Design guide: a "3d"/"2d" button carries a 3px outline in the shadow
+  // color of its fill.
+  double borderWidth = 3,
   bool expand = false,
   List<BoxShadow>? shadows,
 }) {
@@ -336,7 +338,10 @@ class NuvoOutlineButton extends StatelessWidget {
 
 typedef NuvoSecondaryButton = NuvoOutlineButton;
 
-// ── Tertiary (was Ghost — now a filled low-emphasis tier) ────────────────────
+// ── Tertiary — the "2d" button: same fill+outline construction as the 3d
+// tiers, but no drop shadow. Use for lower-emphasis actions (a settings page,
+// a secondary control) where the 3d tiers' physical pop isn't warranted.
+// (was Ghost — now a filled low-emphasis tier) ───────────────────────────────
 
 class NuvoTertiaryButton extends StatelessWidget {
   const NuvoTertiaryButton({
@@ -365,8 +370,9 @@ class NuvoTertiaryButton extends StatelessWidget {
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoTokens.gray100,
       borderColor: NuvoTokens.gray300,
-      borderWidth: 1.5,
-      shadows: enabled ? AppShadows.hardSmall : null,
+      // 2d: outline only, no drop shadow (kept for API compatibility — the
+      // shell's 3px default still applies).
+      shadows: null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -381,7 +387,7 @@ class NuvoTertiaryButton extends StatelessWidget {
 }
 
 /// Legacy name. A ghost button is no longer transparent — it renders as a
-/// [NuvoTertiaryButton] (filled gray-100 + hard-small shadow).
+/// [NuvoTertiaryButton] (2d: filled gray-100 + outline, no shadow).
 class NuvoGhostButton extends NuvoTertiaryButton {
   const NuvoGhostButton({
     super.key,

@@ -24,11 +24,11 @@ abstract final class AppShadows {
   /// marketing site's orange-shadow chips/CTAs. Use sparingly — only on
   /// primary action surfaces where orange is the accent color.
   static const List<BoxShadow> hardMediumOrange = [
-    BoxShadow(color: NuvoColors.orange, blurRadius: 0, offset: Offset(5, 5)),
+    BoxShadow(color: NuvoColors.orangeShadow, blurRadius: 0, offset: Offset(5, 5)),
   ];
 
   static const List<BoxShadow> hardLargeOrange = [
-    BoxShadow(color: NuvoColors.orange, blurRadius: 0, offset: Offset(7, 7)),
+    BoxShadow(color: NuvoColors.orangeShadow, blurRadius: 0, offset: Offset(7, 7)),
   ];
 
   /// Rare ambient separation for sheets/dialogs where hard offset is too loud.

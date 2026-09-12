@@ -57,7 +57,7 @@ final class NuvoTokens {
 
   /// Amber — needs attention / almost finished / in review.
   static const Color amber = NuvoColors.warning;
-  static const Color orange = Color(0xFFFF8C3A);
+  static const Color orange = NuvoColors.orange;
 
   // ── Gray scale ─────────────────────────────────────────────────────────────
 
