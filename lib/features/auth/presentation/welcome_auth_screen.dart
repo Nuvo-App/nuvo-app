@@ -588,13 +588,19 @@ class _LegalCopy extends StatelessWidget {
 class _GoogleGIcon extends StatelessWidget {
   const _GoogleGIcon();
 
+  // nuvo-lint-ignore: brand-color — Google's official "G" mark colors, not a
+  // Nuvo palette literal. Never recolor to match NuvoColors; that's a
+  // platform brand requirement, not a design choice.
+  static const _googleG = Color(0xFF4285F4);
+  static const _googleGBackdrop = Color(0xFFF0F0F0);
+
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 22,
       height: 22,
       decoration: const BoxDecoration(
-        color: Color(0xFFF0F0F0),
+        color: _googleGBackdrop,
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
@@ -603,7 +609,7 @@ class _GoogleGIcon extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF4285F4),
+          color: _googleG,
           height: 1,
         ),
       ),

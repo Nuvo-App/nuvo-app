@@ -17,6 +17,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_geometry.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
+import '../../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
 import '../../ai/motion_v2/diagnostics/motion_diagnostic_session.dart';
@@ -1718,13 +1719,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   Widget _smallButton(String label, VoidCallback onPressed) {
-    return TextButton(
-      onPressed: onPressed,
-      child: Text(
-        label,
-        style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
-      ),
-    );
+    return NuvoTertiaryButton(label: label, small: true, onPressed: onPressed);
   }
 
 
@@ -1863,7 +1858,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
     }
     if (stage == TeachMovementStage.building || _learnRequested) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: NuvoLoadingIndicator());
     }
     if (_awaitingExampleSave) {
       return NuvoPrimaryButton(

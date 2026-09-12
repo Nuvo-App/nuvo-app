@@ -24,7 +24,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
   static const int _frameCount = AssetPaths.splashFrameCount;
   static const int _fps = 60;
-  static const Color _bg = Color(0xFFFBFCFF);
+  static const Color _bg = NuvoColors.page;
 
   late final AnimationController _frameController;
   late final AnimationController _settleController;
@@ -277,7 +277,7 @@ class _LaunchMark extends StatelessWidget {
                 const Text(
                   'WELCOME TO',
                   style: TextStyle(
-                    color: Color(0xFF1264FF),
+                    color: NuvoColors.blue,
                     fontFamily: 'Avenir Next',
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
@@ -289,7 +289,7 @@ class _LaunchMark extends StatelessWidget {
                   width: 42,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1264FF),
+                    color: NuvoColors.blue,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -362,10 +362,11 @@ class _LaunchAtmospherePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final t = progress * math.pi * 2;
     final rect = Offset.zero & size;
-    canvas.drawRect(rect, Paint()..color = const Color(0xFFF5F7FB));
+    canvas.drawRect(rect, Paint()..color = NuvoColors.page);
 
     // Give the white mark a quiet contrast pocket without introducing a hard
-    // badge or circle behind it.
+    // badge or circle behind it. One hue (brand blue) at falling alpha, per
+    // the design guide — no second palette for the glow effect.
     final markCenter = Offset(size.width / 2, size.height * .43);
     final markField = Rect.fromCenter(
       center: markCenter,
@@ -375,9 +376,13 @@ class _LaunchAtmospherePainter extends CustomPainter {
     canvas.drawOval(
       markField,
       Paint()
-        ..shader = const RadialGradient(
-          colors: [Color(0x44618DDE), Color(0x226E9FF0), Color(0x0079A8FF)],
-          stops: [0, .45, 1],
+        ..shader = RadialGradient(
+          colors: [
+            NuvoColors.blue.withValues(alpha: .27),
+            NuvoColors.blue.withValues(alpha: .13),
+            NuvoColors.blue.withValues(alpha: 0),
+          ],
+          stops: const [0, .45, 1],
         ).createShader(markField),
     );
 
@@ -411,8 +416,8 @@ class _LaunchAtmospherePainter extends CustomPainter {
         final radius =
             (.45 + Curves.easeOut.transform(pulse) * 2.45) * quietZone;
         dotPaint.color = Color.lerp(
-          const Color(0xFFC5D9FA).withValues(alpha: .20),
-          const Color(0xFF3F83FF).withValues(alpha: .68),
+          NuvoColors.blueLight.withValues(alpha: .20),
+          NuvoColors.blue.withValues(alpha: .68),
           pulse,
         )!;
         canvas.drawCircle(Offset(x, y), radius, dotPaint);

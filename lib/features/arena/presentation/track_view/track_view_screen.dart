@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/nuvo_button.dart';
 import 'track_view_fixture.dart';
 import 'track_view_geometry.dart';
 import 'track_view_world.dart';
 
 const _kArenaNavy = Color(0xFF061A33);
 const _kArenaNavyDeep = Color(0xFF031327);
-const _kArenaBlue = Color(0xFF2F7DFF);
+// Was a bespoke #2F7DFF — now the one brand blue everywhere, per the design
+// guide's "4-5 colors used for almost everything" rule (matches the fix in
+// bottom_nav.dart's trackside nav mode).
+const _kArenaBlue = NuvoColors.blue;
 const _kArenaText = Color(0xFFF7FAFF);
 const _kArenaMuted = Color(0xFF9EADC0);
 const _kPanelText = Color(0xFF1E293B);
@@ -301,27 +305,12 @@ class _ArenaHero extends StatelessWidget {
                       minWidth: 278,
                       maxWidth: 304,
                     ),
-                    child: SizedBox(
+                    child: NuvoPrimaryButton(
+                      key: const ValueKey('track-view-make-move'),
+                      label: 'Submit proof',
                       height: 60,
-                      child: FilledButton(
-                        key: const ValueKey('track-view-make-move'),
-                        onPressed: onSubmitProof,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _kArenaBlue,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                        ),
-                        child: const Text(
-                          'Submit proof',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
+                      expand: true,
+                      onPressed: onSubmitProof,
                     ),
                   ),
                 ),

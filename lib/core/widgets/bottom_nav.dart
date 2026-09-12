@@ -6,8 +6,11 @@ import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 
-const _kTrackNavy = Color(0xFF071B35);
-const _kTrackActiveBlue = Color(0xFF2F7CFF);
+// Was bespoke #071B35/#2F7CFF — now the one navy/blue everywhere, per the
+// design guide's "4-5 colors used for almost everything" rule (matches the
+// fix in track_view_screen.dart's trackside chrome).
+const _kTrackNavy = NuvoColors.navy;
+const _kTrackActiveBlue = NuvoColors.blue;
 
 /// Bottom navigation for Nuvo.
 ///

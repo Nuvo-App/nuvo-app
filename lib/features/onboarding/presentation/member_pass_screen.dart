@@ -10,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/member_pass_card.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../data/models/user_profile.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -75,7 +76,7 @@ class _OnboardingMemberPassScreenState
     final shareUrl = _passInfo?.shareUrl ?? profile.memberId;
 
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: NuvoLoadingIndicator()));
     }
 
     if (_error != null) {
