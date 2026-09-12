@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/nuvo_entrance.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
@@ -248,33 +249,40 @@ class _RacePreview extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 12),
-            Text('You’re invited to a race',
-                style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.blue)),
-            const SizedBox(height: 8),
-            Text(c.title, style: AppTextStyles.displaySmall),
-            const SizedBox(height: 16),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              if (target != null) _Pill(icon: Icons.flag_rounded, text: 'Goal $target'),
-              if (c.activityId != null)
-                _Pill(icon: Icons.bolt_rounded, text: _pretty(c.activityId!)),
-              _Pill(
-                icon: Icons.group_rounded,
-                text: '${c.participantCount} racing',
-              ),
-            ]),
-            const SizedBox(height: 20),
-            if (c.creatorName != null)
-              Row(children: [
-                NuvoAvatar(
-                  photoUrl: c.creatorPhotoUrl,
-                  initials: _initials(c.creatorName!),
-                  size: 32,
-                ),
-                const SizedBox(width: 10),
-                Text('Created by ${c.creatorName}',
-                    style: AppTextStyles.bodyMedium),
-              ]),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 12),
+                Text('You’re invited to a race',
+                    style: AppTextStyles.labelSmall
+                        .copyWith(color: NuvoColors.blue)),
+                const SizedBox(height: 8),
+                Text(c.title, style: AppTextStyles.displaySmall),
+                const SizedBox(height: 16),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  if (target != null)
+                    _Pill(icon: Icons.flag_rounded, text: 'Goal $target'),
+                  if (c.activityId != null)
+                    _Pill(icon: Icons.bolt_rounded, text: _pretty(c.activityId!)),
+                  _Pill(
+                    icon: Icons.group_rounded,
+                    text: '${c.participantCount} racing',
+                  ),
+                ]),
+                const SizedBox(height: 20),
+                if (c.creatorName != null)
+                  Row(children: [
+                    NuvoAvatar(
+                      photoUrl: c.creatorPhotoUrl,
+                      initials: _initials(c.creatorName!),
+                      size: 32,
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Created by ${c.creatorName}',
+                        style: AppTextStyles.bodyMedium),
+                  ]),
+              ],
+            ).nuvoEnter(),
             const Spacer(),
             if (error != null) ...[
               Text(error!, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
@@ -326,31 +334,36 @@ class _PersonPreview extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Spacer(),
-            Center(
-              child: NuvoAvatar(
-                photoUrl: c.profilePhotoUrl,
-                initials: _initials(c.displayName),
-                size: 88,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(c.displayName,
-                textAlign: TextAlign.center, style: AppTextStyles.displaySmall),
-            if (c.username != null) ...[
-              const SizedBox(height: 4),
-              Text('@${c.username}',
+            Column(
+              children: [
+                Center(
+                  child: NuvoAvatar(
+                    photoUrl: c.profilePhotoUrl,
+                    initials: _initials(c.displayName),
+                    size: 88,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(c.displayName,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.displaySmall),
+                if (c.username != null) ...[
+                  const SizedBox(height: 4),
+                  Text('@${c.username}',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: NuvoColors.textMuted)),
+                ],
+                const SizedBox(height: 10),
+                Text(
+                  c.isPrivate
+                      ? 'Send a connect request to add them to your crew.'
+                      : 'Add them to your crew to race together.',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: NuvoColors.textMuted)),
-            ],
-            const SizedBox(height: 10),
-            Text(
-              c.isPrivate
-                  ? 'Send a connect request to add them to your crew.'
-                  : 'Add them to your crew to race together.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium,
-            ),
+                  style: AppTextStyles.bodyMedium,
+                ),
+              ],
+            ).nuvoEnter(),
             const Spacer(),
             if (error != null) ...[
               Text(error!,
