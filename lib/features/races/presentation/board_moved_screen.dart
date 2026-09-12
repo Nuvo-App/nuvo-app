@@ -217,31 +217,10 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
                   child: Column(
                     children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () =>
-                              context.go('/race/$raceId'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: NuvoColors.successOn,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            elevation: 0,
-                            side: const BorderSide(
-                              color: NuvoColors.successShadow,
-                              width: 2,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                          child: Text(
-                            'View race',
-                            style: AppTextStyles.labelLarge.copyWith(
-                              color: NuvoColors.successOn,
-                            ),
-                          ),
-                        ),
+                      NuvoSuccessButton(
+                        label: 'View race',
+                        expand: true,
+                        onPressed: () => context.go('/race/$raceId'),
                       ),
                       const SizedBox(height: 12),
                       GestureDetector(

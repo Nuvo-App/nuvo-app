@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../races/ai/camera_image_converter.dart';
 import '../data/barcode_scanner_service.dart';
 import '../domain/nuvo_destination.dart';
@@ -170,7 +171,9 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      // Navy chrome, not black — the camera preview itself is the only
+      // legitimately black surface (a live feed, not a fill choice).
+      backgroundColor: NuvoColors.navy,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -203,13 +206,13 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
         ),
       );
     }
-    return Container(color: Colors.black, child: Center(child: _statusCard()));
+    return Container(color: NuvoColors.navy, child: Center(child: _statusCard()));
   }
 
   Widget _statusCard() {
     switch (_state) {
       case _ScanState.starting:
-        return const CircularProgressIndicator(color: Colors.white);
+        return const NuvoLoadingIndicator(color: NuvoColors.white);
       case _ScanState.permissionDenied:
         return _MessageCard(
           icon: Icons.lock_outline_rounded,

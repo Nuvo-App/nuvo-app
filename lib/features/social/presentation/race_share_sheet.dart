@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../data/invite_models.dart';
 import '../social_providers.dart';
 
@@ -120,7 +121,7 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
     if (invite == null) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: NuvoLoadingIndicator()),
       );
     }
     return Column(

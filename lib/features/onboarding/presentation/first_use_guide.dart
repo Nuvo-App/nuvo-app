@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_button.dart';
 
 enum FirstRaceGuideStep {
   idle,
@@ -243,9 +244,10 @@ class _GuideCallout extends StatelessWidget {
                     ),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
+                      child: NuvoTertiaryButton(
+                        label: 'Skip guide',
+                        small: true,
                         onPressed: onSkip,
-                        child: const Text('Skip guide'),
                       ),
                     ),
                   ],

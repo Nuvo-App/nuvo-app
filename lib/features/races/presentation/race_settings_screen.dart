@@ -7,7 +7,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -162,25 +164,12 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     required Future<void> Function() action,
     bool returnToArena = false,
   }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: NuvoColors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Keep race'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
+    final confirmed = await showNuvoConfirmDialog(
+      context,
+      title: title,
+      message: message,
+      cancelLabel: 'Keep race',
+      confirmLabel: confirmLabel,
     );
     if (confirmed != true) return;
 
@@ -221,7 +210,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     if (_loading) {
       return const Scaffold(
         backgroundColor: NuvoColors.page,
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: NuvoLoadingIndicator()),
       );
     }
 

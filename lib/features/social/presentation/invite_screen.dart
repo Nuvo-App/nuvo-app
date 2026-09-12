@@ -10,6 +10,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -174,7 +175,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
     }
     final preview = _preview;
     if (preview == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: NuvoLoadingIndicator());
     }
     if (!preview.isAvailable) {
       return Center(

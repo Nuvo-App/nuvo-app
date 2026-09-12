@@ -10,6 +10,7 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -124,7 +125,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     if (_loading) {
       return const Scaffold(
         backgroundColor: NuvoColors.page,
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: NuvoLoadingIndicator()),
       );
     }
 

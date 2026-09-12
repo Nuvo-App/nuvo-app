@@ -9,6 +9,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../application/notification_controller.dart';
 import '../data/notification_models.dart';
@@ -69,12 +70,11 @@ class _State extends ConsumerState<NotificationsScreen> {
               Text('Notifications', style: AppTextStyles.screenTitle),
               const Spacer(),
               if (state.unreadCount > 0)
-                TextButton(
+                NuvoTertiaryButton(
+                  label: 'Mark all read',
+                  small: true,
                   onPressed: () =>
                       ref.read(notificationControllerProvider.notifier).markAllRead(),
-                  child: Text('Mark all read',
-                      style: AppTextStyles.labelMedium
-                          .copyWith(color: NuvoColors.blue)),
                 ),
               IconButton(
                 onPressed: () => context.push('/settings/notifications'),
@@ -92,7 +92,7 @@ class _State extends ConsumerState<NotificationsScreen> {
 
   Widget _body(NotificationState state) {
     if (state.loading && !state.hasData) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: NuvoLoadingIndicator());
     }
     if (!state.hasData && state.error != null) {
       return Center(
@@ -126,7 +126,7 @@ class _State extends ConsumerState<NotificationsScreen> {
           if (i >= state.items.length) {
             return const Padding(
               padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              child: Center(child: NuvoLoadingIndicator(size: 20)),
             );
           }
           return _NotificationRow(item: state.items[i], onTap: () => _open(state.items[i]));

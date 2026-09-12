@@ -8,6 +8,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -134,10 +135,7 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 32),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: NuvoColors.blue,
-                  ),
+                  child: NuvoLoadingIndicator(),
                 ),
               )
             else if (raceState.error != null &&

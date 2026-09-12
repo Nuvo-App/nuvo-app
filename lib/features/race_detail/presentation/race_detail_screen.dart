@@ -15,6 +15,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_move_log_item.dart';
 import '../../../core/widgets/nuvo_podium.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -234,12 +235,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     if (_loading) {
       return const Scaffold(
         backgroundColor: NuvoColors.page,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: NuvoColors.blue,
-            strokeWidth: 2,
-          ),
-        ),
+        body: Center(child: NuvoLoadingIndicator()),
       );
     }
 

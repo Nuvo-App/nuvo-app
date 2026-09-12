@@ -12,6 +12,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/photo_service.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -160,23 +161,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
 
   Future<void> _confirmAndRemove() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remove profile photo?'),
-        content: const Text("You'll go back to your initials."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: NuvoColors.danger),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+    final confirmed = await showNuvoConfirmDialog(
+      context,
+      title: 'Remove profile photo?',
+      message: "You'll go back to your initials.",
+      confirmLabel: 'Remove',
     );
     if (confirmed != true || !mounted) return;
     setState(() {

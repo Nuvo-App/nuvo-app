@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 
 class ProofScreen extends StatefulWidget {
   const ProofScreen({super.key, required this.id});
@@ -25,7 +26,7 @@ class _ProofScreenState extends State<ProofScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: NuvoColors.page,
-      body: Center(child: CircularProgressIndicator()),
+      body: Center(child: NuvoLoadingIndicator()),
     );
   }
 }

@@ -1024,11 +1024,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 16),
-            TextButton(
+            NuvoTertiaryButton(
+              label: 'Pick a preset movement instead',
+              small: true,
               onPressed: () => setState(() => _teachMode = false),
-              child: Text('Pick a preset movement instead',
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: NuvoColors.navy)),
             ),
           ],
         ),
@@ -1253,13 +1252,10 @@ class _TrainPage extends StatelessWidget {
           ),
           if (trained) ...[
             const SizedBox(height: 12),
-            TextButton(
+            NuvoTertiaryButton(
+              label: 'Retrain this movement',
+              small: true,
               onPressed: onTrain,
-              child: Text(
-                'Retrain this movement',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: NuvoColors.navy),
-              ),
             ),
           ],
         ],

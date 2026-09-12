@@ -8,6 +8,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
 import '../../races/data/race_models.dart' show PublicUser;
@@ -172,7 +173,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
     }
     final card = _card;
     if (card == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: NuvoLoadingIndicator());
     }
     return SafeArea(
       child: Padding(

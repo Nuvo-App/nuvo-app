@@ -2229,10 +2229,12 @@ class _AmbientPainter extends CustomPainter {
       markField,
       Paint()
         ..shader = RadialGradient(
+          // One hue (brand blue) at falling alpha, per the design guide —
+          // no second palette for the glow effect.
           colors: [
-            const Color(0x44618DDE).withValues(alpha: .27 * opacity),
-            const Color(0x226E9FF0).withValues(alpha: .13 * opacity),
-            const Color(0x0079A8FF).withValues(alpha: 0),
+            NuvoColors.blue.withValues(alpha: .27 * opacity),
+            NuvoColors.blue.withValues(alpha: .13 * opacity),
+            NuvoColors.blue.withValues(alpha: 0),
           ],
           stops: const [0, .45, 1],
         ).createShader(markField),
@@ -2267,8 +2269,8 @@ class _AmbientPainter extends CustomPainter {
         final radius =
             (.28 + Curves.easeOut.transform(visibility) * 1.55) * quietZone;
         dotPaint.color = Color.lerp(
-          const Color(0xFFC5D9FA).withValues(alpha: .025 * opacity),
-          const Color(0xFF3F83FF).withValues(alpha: .30 * opacity),
+          NuvoColors.blueLight.withValues(alpha: .025 * opacity),
+          NuvoColors.blue.withValues(alpha: .30 * opacity),
           visibility,
         )!;
         canvas.drawCircle(Offset(x, y), radius, dotPaint);
