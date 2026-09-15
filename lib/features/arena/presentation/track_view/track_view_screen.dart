@@ -600,21 +600,20 @@ class _StandingsPanel extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    TextButton(
+                    GestureDetector(
                       key: const ValueKey('track-view-standings'),
-                      onPressed: onViewStandings,
-                      style: TextButton.styleFrom(
-                        foregroundColor: _kArenaBlue,
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 28),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        'View standings',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onViewStandings,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          'View standings',
+                          style: TextStyle(
+                            color: _kArenaBlue,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.4,
+                          ),
                         ),
                       ),
                     ),

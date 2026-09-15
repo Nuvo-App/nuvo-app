@@ -307,7 +307,7 @@ class NuvoBoardLane extends StatelessWidget {
     final ringColor = participant.isCurrentUser
         ? NuvoColors.blue
         : isLeader
-        ? const Color(0xFFC9A227)
+        ? NuvoColors.gold
         : NuvoColors.white;
     final content = Container(
       constraints: BoxConstraints(minHeight: minHeight),
