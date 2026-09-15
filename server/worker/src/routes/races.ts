@@ -380,68 +380,52 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
   };
 }
 
-async function buildRaceResponse(
+type ParticipantRow = { id: string; user_id: string; joined_at: string; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
+type MoveRow = MoveLogRow & { display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
+type StandingRow = { user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
+
+/// Viewer-level visibility inputs (crew allowlist + block set) — the same for
+/// every race in one request, computed once instead of once per race.
+async function loadViewerVisibilityContext(
   db: D1Database,
   viewerUserId: string | undefined,
+): Promise<{ allowedIds: Set<string>; blockedEitherWay: Set<string> }> {
+  const allowedIds = new Set<string>();
+  const blockedEitherWay = new Set<string>();
+  if (!viewerUserId) return { allowedIds, blockedEitherWay };
+  allowedIds.add(viewerUserId);
+  const [crew, blocked, blockedBy] = await Promise.all([
+    db.prepare("SELECT crew_user_id FROM crew_connections WHERE user_id = ? AND status = 'active'").bind(viewerUserId).all<{ crew_user_id: string }>(),
+    db.prepare('SELECT blocked_user_id FROM blocked_users WHERE user_id = ?').bind(viewerUserId).all<{ blocked_user_id: string }>(),
+    db.prepare('SELECT user_id FROM blocked_users WHERE blocked_user_id = ?').bind(viewerUserId).all<{ user_id: string }>(),
+  ]);
+  for (const r of crew.results) allowedIds.add(r.crew_user_id);
+  for (const r of blocked.results) blockedEitherWay.add(r.blocked_user_id);
+  for (const r of blockedBy.results) blockedEitherWay.add(r.user_id);
+  return { allowedIds, blockedEitherWay };
+}
+
+/// Shapes one race's API response from its already-fetched sub-collections.
+/// Pure/no I/O — shared by the single-race path (buildRaceResponse) and the
+/// batched list path (buildRaceResponsesBatch) so both produce an identical
+/// shape from a single source of truth.
+function shapeRaceResponse(
   race: RaceRow,
+  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[] },
+  viewerUserId: string | undefined,
+  visibilityCtx: { allowedIds: Set<string>; blockedEitherWay: Set<string> },
   submissionResult?: SubmissionResult,
 ) {
-  const [participants, moves, invite, finalStandings] = await Promise.all([
-    db.prepare(
-      `SELECT rm.id, rm.user_id, rm.joined_at,
-              COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
-              COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              p.private_profile,
-              p.username,
-              rp.progress_value, rp.progress_percent, rp.rank_cache
-       FROM race_members rm
-       LEFT JOIN profiles p ON p.user_id = rm.user_id
-       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-       WHERE rm.race_id = ? AND rm.status = 'active'
-       ORDER BY COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
-    ).bind(race.id).all<{ id: string; user_id: string; joined_at: string; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null }>(),
-    db.prepare(
-      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
-       FROM move_logs ml
-       LEFT JOIN profiles p ON p.user_id = ml.user_id
-       WHERE ml.race_id = ? AND ml.status != 'removed'
-       ORDER BY ml.created_at DESC LIMIT 20`
-    ).bind(race.id).all<MoveLogRow & { display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null }>(),
-    db.prepare(
-      `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
-    ).bind(race.id).first<InviteRow>(),
-    db.prepare(
-      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
-       FROM race_final_standings fs
-       LEFT JOIN profiles p ON p.user_id = fs.user_id
-       WHERE fs.race_id = ?
-       ORDER BY fs.rank_position ASC`
-    ).bind(race.id).all<{ user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null }>(),
-  ]);
+  const { participants, moves, invite, finalStandings } = collections;
+  const { allowedIds, blockedEitherWay } = visibilityCtx;
 
-  let allowedIds = new Set<string>();
-  let blockedByMe = new Set<string>();
-  let blockedMe = new Set<string>();
-  if (viewerUserId) {
-    allowedIds.add(viewerUserId);
-    const [crew, blocked, blockedBy] = await Promise.all([
-      db.prepare("SELECT crew_user_id FROM crew_connections WHERE user_id = ? AND status = 'active'").bind(viewerUserId).all<{ crew_user_id: string }>(),
-      db.prepare('SELECT blocked_user_id FROM blocked_users WHERE user_id = ?').bind(viewerUserId).all<{ blocked_user_id: string }>(),
-      db.prepare('SELECT user_id FROM blocked_users WHERE blocked_user_id = ?').bind(viewerUserId).all<{ user_id: string }>(),
-    ]);
-    for (const r of crew.results) allowedIds.add(r.crew_user_id);
-    for (const r of blocked.results) blockedByMe.add(r.blocked_user_id);
-    for (const r of blockedBy.results) blockedMe.add(r.user_id);
-  }
-
-  const blockedEitherWay = new Set<string>([...blockedByMe, ...blockedMe]);
   // Being in the same race is itself an opt-in relationship: fellow racers see
   // each other's race identity (name + photo) even with a private profile —
   // a leaderboard / "someone passed you" is unreadable otherwise. Only when
   // the viewer is themselves in this race; blocking still wins.
   const coRacerIds = new Set<string>();
-  if (viewerUserId && participants.results.some((p) => p.user_id === viewerUserId)) {
-    for (const p of participants.results) {
+  if (viewerUserId && participants.some((p) => p.user_id === viewerUserId)) {
+    for (const p of participants) {
       if (p.user_id) coRacerIds.add(p.user_id);
     }
   }
@@ -507,7 +491,7 @@ async function buildRaceResponse(
     inviteCode: invite?.invite_code ?? null,
     createdAt: race.created_at,
     updatedAt: race.updated_at,
-    participants: participants.results.map((p) => {
+    participants: participants.map((p) => {
       const visible = visibleFor(p);
       return {
         id: p.id,
@@ -520,7 +504,7 @@ async function buildRaceResponse(
         joinedAt: p.joined_at,
       };
     }),
-    recentProofs: moves.results.map((m) => {
+    recentProofs: moves.map((m) => {
       const meta = parseMetadata(m.metadata_json);
       const isMovecheck = m.source === 'movecheck';
       const visible = visibleFor(m);
@@ -554,7 +538,7 @@ async function buildRaceResponse(
         createdAt: m.created_at,
       };
     }),
-    finalStandings: finalStandings.results.map((row) => {
+    finalStandings: finalStandings.map((row) => {
       const visible = visibleFor(row);
       return {
         userId: row.user_id,
@@ -567,6 +551,145 @@ async function buildRaceResponse(
     }),
     submissionResult: submissionResult ?? null,
   };
+}
+
+/// Single-race response — detail/create/join/proof endpoints. Fetches this
+/// race's sub-collections plus the viewer's visibility context, then shapes.
+async function buildRaceResponse(
+  db: D1Database,
+  viewerUserId: string | undefined,
+  race: RaceRow,
+  submissionResult?: SubmissionResult,
+) {
+  const [participants, moves, invite, finalStandings] = await Promise.all([
+    db.prepare(
+      `SELECT rm.id, rm.user_id, rm.joined_at,
+              COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
+              COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
+              p.private_profile,
+              p.username,
+              rp.progress_value, rp.progress_percent, rp.rank_cache
+       FROM race_members rm
+       LEFT JOIN profiles p ON p.user_id = rm.user_id
+       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+       WHERE rm.race_id = ? AND rm.status = 'active'
+       ORDER BY COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
+    ).bind(race.id).all<ParticipantRow>(),
+    db.prepare(
+      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+       FROM move_logs ml
+       LEFT JOIN profiles p ON p.user_id = ml.user_id
+       WHERE ml.race_id = ? AND ml.status != 'removed'
+       ORDER BY ml.created_at DESC LIMIT 20`
+    ).bind(race.id).all<MoveRow>(),
+    db.prepare(
+      `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
+    ).bind(race.id).first<InviteRow>(),
+    db.prepare(
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+       FROM race_final_standings fs
+       LEFT JOIN profiles p ON p.user_id = fs.user_id
+       WHERE fs.race_id = ?
+       ORDER BY fs.rank_position ASC`
+    ).bind(race.id).all<StandingRow>(),
+  ]);
+
+  const visibilityCtx = await loadViewerVisibilityContext(db, viewerUserId);
+  return shapeRaceResponse(
+    race,
+    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results },
+    viewerUserId,
+    visibilityCtx,
+    submissionResult,
+  );
+}
+
+/// Group rows that carry a `race_id` by that id, in their existing order.
+/// `cap` keeps only the first N per group (rows must already be pre-sorted
+/// per-race, e.g. `ORDER BY race_id, created_at DESC`).
+function groupByRaceId<T extends { race_id: string }>(rows: T[], cap?: number): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const row of rows) {
+    const list = map.get(row.race_id) ?? [];
+    if (cap === undefined || list.length < cap) list.push(row);
+    map.set(row.race_id, list);
+  }
+  return map;
+}
+
+/// Batched list response — GET /races. Arena's snapshot endpoint proved the
+/// pattern (docs/agents/18): one query for the race list, then ONE batched
+/// query per sub-collection across every race (`WHERE race_id IN (...)`)
+/// instead of building each race's response one at a time. The previous
+/// version called buildRaceResponse in a sequential for-loop — 1 + N*7
+/// queries, awaited one race at a time — which is exactly the N+1 request
+/// waterfall that made Compete/Verify (both backed by this endpoint) slow
+/// to populate while Arena's already-batched /arena endpoint loaded fast.
+async function buildRaceResponsesBatch(
+  db: D1Database,
+  viewerUserId: string,
+  races: RaceRow[],
+): Promise<unknown[]> {
+  if (races.length === 0) return [];
+
+  const ids = races.map((r) => r.id);
+  const placeholders = ids.map(() => '?').join(', ');
+
+  const [participantsRows, movesRows, invitesRows, standingsRows, visibilityCtx] = await Promise.all([
+    db.prepare(
+      `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at,
+              COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
+              COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
+              p.private_profile, p.username,
+              rp.progress_value, rp.progress_percent, rp.rank_cache
+       FROM race_members rm
+       LEFT JOIN profiles p ON p.user_id = rm.user_id
+       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+       WHERE rm.race_id IN (${placeholders}) AND rm.status = 'active'
+       ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
+    ).bind(...ids).all<ParticipantRow & { race_id: string }>(),
+    db.prepare(
+      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+       FROM move_logs ml
+       LEFT JOIN profiles p ON p.user_id = ml.user_id
+       WHERE ml.race_id IN (${placeholders}) AND ml.status != 'removed'
+       ORDER BY ml.race_id, ml.created_at DESC`
+    ).bind(...ids).all<MoveRow & { race_id: string }>(),
+    db.prepare(
+      `SELECT * FROM race_invites WHERE race_id IN (${placeholders}) AND status = 'active'
+       ORDER BY race_id, created_at DESC`
+    ).bind(...ids).all<InviteRow>(),
+    db.prepare(
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+       FROM race_final_standings fs
+       LEFT JOIN profiles p ON p.user_id = fs.user_id
+       WHERE fs.race_id IN (${placeholders})
+       ORDER BY fs.race_id, fs.rank_position ASC`
+    ).bind(...ids).all<StandingRow & { race_id: string }>(),
+    loadViewerVisibilityContext(db, viewerUserId),
+  ]);
+
+  // move_logs is capped at 20 most-recent per race, same as the single-race
+  // path — the batched query fetches all matching rows pre-sorted per race,
+  // then this caps each group client-side.
+  const participantsByRace = groupByRaceId(participantsRows.results);
+  const movesByRace = groupByRaceId(movesRows.results, 20);
+  const invitesByRace = groupByRaceId(invitesRows.results);
+  const standingsByRace = groupByRaceId(standingsRows.results);
+
+  return races.map((race) =>
+    shapeRaceResponse(
+      race,
+      {
+        participants: participantsByRace.get(race.id) ?? [],
+        moves: movesByRace.get(race.id) ?? [],
+        invite: (invitesByRace.get(race.id) ?? [])[0] ?? null,
+        finalStandings: standingsByRace.get(race.id) ?? [],
+      },
+      viewerUserId,
+      visibilityCtx,
+    ),
+  );
 }
 
 function badRequest(error: string) {
@@ -612,13 +735,22 @@ racesRouter.get('/', async (c) => {
      WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
      ORDER BY r.created_at DESC`
   ).bind(userId, userId).all<RaceRow>();
-  const races: unknown[] = [];
-  for (const row of rows.results) {
-    try {
-      races.push(await buildRaceResponse(c.env.DB, c.get('userId'), row));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error('[races] GET /races skipping corrupt race:', row.id, message);
+  let races: unknown[];
+  try {
+    races = await buildRaceResponsesBatch(c.env.DB, userId, rows.results);
+  } catch (err) {
+    // Batch failed for the whole page (e.g. one bad row) — fall back to the
+    // slower per-race path so one corrupt race doesn't blank the entire list.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[races] GET /races batch failed, falling back per-race:', message);
+    races = [];
+    for (const row of rows.results) {
+      try {
+        races.push(await buildRaceResponse(c.env.DB, userId, row));
+      } catch (rowErr) {
+        const rowMessage = rowErr instanceof Error ? rowErr.message : String(rowErr);
+        console.error('[races] GET /races skipping corrupt race:', row.id, rowMessage);
+      }
     }
   }
   return c.json({ ok: true, races });
