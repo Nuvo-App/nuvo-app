@@ -55,6 +55,12 @@ class ArenaController extends StateNotifier<ArenaState> {
   Future<void>? _loadInFlight;
   DateTime? _snapshotLoadedAt;
 
+  /// Bumped by [clearSnapshot] (sign-out) — see the matching guard in
+  /// RaceController._generation. Stops a fetch started before sign-out from
+  /// landing after clearSnapshot() and resurrecting the previous account's
+  /// snapshot into the new session.
+  int _generation = 0;
+
   /// SWR entry point — screen focus / app resume. No-op if fresh, otherwise a
   /// background refresh while the current snapshot stays on screen.
   void revalidate() {
@@ -98,6 +104,7 @@ class ArenaController extends StateNotifier<ArenaState> {
   }
 
   Future<void> _fetchSnapshot() async {
+    final generation = _generation;
     if (mounted) {
       final haveData = state.hasData;
       state = ArenaState(
@@ -108,9 +115,11 @@ class ArenaController extends StateNotifier<ArenaState> {
     }
     try {
       final snapshot = await _repo.getArenaSnapshot();
+      if (generation != _generation) return; // superseded by a sign-out
       _snapshotLoadedAt = DateTime.now();
       if (mounted) state = ArenaState(snapshot: snapshot);
     } on ApiException catch (e) {
+      if (generation != _generation) return;
       if (e.statusCode == 401) {
         debugPrint('[ArenaController] 401 — triggering session expiry');
         if (mounted) state = state.copyWith(loading: false, refreshing: false);
@@ -126,6 +135,7 @@ class ArenaController extends StateNotifier<ArenaState> {
         );
       }
     } catch (e, st) {
+      if (generation != _generation) return;
       debugPrint('[ArenaController] unexpected error: $e\n$st');
       if (mounted) {
         state = state.copyWith(
@@ -142,6 +152,10 @@ class ArenaController extends StateNotifier<ArenaState> {
     // Drop any in-flight load so the next sign-in starts fresh rather than
     // awaiting a future from the previous session.
     _loadInFlight = null;
+    // Invalidate any fetch already in flight — see [_generation] — so it
+    // cannot land after this reset and resurrect the previous account's
+    // snapshot into the new session.
+    _generation++;
     if (mounted) state = const ArenaState();
   }
 }

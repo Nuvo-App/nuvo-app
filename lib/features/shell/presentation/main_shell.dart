@@ -38,6 +38,43 @@ class _MainShellState extends ConsumerState<MainShell>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Self-heal: a canonical controller's own provider-creation-time load can
+    // miss (e.g. a load that was in flight across a sign-out — see the
+    // _generation guards in RaceController/ArenaController/CrewController/
+    // NotificationController). Previously only Compete patched this itself
+    // (per-screen initState check), which left every other tab — Verify
+    // included — exposed to the exact same "stuck cold, no error, no retry"
+    // state until the user happened to open Compete or force-refresh.
+    // Centralized here once, for every domain, instead of duplicated per
+    // screen (docs/agents/18 designates MainShell as the one freshness
+    // trigger point).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _selfHealIfStuck());
+  }
+
+  void _selfHealIfStuck() {
+    if (!mounted) return;
+    final raceState = ref.read(raceControllerProvider);
+    if (raceState.races.isEmpty &&
+        raceState.error == null &&
+        !raceState.loading) {
+      ref.read(raceControllerProvider.notifier).loadRaces(force: false);
+    }
+    final arenaState = ref.read(arenaControllerProvider);
+    if (!arenaState.hasData &&
+        arenaState.error == null &&
+        !arenaState.loading) {
+      ref.read(arenaControllerProvider.notifier).loadSnapshot(force: false);
+    }
+    final crewState = ref.read(crewControllerProvider);
+    if (!crewState.hasData && crewState.error == null && !crewState.loading) {
+      ref.read(crewControllerProvider.notifier).load(force: false);
+    }
+    final notifState = ref.read(notificationControllerProvider);
+    if (!notifState.hasData &&
+        notifState.error == null &&
+        !notifState.loading) {
+      ref.read(notificationControllerProvider.notifier).load(force: false);
+    }
   }
 
   @override

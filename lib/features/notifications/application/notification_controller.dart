@@ -64,6 +64,12 @@ class NotificationController extends StateNotifier<NotificationState> {
   Future<void>? _loadInFlight;
   DateTime? _loadedAt;
 
+  /// Bumped by [clear] (sign-out) — see the matching guard in
+  /// RaceController._generation. Stops a fetch started before sign-out from
+  /// landing after clear() and resurrecting the previous account's inbox
+  /// into the new session.
+  int _generation = 0;
+
   void revalidate() {
     final at = _loadedAt;
     if (state.hasData && at != null && DateTime.now().difference(at) < _staleWindow) {
@@ -94,11 +100,13 @@ class NotificationController extends StateNotifier<NotificationState> {
   }
 
   Future<void> _fetch() async {
+    final generation = _generation;
     if (mounted) {
       state = state.copyWith(loading: !state.hasData, refreshing: state.hasData, error: null);
     }
     try {
       final page = await _repo.list();
+      if (generation != _generation) return; // superseded by a sign-out
       _loadedAt = DateTime.now();
       if (mounted) {
         state = NotificationState(
@@ -108,6 +116,7 @@ class NotificationController extends StateNotifier<NotificationState> {
         );
       }
     } on ApiException catch (e) {
+      if (generation != _generation) return;
       if (e.statusCode == 401) {
         if (mounted) state = state.copyWith(loading: false, refreshing: false);
         onSessionExpired?.call();
@@ -121,6 +130,7 @@ class NotificationController extends StateNotifier<NotificationState> {
         );
       }
     } catch (e, st) {
+      if (generation != _generation) return;
       debugPrint('[NotificationController] $e\n$st');
       if (mounted) {
         state = state.copyWith(
@@ -135,9 +145,11 @@ class NotificationController extends StateNotifier<NotificationState> {
   Future<void> loadMore() async {
     final cursor = state.nextCursor;
     if (cursor == null || state.loadingMore) return;
+    final generation = _generation;
     state = state.copyWith(loadingMore: true);
     try {
       final page = await _repo.list(cursor: cursor);
+      if (generation != _generation) return; // superseded by a sign-out
       if (mounted) {
         state = state.copyWith(
           items: [...state.items, ...page.items],
@@ -148,6 +160,7 @@ class NotificationController extends StateNotifier<NotificationState> {
         );
       }
     } catch (_) {
+      if (generation != _generation) return;
       if (mounted) state = state.copyWith(loadingMore: false);
     }
   }
@@ -178,6 +191,7 @@ class NotificationController extends StateNotifier<NotificationState> {
   void clear() {
     _loadedAt = null;
     _loadInFlight = null;
+    _generation++;
     if (mounted) state = const NotificationState();
   }
 }

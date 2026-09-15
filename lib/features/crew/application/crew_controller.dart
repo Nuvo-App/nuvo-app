@@ -59,6 +59,12 @@ class CrewController extends StateNotifier<CrewState> {
   Future<void>? _loadInFlight;
   DateTime? _loadedAt;
 
+  /// Bumped by [clear] (sign-out) — see the matching guard in
+  /// RaceController._generation. Stops a fetch started before sign-out from
+  /// landing after clear() and resurrecting the previous account's crew into
+  /// the new session.
+  int _generation = 0;
+
   void revalidate() {
     final at = _loadedAt;
     if (state.hasData && at != null && DateTime.now().difference(at) < _staleWindow) {
@@ -88,11 +94,13 @@ class CrewController extends StateNotifier<CrewState> {
   }
 
   Future<void> _fetch() async {
+    final generation = _generation;
     if (mounted) {
       state = state.copyWith(loading: !state.hasData, refreshing: state.hasData, error: null);
     }
     try {
       final results = await Future.wait([_repo.getCrew(), _repo.getRequests()]);
+      if (generation != _generation) return; // superseded by a sign-out
       _loadedAt = DateTime.now();
       if (mounted) {
         state = CrewState(
@@ -101,6 +109,7 @@ class CrewController extends StateNotifier<CrewState> {
         );
       }
     } on ApiException catch (e) {
+      if (generation != _generation) return;
       if (e.statusCode == 401) {
         if (mounted) state = state.copyWith(loading: false, refreshing: false);
         onSessionExpired?.call();
@@ -114,6 +123,7 @@ class CrewController extends StateNotifier<CrewState> {
         );
       }
     } catch (e, st) {
+      if (generation != _generation) return;
       debugPrint('[CrewController] $e\n$st');
       if (mounted) {
         state = state.copyWith(
@@ -171,6 +181,7 @@ class CrewController extends StateNotifier<CrewState> {
   void clear() {
     _loadedAt = null;
     _loadInFlight = null;
+    _generation++;
     if (mounted) state = const CrewState();
   }
 }

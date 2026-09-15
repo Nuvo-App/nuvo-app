@@ -87,6 +87,15 @@ class RaceController extends StateNotifier<RaceState> {
   Future<void>? _loadInFlight;
   DateTime? _racesLoadedAt;
 
+  /// Bumped by [clearRaces] (sign-out). A fetch started before a sign-out can
+  /// still be in flight when the response arrives after clearRaces() has
+  /// already reset state for the *next* session — without this guard that
+  /// stale response would silently overwrite the new session's (possibly
+  /// empty, correctly-clearing) state with the previous account's races.
+  /// `_fetchRaces` captures the generation at start and only applies its
+  /// result if nothing has cleared the cache in the meantime.
+  int _generation = 0;
+
   Future<void> loadRaces({bool force = true}) {
     final loadedAt = _racesLoadedAt;
     if (!force &&
@@ -124,6 +133,7 @@ class RaceController extends StateNotifier<RaceState> {
   }
 
   Future<void> _fetchRaces() async {
+    final generation = _generation;
     if (mounted) {
       final haveData = state.hasData;
       state = RaceState(
@@ -134,9 +144,11 @@ class RaceController extends StateNotifier<RaceState> {
     }
     try {
       final races = await _repo.getRaces();
+      if (generation != _generation) return; // superseded by a sign-out
       _racesLoadedAt = DateTime.now();
       if (mounted) state = RaceState(races: races);
     } on ApiException catch (e) {
+      if (generation != _generation) return;
       // Keep cached races visible on a failed background refresh.
       if (mounted) {
         state = state.copyWith(
@@ -146,6 +158,7 @@ class RaceController extends StateNotifier<RaceState> {
         );
       }
     } catch (_) {
+      if (generation != _generation) return;
       if (mounted) {
         state = state.copyWith(
           loading: false,
@@ -283,6 +296,10 @@ class RaceController extends StateNotifier<RaceState> {
     // instead of awaiting a future tied to the previous session (which could
     // be hung on a stalled socket and wedge the races tab until an app kill).
     _loadInFlight = null;
+    // Invalidate any fetch already in flight — see [_generation] — so its
+    // response cannot land after this reset and resurrect the previous
+    // account's races into the new session.
+    _generation++;
     if (mounted) state = const RaceState();
   }
 
