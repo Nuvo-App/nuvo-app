@@ -46,24 +46,6 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
   static const _racesCap = 3;
 
   @override
-  void initState() {
-    super.initState();
-    // Self-heal: make sure a load is running whenever Compete is shown. The
-    // provider-level trigger can miss (e.g. a load that was in flight across a
-    // sign-out), which previously left this tab blank with no way to recover
-    // short of killing the app.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final state = ref.read(raceControllerProvider);
-      // Only kick a load when the tab is genuinely cold — never stomp an
-      // in-flight load, a populated list, or an error the user should see.
-      if (state.races.isEmpty && state.error == null && !state.loading) {
-        ref.read(raceControllerProvider.notifier).loadRaces(force: false);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final raceState = ref.watch(raceControllerProvider);
     final user = ref.watch(authControllerProvider).user;
