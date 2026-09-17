@@ -12,6 +12,7 @@ import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
+import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_podium.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -50,7 +51,10 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = widget.preview ? null : ref.watch(authControllerProvider).user;
+    final authState = widget.preview ? null : ref.watch(authControllerProvider);
+    final user = authState?.user;
+    final isOffline =
+        !widget.preview && authState?.status == AuthStatus.offline;
     final arenaState = widget.preview
         ? null
         : ref.watch(arenaControllerProvider);
@@ -67,6 +71,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         user?.fullName?.trim().split(RegExp(r'\s+')).first ?? 'there';
     final loading =
         !widget.preview && ((arenaState?.loading ?? false) && snapshot == null);
+
+    void retryConnection() =>
+        ref.read(authControllerProvider.notifier).retryRestore();
 
     return Scaffold(
       backgroundColor: _arenaBackground,
@@ -87,10 +94,31 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   child: _ArenaHeader(greeting: greeting),
                 ),
               ),
+              // Cached content exists but the connection is down — keep the
+              // board visible (it's still real data) and say so quietly
+              // instead of replacing it with a generic error.
+              if (isOffline && snapshot != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                    child: NuvoOfflineBanner(onRetry: retryConnection),
+                  ),
+                ),
               if (loading)
                 const SliverFillRemaining(
                   hasScrollBody: false,
                   child: _LoadingState(),
+                )
+              else if (isOffline && snapshot == null)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: NuvoErrorState(
+                    title: 'No connection',
+                    message:
+                        "Nuvo couldn't load your races. Check your connection and try again.",
+                    retryLabel: 'Try again',
+                    onRetry: retryConnection,
+                  ),
                 )
               else if (arenaState?.error != null && snapshot == null)
                 SliverFillRemaining(
@@ -573,22 +601,26 @@ class _RaceProgressTrack extends StatelessWidget {
   final double progress;
 
   @override
-  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
-    tween: Tween<double>(begin: 0, end: progress),
-    duration: const Duration(milliseconds: 700),
-    curve: Curves.easeOutCubic,
-    builder: (context, animatedProgress, child) => SizedBox(
-      // Left at 42 — the flag-pole artwork in _RaceProgressPainter uses
-      // absolute pixel offsets (not size-relative), so shrinking this
-      // risks clipping it. The gap/padding trims above and heroHeight
-      // reduction below carry the height savings instead.
-      height: 42,
-      child: CustomPaint(
-        painter: _RaceProgressPainter(progress: animatedProgress),
-        child: child,
+  Widget build(BuildContext context) => Semantics(
+    label: 'Race progress',
+    value: '${(progress.clamp(0, 1) * 100).round()}%',
+    child: TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: progress),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedProgress, child) => SizedBox(
+        // Left at 42 — the flag-pole artwork in _RaceProgressPainter uses
+        // absolute pixel offsets (not size-relative), so shrinking this
+        // risks clipping it. The gap/padding trims above and heroHeight
+        // reduction below carry the height savings instead.
+        height: 42,
+        child: CustomPaint(
+          painter: _RaceProgressPainter(progress: animatedProgress),
+          child: child,
+        ),
       ),
+      child: const SizedBox.expand(),
     ),
-    child: const SizedBox.expand(),
   );
 }
 
@@ -637,45 +669,102 @@ class _RaceDetails extends StatelessWidget {
   }
 }
 
+/// A simplified route toward a finish line — two broad, gentle curves (an
+/// up-bend then a down-bend back to the baseline), not a single shallow
+/// quadratic bow that reads as a straight generic progress bar. Every
+/// stroke and marker stays within the painter's bounds at 0%, 50%, and
+/// 100%: the curve amplitude is a fixed fraction of the available height,
+/// well inside the stroke's own radius margin.
 class _RaceProgressPainter extends CustomPainter {
   const _RaceProgressPainter({required this.progress});
   final double progress;
 
+  static const _strokeWidth = 16.0;
+  static const _progressWidth = 10.0;
+
+  Path _routePath(Size size) {
+    final startX = 14.0;
+    final finishX = size.width - 36;
+    final midX = (startX + finishX) / 2;
+    final baseY = size.height / 2;
+    // Amplitude is a fraction of the half-height left after the stroke's own
+    // radius, so the curve can never push the stroke edge past the canvas
+    // bounds regardless of the widget's height.
+    final margin = _strokeWidth / 2;
+    final amplitude = ((size.height / 2) - margin).clamp(0.0, double.infinity) * 0.72;
+
+    return Path()
+      ..moveTo(startX, baseY)
+      // Broad upward bend from start to the midpoint.
+      ..cubicTo(
+        startX + (midX - startX) * 0.35,
+        baseY - amplitude,
+        startX + (midX - startX) * 0.65,
+        baseY - amplitude,
+        midX,
+        baseY,
+      )
+      // Broad downward bend from the midpoint to the finish line.
+      ..cubicTo(
+        midX + (finishX - midX) * 0.35,
+        baseY + amplitude,
+        midX + (finishX - midX) * 0.65,
+        baseY + amplitude,
+        finishX,
+        baseY,
+      );
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final start = Offset(14, size.height / 2);
+    final path = _routePath(size);
+    final metric = path.computeMetrics().first;
     final finish = Offset(size.width - 36, size.height / 2);
-    final path = Path()
-      ..moveTo(start.dx, start.dy)
-      ..quadraticBezierTo(
-        size.width * .52,
-        size.height * .38,
-        finish.dx,
-        finish.dy,
-      );
+
+    // Uncompleted route: a pale, quiet neutral — the course itself, not yet
+    // run.
     final track = Paint()
-      ..color = NuvoColors.navy
-      ..strokeWidth = 16
+      ..color = NuvoColors.trackBg
+      ..strokeWidth = _strokeWidth
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, track);
-    final metric = path.computeMetrics().first;
-    if (progress > 0 && metric.length > 0) {
+
+    final clampedProgress = progress.clamp(0.0, 1.0);
+    final coveredLength = metric.length * clampedProgress;
+
+    // Completed portion: Nuvo blue, drawn over the pale route via
+    // PathMetric.extractPath so it follows the same curve exactly.
+    if (coveredLength > 0) {
       final progressPaint = Paint()
         ..color = NuvoColors.blue
-        ..strokeWidth = 10
+        ..strokeWidth = _progressWidth
         ..strokeCap = StrokeCap.round
         ..style = PaintingStyle.stroke;
-      canvas.drawPath(
-        metric.extractPath(0, metric.length * progress.clamp(0, 1)),
-        progressPaint,
-      );
+      canvas.drawPath(metric.extractPath(0, coveredLength), progressPaint);
     }
-    final marker = Paint()
+
+    // The marker sits at the racer's actual current distance along the
+    // route — never pinned to the start once progress is above zero.
+    final tangent = metric.getTangentForOffset(
+      coveredLength.clamp(0.0, metric.length),
+    );
+    final markerPosition = tangent?.position ?? Offset(14, size.height / 2);
+    final markerPaint = Paint()
       ..color = NuvoColors.blue
       ..style = PaintingStyle.fill;
-    final markerRadius = progress <= 0 ? 7.0 : 10.0;
-    canvas.drawCircle(start, markerRadius, marker);
+    final markerRadius = clampedProgress <= 0 ? 7.0 : 10.0;
+    canvas.drawCircle(markerPosition, markerRadius, markerPaint);
+    canvas.drawCircle(
+      markerPosition,
+      markerRadius,
+      Paint()
+        ..color = NuvoColors.navy
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke,
+    );
+
+    // Finish flag at the route's actual endpoint.
     final flagPaint = Paint()..color = _arenaText;
     final flagX = finish.dx + 12;
     canvas.drawRect(

@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/trackside_layout_diagnostics.dart';
 import '../../arena/presentation/arena_controller.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../notifications/application/notification_controller.dart';
 import '../../races/presentation/race_controller.dart';
@@ -14,6 +15,17 @@ import '../../races/presentation/race_controller.dart';
 /// resume and on switching to a data tab it asks the canonical controllers to
 /// revalidate (stale-while-revalidate — the current content stays on screen).
 /// See docs/agents/18-data-freshness-contract.md.
+///
+/// LAYOUT CONTRACT: every tab shares one `Scaffold(bottomNavigationBar:
+/// ..., extendBody: false)`. Scaffold reserves exactly the nav's rendered
+/// height for the body — the body's usable viewport physically ends above
+/// the dock, so no screen can paint content underneath it. There used to be
+/// a second code path here (a `Stack` that floated the nav over Arena's
+/// body with `extendBody: true`) which was the actual cause of Arena
+/// content rendering behind the dock — not insufficient bottom padding on
+/// Arena's own scroll view. Do not reintroduce a per-tab layout branch here;
+/// if a screen needs different chrome, that belongs in the screen, not the
+/// shell.
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.child});
 
@@ -51,8 +63,16 @@ class _MainShellState extends ConsumerState<MainShell>
     WidgetsBinding.instance.addPostFrameCallback((_) => _selfHealIfStuck());
   }
 
+  /// True once a network round-trip is actually worth attempting. While auth
+  /// is offline (stored credentials, server unreachable — see AuthStatus),
+  /// every one of these domains would just fail the same way Arena's own
+  /// retry will, so the shell stays quiet instead of firing four more
+  /// doomed requests on every mount/resume/tab-tap.
+  bool get _authIsUp =>
+      ref.read(authControllerProvider).status == AuthStatus.authenticated;
+
   void _selfHealIfStuck() {
-    if (!mounted) return;
+    if (!mounted || !_authIsUp) return;
     final raceState = ref.read(raceControllerProvider);
     if (raceState.races.isEmpty &&
         raceState.error == null &&
@@ -85,7 +105,7 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed && _authIsUp) {
       // High-value user state, revalidated the moment the app comes forward.
       ref.read(raceControllerProvider.notifier).revalidate();
       ref.read(arenaControllerProvider.notifier).revalidate();
@@ -104,6 +124,9 @@ class _MainShellState extends ConsumerState<MainShell>
 
   void _onTapTab(int index) {
     // Revalidate the data behind the destination tab before showing it.
+    // (A deliberate, single, user-initiated tap — unlike the automatic
+    // self-heal/resume triggers above, this is allowed to attempt a request
+    // even while offline: tapping a tab is itself a natural "try again.")
     switch (index) {
       case 0:
         ref.read(arenaControllerProvider.notifier).revalidate();
@@ -120,7 +143,6 @@ class _MainShellState extends ConsumerState<MainShell>
   @override
   Widget build(BuildContext context) {
     final currentIndex = _indexFor(GoRouterState.of(context).uri.path);
-    final isArena = currentIndex == 0;
 
     final navigation = NuvoBottomNav(
       key: TrackSideLayoutKeys.navigation,
@@ -130,54 +152,11 @@ class _MainShellState extends ConsumerState<MainShell>
       isDark: false,
     );
 
-    final shellBody = Scaffold(
+    return Scaffold(
       backgroundColor: NuvoColors.page,
-      extendBody: !isArena,
-      body: isArena
-          ? LayoutBuilder(
-              builder: (context, constraints) {
-                if (trackSideLayoutDiagnosticsEnabled) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    TrackSideLayoutDiagnostics.report({
-                      ...TrackSideLayoutDiagnostics.viewData(context),
-                      'mainShellRootConstraints': constraints.toString(),
-                      'arenaStackConstraints': constraints.toString(),
-                      'mainShellRoot': TrackSideLayoutDiagnostics.box(
-                        TrackSideLayoutKeys.shell,
-                      ),
-                      'arenaStack': TrackSideLayoutDiagnostics.box(
-                        TrackSideLayoutKeys.arenaStack,
-                      ),
-                      'navigationBackground': TrackSideLayoutDiagnostics.box(
-                        TrackSideLayoutKeys.navigation,
-                      ),
-                      'navigationIconRow': TrackSideLayoutDiagnostics.box(
-                        TrackSideLayoutKeys.navigationRow,
-                      ),
-                    });
-                  });
-                }
-                return KeyedSubtree(
-                  key: TrackSideLayoutKeys.shell,
-                  child: Stack(
-                    key: TrackSideLayoutKeys.arenaStack,
-                    fit: StackFit.expand,
-                    children: [
-                      widget.child,
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: navigation,
-                      ),
-                      const TrackSideLayoutDiagnosticsOverlay(),
-                    ],
-                  ),
-                );
-              },
-            )
-          : SafeArea(bottom: false, child: widget.child),
-      bottomNavigationBar: isArena ? null : navigation,
+      extendBody: false,
+      body: SafeArea(bottom: false, child: widget.child),
+      bottomNavigationBar: navigation,
     );
-
-    return shellBody;
   }
 }

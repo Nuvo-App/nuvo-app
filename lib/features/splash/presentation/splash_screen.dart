@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,8 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
@@ -28,12 +25,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   late final AnimationController _frameController;
   late final AnimationController _settleController;
-  late final AnimationController _ambientController;
   bool _animationDone = false;
   bool _navigated = false;
   bool _continueRequested = false;
   bool _framesPrecached = false;
-  bool _showOfflineRetry = false;
   Timer? _autoContinueTimer;
 
   @override
@@ -68,11 +63,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             _tryNavigate();
           }
         });
-    _ambientController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3600),
-    )..repeat();
-
     WidgetsBinding.instance.addPostFrameCallback((_) => _startSequence());
   }
 
@@ -107,7 +97,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     _autoContinueTimer?.cancel();
     _frameController.dispose();
     _settleController.dispose();
-    _ambientController.dispose();
     super.dispose();
   }
 
@@ -128,13 +117,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final authState = ref.read(authControllerProvider);
     if (authState.status == AuthStatus.loading) return;
 
-    // Held tokens, but the server was unreachable on launch. Do not navigate
-    // and do not log out — show the retry affordance.
+    // Held tokens, but the server was unreachable on launch. Do not log the
+    // user out — finish the splash and let Arena own the in-page
+    // "no connection" / retry experience (with its normal header and nav),
+    // instead of stranding the user on a permanent splash error page.
     if (authState.status == AuthStatus.offline) {
-      if (mounted && !_showOfflineRetry) setState(() => _showOfflineRetry = true);
+      _navigated = true;
+      context.go('/arena');
       return;
     }
-    if (_showOfflineRetry && mounted) setState(() => _showOfflineRetry = false);
 
     final user = authState.user;
     if (user != null && isNuvoStoreDemoEmail(user.email)) {
@@ -182,47 +173,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         behavior: HitTestBehavior.opaque,
         onTap: _continue,
         child: AnimatedBuilder(
-          animation: Listenable.merge([
-            _frameController,
-            _settleController,
-            _ambientController,
-          ]),
+          animation: Listenable.merge([_frameController, _settleController]),
           builder: (context, _) => CustomPaint(
-            painter: _LaunchAtmospherePainter(
-              progress: _ambientController.value,
-            ),
+            painter: const _LaunchAtmospherePainter(),
             child: SafeArea(
-              child: Stack(
-                children: [
-                  Center(
-                    child: _framesPrecached
-                        ? _LaunchMark(
-                            frameProgress: _frameController.value,
-                            settleProgress: Curves.easeOutCubic.transform(
-                              _settleController.value,
-                            ),
-                          )
-                        : const SizedBox(width: 280, height: 280),
-                  ),
-                  if (_showOfflineRetry)
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(28, 0, 28, 40),
-                        child: _OfflineRetry(
-                          onRetry: () {
-                            setState(() {
-                              _showOfflineRetry = false;
-                              _navigated = false;
-                            });
-                            ref
-                                .read(authControllerProvider.notifier)
-                                .retryRestore();
-                          },
+              child: Center(
+                child: _framesPrecached
+                    ? _LaunchMark(
+                        frameProgress: _frameController.value,
+                        settleProgress: Curves.easeOutCubic.transform(
+                          _settleController.value,
                         ),
-                      ),
-                    ),
-                ],
+                      )
+                    : const SizedBox(width: 280, height: 280),
               ),
             ),
           ),
@@ -319,48 +282,16 @@ class SplashScreenStateAccess {
   static const frameCount = AssetPaths.splashFrameCount;
 }
 
-/// Shown on the splash when the app holds a saved session but could not reach
-/// the server on launch. The user is still signed in — this only offers a
-/// retry, it never routes to sign-in.
-class _OfflineRetry extends StatelessWidget {
-  const _OfflineRetry({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          "Couldn't reach Nuvo",
-          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Check your connection — you are still signed in.',
-          textAlign: TextAlign.center,
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-        ),
-        const SizedBox(height: 16),
-        NuvoPrimaryButton(
-          label: 'Retry',
-          icon: Icons.refresh_rounded,
-          expand: true,
-          onPressed: onRetry,
-        ),
-      ],
-    );
-  }
-}
-
+/// One quiet static blue glow behind the mark — no ambient dot-grid loop.
+/// The loading screen's job is to feel focused and branded (the mark/frame
+/// animation and the wordmark reveal already carry that), not busy; a large
+/// animated field of ~550 pulsing dots was competing with the brand moment
+/// for attention rather than supporting it.
 class _LaunchAtmospherePainter extends CustomPainter {
-  const _LaunchAtmospherePainter({required this.progress});
-  final double progress;
+  const _LaunchAtmospherePainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    final t = progress * math.pi * 2;
     final rect = Offset.zero & size;
     canvas.drawRect(rect, Paint()..color = NuvoColors.page);
 
@@ -385,47 +316,8 @@ class _LaunchAtmospherePainter extends CustomPainter {
           stops: const [0, .45, 1],
         ).createShader(markField),
     );
-
-    // The whole matrix stays present. Broad overlapping waves make every
-    // region breathe instead of isolating the animation to a few dots.
-    const columns = 18;
-    const rows = 31;
-    final spacingX = size.width / (columns + 1);
-    final spacingY = size.height / (rows + 1);
-    final dotPaint = Paint()..style = PaintingStyle.fill;
-    for (var row = 0; row < rows; row++) {
-      for (var column = 0; column < columns; column++) {
-        final x = spacingX * (column + 1);
-        final y = spacingY * (row + 1);
-        final nx = column / (columns - 1);
-        final ny = row / (rows - 1);
-        final centerDistance = math.sqrt(
-          math.pow(nx - .5, 2) + math.pow(ny - .46, 2),
-        );
-        final diagonal = nx * .9 + ny * 1.1;
-        final expandingRing = math.sin(t * 2.8 - centerDistance * 20.0);
-        final counterRing = math.sin(t * 2.2 - (1 - centerDistance) * 17.0);
-        final diagonalBurst = math.sin(t * 2.1 - diagonal * 11.0);
-        final pulse =
-            (((expandingRing + 1) * .48) +
-                    ((counterRing + 1) * .30) +
-                    ((diagonalBurst + 1) * .22))
-                .clamp(0.0, 1.0)
-                .toDouble();
-        final quietZone = centerDistance < .13 ? .40 : 1.0;
-        final radius =
-            (.45 + Curves.easeOut.transform(pulse) * 2.45) * quietZone;
-        dotPaint.color = Color.lerp(
-          NuvoColors.blueLight.withValues(alpha: .20),
-          NuvoColors.blue.withValues(alpha: .68),
-          pulse,
-        )!;
-        canvas.drawCircle(Offset(x, y), radius, dotPaint);
-      }
-    }
   }
 
   @override
-  bool shouldRepaint(covariant _LaunchAtmospherePainter oldDelegate) =>
-      oldDelegate.progress != progress;
+  bool shouldRepaint(covariant _LaunchAtmospherePainter oldDelegate) => false;
 }

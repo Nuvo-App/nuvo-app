@@ -23,8 +23,15 @@ const _kTrackActiveBlue = NuvoColors.blue;
 ///   _bottomGap*         — gap between dock bottom and screen bottom (excl. safe area)
 ///   _contentGap         — extra breathing room between dock top and page content
 ///
-/// Every scrollable page MUST use [NuvoBottomNav.bottomPadding] as its bottom
-/// inset. This guarantees no content is ever obscured by the dock.
+/// This widget always sits in `Scaffold.bottomNavigationBar` (see
+/// `MainShell`), with `extendBody: false` — Scaffold reserves exactly this
+/// widget's rendered height (`_occupiedHeight` + the dock's own safe-area
+/// handling) from the body, so a screen's scrollable content structurally
+/// cannot end up underneath the dock. [bottomPadding] is therefore only a
+/// small cosmetic gap for a scrollable page's last item, not a manual
+/// overlap-avoidance margin — do not inflate it to "fix" clipped content;
+/// that means the shell's Scaffold composition regressed, not that this
+/// number is too small.
 ///
 /// CONTENT FIT MATH (normal button):
 ///   icon(20) + spacing(2) + label(11) + padding(5*2) = 43px
@@ -65,12 +72,18 @@ class NuvoBottomNav extends StatelessWidget {
   // Dark mode (Arena) uses a simpler full-width bar.
   static const double _darkHeight = 60;
 
-  /// The bottom padding every scrollable page must use.
-  /// Ensures content can scroll completely above the dock.
-  static double bottomPadding(BuildContext context) {
-    final safeBottom = MediaQuery.paddingOf(context).bottom;
-    return _occupiedHeight(safeBottom) + _contentGap;
-  }
+  /// A small courtesy gap below a scrollable page's last item.
+  ///
+  /// This used to return the dock's *full* occupied height, because the
+  /// shell used to float the nav over the body (`extendBody: true` + a
+  /// `Stack`, on Arena specifically) and screens had to manually reserve
+  /// space so their own content wasn't painted underneath it. That per-tab
+  /// branch is gone — every tab now renders through
+  /// `Scaffold(bottomNavigationBar: ..., extendBody: false)`, which reserves
+  /// the dock's exact height from the body itself. Overlap is now
+  /// structurally impossible, so this is just breathing room, decoupled
+  /// from the dock's geometry.
+  static double bottomPadding(BuildContext context) => _contentGap * 2;
 
   static double _occupiedHeight(double safeBottom) {
     final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
