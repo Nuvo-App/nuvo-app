@@ -464,10 +464,10 @@ class RaceHero extends StatelessWidget {
               Container(
                 color: NuvoColors.surface,
                 padding: const EdgeInsets.fromLTRB(
-                  NuvoSpacing.xl,
-                  NuvoSpacing.xl,
-                  NuvoSpacing.xl,
                   NuvoSpacing.lg,
+                  NuvoSpacing.lg,
+                  NuvoSpacing.lg,
+                  NuvoSpacing.md,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,7 +492,7 @@ class RaceHero extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: NuvoSpacing.xl),
+                    const SizedBox(height: NuvoSpacing.lg),
                     // Race lane — prominent track on white
                     RaceProgress(
                       progressPercent: progressPercent,
@@ -640,7 +640,7 @@ class RaceRow extends StatelessWidget {
         onTap: onTap,
         scale: 0.985,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 64),
+          constraints: const BoxConstraints(minHeight: 58),
           padding: const EdgeInsets.symmetric(
             horizontal: NuvoSpacing.md,
             vertical: NuvoSpacing.md,
@@ -969,7 +969,7 @@ class RaceWaitingSummary extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.hero,
+              border: NuvoBorders.quiet,
             ),
             child: Row(
               children: [
@@ -1050,7 +1050,7 @@ class RaceFinishedSummary extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.hero,
+              border: NuvoBorders.quiet,
             ),
             child: Row(
               children: [
@@ -1114,7 +1114,7 @@ class RaceQuickStart extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.hero,
+          border: NuvoBorders.quiet,
         ),
         child: Row(
           children: [

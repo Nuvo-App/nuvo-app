@@ -7,7 +7,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/member_pass_card.dart';
@@ -395,31 +394,15 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label, this.accent = NuvoColors.blue});
   final String label;
+  // Kept for call-site compatibility; no longer painted — a colored stripe
+  // per section read as decoration, not meaning (every section isn't a
+  // different semantic state). Structure now comes from the same plain
+  // sectionTitle style Compete/Verify/Arena use.
   final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 16,
-          decoration: BoxDecoration(
-            color: accent,
-            borderRadius: BorderRadius.circular(NuvoRadii.pill),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: AppTextStyles.titleMedium.copyWith(
-            color: NuvoColors.navy,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
-          ),
-        ),
-      ],
-    );
+    return Text(label, style: AppTextStyles.sectionTitle);
   }
 }
 
@@ -446,8 +429,7 @@ class _ClosestRaceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.hero,
-        boxShadow: AppShadows.hardSmall,
+        border: NuvoBorders.quiet,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -891,7 +873,7 @@ class _PeopleSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.hero,
+        border: NuvoBorders.quiet,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.lg - 2),

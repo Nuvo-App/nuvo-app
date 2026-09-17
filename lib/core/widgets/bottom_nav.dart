@@ -310,6 +310,16 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
     final sizedBoxHeight =
         NuvoBottomNav._dockInternal + NuvoBottomNav._verifyRise; // 60
 
+    // Verify keeps its distinctive raised-shield shape whether selected or
+    // not — but only the *current* tab may read as active. Selected: solid
+    // blue, white content (unmistakably "on"). Unselected: plain surface
+    // fill, quiet ink content, thin neutral border — the same "off" register
+    // every other tab uses, just in this button's own shape.
+    final fill = widget.selected ? NuvoColors.actionBlue : NuvoColors.surface;
+    final border = widget.selected ? NuvoColors.navy : NuvoColors.border;
+    final borderWidth = widget.selected ? 1.25 : 1.0;
+    final content = widget.selected ? NuvoColors.white : NuvoColors.textMuted;
+
     return Semantics(
       selected: widget.selected,
       button: true,
@@ -337,14 +347,14 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
               height: containerHeight,
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
               decoration: BoxDecoration(
-                color: NuvoColors.actionBlue,
+                color: fill,
                 borderRadius: BorderRadius.circular(NuvoRadii.button),
-                border: Border.all(color: NuvoColors.navy, width: 1.25),
+                border: Border.all(color: border, width: borderWidth),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(widget.item.icon, size: 18, color: NuvoColors.white),
+                  Icon(widget.item.icon, size: 18, color: content),
                   const SizedBox(height: 2),
                   Text(
                     widget.item.label,
@@ -352,9 +362,11 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
                     overflow: TextOverflow.ellipsis,
                     textScaler: const TextScaler.linear(1),
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.white,
+                      color: content,
                       fontSize: 10,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: widget.selected
+                          ? FontWeight.w800
+                          : FontWeight.w600,
                       height: 1.1,
                     ),
                   ),

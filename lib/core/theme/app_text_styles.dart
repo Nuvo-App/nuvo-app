@@ -116,6 +116,12 @@ abstract final class AppTextStyles {
   /// Readable structural section title (14/w700/navy).
   /// Use for section headers like "Your races", "Up next", "Quick starts".
   /// Not uppercase — communicates structure without dashboard feel.
+  ///
+  /// Kept at 14 rather than bumped further: Arena's first-viewport
+  /// composition (test/arena/arena_first_viewport_test.dart) is pixel-
+  /// budgeted so "Recent activity" stays below the fold, and this style now
+  /// feeds three headings on that screen — a larger size pushes that
+  /// section back into the first viewport on larger phones.
   static TextStyle get sectionTitle =>
       _manrope(14, FontWeight.w700, color: NuvoColors.navy, height: 1.2);
 

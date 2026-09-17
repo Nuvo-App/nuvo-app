@@ -220,7 +220,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     decoration: BoxDecoration(
                       color: NuvoColors.panel,
                       borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                      border: NuvoBorders.hero,
+                      border: NuvoBorders.quiet,
                     ),
                     child: Row(
                       children: [
@@ -236,17 +236,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           color: NuvoColors.success,
                         ),
                         _HeaderDivider(),
+                        // Moves and Avg are neutral counts, not a good/bad
+                        // signal — orange/gold on them was color spent for
+                        // decoration, not meaning (gold is reserved for 1st
+                        // place; orange for warnings/attention).
                         _HeaderStat(
                           value: moveCount,
                           label: 'Moves',
-                          color: NuvoColors.warning,
+                          color: NuvoColors.navy,
                         ),
                         _HeaderDivider(),
                         _HeaderStat(
                           value: avgProgress,
                           label: 'Avg',
                           suffix: '%',
-                          color: NuvoColors.gold,
+                          color: NuvoColors.navy,
                         ),
                       ],
                     ),
@@ -483,7 +487,7 @@ class _ProfileRaceGroup extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.hero,
+        border: NuvoBorders.quiet,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -584,7 +588,7 @@ class _AccountRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.card),
-          border: NuvoBorders.hero,
+          border: NuvoBorders.quiet,
         ),
         child: Row(
           children: [

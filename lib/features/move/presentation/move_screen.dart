@@ -443,7 +443,7 @@ class _ReadySegment extends StatelessWidget {
             decoration: BoxDecoration(
               color: NuvoColors.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: NuvoBorders.hero,
+              border: NuvoBorders.quiet,
             ),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -627,7 +627,7 @@ class _CompletedSegment extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: NuvoBorders.hero,
+            border: NuvoBorders.quiet,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -754,7 +754,7 @@ class _RecentSegment extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: NuvoBorders.hero,
+            border: NuvoBorders.quiet,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -810,10 +810,16 @@ class _RecentProofRow extends StatelessWidget {
       _ => 'Logged',
     };
 
+    final isPending =
+        proof.verificationStatus == 'needs_review' ||
+        proof.verificationStatus == 'ai_pending' ||
+        proof.verificationStatus == 'pending';
     final statusColor = isChecked
         ? NuvoColors.success
         : isRejected
         ? NuvoColors.danger
+        : isPending
+        ? NuvoColors.warning
         : NuvoColors.muted;
 
     final valueStr = proof.value != null
