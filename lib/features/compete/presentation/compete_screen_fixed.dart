@@ -413,7 +413,7 @@ class _CappedRaceList extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: NuvoBorders.hero,
+            border: NuvoBorders.quiet,
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -492,7 +492,7 @@ class _SummaryExpansionList extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: NuvoBorders.hero,
+        border: NuvoBorders.quiet,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -562,7 +562,7 @@ class _FinishedExpansionList extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: NuvoBorders.hero,
+        border: NuvoBorders.quiet,
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -705,7 +705,7 @@ class _QuickStartChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.hero,
+          border: NuvoBorders.quiet,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

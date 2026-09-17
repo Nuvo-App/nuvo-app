@@ -57,13 +57,15 @@ void main() {
       await pumpArena(tester, size);
 
       expect(tester.takeException(), isNull);
-      expect(find.text('YOUR NEXT MOVE'), findsOneWidget);
-      expect(find.text('LEADERBOARD'), findsOneWidget);
+      // Sentence case, not all-caps — matches every other screen's section
+      // titles (Compete/Verify/Crew all use plain sectionTitle already).
+      expect(find.text('Your next move'), findsOneWidget);
+      expect(find.text('Leaderboard'), findsOneWidget);
 
       final foldY = size.height - 34; // above the home indicator / nav
 
       // Leaderboard label is within the first viewport.
-      final lbY = tester.getTopLeft(find.text('LEADERBOARD')).dy;
+      final lbY = tester.getTopLeft(find.text('Leaderboard')).dy;
       expect(lbY, lessThan(foldY), reason: '${entry.key}: leaderboard visible');
 
       // The card carries real height — not a thin info strip.
@@ -86,7 +88,7 @@ void main() {
       // either not laid out yet (lazy sliver, well past the fold) or, if
       // built, positioned below it.
       if (size.height >= 800) {
-        final raFinder = find.text('RECENT ACTIVITY');
+        final raFinder = find.text('Recent activity');
         if (raFinder.evaluate().isNotEmpty) {
           expect(tester.getTopLeft(raFinder).dy, greaterThan(foldY),
               reason: '${entry.key}: Recent Activity is below the fold');

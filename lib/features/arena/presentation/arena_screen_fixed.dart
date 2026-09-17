@@ -8,7 +8,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -118,7 +117,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   // above the nav; see the tightened gaps below.
                   padding: EdgeInsets.fromLTRB(
                     NuvoSpacing.pageHorizontal,
-                    16,
+                    20,
                     NuvoSpacing.pageHorizontal,
                     NuvoBottomNav.bottomPadding(context),
                   ),
@@ -151,6 +150,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           // usable viewport (past that the first composition
                           // spills below the leaderboard). On a tiny phone
                           // the floor wins and the page scrolls — allowed.
+                          //
+                          // The card's *height budget* is unchanged from
+                          // before — the fix for the dead space this budget
+                          // used to produce is in _NextMoveHero below (no
+                          // more forced spaceBetween stretch), not here.
                           const contentFloor = 284.0;
                           final maxH = math.max(
                             contentFloor,
@@ -303,12 +307,10 @@ class _ArenaHeader extends StatelessWidget {
     children: [
       Text(
         'Arena',
-        style: AppTextStyles.displayMedium.copyWith(
-          color: _arenaText,
-          fontSize: context.rs(44),
-          height: .98,
-          letterSpacing: 0,
-        ),
+        // Same scale as every other tab title (Compete/Verify/Crew/Profile
+        // all use screenTitle) — Arena used to run a bespoke 44px override
+        // that made it feel like a different app section.
+        style: AppTextStyles.screenTitle,
       ),
       const SizedBox(height: 6),
       Text(
@@ -330,13 +332,19 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
     children: [
+      // Sentence case, not tracked all-caps — Arena used to be the one
+      // screen running "YOUR NEXT MOVE" style labels, which read as a
+      // different design system rather than the same app. Kept at the same
+      // size/weight as before (titleMedium, not the smaller shared
+      // sectionTitle) — this screen's first-viewport composition is
+      // pixel-budgeted (test/arena/arena_first_viewport_test.dart) and a
+      // smaller label here pushes "Recent activity" back above the fold.
       Expanded(
         child: Text(
-          title.toUpperCase(),
+          title,
           style: AppTextStyles.titleMedium.copyWith(
             color: _arenaText,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.1,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -442,16 +450,15 @@ class _NextMoveHero extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.fromLTRB(20, tall ? 18 : 12, 20, tall ? 14 : 4),
-              // Distributed, not centered: title anchors the top, the
-              // participant context anchors the bottom, and a taller card
-              // spreads the gap as intentional breathing room around the
-              // progress numeral — not a blank Spacer.
+              // Anchored to the top with a fixed gap before the participant
+              // context — not spaceBetween, which used to stretch to fill
+              // whatever height the card happened to get and left a large
+              // blank gap above "N racers" on anything but the smallest
+              // phones.
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: tall
-                    ? MainAxisAlignment.spaceBetween
-                    : MainAxisAlignment.center,
-                mainAxisSize: tall ? MainAxisSize.max : MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // Title + progress + track — the group that anchors the top.
                   Column(
@@ -507,10 +514,10 @@ class _NextMoveHero extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // Participant context — anchors the bottom of the content
-                  // area. On a short card the whole column just centres.
+                  // Participant context — a fixed gap below the track,
+                  // never a stretch-to-fill blank area.
                   Padding(
-                    padding: EdgeInsets.only(top: tall ? 0 : 10),
+                    padding: EdgeInsets.only(top: tall ? 8 : 10),
                     child: _RaceDetails(board: board),
                   ),
                 ],
@@ -730,7 +737,9 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Expanded(
-        flex: 4,
+        // Was 4:2:2 — the two labeled secondaries need a bit more than a
+        // bare icon did to fit icon + text without crowding.
+        flex: 3,
         child: NuvoPrimaryButton(
           leadingWidget: const Icon(
             Icons.camera_alt_outlined,
@@ -745,10 +754,11 @@ class _QuickActions extends StatelessWidget {
       const SizedBox(width: 8),
       Expanded(
         flex: 2,
+        // Labeled, not icon-only — a bare "+" glyph read as an unclear
+        // secondary action with no text to anchor its meaning.
         child: NuvoOutlineButton(
           icon: Icons.add_rounded,
-          label: 'New race',
-          iconOnly: true,
+          label: 'New',
           onPressed: onStart,
           expand: true,
           height: 64,
@@ -760,7 +770,6 @@ class _QuickActions extends StatelessWidget {
         child: NuvoOutlineButton(
           icon: Icons.group_add_outlined,
           label: 'Join',
-          iconOnly: true,
           onPressed: onJoin,
           expand: true,
           height: 64,
@@ -899,10 +908,10 @@ class _OutlinedSheet extends StatelessWidget {
       decoration: BoxDecoration(
         color: _arenaSurface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: NuvoBorders.quiet,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(NuvoRadii.lg - 2),
+        borderRadius: BorderRadius.circular(NuvoRadii.lg - 1),
         child: child,
       ),
     );

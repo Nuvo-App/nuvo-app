@@ -67,7 +67,7 @@ void main() {
 
     await pumpArena(tester);
 
-    expect(find.text('YOUR NEXT MOVE'), findsOneWidget);
+    expect(find.text('Your next move'), findsOneWidget);
     expect(find.text('You lead Alex by 17 reps.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -77,7 +77,7 @@ void main() {
   ) async {
     await pumpArena(tester, bottomInset: 34);
 
-    expect(find.text('LEADERBOARD'), findsOneWidget);
+    expect(find.text('Leaderboard'), findsOneWidget);
     expect(find.text('Submit proof'), findsWidgets);
     expect(tester.takeException(), isNull);
   });

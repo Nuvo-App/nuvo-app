@@ -47,9 +47,9 @@ void main() {
 
     expect(find.byType(ArenaScreen), findsOneWidget);
     expect(find.text('Arena'), findsWidgets);
-    expect(find.text('YOUR NEXT MOVE'), findsOneWidget);
+    expect(find.text('Your next move'), findsOneWidget);
     expect(find.text('First to 100 Pushups'), findsOneWidget);
-    expect(find.text('LEADERBOARD'), findsOneWidget);
+    expect(find.text('Leaderboard'), findsOneWidget);
     expect(find.text('Submit proof'), findsWidgets);
     expect(find.text('Start'), findsNothing);
     // Quick actions: one text primary + two icon-only secondaries in a row.
@@ -82,7 +82,7 @@ void main() {
     expect(find.text('submitted 20 pushups'), findsNothing);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -520));
     await tester.pumpAndSettle();
-    expect(find.text('RECENT ACTIVITY'), findsOneWidget);
+    expect(find.text('Recent activity'), findsOneWidget);
     expect(find.text('submitted 20 pushups'), findsOneWidget);
   });
 }
