@@ -26,14 +26,27 @@ class RouterNotifier extends ChangeNotifier {
     final authState = _ref.read(authControllerProvider);
     final loc = state.matchedLocation;
 
-    // While auth is being determined — or we hold tokens but could not reach
-    // the server — never render protected routes (they would hit secure
-    // storage concurrently with the restore and can corrupt the session on
-    // web). Send them to /splash, which shows the loading / retry state.
-    if (authState.status == AuthStatus.loading ||
-        authState.status == AuthStatus.offline) {
+    // While auth is genuinely unresolved, never render protected routes
+    // (they would hit secure storage concurrently with the restore and can
+    // corrupt the session on web). Send them to /splash, which shows the
+    // loading state.
+    if (authState.status == AuthStatus.loading) {
       final dest = _isProtected(loc) ? '/splash' : null;
-      debugPrint('[Router] ${authState.status.name} → $loc : redirect=$dest');
+      debugPrint('[Router] loading → $loc : redirect=$dest');
+      return dest;
+    }
+
+    // Stored credentials exist but the server was unreachable on restore —
+    // NOT logged out (AuthState.user is null here; never dereference it in
+    // this branch). SplashScreen finishes its launch animation and sends the
+    // user straight to /arena, which owns the in-page "no connection" /
+    // retry experience with the normal header and nav intact. Every other
+    // protected destination bounces back to Arena instead — one offline
+    // home, not a dead end on whatever screen last happened to be loading.
+    if (authState.status == AuthStatus.offline) {
+      if (loc == '/splash' || loc == '/arena') return null;
+      final dest = _isProtected(loc) ? '/arena' : null;
+      debugPrint('[Router] offline → $loc : redirect=$dest');
       return dest;
     }
 
