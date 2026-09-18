@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +12,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../notifications/application/notification_controller.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../races/presentation/motion_catalog_provider.dart';
 
 /// Bottom-nav host. Also the app-wide **freshness trigger point**: on app
 /// resume and on switching to a data tab it asks the canonical controllers to
@@ -73,6 +76,7 @@ class _MainShellState extends ConsumerState<MainShell>
 
   void _selfHealIfStuck() {
     if (!mounted || !_authIsUp) return;
+    unawaited(refreshMotionCatalog(ref));
     final raceState = ref.read(raceControllerProvider);
     if (raceState.races.isEmpty &&
         raceState.error == null &&
@@ -107,6 +111,7 @@ class _MainShellState extends ConsumerState<MainShell>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _authIsUp) {
       // High-value user state, revalidated the moment the app comes forward.
+      unawaited(refreshMotionCatalog(ref));
       ref.read(raceControllerProvider.notifier).revalidate();
       ref.read(arenaControllerProvider.notifier).revalidate();
       ref.read(crewControllerProvider.notifier).revalidate();
@@ -129,13 +134,18 @@ class _MainShellState extends ConsumerState<MainShell>
     // even while offline: tapping a tab is itself a natural "try again.")
     switch (index) {
       case 0:
+        unawaited(refreshMotionCatalog(ref));
         ref.read(arenaControllerProvider.notifier).revalidate();
+        break;
       case 1:
       case 2:
+        unawaited(refreshMotionCatalog(ref));
         ref.read(raceControllerProvider.notifier).revalidate();
+        break;
       case 3:
         ref.read(crewControllerProvider.notifier).revalidate();
         ref.read(notificationControllerProvider.notifier).revalidate();
+        break;
     }
     context.go(MainShell._paths[index]);
   }

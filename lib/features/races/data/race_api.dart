@@ -33,6 +33,14 @@ class MotionCatalogFetch {
   final bool notModified;
 }
 
+class MotionReleaseFetch {
+  const MotionReleaseFetch({this.json, this.etag, this.notModified = false});
+
+  final Map<String, dynamic>? json;
+  final String? etag;
+  final bool notModified;
+}
+
 class VerificationSession {
   const VerificationSession({
     required this.id,
@@ -96,6 +104,35 @@ class RaceApi {
     }
     final json = _decode(res);
     return MotionCatalogFetch(json: json, etag: res.headers['etag']);
+  }
+
+  Future<MotionReleaseFetch> getMotionRelease(
+    String releaseId, {
+    String? etag,
+  }) async {
+    final headers = <String, String>{'Accept': 'application/json'};
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
+    final res = await _guard(
+      () => _client.get(
+        Uri.parse('$_kApiBase/motion/releases/$releaseId'),
+        headers: headers,
+      ),
+    );
+    if (res.statusCode == 304) {
+      return MotionReleaseFetch(
+        etag: res.headers['etag'] ?? etag,
+        notModified: true,
+      );
+    }
+    final json = _decode(res);
+    final release = json['release'];
+    if (release is! Map<String, dynamic>) {
+      throw const ApiException(
+        502,
+        'Verifier release response was incomplete.',
+      );
+    }
+    return MotionReleaseFetch(json: release, etag: res.headers['etag']);
   }
 
   Future<VerificationSessionHandshake> createVerificationSession(

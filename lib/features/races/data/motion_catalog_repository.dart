@@ -4,12 +4,18 @@ import 'motion_capabilities.dart';
 import 'motion_catalog.dart';
 import 'motion_catalog_cache.dart';
 import 'race_api.dart';
+import 'verifier_release_repository.dart';
 
 class MotionCatalogRepository {
-  MotionCatalogRepository(this._api, this._cache);
+  MotionCatalogRepository(
+    this._api,
+    this._cache, {
+    VerifierReleaseRepository? releases,
+  }) : _releases = releases;
 
   final RaceApi _api;
   final MotionCatalogCache _cache;
+  final VerifierReleaseRepository? _releases;
   MotionCatalogSnapshot? _snapshot;
   Future<MotionCatalogSnapshot>? _inFlight;
 
@@ -34,7 +40,10 @@ class MotionCatalogRepository {
 
     try {
       final fetched = await _api.getMotionCatalog(etag: cached?.etag);
-      if (fetched.notModified && cached != null) return cached;
+      if (fetched.notModified && cached != null) {
+        await _releases?.prefetch(cached);
+        return cached;
+      }
       if (fetched.json == null) return _snapshot ?? bundled;
       final next = MotionCatalogSnapshot.fromJson(
         fetched.json!,
@@ -42,6 +51,7 @@ class MotionCatalogRepository {
       );
       _snapshot = next;
       await _cache.write(jsonEncode(next.toJson()));
+      await _releases?.prefetch(next);
       return next;
     } catch (_) {
       // Last-known-good first; the bundled catalog is the first-launch and

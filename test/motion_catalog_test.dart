@@ -23,42 +23,68 @@ class _FakeApi extends RaceApi {
   Future<MotionCatalogFetch> getMotionCatalog({String? etag}) async => response;
 }
 
-Map<String, dynamic> _catalog({String id = 'side_reaches', String engine = 'native_v1'}) => {
-      'catalogVersion': '2026-09-17T00:00:00Z',
-      'activities': [
-        {
-          'id': id,
-          'displayName': 'Side Reaches',
-          'category': 'full_body',
-          'proofLabel': 'side reaches',
-          'measurementType': 'repetitions',
-          'metric': 'reps',
-          'suggestedTargets': [10, 20],
-          'supportedFormats': ['first_to_goal'],
-          'iconKey': 'fitness_center',
-          'availability': 'supported',
-          'currentReleaseId': 'side-reaches-1',
-          'currentReleaseChecksum': 'sha256:side-reaches-1',
-          'requiredCapabilities': ['pose_landmarks_v1'],
-          'minimumAppBuild': 'local',
-          'engineType': engine,
-        },
-      ],
-    };
+Map<String, dynamic> _catalog({
+  String id = 'side_reaches',
+  String engine = 'native_v1',
+}) => {
+  'catalogVersion': '2026-09-17T00:00:00Z',
+  'activities': [
+    {
+      'id': id,
+      'displayName': 'Side Reaches',
+      'category': 'full_body',
+      'proofLabel': 'side reaches',
+      'measurementType': 'repetitions',
+      'metric': 'reps',
+      'suggestedTargets': [10, 20],
+      'supportedFormats': ['first_to_goal'],
+      'iconKey': 'fitness_center',
+      'availability': 'supported',
+      'currentReleaseId': 'side-reaches-1',
+      'currentReleaseChecksum': 'sha256:side-reaches-1',
+      'requiredCapabilities': ['pose_landmarks_v1'],
+      'minimumAppBuild': 'local',
+      'engineType': engine,
+    },
+  ],
+};
 
 void main() {
-  test('remote activity requires a known engine and preserves its stable ID', () {
-    final snapshot = MotionCatalogSnapshot.fromJson(_catalog());
+  test(
+    'remote activity requires a known engine and preserves its stable ID',
+    () {
+      final snapshot = MotionCatalogSnapshot.fromJson(_catalog());
+      final definitions = snapshot.toDefinitions({'pose_landmarks_v1'});
+      final remote = definitions.singleWhere(
+        (activity) => activity.activityId == 'side_reaches',
+      );
+      expect(remote.isRemote, isTrue);
+      expect(remote.activityId, 'side_reaches');
+      expect(remote.releaseChecksum, 'sha256:side-reaches-1');
+    },
+  );
+
+  test('database release metadata overrides the bundled identity', () {
+    final snapshot = MotionCatalogSnapshot.fromJson(_catalog(id: 'push_ups'));
     final definitions = snapshot.toDefinitions({'pose_landmarks_v1'});
-    final remote = definitions.singleWhere((activity) => activity.activityId == 'side_reaches');
-    expect(remote.isRemote, isTrue);
-    expect(remote.activityId, 'side_reaches');
-    expect(remote.releaseChecksum, 'sha256:side-reaches-1');
+    final pushUps = definitions.singleWhere(
+      (activity) => activity.activityId == 'push_ups',
+    );
+    expect(pushUps.isRemote, isTrue);
+    expect(pushUps.releaseId, 'side-reaches-1');
+    expect(pushUps.title, 'Side Reaches');
   });
 
   test('unknown engine is hidden instead of guessed', () {
-    final snapshot = MotionCatalogSnapshot.fromJson(_catalog(engine: 'future_engine_v1'));
-    expect(snapshot.toDefinitions({'pose_landmarks_v1'}).where((activity) => activity.isRemote), isEmpty);
+    final snapshot = MotionCatalogSnapshot.fromJson(
+      _catalog(engine: 'future_engine_v1'),
+    );
+    expect(
+      snapshot
+          .toDefinitions({'pose_landmarks_v1'})
+          .where((activity) => activity.isRemote),
+      isEmpty,
+    );
   });
 
   test('repository keeps last-known-good data when refresh fails', () async {
@@ -70,7 +96,10 @@ void main() {
     expect(cache.value, isNotNull);
 
     api.response = const MotionCatalogFetch();
-    final refreshed = await MotionCatalogRepository(api, cache).load(force: true);
+    final refreshed = await MotionCatalogRepository(
+      api,
+      cache,
+    ).load(force: true);
     expect(refreshed.fromCache, isTrue);
     expect(refreshed.activities.single.id, 'side_reaches');
   });
@@ -78,7 +107,10 @@ void main() {
   test('corrupt cache falls back to the bundled catalog', () async {
     final cache = _MemoryCache()..value = '{not-json';
     final api = _FakeApi(const MotionCatalogFetch());
-    final snapshot = await MotionCatalogRepository(api, cache).load(force: true);
+    final snapshot = await MotionCatalogRepository(
+      api,
+      cache,
+    ).load(force: true);
     expect(snapshot.catalogVersion, 'bundled');
     expect(snapshot.activities, isNotEmpty);
   });

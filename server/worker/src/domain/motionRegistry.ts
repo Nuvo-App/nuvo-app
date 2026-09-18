@@ -163,7 +163,11 @@ export async function readMotionCatalog(
     'ORDER BY a.sort_priority, a.display_name',
   ).bind(channel).all<RegistryActivityRow>();
   const version = await db.prepare(
-    'SELECT COALESCE(MAX(updated_at), CURRENT_TIMESTAMP) AS version FROM motion_activities',
+    'SELECT COALESCE(MAX(updated_at), CURRENT_TIMESTAMP) AS version FROM (' +
+    'SELECT updated_at FROM motion_activities UNION ALL ' +
+    'SELECT updated_at FROM verifier_releases UNION ALL ' +
+    'SELECT updated_at FROM activity_channel_releases' +
+    ')',
   ).first<{ version: string }>();
   return {
     catalogVersion: version?.version ?? 'registry-1',
