@@ -41,6 +41,22 @@ class MotionReleaseFetch {
   final bool notModified;
 }
 
+class MotionModelArtifactFetch {
+  const MotionModelArtifactFetch({
+    this.bytes,
+    this.etag,
+    this.modelVersion,
+    this.sha256,
+    this.notModified = false,
+  });
+
+  final Uint8List? bytes;
+  final String? etag;
+  final String? modelVersion;
+  final String? sha256;
+  final bool notModified;
+}
+
 class VerificationSession {
   const VerificationSession({
     required this.id,
@@ -133,6 +149,42 @@ class RaceApi {
       );
     }
     return MotionReleaseFetch(json: release, etag: res.headers['etag']);
+  }
+
+  Future<MotionModelArtifactFetch> getMotionModelArtifact(
+    String token,
+    String modelVersion, {
+    String? etag,
+  }) async {
+    final headers = <String, String>{
+      'Accept': 'application/octet-stream',
+      'Authorization': 'Bearer $token',
+    };
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
+    final res = await _guard(
+      () => _client.get(
+        Uri.parse('$_kApiBase/motion/models/$modelVersion/artifact'),
+        headers: headers,
+      ),
+    );
+    if (res.statusCode == 304) {
+      return MotionModelArtifactFetch(
+        etag: res.headers['etag'] ?? etag,
+        modelVersion: res.headers['x-model-version'],
+        sha256: res.headers['x-model-sha256'],
+        notModified: true,
+      );
+    }
+    if (res.statusCode >= 400) _decode(res);
+    if (res.bodyBytes.isEmpty) {
+      throw const ApiException(502, 'Model artifact response was empty.');
+    }
+    return MotionModelArtifactFetch(
+      bytes: Uint8List.fromList(res.bodyBytes),
+      etag: res.headers['etag'],
+      modelVersion: res.headers['x-model-version'],
+      sha256: res.headers['x-model-sha256'],
+    );
   }
 
   Future<VerificationSessionHandshake> createVerificationSession(
