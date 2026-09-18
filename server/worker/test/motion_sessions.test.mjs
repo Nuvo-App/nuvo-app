@@ -12,9 +12,10 @@ const JWT_SECRET = 'test-secret';
 const INTERNAL_KEY = 'internal-test-key';
 
 // ── Minimal fakes for D1 + R2 ─────────────────────────────────────────────────
-function makeEnv({ withInternalKey = true } = {}) {
+function makeEnv({ withInternalKey = true, model = null, artifact = null } = {}) {
   const sessions = [];
   const objects = new Map();
+  if (artifact) objects.set(artifact.key, Buffer.from(artifact.body));
 
   const DB = {
     prepare(sql) {
@@ -45,6 +46,7 @@ function makeEnv({ withInternalKey = true } = {}) {
         },
         async first() {
           let rows = sessions.slice().reverse();
+          if (q.includes('FROM motion_model_releases')) return model;
           if (q.includes('FROM users')) {
             return { id: args[0], primary_email: 'a@b.com', status: 'active', full_name: 'A', username: 'aaa' };
           }
@@ -69,7 +71,11 @@ function makeEnv({ withInternalKey = true } = {}) {
     async get(key) {
       if (!objects.has(key)) return null;
       const buf = objects.get(key);
-      return { async arrayBuffer() { return buf; } };
+      return {
+        body: new ReadableStream({ start(controller) { controller.enqueue(buf); controller.close(); } }),
+        writeHttpMetadata(headers) { headers.set('Content-Type', 'application/octet-stream'); },
+        async arrayBuffer() { return buf; },
+      };
     },
   };
 
@@ -82,6 +88,50 @@ function makeEnv({ withInternalKey = true } = {}) {
     RESEND_FROM_EMAIL: '', API_BASE_URL: '',
   };
 }
+
+test('model artifact requires a promoted concrete model and supports checksum caching', async () => {
+  const env = makeEnv({
+    model: {
+      model_version: 'basketball-yolox-s-800',
+      artifact_key: 'motion-models/basketball-yolox-s-800.onnx',
+      artifact_sha256: 'dc5a5afe11ac75ba9c80f1975cb1f7dc8bc738a6a37a8a4ecfb78fa196b3b425',
+    },
+    artifact: {
+      key: 'motion-models/basketball-yolox-s-800.onnx',
+      body: 'onnx-bytes',
+    },
+  });
+  const token = await signJwt({ sub: 'user-42', iat: 0, exp: 9999999999 }, JWT_SECRET);
+  const first = await app.request('/motion/models/basketball-yolox-s-800/artifact', {
+    headers: { Authorization: `Bearer ${token}` },
+  }, env);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('X-Model-Version'), 'basketball-yolox-s-800');
+  assert.equal(first.headers.get('X-Model-SHA256'), 'dc5a5afe11ac75ba9c80f1975cb1f7dc8bc738a6a37a8a4ecfb78fa196b3b425');
+  assert.equal(Buffer.from(await first.arrayBuffer()).toString(), 'onnx-bytes');
+
+  const cached = await app.request('/motion/models/basketball-yolox-s-800/artifact', {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'If-None-Match': '"dc5a5afe11ac75ba9c80f1975cb1f7dc8bc738a6a37a8a4ecfb78fa196b3b425"',
+    },
+  }, env);
+  assert.equal(cached.status, 304);
+
+  const missing = await app.request('/motion/models/current/artifact', {
+    headers: { Authorization: `Bearer ${token}` },
+  }, env);
+  assert.equal(missing.status, 400);
+});
+
+test('model artifact rejects a non-production model without reading R2', async () => {
+  const env = makeEnv({ model: null });
+  const token = await signJwt({ sub: 'user-42', iat: 0, exp: 9999999999 }, JWT_SECRET);
+  const res = await app.request('/motion/models/candidate/artifact', {
+    headers: { Authorization: `Bearer ${token}` },
+  }, env);
+  assert.equal(res.status, 404);
+});
 
 function metaHeader(meta) {
   return Buffer.from(JSON.stringify(meta)).toString('base64');
