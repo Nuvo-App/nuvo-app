@@ -4,6 +4,7 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { assignmentForNextSession } from '../domain/motionAssignments';
+import { recordReleaseMetric } from '../domain/motionTelemetry';
 
 export const verificationSessionsRouter = new Hono<AppEnv>();
 
@@ -224,6 +225,44 @@ verificationSessionsRouter.post('/verification-sessions/:sessionId/complete', re
     'completed_at = CURRENT_TIMESTAMP, motion_session_id = ?, started_at = COALESCE(started_at, CURRENT_TIMESTAMP) ' +
     'WHERE id = ? AND user_id = ? AND status IN (?, ?)',
   ).bind(status, resultValue, confidence, failureReason, motionSessionId, sessionId, userId, 'created', 'running').run();
+
+  // Link the already-uploaded artifact to the immutable release that actually
+  // ran. Older clients may upload before this endpoint completes; in that case
+  // this update is simply a no-op and the historical artifact remains readable.
+  if (motionSessionId) {
+    await c.env.DB.prepare(
+      'UPDATE motion_sessions SET verifier_release_id = ?, verifier_release_checksum = ?, ' +
+      'engine_type = ?, spec_schema_version = ?, assignment_policy = ? WHERE session_id = ?',
+    ).bind(
+      session.release_id,
+      session.release_checksum,
+      session.engine_type,
+      session.spec_schema_version,
+      null,
+      motionSessionId,
+    ).run();
+
+    const artifact = await c.env.DB.prepare(
+      'SELECT activity_id, outcome, failed_rule_reason, detected_value, confidence ' +
+      'FROM motion_sessions WHERE session_id = ? LIMIT 1',
+    ).bind(motionSessionId).first<{
+      activity_id: string;
+      outcome: string;
+      failed_rule_reason: string;
+      detected_value: number;
+      confidence: number;
+    }>();
+    if (artifact) {
+      await recordReleaseMetric(c.env.DB, {
+        releaseId: session.release_id,
+        activityId: artifact.activity_id,
+        outcome: artifact.outcome,
+        failureReason: artifact.failed_rule_reason,
+        detectedValue: artifact.detected_value,
+        confidence: artifact.confidence,
+      });
+    }
+  }
   const updated = await readSession(c.env.DB, sessionId, userId);
   return updated ? c.json({ ok: true, session: sessionView(updated) }) : c.json({ ok: false, error: 'Verification session could not be completed.' }, 500);
 });

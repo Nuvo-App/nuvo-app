@@ -1,6 +1,9 @@
 import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../types';
 import { readMotionCatalog, readMotionRelease } from '../domain/motionRegistry';
+import { validateMotionVerifierSpec } from '../domain/motionSpec';
+import { adaptationRecommendation, decideEvaluation, parseEvaluationReport } from '../domain/motionEvaluation';
+import { generateId, hashValue } from '../lib/crypto';
 
 // Internal Motion Session lookup — for the coding agent / support tooling to
 // pull what Nuvo actually saw during a verification attempt. Gated on a shared
@@ -31,6 +34,221 @@ internalRouter.get('/motion/releases/:releaseId', async (c) => {
   const release = await readMotionRelease(c.env.DB, c.req.param('releaseId'));
   if (!release) return c.json({ ok: false, error: 'Release not found.' }, 404);
   return c.json({ ok: true, release });
+});
+
+function bodyString(body: Record<string, unknown>, key: string, fallback = ''): string {
+  return typeof body[key] === 'string' ? String(body[key]).trim() : fallback;
+}
+
+function bodyInt(body: Record<string, unknown>, key: string, fallback: number): number {
+  const value = body[key];
+  return typeof value === 'number' && Number.isInteger(value) ? value : fallback;
+}
+
+function bodyActor(body: Record<string, unknown>): string {
+  return bodyString(body, 'actorId', 'internal-operator').slice(0, 160);
+}
+
+async function audit(
+  db: D1Database,
+  input: { actorId: string; action: string; activityId?: string | null; releaseId?: string | null; previousReleaseId?: string | null; details?: Record<string, unknown> },
+) {
+  await db.prepare(
+    `INSERT INTO verifier_audit_log
+       (id, actor_id, action, activity_id, release_id, previous_release_id, details_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    generateId(), input.actorId, input.action, input.activityId ?? null,
+    input.releaseId ?? null, input.previousReleaseId ?? null,
+    JSON.stringify(input.details ?? {}),
+  ).run();
+}
+
+// Aggregates are intentionally small and release-scoped. They identify a
+// cluster worth replaying; they do not mutate a verifier or publish a fix.
+internalRouter.get('/motion/adaptation/signals', async (c) => {
+  const activityId = c.req.query('activityId');
+  const releaseId = c.req.query('releaseId');
+  const clauses = ['1 = 1'];
+  const binds: string[] = [];
+  if (activityId) { clauses.push('activity_id = ?'); binds.push(activityId); }
+  if (releaseId) { clauses.push('release_id = ?'); binds.push(releaseId); }
+  const rows = await c.env.DB.prepare(
+    `SELECT release_id, activity_id, outcome, failure_reason, sample_count,
+            total_detected, total_confidence, last_seen_at
+       FROM motion_release_metrics WHERE ${clauses.join(' AND ')}
+      ORDER BY sample_count DESC, last_seen_at DESC LIMIT 200`,
+  ).bind(...binds).all<Record<string, unknown>>();
+  return c.json({
+    ok: true,
+    signals: rows.results.map((row) => ({
+      releaseId: row.release_id,
+      activityId: row.activity_id,
+      outcome: row.outcome,
+      failureReason: row.failure_reason,
+      sampleCount: row.sample_count,
+      averageDetected: Number(row.sample_count) > 0 ? Number(row.total_detected) / Number(row.sample_count) : 0,
+      averageConfidence: Number(row.sample_count) > 0 ? Number(row.total_confidence) / Number(row.sample_count) : 0,
+      recommendation: adaptationRecommendation(String(row.failure_reason ?? ''), Number(row.sample_count ?? 0)),
+      lastSeenAt: row.last_seen_at,
+    })),
+  });
+});
+
+// Draft creation is the handoff from telemetry analysis to release tooling.
+// The caller supplies the proposed declarative spec; the Worker validates it,
+// assigns a checksum, and keeps it unavailable to clients as `draft`.
+internalRouter.post('/motion/releases/drafts', async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ ok: false, error: 'Invalid draft body.' }, 400);
+  const value = body as Record<string, unknown>;
+  const activityId = bodyString(value, 'activityId');
+  const releaseId = bodyString(value, 'releaseId');
+  const parentReleaseId = bodyString(value, 'parentReleaseId');
+  const semver = bodyString(value, 'semver');
+  const changeClass = bodyString(value, 'changeClass', 'patch');
+  const spec = value.spec;
+  if (!activityId || !releaseId || !parentReleaseId || !semver || !spec || typeof spec !== 'object' || Array.isArray(spec)) {
+    return c.json({ ok: false, error: 'activityId, releaseId, parentReleaseId, semver, and spec are required.' }, 400);
+  }
+  if (!/^[a-z0-9][a-z0-9._-]{2,119}$/.test(releaseId)) return c.json({ ok: false, error: 'Invalid release ID.' }, 400);
+  if (!['patch', 'minor', 'major'].includes(changeClass)) return c.json({ ok: false, error: 'Invalid change class.' }, 400);
+  try { validateMotionVerifierSpec(spec, { releaseId, activityId }); }
+  catch (error) { return c.json({ ok: false, code: 'invalid_spec', error: error instanceof Error ? error.message : 'Invalid verifier spec.' }, 400); }
+  const parent = await c.env.DB.prepare(
+    'SELECT id, activity_id, compatibility_group, minimum_app_build FROM verifier_releases WHERE id = ? LIMIT 1',
+  ).bind(parentReleaseId).first<{ id: string; activity_id: string; compatibility_group: string; minimum_app_build: string }>();
+  if (!parent || parent.activity_id !== activityId) return c.json({ ok: false, error: 'Parent release does not match the activity.' }, 400);
+  const checksum = `sha256:${await hashValue(JSON.stringify(spec))}`;
+  const requiredCapabilities = Array.isArray((spec as Record<string, unknown>).requiredCapabilities)
+    ? (spec as Record<string, unknown>).requiredCapabilities
+    : [];
+  const compatibilityGroup = bodyString(value, 'compatibilityGroup', parent.compatibility_group);
+  const minimumAppBuild = bodyString(value, 'minimumAppBuild', parent.minimum_app_build);
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO verifier_releases
+         (id, activity_id, semver, change_class, engine_type, spec_schema_version,
+          spec_json, checksum, required_capabilities_json, minimum_app_build,
+          compatibility_group, status, release_notes, parent_release_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+    ).bind(
+      releaseId, activityId, semver, changeClass,
+      String((spec as Record<string, unknown>).engineType),
+      Number((spec as Record<string, unknown>).specSchemaVersion),
+      JSON.stringify(spec), checksum, JSON.stringify(requiredCapabilities),
+      minimumAppBuild, compatibilityGroup, bodyString(value, 'releaseNotes'), parentReleaseId,
+    ).run();
+  } catch {
+    return c.json({ ok: false, error: 'Release ID or checksum already exists.' }, 409);
+  }
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'release_drafted', activityId, releaseId,
+    details: { parentReleaseId, changeClass, checksum },
+  });
+  return c.json({ ok: true, release: { id: releaseId, activityId, checksum, status: 'draft' } }, 201);
+});
+
+// Evaluation reports come from the deterministic replay runner. A report that
+// fails a guardrail is retained as evidence but cannot validate a release.
+internalRouter.post('/motion/evaluations', async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ ok: false, error: 'Invalid evaluation body.' }, 400);
+  const value = body as Record<string, unknown>;
+  const releaseId = bodyString(value, 'releaseId');
+  const release = await c.env.DB.prepare(
+    'SELECT id, activity_id, status FROM verifier_releases WHERE id = ? LIMIT 1',
+  ).bind(releaseId).first<{ id: string; activity_id: string; status: string }>();
+  if (!release) return c.json({ ok: false, error: 'Release not found.' }, 404);
+  let report;
+  try { report = parseEvaluationReport(value.report); }
+  catch (error) { return c.json({ ok: false, code: 'invalid_evaluation', error: error instanceof Error ? error.message : 'Invalid evaluation.' }, 400); }
+  const decision = decideEvaluation(report);
+  const runId = generateId();
+  await c.env.DB.prepare(
+    `INSERT INTO verifier_evaluation_runs
+       (id, release_id, dataset_snapshot_id, status, report_json, completed_at)
+     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+  ).bind(runId, releaseId, report.datasetSnapshotId, decision.status, JSON.stringify({ ...report, decision })).run();
+  if (decision.status === 'passed') {
+    await c.env.DB.prepare("UPDATE verifier_releases SET status = 'validated' WHERE id = ? AND status = 'draft'").bind(releaseId).run();
+  }
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: `evaluation_${decision.status}`,
+    activityId: release.activity_id, releaseId,
+    details: { runId, datasetSnapshotId: report.datasetSnapshotId, blockers: decision.blockers },
+  });
+  return c.json({ ok: true, runId, decision });
+});
+
+internalRouter.post('/motion/releases/:releaseId/promote', async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const value = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  const releaseId = c.req.param('releaseId');
+  const channel = bodyString(value, 'channel');
+  const rolloutPercent = bodyInt(value, 'rolloutPercent', channel === 'stable' ? 100 : 0);
+  if (!['internal', 'beta', 'stable'].includes(channel) || rolloutPercent < 0 || rolloutPercent > 100) {
+    return c.json({ ok: false, error: 'Valid channel and rolloutPercent are required.' }, 400);
+  }
+  const release = await c.env.DB.prepare(
+    'SELECT id, activity_id, status FROM verifier_releases WHERE id = ? LIMIT 1',
+  ).bind(releaseId).first<{ id: string; activity_id: string; status: string }>();
+  if (!release) return c.json({ ok: false, error: 'Release not found.' }, 404);
+  if (!['validated', 'internal', 'beta', 'stable'].includes(release.status)) return c.json({ ok: false, error: 'Release must pass evaluation before promotion.' }, 409);
+  if (channel === 'stable') {
+    const evaluation = await c.env.DB.prepare(
+      "SELECT id FROM verifier_evaluation_runs WHERE release_id = ? AND status = 'passed' ORDER BY completed_at DESC LIMIT 1",
+    ).bind(releaseId).first<{ id: string }>();
+    if (!evaluation) return c.json({ ok: false, error: 'A passing evaluation is required for stable promotion.' }, 409);
+  }
+  const previous = await c.env.DB.prepare(
+    'SELECT release_id FROM activity_channel_releases WHERE activity_id = ? AND channel = ? LIMIT 1',
+  ).bind(release.activity_id, channel).first<{ release_id: string }>();
+  await c.env.DB.prepare("UPDATE verifier_releases SET status = ?, published_at = COALESCE(published_at, CURRENT_TIMESTAMP) WHERE id = ?").bind(channel, releaseId).run();
+  await c.env.DB.prepare(
+    `INSERT INTO activity_channel_releases (activity_id, channel, release_id, rollout_percent)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(activity_id, channel) DO UPDATE SET release_id = excluded.release_id,
+       rollout_percent = excluded.rollout_percent, updated_at = CURRENT_TIMESTAMP`,
+  ).bind(release.activity_id, channel, releaseId, rolloutPercent).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'release_promoted', activityId: release.activity_id,
+    releaseId, previousReleaseId: previous?.release_id ?? null,
+    details: { channel, rolloutPercent },
+  });
+  return c.json({ ok: true, channel, releaseId, previousReleaseId: previous?.release_id ?? null });
+});
+
+internalRouter.post('/motion/channels/:activityId/:channel/rollback', async (c) => {
+  const activityId = c.req.param('activityId');
+  const channel = c.req.param('channel');
+  if (!['internal', 'beta', 'stable'].includes(channel)) return c.json({ ok: false, error: 'Unsupported channel.' }, 400);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const value = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  const releaseId = bodyString(value, 'releaseId');
+  const target = await c.env.DB.prepare(
+    'SELECT id, activity_id, status FROM verifier_releases WHERE id = ? LIMIT 1',
+  ).bind(releaseId).first<{ id: string; activity_id: string; status: string }>();
+  if (!target || target.activity_id !== activityId || target.status === 'disabled') return c.json({ ok: false, error: 'Rollback release is unavailable for this activity.' }, 409);
+  const previous = await c.env.DB.prepare(
+    'SELECT release_id FROM activity_channel_releases WHERE activity_id = ? AND channel = ? LIMIT 1',
+  ).bind(activityId, channel).first<{ release_id: string }>();
+  await c.env.DB.prepare(
+    `INSERT INTO activity_channel_releases (activity_id, channel, release_id, rollout_percent)
+     VALUES (?, ?, ?, 100)
+     ON CONFLICT(activity_id, channel) DO UPDATE SET release_id = excluded.release_id,
+       rollout_percent = 100, updated_at = CURRENT_TIMESTAMP`,
+  ).bind(activityId, channel, releaseId).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'channel_rollback', activityId,
+    releaseId, previousReleaseId: previous?.release_id ?? null,
+    details: { channel },
+  });
+  return c.json({ ok: true, channel, releaseId, previousReleaseId: previous?.release_id ?? null });
 });
 
 type SessionRow = Record<string, unknown>;

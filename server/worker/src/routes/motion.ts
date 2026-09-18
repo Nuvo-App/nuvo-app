@@ -3,6 +3,7 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { analyzeMotion, motionAnalysisSchemaVersion, motionModelVersion, motionValidatorVersion, validateMotionRequest } from '../domain/motionAnalysis';
+import { recordFeedback, recordReleaseMetric } from '../domain/motionTelemetry';
 
 export const motionRouter = new Hono<AppEnv>();
 motionRouter.use('*', requireAuth);
@@ -136,7 +137,43 @@ motionSessionsRouter.post('/', async (c) => {
     )
     .run();
 
+  // Index release-linked health asynchronously in the request lifecycle. This
+  // is only an aggregate counter; the raw artifact remains in R2 for replay.
+  // Missing release metadata is allowed for older clients and is backfilled
+  // when a linked verification session completes.
+  await recordReleaseMetric(c.env.DB, {
+    releaseId: typeof meta.verifierReleaseId === 'string' ? meta.verifierReleaseId : null,
+    activityId: str(meta.activityId, 'unknown'),
+    outcome: str(meta.outcome, 'incomplete'),
+    failureReason: str(meta.failedRuleReason),
+    detectedValue: num(meta.detectedValue),
+    confidence: typeof meta.confidence === 'number' ? meta.confidence : 0,
+  });
+
   return c.json({ ok: true, sessionId, stored: true });
+});
+
+motionSessionsRouter.post('/:sessionId/feedback', async (c) => {
+  const sessionId = c.req.param('sessionId');
+  const userId = c.get('userId');
+  const session = await c.env.DB.prepare(
+    'SELECT session_id FROM motion_sessions WHERE session_id = ? AND user_id = ? LIMIT 1',
+  ).bind(sessionId, userId).first<{ session_id: string }>();
+  if (!session) return c.json({ ok: false, error: 'Motion session not found.' }, 404);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const value = body as Record<string, unknown>;
+  const label = typeof value.label === 'string' ? value.label.trim() : '';
+  if (!['missed_count', 'false_count', 'camera_issue', 'worked'].includes(label)) {
+    return c.json({ ok: false, error: 'Unsupported motion feedback label.' }, 400);
+  }
+  await recordFeedback(c.env.DB, {
+    motionSessionId: sessionId,
+    userId,
+    label,
+    note: typeof value.note === 'string' ? value.note : null,
+  });
+  return c.json({ ok: true, stored: true });
 });
 
 motionRouter.post('/training/examples', async (c) => {
