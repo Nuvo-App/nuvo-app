@@ -1,4 +1,4 @@
-export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'high_knees' | 'arm_raises' | 'sumo_squats' | 'side_lunges' | 'deep_squats' | 'squat_jacks' | 'jump_squats' | 'lunge_jumps' | 'running_in_place' | 'treadmill_running' | 'walking_in_place' | 'marching_in_place' | 'butt_kicks' | 'mountain_climbers' | 'burpees' | 'step_ups' | 'calf_raises' | 'lateral_steps';
+export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'high_knees' | 'arm_raises' | 'sumo_squats' | 'side_lunges' | 'deep_squats' | 'squat_jacks' | 'jump_squats' | 'lunge_jumps' | 'running_in_place' | 'treadmill_running' | 'walking_in_place' | 'marching_in_place' | 'butt_kicks' | 'mountain_climbers' | 'burpees' | 'step_ups' | 'calf_raises' | 'lateral_steps' | 'basketball_shot';
 export type RaceMetric = 'reps' | 'seconds';
 export type RaceFormat = 'first_to_goal' | 'most_in_window' | 'best_attempt' | 'timed_attempt';
 export type RaceScoringRule = 'cumulative_sum' | 'maximum_attempt';
@@ -369,8 +369,31 @@ export const RACE_ACTIVITY_CATALOG: RaceActivityDefinition[] = [
   },
 ];
 
+// Object-interaction activities are released through the motion control plane
+// before they are made available in the public race composer. Keeping this
+// definition outside the public catalog lets existing/internal races resolve
+// their scoring and proof contracts without making basketball a selectable
+// preset before its model artifact is promoted.
+const INTERNAL_BASKETBALL_SHOT: RaceActivityDefinition = {
+  id: 'basketball_shot',
+  displayName: 'Basketball Shot',
+  aliases: ['basketball shot', 'basketball shots', 'shoot a basketball'],
+  supportedMetrics: ['reps'],
+  defaultMetric: 'reps',
+  validatorKey: 'basketball_shot_v1',
+  verificationMethod: 'camera_pose',
+  cameraOrientation: 'front_or_angle',
+  sessionBehavior: 'count_reps',
+  suggestedTargets: [1, 3, 5, 10],
+  supportedFormats: ['first_to_goal', 'most_in_window', 'best_attempt'],
+  availability: 'hidden',
+  instructions: ['Keep your hands, ball, and hoop visible.', 'Release the ball toward the hoop.', 'Hold still until the shot is evaluated.'],
+};
+
 export function activityForId(id: string | null | undefined): RaceActivityDefinition | undefined {
-  return RACE_ACTIVITY_CATALOG.find((activity) => activity.id === normalizeActivityId(id));
+  const normalized = normalizeActivityId(id);
+  if (normalized === 'basketball_shot') return INTERNAL_BASKETBALL_SHOT;
+  return RACE_ACTIVITY_CATALOG.find((activity) => activity.id === normalized);
 }
 
 export function normalizeActivityId(value: string | null | undefined): RaceActivityId | undefined {
@@ -395,7 +418,7 @@ export function normalizeActivityId(value: string | null | undefined): RaceActiv
   if (normalized === 'step_up' || normalized === 'stepups') return 'step_ups';
   if (normalized === 'calf_raise' || normalized === 'heel_raises') return 'calf_raises';
   if (normalized === 'side_steps' || normalized === 'side_step' || normalized === 'lateral_step') return 'lateral_steps';
-  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold', 'high_knees', 'arm_raises', 'sumo_squats', 'side_lunges', 'deep_squats', 'squat_jacks', 'jump_squats', 'lunge_jumps', 'running_in_place', 'treadmill_running', 'walking_in_place', 'marching_in_place', 'butt_kicks', 'mountain_climbers', 'burpees', 'step_ups', 'calf_raises', 'lateral_steps'].includes(normalized)) {
+  if (['push_ups', 'jumping_jacks', 'squats', 'lunges', 'plank_hold', 'high_knees', 'arm_raises', 'sumo_squats', 'side_lunges', 'deep_squats', 'squat_jacks', 'jump_squats', 'lunge_jumps', 'running_in_place', 'treadmill_running', 'walking_in_place', 'marching_in_place', 'butt_kicks', 'mountain_climbers', 'burpees', 'step_ups', 'calf_raises', 'lateral_steps', 'basketball_shot'].includes(normalized)) {
     return normalized as RaceActivityId;
   }
   return undefined;

@@ -18,6 +18,7 @@ const ALLOWED_SPEC_KEYS = new Set([
   'stableFrames', 'startRules', 'activeRules', 'leftRules', 'rightRules',
   'holdRules', 'minHoldMs', 'maxHoldMs', 'nativeValidatorKey',
   'requiredObjects', 'composition',
+  'model',
 ]);
 
 export class MotionSpecValidationError extends Error {
@@ -120,6 +121,21 @@ function requiredObjects(value: unknown): Array<{ id: string; kind: string; minL
   return objects;
 }
 
+function model(value: unknown): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MotionSpecValidationError('model_invalid');
+  }
+  const item = value as Record<string, unknown>;
+  const unknown = Object.keys(item).filter((key) =>
+    !['modelVersion', 'inputSchemaVersion', 'artifactSha256', 'inputSize'].includes(key));
+  if (unknown.length) throw new MotionSpecValidationError('model_unknown_key');
+  stringValue(item.modelVersion, 'model_version', 120);
+  boundedInt(item.inputSchemaVersion, 'model_input_schema_version', 1, 1, 1);
+  const digest = stringValue(item.artifactSha256, 'model_artifact_sha256', 80).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(digest)) throw new MotionSpecValidationError('model_artifact_sha256_invalid');
+  boundedInt(item.inputSize, 'model_input_size', 160, 1280, 800);
+}
+
 function composition(value: unknown, objectIds: Set<string>) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new MotionSpecValidationError('composition_invalid');
@@ -199,6 +215,7 @@ export function validateMotionVerifierSpec(
   const right = rules(value.rightRules, 'right_rules');
   const hold = rules(value.holdRules, 'hold_rules');
   if (engineType === 'object_composition_v1') {
+    model(value.model);
     const objects = requiredObjects(value.requiredObjects);
     composition(value.composition, new Set(objects.map((entry) => entry.id)));
     return value;
