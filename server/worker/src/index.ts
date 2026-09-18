@@ -9,6 +9,7 @@ import { RACE_ACTIVITY_CATALOG } from './domain/raceActivities';
 import { readMotionCatalog } from './domain/motionRegistry';
 import { arenaRouter } from './routes/arena';
 import { motionRouter, motionSessionsRouter } from './routes/motion';
+import { verificationSessionsRouter } from './routes/verificationSessions';
 import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
 import { crewRouter } from './routes/crew';
@@ -204,6 +205,7 @@ app.route('/motion', motionRouter);
 
 // ── Motion Session telemetry ingest (authed) + internal lookup (X-Internal-Key)
 app.route('/motion-sessions', motionSessionsRouter);
+app.route('/', verificationSessionsRouter);
 app.route('/internal', internalRouter);
 
 // ── Onboarding complete ───────────────────────────────────────────────────────

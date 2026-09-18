@@ -20,6 +20,7 @@ import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { safeEmit } from '../domain/notifications';
+import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 
 export const racesRouter = new Hono<AppEnv>();
 racesRouter.use('*', requireAuth);
@@ -482,6 +483,7 @@ function shapeRaceResponse(
     storedStatus: race.status,
     winnerUserId: race.winner_user_id ?? null,
     completedAt: race.completed_at ?? null,
+    verifierReleaseId: race.verifier_release_id ?? null,
     startLineAt: race.start_at,
     finishLineAt: race.end_at,
     rules: '',
@@ -816,6 +818,20 @@ racesRouter.post('/', async (c) => {
   const raceTimezone = custom?.timezone ?? manual?.timezone ?? config?.timezone ?? 'America/New_York';
   const raceRecurrence = custom?.recurrence ?? manual?.recurrence ?? config?.recurrence ?? 'none';
 
+  // Preset races are assigned to the stable immutable release at creation.
+  // Custom-pose and manual races deliberately stay on their existing paths.
+  let presetRelease = null;
+  if (raceActivityId && !custom && !manual) {
+    try {
+      presetRelease = await stableReleaseForActivity(c.env.DB, raceActivityId);
+    } catch (error) {
+      // Keep the pre-0015 compatibility path usable while the registry
+      // migration rolls out. A race must never silently point at a wrong
+      // verifier; once the registry exists, assignment is transactional.
+      console.error('[races] stable verifier lookup unavailable:', error);
+    }
+  }
+
   const withVerifierType = custom
     ? { type: custom.verifierType, version: custom.verifierVersion, spec: custom.verifierSpecJson, name: custom.customActivityName }
     : manual
@@ -890,7 +906,7 @@ racesRouter.post('/', async (c) => {
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
 
   try {
-    await c.env.DB.batch([
+    const statements = [
       raceStmt,
       c.env.DB.prepare(
         `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at)
@@ -900,7 +916,15 @@ racesRouter.post('/', async (c) => {
         `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
          VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
       ).bind(generateId(), raceId, userId),
-    ]);
+    ];
+    if (presetRelease) {
+      statements.push(
+        assignmentInsert(c.env.DB, raceId, presetRelease),
+        c.env.DB.prepare('UPDATE races SET verifier_release_id = ? WHERE id = ?')
+          .bind(presetRelease.id, raceId),
+      );
+    }
+    await c.env.DB.batch(statements);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[races] create race DB batch failed:', message);

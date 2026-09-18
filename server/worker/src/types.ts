@@ -133,6 +133,7 @@ export interface RaceRow {
   recurrence?: string | null;
   winner_user_id?: string | null;
   completed_at?: string | null;
+  verifier_release_id?: string | null;
   status: string;
   visibility: string;
   public_join_enabled: number;
