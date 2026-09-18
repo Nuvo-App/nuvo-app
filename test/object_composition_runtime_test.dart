@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:nuvo/features/races/ai/object_composition_runtime.dart';
 import 'package:nuvo/features/races/ai/object_composition_replay.dart';
+import 'package:nuvo/features/races/ai/basketball_object_projector.dart';
 import 'package:nuvo/features/races/ai/object_composition_spec.dart';
 import 'package:nuvo/features/races/ai/object_dot_producer.dart';
 import 'package:nuvo/features/races/ai/object_motion_models.dart';
@@ -101,6 +102,44 @@ void main() {
       ),
       containsAll(<String>['object_dots_v1', 'object_composition_v1']),
     );
+  });
+
+  test('detector boxes project to stable ball and hoop dots', () {
+    final source = _frame(DateTime.utc(2026, 9, 18), 0.6, 0.5);
+    final projected = const BasketballObjectProjector().project(
+      pose: source.pose,
+      createdAt: source.createdAt,
+      detections: const [
+        NuvoObjectDetection(
+          label: 'basketball',
+          left: 0.4,
+          top: 0.4,
+          right: 0.5,
+          bottom: 0.5,
+          confidence: 0.91,
+        ),
+        NuvoObjectDetection(
+          label: 'rim',
+          left: 0.6,
+          top: 0.2,
+          right: 0.8,
+          bottom: 0.28,
+          confidence: 0.84,
+        ),
+        NuvoObjectDetection(
+          label: 'person',
+          left: 0,
+          top: 0,
+          right: 1,
+          bottom: 1,
+          confidence: 0.99,
+        ),
+      ],
+    );
+
+    expect(projected.object('ball')?.x, closeTo(0.45, 0.0001));
+    expect(projected.object('hoop')?.y, closeTo(0.24, 0.0001));
+    expect(projected.objects, hasLength(2));
   });
 
   test('strict object composition parser rejects unknown fields', () {
