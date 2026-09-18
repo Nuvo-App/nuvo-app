@@ -1,4 +1,5 @@
 import '../ai/remote_verifier_spec.dart';
+import '../ai/object_composition_spec.dart';
 
 /// An immutable verifier release fetched from the Worker control plane.
 ///
@@ -40,6 +41,8 @@ class VerifierRelease {
       if (nativeKey is! String || nativeKey.trim().isEmpty) {
         throw const FormatException('Native verifier key is missing.');
       }
+    } else if (engineType == 'object_composition_v1') {
+      ObjectCompositionSpec.fromJson(spec);
     } else {
       // Strictly parse remote specs here so a cached release is never more
       // permissive than a freshly negotiated session.

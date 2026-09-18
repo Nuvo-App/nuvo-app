@@ -17,6 +17,8 @@ class MotionCapabilities {
     'state_machine_v1',
     'alternating_rep_v1',
     'hold_v1',
+    'object_dots_v1',
+    'object_composition_v1',
     for (final activity in motionActivityDefinitions)
       'native_${activity.activityId}_v1',
   };

@@ -160,8 +160,9 @@ export async function readMotionCatalog(
     'FROM motion_activities a ' +
     'LEFT JOIN activity_channel_releases cr ON cr.activity_id = a.id AND cr.channel = ? ' +
     'LEFT JOIN verifier_releases vr ON vr.id = cr.release_id ' +
+    'WHERE ? <> ? OR a.availability = ? ' +
     'ORDER BY a.sort_priority, a.display_name',
-  ).bind(channel).all<RegistryActivityRow>();
+  ).bind(channel, channel, 'stable', 'supported').all<RegistryActivityRow>();
   const version = await db.prepare(
     'SELECT COALESCE(MAX(updated_at), CURRENT_TIMESTAMP) AS version FROM (' +
     'SELECT updated_at FROM motion_activities UNION ALL ' +
