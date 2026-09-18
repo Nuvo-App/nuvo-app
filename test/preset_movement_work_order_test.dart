@@ -739,5 +739,6 @@ AiMotionActivity _aiActivityForType(MotionActivityType type) {
     MotionActivityType.stepUps => AiMotionActivity.stepUps,
     MotionActivityType.calfRaises => AiMotionActivity.calfRaises,
     MotionActivityType.lateralSteps => AiMotionActivity.lateralSteps,
+    MotionActivityType.remote => throw ArgumentError('Remote catalog entries have no local work order.'),
   };
 }

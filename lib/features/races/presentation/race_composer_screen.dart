@@ -19,6 +19,7 @@ import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
+import 'motion_catalog_provider.dart';
 import 'create_race_screen.dart';
 import 'custom_pose/recent_movements_provider.dart';
 import 'custom_pose/teach_movement_screen.dart';
@@ -177,8 +178,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   void _logTransition(_Step from, _Step to, String reason) {
     if (kDebugMode || kNuvoDiagnosticsEnabled) {
       final custom = ref.read(_composerDraftProvider).isCustom;
-      debugPrint('RACE COMPOSER: ${from.name} -> ${to.name}  '
-          'reason: $reason  (${custom ? 'custom' : 'preset'})');
+      debugPrint(
+        'RACE COMPOSER: ${from.name} -> ${to.name}  '
+        'reason: $reason  (${custom ? 'custom' : 'preset'})',
+      );
     }
   }
 
@@ -187,7 +190,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   void _goToStep(_Step target, {required String reason}) {
     _dismissKeyboard();
     _logTransition(_step, target, reason);
-    final idx = _steps.indexOf(target); // PageView keeps all pages; index by enum
+    final idx = _steps.indexOf(
+      target,
+    ); // PageView keeps all pages; index by enum
     setState(() => _step = target);
     _pageController.animateToPage(
       idx,
@@ -227,7 +232,8 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   void _advance({String? reason}) {
     _syncGuide(_step);
     final draft = ref.read(_composerDraftProvider);
-    final r = reason ??
+    final r =
+        reason ??
         switch (_step) {
           _Step.name => 'race named',
           _Step.activity =>
@@ -262,8 +268,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     );
     if (!mounted) return;
     if (spec != null) {
-      ref.read(_composerDraftProvider.notifier).state =
-          ref.read(_composerDraftProvider).copyWith(verifierSpec: spec);
+      ref.read(_composerDraftProvider.notifier).state = ref
+          .read(_composerDraftProvider)
+          .copyWith(verifierSpec: spec);
       _goToStep(_Step.goal, reason: 'teach nuvo returned verifier spec');
     }
     // spec == null → user backed out; stay on `train` (retry button visible).
@@ -290,8 +297,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         // Invariant broken before we ever hit the backend — send the user back
         // to the training stage instead of showing a server "couldn't create".
         assert(() {
-          debugPrint('COMPOSER GUARD: custom race with no verifierSpec — '
-              'returning to train step');
+          debugPrint(
+            'COMPOSER GUARD: custom race with no verifierSpec — '
+            'returning to train step',
+          );
           return true;
         }());
         setState(() {
@@ -476,8 +485,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                   _TrainPage(
                     draft: draft,
                     onTrain: () => _openTraining(reason: 'train page retry'),
-                    onContinue: () =>
-                        _advance(reason: 'train page continue (already trained)'),
+                    onContinue: () => _advance(
+                      reason: 'train page continue (already trained)',
+                    ),
                   ),
                   _GoalPage(
                     draft: draft,
@@ -977,18 +987,38 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     // Record selection in recent movements
     ref
         .read(recentMovementIdsProvider.notifier)
-        .record(activity.type.backendValue);
+        .record(activity.activityId);
   }
 
   @override
   Widget build(BuildContext context) {
     final isManual = widget.draft.goalKind == RaceGoalKind.manual;
+    final recentActivities = recentActivitiesFromIds(
+      ref.watch(recentMovementIdsProvider),
+    );
+    final remoteSnapshot = ref.watch(motionCatalogProvider).valueOrNull;
+    final capabilities = ref.watch(motionCapabilitiesProvider);
+    final availableActivities = availableMotionActivities(
+      remoteSnapshot,
+      capabilities,
+    );
+    final featured = availableActivities.where((activity) => activity.featured).toList()
+      ..sort((a, b) => a.sortPriority.compareTo(b.sortPriority));
+    final categories = availableActivities.map((activity) => activity.category).toSet().toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
+    final sorted = [...availableActivities]
+      ..sort((a, b) {
+        final category = a.category.index.compareTo(b.category.index);
+        return category == 0 ? a.sortPriority.compareTo(b.sortPriority) : category;
+      });
+    final selectedActivityId = widget.draft.activity.activityId;
 
     if (_teachMode && !isManual) {
       final canContinue = _moveNameController.text.trim().isNotEmpty;
       return _PageShell(
         question: 'Your custom movement',
-        support: 'Name it and pick how it is counted. Next you\'ll teach it to '
+        support:
+            'Name it and pick how it is counted. Next you\'ll teach it to '
             'Nuvo.',
         ctaLabel: 'Continue to training',
         ctaEnabled: canContinue,
@@ -1078,7 +1108,9 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               const SizedBox(height: 18),
               Text(
                 'Or pick a movement Nuvo already knows',
-                style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: NuvoColors.muted,
+                ),
               ),
               const SizedBox(height: 12),
               _SearchBar(
@@ -1089,21 +1121,38 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               if (_searchQuery.isNotEmpty)
                 _SearchResults(
                   query: _searchQuery,
-                  selectedType: widget.draft.activity.type,
+                  activities: availableActivities,
+                  selectedActivityId: selectedActivityId,
                   onSelect: _select,
                 )
               else ...[
+                if (recentActivities.isNotEmpty) ...[
+                  _MovementShelf(
+                    title: 'Recently used',
+                    activities: recentActivities.take(4).toList(),
+                    selectedActivityId: selectedActivityId,
+                    onSelect: _select,
+                  ),
+                  const SizedBox(height: 22),
+                ],
+                _MovementShelf(
+                  title: 'Popular with crews',
+                  activities: featured.take(6).toList(),
+                  selectedActivityId: selectedActivityId,
+                  onSelect: _select,
+                ),
+                const SizedBox(height: 22),
                 _CategoryTabs(
-                  categories: activeCategories,
+                  categories: categories,
                   selected: _selectedCategory,
                   onSelect: (cat) => setState(() => _selectedCategory = cat),
                 ),
                 const SizedBox(height: 14),
-                _ActivityGrid(
+                _ActivityList(
                   activities: _selectedCategory == null
-                      ? motionActivityDefinitions
-                      : activitiesByCategory(_selectedCategory!),
-                  selectedType: widget.draft.activity.type,
+                      ? sorted
+                      : availableActivities.where((activity) => activity.category == _selectedCategory).toList(),
+                  selectedActivityId: selectedActivityId,
                   onSelect: _select,
                 ),
               ],
@@ -1171,10 +1220,7 @@ class _TeachNuvoCard extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: NuvoColors.navy,
-            ),
+            const Icon(Icons.chevron_right_rounded, color: NuvoColors.navy),
           ],
         ),
       ),
@@ -1211,7 +1257,7 @@ class _TrainPage extends StatelessWidget {
       support: trained
           ? 'Nuvo learned the motion. Continue to set the target.'
           : 'Record it 3 times so Nuvo can recognise every rep. This step '
-              'is required before you can race on it.',
+                'is required before you can race on it.',
       ctaLabel: trained ? 'Continue' : 'Start training',
       onCta: trained ? onContinue : onTrain,
       body: Column(
@@ -1231,9 +1277,7 @@ class _TrainPage extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  trained
-                      ? Icons.check_circle_rounded
-                      : Icons.videocam_rounded,
+                  trained ? Icons.check_circle_rounded : Icons.videocam_rounded,
                   color: trained ? NuvoColors.success : NuvoColors.blue,
                 ),
                 const SizedBox(width: 12),
@@ -1242,9 +1286,10 @@ class _TrainPage extends StatelessWidget {
                     trained
                         ? 'Movement trained — Nuvo learned "$name".'
                         : 'Not trained yet. Tap Start training to record your '
-                            '3 examples, then test it.',
-                    style: AppTextStyles.bodyMedium
-                        .copyWith(color: NuvoColors.navy),
+                              '3 examples, then test it.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: NuvoColors.navy,
+                    ),
                   ),
                 ),
               ],
@@ -1484,96 +1529,234 @@ class _CategoryTab extends StatelessWidget {
   }
 }
 
-class _ActivityGrid extends StatelessWidget {
-  const _ActivityGrid({
+class _MovementShelf extends StatelessWidget {
+  const _MovementShelf({
+    required this.title,
     required this.activities,
-    required this.selectedType,
+    required this.selectedActivityId,
     required this.onSelect,
   });
 
+  final String title;
   final List<MotionActivityDefinition> activities;
-  final MotionActivityType selectedType;
+  final String selectedActivityId;
   final ValueChanged<MotionActivityDefinition> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 2.45,
-      ),
-      itemCount: activities.length,
-      itemBuilder: (context, index) {
-        final activity = activities[index];
-        return _CompactActivityCard(
-          activity: activity,
-          selected: activity.type == selectedType,
-          onTap: () => onSelect(activity),
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: AppTextStyles.labelLarge),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 94,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: activities.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final activity = activities[index];
+              return _MovementShelfItem(
+                activity: activity,
+                selected: activity.activityId == selectedActivityId,
+                onTap: () => onSelect(activity),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
-// ── Compact activity card ────────────────────────────────────────────────────
-
-class _CompactActivityCard extends StatelessWidget {
-  const _CompactActivityCard({
+class _MovementShelfItem extends StatelessWidget {
+  const _MovementShelfItem({
     required this.activity,
     required this.selected,
     required this.onTap,
   });
+
   final MotionActivityDefinition activity;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? NuvoColors.actionBlue.withValues(alpha: 0.08)
-              : NuvoColors.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: Border.all(
-            color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-            width: selected ? 2 : 1.5,
-          ),
-          boxShadow: null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  activity.icon,
-                  color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    activity.title,
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.navy,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${activity.title}, ${activity.unit}',
+      child: PressableScale(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 148,
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 9),
+          decoration: BoxDecoration(
+            color: selected ? NuvoColors.blueSurface : NuvoColors.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: Border.all(
+              color: selected ? NuvoColors.actionBlue : NuvoColors.divider,
+              width: selected ? 2 : 1,
             ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                activity.icon,
+                color: selected ? NuvoColors.actionBlue : NuvoColors.navy,
+                size: 21,
+              ),
+              const Spacer(),
+              Text(
+                activity.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.navy,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                activity.unit,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Movement list ────────────────────────────────────────────────────────────
+
+class _ActivityList extends StatelessWidget {
+  const _ActivityList({
+    required this.activities,
+    required this.selectedActivityId,
+    required this.onSelect,
+  });
+
+  final List<MotionActivityDefinition> activities;
+  final String selectedActivityId;
+  final ValueChanged<MotionActivityDefinition> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.divider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < activities.length; i++) ...[
+            _MovementListRow(
+              activity: activities[i],
+              selected: activities[i].activityId == selectedActivityId,
+              onTap: () => onSelect(activities[i]),
+            ),
+            if (i < activities.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 66,
+                color: NuvoColors.divider,
+              ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MovementListRow extends StatelessWidget {
+  const _MovementListRow({
+    required this.activity,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final MotionActivityDefinition activity;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${activity.title}, ${activity.unit}',
+      child: PressableScale(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          constraints: const BoxConstraints(minHeight: 70),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          color: selected ? NuvoColors.blueSurface : NuvoColors.surface,
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: selected ? NuvoColors.blue : NuvoColors.icyBlue,
+                  borderRadius: BorderRadius.circular(NuvoRadii.sm),
+                ),
+                child: Icon(
+                  activity.icon,
+                  color: selected ? NuvoColors.white : NuvoColors.navy,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      activity.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: NuvoColors.navy,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${activity.category.label} · ${activity.unit}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.chevron_right_rounded,
+                color: selected ? NuvoColors.actionBlue : NuvoColors.muted,
+                size: selected ? 22 : 24,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1585,16 +1768,23 @@ class _CompactActivityCard extends StatelessWidget {
 class _SearchResults extends StatelessWidget {
   const _SearchResults({
     required this.query,
-    required this.selectedType,
+    required this.activities,
+    required this.selectedActivityId,
     required this.onSelect,
   });
   final String query;
-  final MotionActivityType selectedType;
+  final List<MotionActivityDefinition> activities;
+  final String selectedActivityId;
   final ValueChanged<MotionActivityDefinition> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final results = searchActivities(query);
+    final normalized = query.toLowerCase().trim();
+    final results = activities.where((activity) {
+      if (normalized.isEmpty) return true;
+      return activity.title.toLowerCase().contains(normalized) ||
+          activity.aliases.any((alias) => alias.toLowerCase().contains(normalized));
+    }).toList();
     if (results.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
@@ -1608,9 +1798,9 @@ class _SearchResults extends StatelessWidget {
     }
     return Column(
       children: [
-        _ActivityGrid(
+        _ActivityList(
           activities: results,
-          selectedType: selectedType,
+          selectedActivityId: selectedActivityId,
           onSelect: onSelect,
         ),
       ],
@@ -1697,9 +1887,7 @@ class _GoalPageState extends State<_GoalPage> {
       final cleaned = text.replaceAll(RegExp(r'[^0-9.]'), '');
       final n = double.tryParse(cleaned);
       if (n != null && n > 0) {
-        _setTarget(
-          cleaned.contains('.') ? (n * 1609.344).round() : n.round(),
-        );
+        _setTarget(cleaned.contains('.') ? (n * 1609.344).round() : n.round());
       }
     } else {
       final parsed = int.tryParse(text);
@@ -1717,8 +1905,8 @@ class _GoalPageState extends State<_GoalPage> {
 
   /// Measurement model for the selected preset (reps unless it's a distance /
   /// duration activity like Treadmill Running / Plank).
-  MotionMeasurementType get _measure => widget.draft.isCustom ||
-          widget.draft.isManual
+  MotionMeasurementType get _measure =>
+      widget.draft.isCustom || widget.draft.isManual
       ? MotionMeasurementType.repetitions
       : widget.draft.activity.resolvedMeasurementType;
 
@@ -1756,7 +1944,8 @@ class _GoalPageState extends State<_GoalPage> {
     return '$_target';
   }
 
-  List<int> get _suggestedTargets => widget.draft.isCustom || widget.draft.isManual
+  List<int> get _suggestedTargets =>
+      widget.draft.isCustom || widget.draft.isManual
       ? const [5, 10, 25, 50]
       : widget.draft.activity.suggestedTargets;
 
@@ -2224,126 +2413,97 @@ class _ReviewPage extends StatelessWidget {
       children: [
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height -
-                    MediaQuery.of(context).padding.vertical -
-                    160,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Eyebrow
-                  Text(
-                    'Review your race',
-                    style: AppTextStyles.labelUppercase(
-                      12,
-                    ).copyWith(color: NuvoColors.blue),
-                  ).animate().fadeIn(duration: 180.ms),
-                  const SizedBox(height: 8),
-
-                  // Race title — tappable to edit name
-                  GestureDetector(
-                    onTap: () => onEditStep(_Step.name),
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Review your race',
+                  style: AppTextStyles.labelUppercase(
+                    12,
+                  ).copyWith(color: NuvoColors.blue),
+                ).animate().fadeIn(duration: 180.ms),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => onEditStep(_Step.name),
+                  child: Text(
+                    draft.resolvedTitle,
+                    style: AppTextStyles.headlineLarge.copyWith(
+                      color: NuvoColors.navy,
+                      height: 1.08,
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 220.ms),
+                const SizedBox(height: 6),
+                Text(
+                  _winSubtitle,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
+                const SizedBox(height: 22),
+                _RacePathVisual(
+                  targetLabel: _finishLineLabel,
+                  activityIcon: draft.activity.icon,
+                  activityLabel: draft.displayActivityName,
+                ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
+                const SizedBox(height: 16),
+                _ReviewDetails(
+                  activityLabel: draft.displayActivityName,
+                  activitySub: draft.isCustom
+                      ? 'Custom movement'
+                      : 'Camera verified',
+                  finishLineLabel: _finishLineLabel,
+                  raceModeLabel: isInvite ? 'Invite crew' : 'Start solo',
+                  raceModeSub: isInvite
+                      ? 'Invite link opens after race starts'
+                      : 'Race yourself first',
+                  onEditActivity: draft.isCustom
+                      ? null
+                      : () => onEditStep(_Step.activity),
+                  onEditGoal: () => onEditStep(_Step.goal),
+                  onEditRacers: () => onEditStep(_Step.racers),
+                ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
+                if (error != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: NuvoColors.danger.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(NuvoRadii.md),
+                      border: Border.all(
+                        color: NuvoColors.danger.withValues(alpha: 0.28),
+                      ),
+                    ),
                     child: Text(
-                      draft.resolvedTitle,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.headlineLarge.copyWith(
-                        color: NuvoColors.navy,
-                        height: 1.1,
+                      error!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.danger,
                       ),
                     ),
-                  ).animate().fadeIn(duration: 220.ms),
-                  const SizedBox(height: 6),
-                  Text(
-                    _winSubtitle,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      color: NuvoColors.muted,
-                    ),
-                  ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
-                  const SizedBox(height: 36),
-
-                  // Central hero: the race path card
-                  _RacePathVisual(
-                    targetLabel: _finishLineLabel,
-                  ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
-
-                  const SizedBox(height: 24),
-
-                  // Compact editable detail chips — centered row
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _ReviewDetailChip(
-                        icon: Icons.verified_rounded,
-                        label: 'Camera verified',
-                        sub: '${draft.displayActivityName} · ${draft.metric.label}',
-                        onTap: draft.isCustom
-                            ? null
-                            : () => onEditStep(_Step.activity),
-                      ),
-                      _ReviewDetailChip(
-                        icon: Icons.flag_rounded,
-                        label: _finishLineLabel,
-                        sub: 'Finish line',
-                        onTap: () => onEditStep(_Step.goal),
-                      ),
-                      _ReviewDetailChip(
-                        icon: isInvite ? Icons.group_rounded : Icons.person_rounded,
-                        label: isInvite ? 'Invite crew' : 'Start solo',
-                        sub: isInvite
-                            ? 'Invite link opens after race starts'
-                            : 'Race yourself first',
-                        onTap: () => onEditStep(_Step.racers),
-                      ),
-                    ],
-                  ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
-
-                  if (error != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: NuvoColors.danger.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(NuvoRadii.md),
-                        border: Border.all(
-                          color: NuvoColors.danger.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      child: Text(
-                        error!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (showDiagnostics) ...[
-                    const SizedBox(height: 16),
-                    NuvoOutlineButton(
-                      label: 'Copy race debug',
-                      expand: true,
-                      onPressed: onCopyDiagnostics,
-                    ),
-                  ],
+                  ),
                 ],
-              ),
+                if (showDiagnostics) ...[
+                  const SizedBox(height: 16),
+                  NuvoOutlineButton(
+                    label: 'Copy race debug',
+                    expand: true,
+                    onPressed: onCopyDiagnostics,
+                  ),
+                ],
+              ],
             ),
           ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: NuvoPrimaryButton(
+          child: NuvoSuccessButton(
             key: FirstRaceGuideKeys.composerReview,
             label: 'Start race',
             icon: Icons.flag_rounded,
             expand: true,
             loading: loading,
+            solid: true,
             onPressed: loading ? null : onStart,
           ),
         ),
@@ -2353,39 +2513,70 @@ class _ReviewPage extends StatelessWidget {
 }
 
 class _RacePathVisual extends StatelessWidget {
-  const _RacePathVisual({required this.targetLabel});
+  const _RacePathVisual({
+    required this.targetLabel,
+    required this.activityIcon,
+    required this.activityLabel,
+  });
   final String targetLabel;
+  final IconData activityIcon;
+  final String activityLabel;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
+        color: NuvoColors.blueSurface,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        boxShadow: const [
-          BoxShadow(
-            color: NuvoColors.inkNavy,
-            blurRadius: 0,
-            offset: Offset(4, 4),
-          ),
-        ],
+        border: Border.all(color: NuvoColors.navy, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text(
-                'START',
-                style: TextStyle(
-                  color: NuvoColors.actionBlue,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: NuvoColors.blue,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(activityIcon, color: NuvoColors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activityLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: NuvoColors.navy,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Your proof moves the leaderboard',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              const _RacePoint(label: 'Start line', color: NuvoColors.blue),
               const SizedBox(width: 10),
               Expanded(
                 child: CustomPaint(
@@ -2394,30 +2585,18 @@ class _RacePathVisual extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              const Icon(
-                Icons.flag_rounded,
-                color: NuvoColors.success,
-                size: 20,
-              ),
+              const _RacePoint(label: 'Finish line', color: NuvoColors.success),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            targetLabel,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Finish line',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              targetLabel,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],
@@ -2426,11 +2605,187 @@ class _RacePathVisual extends StatelessWidget {
   }
 }
 
+class _RacePoint extends StatelessWidget {
+  const _RacePoint({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: NuvoColors.navy,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewDetails extends StatelessWidget {
+  const _ReviewDetails({
+    required this.activityLabel,
+    required this.activitySub,
+    required this.finishLineLabel,
+    required this.raceModeLabel,
+    required this.raceModeSub,
+    required this.onEditActivity,
+    required this.onEditGoal,
+    required this.onEditRacers,
+  });
+
+  final String activityLabel;
+  final String activitySub;
+  final String finishLineLabel;
+  final String raceModeLabel;
+  final String raceModeSub;
+  final VoidCallback? onEditActivity;
+  final VoidCallback onEditGoal;
+  final VoidCallback onEditRacers;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.divider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          _ReviewDetailRow(
+            icon: Icons.verified_rounded,
+            label: 'Proof',
+            value: activityLabel,
+            sub: activitySub,
+            onTap: onEditActivity,
+            isLast: false,
+          ),
+          _ReviewDetailRow(
+            icon: Icons.flag_rounded,
+            label: 'Finish line',
+            value: finishLineLabel,
+            sub: 'Target everyone races toward',
+            onTap: onEditGoal,
+            isLast: false,
+          ),
+          _ReviewDetailRow(
+            icon: Icons.group_rounded,
+            label: 'Race mode',
+            value: raceModeLabel,
+            sub: raceModeSub,
+            onTap: onEditRacers,
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewDetailRow extends StatelessWidget {
+  const _ReviewDetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.onTap,
+    required this.isLast,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String sub;
+  final VoidCallback? onTap;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: const BoxDecoration(
+              color: NuvoColors.blueSurface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: NuvoColors.blue, size: 17),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: NuvoColors.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            const Icon(Icons.edit_outlined, color: NuvoColors.muted, size: 16),
+        ],
+      ),
+    );
+
+    return Column(
+      children: [
+        if (onTap == null) row else InkWell(onTap: onTap, child: row),
+        if (!isLast)
+          const Divider(
+            height: 1,
+            thickness: 1,
+            indent: 60,
+            color: NuvoColors.divider,
+          ),
+      ],
+    );
+  }
+}
+
 class _RaceLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.22)
+      ..color = NuvoColors.navy.withValues(alpha: 0.22)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -2452,63 +2807,4 @@ class _RaceLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _ReviewDetailChip extends StatelessWidget {
-  const _ReviewDetailChip({
-    required this.icon,
-    required this.label,
-    required this.sub,
-    this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final String sub;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final chip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: NuvoColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: NuvoColors.border, width: 1.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: NuvoColors.actionBlue, size: 16),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: NuvoColors.navy,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                sub,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    if (onTap == null) return chip;
-
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: chip,
-    );
-  }
 }

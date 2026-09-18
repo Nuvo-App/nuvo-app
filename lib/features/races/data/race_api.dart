@@ -25,10 +25,34 @@ const _kApiBase = String.fromEnvironment(
   defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
 );
 
+class MotionCatalogFetch {
+  const MotionCatalogFetch({this.json, this.etag, this.notModified = false});
+
+  final Map<String, dynamic>? json;
+  final String? etag;
+  final bool notModified;
+}
+
 class RaceApi {
   RaceApi({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
+
+  Future<MotionCatalogFetch> getMotionCatalog({String? etag}) async {
+    final headers = <String, String>{'Accept': 'application/json'};
+    if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
+    final res = await _guard(
+      () => _client.get(Uri.parse('$_kApiBase/races/activities'), headers: headers),
+    );
+    if (res.statusCode == 304) {
+      return MotionCatalogFetch(
+        etag: res.headers['etag'] ?? etag,
+        notModified: true,
+      );
+    }
+    final json = _decode(res);
+    return MotionCatalogFetch(json: json, etag: res.headers['etag']);
+  }
 
   Future<MotionAnalysisResult> analyzeMotion(
     String token, {

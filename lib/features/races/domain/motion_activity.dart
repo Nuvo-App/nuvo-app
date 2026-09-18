@@ -30,7 +30,12 @@ enum MotionActivityType {
   burpees('burpees'),
   stepUps('step_ups'),
   calfRaises('calf_raises'),
-  lateralSteps('lateral_steps');
+  lateralSteps('lateral_steps'),
+
+  /// Placeholder identity for a control-plane activity that has no compiled
+  /// Dart enum yet. Its real stable ID lives on [MotionActivityDefinition].
+  /// This value is never treated as a local verifier by itself.
+  remote('remote');
 
   const MotionActivityType(this.backendValue);
 
@@ -300,6 +305,11 @@ class MotionActivityDefinition {
     this.measurementType,
     this.goalPromptOverride,
     this.displayUnitOverride,
+    this.backendId,
+    this.releaseId,
+    this.releaseChecksum,
+    this.engineType,
+    this.requiredCapabilities = const [],
   });
 
   final MotionActivityType type;
@@ -338,6 +348,17 @@ class MotionActivityDefinition {
   /// type's default plural ("reps" / "seconds"). Does NOT affect
   /// serialization — the wire metric is always [MotionMeasurementType.raceMetric].
   final String? displayUnitOverride;
+
+  /// Stable control-plane ID. Local activities derive this from [type]; remote
+  /// activities carry the server-published ID here.
+  final String? backendId;
+  final String? releaseId;
+  final String? releaseChecksum;
+  final String? engineType;
+  final List<String> requiredCapabilities;
+
+  String get activityId => backendId ?? type.backendValue;
+  bool get isRemote => backendId != null;
 
   int get defaultTarget => suggestedTargets.first;
 
