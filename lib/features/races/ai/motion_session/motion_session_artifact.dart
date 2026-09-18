@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import '../../data/ai_motion_models.dart';
 import '../../data/motion_analysis_contract.dart';
+import '../object_motion_models.dart';
 
 /// Schema version for [MotionSessionArtifact]. Bump on any breaking change to
 /// the JSON shape; stored sessions must stay readable after the verifier
@@ -18,10 +19,10 @@ enum MotionSessionOutcome { verified, failed, incomplete }
 
 extension MotionSessionOutcomeWire on MotionSessionOutcome {
   String get wire => switch (this) {
-        MotionSessionOutcome.verified => 'verified',
-        MotionSessionOutcome.failed => 'failed',
-        MotionSessionOutcome.incomplete => 'incomplete',
-      };
+    MotionSessionOutcome.verified => 'verified',
+    MotionSessionOutcome.failed => 'failed',
+    MotionSessionOutcome.incomplete => 'incomplete',
+  };
 }
 
 /// One meaningful runtime decision during the session — a rep the verifier
@@ -53,16 +54,14 @@ class MotionSessionEvent {
   final Map<String, double> metrics;
 
   Map<String, dynamic> toJson() => {
-        't': tMs,
-        'type': type,
-        if (state != null) 'state': state,
-        if (detail != null) 'detail': detail,
-        if (count != null) 'count': count,
-        if (metrics.isNotEmpty)
-          'metrics': {
-            for (final e in metrics.entries) e.key: _round(e.value),
-          },
-      };
+    't': tMs,
+    'type': type,
+    if (state != null) 'state': state,
+    if (detail != null) 'detail': detail,
+    if (count != null) 'count': count,
+    if (metrics.isNotEmpty)
+      'metrics': {for (final e in metrics.entries) e.key: _round(e.value)},
+  };
 }
 
 /// The complete, self-contained record of one motion verification attempt.
@@ -104,6 +103,7 @@ class MotionSessionArtifact {
     required this.framesProcessed,
     required this.effectivePoseFps,
     required this.frames,
+    this.objectFrames = const [],
     required this.events,
     this.serverAnalysis,
     this.extra = const {},
@@ -141,6 +141,11 @@ class MotionSessionArtifact {
   /// The normalized landmark stream the verifier evaluated (bounded upstream).
   final List<NuvoPoseFrame> frames;
 
+  /// Dot-only object observations. This is intentionally separate from pose
+  /// frames so old artifacts remain readable and no camera pixels can enter
+  /// the session schema by accident.
+  final List<NuvoObjectMotionFrame> objectFrames;
+
   /// The verifier's decision trace.
   final List<MotionSessionEvent> events;
 
@@ -155,73 +160,76 @@ class MotionSessionArtifact {
   /// The searchable metadata a client sends alongside the blob so the Worker
   /// can index it without unpacking the whole payload.
   Map<String, dynamic> metadata() => {
-        'sessionId': sessionId,
-        'kind': kind.name,
-        'activityId': activityId,
-        'raceId': raceId,
-        'startedAt': startedAt.toUtc().toIso8601String(),
-        'endedAt': endedAt.toUtc().toIso8601String(),
-        'outcome': outcome.wire,
-        'detectedValue': detectedValue,
-        'goalValue': goalValue,
-        'confidence': _round(confidence),
-        'failedRuleReason': failedRuleReason,
-        'appVersion': appVersion,
-        'gitCommit': gitCommit,
-        'verifierVersion': verifierVersion,
-        'modelVersion': modelVersion,
-        'schemaVersion': kMotionSessionSchema,
-        'frameCount': frames.length,
-        'durationMs': durationMs,
-      };
+    'sessionId': sessionId,
+    'kind': kind.name,
+    'activityId': activityId,
+    'raceId': raceId,
+    'startedAt': startedAt.toUtc().toIso8601String(),
+    'endedAt': endedAt.toUtc().toIso8601String(),
+    'outcome': outcome.wire,
+    'detectedValue': detectedValue,
+    'goalValue': goalValue,
+    'confidence': _round(confidence),
+    'failedRuleReason': failedRuleReason,
+    'appVersion': appVersion,
+    'gitCommit': gitCommit,
+    'verifierVersion': verifierVersion,
+    'modelVersion': modelVersion,
+    'schemaVersion': kMotionSessionSchema,
+    'frameCount': frames.length,
+    'objectFrameCount': objectFrames.length,
+    'durationMs': durationMs,
+  };
 
   Map<String, dynamic> toJson() => {
-        'schemaVersion': kMotionSessionSchema,
-        'sessionId': sessionId,
-        'kind': kind.name,
-        'startedAt': startedAt.toUtc().toIso8601String(),
-        'endedAt': endedAt.toUtc().toIso8601String(),
-        'durationMs': durationMs,
-        'context': {
-          'activityId': activityId,
-          'activityTitle': activityTitle,
-          'raceId': raceId,
-          'goal': {
-            'value': goalValue,
-            'unit': goalUnit,
-            'measurementType': measurementType,
-          },
-        },
-        'result': {
-          'outcome': outcome.wire,
-          'detectedValue': detectedValue,
-          'goalValue': goalValue,
-          'confidence': _round(confidence),
-          'failedRuleReason': failedRuleReason,
-        },
-        'versions': {
-          'schema': kMotionSessionSchema,
-          'verifier': verifierVersion,
-          'model': modelVersion,
-          'app': appVersion,
-          'gitCommit': gitCommit,
-        },
-        'device': {
-          'platform': platform,
-          'osVersion': osVersion,
-          'buildMode': buildMode,
-        },
-        'pipeline': {
-          'framesReceived': framesReceived,
-          'framesProcessed': framesProcessed,
-          'framesDropped': framesDropped,
-          'effectivePoseFps': _round(effectivePoseFps),
-        },
-        'events': [for (final e in events) e.toJson()],
-        'frames': [for (final f in frames) f.toJson()],
-        if (serverAnalysis != null) 'serverAnalysis': serverAnalysis,
-        if (extra.isNotEmpty) 'extra': extra,
-      };
+    'schemaVersion': kMotionSessionSchema,
+    'sessionId': sessionId,
+    'kind': kind.name,
+    'startedAt': startedAt.toUtc().toIso8601String(),
+    'endedAt': endedAt.toUtc().toIso8601String(),
+    'durationMs': durationMs,
+    'context': {
+      'activityId': activityId,
+      'activityTitle': activityTitle,
+      'raceId': raceId,
+      'goal': {
+        'value': goalValue,
+        'unit': goalUnit,
+        'measurementType': measurementType,
+      },
+    },
+    'result': {
+      'outcome': outcome.wire,
+      'detectedValue': detectedValue,
+      'goalValue': goalValue,
+      'confidence': _round(confidence),
+      'failedRuleReason': failedRuleReason,
+    },
+    'versions': {
+      'schema': kMotionSessionSchema,
+      'verifier': verifierVersion,
+      'model': modelVersion,
+      'app': appVersion,
+      'gitCommit': gitCommit,
+    },
+    'device': {
+      'platform': platform,
+      'osVersion': osVersion,
+      'buildMode': buildMode,
+    },
+    'pipeline': {
+      'framesReceived': framesReceived,
+      'framesProcessed': framesProcessed,
+      'framesDropped': framesDropped,
+      'effectivePoseFps': _round(effectivePoseFps),
+    },
+    'events': [for (final e in events) e.toJson()],
+    'frames': [for (final f in frames) f.toJson()],
+    if (objectFrames.isNotEmpty)
+      'objectFrames': [for (final f in objectFrames) f.toJson()],
+    if (serverAnalysis != null) 'serverAnalysis': serverAnalysis,
+    if (extra.isNotEmpty) 'extra': extra,
+  };
 
   /// gzip'd JSON — the storage / upload form.
   Uint8List toGzipBytes() =>
@@ -234,16 +242,26 @@ class MotionSessionArtifact {
       ..writeln('NUVO MOTION SESSION  $sessionId')
       ..writeln('activity   : $activityId ($activityTitle)  kind=${kind.name}')
       ..writeln('race       : ${raceId ?? '(none)'}')
-      ..writeln('goal       : ${goalValue ?? '-'} $goalUnit  ($measurementType)')
-      ..writeln('outcome    : ${outcome.wire}  '
-          'detected=$detectedValue/${goalValue ?? '-'}  '
-          'confidence=${_round(confidence)}')
-      ..writeln('failedRule : ${failedRuleReason.isEmpty ? 'none' : failedRuleReason}')
+      ..writeln(
+        'goal       : ${goalValue ?? '-'} $goalUnit  ($measurementType)',
+      )
+      ..writeln(
+        'outcome    : ${outcome.wire}  '
+        'detected=$detectedValue/${goalValue ?? '-'}  '
+        'confidence=${_round(confidence)}',
+      )
+      ..writeln(
+        'failedRule : ${failedRuleReason.isEmpty ? 'none' : failedRuleReason}',
+      )
       ..writeln('duration   : ${durationMs}ms')
-      ..writeln('pipeline   : received=$framesReceived processed=$framesProcessed '
-          'dropped=$framesDropped  fps=${_round(effectivePoseFps)}')
-      ..writeln('versions   : app=$appVersion commit=$gitCommit '
-          'verifier=$verifierVersion model=$modelVersion')
+      ..writeln(
+        'pipeline   : received=$framesReceived processed=$framesProcessed '
+        'dropped=$framesDropped  fps=${_round(effectivePoseFps)}',
+      )
+      ..writeln(
+        'versions   : app=$appVersion commit=$gitCommit '
+        'verifier=$verifierVersion model=$modelVersion',
+      )
       ..writeln('device     : $platform $osVersion ($buildMode)')
       ..writeln('frames     : ${frames.length} captured')
       ..writeln('')
@@ -255,9 +273,11 @@ class MotionSessionArtifact {
       if (e.detail != null) b.write('  ${e.detail}');
       if (e.metrics.isNotEmpty) {
         b.write('  {');
-        b.write(e.metrics.entries
-            .map((m) => '${m.key}=${_round(m.value)}')
-            .join(', '));
+        b.write(
+          e.metrics.entries
+              .map((m) => '${m.key}=${_round(m.value)}')
+              .join(', '),
+        );
         b.write('}');
       }
       b.writeln();
@@ -268,7 +288,9 @@ class MotionSessionArtifact {
         ..writeln('SERVER ANALYSIS')
         ..writeln('  ${jsonEncode(serverAnalysis)}');
     }
-    b.writeln('\nFull session: $sessionId.json.gz (schema $kMotionSessionSchema)');
+    b.writeln(
+      '\nFull session: $sessionId.json.gz (schema $kMotionSessionSchema)',
+    );
     return b.toString();
   }
 
