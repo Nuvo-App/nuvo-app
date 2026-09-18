@@ -152,6 +152,7 @@ app.get('/races/activities', async (c) => {
       }),
       currentReleaseId: entry.releaseId,
       currentReleaseChecksum: entry.releaseChecksum,
+      engineType: entry.engineType,
       requiredCapabilities: entry.requiredCapabilities,
       minimumAppBuild: entry.minimumAppBuild,
     }));

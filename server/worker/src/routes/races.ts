@@ -21,6 +21,7 @@ import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { safeEmit } from '../domain/notifications';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
+import { readMotionRelease } from '../domain/motionRegistry';
 
 export const racesRouter = new Hono<AppEnv>();
 racesRouter.use('*', requireAuth);
@@ -115,7 +116,11 @@ function parseMetadata(json: string | null): Record<string, unknown> {
   try { return JSON.parse(json) as Record<string, unknown>; } catch { return {}; }
 }
 
-function parsedVerifierSpec(race: RaceRow): { spec: Record<string, unknown> | null; invalidReason: string | null } {
+function parsedVerifierSpec(
+  race: RaceRow,
+  releasedSpec?: Record<string, unknown> | null,
+): { spec: Record<string, unknown> | null; invalidReason: string | null } {
+  if (releasedSpec) return { spec: releasedSpec, invalidReason: null };
   if (race.verifier_type !== CUSTOM_VERIFIER_TYPE) {
     return { spec: null, invalidReason: null };
   }
@@ -416,6 +421,7 @@ function shapeRaceResponse(
   viewerUserId: string | undefined,
   visibilityCtx: { allowedIds: Set<string>; blockedEitherWay: Set<string> },
   submissionResult?: SubmissionResult,
+  releasedSpec?: Record<string, unknown> | null,
 ) {
   const { participants, moves, invite, finalStandings } = collections;
   const { allowedIds, blockedEitherWay } = visibilityCtx;
@@ -449,7 +455,7 @@ function shapeRaceResponse(
   const proofRequirement = mapVerificationTypeToProofRequirement(race.verification_type);
   const config = raceConfigFromRow(race);
   const scoring = raceScoringConfigFromRow(race);
-  const verifier = parsedVerifierSpec(race);
+  const verifier = parsedVerifierSpec(race, releasedSpec);
   const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
 
@@ -563,7 +569,7 @@ async function buildRaceResponse(
   race: RaceRow,
   submissionResult?: SubmissionResult,
 ) {
-  const [participants, moves, invite, finalStandings] = await Promise.all([
+  const [participants, moves, invite, finalStandings, release] = await Promise.all([
     db.prepare(
       `SELECT rm.id, rm.user_id, rm.joined_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
@@ -594,6 +600,9 @@ async function buildRaceResponse(
        WHERE fs.race_id = ?
        ORDER BY fs.rank_position ASC`
     ).bind(race.id).all<StandingRow>(),
+    race.verifier_release_id
+      ? readMotionRelease(db, race.verifier_release_id)
+      : Promise.resolve(null),
   ]);
 
   const visibilityCtx = await loadViewerVisibilityContext(db, viewerUserId);
@@ -603,6 +612,7 @@ async function buildRaceResponse(
     viewerUserId,
     visibilityCtx,
     submissionResult,
+    release?.spec ?? null,
   );
 }
 

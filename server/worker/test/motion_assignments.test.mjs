@@ -14,7 +14,7 @@ function fakeDb({ openSession = false } = {}) {
     change_class: 'minor',
     engine_type: 'native_v1',
     spec_schema_version: 1,
-    spec_json: '{"activityId":"push_ups"}',
+    spec_json: '{"specSchemaVersion":1,"releaseId":"push_ups-release-1","activityId":"push_ups","engineType":"native_v1","nativeValidatorKey":"pushups_v1"}',
     checksum: 'sha256:old',
     required_capabilities_json: '[]',
     minimum_app_build: 'legacy',
@@ -31,6 +31,7 @@ function fakeDb({ openSession = false } = {}) {
     semver: '1.0.1',
     change_class: 'patch',
     checksum: 'sha256:new',
+    spec_json: '{"specSchemaVersion":1,"releaseId":"push_ups-release-2","activityId":"push_ups","engineType":"native_v1","nativeValidatorKey":"pushups_v1"}',
   };
   return {
     updates,

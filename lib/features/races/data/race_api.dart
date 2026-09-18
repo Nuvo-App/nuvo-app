@@ -33,6 +33,47 @@ class MotionCatalogFetch {
   final bool notModified;
 }
 
+class VerificationSession {
+  const VerificationSession({
+    required this.id,
+    required this.raceId,
+    required this.activityId,
+    required this.releaseId,
+    required this.releaseChecksum,
+    required this.status,
+  });
+
+  factory VerificationSession.fromJson(Map<String, dynamic> json) =>
+      VerificationSession(
+        id: json['id'] as String? ?? '',
+        raceId: json['raceId'] as String? ?? '',
+        activityId: json['activityId'] as String? ?? '',
+        releaseId: json['releaseId'] as String? ?? '',
+        releaseChecksum:
+            json['releaseChecksum'] as String? ??
+            json['checksum'] as String? ??
+            '',
+        status: json['status'] as String? ?? 'created',
+      );
+
+  final String id;
+  final String raceId;
+  final String activityId;
+  final String releaseId;
+  final String releaseChecksum;
+  final String status;
+}
+
+class VerificationSessionHandshake {
+  const VerificationSessionHandshake({
+    required this.session,
+    required this.verifier,
+  });
+
+  final VerificationSession session;
+  final Map<String, dynamic> verifier;
+}
+
 class RaceApi {
   RaceApi({http.Client? client}) : _client = client ?? http.Client();
 
@@ -42,7 +83,10 @@ class RaceApi {
     final headers = <String, String>{'Accept': 'application/json'};
     if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
     final res = await _guard(
-      () => _client.get(Uri.parse('$_kApiBase/races/activities'), headers: headers),
+      () => _client.get(
+        Uri.parse('$_kApiBase/races/activities'),
+        headers: headers,
+      ),
     );
     if (res.statusCode == 304) {
       return MotionCatalogFetch(
@@ -52,6 +96,78 @@ class RaceApi {
     }
     final json = _decode(res);
     return MotionCatalogFetch(json: json, etag: res.headers['etag']);
+  }
+
+  Future<VerificationSessionHandshake> createVerificationSession(
+    String token,
+    String raceId, {
+    required String appVersion,
+    required String appBuild,
+    required Set<String> runtimeCapabilities,
+  }) async {
+    final json = await _post('/races/$raceId/verification-sessions', token, {
+      'appVersion': appVersion,
+      'appBuild': appBuild,
+      'runtimeCapabilities': runtimeCapabilities.toList()..sort(),
+    });
+    final rawSession = json['session'];
+    final rawVerifier = json['verifier'];
+    if (rawSession is! Map<String, dynamic> ||
+        rawVerifier is! Map<String, dynamic>) {
+      throw const ApiException(
+        502,
+        'Verifier session response was incomplete.',
+      );
+    }
+    return VerificationSessionHandshake(
+      session: VerificationSession.fromJson(rawSession),
+      verifier: rawVerifier,
+    );
+  }
+
+  Future<VerificationSession> startVerificationSession(
+    String token,
+    String sessionId,
+  ) async {
+    final json = await _post(
+      '/verification-sessions/$sessionId/start',
+      token,
+      const {},
+    );
+    return VerificationSession.fromJson(
+      json['session'] as Map<String, dynamic>,
+    );
+  }
+
+  Future<VerificationSession> completeVerificationSession(
+    String token,
+    String sessionId, {
+    required String releaseId,
+    required String releaseChecksum,
+    required String status,
+    required int resultValue,
+    required double confidence,
+    String? failureReason,
+    String? motionSessionId,
+  }) async {
+    final body = <String, dynamic>{
+      'releaseId': releaseId,
+      'releaseChecksum': releaseChecksum,
+      'status': status,
+      'resultValue': resultValue,
+      'confidence': confidence,
+      if (failureReason != null && failureReason.isNotEmpty)
+        'failureReason': failureReason,
+      if (motionSessionId != null) 'motionSessionId': motionSessionId,
+    };
+    final json = await _post(
+      '/verification-sessions/$sessionId/complete',
+      token,
+      body,
+    );
+    return VerificationSession.fromJson(
+      json['session'] as Map<String, dynamic>,
+    );
   }
 
   Future<MotionAnalysisResult> analyzeMotion(
@@ -191,8 +307,10 @@ class RaceApi {
 
   Future<Map<String, dynamic>> _delete(String path, String token) async {
     final res = await _guard(
-      () =>
-          _client.delete(Uri.parse('$_kApiBase$path'), headers: _headers(token)),
+      () => _client.delete(
+        Uri.parse('$_kApiBase$path'),
+        headers: _headers(token),
+      ),
     );
     return _decode(res);
   }

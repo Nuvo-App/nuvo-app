@@ -89,7 +89,8 @@ class MotionCatalogActivity {
   /// intentionally excluded; the client must never guess a verifier.
   bool isCompatibleWith(Set<String> capabilities) =>
       availability == 'supported' &&
-      engineType == 'native_v1' &&
+      const {'native_v1', 'state_machine_v1', 'alternating_rep_v1', 'hold_v1'}
+          .contains(engineType) &&
       releaseId != null &&
       releaseChecksum != null &&
       engineType != null &&

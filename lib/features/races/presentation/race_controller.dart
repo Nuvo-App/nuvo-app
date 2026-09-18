@@ -74,6 +74,41 @@ class RaceController extends StateNotifier<RaceState> {
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _repo.analyzeMotion(request);
 
+  Future<VerificationSessionHandshake> createVerificationSession(
+    String raceId, {
+    required String appVersion,
+    required String appBuild,
+    required Set<String> runtimeCapabilities,
+  }) => _repo.createVerificationSession(
+    raceId,
+    appVersion: appVersion,
+    appBuild: appBuild,
+    runtimeCapabilities: runtimeCapabilities,
+  );
+
+  Future<VerificationSession> startVerificationSession(String sessionId) =>
+      _repo.startVerificationSession(sessionId);
+
+  Future<VerificationSession> completeVerificationSession(
+    String sessionId, {
+    required String releaseId,
+    required String releaseChecksum,
+    required String status,
+    required int resultValue,
+    required double confidence,
+    String? failureReason,
+    String? motionSessionId,
+  }) => _repo.completeVerificationSession(
+    sessionId,
+    releaseId: releaseId,
+    releaseChecksum: releaseChecksum,
+    status: status,
+    resultValue: resultValue,
+    confidence: confidence,
+    failureReason: failureReason,
+    motionSessionId: motionSessionId,
+  );
+
   Future<void> submitMotionTrainingExample({
     required MotionAnalysisRequest request,
     required String consentVersion,

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/remote_verifier_spec.dart';
 import '../data/race_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
@@ -11,6 +12,7 @@ enum CameraVerificationSource {
   explicitField,
   titleInference,
   customVerifier,
+  remoteRelease,
   unresolved,
 }
 
@@ -26,6 +28,8 @@ class CameraVerificationEligibility {
     required this.reason,
     this.unsupportedMessage = 'This movement cannot be camera verified yet.',
     this.customVerifierSpec,
+    this.remoteVerifierSpec,
+    this.verifierReleaseId,
   });
 
   final String raceId;
@@ -38,12 +42,16 @@ class CameraVerificationEligibility {
   final String reason;
   final String unsupportedMessage;
   final CustomPoseVerifierSpec? customVerifierSpec;
+  final RemoteVerifierSpec? remoteVerifierSpec;
+  final String? verifierReleaseId;
 
   MotionActivityDefinition? get movementDefinition =>
       motionActivityForType(movementType);
 
   bool get isCustomVerifier =>
       source == CameraVerificationSource.customVerifier;
+
+  bool get isRemoteVerifier => source == CameraVerificationSource.remoteRelease;
 }
 
 /// Backend `verifier_type` for a non-physical / honor-logged goal.
@@ -52,7 +60,8 @@ const manualLogVerifierType = 'manual_log';
 CameraVerificationEligibility resolveCameraVerification(Race race) {
   // A non-physical goal is authoritatively not camera-verifiable — never let a
   // movement-sounding title ("Run 5 miles this week") infer a camera flow.
-  if (race.verifierType == manualLogVerifierType || race.proofMode == 'manual') {
+  if (race.verifierType == manualLogVerifierType ||
+      race.proofMode == 'manual') {
     return CameraVerificationEligibility(
       raceId: race.id,
       raceTitle: race.title,
@@ -67,6 +76,9 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
   if (race.isCustomVerifierRace) {
     return _resolveCustomVerification(race);
   }
+
+  final remote = _resolveRemoteRelease(race);
+  if (remote != null) return remote;
 
   final explicitValue = race.activityId ?? race.aiActivityType;
   final explicit = _supportedActivityFromBackendValue(explicitValue);
@@ -117,6 +129,59 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
     reason: 'no_supported_movement',
   );
 }
+
+CameraVerificationEligibility? _resolveRemoteRelease(Race race) {
+  final raw = race.verifierSpec;
+  final engine = raw?['engineType'];
+  if (raw == null || engine == null || engine == 'native_v1') return null;
+  try {
+    final spec = RemoteVerifierSpec.fromJson(raw);
+    if (spec.activityId != race.effectiveAiActivityType ||
+        (race.verifierReleaseId != null &&
+            spec.releaseId != race.verifierReleaseId)) {
+      return _remoteIneligible(race, 'remote_release_identity_mismatch');
+    }
+    final movement = MotionActivityType.fromBackendValue(spec.activityId);
+    if (movement == null || movement == MotionActivityType.remote) {
+      return _remoteIneligible(
+        race,
+        'remote_activity_not_supported_by_runtime',
+      );
+    }
+    final definition = motionActivityForType(movement);
+    return CameraVerificationEligibility(
+      raceId: race.id,
+      raceTitle: race.title,
+      isCameraVerifiable: true,
+      movementType: movement,
+      source: CameraVerificationSource.remoteRelease,
+      preferredCameraView:
+          definition?.preferredCameraView ?? PreferredCameraView.frontPreferred,
+      instructions:
+          definition?.instructions ??
+          const ['Keep the required body regions visible.'],
+      reason: 'remote_release_resolved',
+      remoteVerifierSpec: spec,
+      verifierReleaseId: race.verifierReleaseId,
+    );
+  } on RemoteVerifierSpecException {
+    return _remoteIneligible(race, 'invalid_remote_verifier_spec');
+  }
+}
+
+CameraVerificationEligibility _remoteIneligible(Race race, String reason) =>
+    CameraVerificationEligibility(
+      raceId: race.id,
+      raceTitle: race.title,
+      isCameraVerifiable: false,
+      movementType: null,
+      source: CameraVerificationSource.unresolved,
+      preferredCameraView: null,
+      instructions: const [],
+      reason: reason,
+      unsupportedMessage: 'This verifier release is not available in this app.',
+      verifierReleaseId: race.verifierReleaseId,
+    );
 
 void debugLogCameraVerificationDecision(
   Race race,
@@ -244,7 +309,8 @@ CameraVerificationEligibility _eligible(
     movementType: movement,
     source: source,
     preferredCameraView: definition?.preferredCameraView,
-    instructions: definition?.instructions ?? const ['Keep your body in frame.'],
+    instructions:
+        definition?.instructions ?? const ['Keep your body in frame.'],
     reason: reason,
   );
 }

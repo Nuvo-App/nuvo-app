@@ -4,6 +4,8 @@ import 'custom_pose/custom_pose_sequence_runtime.dart';
 import 'custom_pose/custom_pose_verifier_spec.dart';
 import 'custom_pose/normalized_pose.dart';
 import 'motion_validators.dart';
+import 'remote_verifier_runtime.dart';
+import 'remote_verifier_spec.dart';
 
 enum VerifierType {
   presetPose('preset_pose'),
@@ -147,27 +149,125 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
   void dispose() {}
 }
 
+/// Adapts a validated control-plane runtime to the existing camera proof
+/// contract. The adapter deliberately requires a compiled movement definition
+/// for the proof payload so a remote release can never silently fall back to a
+/// different activity identity.
+class RemotePoseVerifierRuntime implements VerifierRuntime {
+  RemotePoseVerifierRuntime({
+    required RemoteVerifierSpec spec,
+    required MovementDefinition movement,
+    required int target,
+  }) : _spec = spec,
+       _movement = movement,
+       _runtime = createRemoteVerifierRuntime(spec: spec, target: target);
+
+  final RemoteVerifierSpec _spec;
+  final MovementDefinition _movement;
+  final RemoteVerifierRuntime _runtime;
+  RemoteVerifierUpdate? _lastUpdate;
+  int _framesAnalyzed = 0;
+  int _validPoseFrames = 0;
+
+  @override
+  VerifierType get type => VerifierType.presetPose;
+
+  @override
+  MovementDefinition get movement => _movement;
+
+  @override
+  int get targetValue => _runtime.target;
+
+  @override
+  int get currentValue => _runtime.count;
+
+  @override
+  bool get fullBodyVisible => _lastUpdate?.state != RemoteRuntimeState.notReady;
+
+  @override
+  String get failedRuleReason => _lastUpdate?.diagnostic ?? '';
+
+  @override
+  void start() => _runtime.start();
+
+  @override
+  VerifierUpdate update(NuvoPoseFrame frame) {
+    _framesAnalyzed++;
+    if (frame.hasPoints(_spec.requiredLandmarks)) _validPoseFrames++;
+    final update = _runtime.update(frame);
+    _lastUpdate = update;
+    return VerifierUpdate(
+      type: VerifierType.presetPose,
+      selectedMovement: _movement,
+      count: _movement.isHold ? 0 : update.count,
+      holdSeconds: _movement.isHold ? update.count : 0,
+      target: targetValue,
+      confidence: update.confidence,
+      completed: update.state == RemoteRuntimeState.completed,
+      debugValues: {
+        'progress': update.progress,
+        'elapsedMs': update.elapsedMs.toDouble(),
+      },
+      validatorState: update.state.name,
+      failedRuleReason: update.state == RemoteRuntimeState.notReady
+          ? update.diagnostic
+          : '',
+    );
+  }
+
+  @override
+  VerifierResult finish() {
+    final update = _lastUpdate;
+    final completed = _runtime.count >= targetValue;
+    return VerifierResult(
+      type: VerifierType.presetPose,
+      aiMotionResult: AiMotionResult(
+        activity: _movement.activity,
+        targetReps: targetValue,
+        detectedReps: _runtime.count,
+        confidence: update?.confidence ?? 0,
+        verificationStatus: completed ? 'ai_verified' : 'ai_failed',
+        verificationSummary: completed
+            ? 'Target complete.'
+            : (update?.guidance ??
+                  'Keep your movement in frame and try again.'),
+        framesAnalyzed: _framesAnalyzed,
+        validPoseFrames: _validPoseFrames,
+        durationMs: update?.elapsedMs ?? 0,
+        validatorVersion: '${_spec.releaseId}:${_spec.schemaVersion}',
+      ),
+    );
+  }
+
+  @override
+  void dispose() {}
+}
+
 class VerifierRuntimeResolution {
   const VerifierRuntimeResolution({
     required this.type,
     required this.eligibility,
     required this.presetMovement,
+    this.remoteVerifierSpec,
     required this.reason,
   });
 
   final VerifierType type;
   final CameraVerificationEligibility? eligibility;
   final MovementDefinition? presetMovement;
+  final RemoteVerifierSpec? remoteVerifierSpec;
   final String reason;
 
   bool get canCreateRuntime =>
-      (type == VerifierType.presetPose && presetMovement != null) ||
+      (type == VerifierType.presetPose &&
+          (presetMovement != null || remoteVerifierSpec != null)) ||
       (type == VerifierType.customPoseSequence &&
           eligibility?.customVerifierSpec != null);
 
   VerifierRuntime createRuntime({
     required int target,
     CustomPoseVerifierSpec? customSpec,
+    RemoteVerifierSpec? remoteSpecOverride,
   }) {
     final movement = presetMovement;
     if (type == VerifierType.customPoseSequence) {
@@ -184,6 +284,20 @@ class VerifierRuntimeResolution {
         );
       }
       return CustomPoseSequenceRuntime(spec: customSpec, target: target);
+    }
+    final executableRemoteSpec = remoteSpecOverride ?? remoteVerifierSpec;
+    if (executableRemoteSpec != null) {
+      final remoteMovement = presetMovement;
+      if (remoteMovement == null) {
+        throw const VerifierRuntimeException(
+          'Remote verifier requires a matching local proof activity.',
+        );
+      }
+      return RemotePoseVerifierRuntime(
+        spec: executableRemoteSpec,
+        movement: remoteMovement,
+        target: target,
+      );
     }
     if (movement == null) {
       throw VerifierRuntimeException(
@@ -223,6 +337,19 @@ class VerifierRuntimeResolver {
     if (!eligibility.isCameraVerifiable) {
       throw VerifierRuntimeException(
         'No verifier runtime for unsupported race: ${eligibility.reason}.',
+      );
+    }
+
+    if (eligibility.remoteVerifierSpec != null) {
+      final movement = _movementDefinitionForEligibility(eligibility);
+      return VerifierRuntimeResolution(
+        type: VerifierType.presetPose,
+        eligibility: eligibility,
+        presetMovement: movement,
+        remoteVerifierSpec: eligibility.remoteVerifierSpec,
+        reason: movement == null
+            ? 'remote_release_activity_not_supported'
+            : 'remote_release_runtime_resolved',
       );
     }
 

@@ -3,6 +3,7 @@ import {
   RACE_ACTIVITY_CATALOG,
   type RaceActivityDefinition,
 } from './raceActivities';
+import { validateMotionVerifierSpec } from './motionSpec';
 
 type RegistryActivityRow = {
   id: string;
@@ -20,6 +21,7 @@ type RegistryActivityRow = {
   metadata_json: string;
   release_id: string | null;
   release_checksum: string | null;
+  engine_type: string | null;
   required_capabilities_json: string | null;
   minimum_app_build: string | null;
 };
@@ -58,6 +60,7 @@ export type RegistryActivity = {
   availability: string;
   releaseId: string | null;
   releaseChecksum: string | null;
+  engineType: string | null;
   requiredCapabilities: string[];
   minimumAppBuild: string | null;
   legacy: RaceActivityDefinition | null;
@@ -116,6 +119,7 @@ function mapActivity(row: RegistryActivityRow): RegistryActivity {
     availability: row.availability,
     releaseId: row.release_id,
     releaseChecksum: row.release_checksum,
+    engineType: row.engine_type,
     requiredCapabilities: jsonValue<string[]>(row.required_capabilities_json, []),
     minimumAppBuild: row.minimum_app_build,
     legacy: legacyDefinition(row),
@@ -151,7 +155,7 @@ export async function readMotionCatalog(
     'SELECT a.id, a.display_name, a.category, a.proof_label, a.measurement_type, ' +
     'a.metric, a.suggested_targets_json, a.supported_formats_json, a.icon_key, ' +
     'a.sort_priority, a.featured, a.availability, a.metadata_json, ' +
-    'cr.release_id, vr.checksum AS release_checksum, ' +
+    'cr.release_id, vr.checksum AS release_checksum, vr.engine_type, ' +
     'vr.required_capabilities_json, vr.minimum_app_build ' +
     'FROM motion_activities a ' +
     'LEFT JOIN activity_channel_releases cr ON cr.activity_id = a.id AND cr.channel = ? ' +
@@ -177,7 +181,17 @@ export async function readMotionRelease(
     'compatibility_group, status, release_notes, created_at, published_at, parent_release_id ' +
     'FROM verifier_releases WHERE id = ? LIMIT 1',
   ).bind(releaseId).first<RegistryReleaseRow>();
-  return row ? mapRelease(row) : null;
+  if (!row) return null;
+  const release = mapRelease(row);
+  try {
+    validateMotionVerifierSpec(release.spec, {
+      releaseId: release.id,
+      activityId: release.activityId,
+    });
+  } catch {
+    return null;
+  }
+  return release;
 }
 
 export function legacyCatalogResponse() {

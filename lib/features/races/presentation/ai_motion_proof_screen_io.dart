@@ -28,9 +28,11 @@ import '../ai/motion_session/motion_session_providers.dart';
 import '../ai/motion_session/motion_session_recorder.dart';
 import '../ai/pose_detector_service.dart';
 import '../ai/rep_event_diagnostics.dart';
+import '../ai/remote_verifier_spec.dart';
 import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
 import '../data/motion_analysis_contract.dart';
+import '../data/motion_capabilities.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
@@ -85,6 +87,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String? _customMovementName;
   CustomPoseRuntimeUpdate? _customUpdate;
   String? _message;
+  String? _verificationSessionId;
+  String? _verificationReleaseId;
+  String? _verificationReleaseChecksum;
   bool _disposed = false;
   Timer? _recordingTimer;
   Duration _elapsed = Duration.zero;
@@ -227,6 +232,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         });
         return;
       }
+      RemoteVerifierSpec? sessionRemoteSpec;
+      if (eligibility.remoteVerifierSpec != null) {
+        final handshake = await ref
+            .read(raceControllerProvider.notifier)
+            .createVerificationSession(
+              race.id,
+              appVersion: 'local',
+              appBuild: MotionCapabilities.appBuild,
+              runtimeCapabilities: MotionCapabilities.current(),
+            );
+        _verificationSessionId = handshake.session.id;
+        _verificationReleaseId = handshake.session.releaseId;
+        _verificationReleaseChecksum = handshake.session.releaseChecksum;
+        final rawSpec = handshake.verifier['spec'];
+        if (rawSpec is Map) {
+          sessionRemoteSpec = RemoteVerifierSpec.fromJson(
+            Map<String, dynamic>.from(rawSpec),
+          );
+        }
+      }
       final VerifierRuntime runtime;
       if (isCustom) {
         runtime = resolution.createRuntime(
@@ -234,7 +259,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           customSpec: race.customVerifierSpec!,
         );
       } else {
-        runtime = resolution.createRuntime(target: target);
+        runtime = resolution.createRuntime(
+          target: target,
+          remoteSpecOverride: sessionRemoteSpec,
+        );
       }
       setState(() {
         _runtime = runtime;
@@ -389,27 +417,28 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
 
     _runtime.start();
+    final verificationSessionId = _verificationSessionId;
+    if (verificationSessionId != null && verificationSessionId.isNotEmpty) {
+      unawaited(_startVerificationSession(verificationSessionId));
+    }
     _elapsed = Duration.zero;
     _debugFrameCount = 0;
     _capturedFrames.clear();
     _serverAnalysis = null;
     _sessionFinalized = false;
-    _session =
-        MotionSessionRecorder(
-          kind: _isCustom
-              ? MotionSessionKind.custom
-              : MotionSessionKind.preset,
-          activityId: _isCustom
-              ? (_customMovementName ?? 'custom')
-              : _activity.backendValue,
-          activityTitle: _raceTitle.isEmpty
-              ? (_customMovementName ?? _activity.backendValue)
-              : _raceTitle,
-          measurementType: _measurementType,
-          raceId: widget.raceId,
-          goalValue: _runtime.targetValue,
-          goalUnit: _metric,
-        )..start();
+    _session = MotionSessionRecorder(
+      kind: _isCustom ? MotionSessionKind.custom : MotionSessionKind.preset,
+      activityId: _isCustom
+          ? (_customMovementName ?? 'custom')
+          : _activity.backendValue,
+      activityTitle: _raceTitle.isEmpty
+          ? (_customMovementName ?? _activity.backendValue)
+          : _raceTitle,
+      measurementType: _measurementType,
+      raceId: widget.raceId,
+      goalValue: _runtime.targetValue,
+      goalUnit: _metric,
+    )..start();
     _resetRepFlash();
     _poseDetector.resetDiagnostics();
     _skeletonHold.clear();
@@ -591,6 +620,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       });
       unawaited(_analyzeCapturedMotion());
       if (acceptedResult.isVerified) _scheduleAutoSubmit();
+      unawaited(
+        _completeVerificationSession(
+          value: acceptedResult.count,
+          confidence: acceptedResult.confidence,
+          verified: acceptedResult.isVerified,
+        ),
+      );
       return;
     }
     final result = verifierResult.aiMotionResult;
@@ -620,6 +656,56 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     });
     unawaited(_analyzeCapturedMotion());
     if (acceptedResult.isVerified) _scheduleAutoSubmit();
+    unawaited(
+      _completeVerificationSession(
+        value: acceptedResult.detectedReps,
+        confidence: acceptedResult.confidence,
+        verified: acceptedResult.isVerified,
+      ),
+    );
+  }
+
+  Future<void> _completeVerificationSession({
+    required int value,
+    required double confidence,
+    required bool verified,
+  }) async {
+    final sessionId = _verificationSessionId;
+    final releaseId = _verificationReleaseId;
+    final checksum = _verificationReleaseChecksum;
+    if (sessionId == null ||
+        sessionId.isEmpty ||
+        releaseId == null ||
+        releaseId.isEmpty ||
+        checksum == null ||
+        checksum.isEmpty) {
+      return;
+    }
+    try {
+      await ref
+          .read(raceControllerProvider.notifier)
+          .completeVerificationSession(
+            sessionId,
+            releaseId: releaseId,
+            releaseChecksum: checksum,
+            status: verified ? 'completed' : 'failed',
+            resultValue: value,
+            confidence: confidence,
+            failureReason: verified ? null : _runtime.failedRuleReason,
+          );
+    } catch (_) {
+      _debugLog('verificationSessionCompletionUnavailable');
+    }
+  }
+
+  Future<void> _startVerificationSession(String sessionId) async {
+    try {
+      await ref
+          .read(raceControllerProvider.notifier)
+          .startVerificationSession(sessionId);
+    } catch (_) {
+      _debugLog('verificationSessionStartUnavailable');
+    }
   }
 
   Future<void> _analyzeCapturedMotion() async {
@@ -703,11 +789,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     );
     _lastArtifact = artifact;
     // Fire-and-forget: staging + upload happen off the UI path.
-    unawaited(
-      ref.read(motionSessionUploadQueueProvider).enqueue(artifact),
+    unawaited(ref.read(motionSessionUploadQueueProvider).enqueue(artifact));
+    _debugLog(
+      'motionSessionQueued id=${artifact.sessionId} '
+      'outcome=${outcome.wire} frames=${artifact.frames.length}',
     );
-    _debugLog('motionSessionQueued id=${artifact.sessionId} '
-        'outcome=${outcome.wire} frames=${artifact.frames.length}');
     return artifact;
   }
 
@@ -816,8 +902,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   void _goToCelebration(Race race, int value, String status) {
     if (!mounted) return;
     final uid = ref.read(authControllerProvider).user?.id;
-    final proof =
-        race.recentProofs.isNotEmpty ? race.recentProofs.first : null;
+    final proof = race.recentProofs.isNotEmpty ? race.recentProofs.first : null;
     context.pushReplacement(
       '/race/${widget.raceId}/board-moved',
       extra: BoardMovedArgs(
@@ -949,9 +1034,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   int get _startingRaceProgress => _raceTotalBefore;
 
   ContinuationProgress get _continuation => ContinuationProgress(
-        startingRaceProgress: _startingRaceProgress,
-        raceTarget: _raceTargetValue ?? (_startingRaceProgress + _targetValue),
-      );
+    startingRaceProgress: _startingRaceProgress,
+    raceTarget: _raceTargetValue ?? (_startingRaceProgress + _targetValue),
+  );
 
   /// The full race target (reps / seconds / metres).
   int get _raceTarget => _continuation.raceTarget;
@@ -1178,7 +1263,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _pill(
-                        recording ? _raceProgressReadout : 'Goal: $_targetLabel',
+                        recording
+                            ? _raceProgressReadout
+                            : 'Goal: $_targetLabel',
                         color: recording
                             ? (_currentValue >= _targetValue
                                   ? NuvoColors.success
@@ -1777,7 +1864,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget _recordingHud() {
     // Pace + intensity only for a mile-scale run; a metre sprint shows the
     // phase line ("HALFWAY", "ALMOST THERE") instead.
-    final showsPace = _isDistanceRace &&
+    final showsPace =
+        _isDistanceRace &&
         motionProgressShowsPace(MotionMeasurementType.distance, _raceTarget);
     final phaseLine = motionProgressPhase(
       current: _displayedRaceProgress,

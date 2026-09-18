@@ -19,17 +19,57 @@ class RaceRepository {
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _withRefresh((token) => _api.analyzeMotion(token, request: request));
 
+  Future<VerificationSessionHandshake> createVerificationSession(
+    String raceId, {
+    required String appVersion,
+    required String appBuild,
+    required Set<String> runtimeCapabilities,
+  }) => _withRefresh(
+    (token) => _api.createVerificationSession(
+      token,
+      raceId,
+      appVersion: appVersion,
+      appBuild: appBuild,
+      runtimeCapabilities: runtimeCapabilities,
+    ),
+  );
+
+  Future<VerificationSession> startVerificationSession(String sessionId) =>
+      _withRefresh((token) => _api.startVerificationSession(token, sessionId));
+
+  Future<VerificationSession> completeVerificationSession(
+    String sessionId, {
+    required String releaseId,
+    required String releaseChecksum,
+    required String status,
+    required int resultValue,
+    required double confidence,
+    String? failureReason,
+    String? motionSessionId,
+  }) => _withRefresh(
+    (token) => _api.completeVerificationSession(
+      token,
+      sessionId,
+      releaseId: releaseId,
+      releaseChecksum: releaseChecksum,
+      status: status,
+      resultValue: resultValue,
+      confidence: confidence,
+      failureReason: failureReason,
+      motionSessionId: motionSessionId,
+    ),
+  );
+
   Future<void> uploadMotionSession({
     required Map<String, dynamic> metadata,
     required Uint8List gzipBytes,
-  }) =>
-      _withRefresh(
-        (token) => _api.uploadMotionSession(
-          token,
-          metadata: metadata,
-          gzipBytes: gzipBytes,
-        ),
-      );
+  }) => _withRefresh(
+    (token) => _api.uploadMotionSession(
+      token,
+      metadata: metadata,
+      gzipBytes: gzipBytes,
+    ),
+  );
 
   Future<void> submitMotionTrainingExample({
     required MotionAnalysisRequest request,
