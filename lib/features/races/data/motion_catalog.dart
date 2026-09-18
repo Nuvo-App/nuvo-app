@@ -20,6 +20,8 @@ class MotionCatalogActivity {
     required this.requiredCapabilities,
     required this.minimumAppBuild,
     required this.engineType,
+    required this.featured,
+    required this.sortPriority,
   });
 
   final String id;
@@ -37,6 +39,8 @@ class MotionCatalogActivity {
   final List<String> requiredCapabilities;
   final String? minimumAppBuild;
   final String? engineType;
+  final bool featured;
+  final int sortPriority;
 
   factory MotionCatalogActivity.fromJson(Map<String, dynamic> json) {
     final rawTargets = json['suggestedTargets'];
@@ -46,51 +50,75 @@ class MotionCatalogActivity {
       displayName: _requiredString(json['displayName']),
       category: _requiredString(json['category'], fallback: 'full_body'),
       proofLabel: _requiredString(json['proofLabel']),
-      measurementType: _requiredString(json['measurementType'], fallback: 'repetitions'),
+      measurementType: _requiredString(
+        json['measurementType'],
+        fallback: 'repetitions',
+      ),
       metric: _requiredString(json['metric'], fallback: 'reps'),
       suggestedTargets: rawTargets is List
-          ? rawTargets.whereType<num>().map((value) => value.toInt()).where((value) => value > 0).take(16).toList()
+          ? rawTargets
+                .whereType<num>()
+                .map((value) => value.toInt())
+                .where((value) => value > 0)
+                .take(16)
+                .toList()
           : const [],
       supportedFormats: rawFormats is List
           ? rawFormats.whereType<String>().take(8).toList()
           : const [],
       iconKey: _requiredString(json['iconKey'], fallback: 'fitness_center'),
-      availability: _requiredString(json['availability'], fallback: 'supported'),
-      releaseId: json['currentReleaseId'] as String? ?? json['releaseId'] as String?,
-      releaseChecksum: json['currentReleaseChecksum'] as String? ?? json['releaseChecksum'] as String?,
+      availability: _requiredString(
+        json['availability'],
+        fallback: 'supported',
+      ),
+      releaseId:
+          json['currentReleaseId'] as String? ?? json['releaseId'] as String?,
+      releaseChecksum:
+          json['currentReleaseChecksum'] as String? ??
+          json['releaseChecksum'] as String?,
       requiredCapabilities: json['requiredCapabilities'] is List
           ? (json['requiredCapabilities'] as List).whereType<String>().toList()
           : const [],
       minimumAppBuild: json['minimumAppBuild'] as String?,
       engineType: json['engineType'] as String?,
+      featured: json['featured'] == true || json['featured'] == 1,
+      sortPriority: json['sortPriority'] is num
+          ? (json['sortPriority'] as num).toInt()
+          : 100,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'displayName': displayName,
-        'category': category,
-        'proofLabel': proofLabel,
-        'measurementType': measurementType,
-        'metric': metric,
-        'suggestedTargets': suggestedTargets,
-        'supportedFormats': supportedFormats,
-        'iconKey': iconKey,
-        'availability': availability,
-        'currentReleaseId': releaseId,
-        'currentReleaseChecksum': releaseChecksum,
-        'requiredCapabilities': requiredCapabilities,
-        'minimumAppBuild': minimumAppBuild,
-        'engineType': engineType,
-      };
+    'id': id,
+    'displayName': displayName,
+    'category': category,
+    'proofLabel': proofLabel,
+    'measurementType': measurementType,
+    'metric': metric,
+    'suggestedTargets': suggestedTargets,
+    'supportedFormats': supportedFormats,
+    'iconKey': iconKey,
+    'availability': availability,
+    'currentReleaseId': releaseId,
+    'currentReleaseChecksum': releaseChecksum,
+    'requiredCapabilities': requiredCapabilities,
+    'minimumAppBuild': minimumAppBuild,
+    'engineType': engineType,
+    'featured': featured,
+    'sortPriority': sortPriority,
+  };
 
   /// An unknown activity is displayable only when the release advertises a
   /// client capability the current build actually owns. Unknown engines are
   /// intentionally excluded; the client must never guess a verifier.
   bool isCompatibleWith(Set<String> capabilities) =>
       availability == 'supported' &&
-      const {'native_v1', 'state_machine_v1', 'alternating_rep_v1', 'hold_v1'}
-          .contains(engineType) &&
+      const {
+        'native_v1',
+        'state_machine_v1',
+        'alternating_rep_v1',
+        'hold_v1',
+      }.contains(engineType) &&
       releaseId != null &&
       releaseChecksum != null &&
       engineType != null &&
@@ -114,18 +142,24 @@ class MotionCatalogActivity {
       title: displayName,
       metric: metricValue,
       suggestedTargets: suggestedTargets.isEmpty ? const [1] : suggestedTargets,
-      supportedFormats: formats.isEmpty ? const [RaceFormat.firstToGoal] : formats,
+      supportedFormats: formats.isEmpty
+          ? const [RaceFormat.firstToGoal]
+          : formats,
       aliases: [displayName.toLowerCase()],
       proofLabel: proofLabel,
       cameraInstruction: 'Follow the on-screen framing guide.',
-      instructions: const ['Keep the required body regions visible.', 'Move at a steady pace.', 'Finish each rep cleanly.'],
+      instructions: const [
+        'Keep the required body regions visible.',
+        'Move at a steady pace.',
+        'Finish each rep cleanly.',
+      ],
       icon: _iconFor(iconKey),
       framingLabel: 'Follow the release framing guide',
       preferredCameraView: PreferredCameraView.frontPreferred,
       category: _categoryFor(category),
       isHold: measurement == MotionMeasurementType.duration,
-      featured: false,
-      sortPriority: 100,
+      featured: featured,
+      sortPriority: sortPriority,
       measurementType: measurement,
       releaseId: releaseId,
       releaseChecksum: releaseChecksum,
@@ -137,27 +171,29 @@ class MotionCatalogActivity {
   static String _requiredString(Object? value, {String fallback = ''}) =>
       value is String && value.trim().isNotEmpty ? value.trim() : fallback;
 
-  static RaceFormat? _raceFormatFor(String value) => RaceFormat.values.where((format) => format.backendValue == value).firstOrNull;
+  static RaceFormat? _raceFormatFor(String value) => RaceFormat.values
+      .where((format) => format.backendValue == value)
+      .firstOrNull;
 
   static MovementCategory _categoryFor(String value) => switch (value) {
-        'upper_body' => MovementCategory.upperBody,
-        'lower_body' => MovementCategory.lowerBody,
-        'cardio' => MovementCategory.cardio,
-        'core' => MovementCategory.core,
-        _ => MovementCategory.fullBody,
-      };
+    'upper_body' => MovementCategory.upperBody,
+    'lower_body' => MovementCategory.lowerBody,
+    'cardio' => MovementCategory.cardio,
+    'core' => MovementCategory.core,
+    _ => MovementCategory.fullBody,
+  };
 
   static IconData _iconFor(String value) => switch (value) {
-        'accessibility_new' => Icons.accessibility_new_rounded,
-        'directions_walk' => Icons.directions_walk_rounded,
-        'directions_run' => Icons.directions_run_rounded,
-        'person_outline' => Icons.person_outline_rounded,
-        'straighten' => Icons.straighten_rounded,
-        'sports_gymnastics' => Icons.sports_gymnastics_rounded,
-        'terrain' => Icons.terrain_rounded,
-        'whatshot' => Icons.whatshot_rounded,
-        _ => Icons.fitness_center_rounded,
-      };
+    'accessibility_new' => Icons.accessibility_new_rounded,
+    'directions_walk' => Icons.directions_walk_rounded,
+    'directions_run' => Icons.directions_run_rounded,
+    'person_outline' => Icons.person_outline_rounded,
+    'straighten' => Icons.straighten_rounded,
+    'sports_gymnastics' => Icons.sports_gymnastics_rounded,
+    'terrain' => Icons.terrain_rounded,
+    'whatshot' => Icons.whatshot_rounded,
+    _ => Icons.fitness_center_rounded,
+  };
 }
 
 class MotionCatalogSnapshot {
@@ -173,11 +209,20 @@ class MotionCatalogSnapshot {
   final String? etag;
   final bool fromCache;
 
-  factory MotionCatalogSnapshot.fromJson(Map<String, dynamic> json, {String? etag, bool fromCache = false}) {
+  factory MotionCatalogSnapshot.fromJson(
+    Map<String, dynamic> json, {
+    String? etag,
+    bool fromCache = false,
+  }) {
     final raw = json['activities'];
-    if (raw is! List) throw const FormatException('Catalog activities are missing.');
-    final activities = raw.whereType<Map<String, dynamic>>().map(MotionCatalogActivity.fromJson).toList();
-    if (activities.isEmpty) throw const FormatException('Catalog contains no activities.');
+    if (raw is! List)
+      throw const FormatException('Catalog activities are missing.');
+    final activities = raw
+        .whereType<Map<String, dynamic>>()
+        .map(MotionCatalogActivity.fromJson)
+        .toList();
+    if (activities.isEmpty)
+      throw const FormatException('Catalog contains no activities.');
     return MotionCatalogSnapshot(
       catalogVersion: json['catalogVersion'] as String? ?? 'remote-unknown',
       activities: activities,
@@ -187,42 +232,52 @@ class MotionCatalogSnapshot {
   }
 
   Map<String, dynamic> toJson() => {
-        'catalogVersion': catalogVersion,
-        'etag': etag,
-        'activities': activities.map((activity) => activity.toJson()).toList(),
-      };
+    'catalogVersion': catalogVersion,
+    'etag': etag,
+    'activities': activities.map((activity) => activity.toJson()).toList(),
+  };
 
   List<MotionActivityDefinition> toDefinitions(Set<String> capabilities) {
-    final definitions = [...motionActivityDefinitions];
+    final definitions = <MotionActivityDefinition>[];
+    final remoteById = <String, MotionActivityDefinition>{};
     for (final activity in activities) {
-      if (motionActivityForBackendValue(activity.id) != null) continue;
       final definition = activity.toDefinition(capabilities);
-      if (definition != null) definitions.add(definition);
+      if (definition != null) remoteById[activity.id] = definition;
     }
+    for (final bundled in motionActivityDefinitions) {
+      definitions.add(remoteById.remove(bundled.activityId) ?? bundled);
+    }
+    // Database-published activities that were not present in the app build
+    // are appended only after the known identities have been overlaid.
+    definitions.addAll(remoteById.values);
     return definitions;
   }
 
   static MotionCatalogSnapshot bundled() => MotionCatalogSnapshot(
-        catalogVersion: 'bundled',
-        activities: [
-          for (final activity in motionActivityDefinitions)
-            MotionCatalogActivity(
-              id: activity.activityId,
-              displayName: activity.title,
-              category: activity.category.name,
-              proofLabel: activity.proofLabel,
-              measurementType: activity.resolvedMeasurementType.name,
-              metric: activity.metric.backendValue,
-              suggestedTargets: activity.suggestedTargets,
-              supportedFormats: activity.supportedFormats.map((format) => format.backendValue).toList(),
-              iconKey: activity.icon.codePoint.toString(),
-              availability: 'supported',
-              releaseId: null,
-              releaseChecksum: null,
-              requiredCapabilities: const [],
-              minimumAppBuild: null,
-              engineType: 'native_v1',
-            ),
-        ],
-      );
+    catalogVersion: 'bundled',
+    activities: [
+      for (final activity in motionActivityDefinitions)
+        MotionCatalogActivity(
+          id: activity.activityId,
+          displayName: activity.title,
+          category: activity.category.name,
+          proofLabel: activity.proofLabel,
+          measurementType: activity.resolvedMeasurementType.name,
+          metric: activity.metric.backendValue,
+          suggestedTargets: activity.suggestedTargets,
+          supportedFormats: activity.supportedFormats
+              .map((format) => format.backendValue)
+              .toList(),
+          iconKey: activity.icon.codePoint.toString(),
+          availability: 'supported',
+          releaseId: null,
+          releaseChecksum: null,
+          requiredCapabilities: const [],
+          minimumAppBuild: null,
+          engineType: 'native_v1',
+          featured: activity.featured,
+          sortPriority: activity.sortPriority,
+        ),
+    ],
+  );
 }

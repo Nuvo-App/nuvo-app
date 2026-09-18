@@ -6,7 +6,7 @@ import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
 import { RACE_ACTIVITY_CATALOG } from './domain/raceActivities';
-import { readMotionCatalog } from './domain/motionRegistry';
+import { readMotionCatalog, readMotionRelease } from './domain/motionRegistry';
 import { arenaRouter } from './routes/arena';
 import { motionRouter, motionSessionsRouter } from './routes/motion';
 import { verificationSessionsRouter } from './routes/verificationSessions';
@@ -150,6 +150,17 @@ app.get('/races/activities', async (c) => {
         availability: entry.availability,
         instructions: [],
       }),
+      // Registry columns are authoritative. The legacy object only supplies
+      // compatibility fields such as aliases and camera orientation.
+      id: entry.id,
+      displayName: entry.displayName,
+      supportedMetrics: [entry.metric],
+      defaultMetric: entry.metric,
+      suggestedTargets: entry.suggestedTargets,
+      supportedFormats: entry.supportedFormats,
+      availability: entry.availability,
+      featured: entry.featured,
+      sortPriority: entry.sortPriority,
       currentReleaseId: entry.releaseId,
       currentReleaseChecksum: entry.releaseChecksum,
       engineType: entry.engineType,
@@ -179,6 +190,32 @@ app.get('/races/activities', async (c) => {
       registryFallback: true,
     });
   }
+});
+
+// Immutable release download endpoint. The catalog intentionally contains
+// only stable metadata and release identity; the spec is fetched and cached
+// separately so a changed database pointer downloads exactly one new release.
+app.get('/motion/releases/:releaseId', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  const release = await readMotionRelease(c.env.DB, releaseId);
+  if (!release) return c.json({ ok: false, error: 'Verifier release not found.' }, 404);
+  const etag = `"${release.id}:${release.checksum}"`;
+  c.header('ETag', etag);
+  c.header('Cache-Control', 'public, max-age=300');
+  if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
+  return c.json({
+    ok: true,
+    release: {
+      id: release.id,
+      activityId: release.activityId,
+      engineType: release.engineType,
+      specSchemaVersion: release.specSchemaVersion,
+      spec: release.spec,
+      checksum: release.checksum,
+      requiredCapabilities: release.requiredCapabilities,
+      minimumAppBuild: release.minimumAppBuild,
+    },
+  });
 });
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
