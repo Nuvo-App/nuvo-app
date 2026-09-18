@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../data/ai_motion_models.dart';
 import '../../domain/motion_activity.dart';
+import '../object_motion_models.dart';
 import 'motion_session_artifact.dart';
 
 /// Accumulates one motion verification attempt into a [MotionSessionArtifact].
@@ -43,6 +44,7 @@ class MotionSessionRecorder {
   DateTime? _startedAt;
   DateTime? _endedAt;
   final List<NuvoPoseFrame> _frames = [];
+  final List<NuvoObjectMotionFrame> _objectFrames = [];
   final List<MotionSessionEvent> _events = [];
 
   // Result (filled by finish()).
@@ -67,11 +69,14 @@ class MotionSessionRecorder {
 
   void start() {
     _startedAt = DateTime.now();
-    _events.add(MotionSessionEvent(tMs: 0, type: 'note', detail: 'session start'));
+    _events.add(
+      MotionSessionEvent(tMs: 0, type: 'note', detail: 'session start'),
+    );
   }
 
-  int get _elapsedMs =>
-      _startedAt == null ? 0 : DateTime.now().difference(_startedAt!).inMilliseconds;
+  int get _elapsedMs => _startedAt == null
+      ? 0
+      : DateTime.now().difference(_startedAt!).inMilliseconds;
 
   /// One processed pose frame plus the verifier's read of it. Call once per
   /// frame that actually reached the validator.
@@ -89,42 +94,64 @@ class MotionSessionRecorder {
     _confidence = confidence;
 
     if (count > _lastCount) {
-      _events.add(MotionSessionEvent(
-        tMs: _elapsedMs,
-        type: 'rep_counted',
-        state: validatorState,
-        count: count,
-        metrics: debugValues,
-      ));
+      _events.add(
+        MotionSessionEvent(
+          tMs: _elapsedMs,
+          type: 'rep_counted',
+          state: validatorState,
+          count: count,
+          metrics: debugValues,
+        ),
+      );
       _lastCount = count;
     }
     if (validatorState != _lastState && validatorState.isNotEmpty) {
-      _events.add(MotionSessionEvent(
-        tMs: _elapsedMs,
-        type: 'validator_state',
-        state: validatorState,
-        detail: failedRuleReason.isEmpty ? null : 'rejected: $failedRuleReason',
-        metrics: debugValues,
-      ));
+      _events.add(
+        MotionSessionEvent(
+          tMs: _elapsedMs,
+          type: 'validator_state',
+          state: validatorState,
+          detail: failedRuleReason.isEmpty
+              ? null
+              : 'rejected: $failedRuleReason',
+          metrics: debugValues,
+        ),
+      );
       _lastState = validatorState;
     }
     if (readiness != null) {
-      _events.add(MotionSessionEvent(
-        tMs: _elapsedMs,
-        type: 'readiness',
-        state: readiness,
-      ));
+      _events.add(
+        MotionSessionEvent(
+          tMs: _elapsedMs,
+          type: 'readiness',
+          state: readiness,
+        ),
+      );
     }
   }
 
-  void recordEvent(String type, {String? detail, Map<String, double> metrics = const {}}) {
+  /// Records object detector output without accepting a camera frame. The
+  /// pose frame remains in the normal stream; this list carries only the
+  /// ball/hoop dots needed to replay an object composition.
+  void recordObjectFrame(NuvoObjectMotionFrame frame) {
+    if (!isRecording || _objectFrames.length >= _maxFrames) return;
+    _objectFrames.add(frame);
+  }
+
+  void recordEvent(
+    String type, {
+    String? detail,
+    Map<String, double> metrics = const {},
+  }) {
     if (_startedAt == null) return;
-    _events.add(MotionSessionEvent(
-      tMs: _elapsedMs,
-      type: type,
-      detail: detail,
-      metrics: metrics,
-    ));
+    _events.add(
+      MotionSessionEvent(
+        tMs: _elapsedMs,
+        type: type,
+        detail: detail,
+        metrics: metrics,
+      ),
+    );
   }
 
   void updatePipeline({
@@ -151,11 +178,13 @@ class MotionSessionRecorder {
     _detectedValue = detectedValue;
     if (confidence != null) _confidence = confidence;
     _failedRuleReason = failedRuleReason;
-    _events.add(MotionSessionEvent(
-      tMs: _elapsedMs,
-      type: 'note',
-      detail: 'session end (${_outcome.wire})',
-    ));
+    _events.add(
+      MotionSessionEvent(
+        tMs: _elapsedMs,
+        type: 'note',
+        detail: 'session end (${_outcome.wire})',
+      ),
+    );
   }
 
   MotionSessionArtifact build({Map<String, dynamic>? serverAnalysis}) {
@@ -177,21 +206,26 @@ class MotionSessionRecorder {
       failedRuleReason: _failedRuleReason,
       verifierVersion: _BaseValidatorVersion.value,
       modelVersion: 'mlkit-pose-base',
-      appVersion: const String.fromEnvironment('NUVO_APP_VERSION',
-          defaultValue: 'dev'),
-      gitCommit: const String.fromEnvironment('NUVO_GIT_COMMIT',
-          defaultValue: 'unknown'),
+      appVersion: const String.fromEnvironment(
+        'NUVO_APP_VERSION',
+        defaultValue: 'dev',
+      ),
+      gitCommit: const String.fromEnvironment(
+        'NUVO_GIT_COMMIT',
+        defaultValue: 'unknown',
+      ),
       platform: Platform.operatingSystem,
       osVersion: Platform.operatingSystemVersion,
       buildMode: kReleaseMode
           ? 'release'
           : kProfileMode
-              ? 'profile'
-              : 'debug',
+          ? 'profile'
+          : 'debug',
       framesReceived: _framesReceived,
       framesProcessed: _framesProcessed,
       effectivePoseFps: _effectiveFps,
       frames: List.unmodifiable(_frames),
+      objectFrames: List.unmodifiable(_objectFrames),
       events: List.unmodifiable(_events),
       serverAnalysis: serverAnalysis,
     );
