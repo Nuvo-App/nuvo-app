@@ -1,0 +1,148 @@
+{
+  "fixtureVersion": "stage0-2026-09-17",
+  "contractOwner": "docs/NUVO_MOTION_CONTROL_PLANE_PRD.md",
+  "activityIdentity": {
+    "idFormat": "snake_case",
+    "examples": ["push_ups", "arm_raises", "mountain_climbers"],
+    "unknownActivityBehavior": "reject_without_fallback"
+  },
+  "capabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "state_machine_v1",
+    "alternating_rep_v1",
+    "hold_v1",
+    "sequence_match_v1",
+    "native_pushups_v1",
+    "native_plank_hold_v1",
+    "native_high_knees_v1",
+    "native_arm_raises_v1",
+    "native_jump_squats_v1",
+    "native_lunge_jumps_v1",
+    "native_cadence_v1",
+    "native_mountain_climbers_v1",
+    "native_burpees_v1",
+    "native_calf_raises_v1",
+    "native_lateral_steps_v1"
+  ],
+  "catalogResponseShape": {
+    "catalogVersion": "catalog-2026-09.0",
+    "etag": "sha256:example-catalog-checksum",
+    "activities": [
+      {
+        "id": "arm_raises",
+        "displayName": "Arm Raises",
+        "category": "upper_body",
+        "proofLabel": "arm raises",
+        "measurementType": "repetitions",
+        "metric": "reps",
+        "currentReleaseId": "arm_raises-2026.09.0",
+        "currentReleaseChecksum": "sha256:example-release-checksum",
+        "minimumAppBuild": "remote-runtime-1",
+        "requiredCapabilities": [
+          "pose_landmarks_v1",
+          "derived_features_v1",
+          "state_machine_v1"
+        ]
+      }
+    ]
+  },
+  "releaseMetadataShape": {
+    "id": "arm_raises-2026.09.0",
+    "activityId": "arm_raises",
+    "semver": "2026.09.0",
+    "changeClass": "minor",
+    "engineType": "state_machine_v1",
+    "specSchemaVersion": 1,
+    "checksum": "sha256:example-release-checksum",
+    "compatibilityGroup": "arm_raises-state-machine-v1",
+    "status": "stable"
+  },
+  "declarativeSpecShape": {
+    "specSchemaVersion": 1,
+    "releaseId": "arm_raises-2026.09.0",
+    "activityId": "arm_raises",
+    "engineType": "state_machine_v1",
+    "measurementType": "repetitions",
+    "requiredCapabilities": [
+      "pose_landmarks_v1",
+      "derived_features_v1",
+      "state_machine_v1"
+    ],
+    "cameraPolicy": {
+      "preferredView": "front",
+      "requiredRegions": ["torso", "left_arm", "right_arm"],
+      "optionalRegions": ["hips"],
+      "minimumVisibility": 0.55,
+      "minimumPersonScale": 0.18,
+      "maximumPersonScale": 0.92,
+      "mirrorInvariant": true
+    },
+    "normalization": {
+      "anchor": "shoulder_midpoint",
+      "scale": "shoulder_width",
+      "translationInvariant": true
+    },
+    "features": [
+      {
+        "id": "left_wrist_above_shoulder",
+        "operator": "relative_y",
+        "a": "leftWrist",
+        "b": "leftShoulder"
+      },
+      {
+        "id": "right_wrist_above_shoulder",
+        "operator": "relative_y",
+        "a": "rightWrist",
+        "b": "rightShoulder"
+      }
+    ],
+    "states": ["ready", "raised"],
+    "transitions": [
+      {"from": "ready", "to": "raised", "when": "feature_thresholds"},
+      {"from": "raised", "to": "ready", "when": "feature_thresholds"}
+    ],
+    "timing": {
+      "minimumStateMs": 100,
+      "cooldownMs": 220,
+      "maximumRepMs": 5000
+    },
+    "feedback": {
+      "missing_required_region": "Keep your arms and shoulders in view.",
+      "waiting_for_start": "Move to the starting position.",
+      "partial_motion": "Finish the movement."
+    }
+  },
+  "rejectionCases": [
+    "unknown_engine",
+    "unknown_operator",
+    "unknown_landmark",
+    "non_finite_number",
+    "duplicate_feature_id",
+    "unreachable_state",
+    "activity_release_mismatch",
+    "checksum_mismatch",
+    "capability_mismatch",
+    "payload_too_large"
+  ],
+  "compatibilityExamples": [
+    {
+      "policy": "follow_compatible_patch",
+      "openSessionRelease": "arm_raises-2026.09.0",
+      "nextSessionRelease": "arm_raises-2026.09.1",
+      "allowed": true
+    },
+    {
+      "policy": "pinned",
+      "openSessionRelease": "arm_raises-2026.09.0",
+      "nextSessionRelease": "arm_raises-2026.09.0",
+      "allowed": true
+    },
+    {
+      "policy": "follow_compatible_patch",
+      "openSessionRelease": "arm_raises-2026.09.0",
+      "nextSessionRelease": "arm_raises-2026.10.0",
+      "allowed": false
+    }
+  ]
+}
