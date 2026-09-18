@@ -102,6 +102,15 @@ void main() {
       ),
       containsAll(<String>['object_dots_v1', 'object_composition_v1']),
     );
+    final producer = ModelBackedBasketballObjectDotProducer(
+      detect:
+          ({
+            required image,
+            required camera,
+            required deviceOrientation,
+          }) async => const <NuvoObjectDetection>[],
+    );
+    expect(producer.capabilities, contains('object_composition_v1'));
   });
 
   test('detector boxes project to stable ball and hoop dots', () {
