@@ -127,16 +127,17 @@ class BasketballShotRuntime {
       case ObjectCompositionState.descending:
         if (_crossedHoopPlane(previousY, ball.y, hoop.y)) {
           final made = (ball.x - hoop.x).abs() <= spec.madeRadius;
-          if (made &&
-              _transition('ball_through_hoop', ObjectCompositionState.made)) {
-            _count++;
-          } else {
-            _transition('shot_timeout', ObjectCompositionState.missed);
+          if (made) {
+            if (_transition('ball_through_hoop', ObjectCompositionState.made)) {
+              _count++;
+              return _update('ball_through_hoop', 0.94);
+            }
+            return _update('undeclared_made_transition', 0.2);
           }
-          return _update(
-            made ? 'ball_through_hoop' : 'shot_missed',
-            made ? 0.94 : 0.7,
-          );
+          // Passing the hoop plane outside the made radius is evidence for a
+          // miss, not a terminal transition by itself. Keep tracking until
+          // the declared timeout transition closes the shot.
+          return _update('ball_outside_hoop', 0.7);
         }
         return _update('tracking_descent', 0.82);
       case ObjectCompositionState.unsupported:
