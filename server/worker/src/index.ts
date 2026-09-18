@@ -155,9 +155,13 @@ app.get('/races/activities', async (c) => {
       requiredCapabilities: entry.requiredCapabilities,
       minimumAppBuild: entry.minimumAppBuild,
     }));
+    const etag = `\"${catalog.catalogVersion}:${activities.length}\"`;
+    c.header('ETag', etag);
+    if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
     return c.json({
       ok: true,
       catalogVersion: catalog.catalogVersion,
+      etag,
       count: activities.length,
       supported: activities.filter((a) => a.availability === 'supported').map((a) => a.id),
       activities,
@@ -167,6 +171,7 @@ app.get('/races/activities', async (c) => {
     console.error('[motion-registry] registry read unavailable; using legacy catalog:', error);
     return c.json({
       ok: true,
+      etag: 'legacy-catalog',
       count: RACE_ACTIVITY_CATALOG.length,
       supported: RACE_ACTIVITY_CATALOG.filter((a) => a.availability === 'supported').map((a) => a.id),
       activities: RACE_ACTIVITY_CATALOG,

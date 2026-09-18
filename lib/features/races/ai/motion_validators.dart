@@ -274,6 +274,7 @@ AiMotionActivity? _aiMotionActivityForType(MotionActivityType type) {
     MotionActivityType.stepUps => AiMotionActivity.stepUps,
     MotionActivityType.calfRaises => AiMotionActivity.calfRaises,
     MotionActivityType.lateralSteps => AiMotionActivity.lateralSteps,
+    MotionActivityType.remote => null,
   };
 }
 
@@ -503,9 +504,7 @@ MotionValidator createMotionValidator(
   AiMotionActivity.lateralSteps => LateralStepsValidator(
     targetValue: targetValue,
   ),
-  AiMotionActivity.calfRaises => CalfRaisesValidator(
-    targetValue: targetValue,
-  ),
+  AiMotionActivity.calfRaises => CalfRaisesValidator(targetValue: targetValue),
   AiMotionActivity.burpees => MultiPhaseSequenceValidator(
     activity: AiMotionActivity.burpees,
     targetValue: targetValue,
@@ -792,6 +791,14 @@ class PushupsValidator extends _BaseValidator {
   // test/fast_rep_replay_test.dart — 5 reps at the frame floor counted 3).
   static const _repCooldownFrames = _phaseStableFrames - 1;
 
+  // Pushups are an upper-body movement. Hips are useful for scale when the
+  // detector has them, but requiring them made a low camera angle, grass, or
+  // a shadow on the floor invalidate an otherwise usable upper-body pose.
+  // Keep the minimum signal conservative: both shoulders, elbows, and wrists
+  // must still be present before a frame can influence the counter.
+  static const _minimumLandmarkLikelihood = 0.25;
+  static const _minimumUsableVisibility = 0.30;
+
   final RepCounterStateMachine _counter = RepCounterStateMachine();
   double? _topShoulderY;
   int _cooldownFrames = 0;
@@ -809,6 +816,8 @@ class PushupsValidator extends _BaseValidator {
   @override
   String get coachingText => _pushupFeedback;
   @override
+  bool get fullBodyVisible => lastVisibilityScore >= _minimumUsableVisibility;
+  @override
   String get stateLabel =>
       '${_counter.stableState.name}:${_cooldownFrames > 0 ? 'cooldown' : 'ready'}';
   @override
@@ -819,8 +828,6 @@ class PushupsValidator extends _BaseValidator {
     'rightElbow',
     'leftWrist',
     'rightWrist',
-    'leftHip',
-    'rightHip',
   ];
 
   @override
@@ -835,6 +842,26 @@ class PushupsValidator extends _BaseValidator {
   }
 
   @override
+  MotionValidationUpdate update(NuvoPoseFrame frame) {
+    framesAnalyzed++;
+    if (!frame.hasPoints(
+      criticalPoints,
+      minLikelihood: _minimumLandmarkLikelihood,
+    )) {
+      invalidPoseFrames++;
+      lastVisibilityScore = 0;
+      lastFailureReason = 'missing_landmarks';
+      return snapshot();
+    }
+
+    validPoseFrames++;
+    lastVisibilityScore = _visibilityScore(frame);
+    if (!fullBodyVisible) lastFailureReason = 'low_landmark_confidence';
+    analyzeValidFrame(frame);
+    return snapshot();
+  }
+
+  @override
   void analyzeValidFrame(NuvoPoseFrame frame) {
     final features = PoseFeatureExtractor(frame);
     final leftElbowAngle = features.elbowAngle(left: true);
@@ -845,13 +872,15 @@ class PushupsValidator extends _BaseValidator {
     final wristY =
         (frame.point('leftWrist')!.y + frame.point('rightWrist')!.y) / 2;
     final handsBelowShoulders =
-        wristY > shoulderY - features.torsoHeight * 0.15;
-    final symmetrical = symmetryError < 62;
+        wristY > shoulderY - _movementScale(frame) * 0.30;
+    // A three-quarter view, a low-contrast sleeve, or a partially occluded
+    // elbow can make the two sides disagree without invalidating the rep.
+    final symmetrical = symmetryError < 90;
 
     _lastElbowAngle = elbowAngle;
     _lastSymmetryError = symmetryError;
 
-    if (!fullBodyVisible) {
+    if (lastVisibilityScore < _minimumUsableVisibility) {
       lastFailureReason = 'low_landmark_confidence';
       _pushupFeedback = 'Position yourself in frame.';
       _counter.update(MovementPhase.unknown);
@@ -895,8 +924,8 @@ class PushupsValidator extends _BaseValidator {
     } else if (_cooldownFrames == 0 &&
         // A pushup must show both elbow flexion and the torso moving down.
         // Using either signal lets arm-only movement or camera jitter count.
-        elbowAngle < 112 &&
-        shoulderDrop > features.torsoHeight * 0.16) {
+        elbowAngle < 125 &&
+        shoulderDrop > _movementScale(frame) * 0.10) {
       _counter.update(MovementPhase.active, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Keep going.';
     } else {
@@ -935,14 +964,38 @@ class PushupsValidator extends _BaseValidator {
 
     // A close/cropped camera view often produces a high-confidence pose, but
     // the extremities are clipped. Reject that geometry before phase matching.
-    const edgeMargin = 0.04;
-    const maximumSpan = 0.88;
+    const edgeMargin = 0.02;
+    const maximumSpan = 0.98;
     return minX >= edgeMargin &&
         maxX <= 1 - edgeMargin &&
         minY >= edgeMargin &&
         maxY <= 1 - edgeMargin &&
         maxX - minX <= maximumSpan &&
         maxY - minY <= maximumSpan;
+  }
+
+  double _movementScale(NuvoPoseFrame frame) {
+    final leftShoulder = frame.point('leftShoulder')!;
+    final rightShoulder = frame.point('rightShoulder')!;
+    final dx = leftShoulder.x - rightShoulder.x;
+    final dy = leftShoulder.y - rightShoulder.y;
+    final shoulderSpan = math.sqrt(
+      dx * dx + dy * dy,
+    );
+
+    final leftHip = frame.point('leftHip');
+    final rightHip = frame.point('rightHip');
+    if (leftHip != null && rightHip != null) {
+      final torsoHeight =
+          (((leftHip.y + rightHip.y) / 2) -
+                  ((leftShoulder.y + rightShoulder.y) / 2))
+              .abs();
+      return math.max(shoulderSpan, torsoHeight).clamp(0.12, 0.6);
+    }
+
+    // Hips are optional. Shoulder span is stable enough for a normalized
+    // upper-body depth signal and avoids inventing a hidden lower-body pose.
+    return shoulderSpan.clamp(0.12, 0.6);
   }
 }
 
@@ -1061,9 +1114,11 @@ class ArmRaisesValidator extends _BaseValidator {
     // distance. torsoHeight is the shoulder→hip span; multipliers preserve the
     // previous effective offsets (~0.04 / ~0.03 / ~0.16) for a standard torso.
     final torsoHeight = (hipY - shoulderY).abs().clamp(0.12, 0.6);
-    final up = leftWrist.y < shoulderY - torsoHeight * 0.16 &&
+    final up =
+        leftWrist.y < shoulderY - torsoHeight * 0.16 &&
         rightWrist.y < shoulderY - torsoHeight * 0.16;
-    final down = leftWrist.y > shoulderY + torsoHeight * 0.12 &&
+    final down =
+        leftWrist.y > shoulderY + torsoHeight * 0.12 &&
         rightWrist.y > shoulderY + torsoHeight * 0.12 &&
         leftWrist.y < hipY + torsoHeight * 0.64;
     _lastWristRise = shoulderY - (leftWrist.y + rightWrist.y) / 2;
@@ -1813,7 +1868,7 @@ class ConfigurableRepValidator extends _BaseValidator {
       _lastRightKneeAngle = features.kneeAngle(left: false);
       _lastKneeSeparation =
           (frame.point('leftKnee')!.x - frame.point('rightKnee')!.x).abs() /
-              features.hipWidth;
+          features.hipWidth;
       // Direction of the descent signal (lower hipToKneeRatio = deeper).
       // Small deadband so pose jitter reads as "flat", not oscillating.
       final delta = _lastHipToKneeRatio - _prevDepthSignal;
@@ -2157,7 +2212,8 @@ const squatJackRepDefinition = RepMovementDefinition(
 // See CadenceDetector's doc comment for the full rationale.
 // ─────────────────────────────────────────────────────────────────────────────
 
-typedef CadenceSideSignal = CadenceSide? Function(PoseFeatureExtractor features);
+typedef CadenceSideSignal =
+    CadenceSide? Function(PoseFeatureExtractor features);
 
 class CadenceMovementDefinition {
   const CadenceMovementDefinition({
@@ -2171,10 +2227,10 @@ class CadenceMovementDefinition {
     this.stableFrames = 2,
     this.measuresVirtualDistance = false,
   }) : assert(
-          sideSignal != null || gaitSignalFactory != null,
-          'a cadence definition needs either a stateless sideSignal or a '
-          'stateful gaitSignalFactory',
-        );
+         sideSignal != null || gaitSignalFactory != null,
+         'a cadence definition needs either a stateless sideSignal or a '
+         'stateful gaitSignalFactory',
+       );
 
   final AiMotionActivity activity;
   final List<String> requiredLandmarks;
@@ -2211,10 +2267,11 @@ class CadenceMovementDefinition {
 /// finish behavior — the same contract every other preset validator honors.
 class CadenceMotionValidator extends _BaseValidator {
   CadenceMotionValidator({required this.definition, required super.targetValue})
-      : _cadence = CadenceDetector(stableFrames: definition.stableFrames),
-        _gaitSignal = definition.gaitSignalFactory?.call(),
-        _distance =
-            definition.measuresVirtualDistance ? VirtualDistanceEstimator() : null;
+    : _cadence = CadenceDetector(stableFrames: definition.stableFrames),
+      _gaitSignal = definition.gaitSignalFactory?.call(),
+      _distance = definition.measuresVirtualDistance
+          ? VirtualDistanceEstimator()
+          : null;
 
   final CadenceMovementDefinition definition;
   final CadenceDetector _cadence;
@@ -2285,20 +2342,23 @@ class CadenceMotionValidator extends _BaseValidator {
     }
     final counted = _cadence.update(_lastMeasuredSide);
     if (counted) {
-      _repIntervalFrames =
-          _lastCountFrame < 0 ? 0 : framesAnalyzed - _lastCountFrame;
+      _repIntervalFrames = _lastCountFrame < 0
+          ? 0
+          : framesAnalyzed - _lastCountFrame;
       _lastCountFrame = framesAnalyzed;
     }
 
     final estimator = _distance;
     if (estimator != null) {
       _firstFrameAt ??= frame.createdAt;
-      final elapsedMs =
-          frame.createdAt.difference(_firstFrameAt!).inMilliseconds;
+      final elapsedMs = frame.createdAt
+          .difference(_firstFrameAt!)
+          .inMilliseconds;
       estimator.onFrame(elapsedMs);
       if (counted) {
         estimator.onStep(
-          swingAmplitude: _gaitSignal?.lastSwing.abs() ?? _lastKneeStagger.abs(),
+          swingAmplitude:
+              _gaitSignal?.lastSwing.abs() ?? _lastKneeStagger.abs(),
           torsoHeight: features.torsoHeight,
           elapsedMs: elapsedMs,
         );
@@ -2308,15 +2368,15 @@ class CadenceMotionValidator extends _BaseValidator {
 
   @override
   Map<String, double> get debugValues => {
-        ...super.debugValues,
-        'currentSide': _sideCode(_cadence.currentSide),
-        'measuredSide': _sideCode(_lastMeasuredSide),
-        'kneeStagger': _lastKneeStagger,
-        if (_gaitSignal case final g?) 'gaitSwing': g.lastSwing,
-        'cycles': _cadence.cycles.toDouble(),
-        'repIntervalFrames': _repIntervalFrames.toDouble(),
-        if (_distance case final d?) ...d.metrics,
-      };
+    ...super.debugValues,
+    'currentSide': _sideCode(_cadence.currentSide),
+    'measuredSide': _sideCode(_lastMeasuredSide),
+    'kneeStagger': _lastKneeStagger,
+    if (_gaitSignal case final g?) 'gaitSwing': g.lastSwing,
+    'cycles': _cadence.cycles.toDouble(),
+    'repIntervalFrames': _repIntervalFrames.toDouble(),
+    if (_distance case final d?) ...d.metrics,
+  };
 
   double _sideCode(CadenceSide? side) =>
       side == null ? -1 : (side == CadenceSide.left ? 0 : 1);
@@ -2572,8 +2632,9 @@ const buttKicksDefinition = CadenceMovementDefinition(
 /// A mountain climber is: a roughly plank-oriented torso, one knee driving
 /// toward the chest along that torso line, then alternating. The signal:
 ///  - **plank context** = the shoulder→hip vector is meaningfully off
-///    vertical (`|Δy| / torsoLen`). Standing (High Knees) sits at ~0.95+;
-///    a plank at any camera angle is well below. No screen coordinate.
+///    vertical (`|Δy| / torsoLen`) and the hands stay near shoulder height.
+///    The hand-height check keeps the context useful for front/three-quarter
+///    phone views without accepting a standing knee raise with the arms up.
 ///  - **knee drive** = projection of `(knee − hipCentre)` onto the torso
 ///    axis, normalized by torso length — how far up toward the shoulders the
 ///    knee is. The extended-back leg is strongly negative; a knee driving in
@@ -2594,15 +2655,23 @@ class MountainClimbersValidator extends _BaseValidator {
   int _lastCountFrame = -1;
   int _repIntervalFrames = 0;
 
-
-  /// Torso at least this far off vertical to read as a plank. Standing ≈ 0.95;
-  /// a front/3-4 plank ≈ 0.5-0.75; a side plank ≈ 0.1-0.3.
-  static const _plankVerticalnessMax = 0.88;
+  /// Vertical projection can reach 1.0 when a front-facing plank is viewed
+  /// down the length of the body. The hand-height gate below is what keeps a
+  /// standing knee raise from entering this context.
+  static const _plankVerticalnessMax = 1.05;
 
   /// Drive-difference (already torso-normalized) for one knee to read as the
-  /// active side. The driving knee sits ~0.5-1 torso-length ahead of the
-  /// extended one.
-  static const _driveGap = 0.40;
+  /// active side. Real footage often shows a smaller projected gap than the
+  /// idealized side-biased fixture.
+  static const _driveGap = 0.26;
+
+  /// A hand line close to the shoulder line is a useful support cue for a
+  /// mountain climber. This is deliberately permissive for camera tilt.
+  static const _handShoulderVerticalGapMax = 0.55;
+
+  /// Fallback knee-proximity gap for front-facing views where projection onto
+  /// the torso axis under-reports a knee drive.
+  static const _proximityGap = 0.24;
 
   @override
   AiMotionActivity get activity => AiMotionActivity.mountainClimbers;
@@ -2613,18 +2682,18 @@ class MountainClimbersValidator extends _BaseValidator {
   @override
   String get coachingText => fullBodyVisible
       ? (_verticalness >= _plankVerticalnessMax
-          ? 'Get into a plank, then drive your knees in'
-          : 'Drive your knees in, alternating sides')
+            ? 'Get into a plank, then drive your knees in'
+            : 'Drive your knees in, alternating sides')
       : 'Full body needed';
   @override
   List<String> get criticalPoints => const [
-        'leftShoulder',
-        'rightShoulder',
-        'leftHip',
-        'rightHip',
-        'leftKnee',
-        'rightKnee',
-      ];
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+  ];
 
   @override
   void resetState() {
@@ -2647,6 +2716,8 @@ class MountainClimbersValidator extends _BaseValidator {
     final rh = frame.point('rightHip')!;
     final lk = frame.point('leftKnee')!;
     final rk = frame.point('rightKnee')!;
+    final lw = frame.point('leftWrist');
+    final rw = frame.point('rightWrist');
 
     final scx = (ls.x + rs.x) / 2, scy = (ls.y + rs.y) / 2;
     final hcx = (lh.x + rh.x) / 2, hcy = (lh.y + rh.y) / 2;
@@ -2654,12 +2725,29 @@ class MountainClimbersValidator extends _BaseValidator {
     final torsoLen = math.sqrt(tx * tx + ty * ty).clamp(0.06, 0.8);
 
     _verticalness = ty.abs() / torsoLen;
-    _torsoAngleDeg = math.atan2(tx.abs(), ty.abs().clamp(1e-4, 1)) * 180 / math.pi;
+    _torsoAngleDeg =
+        math.atan2(tx.abs(), ty.abs().clamp(1e-4, 1)) * 180 / math.pi;
 
     double drive(NuvoPosePoint k) =>
         ((k.x - hcx) * tx + (k.y - hcy) * ty) / (torsoLen * torsoLen);
     _leftDrive = drive(lk);
     _rightDrive = drive(rk);
+
+    final shoulderY = (ls.y + rs.y) / 2;
+    final handSupport = lw == null || rw == null
+        ? true
+        : (((lw.y + rw.y) / 2) - shoulderY).abs() / torsoLen <
+              _handShoulderVerticalGapMax;
+
+    double proximity(NuvoPosePoint knee) {
+      final dx = knee.x - scx;
+      final dy = knee.y - scy;
+      return 1 - math.sqrt(dx * dx + dy * dy) / torsoLen;
+    }
+
+    final leftProximity = proximity(lk);
+    final rightProximity = proximity(rk);
+    final proximityDifference = leftProximity - rightProximity;
 
     // The drive gap has huge margin (~1 torso-length vs a 0.4 threshold), so
     // the raw per-frame value is used directly — smoothing only lagged the
@@ -2667,36 +2755,41 @@ class MountainClimbersValidator extends _BaseValidator {
     // CadenceDetector's stable-frame + alternation requirement.
     _lastGap = _leftDrive - _rightDrive;
     CadenceSide? side;
-    if (_verticalness < _plankVerticalnessMax) {
+    if (_verticalness < _plankVerticalnessMax && handSupport) {
       if (_lastGap > _driveGap) {
         side = CadenceSide.left;
       } else if (_lastGap < -_driveGap) {
+        side = CadenceSide.right;
+      } else if (proximityDifference > _proximityGap) {
+        side = CadenceSide.left;
+      } else if (proximityDifference < -_proximityGap) {
         side = CadenceSide.right;
       }
     }
     _lastSide = side;
     final counted = _cadence.update(side);
     if (counted) {
-      _repIntervalFrames =
-          _lastCountFrame < 0 ? 0 : framesAnalyzed - _lastCountFrame;
+      _repIntervalFrames = _lastCountFrame < 0
+          ? 0
+          : framesAnalyzed - _lastCountFrame;
       _lastCountFrame = framesAnalyzed;
     }
   }
 
   @override
   Map<String, double> get debugValues => {
-        ...super.debugValues,
-        'torsoAngle': _torsoAngleDeg,
-        'plankContext': _verticalness < _plankVerticalnessMax ? 1 : 0,
-        'verticalness': _verticalness,
-        'leftKneeDrive': _leftDrive,
-        'rightKneeDrive': _rightDrive,
-        'currentSide': _lastSide == null
-            ? -1
-            : (_lastSide == CadenceSide.left ? 0 : 1),
-        'count': _cadence.cycles.toDouble(),
-        'repIntervalFrames': _repIntervalFrames.toDouble(),
-      };
+    ...super.debugValues,
+    'torsoAngle': _torsoAngleDeg,
+    'plankContext': _verticalness < _plankVerticalnessMax ? 1 : 0,
+    'verticalness': _verticalness,
+    'leftKneeDrive': _leftDrive,
+    'rightKneeDrive': _rightDrive,
+    'currentSide': _lastSide == null
+        ? -1
+        : (_lastSide == CadenceSide.left ? 0 : 1),
+    'count': _cadence.cycles.toDouble(),
+    'repIntervalFrames': _repIntervalFrames.toDouble(),
+  };
 }
 
 /// Lateral Steps / Side Steps: alternating LEFT/RIGHT stepping direction
@@ -2707,7 +2800,7 @@ class MountainClimbersValidator extends _BaseValidator {
 /// signal function.
 class LateralStepsValidator extends _BaseValidator {
   LateralStepsValidator({required super.targetValue})
-      : _cadence = CadenceDetector(stableFrames: 2);
+    : _cadence = CadenceDetector(stableFrames: 2);
 
   final CadenceDetector _cadence;
   double? _baselineCenterX;
@@ -2727,15 +2820,16 @@ class LateralStepsValidator extends _BaseValidator {
   @override
   String get statusText => 'Tracking lateral steps';
   @override
-  String get coachingText =>
-      fullBodyVisible ? 'Step out to the side, alternating directions' : 'Full body needed';
+  String get coachingText => fullBodyVisible
+      ? 'Step out to the side, alternating directions'
+      : 'Full body needed';
   @override
   List<String> get criticalPoints => const [
-        'leftHip',
-        'rightHip',
-        'leftAnkle',
-        'rightAnkle',
-      ];
+    'leftHip',
+    'rightHip',
+    'leftAnkle',
+    'rightAnkle',
+  ];
 
   @override
   void resetState() {
@@ -2774,19 +2868,20 @@ class LateralStepsValidator extends _BaseValidator {
     // camera/positioning drift without absorbing an intentional step.
     if (offset.abs() < neutralThreshold) {
       _baselineCenterX =
-          _baselineCenterX! * (1 - _baselineEmaAlpha) + ankleCenterX * _baselineEmaAlpha;
+          _baselineCenterX! * (1 - _baselineEmaAlpha) +
+          ankleCenterX * _baselineEmaAlpha;
     }
   }
 
   @override
   Map<String, double> get debugValues => {
-        ...super.debugValues,
-        'offset': _lastOffset,
-        'currentSide': _lastMeasuredSide == null
-            ? -1
-            : (_lastMeasuredSide == CadenceSide.left ? 0 : 1),
-        'cycles': _cadence.cycles.toDouble(),
-      };
+    ...super.debugValues,
+    'offset': _lastOffset,
+    'currentSide': _lastMeasuredSide == null
+        ? -1
+        : (_lastMeasuredSide == CadenceSide.left ? 0 : 1),
+    'cycles': _cadence.cycles.toDouble(),
+  };
 }
 
 /// Calf Raises: small-amplitude rise onto the toes. Uses a rolling ankle-Y
@@ -2820,22 +2915,23 @@ class CalfRaisesValidator extends _BaseValidator {
   @override
   String get statusText => 'Tracking calf raises';
   @override
-  String get coachingText =>
-      fullBodyVisible ? 'Rise onto your toes, then lower fully' : 'Lower body needed';
+  String get coachingText => fullBodyVisible
+      ? 'Rise onto your toes, then lower fully'
+      : 'Lower body needed';
   @override
   List<String> get criticalPoints => const [
-        // Shoulders are required here (unlike the cadence movements) because
-        // torsoHeight (shoulder-to-hip span) is the body-scale reference the
-        // small calf-raise amplitude is measured against.
-        'leftShoulder',
-        'rightShoulder',
-        'leftHip',
-        'rightHip',
-        'leftKnee',
-        'rightKnee',
-        'leftAnkle',
-        'rightAnkle',
-      ];
+    // Shoulders are required here (unlike the cadence movements) because
+    // torsoHeight (shoulder-to-hip span) is the body-scale reference the
+    // small calf-raise amplitude is measured against.
+    'leftShoulder',
+    'rightShoulder',
+    'leftHip',
+    'rightHip',
+    'leftKnee',
+    'rightKnee',
+    'leftAnkle',
+    'rightAnkle',
+  ];
 
   @override
   void resetState() {
@@ -2849,10 +2945,12 @@ class CalfRaisesValidator extends _BaseValidator {
     final features = PoseFeatureExtractor(frame);
     final ankleY = features.ankleY;
     final kneesExtended =
-        features.kneeAngle(left: true) > 150 && features.kneeAngle(left: false) > 150;
+        features.kneeAngle(left: true) > 150 &&
+        features.kneeAngle(left: false) > 150;
 
     _baselineAnkleY ??= ankleY;
-    final rise = _baselineAnkleY! - ankleY; // positive = ankle rose (body lifted)
+    final rise =
+        _baselineAnkleY! - ankleY; // positive = ankle rose (body lifted)
     _lastRise = rise;
 
     final riseThreshold = features.torsoHeight * _riseFraction;
@@ -2868,8 +2966,8 @@ class CalfRaisesValidator extends _BaseValidator {
     final phase = rise > riseThreshold
         ? MovementPhase.active
         : rise < lowerThreshold
-            ? MovementPhase.start
-            : MovementPhase.unknown;
+        ? MovementPhase.start
+        : MovementPhase.unknown;
     // stableFrames: 2 — a calf raise is a small, quick motion right above the
     // landmark-noise floor; requiring 3 clean consecutive active frames drops
     // real reps at a normal tempo. Hysteresis still comes from the separate
@@ -2881,14 +2979,15 @@ class CalfRaisesValidator extends _BaseValidator {
     // without absorbing the raise itself.
     if (phase == MovementPhase.start) {
       _baselineAnkleY =
-          _baselineAnkleY! * (1 - _baselineEmaAlpha) + ankleY * _baselineEmaAlpha;
+          _baselineAnkleY! * (1 - _baselineEmaAlpha) +
+          ankleY * _baselineEmaAlpha;
     }
   }
 
   @override
   Map<String, double> get debugValues => {
-        ...super.debugValues,
-        'rise': _lastRise,
-        'count': _counter.count.toDouble(),
-      };
+    ...super.debugValues,
+    'rise': _lastRise,
+    'count': _counter.count.toDouble(),
+  };
 }

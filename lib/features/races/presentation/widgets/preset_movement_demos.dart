@@ -800,5 +800,6 @@ MovementDemo? movementDemoForType(MotionActivityType type) {
     MotionActivityType.stepUps => null,
     MotionActivityType.calfRaises => null,
     MotionActivityType.lateralSteps => null,
+    MotionActivityType.remote => null,
   };
 }

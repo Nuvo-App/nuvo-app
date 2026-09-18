@@ -78,7 +78,7 @@ class RaceDraft {
     if (isCustom) {
       return verifierSpec != null && customActivityName!.isNotEmpty;
     }
-    return activity.type.backendValue.isNotEmpty;
+    return activity.activityId.isNotEmpty;
   }
 
   /// Activity name to show in review pages (preset, custom, or manual).
@@ -171,14 +171,14 @@ class RaceDraft {
       'targetValue': targetValue,
       'unit': metric.backendValue,
       'targetUnit': metric.backendValue,
-      'activityId': activity.type.backendValue,
+      'activityId': activity.activityId,
       'metric': metric.backendValue,
       'format': format.backendValue,
       'recurrence': recurrence.backendValue,
       'proofRequirement': 'ai_check',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
-      'aiActivityType': activity.type.backendValue,
+      'aiActivityType': activity.activityId,
       'visibility': visibility,
     };
   }
