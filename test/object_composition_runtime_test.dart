@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 import 'package:nuvo/features/races/ai/object_composition_runtime.dart';
+import 'package:nuvo/features/races/ai/object_composition_replay.dart';
 import 'package:nuvo/features/races/ai/object_composition_spec.dart';
 import 'package:nuvo/features/races/ai/object_dot_producer.dart';
 import 'package:nuvo/features/races/ai/object_motion_models.dart';
@@ -195,6 +196,29 @@ void main() {
 
     expect(blocked.state, ObjectCompositionState.descending);
     expect(blocked.count, 0);
+  });
+
+  test('dot-only replay evaluator stops at the first terminal decision', () {
+    final start = DateTime.utc(2026, 9, 18);
+    final frames = <NuvoObjectMotionFrame>[
+      _frame(start, 0.6, 0.5),
+      _frame(start.add(const Duration(milliseconds: 100)), 0.6, 0.5),
+      _frame(start.add(const Duration(milliseconds: 200)), 0.8, 0.4),
+      _frame(start.add(const Duration(milliseconds: 300)), 0.75, 0.3),
+      _frame(start.add(const Duration(milliseconds: 400)), 0.7, 0.32),
+      _frame(start.add(const Duration(milliseconds: 500)), 0.52, 0.51),
+      // This frame must not be evaluated after the made decision.
+      _frame(start.add(const Duration(milliseconds: 600)), 0.52, 0.52),
+    ];
+    final result = const ObjectCompositionReplayEvaluator().evaluate(
+      spec: ObjectCompositionSpec.fromJson(_spec()),
+      frames: frames,
+    );
+
+    expect(result.made, isTrue);
+    expect(result.detectedCount, 1);
+    expect(result.updates.last.event, 'ball_through_hoop');
+    expect(result.updates, hasLength(6));
   });
 }
 
