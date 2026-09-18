@@ -3,6 +3,7 @@ const ALLOWED_ENGINES = new Set([
   'state_machine_v1',
   'alternating_rep_v1',
   'hold_v1',
+  'object_composition_v1',
 ]);
 
 const ALLOWED_LANDMARKS = new Set([
@@ -16,6 +17,7 @@ const ALLOWED_SPEC_KEYS = new Set([
   'measurementType', 'requiredCapabilities', 'requiredLandmarks',
   'stableFrames', 'startRules', 'activeRules', 'leftRules', 'rightRules',
   'holdRules', 'minHoldMs', 'maxHoldMs', 'nativeValidatorKey',
+  'requiredObjects', 'composition',
 ]);
 
 export class MotionSpecValidationError extends Error {
@@ -82,6 +84,87 @@ function rules(value: unknown, field: string): Rule[] {
   });
 }
 
+const ALLOWED_OBJECT_KINDS = new Set(['ball', 'hoop']);
+const ALLOWED_COMPOSITION_EVENTS = new Set([
+  'ball_controlled', 'ball_released', 'ball_ascending', 'ball_descending',
+  'ball_through_hoop', 'shot_timeout',
+]);
+
+function boundedNumber(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw new MotionSpecValidationError(`${field}_out_of_range`);
+  }
+  return value;
+}
+
+function requiredObjects(value: unknown): Array<{ id: string; kind: string; minLikelihood: number }> {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 8) {
+    throw new MotionSpecValidationError('required_objects_invalid');
+  }
+  const objects = value.map((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new MotionSpecValidationError('object_requirement_invalid');
+    }
+    const item = entry as Record<string, unknown>;
+    const unknown = Object.keys(item).filter((key) => !['id', 'kind', 'minLikelihood'].includes(key));
+    if (unknown.length) throw new MotionSpecValidationError('object_requirement_unknown_key');
+    const id = stringValue(item.id, 'object_id', 80);
+    const kind = stringValue(item.kind, 'object_kind', 40);
+    if (!ALLOWED_OBJECT_KINDS.has(kind)) throw new MotionSpecValidationError('object_kind_unsupported');
+    const minLikelihood = boundedNumber(item.minLikelihood ?? 0.35, 'object_likelihood', 0.2, 1);
+    return { id, kind, minLikelihood };
+  });
+  if (new Set(objects.map((entry) => entry.id)).size !== objects.length) {
+    throw new MotionSpecValidationError('object_id_duplicate');
+  }
+  return objects;
+}
+
+function composition(value: unknown, objectIds: Set<string>) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MotionSpecValidationError('composition_invalid');
+  }
+  const item = value as Record<string, unknown>;
+  const allowed = new Set([
+    'states', 'transitions', 'startState', 'terminalStates', 'ballObjectId',
+    'hoopObjectId', 'stableFrames', 'maxShotMs', 'controlDistance',
+    'releaseDistance', 'minUpwardVelocity', 'minDownwardVelocity',
+    'hoopPlaneTolerance', 'madeRadius',
+  ]);
+  if (Object.keys(item).some((key) => !allowed.has(key))) throw new MotionSpecValidationError('composition_unknown_key');
+  const states = strings(item.states, 'composition_states', 16);
+  const transitions = item.transitions;
+  if (!Array.isArray(transitions) || transitions.length === 0 || transitions.length > 24) {
+    throw new MotionSpecValidationError('composition_transitions_invalid');
+  }
+  for (const entry of transitions) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new MotionSpecValidationError('composition_transition_invalid');
+    const transition = entry as Record<string, unknown>;
+    if (Object.keys(transition).some((key) => !['from', 'to', 'event'].includes(key))) throw new MotionSpecValidationError('composition_transition_unknown_key');
+    const from = stringValue(transition.from, 'transition_from', 80);
+    const to = stringValue(transition.to, 'transition_to', 80);
+    const event = stringValue(transition.event, 'transition_event', 80);
+    if (!states.includes(from) || !states.includes(to) || !ALLOWED_COMPOSITION_EVENTS.has(event)) {
+      throw new MotionSpecValidationError('composition_transition_reference_invalid');
+    }
+  }
+  const startState = stringValue(item.startState, 'composition_start_state', 80);
+  if (!states.includes(startState)) throw new MotionSpecValidationError('composition_start_state_invalid');
+  const terminalStates = strings(item.terminalStates, 'composition_terminal_states', 8);
+  if (terminalStates.some((state) => !states.includes(state))) throw new MotionSpecValidationError('composition_terminal_state_invalid');
+  const ballObjectId = stringValue(item.ballObjectId, 'ball_object_id', 80);
+  const hoopObjectId = stringValue(item.hoopObjectId, 'hoop_object_id', 80);
+  if (!objectIds.has(ballObjectId) || !objectIds.has(hoopObjectId)) throw new MotionSpecValidationError('composition_object_reference_invalid');
+  boundedInt(item.stableFrames, 'composition_stable_frames', 1, 12, 2);
+  boundedInt(item.maxShotMs, 'composition_max_shot_ms', 1000, 60 * 1000, 8000);
+  boundedNumber(item.controlDistance, 'composition_control_distance', 0.01, 1);
+  boundedNumber(item.releaseDistance, 'composition_release_distance', 0.01, 1);
+  boundedNumber(item.minUpwardVelocity, 'composition_upward_velocity', 0.001, 10);
+  boundedNumber(item.minDownwardVelocity, 'composition_downward_velocity', 0.001, 10);
+  boundedNumber(item.hoopPlaneTolerance, 'composition_hoop_tolerance', 0.001, 1);
+  boundedNumber(item.madeRadius, 'composition_made_radius', 0.001, 1);
+}
+
 export function validateMotionVerifierSpec(
   spec: unknown,
   expected?: { releaseId?: string; activityId?: string },
@@ -115,6 +198,11 @@ export function validateMotionVerifierSpec(
   const left = rules(value.leftRules, 'left_rules');
   const right = rules(value.rightRules, 'right_rules');
   const hold = rules(value.holdRules, 'hold_rules');
+  if (engineType === 'object_composition_v1') {
+    const objects = requiredObjects(value.requiredObjects);
+    composition(value.composition, new Set(objects.map((entry) => entry.id)));
+    return value;
+  }
   if (engineType === 'state_machine_v1' && (!start.length || !active.length)) throw new MotionSpecValidationError('state_rules_missing');
   if (engineType === 'alternating_rep_v1' && (!left.length || !right.length)) throw new MotionSpecValidationError('alternating_rules_missing');
   if (engineType === 'hold_v1' && !hold.length) throw new MotionSpecValidationError('hold_rules_missing');
