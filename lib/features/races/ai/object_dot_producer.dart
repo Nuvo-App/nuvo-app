@@ -1,3 +1,6 @@
+import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
+
 import '../data/ai_motion_models.dart';
 import 'object_motion_models.dart';
 
@@ -13,6 +16,9 @@ abstract interface class ObjectDotProducer {
   Set<String> get capabilities;
 
   Future<NuvoObjectMotionFrame?> process({
+    required CameraImage image,
+    required CameraDescription camera,
+    required DeviceOrientation deviceOrientation,
     required NuvoPoseFrame pose,
     required DateTime createdAt,
   });
@@ -29,6 +35,9 @@ class UnsupportedObjectDotProducer implements ObjectDotProducer {
 
   @override
   Future<NuvoObjectMotionFrame?> process({
+    required CameraImage image,
+    required CameraDescription camera,
+    required DeviceOrientation deviceOrientation,
     required NuvoPoseFrame pose,
     required DateTime createdAt,
   }) async => null;

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:nuvo/features/races/ai/object_composition_runtime.dart';
 import 'package:nuvo/features/races/ai/object_composition_spec.dart';
 import 'package:nuvo/features/races/ai/object_dot_producer.dart';
@@ -207,6 +209,9 @@ class _TestObjectDotProducer implements ObjectDotProducer {
 
   @override
   Future<NuvoObjectMotionFrame?> process({
+    required CameraImage image,
+    required CameraDescription camera,
+    required DeviceOrientation deviceOrientation,
     required NuvoPoseFrame pose,
     required DateTime createdAt,
   }) async => null;
