@@ -131,8 +131,8 @@ internalRouter.post('/motion/releases/drafts', async (c) => {
       `INSERT INTO verifier_releases
          (id, activity_id, semver, change_class, engine_type, spec_schema_version,
           spec_json, checksum, required_capabilities_json, minimum_app_build,
-          compatibility_group, status, release_notes, parent_release_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+          compatibility_group, status, release_notes, parent_release_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, CURRENT_TIMESTAMP)`,
     ).bind(
       releaseId, activityId, semver, changeClass,
       String((spec as Record<string, unknown>).engineType),
@@ -207,7 +207,7 @@ internalRouter.post('/motion/releases/:releaseId/promote', async (c) => {
   const previous = await c.env.DB.prepare(
     'SELECT release_id FROM activity_channel_releases WHERE activity_id = ? AND channel = ? LIMIT 1',
   ).bind(release.activity_id, channel).first<{ release_id: string }>();
-  await c.env.DB.prepare("UPDATE verifier_releases SET status = ?, published_at = COALESCE(published_at, CURRENT_TIMESTAMP) WHERE id = ?").bind(channel, releaseId).run();
+  await c.env.DB.prepare("UPDATE verifier_releases SET status = ?, published_at = COALESCE(published_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(channel, releaseId).run();
   await c.env.DB.prepare(
     `INSERT INTO activity_channel_releases (activity_id, channel, release_id, rollout_percent)
      VALUES (?, ?, ?, ?)
