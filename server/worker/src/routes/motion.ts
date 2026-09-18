@@ -50,6 +50,50 @@ motionRouter.get('/models/current', async (c) => {
   return c.json({ ok: true, model: model ?? { model_version: motionModelVersion, input_schema_version: motionAnalysisSchemaVersion, artifactKey: null, artifactSha256: null, supportedMotionIds: [] } });
 });
 
+// Model bytes are served only for an explicitly promoted release. The client
+// still executes the model locally; this endpoint is a hash-addressed artifact
+// transport, not a remote inference path or executable-code download.
+motionRouter.get('/models/:modelVersion/artifact', async (c) => {
+  const modelVersion = c.req.param('modelVersion').trim();
+  if (!modelVersion || modelVersion === 'current') {
+    return c.json({ ok: false, error: 'A concrete model version is required.' }, 400);
+  }
+
+  const model = await c.env.DB.prepare(
+    `SELECT model_version, artifact_key, artifact_sha256
+       FROM motion_model_releases
+      WHERE model_version = ? AND status = 'production'
+      LIMIT 1`,
+  ).bind(modelVersion).first<{
+    model_version: string;
+    artifact_key: string | null;
+    artifact_sha256: string | null;
+  }>();
+  if (!model || !model.artifact_key || !model.artifact_sha256) {
+    return c.json({ ok: false, error: 'Production model artifact not found.' }, 404);
+  }
+
+  const object = await c.env.PROFILE_PHOTOS.get(model.artifact_key);
+  if (!object) {
+    return c.json({ ok: false, error: 'Production model artifact is unavailable.' }, 503);
+  }
+
+  const etag = `"${model.artifact_sha256}"`;
+  c.header('ETag', etag);
+  c.header('X-Model-Version', model.model_version);
+  c.header('X-Model-SHA256', model.artifact_sha256);
+  c.header('Cache-Control', 'private, max-age=300');
+  if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('ETag', etag);
+  headers.set('X-Model-Version', model.model_version);
+  headers.set('X-Model-SHA256', model.artifact_sha256);
+  headers.set('Cache-Control', 'private, max-age=300');
+  return new Response(object.body, { headers });
+});
+
 // ── Motion Session telemetry ingest ────────────────────────────────────────
 //
 // Mounted at `/motion-sessions` (see index.ts). The client sends the gzip
