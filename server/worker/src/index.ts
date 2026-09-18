@@ -6,6 +6,7 @@ import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
 import { RACE_ACTIVITY_CATALOG } from './domain/raceActivities';
+import { readMotionCatalog } from './domain/motionRegistry';
 import { arenaRouter } from './routes/arena';
 import { motionRouter, motionSessionsRouter } from './routes/motion';
 import { internalRouter } from './routes/internal';
@@ -129,16 +130,49 @@ app.get('/j/:token', async (c) => {
 // here, `POST /races` will reject it with "Choose a supported activity".
 // Registered before `app.route('/races', ...)` so it bypasses that router's
 // auth middleware.
-app.get('/races/activities', (c) =>
-  c.json({
-    ok: true,
-    count: RACE_ACTIVITY_CATALOG.length,
-    supported: RACE_ACTIVITY_CATALOG.filter((a) => a.availability === 'supported').map(
-      (a) => a.id,
-    ),
-    activities: RACE_ACTIVITY_CATALOG,
-  }),
-);
+app.get('/races/activities', async (c) => {
+  try {
+    const catalog = await readMotionCatalog(c.env.DB);
+    const activities = catalog.activities.map((entry) => ({
+      ...(entry.legacy ?? {
+        id: entry.id,
+        displayName: entry.displayName,
+        aliases: [],
+        supportedMetrics: [entry.metric],
+        defaultMetric: entry.metric,
+        validatorKey: 'registry_release',
+        verificationMethod: 'camera_pose',
+        cameraOrientation: 'front',
+        sessionBehavior: entry.measurementType === 'duration' ? 'validated_timer' : 'count_reps',
+        suggestedTargets: entry.suggestedTargets,
+        supportedFormats: entry.supportedFormats,
+        availability: entry.availability,
+        instructions: [],
+      }),
+      currentReleaseId: entry.releaseId,
+      currentReleaseChecksum: entry.releaseChecksum,
+      requiredCapabilities: entry.requiredCapabilities,
+      minimumAppBuild: entry.minimumAppBuild,
+    }));
+    return c.json({
+      ok: true,
+      catalogVersion: catalog.catalogVersion,
+      count: activities.length,
+      supported: activities.filter((a) => a.availability === 'supported').map((a) => a.id),
+      activities,
+    });
+  } catch (error) {
+    // Deploy the Worker before applying D1 0015 without breaking old clients.
+    console.error('[motion-registry] registry read unavailable; using legacy catalog:', error);
+    return c.json({
+      ok: true,
+      count: RACE_ACTIVITY_CATALOG.length,
+      supported: RACE_ACTIVITY_CATALOG.filter((a) => a.availability === 'supported').map((a) => a.id),
+      activities: RACE_ACTIVITY_CATALOG,
+      registryFallback: true,
+    });
+  }
+});
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 app.route('/auth', authRouter);

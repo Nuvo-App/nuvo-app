@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../types';
+import { readMotionCatalog, readMotionRelease } from '../domain/motionRegistry';
 
 // Internal Motion Session lookup — for the coding agent / support tooling to
 // pull what Nuvo actually saw during a verification attempt. Gated on a shared
@@ -16,6 +17,20 @@ internalRouter.use('*', async (c, next) => {
   }
   await next();
   return;
+});
+
+internalRouter.get('/motion/catalog', async (c) => {
+  const channel = c.req.query('channel') ?? 'stable';
+  if (!['internal', 'beta', 'stable'].includes(channel)) {
+    return c.json({ ok: false, error: 'Unsupported motion channel.' }, 400);
+  }
+  return c.json({ ok: true, channel, ...(await readMotionCatalog(c.env.DB, channel)) });
+});
+
+internalRouter.get('/motion/releases/:releaseId', async (c) => {
+  const release = await readMotionRelease(c.env.DB, c.req.param('releaseId'));
+  if (!release) return c.json({ ok: false, error: 'Release not found.' }, 404);
+  return c.json({ ok: true, release });
 });
 
 type SessionRow = Record<string, unknown>;
