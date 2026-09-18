@@ -24,6 +24,8 @@ class Race {
     this.verificationMethod = 'camera_pose',
     this.verifierType = 'preset_pose',
     this.verifierVersion,
+    this.verifierSpec,
+    this.verifierReleaseId,
     this.customVerifierSpec,
     this.customActivityName,
     this.verifierInvalidReason,
@@ -68,6 +70,12 @@ class Race {
   final String verificationMethod;
   final String verifierType;
   final int? verifierVersion;
+
+  /// Immutable control-plane verifier specification returned with a race.
+  /// Custom pose races use [customVerifierSpec]; preset races may carry a
+  /// validated declarative release here.
+  final Map<String, dynamic>? verifierSpec;
+  final String? verifierReleaseId;
   final CustomPoseVerifierSpec? customVerifierSpec;
   final String? customActivityName;
   final String? verifierInvalidReason;
@@ -120,6 +128,10 @@ class Race {
           json['verificationMethod'] as String? ?? 'camera_pose',
       verifierType: verifierType,
       verifierVersion: json['verifierVersion'] as int?,
+      verifierSpec: json['verifierSpec'] is Map
+          ? Map<String, dynamic>.from(json['verifierSpec'] as Map)
+          : null,
+      verifierReleaseId: json['verifierReleaseId'] as String?,
       customVerifierSpec: parsedCustomSpec.spec,
       customActivityName: json['customActivityName'] as String?,
       verifierInvalidReason:
