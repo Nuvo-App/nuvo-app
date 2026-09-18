@@ -87,6 +87,89 @@ void main() {
     },
   );
 
+  test('basketball object release resolves without title inference', () {
+    final objectSpec = <String, dynamic>{
+      'specSchemaVersion': 1,
+      'releaseId': 'basketball_shot-composition-2026.09.1',
+      'activityId': 'basketball_shot',
+      'engineType': 'object_composition_v1',
+      'measurementType': 'repetitions',
+      'requiredCapabilities': [
+        'pose_landmarks_v1',
+        'object_dots_v1',
+        'object_composition_v1',
+      ],
+      'requiredLandmarks': ['leftWrist', 'rightWrist'],
+      'requiredObjects': [
+        {'id': 'ball', 'kind': 'ball', 'minLikelihood': 0.45},
+        {'id': 'hoop', 'kind': 'hoop', 'minLikelihood': 0.55},
+      ],
+      'model': {
+        'modelVersion': 'basketball-yolox-s-800',
+        'inputSchemaVersion': 1,
+        'artifactSha256':
+            'dc5a5afe11ac75ba9c80f1975cb1f7dc8bc738a6a37a8a4ecfb78fa196b3b425',
+        'inputSize': 800,
+      },
+      'composition': {
+        'states': [
+          'ready',
+          'released',
+          'ascending',
+          'descending',
+          'made',
+          'missed',
+        ],
+        'transitions': [
+          {'from': 'ready', 'to': 'released', 'event': 'ball_released'},
+          {'from': 'released', 'to': 'ascending', 'event': 'ball_ascending'},
+          {'from': 'ascending', 'to': 'descending', 'event': 'ball_descending'},
+          {'from': 'descending', 'to': 'made', 'event': 'ball_through_hoop'},
+          {'from': 'ascending', 'to': 'missed', 'event': 'shot_timeout'},
+          {'from': 'descending', 'to': 'missed', 'event': 'shot_timeout'},
+        ],
+        'startState': 'ready',
+        'terminalStates': ['made', 'missed'],
+        'ballObjectId': 'ball',
+        'hoopObjectId': 'hoop',
+        'stableFrames': 2,
+        'maxShotMs': 8000,
+        'controlDistance': 0.22,
+        'releaseDistance': 0.16,
+        'minUpwardVelocity': 0.06,
+        'minDownwardVelocity': 0.04,
+        'hoopPlaneTolerance': 0.08,
+        'madeRadius': 0.18,
+      },
+    };
+    final race = Race.fromJson({
+      'id': 'race-basketball',
+      'creatorId': 'user-1',
+      'title': 'First to 3 made shots',
+      'goalType': 'first_to_goal',
+      'targetValue': 3,
+      'unit': 'reps',
+      'activityId': 'basketball_shot',
+      'aiActivityType': 'basketball_shot',
+      'proofMode': 'ai_check',
+      'verifierType': 'preset_pose',
+      'verifierReleaseId': 'basketball_shot-composition-2026.09.1',
+      'verifierSpec': objectSpec,
+      'status': 'active',
+      'createdAt': '2026-09-17T00:00:00Z',
+      'updatedAt': '2026-09-17T00:00:00Z',
+    });
+
+    final eligibility = resolveCameraVerification(race);
+    expect(eligibility.isCameraVerifiable, isTrue);
+    expect(eligibility.isObjectComposition, isTrue);
+    expect(eligibility.movementType, isNull);
+    expect(
+      eligibility.objectCompositionSpec?.model.modelVersion,
+      'basketball-yolox-s-800',
+    );
+  });
+
   test('a mismatched immutable release is rejected instead of inferred', () {
     final race = Race.fromJson({
       'id': 'race-mismatch',

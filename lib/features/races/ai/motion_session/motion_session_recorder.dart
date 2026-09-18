@@ -30,6 +30,8 @@ class MotionSessionRecorder {
     this.raceId,
     this.goalValue,
     this.goalUnit = 'reps',
+    this.modelVersion = 'mlkit-pose-base',
+    this.verifierVersion = _BaseValidatorVersion.value,
   }) : sessionId = 'ms_${const Uuid().v4().replaceAll('-', '')}';
 
   final String sessionId;
@@ -40,6 +42,8 @@ class MotionSessionRecorder {
   final String? raceId;
   final int? goalValue;
   final String goalUnit;
+  final String modelVersion;
+  final String verifierVersion;
 
   DateTime? _startedAt;
   DateTime? _endedAt;
@@ -66,6 +70,8 @@ class MotionSessionRecorder {
   static const _maxFrames = 900;
 
   bool get isRecording => _startedAt != null && _endedAt == null;
+
+  int get objectFrameCount => _objectFrames.length;
 
   void start() {
     _startedAt = DateTime.now();
@@ -204,8 +210,8 @@ class MotionSessionRecorder {
       detectedValue: _detectedValue,
       confidence: _confidence,
       failedRuleReason: _failedRuleReason,
-      verifierVersion: _BaseValidatorVersion.value,
-      modelVersion: 'mlkit-pose-base',
+      verifierVersion: verifierVersion,
+      modelVersion: modelVersion,
       appVersion: const String.fromEnvironment(
         'NUVO_APP_VERSION',
         defaultValue: 'dev',

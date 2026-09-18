@@ -23,9 +23,14 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../ai/camera_image_converter.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
+import '../ai/basketball_shot_coordinator.dart';
+import '../ai/cloud_basketball_object_dot_producer.dart';
 import '../ai/motion_session/motion_session_artifact.dart';
 import '../ai/motion_session/motion_session_providers.dart';
 import '../ai/motion_session/motion_session_recorder.dart';
+import '../ai/motion_model_artifact_integrity.dart';
+import '../ai/object_composition_runtime.dart';
+import '../ai/object_composition_spec.dart';
 import '../ai/pose_detector_service.dart';
 import '../ai/rep_event_diagnostics.dart';
 import '../ai/remote_verifier_spec.dart';
@@ -90,11 +95,19 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String? _verificationSessionId;
   String? _verificationReleaseId;
   String? _verificationReleaseChecksum;
+  CloudBasketballObjectDotProducer? _objectDotProducer;
+  BasketballShotCoordinator? _basketballShot;
+  ObjectCompositionSpec? _objectCompositionSpec;
+  ObjectCompositionUpdate? _objectUpdate;
+  int _objectCount = 0;
+  double _objectConfidence = 0;
   bool _disposed = false;
   Timer? _recordingTimer;
   Duration _elapsed = Duration.zero;
   int _debugFrameCount = 0;
   bool _autoSubmitScheduled = false;
+
+  bool get _isObjectComposition => _objectCompositionSpec != null;
 
   // ── Live pose skeleton ──────────────────────────────────────────────────────
   static const _skeletonHoldMs = 900;
@@ -219,6 +232,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 ? (raceTarget - alreadyDone).clamp(1, raceTarget)
                 : eligibility.movementDefinition?.defaultTarget ?? 1)
           : raceTarget ?? eligibility.movementDefinition?.defaultTarget ?? 1;
+      if (eligibility.objectCompositionSpec != null) {
+        await _loadBasketballRelease(
+          race: race,
+          eligibility: eligibility,
+          target: target,
+          alreadyDone: alreadyDone,
+        );
+        return;
+      }
       final resolution = _runtimeResolver.resolve(
         eligibility: eligibility,
         explicitVerifierType: isCustom
@@ -265,6 +287,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         );
       }
       setState(() {
+        _objectCompositionSpec = null;
+        _objectUpdate = null;
+        _basketballShot = null;
+        _objectDotProducer?.dispose();
+        _objectDotProducer = null;
         _runtime = runtime;
         _isCustom = isCustom;
         _customMovementName = isCustom ? race.customActivityName : null;
@@ -290,6 +317,90 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
   }
 
+  Future<void> _loadBasketballRelease({
+    required Race race,
+    required CameraVerificationEligibility eligibility,
+    required int target,
+    required int alreadyDone,
+  }) async {
+    final spec = eligibility.objectCompositionSpec!;
+    try {
+      final artifact = await ref
+          .read(raceControllerProvider.notifier)
+          .getMotionModelArtifact(spec.model.modelVersion);
+      final bytes = artifact.bytes;
+      if (bytes == null) {
+        throw const FormatException('Basketball model artifact is not cached.');
+      }
+      final vetted = MotionModelArtifactIntegrity.verify(
+        requestedModelVersion: spec.model.modelVersion,
+        bytes: bytes,
+        artifactModelVersion: artifact.modelVersion,
+        expectedSha256: spec.model.artifactSha256,
+      );
+      final producer = await CloudBasketballObjectDotProducer.load(
+        vetted,
+        inputSize: spec.model.inputSize,
+      );
+      final handshake = await ref
+          .read(raceControllerProvider.notifier)
+          .createVerificationSession(
+            race.id,
+            appVersion: 'local',
+            appBuild: MotionCapabilities.appBuild,
+            runtimeCapabilities: MotionCapabilities.current(
+              objectDotProducer: producer,
+            ),
+          );
+      final rawSpec = handshake.verifier['spec'];
+      if (rawSpec is! Map) {
+        producer.dispose();
+        throw const FormatException('Basketball verifier spec is missing.');
+      }
+      final negotiated = ObjectCompositionSpec.fromJson(
+        Map<String, dynamic>.from(rawSpec),
+      );
+      if (negotiated.releaseId != handshake.session.releaseId ||
+          negotiated.model.modelVersion != spec.model.modelVersion ||
+          negotiated.model.artifactSha256 != spec.model.artifactSha256) {
+        producer.dispose();
+        throw const FormatException('Basketball release identity changed.');
+      }
+      _objectDotProducer = producer;
+      _basketballShot = BasketballShotCoordinator(
+        runtime: BasketballShotRuntime(spec: negotiated),
+      );
+      _verificationSessionId = handshake.session.id;
+      _verificationReleaseId = handshake.session.releaseId;
+      _verificationReleaseChecksum = handshake.session.releaseChecksum;
+      if (!mounted) return;
+      setState(() {
+        _objectCompositionSpec = negotiated;
+        _objectUpdate = null;
+        _objectCount = 0;
+        _objectConfidence = 0;
+        _isCustom = false;
+        _customMovementName = null;
+        _result = null;
+        _customResult = null;
+        _metric = race.metric ?? 'reps';
+        _raceTotalBefore = alreadyDone;
+        _raceTargetValue = race.targetValue ?? target;
+        _raceTitle = race.title;
+        _measurementType = 'repetitions';
+      });
+      _initializeCamera();
+    } catch (error) {
+      _debugLog('basketballReleaseUnavailable error=$error');
+      if (!mounted) return;
+      setState(() {
+        _status = AiMotionProofStatus.unsupportedMovement;
+        _message =
+            'Basketball verification is not available on this build yet.';
+      });
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final controller = _cameraController;
@@ -311,6 +422,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _recordingTimer?.cancel();
     _skeletonExpiryTimer?.cancel();
     _stopCamera();
+    _objectDotProducer?.dispose();
     _poseDetector.dispose();
     super.dispose();
   }
@@ -416,7 +528,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
-    _runtime.start();
+    if (!_isObjectComposition) _runtime.start();
     final verificationSessionId = _verificationSessionId;
     if (verificationSessionId != null && verificationSessionId.isNotEmpty) {
       unawaited(_startVerificationSession(verificationSessionId));
@@ -430,20 +542,37 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       kind: _isCustom ? MotionSessionKind.custom : MotionSessionKind.preset,
       activityId: _isCustom
           ? (_customMovementName ?? 'custom')
+          : _isObjectComposition
+          ? (_objectCompositionSpec?.activityId ?? 'basketball_shot')
           : _activity.backendValue,
       activityTitle: _raceTitle.isEmpty
           ? (_customMovementName ?? _activity.backendValue)
           : _raceTitle,
       measurementType: _measurementType,
       raceId: widget.raceId,
-      goalValue: _runtime.targetValue,
+      goalValue: _targetValue,
       goalUnit: _metric,
+      modelVersion: _isObjectComposition
+          ? (_objectCompositionSpec?.model.modelVersion ?? 'unknown')
+          : 'mlkit-pose-base',
+      verifierVersion: _isObjectComposition
+          ? (_objectCompositionSpec?.releaseId ?? 'object_composition_v1')
+          : 'nuvo-ai-motion-v2',
     )..start();
+    if (_objectCompositionSpec != null) {
+      _basketballShot = BasketballShotCoordinator(
+        runtime: BasketballShotRuntime(spec: _objectCompositionSpec!),
+        recorder: _session,
+      );
+    }
     _resetRepFlash();
     _poseDetector.resetDiagnostics();
     _skeletonHold.clear();
     _debugLog(
-      _isCustom
+      _isObjectComposition
+          ? 'verificationStarted movement=basketball_shot '
+                'mode=camera target=$_targetValue'
+          : _isCustom
           ? 'verificationStarted custom=${_customMovementName ?? 'custom'} '
                 'mode=camera target=${_runtime.targetValue}'
           : 'verificationStarted movement=${_runtime.movement.type.name} '
@@ -492,6 +621,38 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       // Keep a bounded landmark-only trace for server analysis and future
       // consented training. Camera pixels never leave the device.
       if (_capturedFrames.length < 900) _capturedFrames.add(frame);
+      if (_isObjectComposition) {
+        final producer = _objectDotProducer;
+        final coordinator = _basketballShot;
+        if (producer == null || coordinator == null) return;
+        final objectFrame = await producer.process(
+          image: image,
+          camera: camera,
+          deviceOrientation: orientation,
+          pose: frame,
+          createdAt: frame.createdAt,
+        );
+        if (objectFrame == null ||
+            _disposed ||
+            _status != AiMotionProofStatus.recording) {
+          return;
+        }
+        final objectOutput = coordinator.process(objectFrame);
+        _objectUpdate = objectOutput;
+        _objectCount = objectOutput.count;
+        _objectConfidence = objectOutput.confidence;
+        _session?.recordFrame(
+          frame,
+          validatorState: objectOutput.state.name,
+          count: objectOutput.count,
+          confidence: objectOutput.confidence,
+          failedRuleReason: objectOutput.state == ObjectCompositionState.missed
+              ? objectOutput.diagnostic
+              : '',
+        );
+        if (mounted) setState(() {});
+        return;
+      }
       final output = _runtime.update(frame);
       _liveMetrics = output.debugValues;
       _session?.recordFrame(
@@ -590,6 +751,36 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     await _stopImageStream();
     await Future<void>.delayed(const Duration(milliseconds: 250));
 
+    if (_isObjectComposition) {
+      final update = _objectUpdate;
+      final verified = update?.state == ObjectCompositionState.made;
+      final value = _objectCount;
+      if (!mounted) return;
+      setState(() {
+        _status = verified
+            ? AiMotionProofStatus.aiVerified
+            : AiMotionProofStatus.aiFailed;
+        _message = verified
+            ? null
+            : 'The shot was not confirmed. Keep the ball and hoop visible and try again.';
+      });
+      _session?.recordEvent(
+        'object_result',
+        detail: verified ? 'made_basket' : (update?.diagnostic ?? 'no_result'),
+        metrics: {'count': value.toDouble()},
+      );
+      _finalizeSession();
+      if (verified) _scheduleAutoSubmit();
+      unawaited(
+        _completeVerificationSession(
+          value: value,
+          confidence: _objectConfidence,
+          verified: verified,
+        ),
+      );
+      return;
+    }
+
     final verifierResult = _runtime.finish();
     if (_isCustom) {
       final result = verifierResult.customPoseResult;
@@ -640,7 +831,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
     final acceptedResult = _acceptPartialMotionResult(result);
     _debugLog(
-      'verificationFinished movement=${_runtime.movement.type.name} '
+      'verificationFinished movement=${_isObjectComposition ? 'basketball_shot' : _runtime.movement.type.name} '
       'value=${acceptedResult.detectedReps} '
       'confidence=${acceptedResult.confidence.toStringAsFixed(2)} '
       'status=${acceptedResult.verificationStatus} '
@@ -691,7 +882,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             status: verified ? 'completed' : 'failed',
             resultValue: value,
             confidence: confidence,
-            failureReason: verified ? null : _runtime.failedRuleReason,
+            failureReason: verified
+                ? null
+                : _isObjectComposition
+                ? (_objectUpdate?.diagnostic ?? 'shot_not_confirmed')
+                : _runtime.failedRuleReason,
           );
     } catch (_) {
       _debugLog('verificationSessionCompletionUnavailable');
@@ -750,10 +945,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     } else {
       outcome = MotionSessionOutcome.incomplete;
     }
-    final detected = _isCustom
+    final detected = _isObjectComposition
+        ? _objectCount
+        : _isCustom
         ? (_customResult?.count ?? 0)
         : (_result?.detectedReps ?? 0);
-    final confidence = _isCustom
+    final confidence = _isObjectComposition
+        ? _objectConfidence
+        : _isCustom
         ? _customResult?.confidence
         : _result?.confidence;
 
@@ -766,7 +965,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       outcome: outcome,
       detectedValue: detected,
       confidence: confidence,
-      failedRuleReason: _runtime.failedRuleReason,
+      failedRuleReason: _isObjectComposition
+          ? (_objectUpdate?.diagnostic ?? '')
+          : _runtime.failedRuleReason,
     );
     final server = _serverAnalysis;
     final artifact = session.build(
@@ -828,6 +1029,51 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   Future<void> _submitVerifiedProof() async {
+    if (_isObjectComposition) {
+      if (_objectCount <= 0 || _status != AiMotionProofStatus.aiVerified) {
+        return;
+      }
+      setState(() {
+        _status = AiMotionProofStatus.submitting;
+        _message = null;
+      });
+      try {
+        final clientSubmissionId = _clientSubmissionId ?? const Uuid().v4();
+        _clientSubmissionId = clientSubmissionId;
+        final race = await ref
+            .read(raceControllerProvider.notifier)
+            .submitObjectCompositionProof(
+              widget.raceId,
+              activityId: _objectCompositionSpec!.activityId,
+              clientSubmissionId: clientSubmissionId,
+              metric: _metric,
+              value: _objectCount,
+              targetValue: _raceTarget,
+              confidence: _objectConfidence,
+              verificationSummary:
+                  'Confirmed $_objectCount made basketball shot${_objectCount == 1 ? '' : 's'} from dot-only object tracking.',
+              validatorVersion: _objectCompositionSpec!.releaseId,
+              framesAnalyzed: _session?.objectFrameCount ?? 0,
+              durationMs: _elapsed.inMilliseconds,
+            );
+        if (!mounted) return;
+        setState(() => _status = AiMotionProofStatus.submitted);
+        _goToCelebration(race, _objectCount, 'ai_verified');
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _status = AiMotionProofStatus.aiVerified;
+          _message = e.message;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _status = AiMotionProofStatus.aiVerified;
+          _message = 'Verified proof could not be submitted. Try again.';
+        });
+      }
+      return;
+    }
     if (_isCustom) {
       final result = _customResult;
       if (result == null || !result.isVerified) return;
@@ -971,12 +1217,21 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Future<void> _recordAgain() async {
     _recordingTimer?.cancel();
     await _stopImageStream();
+    if (_objectCompositionSpec != null) {
+      _basketballShot = BasketballShotCoordinator(
+        runtime: BasketballShotRuntime(spec: _objectCompositionSpec!),
+        recorder: _session,
+      );
+    }
     setState(() {
       _result = null;
       _serverAnalysis = null;
       _capturedFrames.clear();
       _customResult = null;
       _customUpdate = null;
+      _objectUpdate = null;
+      _objectCount = 0;
+      _objectConfidence = 0;
       _message = null;
       _elapsed = Duration.zero;
       _autoSubmitScheduled = false;
@@ -1026,10 +1281,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   /// The verifier's own target — the REMAINING amount this session must reach
   /// to complete the race.
-  int get _targetValue => _runtime.targetValue;
+  int get _targetValue => _isObjectComposition
+      ? ((_raceTargetValue ?? 1) - _raceTotalBefore).clamp(1, 1000000).toInt()
+      : _runtime.targetValue;
 
   /// This session's contribution so far (starts at 0). Only this is submitted.
-  int get _sessionContribution => _runtime.currentValue;
+  int get _sessionContribution =>
+      _isObjectComposition ? _objectCount : _runtime.currentValue;
 
   int get _startingRaceProgress => _raceTotalBefore;
 
@@ -1047,7 +1305,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _continuation.displayedProgress(_sessionContribution);
 
   /// Kept for the internal completion check / celebration timing.
-  int get _currentValue => _runtime.currentValue;
+  int get _currentValue =>
+      _isObjectComposition ? _objectCount : _runtime.currentValue;
 
   /// Latest verifier debug metrics — includes virtual distance / pace /
   /// cadence / intensity for a distance race.
@@ -1059,8 +1318,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   bool get _isDistanceRace => _measure == MotionMeasurementType.distance;
 
-  String get _displayUnit =>
-      motionActivityForBackendValue(_activity.backendValue)?.unit ?? _metric;
+  String get _displayUnit => _isObjectComposition
+      ? 'shots'
+      : motionActivityForBackendValue(_activity.backendValue)?.unit ?? _metric;
 
   /// "12 / 25 reps" · "0:45 / 2:00" · "0.12 / 0.25 mi".
   String _progressText(int current, int target) => _isCustom
@@ -1096,6 +1356,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   /// The full race goal (not the session's remaining amount).
   String get _targetLabel {
+    if (_isObjectComposition) return '$_raceTarget made shots';
     if (_isCustom) return '$_raceTarget reps';
     final definition = motionActivityForBackendValue(_activity.backendValue);
     return definition?.targetLabel(_raceTarget) ??
@@ -1109,7 +1370,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     return _progressText(_displayedRaceProgress, _raceTarget);
   }
 
-  String get _movementTitle => _isCustom
+  String get _movementTitle => _isObjectComposition
+      ? 'Basketball shot'
+      : _isCustom
       ? (_customMovementName ?? 'Custom movement')
       : motionActivityForBackendValue(_activity.backendValue)?.title ??
             _activity.label;
@@ -1163,10 +1426,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                         Text(_movementTitle, style: AppTextStyles.titleLarge),
                         const SizedBox(height: 2),
                         Text(
-                          motionActivityForBackendValue(
-                                    _activity.backendValue,
-                                  )?.isHold ==
-                                  true
+                          _isObjectComposition
+                              ? 'Camera will confirm $_targetLabel.'
+                              : motionActivityForBackendValue(
+                                      _activity.backendValue,
+                                    )?.isHold ==
+                                    true
                               ? 'Hold until the timer finishes.'
                               : 'Camera will count $_targetLabel.',
                           style: AppTextStyles.bodySmall.copyWith(
@@ -1655,7 +1920,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                   .fadeIn(duration: 200.ms, curve: Curves.easeOut),
               const SizedBox(height: 18),
               Text(
-                    _isCustom
+                    _isObjectComposition
+                        ? '+$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}'
+                        : _isCustom
                         ? '+${_customCountedLabel(customResult)}'
                         : '+${_countedLabel(result)}',
                     style: AppTextStyles.displayLarge.copyWith(
@@ -1700,7 +1967,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
 
     // Failed / coaching state.
-    final detected = _isCustom
+    final detected = _isObjectComposition
+        ? _objectCount
+        : _isCustom
         ? (customResult?.count ?? 0)
         : (result?.detectedReps ?? 0);
     return Center(
@@ -2022,7 +2291,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Widget _visibilityPill() {
     final recording = _status == AiMotionProofStatus.recording;
-    final visible = _runtime.fullBodyVisible;
+    final visible = _isObjectComposition
+        ? _objectUpdate != null
+        : _runtime.fullBodyVisible;
     final targetReached = _currentValue >= _targetValue;
 
     final label = recording && targetReached
@@ -2070,6 +2341,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   }
 
   String _countedLabel(AiMotionResult? result) {
+    if (_isObjectComposition) {
+      return '$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}';
+    }
     final value = result?.detectedReps ?? _targetValue;
     final definition = motionActivityForBackendValue(_activity.backendValue);
     if (_isDistanceRace) return formatMotionTarget(_measure, value, 'mi');

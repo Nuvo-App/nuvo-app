@@ -21,6 +21,13 @@ Map<String, dynamic> _spec() => {
     {'id': 'ball', 'kind': 'ball', 'minLikelihood': 0.45},
     {'id': 'hoop', 'kind': 'hoop', 'minLikelihood': 0.55},
   ],
+  'model': {
+    'modelVersion': 'basketball-yolox-s-800',
+    'inputSchemaVersion': 1,
+    'artifactSha256':
+        'dc5a5afe11ac75ba9c80f1975cb1f7dc8bc738a6a37a8a4ecfb78fa196b3b425',
+    'inputSize': 800,
+  },
   'composition': {
     'states': [
       'ready',

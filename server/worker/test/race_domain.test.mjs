@@ -616,6 +616,20 @@ test('activityForId returns definitions for high_knees and arm_raises', () => {
   assert.deepEqual(armRaises?.supportedFormats, ['first_to_goal', 'most_in_window', 'best_attempt', 'timed_attempt']);
 });
 
+test('basketball shot resolves internally without entering the public catalog', () => {
+  const basketball = activityForId('basketball_shot');
+  assert.equal(basketball?.id, 'basketball_shot');
+  assert.equal(basketball?.availability, 'hidden');
+  assert.equal(basketball?.validatorKey, 'basketball_shot_v1');
+  assert.equal(normalizeActivityId('basketball shot'), 'basketball_shot');
+  assert.deepEqual(configFromBody({
+    activityId: 'basketball_shot',
+    metric: 'reps',
+    format: 'first_to_goal',
+    targetValue: 3,
+  }), { error: 'Nuvo cannot verify this movement yet.' });
+});
+
 test('synthetic race row with activity_id=high_knees produces a non-null scoring config', () => {
   const config = presetScoringConfigFromRow({
     activity_id: 'high_knees',

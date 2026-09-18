@@ -587,6 +587,39 @@ class RaceApi {
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
+  Future<Race> submitObjectCompositionProof(
+    String token,
+    String raceId, {
+    required String activityId,
+    required String clientSubmissionId,
+    required String metric,
+    required int value,
+    required int targetValue,
+    required double confidence,
+    required String verificationSummary,
+    required String validatorVersion,
+    required int framesAnalyzed,
+    required int durationMs,
+  }) async {
+    final json = await _post('/races/$raceId/proof', token, {
+      'proofType': 'ai_motion',
+      'clientSubmissionId': clientSubmissionId,
+      'activityType': activityId,
+      'metric': metric,
+      'value': value,
+      'targetValue': targetValue,
+      'detectedValue': value,
+      'confidence': confidence,
+      'verificationStatus': 'ai_verified',
+      'verificationSummary': verificationSummary,
+      'framesAnalyzed': framesAnalyzed,
+      'validPoseFrames': framesAnalyzed,
+      'durationMs': durationMs,
+      'validatorVersion': validatorVersion,
+    });
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
   Future<Race> submitCustomPoseProof(
     String token,
     String raceId, {

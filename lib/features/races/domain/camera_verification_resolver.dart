@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/object_composition_spec.dart';
 import '../ai/remote_verifier_spec.dart';
 import '../data/race_models.dart';
 import 'motion_activity.dart';
@@ -29,6 +30,7 @@ class CameraVerificationEligibility {
     this.unsupportedMessage = 'This movement cannot be camera verified yet.',
     this.customVerifierSpec,
     this.remoteVerifierSpec,
+    this.objectCompositionSpec,
     this.verifierReleaseId,
   });
 
@@ -43,6 +45,7 @@ class CameraVerificationEligibility {
   final String unsupportedMessage;
   final CustomPoseVerifierSpec? customVerifierSpec;
   final RemoteVerifierSpec? remoteVerifierSpec;
+  final ObjectCompositionSpec? objectCompositionSpec;
   final String? verifierReleaseId;
 
   MotionActivityDefinition? get movementDefinition =>
@@ -52,6 +55,8 @@ class CameraVerificationEligibility {
       source == CameraVerificationSource.customVerifier;
 
   bool get isRemoteVerifier => source == CameraVerificationSource.remoteRelease;
+
+  bool get isObjectComposition => objectCompositionSpec != null;
 }
 
 /// Backend `verifier_type` for a non-physical / honor-logged goal.
@@ -134,6 +139,34 @@ CameraVerificationEligibility? _resolveRemoteRelease(Race race) {
   final raw = race.verifierSpec;
   final engine = raw?['engineType'];
   if (raw == null || engine == null || engine == 'native_v1') return null;
+  if (engine == 'object_composition_v1') {
+    try {
+      final spec = ObjectCompositionSpec.fromJson(raw);
+      if (spec.activityId != race.effectiveAiActivityType ||
+          (race.verifierReleaseId != null &&
+              spec.releaseId != race.verifierReleaseId)) {
+        return _remoteIneligible(race, 'remote_release_identity_mismatch');
+      }
+      return CameraVerificationEligibility(
+        raceId: race.id,
+        raceTitle: race.title,
+        isCameraVerifiable: true,
+        movementType: null,
+        source: CameraVerificationSource.remoteRelease,
+        preferredCameraView: PreferredCameraView.frontOrSlightAngle,
+        instructions: const [
+          'Keep your hands, ball, and hoop visible.',
+          'Release the ball toward the hoop.',
+          'Hold still until the shot is evaluated.',
+        ],
+        reason: 'object_composition_release_resolved',
+        objectCompositionSpec: spec,
+        verifierReleaseId: race.verifierReleaseId,
+      );
+    } on ObjectCompositionSpecException {
+      return _remoteIneligible(race, 'invalid_object_composition_spec');
+    }
+  }
   try {
     final spec = RemoteVerifierSpec.fromJson(raw);
     if (spec.activityId != race.effectiveAiActivityType ||

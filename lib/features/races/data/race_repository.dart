@@ -19,6 +19,13 @@ class RaceRepository {
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _withRefresh((token) => _api.analyzeMotion(token, request: request));
 
+  Future<MotionModelArtifactFetch> getMotionModelArtifact(
+    String modelVersion, {
+    String? etag,
+  }) => _withRefresh(
+    (token) => _api.getMotionModelArtifact(token, modelVersion, etag: etag),
+  );
+
   Future<VerificationSessionHandshake> createVerificationSession(
     String raceId, {
     required String appVersion,
@@ -259,6 +266,35 @@ class RaceRepository {
       raceId,
       result: result,
       clientSubmissionId: clientSubmissionId,
+    ),
+  );
+
+  Future<Race> submitObjectCompositionProof(
+    String raceId, {
+    required String activityId,
+    required String clientSubmissionId,
+    required String metric,
+    required int value,
+    required int targetValue,
+    required double confidence,
+    required String verificationSummary,
+    required String validatorVersion,
+    required int framesAnalyzed,
+    required int durationMs,
+  }) => _withRefresh(
+    (token) => _api.submitObjectCompositionProof(
+      token,
+      raceId,
+      activityId: activityId,
+      clientSubmissionId: clientSubmissionId,
+      metric: metric,
+      value: value,
+      targetValue: targetValue,
+      confidence: confidence,
+      verificationSummary: verificationSummary,
+      validatorVersion: validatorVersion,
+      framesAnalyzed: framesAnalyzed,
+      durationMs: durationMs,
     ),
   );
 

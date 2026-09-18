@@ -11,11 +11,15 @@
 // cache; force:true always refetches. Every screen reads state via
 // raceControllerProvider and calls mutations via .notifier — never a second
 // source of truth, never a direct RaceApi call.
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../arena/presentation/arena_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../../core/demo/presentation_demo.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../data/ai_motion_models.dart';
@@ -59,13 +63,23 @@ class RaceState {
 }
 
 class RaceController extends StateNotifier<RaceState> {
-  RaceController(this._repo, {this.onMutated}) : super(const RaceState());
+  RaceController(
+    this._repo, {
+    this.onMutated,
+    this.isPresentationDemo = _neverPresentationDemo,
+    this.presentationUserId = _emptyPresentationUserId,
+  }) : super(const RaceState());
 
   final RaceRepository _repo;
 
-  /// Called after any local write so sibling caches (Arena) can revalidate.
-  /// See docs/agents/18-data-freshness-contract.md.
+  /// Called after a race write or a successful list refresh so sibling caches
+  /// (Arena) can revalidate. See docs/agents/18-data-freshness-contract.md.
   final void Function()? onMutated;
+  final bool Function() isPresentationDemo;
+  final String Function() presentationUserId;
+
+  static bool _neverPresentationDemo() => false;
+  static String _emptyPresentationUserId() => '';
 
   /// How old cached data may be before [revalidate] refetches it in the
   /// background. Short — this fires on screen focus and app resume.
@@ -73,6 +87,11 @@ class RaceController extends StateNotifier<RaceState> {
 
   Future<MotionAnalysisResult> analyzeMotion(MotionAnalysisRequest request) =>
       _repo.analyzeMotion(request);
+
+  Future<MotionModelArtifactFetch> getMotionModelArtifact(
+    String modelVersion, {
+    String? etag,
+  }) => _repo.getMotionModelArtifact(modelVersion, etag: etag);
 
   Future<VerificationSessionHandshake> createVerificationSession(
     String raceId, {
@@ -121,6 +140,16 @@ class RaceController extends StateNotifier<RaceState> {
   static const _cacheLifetime = Duration(minutes: 5);
   Future<void>? _loadInFlight;
   DateTime? _racesLoadedAt;
+  final Map<String, Timer> _presentationDeletionTimers = {};
+
+  @override
+  void dispose() {
+    for (final timer in _presentationDeletionTimers.values) {
+      timer.cancel();
+    }
+    _presentationDeletionTimers.clear();
+    super.dispose();
+  }
 
   /// Bumped by [clearRaces] (sign-out). A fetch started before a sign-out can
   /// still be in flight when the response arrives after clearRaces() has
@@ -178,10 +207,18 @@ class RaceController extends StateNotifier<RaceState> {
       );
     }
     try {
-      final races = await _repo.getRaces();
+      final races = isPresentationDemo()
+          ? PresentationDemoData.races(presentationUserId())
+          : await _repo.getRaces();
       if (generation != _generation) return; // superseded by a sign-out
       _racesLoadedAt = DateTime.now();
-      if (mounted) state = RaceState(races: races);
+      if (mounted) {
+        state = RaceState(races: races);
+        // Arena is a derived view of the same races. A successful read can
+        // discover a race created elsewhere, so it must invalidate the
+        // sibling snapshot just like a local write does.
+        onMutated?.call();
+      }
     } on ApiException catch (e) {
       if (generation != _generation) return;
       // Keep cached races visible on a failed background refresh.
@@ -225,6 +262,20 @@ class RaceController extends StateNotifier<RaceState> {
     String? targetUnit,
     String? proofMode,
   }) async {
+    if (isPresentationDemo()) {
+      final id =
+          '$presentationDemoCreatedRacePrefix${DateTime.now().microsecondsSinceEpoch}';
+      final race = PresentationDemoData.createdRace(
+        id: id,
+        userId: presentationUserId(),
+        title: title,
+        targetValue: targetValue ?? 10,
+        activityId: activityId ?? aiActivityType,
+        unit: unit ?? targetUnit,
+      );
+      _addPresentationRace(race);
+      return race;
+    }
     final race = await _repo.createRace(
       title: title,
       description: description,
@@ -260,6 +311,19 @@ class RaceController extends StateNotifier<RaceState> {
     required String customActivityName,
     required CustomPoseVerifierSpec verifierSpec,
   }) async {
+    if (isPresentationDemo()) {
+      final id =
+          '$presentationDemoCreatedRacePrefix${DateTime.now().microsecondsSinceEpoch}';
+      final race = PresentationDemoData.createdRace(
+        id: id,
+        userId: presentationUserId(),
+        title: customActivityName,
+        targetValue: targetValue,
+        customActivityName: customActivityName,
+      );
+      _addPresentationRace(race);
+      return race;
+    }
     final race = await _repo.createCustomRace(
       title: title,
       targetValue: targetValue,
@@ -274,12 +338,21 @@ class RaceController extends StateNotifier<RaceState> {
     return race;
   }
 
-  Future<Race> getRaceDetail(String id) async {
+  Future<Race> getRaceDetail(String id, {bool syncArena = false}) async {
+    if (_isPresentationLocalRace(id)) {
+      final cached = state.races.where((race) => race.id == id).firstOrNull;
+      if (cached != null) return cached;
+      final fixture = PresentationDemoData.races(
+        presentationUserId(),
+      ).where((race) => race.id == id).firstOrNull;
+      if (fixture != null) return fixture;
+      throw const ApiException(404, 'This race could not be found.');
+    }
     final race = await _repo.getRaceDetail(id);
     // The detail response is the freshest view of this race (participants,
     // progress, standings) — fold it into the canonical list so Compete /
     // Arena / Move see it without their own refetch.
-    _upsertRace(race, silent: true);
+    _upsertRace(race, silent: !syncArena);
     return race;
   }
 
@@ -331,6 +404,10 @@ class RaceController extends StateNotifier<RaceState> {
     // instead of awaiting a future tied to the previous session (which could
     // be hung on a stalled socket and wedge the races tab until an app kill).
     _loadInFlight = null;
+    for (final timer in _presentationDeletionTimers.values) {
+      timer.cancel();
+    }
+    _presentationDeletionTimers.clear();
     // Invalidate any fetch already in flight — see [_generation] — so its
     // response cannot land after this reset and resurrect the previous
     // account's races into the new session.
@@ -344,6 +421,16 @@ class RaceController extends StateNotifier<RaceState> {
     String? note,
     required int value,
   }) async {
+    if (_isPresentationLocalRace(raceId)) {
+      final race = _applyPresentationProof(
+        raceId,
+        proofType: proofType,
+        note: note,
+        value: value,
+      );
+      _upsertRace(race);
+      return race;
+    }
     final race = await _repo.submitProof(
       raceId,
       proofType: proofType,
@@ -366,6 +453,25 @@ class RaceController extends StateNotifier<RaceState> {
     required String clientSubmissionId,
     required String metric,
   }) async {
+    if (_isPresentationLocalRace(raceId)) {
+      final race = _applyPresentationProof(
+        raceId,
+        proofType: 'ai_motion',
+        value: result.detectedReps,
+        aiActivityType: result.activity.backendValue,
+        detectedValue: result.detectedReps,
+        targetValue: result.targetReps,
+        confidence: result.confidence,
+        validatorVersion: result.validatorVersion,
+        framesAnalyzed: result.framesAnalyzed,
+        validPoseFrames: result.validPoseFrames,
+        durationMs: result.durationMs,
+        verificationStatus: result.verificationStatus,
+        verificationSummary: result.verificationSummary,
+      );
+      _upsertRace(race);
+      return race;
+    }
     final race = await _repo.submitAiMotionProof(
       raceId,
       result: result,
@@ -382,11 +488,66 @@ class RaceController extends StateNotifier<RaceState> {
     return race;
   }
 
+  Future<Race> submitObjectCompositionProof(
+    String raceId, {
+    required String activityId,
+    required String clientSubmissionId,
+    required String metric,
+    required int value,
+    required int targetValue,
+    required double confidence,
+    required String verificationSummary,
+    required String validatorVersion,
+    required int framesAnalyzed,
+    required int durationMs,
+  }) async {
+    final race = await _repo.submitObjectCompositionProof(
+      raceId,
+      activityId: activityId,
+      clientSubmissionId: clientSubmissionId,
+      metric: metric,
+      value: value,
+      targetValue: targetValue,
+      confidence: confidence,
+      verificationSummary: verificationSummary,
+      validatorVersion: validatorVersion,
+      framesAnalyzed: framesAnalyzed,
+      durationMs: durationMs,
+    );
+    if (mounted) {
+      state = state.copyWith(
+        races: state.races.map((r) => r.id == raceId ? race : r).toList(),
+      );
+      _racesLoadedAt = DateTime.now();
+      onMutated?.call();
+    }
+    return race;
+  }
+
   Future<Race> submitCustomPoseProof(
     String raceId, {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
   }) async {
+    if (_isPresentationLocalRace(raceId)) {
+      final race = _applyPresentationProof(
+        raceId,
+        proofType: 'ai_motion',
+        value: result.count,
+        detectedValue: result.count,
+        targetValue: result.target,
+        confidence: result.confidence,
+        validatorVersion: 'custom_pose_v${result.verifierVersion}',
+        framesAnalyzed: result.framesAnalyzed,
+        validPoseFrames: result.validFrames,
+        durationMs: result.durationMs,
+        verificationStatus: result.verificationStatus,
+        verificationSummary:
+            result.finalFailureReason ?? 'Demo proof recorded locally.',
+      );
+      _upsertRace(race);
+      return race;
+    }
     final race = await _repo.submitCustomPoseProof(
       raceId,
       result: result,
@@ -415,6 +576,10 @@ class RaceController extends StateNotifier<RaceState> {
   }
 
   Future<void> deleteRace(String id) async {
+    if (isPresentationDemo() && isPresentationDemoCreatedRace(id)) {
+      _removePresentationRace(id);
+      return;
+    }
     await _repo.deleteRace(id);
     if (mounted) {
       state = state.copyWith(
@@ -506,6 +671,186 @@ class RaceController extends StateNotifier<RaceState> {
       onMutated?.call();
     }
   }
+
+  bool _isPresentationLocalRace(String id) =>
+      isPresentationDemo() &&
+      (isPresentationDemoRace(id) || isPresentationDemoCreatedRace(id));
+
+  Race _applyPresentationProof(
+    String raceId, {
+    required String proofType,
+    required int value,
+    String? note,
+    String? aiActivityType,
+    int? detectedValue,
+    int? targetValue,
+    double? confidence,
+    String? validatorVersion,
+    int? framesAnalyzed,
+    int? validPoseFrames,
+    int? durationMs,
+    String verificationStatus = 'accepted',
+    String? verificationSummary,
+  }) {
+    final existing = state.races.where((race) => race.id == raceId).firstOrNull;
+    if (existing == null) {
+      throw const ApiException(404, 'This race could not be found.');
+    }
+
+    final userId = presentationUserId();
+    final current = existing.participantFor(userId);
+    if (current == null) {
+      throw const ApiException(403, 'You are not on this race.');
+    }
+
+    final safeValue = math.max(0, value);
+    final previousScore = current.progressValue;
+    final newScore = previousScore + safeValue;
+    final target = targetValue ?? existing.targetValue;
+    final newPercent = target == null || target <= 0
+        ? current.progressPercent
+        : math.min(100, ((newScore / target) * 100).round());
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    final updatedParticipants = [
+      for (final participant in existing.participants)
+        participant.userId == userId
+            ? RaceParticipant(
+                id: participant.id,
+                userId: participant.userId,
+                displayName: participant.displayName,
+                progressValue: newScore,
+                progressPercent: newPercent,
+                rank: participant.rank,
+                joinedAt: participant.joinedAt,
+                profilePhotoUrl: participant.profilePhotoUrl,
+              )
+            : participant,
+    ];
+    final rankedParticipants = [...updatedParticipants]
+      ..sort((a, b) => b.progressValue.compareTo(a.progressValue));
+    final newRank =
+        rankedParticipants.indexWhere(
+          (participant) => participant.userId == userId,
+        ) +
+        1;
+    final participantsWithRanks = [
+      for (final participant in updatedParticipants)
+        RaceParticipant(
+          id: participant.id,
+          userId: participant.userId,
+          displayName: participant.displayName,
+          progressValue: participant.progressValue,
+          progressPercent: participant.progressPercent,
+          rank:
+              rankedParticipants.indexWhere(
+                (ranked) => ranked.userId == participant.userId,
+              ) +
+              1,
+          joinedAt: participant.joinedAt,
+          profilePhotoUrl: participant.profilePhotoUrl,
+        ),
+    ];
+    final proof = RaceProof(
+      id: 'presentation-demo-proof-${DateTime.now().microsecondsSinceEpoch}',
+      userId: userId,
+      displayName: current.displayName,
+      proofType: proofType,
+      aiActivityType: aiActivityType ?? existing.effectiveAiActivityType,
+      note: note,
+      value: safeValue,
+      detectedValue: detectedValue ?? safeValue,
+      targetValue: target,
+      confidence: confidence,
+      validatorVersion: validatorVersion,
+      framesAnalyzed: framesAnalyzed,
+      validPoseFrames: validPoseFrames,
+      durationMs: durationMs,
+      verificationStatus: verificationStatus,
+      verificationSummary:
+          verificationSummary ?? 'Demo proof recorded locally.',
+      createdAt: now,
+      profilePhotoUrl: current.profilePhotoUrl,
+      rankBefore: current.rank,
+      rankAfter: newRank,
+      peoplePassed: math.max(0, (current.rank ?? newRank) - newRank),
+    );
+    final completed = target != null && newScore >= target;
+    return Race(
+      id: existing.id,
+      creatorId: existing.creatorId,
+      title: existing.title,
+      description: existing.description,
+      category: existing.category,
+      goalType: existing.goalType,
+      targetValue: existing.targetValue,
+      unit: existing.unit,
+      aiActivityType: existing.aiActivityType,
+      targetUnit: existing.targetUnit,
+      proofMode: existing.proofMode,
+      activityId: existing.activityId,
+      metric: existing.metric,
+      format: existing.format,
+      scoringRule: existing.scoringRule,
+      attemptDurationSeconds: existing.attemptDurationSeconds,
+      attemptLimit: existing.attemptLimit,
+      verificationMethod: existing.verificationMethod,
+      verifierType: existing.verifierType,
+      verifierVersion: existing.verifierVersion,
+      customVerifierSpec: existing.customVerifierSpec,
+      customActivityName: existing.customActivityName,
+      verifierInvalidReason: existing.verifierInvalidReason,
+      timezone: existing.timezone,
+      recurrence: existing.recurrence,
+      status: existing.status,
+      storedStatus: existing.storedStatus,
+      winnerUserId: completed ? userId : existing.winnerUserId,
+      completedAt: completed ? now : existing.completedAt,
+      startLineAt: existing.startLineAt,
+      finishLineAt: existing.finishLineAt,
+      rules: existing.rules,
+      proofRequirement: existing.proofRequirement,
+      proofReviewMode: existing.proofReviewMode,
+      visibility: existing.visibility,
+      inviteCode: existing.inviteCode,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+      participants: participantsWithRanks,
+      recentProofs: [proof, ...existing.recentProofs].take(8).toList(),
+      finalStandings: existing.finalStandings,
+      submissionResult: RaceSubmissionResult(
+        verifiedValue: safeValue,
+        previousScore: previousScore,
+        newScore: newScore,
+        previousRank: current.rank,
+        newRank: newRank,
+        peoplePassed: math.max(0, (current.rank ?? newRank) - newRank),
+        raceCompleted: completed,
+        winnerUserId: completed ? userId : existing.winnerUserId,
+      ),
+    );
+  }
+
+  void _addPresentationRace(Race race) {
+    if (!mounted) return;
+    state = state.copyWith(races: [race, ...state.races]);
+    _racesLoadedAt = DateTime.now();
+    onMutated?.call();
+    _presentationDeletionTimers[race.id] = Timer(
+      const Duration(minutes: 10),
+      () => _removePresentationRace(race.id),
+    );
+  }
+
+  void _removePresentationRace(String id) {
+    _presentationDeletionTimers.remove(id)?.cancel();
+    if (!mounted) return;
+    state = state.copyWith(
+      races: state.races.where((race) => race.id != id).toList(),
+    );
+    _racesLoadedAt = DateTime.now();
+    onMutated?.call();
+  }
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────
@@ -524,6 +869,9 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
   (ref) {
     final controller = RaceController(
       ref.watch(raceRepositoryProvider),
+      isPresentationDemo: () =>
+          isPresentationDemoUser(ref.read(authControllerProvider).user),
+      presentationUserId: () => ref.read(authControllerProvider).user?.id ?? '',
       // Any race write immediately revalidates the Arena snapshot (it is
       // derived from races) so a race created in the composer shows up in the
       // Arena without the user navigating there and back.
