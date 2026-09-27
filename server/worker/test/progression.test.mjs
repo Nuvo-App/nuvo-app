@@ -17,6 +17,7 @@ const {
   markLevelSeen,
   publicLevelFor,
   publicIdentityFor,
+  publicProfileProgressionFor,
   featuredSlotsFor,
 } = require('../.tmp-test-dist/domain/progression.js');
 
@@ -57,6 +58,7 @@ function fakeDb() {
   const unlocks = new Map(); // 'user|unlockId' -> {unlocked_at}
   const featured = new Map(); // 'user|position' -> unlockId
   const members = new Map(); // raceId -> Set<userId>
+  const races = new Map(); // raceId -> {id,title,status,winner_user_id,completed_at}
   const leadEvents = []; // {race_id, payload_json}
 
   let idc = 0;
@@ -108,6 +110,15 @@ function fakeDb() {
     addMembers(raceId, userIds) {
       members.set(raceId, new Set(userIds));
     },
+    addRace(raceId, opts = {}) {
+      races.set(raceId, {
+        id: raceId,
+        title: opts.title ?? 'Race',
+        status: opts.status ?? 'completed',
+        winner_user_id: opts.winnerUserId ?? null,
+        completed_at: opts.completedAt ?? new Date().toISOString(),
+      });
+    },
     addLeadChange(raceId, newLeader) {
       leadEvents.push({ race_id: raceId, payload_json: JSON.stringify({ newLeaderUserId: newLeader }) });
     },
@@ -121,6 +132,13 @@ function fakeDb() {
         if (sql.includes('SELECT level FROM user_progression')) {
           const p = progression.get(stmt._a[0]);
           return p ? { level: p.level } : null;
+        }
+        if (sql.includes('SELECT total_xp FROM user_progression')) {
+          const p = progression.get(stmt._a[0]);
+          return p ? { total_xp: p.total_xp } : null;
+        }
+        if (sql.includes('COUNT(*) AS n FROM unlock_definitions')) {
+          return { n: defs.filter((d) => d.unlock_type === 'achievement').length };
         }
         if (sql.includes('FROM xp_events') && sql.includes('SUM(')) {
           const u = stmt._a[0];
@@ -154,6 +172,39 @@ function fakeDb() {
         return null;
       };
       stmt.all = async () => {
+        // publicProfileProgressionFor — grouped racing stats
+        if (sql.includes('COUNT(*) AS n FROM race_events') && sql.includes('GROUP BY event_type')) {
+          const user = stmt._a[0];
+          const counts = new Map();
+          for (const e of raceEvents) {
+            if (e.subject_user_id !== user) continue;
+            if (!['participant_finished', 'winner_determined'].includes(e.event_type)) continue;
+            counts.set(e.event_type, (counts.get(e.event_type) ?? 0) + 1);
+          }
+          return { results: [...counts.entries()].map(([event_type, n]) => ({ event_type, n })) };
+        }
+        // publicProfileProgressionFor — earned achievement rows
+        if (sql.includes('FROM user_unlocks u') && sql.includes("d.unlock_type = 'achievement'") && sql.includes('d.active = 1')) {
+          const user = stmt._a[0];
+          return {
+            results: ownedRows(user)
+              .filter((d) => d.unlock_type === 'achievement')
+              .map((d) => ({ ...d, owned_at: unlocks.get(unlockKey(user, d.id))?.unlocked_at ?? null })),
+          };
+        }
+        // publicProfileProgressionFor — shared completed races (bind: target, viewer)
+        if (sql.includes('FROM race_members a') && sql.includes('JOIN races r')) {
+          const [target, viewer] = stmt._a;
+          const out = [];
+          for (const [raceId, set] of members) {
+            if (!set.has(target) || !set.has(viewer)) continue;
+            const r = races.get(raceId);
+            if (!r || r.status !== 'completed') continue;
+            out.push({ id: r.id, title: r.title, winner_user_id: r.winner_user_id, completed_at: r.completed_at });
+          }
+          out.sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+          return { results: out };
+        }
         // reconcileProgression XP scan — event_type IN (...)
         if (sql.includes('FROM race_events') && sql.includes('event_type IN (')) {
           const [user, ...types] = stmt._a;
@@ -721,4 +772,72 @@ test('featuredSlotsFor counts slot unlocks over the base slot', () => {
     ]),
     3,
   );
+});
+
+// ── Public profile progression (another member's identity) ──────────────────
+
+test('public bundle carries level + fraction, never absolute XP', async () => {
+  const db = fakeDb();
+  finishRace(db, 'them', 'r1');
+  db.addMembers('r1', ['them', 'me']);
+  await reconcileProgression(db, 'them');
+
+  const pub = await publicProfileProgressionFor(db, 'me', 'them');
+  assert.equal(pub.level, 1);
+  assert.equal(typeof pub.levelProgress, 'number');
+  assert.ok(pub.levelProgress >= 0 && pub.levelProgress <= 1);
+  assert.equal(pub.totalXp, undefined, 'public payload must not expose XP');
+  assert.equal(pub.stats.races, 1);
+  assert.equal(pub.stats.wins, 0);
+});
+
+test('public bundle reports earned achievements only', async () => {
+  const db = fakeDb();
+  finishRace(db, 'them', 'r1');
+  db.addMembers('r1', ['them']);
+  await reconcileProgression(db, 'them');
+
+  const pub = await publicProfileProgressionFor(db, 'me', 'them');
+  assert.equal(pub.achievementsEarned, pub.earned.length);
+  assert.ok(pub.earned.length > 0);
+  assert.ok(pub.earned.every((a) => a.unlocked === true));
+  // Locked defs (hat trick at 0/3, five deep at 1/5) never surface publicly.
+  assert.ok(!pub.earned.some((a) => a.key === 'hat_trick'));
+  assert.ok(pub.achievementsTotal >= pub.achievementsEarned);
+});
+
+test('public bundle computes races-with-you from canonical rosters', async () => {
+  const db = fakeDb();
+  // Two shared finished races: viewer won one, target won one.
+  db.addRace('shared-1', { title: 'Pushup Battle', winnerUserId: 'me', completedAt: '2026-09-15T10:00:00Z' });
+  db.addRace('shared-2', { title: 'Squat Race', winnerUserId: 'them', completedAt: '2026-09-14T10:00:00Z' });
+  db.addMembers('shared-1', ['me', 'them']);
+  db.addMembers('shared-2', ['me', 'them']);
+  // A race they finished without the viewer — not shared.
+  db.addRace('theirs-only', { title: 'Solo Race', winnerUserId: 'them', completedAt: '2026-09-13T10:00:00Z' });
+  db.addMembers('theirs-only', ['them']);
+  // A shared race still running — not a finished shared result.
+  db.addRace('still-live', { title: 'Live Race', status: 'active' });
+  db.addMembers('still-live', ['me', 'them']);
+
+  const pub = await publicProfileProgressionFor(db, 'me', 'them');
+  assert.equal(pub.racesWithYou.total, 2);
+  assert.equal(pub.racesWithYou.viewerWins, 1);
+  assert.equal(pub.racesWithYou.targetWins, 1);
+  assert.equal(pub.racesWithYou.recent.length, 2);
+  assert.equal(pub.racesWithYou.recent[0].title, 'Pushup Battle');
+});
+
+test('public bundle marks featured achievements on the earned list', async () => {
+  const db = fakeDb();
+  finishRace(db, 'them', 'r1');
+  db.addMembers('r1', ['them']);
+  await reconcileProgression(db, 'them');
+  await setFeaturedBadges(db, 'them', ['ach-on-the-board']);
+
+  const pub = await publicProfileProgressionFor(db, 'me', 'them');
+  assert.equal(pub.featured.length, 1);
+  assert.equal(pub.featured[0].key, 'on_the_board');
+  const firstMove = pub.earned.find((a) => a.key === 'on_the_board');
+  assert.equal(firstMove.featured, true);
 });

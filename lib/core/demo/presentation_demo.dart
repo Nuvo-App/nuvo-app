@@ -9,6 +9,7 @@ import '../../features/arena/data/arena_models.dart';
 import '../../features/auth/data/auth_models.dart';
 import '../../features/crew/data/crew_api.dart';
 import '../../features/notifications/data/notification_models.dart';
+import '../../features/profile/data/progression_models.dart' show NuvoBadge;
 import '../../features/races/data/race_models.dart';
 import '../../features/social/data/crew_activity_models.dart';
 import '../../features/social/domain/nuvo_destination.dart';
@@ -142,8 +143,11 @@ PassInfo presentationDemoPassInfo() => const PassInfo(
 
 /// Resolve a demo-crew id (presentation-demo-crew-*) to a public profile card
 /// for the presentation session — lets taps on demo crew rows open a real
-/// profile instead of a dead offline error.
-PublicProfileCard? presentationDemoProfile(String userId) {
+/// profile instead of a dead offline error. Progression bundles are
+/// deliberately varied across levels so the public identity reads
+/// differently for a newcomer (Lv. 1) and a veteran (Lv. 52).
+PublicProfileCard? presentationDemoProfile(String userId,
+    {String? viewerId}) {
   final members = PresentationDemoData.crewMembers();
   final requests = PresentationDemoData.crewRequestPage();
   final status = members.any((m) => m.id == userId)
@@ -154,8 +158,10 @@ PublicProfileCard? presentationDemoProfile(String userId) {
               ? CrewConnectionStatus.pendingOutgoing
               : null;
   if (status == null) return null;
+  final me = viewerId ?? 'presentation-demo-viewer';
   for (final person in PresentationDemoData.knownPeople()) {
     if (person.id == userId) {
+      final p = _demoProgression[userId];
       return PublicProfileCard(
         id: person.id,
         displayName: person.displayName,
@@ -164,11 +170,277 @@ PublicProfileCard? presentationDemoProfile(String userId) {
         username: person.username,
         memberId: person.memberId,
         profilePhotoUrl: person.profilePhotoUrl,
+        lastActiveAt: person.lastActiveAt,
+        level: p?.level,
+        levelProgress: p?.levelProgress,
+        achievementsEarned: p?.earned.length,
+        achievementsTotal: p == null ? null : _demoAchievementTotal,
+        featured: p?.featured ?? const [],
+        earned: p?.earned ?? const [],
+        racesFinished: p?.races,
+        racesWon: p?.wins,
+        racesWithYou: p?.shared?.toCard(me),
       );
     }
   }
   return null;
 }
+
+/// One earned badge in a demo person's collection.
+NuvoBadge _demoBadge(
+  String key,
+  String name,
+  String iconKey,
+  String category, {
+  bool featured = false,
+  bool milestone = false,
+}) =>
+    NuvoBadge(
+      unlockId: 'demo-ach-$key',
+      type: 'achievement',
+      key: key,
+      name: name,
+      description: null,
+      requiredLevel: 0,
+      metadata: milestone ? const {'rarity': 'milestone'} : null,
+      unlocked: true,
+      unlockedAt: '2026-09-10T12:00:00.000Z',
+      featured: featured,
+      category: category,
+      iconKey: iconKey,
+    );
+
+const _demoAchievementTotal = 43;
+
+/// Sentinel for "the demo viewer won this shared race" — resolved to the
+/// actual signed-in demo user id when the card is built.
+const _demoViewerId = 'presentation-demo-viewer';
+
+class _DemoShared {
+  const _DemoShared(this.total, this.viewerWins, this.targetWins, this.recent);
+  final int total;
+  final int viewerWins;
+  final int targetWins;
+  final List<PublicSharedRace> recent;
+  PublicRacesWithYou toCard(String viewerId) => PublicRacesWithYou(
+        total: total,
+        viewerWins: viewerWins,
+        targetWins: targetWins,
+        recent: [
+          for (final r in recent)
+            PublicSharedRace(
+              raceId: r.raceId,
+              title: r.title,
+              winnerUserId:
+                  r.winnerUserId == _demoViewerId ? viewerId : r.winnerUserId,
+            ),
+        ],
+      );
+}
+
+class _DemoProgression {
+  const _DemoProgression({
+    required this.level,
+    required this.levelProgress,
+    required this.races,
+    required this.wins,
+    required this.earned,
+    this.shared,
+  });
+  final int level;
+  final double levelProgress;
+  final int races;
+  final int wins;
+  final List<NuvoBadge> earned;
+  final _DemoShared? shared;
+  List<PublicFeaturedBadge> get featured => earned
+      .where((b) => b.featured)
+      .map((b) => PublicFeaturedBadge(
+            unlockId: b.unlockId,
+            key: b.key,
+            name: b.name,
+            iconKey: b.iconKey,
+          ))
+      .toList();
+}
+
+/// Per-person demo progression — every bundle is internally consistent with
+/// what the level implies (a Lv. 52 veteran holds Champion; a Lv. 1
+/// newcomer holds nothing yet).
+final _demoProgression = <String, _DemoProgression>{
+  'presentation-demo-crew-noah': _DemoProgression(
+    level: 27,
+    levelProgress: 0.6,
+    races: 31,
+    wins: 16,
+    earned: [
+      _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
+      _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
+      _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
+      _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing'),
+      _demoBadge('quarter_century', 'Quarter Century', 'num_25', 'racing',
+          milestone: true),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning'),
+      _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning'),
+      _demoBadge('high_five', 'High Five', 'trophy_5', 'winning'),
+      _demoBadge('ten_up', 'Ten Up', 'trophy_10', 'winning',
+          featured: true, milestone: true),
+      _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
+      _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance',
+          featured: true),
+      _demoBadge('getting_better', 'Getting Better', 'chart_up',
+          'performance'),
+      _demoBadge('motion_rookie', 'Motion Rookie', 'motion_figure', 'motion'),
+      _demoBadge('crewmate', 'Crewmate', 'people', 'social'),
+      _demoBadge('variety_pack', 'Variety Pack', 'crossed_flags', 'variety',
+          featured: true),
+      _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
+      _demoBadge('level_10', 'Level 10', 'num_10', 'level'),
+      _demoBadge('level_25', 'Level 25', 'num_25', 'level', milestone: true),
+    ],
+    shared: _DemoShared(12, 7, 5, [
+      PublicSharedRace(
+        raceId: '${presentationDemoRacePrefix}running',
+        title: 'First To 50 Running In Place',
+        winnerUserId: _demoViewerId,
+      ),
+    ]),
+  ),
+  'presentation-demo-crew-priya': _DemoProgression(
+    level: 8,
+    levelProgress: 0.35,
+    races: 11,
+    wins: 4,
+    earned: [
+      _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
+      _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
+      _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
+      _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing',
+          featured: true),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning',
+          featured: true),
+      _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning',
+          featured: true),
+      _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
+      _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance'),
+      _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
+    ],
+    shared: _DemoShared(6, 4, 2, [
+      PublicSharedRace(
+        raceId: '${presentationDemoRacePrefix}lunges',
+        title: 'First To 30 Lunges',
+        winnerUserId: _demoViewerId,
+      ),
+    ]),
+  ),
+  'presentation-demo-crew-theo': _DemoProgression(
+    level: 52,
+    levelProgress: 0.8,
+    races: 87,
+    wins: 51,
+    earned: [
+      _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
+      _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
+      _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
+      _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing'),
+      _demoBadge('quarter_century', 'Quarter Century', 'num_25', 'racing'),
+      _demoBadge('fifty_strong', 'Fifty Strong', 'num_50', 'racing',
+          featured: true, milestone: true),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning'),
+      _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning'),
+      _demoBadge('high_five', 'High Five', 'trophy_5', 'winning'),
+      _demoBadge('ten_up', 'Ten Up', 'trophy_10', 'winning'),
+      _demoBadge('twenty_five_wins', '25 Wins', 'trophy_25', 'winning'),
+      _demoBadge('champion', 'Champion', 'crown', 'winning',
+          featured: true, milestone: true),
+      _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
+      _demoBadge('starter_pack', 'Starter Pack', 'flags_stack', 'creation'),
+      _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance'),
+      _demoBadge('getting_better', 'Getting Better', 'chart_up',
+          'performance'),
+      _demoBadge('comeback', 'Comeback', 'arrow_curve', 'performance'),
+      _demoBadge('wire_to_wire', 'Wire to Wire', 'crown', 'performance'),
+      _demoBadge('motion_rookie', 'Motion Rookie', 'motion_figure', 'motion'),
+      _demoBadge('motion_regular', 'Motion Regular', 'motion_figure',
+          'motion'),
+      _demoBadge('motion_machine', 'Motion Machine', 'motion_figure',
+          'motion', featured: true),
+      _demoBadge('crewmate', 'Crewmate', 'people', 'social'),
+      _demoBadge('crowd_favorite', 'Crowd Favorite', 'people', 'social'),
+      _demoBadge('rivalry', 'Rivalry', 'crossed_flags', 'social'),
+      _demoBadge('variety_pack', 'Variety Pack', 'crossed_flags', 'variety'),
+      _demoBadge('all_rounder', 'All-Rounder', 'crossed_flags', 'variety'),
+      _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
+      _demoBadge('level_10', 'Level 10', 'num_10', 'level'),
+      _demoBadge('level_25', 'Level 25', 'num_25', 'level'),
+      _demoBadge('level_50', 'Level 50', 'num_50', 'level', milestone: true),
+    ],
+  ),
+  'presentation-demo-crew-lena': const _DemoProgression(
+    level: 1,
+    levelProgress: 0,
+    races: 0,
+    wins: 0,
+    earned: [],
+  ),
+  'presentation-demo-crew-jules': _DemoProgression(
+    level: 14,
+    levelProgress: 0.5,
+    races: 19,
+    wins: 6,
+    earned: [
+      _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
+      _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
+      _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
+      _demoBadge('double_digits', 'Double Digits', 'num_10', 'racing',
+          featured: true),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning'),
+      _demoBadge('hat_trick', 'Hat Trick', 'trophy_3', 'winning'),
+      _demoBadge('high_five', 'High Five', 'trophy_5', 'winning',
+          featured: true),
+      _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
+      _demoBadge('personal_best', 'Personal Best', 'spark_up', 'performance'),
+      _demoBadge('motion_rookie', 'Motion Rookie', 'motion_figure', 'motion'),
+      _demoBadge('crewmate', 'Crewmate', 'people', 'social'),
+      _demoBadge('rivalry', 'Rivalry', 'crossed_flags', 'social',
+          featured: true),
+      _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
+      _demoBadge('level_10', 'Level 10', 'num_10', 'level'),
+    ],
+    shared: _DemoShared(9, 4, 5, [
+      PublicSharedRace(
+        raceId: '${presentationDemoRacePrefix}burpees',
+        title: 'First To 20 Burpees',
+        winnerUserId: 'presentation-demo-crew-jules',
+      ),
+    ]),
+  ),
+  'presentation-demo-crew-sam': _DemoProgression(
+    level: 5,
+    levelProgress: 0.4,
+    races: 6,
+    wins: 2,
+    earned: [
+      _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
+      _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
+      _demoBadge('five_deep', 'Five Deep', 'flags_5', 'racing'),
+      _demoBadge('first_w', 'First W', 'trophy_1', 'winning',
+          featured: true),
+      _demoBadge('race_maker', 'Race Maker', 'flag_plus', 'creation'),
+      _demoBadge('level_5', 'Level 5', 'num_5', 'level'),
+    ],
+  ),
+  'presentation-demo-crew-ellie': _DemoProgression(
+    level: 3,
+    levelProgress: 0.2,
+    races: 2,
+    wins: 0,
+    earned: [
+      _demoBadge('first_move', 'First Move', 'arrow_forward', 'racing'),
+      _demoBadge('on_the_board', 'On the Board', 'flag', 'racing'),
+    ],
+  ),
+};
 
 /// All local presentation fixtures live here so Arena, Compete, Crew, and
 /// Profile never drift into separate demo stories.
@@ -229,6 +501,7 @@ abstract final class PresentationDemoData {
         displayName: 'Noah Williams',
         username: 'noahw',
         memberId: 'NV-2048',
+        level: 27,
         initials: 'NW',
         addedAt: _createdAt,
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=11',
@@ -239,6 +512,7 @@ abstract final class PresentationDemoData {
         displayName: 'Priya Shah',
         username: 'priyashah',
         memberId: 'NV-2051',
+        level: 8,
         initials: 'PS',
         addedAt: _createdAt,
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
@@ -249,6 +523,7 @@ abstract final class PresentationDemoData {
         displayName: 'Theo Martin',
         username: 'theom',
         memberId: 'NV-2056',
+        level: 52,
         initials: 'TM',
         addedAt: _createdAt,
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=53',
@@ -259,6 +534,7 @@ abstract final class PresentationDemoData {
         displayName: 'Lena Ortiz',
         username: 'lenao',
         memberId: 'NV-2061',
+        level: 1,
         initials: 'LO',
         addedAt: _createdAt,
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=44',
@@ -269,6 +545,7 @@ abstract final class PresentationDemoData {
         displayName: 'Jules Carter',
         username: 'julesc',
         memberId: 'NV-2064',
+        level: 14,
         initials: 'JC',
         addedAt: now.subtract(const Duration(days: 2)).toIso8601String(),
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=15',
@@ -288,6 +565,7 @@ abstract final class PresentationDemoData {
           displayName: 'Sam Rivera',
           username: 'samr',
           memberId: 'NV-2070',
+        level: 5,
           initials: 'SR',
           addedAt: _createdAt,
           profilePhotoUrl: 'https://i.pravatar.cc/160?img=68',
@@ -300,6 +578,7 @@ abstract final class PresentationDemoData {
           displayName: 'Ellie Brooks',
           username: 'ellieb',
           memberId: 'NV-2073',
+        level: 3,
           initials: 'EB',
           addedAt: _createdAt,
           profilePhotoUrl: 'https://i.pravatar.cc/160?img=49',

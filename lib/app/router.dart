@@ -42,6 +42,8 @@ import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/movement_preview/rive_calibration_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
+import '../features/crew/data/crew_api.dart' show PublicProfileCard;
+import '../features/crew/presentation/public_badges_screen.dart';
 import '../features/crew/presentation/public_profile_screen.dart';
 import '../features/notifications/presentation/notification_prefs_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
@@ -140,6 +142,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) => _detailPage(
           state,
           PublicProfileScreen(userId: state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: '/u/:id/badges',
+        pageBuilder: (_, state) => _detailPage(
+          state,
+          PublicBadgesScreen(
+            userId: state.pathParameters['id']!,
+            card: state.extra is PublicProfileCard
+                ? state.extra as PublicProfileCard
+                : null,
+          ),
         ),
       ),
       GoRoute(

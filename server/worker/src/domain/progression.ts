@@ -934,3 +934,164 @@ export async function publicIdentityFor(
     })),
   };
 }
+
+// ── Public profile progression ───────────────────────────────────────────────
+// Another member's competitive identity. The contract deliberately differs
+// from /progression: level is the social signal, so public viewers get the
+// level + a 0..1 progress fraction — never absolute XP. Locked achievement
+// progress is also self-only; public surfaces get the earned collection.
+
+export interface PublicAchievement {
+  unlockId: string;
+  type: string;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  iconKey: string | null;
+  unlocked: boolean;
+  unlockedAt: string | null;
+  featured: boolean;
+}
+
+export interface SharedRace {
+  raceId: string;
+  title: string;
+  winnerUserId: string | null;
+  completedAt: string | null;
+}
+
+export interface PublicProfileProgression {
+  level: number;
+  /** 0..1 fill inside the current level — fraction only, never XP numbers. */
+  levelProgress: number;
+  achievementsEarned: number;
+  achievementsTotal: number;
+  featured: Array<{ unlockId: string; key: string; name: string; iconKey: string | null }>;
+  earned: PublicAchievement[];
+  stats: { races: number; wins: number };
+  racesWithYou: {
+    total: number;
+    viewerWins: number;
+    targetWins: number;
+    recent: SharedRace[];
+  };
+}
+
+/**
+ * Public progression + racing context for `/users/:id`. Read-only: looking at
+ * someone's profile never reconciles their projection — totals come from the
+ * progression cache and light event counts, never writes.
+ */
+export async function publicProfileProgressionFor(
+  db: D1Database,
+  viewerId: string,
+  targetId: string,
+): Promise<PublicProfileProgression> {
+  const [progRow, statRows, earnedRows, totalRow, featuredRows, sharedRows] =
+    await Promise.all([
+      db
+        .prepare('SELECT total_xp FROM user_progression WHERE user_id = ?')
+        .bind(targetId)
+        .first<{ total_xp: number }>(),
+      db
+        .prepare(
+          `SELECT event_type, COUNT(*) AS n FROM race_events
+           WHERE subject_user_id = ? AND event_type IN ('participant_finished', 'winner_determined')
+           GROUP BY event_type`,
+        )
+        .bind(targetId)
+        .all<{ event_type: string; n: number }>(),
+      db
+        .prepare(
+          `SELECT d.*, u.unlocked_at AS owned_at FROM user_unlocks u
+           JOIN unlock_definitions d ON d.id = u.unlock_id
+           WHERE u.user_id = ? AND d.unlock_type = 'achievement' AND d.active = 1
+           ORDER BY d.sort_order ASC, d.unlock_key ASC`,
+        )
+        .bind(targetId)
+        .all<UnlockRow & { owned_at: string | null }>(),
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM unlock_definitions
+           WHERE active = 1 AND unlock_type = 'achievement'`,
+        )
+        .first<{ n: number }>(),
+      db
+        .prepare(
+          `SELECT d.id, d.unlock_key, d.name, d.icon_key FROM user_featured_badges f
+           JOIN unlock_definitions d ON d.id = f.unlock_id
+           WHERE f.user_id = ? AND d.active = 1
+           ORDER BY f.position ASC LIMIT 3`,
+        )
+        .bind(targetId)
+        .all<{ id: string; unlock_key: string; name: string; icon_key: string | null }>(),
+      // Races-with-you: canonical finished races where both racers were on
+      // the roster. Wins come from the recorded winner, never inferred.
+      db
+        .prepare(
+          `SELECT r.id, r.title, r.winner_user_id, r.completed_at
+           FROM race_members a
+           JOIN race_members b ON b.race_id = a.race_id
+             AND b.user_id = ? AND b.status != 'removed'
+           JOIN races r ON r.id = a.race_id
+           WHERE a.user_id = ? AND a.status != 'removed'
+             AND r.status = 'completed'
+           ORDER BY r.completed_at DESC`,
+        )
+        .bind(targetId, viewerId)
+        .all<{
+          id: string;
+          title: string;
+          winner_user_id: string | null;
+          completed_at: string | null;
+        }>(),
+    ]);
+
+  const lp = levelForXp(progRow?.total_xp ?? 0);
+  let races = 0;
+  let wins = 0;
+  for (const row of statRows.results) {
+    if (row.event_type === 'participant_finished') races = row.n;
+    if (row.event_type === 'winner_determined') wins = row.n;
+  }
+
+  const shared = sharedRows.results;
+  const featuredIds = new Set(featuredRows.results.map((r) => r.id));
+  return {
+    level: lp.level,
+    levelProgress: lp.progress,
+    achievementsEarned: earnedRows.results.length,
+    achievementsTotal: totalRow?.n ?? 0,
+    featured: featuredRows.results.map((r) => ({
+      unlockId: r.id,
+      key: r.unlock_key,
+      name: r.name,
+      iconKey: r.icon_key,
+    })),
+    earned: earnedRows.results.map((d) => ({
+      unlockId: d.id,
+      type: d.unlock_type,
+      key: d.unlock_key,
+      name: d.name,
+      description: d.description,
+      category: d.category,
+      iconKey: d.icon_key,
+      unlocked: true,
+      unlockedAt: d.owned_at,
+      featured: featuredIds.has(d.id),
+    })),
+    stats: { races, wins },
+    racesWithYou: {
+      total: shared.length,
+      viewerWins: shared.filter((r) => r.winner_user_id === viewerId).length,
+      targetWins: shared.filter((r) => r.winner_user_id === targetId).length,
+      recent: shared.slice(0, 3).map((r) => ({
+        raceId: r.id,
+        title: r.title,
+        winnerUserId: r.winner_user_id,
+        completedAt: r.completed_at,
+      })),
+    },
+  };
+}

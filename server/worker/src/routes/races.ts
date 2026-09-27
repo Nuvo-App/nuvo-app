@@ -636,7 +636,7 @@ async function loadViewerVisibilityContext(
 /// shape from a single source of truth.
 function shapeRaceResponse(
   race: RaceRow,
-  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[] },
+  collections: { participants: ParticipantRow[]; moves: MoveRow[]; invite: InviteRow | null; finalStandings: StandingRow[]; levels?: ReadonlyMap<string, number> },
   viewerUserId: string | undefined,
   visibilityCtx: { allowedIds: Set<string>; blockedEitherWay: Set<string> },
   submissionResult?: SubmissionResult,
@@ -644,6 +644,7 @@ function shapeRaceResponse(
   viewerAttempts?: { used: number; openAttemptId: string | null },
 ) {
   const { participants, moves, invite, finalStandings } = collections;
+  const levels = collections.levels ?? new Map<string, number>();
   const { allowedIds, blockedEitherWay } = visibilityCtx;
 
   // Being in the same race is itself an opt-in relationship: fellow racers see
@@ -660,7 +661,7 @@ function shapeRaceResponse(
     }
   }
 
-  function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null } {
+  function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null; anonymized: boolean } {
     const v = resolveRaceMemberVisibility(
       viewerUserId,
       {
@@ -672,7 +673,7 @@ function shapeRaceResponse(
       },
       { crewIds: allowedIds, blockedEitherWay, coRacerIds },
     );
-    return { displayName: v.displayName, profilePhotoUrl: v.profilePhotoUrl };
+    return { displayName: v.displayName, profilePhotoUrl: v.profilePhotoUrl, anonymized: v.anonymized };
   }
 
   const proofRequirement = mapVerificationTypeToProofRequirement(race.verification_type);
@@ -768,6 +769,9 @@ function shapeRaceResponse(
         rank: p.rank_cache,
         joinedAt: p.joined_at,
         finishedAt: p.finished_at ?? null,
+        // Nuvo Level is part of race identity — exposed to whoever can see
+        // this racer's identity here, masked with it otherwise.
+        level: visible.anonymized || !p.user_id ? null : levels.get(p.user_id) ?? null,
       };
     }),
     recentProofs: moves.map((m) => {
@@ -818,10 +822,31 @@ function shapeRaceResponse(
         rank: row.rank_position,
         scoreValue: row.score_value,
         completedAt: row.completed_at,
+        level: visible.anonymized ? null : levels.get(row.user_id) ?? null,
       };
     }),
     submissionResult: submissionResult ?? null,
   };
+}
+
+/** One batched level lookup for every racer on a response — Nuvo Level is
+ * part of race identity, masked by the same visibility rule as the name. */
+async function levelsForUsers(
+  db: D1Database,
+  userIds: Iterable<string | null | undefined>,
+): Promise<Map<string, number>> {
+  const ids = [...new Set([...userIds].filter((x): x is string => Boolean(x)))];
+  const map = new Map<string, number>();
+  if (ids.length === 0) return map;
+  const rows = await db
+    .prepare(
+      `SELECT user_id, level FROM user_progression
+       WHERE user_id IN (${ids.map(() => '?').join(',')})`,
+    )
+    .bind(...ids)
+    .all<{ user_id: string; level: number }>();
+  for (const r of rows.results) map.set(r.user_id, r.level);
+  return map;
 }
 
 /// Single-race response — detail/create/join/proof endpoints. Fetches this
@@ -914,10 +939,16 @@ async function buildRaceResponse(
       : Promise.resolve(null),
   ]);
 
-  const visibilityCtx = await loadViewerVisibilityContext(db, viewerUserId);
+  const [visibilityCtx, levels] = await Promise.all([
+    loadViewerVisibilityContext(db, viewerUserId),
+    levelsForUsers(db, [
+      ...participants.results.map((p) => p.user_id),
+      ...finalStandings.results.map((s) => s.user_id),
+    ]),
+  ]);
   return shapeRaceResponse(
     race,
-    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results },
+    { participants: participants.results, moves: moves.results, invite, finalStandings: finalStandings.results, levels },
     viewerUserId,
     visibilityCtx,
     submissionResult,
@@ -1028,6 +1059,10 @@ async function buildRaceResponsesBatch(
   const movesByRace = groupByRaceId(movesRows.results, 20);
   const invitesByRace = groupByRaceId(invitesRows.results);
   const standingsByRace = groupByRaceId(standingsRows.results);
+  const levels = await levelsForUsers(db, [
+    ...participantsRows.results.map((p) => p.user_id),
+    ...standingsRows.results.map((s) => s.user_id),
+  ]);
 
   return races.map((race) =>
     shapeRaceResponse(
@@ -1037,6 +1072,7 @@ async function buildRaceResponsesBatch(
         moves: movesByRace.get(race.id) ?? [],
         invite: (invitesByRace.get(race.id) ?? [])[0] ?? null,
         finalStandings: standingsByRace.get(race.id) ?? [],
+        levels,
       },
       viewerUserId,
       visibilityCtx,
