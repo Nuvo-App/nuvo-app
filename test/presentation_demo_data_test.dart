@@ -40,12 +40,13 @@ void main() {
   );
 
   test(
-    'the dedicated store-testing identity is always presentation mode, no '
+    'the dedicated store-review identity is always presentation mode, no '
     'toggle needed',
     () {
       const reviewer = AuthUser(
         id: 'reviewer-user',
-        email: 'testing@getnuvo.net',
+        email: 'team@getnuvo.net',
+        isDemo: true,
         fullName: 'Reviewer',
         onboardingComplete: true,
         hasMemberPass: true,
@@ -54,6 +55,19 @@ void main() {
       expect(isPresentationDemoUser(reviewer), isTrue);
     },
   );
+
+  test('the QA account sees the real first-user experience, not fixtures',
+      () {
+    const qa = AuthUser(
+      id: 'qa-user',
+      email: 'testing@getnuvo.net',
+      fullName: 'QA',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    );
+    expect(isPresentationDemoUser(qa), isFalse);
+  });
 
   test('Arena and Compete fixtures share one six-race presentation set', () {
     final races = PresentationDemoData.races(user.id);

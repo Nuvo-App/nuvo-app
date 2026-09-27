@@ -89,18 +89,17 @@ class AuthRepository {
   /// Whether the stored session may fall back to the fully local demo
   /// session when the server can't be reached. Same rule as
   /// AuthController._offlineDemoAllowed, keyed off the stored account email
-  /// (the only identity an offline restore has): the dedicated
-  /// store-testing identity always qualifies; in debug builds the shared
-  /// team credential, the presentation-toggle account, and sessions that
-  /// predate email persistence (no stored email) qualify too — a dead
-  /// retry screen helps no one while developing or demoing.
+  /// (the only identity an offline restore has): the dedicated store-review
+  /// credential always qualifies; in debug builds the presentation-toggle
+  /// account and sessions that predate email persistence (no stored email)
+  /// qualify too — a dead retry screen helps no one while developing or
+  /// demoing.
   bool _offlineDemoAllowedForEmail(String? email) {
     final e = email?.trim().toLowerCase();
-    if (e == 'testing@getnuvo.net' || e == 'testing@getnuvo') return true;
+    if (e == 'team@getnuvo.net') return true;
     if (!kDebugMode) return false;
     return e == null ||
         e.isEmpty ||
-        e == 'team@getnuvo.net' ||
         e == 'sideswifter2010@gmail.com';
   }
 

@@ -41,10 +41,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
 
   String get _normalizedEmail => _emailController.text.trim().toLowerCase();
 
-  bool get _isReviewerEmail =>
-      _normalizedEmail == 'team@getnuvo.net' ||
-      _normalizedEmail == 'testing@getnuvo.net' ||
-      _normalizedEmail == 'testing@getnuvo';
+  bool get _isReviewerEmail => _normalizedEmail == 'team@getnuvo.net';
 
   bool get _canSubmit {
     if (_loading || !_normalizedEmail.contains('@')) return false;
@@ -60,11 +57,9 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     });
     try {
       if (_isReviewerEmail) {
-        // The entered email flows through unchanged: the API maps
-        // testing@getnuvo.net to the shared review credential itself, and the
-        // controller's offline-demo fallback keys off the entered identity —
-        // the store-testing account may demo offline in release builds, the
-        // team credential may not.
+        // The shared review credential authenticates through /auth/reviewer;
+        // the controller's offline-demo fallback keys off this identity so
+        // store review works even on networks that block workers.dev.
         await ref
             .read(authControllerProvider.notifier)
             .signInReviewer(email, _passwordController.text);

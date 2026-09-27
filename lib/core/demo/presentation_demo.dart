@@ -25,9 +25,9 @@ const presentationDemoAvatarUrl = 'https://i.pravatar.cc/160?img=12';
 
 /// Whether [presentationDemoEmail] can flip presentation mode on/off itself
 /// (a Profile settings toggle) — true for that one account, regardless of
-/// the toggle's current value. `testing@getnuvo.net` has no toggle; it is
-/// always presentation mode (App Store review must always see polished demo
-/// data, never a real/empty account).
+/// the toggle's current value. Backend-flagged demo identities (e.g. the
+/// store-review credential) have no toggle; they are always presentation
+/// mode so review/screenshots always see polished demo data.
 bool canTogglePresentationMode(AuthUser? user) =>
     user?.email.trim().toLowerCase() == presentationDemoEmail;
 
@@ -112,15 +112,13 @@ Future<File> _toggleFile() async {
 }
 
 bool isPresentationDemoUser(AuthUser? user) {
-  // Backend-flagged demo identities always render fixtures — same contract
-  // as the dedicated store-testing account.
+  // Backend-flagged demo identities (the store-review credential and demo
+  // accounts) always render fixtures. `testing@getnuvo.net` is a real QA
+  // account — it must see the genuine first-user experience, not fixtures.
   if (user?.isDemo == true) return true;
   final email = user?.email.trim().toLowerCase();
-  // The dedicated store-testing identity is always presentation mode — no
-  // toggle, since App Store review must always see polished demo data. The
-  // account owner's own identity is presentation mode only while they've
+  // The account owner's own identity is presentation mode only while they've
   // turned it on (Profile settings) — otherwise they see their real data.
-  if (email == 'testing@getnuvo.net') return true;
   if (email == presentationDemoEmail) return presentationModeToggleEnabled;
   return false;
 }

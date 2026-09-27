@@ -48,7 +48,7 @@ const _internalUser = AuthUser(
 
 const _testingUser = AuthUser(
   id: 'u-testing',
-  email: 'testing@getnuvo.net',
+  email: 'team@getnuvo.net',
   onboardingComplete: true,
   hasMemberPass: true,
   termsAccepted: true,
@@ -528,14 +528,15 @@ void main() {
       );
     });
 
-    test('testing identity is exact — lookalikes do not qualify', () {
-      expect(isNuvoStoreDemoEmail('testing@getnuvo.net'), isTrue);
-      expect(isNuvoStoreDemoEmail(' TESTING@GETNUVO.NET '), isTrue);
+    test('review identity is exact — lookalikes do not qualify', () {
+      expect(isNuvoStoreDemoEmail('team@getnuvo.net'), isTrue);
+      expect(isNuvoStoreDemoEmail(' TEAM@GETNUVO.NET '), isTrue);
       for (final email in [
         'akshay@getnuvo.net',
-        'testing@getnuvo.net.evil.com',
-        'testing@fakegetnuvo.net',
-        'getnuvo.net@testing.com',
+        'testing@getnuvo.net',
+        'team@getnuvo.net.evil.com',
+        'team@fakegetnuvo.net',
+        'getnuvo.net@team.com',
         'member@example.com',
       ]) {
         expect(isNuvoStoreDemoEmail(email), isFalse, reason: email);
