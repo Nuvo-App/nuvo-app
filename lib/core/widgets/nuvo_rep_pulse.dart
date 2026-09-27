@@ -22,7 +22,7 @@ class NuvoRepPulse extends StatefulWidget {
     required this.count,
     required this.target,
     this.accent = NuvoColors.blue,
-    this.onColor = NuvoColors.navy,
+    this.onColor,
     this.haptics = true,
     this.compact = false,
   });
@@ -34,7 +34,7 @@ class NuvoRepPulse extends StatefulWidget {
   final Color accent;
 
   /// Colour of the running "N / target" number.
-  final Color onColor;
+  final Color? onColor;
   final bool haptics;
 
   /// Smaller number, for an inline HUD rather than a full-screen moment.
@@ -98,14 +98,17 @@ class _NuvoRepPulseState extends State<NuvoRepPulse> {
                   fontSize: numberSize,
                   height: 1,
                   fontWeight: FontWeight.w900,
-                  color: _targetHit ? NuvoColors.success : widget.onColor,
+                  color: _targetHit
+                      ? NuvoColors.success
+                      : widget.onColor ?? context.themeColors.ink,
                 ),
               ),
               TextSpan(
                 text: targetLabel,
                 style: AppTextStyles.titleLarge.copyWith(
                   fontSize: numberSize * 0.42,
-                  color: widget.onColor.withValues(alpha: 0.55),
+                  color: (widget.onColor ?? context.themeColors.ink)
+                      .withValues(alpha: 0.55),
                 ),
               ),
             ],

@@ -136,6 +136,7 @@ class _RaceRingState extends State<RaceRing>
                 painter: _RingPainter(
                   progress: animatedProgress,
                   strokeWidth: widget.strokeWidth,
+                  ringColor: context.themeColors.ink,
                 ),
               );
             },
@@ -208,10 +209,15 @@ class _RaceRingState extends State<RaceRing>
 }
 
 class _RingPainter extends CustomPainter {
-  _RingPainter({required this.progress, required this.strokeWidth});
+  _RingPainter({
+    required this.progress,
+    required this.strokeWidth,
+    required this.ringColor,
+  });
 
   final double progress;
   final double strokeWidth;
+  final Color ringColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -219,12 +225,11 @@ class _RingPainter extends CustomPainter {
     final radius = (size.width / 2) - strokeWidth - 6;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Navy outline track — ring itself, not an outer wrapper
-    const navyOutline = NuvoColors.inkNavy;
+    // Ink outline track — ring itself, not an outer wrapper
     const brightBlue = NuvoColors.actionBlue;
 
     final track = Paint()
-      ..color = navyOutline
+      ..color = ringColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
@@ -259,5 +264,6 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RingPainter oldDelegate) =>
       oldDelegate.progress != progress ||
-      oldDelegate.strokeWidth != strokeWidth;
+      oldDelegate.strokeWidth != strokeWidth ||
+      oldDelegate.ringColor != ringColor;
 }

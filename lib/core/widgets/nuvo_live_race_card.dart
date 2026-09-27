@@ -115,19 +115,20 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return PressableScale(
       onTap: onWatch,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: c.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: NuvoColors.border, width: 1.4),
-          boxShadow: AppShadows.hardSmall,
+          border: Border.all(color: c.border, width: 1.4),
+          boxShadow: AppShadows.hardOffset(c.inkShadow),
         ),
         child: switch (variant) {
-          NuvoLiveRaceCardVariant.primary => _primary(),
-          NuvoLiveRaceCardVariant.compact => _compact(),
+          NuvoLiveRaceCardVariant.primary => _primary(context),
+          NuvoLiveRaceCardVariant.compact => _compact(context),
         },
       ),
     );
@@ -135,24 +136,28 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   // ── Primary ────────────────────────────────────────────────────────────
 
-  Widget _primary() {
+  Widget _primary(BuildContext context) {
+    final c = context.themeColors;
     final r = _ranked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _header(),
+        _header(context),
         const SizedBox(height: 5),
         Text(
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.titleMedium.copyWith(
-            color: NuvoColors.navy,
+            color: c.ink,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 8),
-        if (r.length == 2) _headToHead(r) else _matchupBlock(r),
+        if (r.length == 2)
+          _headToHead(context, r)
+        else
+          _matchupBlock(context, r),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -168,7 +173,11 @@ class NuvoLiveRaceCard extends StatelessWidget {
   /// Two-person race: names over big scores, then a thin tug-of-war bar —
   /// their share vs mine. When I'm in the race I sit on the right (blue);
   /// spectator races are navy-vs-quiet.
-  Widget _headToHead(List<NuvoLiveStanding> ranked) {
+  Widget _headToHead(
+    BuildContext context,
+    List<NuvoLiveStanding> ranked,
+  ) {
+    final c = context.themeColors;
     final meIdx = ranked.indexWhere((p) => p.isMe);
     final left = meIdx >= 0 ? ranked[1 - meIdx] : ranked[0];
     final right = meIdx >= 0 ? ranked[meIdx] : ranked[1];
@@ -177,13 +186,13 @@ class NuvoLiveRaceCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: _duelSide(left, CrossAxisAlignment.start)),
+            Expanded(child: _duelSide(context, left, CrossAxisAlignment.start)),
             const SizedBox(width: 10),
-            Expanded(child: _duelSide(right, CrossAxisAlignment.end)),
+            Expanded(child: _duelSide(context, right, CrossAxisAlignment.end)),
           ],
         ),
         const SizedBox(height: 7),
-        _splitBar(left, right),
+        _splitBar(context, left, right),
         if (_gapLine != null) ...[
           const SizedBox(height: 5),
           Text(
@@ -191,7 +200,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.muted,
+              color: c.inkMuted,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -200,7 +209,12 @@ class NuvoLiveRaceCard extends StatelessWidget {
     );
   }
 
-  Widget _duelSide(NuvoLiveStanding p, CrossAxisAlignment align) {
+  Widget _duelSide(
+    BuildContext context,
+    NuvoLiveStanding p,
+    CrossAxisAlignment align,
+  ) {
+    final c = context.themeColors;
     return Column(
       crossAxisAlignment: align,
       children: [
@@ -209,7 +223,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.labelSmall.copyWith(
-            color: NuvoColors.muted,
+            color: c.inkMuted,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.4,
           ),
@@ -222,7 +236,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
               : TextAlign.start,
           style: AppTextStyles.number(
             24,
-            color: p.isMe ? NuvoColors.blue : NuvoColors.navy,
+            color: p.isMe ? NuvoColors.blue : c.ink,
             weight: FontWeight.w900,
           ),
         ),
@@ -232,7 +246,12 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   /// Their share vs mine, proportional to canonical scores — the only
   /// "progress" the payload honestly supports.
-  Widget _splitBar(NuvoLiveStanding left, NuvoLiveStanding right) {
+  Widget _splitBar(
+    BuildContext context,
+    NuvoLiveStanding left,
+    NuvoLiveStanding right,
+  ) {
+    final c = context.themeColors;
     final l = left.score <= 0 ? 1 : left.score;
     final r = right.score <= 0 ? 1 : right.score;
     return ClipRRect(
@@ -243,16 +262,14 @@ class NuvoLiveRaceCard extends StatelessWidget {
           children: [
             Expanded(
               flex: l,
-              child: ColoredBox(
-                color: NuvoColors.navy.withValues(alpha: 0.18),
-              ),
+              child: ColoredBox(color: c.track),
             ),
             Expanded(
               flex: r,
               child: ColoredBox(
                 color: right.isMe
                     ? NuvoColors.blue
-                    : NuvoColors.navy.withValues(alpha: 0.06),
+                    : c.track.withValues(alpha: 0.35),
               ),
             ),
           ],
@@ -263,11 +280,15 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   /// 3+ racers (or ranks missing): the ranked matchup line — "Noah 41 ·
   /// You 39 · Maya 12". Mine reads blue.
-  Widget _matchupBlock(List<NuvoLiveStanding> ranked) {
+  Widget _matchupBlock(
+    BuildContext context,
+    List<NuvoLiveStanding> ranked,
+  ) {
+    final c = context.themeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _matchupLine(ranked, size: 15),
+        _matchupLine(context, ranked, size: 15),
         if (_me != null && _gapLine != null) ...[
           const SizedBox(height: 4),
           Text(
@@ -275,7 +296,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.muted,
+              color: c.inkMuted,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -286,7 +307,8 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   // ── Compact ────────────────────────────────────────────────────────────
 
-  Widget _compact() {
+  Widget _compact(BuildContext context) {
+    final c = context.themeColors;
     final r = _ranked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,7 +320,7 @@ class NuvoLiveRaceCard extends StatelessWidget {
             Text(
               'LIVE',
               style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.navy,
+                color: c.ink,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.6,
               ),
@@ -310,21 +332,21 @@ class NuvoLiveRaceCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.navy,
+                  color: c.ink,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
             if (_timeLeft != null) ...[
               const SizedBox(width: 8),
-              _timeText(),
+              _timeText(context),
             ],
           ],
         ),
         const SizedBox(height: 5),
         Row(
           children: [
-            Expanded(child: _matchupLine(r, size: 12.5)),
+            Expanded(child: _matchupLine(context, r, size: 12.5)),
             const SizedBox(width: 8),
             _watchAction(),
             if (trailing != null) ...[
@@ -339,7 +361,8 @@ class NuvoLiveRaceCard extends StatelessWidget {
 
   // ── Shared pieces ──────────────────────────────────────────────────────
 
-  Widget _header() {
+  Widget _header(BuildContext context) {
+    final c = context.themeColors;
     return Row(
       children: [
         const _LivePulseDot(),
@@ -347,29 +370,35 @@ class NuvoLiveRaceCard extends StatelessWidget {
         Text(
           'LIVE',
           style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.navy,
+            color: c.ink,
             fontWeight: FontWeight.w800,
             letterSpacing: 0.6,
           ),
         ),
         const Spacer(),
-        if (_timeLeft != null) _timeText(),
+        if (_timeLeft != null) _timeText(context),
       ],
     );
   }
 
-  Widget _timeText() {
+  Widget _timeText(BuildContext context) {
+    final c = context.themeColors;
     final ending = _ending;
     return Text(
       _timeLeft!,
       style: AppTextStyles.labelMedium.copyWith(
-        color: ending ? NuvoColors.danger : NuvoColors.muted,
+        color: ending ? NuvoColors.danger : c.inkMuted,
         fontWeight: FontWeight.w800,
       ),
     );
   }
 
-  Widget _matchupLine(List<NuvoLiveStanding> ranked, {required double size}) {
+  Widget _matchupLine(
+    BuildContext context,
+    List<NuvoLiveStanding> ranked, {
+    required double size,
+  }) {
+    final c = context.themeColors;
     final spans = <InlineSpan>[];
     final shown = ranked.take(3).toList();
     for (var i = 0; i < shown.length; i++) {
@@ -379,18 +408,18 @@ class NuvoLiveRaceCard extends StatelessWidget {
           TextSpan(
             text: '  ·  ',
             style: AppTextStyles.labelMedium.copyWith(
-              color: NuvoColors.muted,
+              color: c.inkMuted,
               fontWeight: FontWeight.w600,
             ),
           ),
         );
       }
-      final color = p.isMe ? NuvoColors.blue : NuvoColors.navy;
+      final color = p.isMe ? NuvoColors.blue : c.ink;
       spans.addAll([
         TextSpan(
           text: p.isMe ? 'You' : p.name,
           style: AppTextStyles.labelMedium.copyWith(
-            color: NuvoColors.muted,
+            color: c.inkMuted,
             fontWeight: FontWeight.w700,
             fontSize: size,
           ),

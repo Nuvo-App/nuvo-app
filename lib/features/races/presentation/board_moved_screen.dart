@@ -380,8 +380,9 @@ class _PendingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final warning = context.semanticColors.warning;
     return Scaffold(
-      backgroundColor: NuvoColors.warningSurface,
+      backgroundColor: warning.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -401,16 +402,16 @@ class _PendingView extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.hourglass_bottom_rounded,
-                        color: NuvoColors.warning,
+                        color: warning.bright,
                         size: 44,
                       ),
                       const SizedBox(height: 14),
                       Text(
                         'Move logged — under review',
                         style: AppTextStyles.headlineMedium.copyWith(
-                          color: NuvoColors.warningOn,
+                          color: warning.on,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -418,7 +419,7 @@ class _PendingView extends StatelessWidget {
                       Text(
                         "We'll update the board once it's confirmed.",
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.warningOn,
+                          color: warning.on,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -452,7 +453,7 @@ class _NotVerifiedView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: Column(
           children: [
@@ -487,7 +488,7 @@ class _NotVerifiedView extends StatelessWidget {
                       Text(
                         'We couldn’t verify this proof. Try again with your whole body in frame and good light.',
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.muted,
+                          color: context.themeColors.inkMuted,
                         ),
                         textAlign: TextAlign.center,
                       ),

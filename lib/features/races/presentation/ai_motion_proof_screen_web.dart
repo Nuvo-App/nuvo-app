@@ -35,14 +35,17 @@ class AiMotionProofScreen extends StatelessWidget {
                       width: 64,
                       height: 64,
                       decoration: BoxDecoration(
-                        color: NuvoColors.icyBlue,
+                        color: context.semanticColors.neutral.surface,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: NuvoColors.navy, width: 1.5),
+                        border: Border.all(
+                          color: context.themeColors.border,
+                          width: 1.5,
+                        ),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child: Icon(
                         Icons.phone_iphone_rounded,
-                        color: NuvoColors.navy,
+                        color: context.themeColors.ink,
                         size: 32,
                       ),
                     ),

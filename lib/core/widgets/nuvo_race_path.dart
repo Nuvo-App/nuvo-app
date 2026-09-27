@@ -62,9 +62,10 @@ class NuvoRacePath extends StatelessWidget {
               seed: seed,
               progress: animatedProgress,
               variant: variant,
-              trackColor: trackColor ?? NuvoColors.trackBg,
+              trackColor: trackColor ?? context.themeColors.track,
               progressColor: progressColor ?? NuvoColors.blue,
               completedColor: completedColor ?? NuvoColors.success,
+              inkColor: context.themeColors.border,
             ),
           ),
         ),
@@ -93,6 +94,7 @@ class _RacePathPainter extends CustomPainter {
     required this.trackColor,
     required this.progressColor,
     required this.completedColor,
+    required this.inkColor,
   });
 
   final int seed;
@@ -101,6 +103,10 @@ class _RacePathPainter extends CustomPainter {
   final Color trackColor;
   final Color progressColor;
   final Color completedColor;
+
+  /// The marker ring + finish flag — the signature ink edge, which lifts to
+  /// the theme border tone on dark so the lane keeps its silhouette.
+  final Color inkColor;
 
   /// Deterministic pseudo-random value in [0, 1) for a given [salt], derived
   /// purely from [seed] — no external randomness, no per-frame variance.
@@ -203,7 +209,7 @@ class _RacePathPainter extends CustomPainter {
       markerPosition,
       markerRadius,
       Paint()
-        ..color = NuvoColors.navy
+        ..color = inkColor
         ..strokeWidth = 1.5
         ..style = PaintingStyle.stroke,
     );
@@ -214,7 +220,7 @@ class _RacePathPainter extends CustomPainter {
     final poleTop = baseY - poleHeight * 0.6;
     canvas.drawRect(
       Rect.fromLTWH(flagX, poleTop, 2, poleHeight),
-      Paint()..color = NuvoColors.border,
+      Paint()..color = inkColor,
     );
     final flagSize = variant == NuvoRacePathVariant.hero ? 15.0 : 9.0;
     canvas.drawPath(
@@ -223,7 +229,7 @@ class _RacePathPainter extends CustomPainter {
         ..lineTo(flagX + 2 + flagSize, poleTop + poleHeight * 0.22)
         ..lineTo(flagX + 2, poleTop + poleHeight * 0.44)
         ..close(),
-      Paint()..color = NuvoColors.navy,
+      Paint()..color = inkColor,
     );
   }
 
@@ -234,5 +240,6 @@ class _RacePathPainter extends CustomPainter {
       oldDelegate.variant != variant ||
       oldDelegate.trackColor != trackColor ||
       oldDelegate.progressColor != progressColor ||
-      oldDelegate.completedColor != completedColor;
+      oldDelegate.completedColor != completedColor ||
+      oldDelegate.inkColor != inkColor;
 }

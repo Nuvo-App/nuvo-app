@@ -24,7 +24,7 @@ Future<void> showMyQrSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: NuvoColors.page,
+    backgroundColor: context.themeColors.page,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -88,22 +88,14 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuvoColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            // Shell owns the drag handle (theme showDragHandle) — sheet
+            // content starts below it.
             const SizedBox(height: 18),
             Text('My code', style: AppTextStyles.titleLarge),
             const SizedBox(height: 4),
             Text(
               'Let someone scan this to add you to their crew.',
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.textMuted),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
             ),
             const SizedBox(height: 20),
             _content(),
@@ -152,22 +144,22 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
                 data: invite.url,
                 version: QrVersions.auto,
                 size: 208,
-                eyeStyle: const QrEyeStyle(
+                eyeStyle: QrEyeStyle(
                   eyeShape: QrEyeShape.square,
-                  color: NuvoColors.navy,
+                  color: context.themeColors.ink,
                 ),
-                dataModuleStyle: const QrDataModuleStyle(
+                dataModuleStyle: QrDataModuleStyle(
                   dataModuleShape: QrDataModuleShape.square,
-                  color: NuvoColors.navy,
+                  color: context.themeColors.ink,
                 ),
               ),
               const SizedBox(height: 10),
               Text(widget.displayName,
-                  style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy)),
+                  style: AppTextStyles.titleMedium.copyWith(color: context.themeColors.ink)),
               if (widget.memberId != null)
                 Text(widget.memberId!,
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: NuvoColors.textMuted)),
+                    style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                        .copyWith(color: context.themeColors.inkSubtle)),
             ]),
           ),
         ),

@@ -21,12 +21,13 @@ class NuvoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final accent = accentColor ?? NuvoColors.actionBlue;
     final bgColor = selected
-        ? NuvoColors.panel
-        : NuvoColors.white;
-    final border = selected ? accent : NuvoColors.border;
-    final textColor = selected ? accent : NuvoColors.navy;
+        ? c.panel
+        : c.surface;
+    final border = selected ? accent : c.border;
+    final textColor = selected ? accent : c.ink;
 
     return NuvoPressable(
       onTap: onTap,

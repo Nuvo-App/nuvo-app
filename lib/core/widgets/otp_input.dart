@@ -21,7 +21,7 @@ class OtpInput extends StatelessWidget {
               keyboardType: TextInputType.number,
               maxLength: 1,
               style: AppTextStyles.headlineMedium.copyWith(
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
               ),
               onChanged: (value) {
                 if (value.isNotEmpty && i < controllers.length - 1) {
@@ -34,11 +34,11 @@ class OtpInput extends StatelessWidget {
               decoration: InputDecoration(
                 counterText: '',
                 filled: true,
-                fillColor: NuvoColors.white,
+                fillColor: context.themeColors.surface,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  borderSide: const BorderSide(color: NuvoColors.border),
+                  borderSide: BorderSide(color: context.themeColors.border),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(NuvoRadii.md),

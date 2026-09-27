@@ -32,7 +32,7 @@ Future<bool?> showNuvoConfirmDialog(
     context: context,
     barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: NuvoColors.navy.withValues(alpha: 0.45),
+    barrierColor: context.themeColors.inkShadow.withValues(alpha: 0.45),
     transitionDuration: const Duration(milliseconds: 180),
     transitionBuilder: (context, animation, secondary, child) {
       if (MediaQuery.disableAnimationsOf(context)) {
@@ -54,30 +54,38 @@ Future<bool?> showNuvoConfirmDialog(
         ),
       );
     },
-    pageBuilder: (context, animation, secondary) => Material(
-      type: MaterialType.transparency,
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 40),
-          decoration: BoxDecoration(
-            color: NuvoColors.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(color: NuvoColors.navy, width: 2),
-            boxShadow: AppShadows.hardMedium,
-          ),
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTextStyles.titleLarge.copyWith(
-                  color: NuvoColors.navy,
-                ),
+    pageBuilder: (context, animation, secondary) {
+      final c = context.themeColors;
+      return Material(
+        type: MaterialType.transparency,
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 40),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(NuvoRadii.lg),
+              border: Border.all(color: c.border, width: 2),
+              boxShadow: AppShadows.hardOffset(
+                c.inkShadow,
+                offset: const Offset(5, 5),
               ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTextStyles.titleLarge.copyWith(
+                    color: c.ink,
+                  ),
+                ),
               const SizedBox(height: 10),
-              Text(message, style: AppTextStyles.bodyMedium),
+              Text(
+                message,
+                style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+              ),
               const SizedBox(height: 24),
               Row(
                 children: [
@@ -107,6 +115,7 @@ Future<bool?> showNuvoConfirmDialog(
           ),
         ),
       ),
-    ),
+    );
+    },
   );
 }

@@ -37,7 +37,7 @@ class NuvoPagePill extends StatelessWidget {
               color:
                   i == selected ? NuvoColors.actionBlue : Colors.transparent,
               border: Border.all(
-                color: NuvoColors.navy,
+                color: context.themeColors.border,
                 width: i == selected ? 1.5 : 1.25,
               ),
               borderRadius: BorderRadius.circular(4),

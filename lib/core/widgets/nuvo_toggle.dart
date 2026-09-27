@@ -86,12 +86,15 @@ class _NuvoToggleState extends State<NuvoToggle>
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: Color.lerp(
-                      NuvoColors.panelLight,
+                      context.themeColors.panelLight,
                       NuvoColors.actionBlue,
                       t,
                     ),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: NuvoColors.navy, width: 2),
+                    border: Border.all(
+                      color: context.themeColors.border,
+                      width: 2,
+                    ),
                   ),
                   child: Align(
                     alignment: Alignment.lerp(
@@ -104,7 +107,7 @@ class _NuvoToggleState extends State<NuvoToggle>
                       height: 20,
                       decoration: BoxDecoration(
                         color: Color.lerp(
-                          NuvoColors.navy,
+                          context.themeColors.ink,
                           NuvoColors.white,
                           t,
                         ),

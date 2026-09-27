@@ -18,7 +18,6 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/race_display.dart';
-import '../../races/presentation/create_race_screen.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
@@ -76,10 +75,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     final finished = raceState.races.where(raceIsCompleted).toList();
 
     final screen = Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: RefreshIndicator(
         color: NuvoColors.blue,
-        backgroundColor: NuvoColors.surface,
+        backgroundColor: context.themeColors.surface,
         onRefresh: () => ref.read(raceControllerProvider.notifier).loadRaces(),
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(
@@ -379,7 +378,7 @@ class _CompactHeader extends StatelessWidget {
                 Text(
                   summary,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
+                    color: context.themeColors.inkMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -450,7 +449,7 @@ class _CappedRaceList extends StatelessWidget {
                   child: Text(
                     expanded ? 'Show less' : 'See all',
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.navy,
+                      color: context.themeColors.ink,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -461,9 +460,9 @@ class _CappedRaceList extends StatelessWidget {
         const SizedBox(height: NuvoSpacing.sm),
         Container(
           decoration: BoxDecoration(
-            color: NuvoColors.surface,
+            color: context.themeColors.surface,
             borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: Border.all(color: NuvoColors.divider),
+            border: Border.all(color: context.themeColors.divider),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -471,11 +470,11 @@ class _CappedRaceList extends StatelessWidget {
               for (var i = 0; i < visible.length; i++) ...[
                 _buildRow(visible[i], i + 1),
                 if (i < visible.length - 1)
-                  const Divider(
+                  Divider(
                     height: 1,
                     thickness: 1,
                     indent: 54,
-                    color: NuvoColors.divider,
+                    color: context.themeColors.divider,
                   ),
               ],
             ],
@@ -540,9 +539,9 @@ class _SummaryExpansionList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: NuvoColors.divider),
+        border: Border.all(color: context.themeColors.divider),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -550,11 +549,11 @@ class _SummaryExpansionList extends StatelessWidget {
           for (var i = 0; i < races.length; i++) ...[
             _buildRow(races[i], i + 1),
             if (i < races.length - 1)
-              const Divider(
+              Divider(
                 height: 1,
                 thickness: 1,
                 indent: 54,
-                color: NuvoColors.divider,
+                color: context.themeColors.divider,
               ),
           ],
         ],
@@ -610,9 +609,9 @@ class _FinishedExpansionList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: NuvoColors.divider),
+        border: Border.all(color: context.themeColors.divider),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -620,11 +619,11 @@ class _FinishedExpansionList extends StatelessWidget {
           for (var i = 0; i < races.length; i++) ...[
             _buildRow(races[i]),
             if (i < races.length - 1)
-              const Divider(
+              Divider(
                 height: 1,
                 thickness: 1,
                 indent: 54,
-                color: NuvoColors.divider,
+                color: context.themeColors.divider,
               ),
           ],
         ],
@@ -667,7 +666,7 @@ class _QuickStarts extends StatelessWidget {
 
   static const double _tileHeight = 96;
 
-  static const _items = [
+  static final _items = [
     (
       icon: Icons.fitness_center_rounded,
       movementName: 'Pushups',
@@ -768,9 +767,9 @@ class _QuickStartTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(NuvoSpacing.md),
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.quiet,
+          border: Border.all(color: context.themeColors.border, width: 1.25),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -781,15 +780,19 @@ class _QuickStartTile extends StatelessWidget {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: NuvoColors.panelLight,
+                    color: context.themeColors.panelLight,
                     borderRadius: BorderRadius.circular(9),
                   ),
-                  child: Icon(icon, color: NuvoColors.navy, size: 17),
+                  child: Icon(
+                    icon,
+                    color: context.themeColors.ink,
+                    size: 17,
+                  ),
                 ),
                 const Spacer(),
-                const Icon(
+                Icon(
                   Icons.arrow_forward_rounded,
-                  color: NuvoColors.textDim,
+                  color: context.themeColors.inkDim,
                   size: 15,
                 ),
               ],
@@ -800,7 +803,7 @@ class _QuickStartTile extends StatelessWidget {
               style: AppTextStyles.titleMedium.copyWith(
                 fontSize: 14,
                 height: 1.1,
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -839,14 +842,14 @@ class _CompeteSkeleton extends StatelessWidget {
       height: height,
       width: width,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(radius),
       ),
     );
 
     return Shimmer.fromColors(
-      baseColor: NuvoColors.divider,
-      highlightColor: NuvoColors.surface,
+      baseColor: context.themeColors.divider,
+      highlightColor: context.themeColors.surface,
       period: const Duration(milliseconds: 1400),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1013,11 +1016,15 @@ class _FeaturedRaceStatusFace extends StatelessWidget {
             ' · ${_ago(proof.createdAt)}';
     final anyProgress = ranked.any((p) => p.progressValue > 0);
 
+    final c = context.themeColors;
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.navy, width: 2),
-        boxShadow: AppShadows.hardLarge,
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(
+          c.inkShadow,
+          offset: const Offset(7, 7),
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.lg - 1),
@@ -1026,7 +1033,7 @@ class _FeaturedRaceStatusFace extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              color: NuvoColors.surface,
+              color: c.surface,
               padding: const EdgeInsets.fromLTRB(
                 NuvoSpacing.lg,
                 NuvoSpacing.md,
@@ -1041,7 +1048,7 @@ class _FeaturedRaceStatusFace extends StatelessWidget {
                       Text(
                         'RACE STATUS',
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: c.inkMuted,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.6,
                         ),
@@ -1059,7 +1066,7 @@ class _FeaturedRaceStatusFace extends StatelessWidget {
                             ? 'Waiting for the first proof — it sets the pace.'
                             : 'No proofs yet — the board is still open.',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: c.inkMuted,
                         ),
                       ),
                     )
@@ -1086,7 +1093,7 @@ class _FeaturedRaceStatusFace extends StatelessWidget {
                     Text(
                       position,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.navy,
+                        color: c.ink,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -1097,7 +1104,7 @@ class _FeaturedRaceStatusFace extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.muted,
+                      color: c.inkMuted,
                       fontSize: 11,
                     ),
                   ),
@@ -1172,6 +1179,7 @@ class _StandingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -1181,7 +1189,7 @@ class _StandingRow extends StatelessWidget {
             child: Text(
               '$rank',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.navy,
+                color: c.ink,
                 fontWeight: FontWeight.w800,
                 fontSize: 12,
               ),
@@ -1193,7 +1201,7 @@ class _StandingRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.navy,
+                color: c.ink,
                 fontWeight: isMe ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
@@ -1202,7 +1210,7 @@ class _StandingRow extends StatelessWidget {
           Text(
             score,
             style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.muted,
+              color: c.inkMuted,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),

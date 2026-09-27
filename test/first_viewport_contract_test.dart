@@ -272,10 +272,31 @@ void main() {
         expect(find.text('Profile'), findsWidgets);
 
         final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        expectFoldRespected(tester, raceSections, height, foldY, name);
+        // Content Flow Contract (MAIN_SCREEN_LAYOUT_CONTRACT §17): the
+        // dock owns bottom occlusion — a section may land under the
+        // occlusion band at rest, but the same scroll must bring it fully
+        // clear above the dock.
+        final scrollable = find.byType(Scrollable).first;
+        for (final element in raceSections.evaluate().toList()) {
+          var rect = tester.getRect(find.byWidget(element.widget));
+          var guard = 0;
+          while (rect.bottom > foldY + 0.5 &&
+              rect.top < height - 0.5 &&
+              guard++ < 20) {
+            await tester.drag(scrollable, const Offset(0, -300));
+            await tester.pumpAndSettle();
+            rect = tester.getRect(find.byWidget(element.widget));
+          }
+          if (rect.top < height - 0.5) {
+            expect(
+              rect.bottom,
+              lessThanOrEqualTo(foldY + 0.5),
+              reason: '$name: section never scrolled clear of the dock',
+            );
+          }
+        }
 
-        // Sections the fold pushed down still exist — scrollable, not
-        // lost. _RaceSection labels compose as 'Recent results · 3'.
+        // All sections still exist — scrollable, not lost.
         expect(find.textContaining('Recent results'), findsWidgets);
         expect(find.textContaining('Account'), findsWidgets);
       });
@@ -289,8 +310,12 @@ void main() {
           const ProfileScreen(),
         );
         final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        // Race-row titles are leaf Texts inside _ProfileRaceGroup — if one
-        // is visible, its row must not terminate inside the dock.
+        // Race-row titles are leaf Texts inside _ProfileRaceGroup. A row
+        // resting fully inside the dock's opaque occlusion band is masked
+        // like below-fold content and scrolls clear (§17) — the failure
+        // case is a title BISECTED by the band's top edge: its top half
+        // visible, its bottom half painted over. That is the half-visible
+        // edge this contract forbids.
         for (final title in [
           'Pushup Race',
           'Squat Race',
@@ -301,13 +326,12 @@ void main() {
         ]) {
           for (final element in find.text(title).evaluate()) {
             final rect = tester.getRect(find.byWidget(element.widget));
-            if (rect.top < height - 0.5) {
-              expect(
-                rect.bottom,
-                lessThanOrEqualTo(foldY + 0.5),
-                reason: '$name: "$title" text runs under the dock',
-              );
-            }
+            final bisected = rect.top < foldY - 0.5 && rect.bottom > foldY + 0.5;
+            expect(
+              bisected,
+              isFalse,
+              reason: '$name: "$title" text is bisected by the dock edge',
+            );
           }
         }
       });

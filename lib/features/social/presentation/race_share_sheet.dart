@@ -23,7 +23,7 @@ Future<void> showRaceShareSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: NuvoColors.page,
+    backgroundColor: context.themeColors.page,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
@@ -82,22 +82,14 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuvoColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            // Shell owns the drag handle (theme showDragHandle) — sheet
+            // content starts below it.
             const SizedBox(height: 18),
             Text('Share this race', style: AppTextStyles.titleLarge),
             const SizedBox(height: 4),
             Text(
               'Anyone with the link can preview and join.',
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.textMuted),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
             ),
             const SizedBox(height: 20),
             _content(),
@@ -132,19 +124,19 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
             decoration: BoxDecoration(
               color: NuvoColors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: NuvoColors.navy, width: 2),
+              border: Border.all(color: context.themeColors.border, width: 2),
             ),
             child: QrImageView(
               data: invite.url,
               version: QrVersions.auto,
               size: 208,
-              eyeStyle: const QrEyeStyle(
+              eyeStyle: QrEyeStyle(
                 eyeShape: QrEyeShape.square,
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
               ),
-              dataModuleStyle: const QrDataModuleStyle(
+              dataModuleStyle: QrDataModuleStyle(
                 dataModuleShape: QrDataModuleShape.square,
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
               ),
             ),
           ),
@@ -155,7 +147,7 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
             child: Text(
               'Or enter code  ${invite.code}',
               style: AppTextStyles.bodyMedium.copyWith(
-                color: NuvoColors.textMuted,
+                color: context.themeColors.inkSubtle,
                 fontWeight: FontWeight.w700,
               ),
             ),

@@ -114,7 +114,7 @@ class _AnimatedProgressBarState extends State<AnimatedProgressBar> {
       borderRadius: BorderRadius.circular(widget.height),
       child: Container(
         height: widget.height,
-        color: NuvoColors.trackBg,
+        color: context.themeColors.track,
         alignment: Alignment.centerLeft,
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: _target),

@@ -29,7 +29,7 @@ class NuvoProgressBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(height),
           child: Container(
             height: height,
-            color: trackColor ?? NuvoColors.softBlue,
+            color: trackColor ?? context.themeColors.track,
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
               widthFactor: animated,

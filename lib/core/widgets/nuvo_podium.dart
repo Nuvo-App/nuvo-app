@@ -117,7 +117,9 @@ class _Place extends StatelessWidget {
                 textColor: NuvoColors.white,
                 borderColor: me
                     ? NuvoColors.blue
-                    : (place <= 3 ? _placeColor : NuvoColors.navy),
+                    : (place <= 3
+                        ? _placeColor
+                        : context.themeColors.border),
                 borderWidth: me || place == 1 ? 3 : 2,
               ),
               Positioned(
@@ -132,7 +134,10 @@ class _Place extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: _placeColor,
                       borderRadius: BorderRadius.circular(NuvoRadii.badge),
-                      border: Border.all(color: NuvoColors.navy, width: 1.5),
+                      border: Border.all(
+                        color: context.themeColors.border,
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
                       '$place',
@@ -155,7 +160,7 @@ class _Place extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: AppTextStyles.titleMedium.copyWith(
-            color: NuvoColors.navy,
+            color: context.themeColors.ink,
             fontSize: (raised ? 16 : 14) * s,
           ),
         ),
@@ -168,7 +173,9 @@ class _Place extends StatelessWidget {
           style: AppTextStyles.raceRowMeta.copyWith(
             color: me
                 ? NuvoColors.blue
-                : (place <= 3 ? _placeColor : NuvoColors.muted),
+                : (place <= 3
+                    ? _placeColor
+                    : context.themeColors.inkMuted),
             fontWeight: FontWeight.w800,
             fontSize: 12 * s,
           ),

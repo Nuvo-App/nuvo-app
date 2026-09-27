@@ -24,6 +24,7 @@ class NuvoErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -34,7 +35,7 @@ class NuvoErrorState extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: NuvoColors.white,
+                color: c.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.md),
                 border: Border.all(color: NuvoColors.danger, width: 2),
               ),
@@ -45,7 +46,7 @@ class NuvoErrorState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               message,
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -73,21 +74,22 @@ class NuvoOfflineBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: NuvoColors.panel,
+        color: c.panel,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: NuvoBorders.quiet,
+        border: Border.all(color: c.border, width: 1.25),
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_off_rounded, size: 16, color: NuvoColors.muted),
+          Icon(Icons.wifi_off_rounded, size: 16, color: c.inkMuted),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -99,7 +101,7 @@ class NuvoOfflineBanner extends StatelessWidget {
             child: Text(
               'Try again',
               style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.navy,
+                color: c.ink,
                 fontWeight: FontWeight.w700,
               ),
             ),

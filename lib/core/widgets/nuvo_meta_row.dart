@@ -28,9 +28,9 @@ class NuvoMetaItem extends StatelessWidget {
     final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: NuvoColors.border, width: 1.5),
+        border: Border.all(color: context.themeColors.border, width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -44,7 +44,7 @@ class NuvoMetaItem extends StatelessWidget {
               Text(
                 label,
                 style: AppTextStyles.labelLarge.copyWith(
-                  color: NuvoColors.navy,
+                  color: context.themeColors.ink,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -52,7 +52,7 @@ class NuvoMetaItem extends StatelessWidget {
                 Text(
                   sub!,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
+                    color: context.themeColors.inkMuted,
                   ),
                 ),
             ],

@@ -31,6 +31,15 @@ abstract final class AppShadows {
     BoxShadow(color: NuvoColors.orangeShadow, blurRadius: 0, offset: Offset(7, 7)),
   ];
 
+  /// Theme-aware hard offset — call sites pass `context.themeColors.inkShadow`
+  /// so the plate keeps the signature silhouette in both themes (navy plate
+  /// on light, near-black plate on dark) instead of vanishing on dark.
+  static List<BoxShadow> hardOffset(
+    Color inkShadow, {
+    Offset offset = const Offset(3, 3),
+  }) =>
+      [BoxShadow(color: inkShadow, blurRadius: 0, offset: offset)];
+
   /// Rare ambient separation for sheets/dialogs where hard offset is too loud.
   static const List<BoxShadow> softSubtle = [
     BoxShadow(

@@ -27,11 +27,12 @@ class NuvoPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pageColor = backgroundColor ?? context.themeColors.page;
     return Scaffold(
-      backgroundColor: backgroundColor ?? NuvoColors.page,
+      backgroundColor: pageColor,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       body: DecoratedBox(
-        decoration: BoxDecoration(color: backgroundColor ?? NuvoColors.page),
+        decoration: BoxDecoration(color: pageColor),
         child: Column(
           children: [
             ?topBar,
@@ -68,6 +69,7 @@ class NuvoTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final top = MediaQuery.paddingOf(context).top;
     return Container(
       color: backgroundColor ?? Colors.transparent,
@@ -76,10 +78,10 @@ class NuvoTopBar extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 52),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: c.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.inkNavy, width: 2),
-          boxShadow: AppShadows.hardShadow3,
+          border: Border.all(color: c.border, width: 2),
+          boxShadow: AppShadows.hardOffset(c.inkShadow),
         ),
         child: Row(
           children: [
@@ -126,11 +128,11 @@ class _NuvoLogoMark extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(11, 7, 12, 7),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
+        color: context.themeColors.ink,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: NuvoColors.navy.withValues(alpha: 0.22),
+            color: context.themeColors.ink.withValues(alpha: 0.22),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -138,7 +140,9 @@ class _NuvoLogoMark extends StatelessWidget {
       ),
       child: Text(
         'nuvo',
-        style: AppTextStyles.brandLabel.copyWith(color: NuvoColors.white),
+        style: AppTextStyles.brandLabel.copyWith(
+          color: context.themeColors.page,
+        ),
       ),
     );
   }

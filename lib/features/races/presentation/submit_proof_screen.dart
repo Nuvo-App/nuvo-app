@@ -247,7 +247,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         _isPreVerify(race);
 
     final screen = Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       bottomNavigationBar: _bottomBar(race),
       body: SafeArea(
         child: isPreVerify ? _centeredPreVerifyBody(race) : _defaultBody(race),
@@ -496,7 +496,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         eligibility.isCameraVerifiable
             ? 'Camera counts and verifies automatically.'
             : 'Add how much you completed toward the finish line.',
-        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
       ),
 
       const SizedBox(height: 24),
@@ -541,7 +541,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         const SizedBox(height: 6),
         Text(
           'First to $goalLabel',
-          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.muted),
+          style: AppTextStyles.titleMedium.copyWith(color: context.themeColors.inkMuted),
           textAlign: TextAlign.center,
         ),
       ],
@@ -555,7 +555,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       Text(
         framingLabel,
         style: AppTextStyles.bodyLarge.copyWith(
-          color: NuvoColors.navy,
+          color: context.themeColors.ink,
           height: 1.4,
         ),
         textAlign: TextAlign.center,
@@ -563,7 +563,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       const SizedBox(height: 6),
       Text(
         'Stand where Nuvo can see your whole body.',
-        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
         textAlign: TextAlign.center,
       ),
     ];
@@ -616,17 +616,17 @@ class _MoveCheckCard extends StatelessWidget {
           children: [
             Text(
               'Goal',
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
             ),
             const SizedBox(width: 12),
             Text(
               _goalLabel,
-              style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.navy),
+              style: AppTextStyles.titleMedium.copyWith(color: context.themeColors.ink),
             ),
             const Spacer(),
             Text(
               _estimatedTime,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
             ),
           ],
         ),
@@ -638,21 +638,23 @@ class _MoveCheckCard extends StatelessWidget {
           height: 160,
           width: double.infinity,
           child: CustomPaint(
-            painter: _FramingGuidePainter(),
+            painter: _FramingGuidePainter(
+              color: context.themeColors.ink,
+            ),
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     _movementIcon,
-                    color: NuvoColors.navy.withValues(alpha: 0.18),
+                    color: context.themeColors.ink.withValues(alpha: 0.18),
                     size: 48,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _framingLabel,
                     style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.muted,
+                      color: context.themeColors.inkMuted,
                     ),
                   ),
                 ],
@@ -711,9 +713,9 @@ class _PreVerifySetupCard extends ConsumerWidget {
         decoration: showRivePreview
             ? const BoxDecoration(color: Colors.transparent)
             : BoxDecoration(
-                color: NuvoColors.blueSurface,
+                color: context.semanticColors.neutral.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.card),
-                border: Border.all(color: NuvoColors.navy, width: 2),
+                border: Border.all(color: context.themeColors.border, width: 2),
               ),
         child: SizedBox(
           height: showRivePreview ? 300 : 78,
@@ -745,7 +747,7 @@ class _StaticPreVerifyCue extends StatelessWidget {
             child: Text(
               'Camera opens after Begin',
               style: AppTextStyles.titleMedium.copyWith(
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -757,10 +759,14 @@ class _StaticPreVerifyCue extends StatelessWidget {
 }
 
 class _FramingGuidePainter extends CustomPainter {
+  const _FramingGuidePainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = NuvoColors.navy.withValues(alpha: 0.14)
+      ..color = color.withValues(alpha: 0.14)
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -834,7 +840,7 @@ class _SkeletonBlock extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: NuvoColors.divider.withValues(alpha: 0.55),
+        color: context.themeColors.divider.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(radius),
       ),
     );
@@ -859,7 +865,7 @@ class _SetupLine extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
+            style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
           ),
         ),
       ],
@@ -902,9 +908,9 @@ class _ManualLogCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: context.themeColors.border, width: 2),
         boxShadow: AppShadows.hardSmall,
       ),
       child: Column(
@@ -915,7 +921,7 @@ class _ManualLogCard extends StatelessWidget {
               Text(
                 startingProgress > 0 ? 'Your progress' : 'Finish line',
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
+                  color: context.themeColors.inkMuted,
                 ),
               ),
               const Spacer(),
@@ -928,7 +934,7 @@ class _ManualLogCard extends StatelessWidget {
                           ? '$startingProgress $unit'
                           : 'No set target'),
                 style: AppTextStyles.titleMedium.copyWith(
-                  color: NuvoColors.navy,
+                  color: context.themeColors.ink,
                 ),
               ),
             ],
@@ -990,7 +996,7 @@ class _EvidenceTile extends StatelessWidget {
       children: [
         Text(
           'Proof',
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+          style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
         ),
         const SizedBox(height: 6),
         InkWell(
@@ -1000,30 +1006,30 @@ class _EvidenceTile extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: NuvoColors.icyBlue,
+              color: context.semanticColors.neutral.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: NuvoColors.navy, width: 1.5),
+              border: Border.all(color: context.themeColors.border, width: 1.5),
             ),
             child: picked == null
                 ? Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.add_photo_alternate_outlined,
                         size: 20,
-                        color: NuvoColors.navy,
+                        color: context.themeColors.ink,
                       ),
                       const SizedBox(width: 10),
                       Text(
                         'Add photo',
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: NuvoColors.navy,
+                          color: context.themeColors.ink,
                         ),
                       ),
                       const Spacer(),
                       Text(
                         'optional',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: context.themeColors.inkMuted,
                         ),
                       ),
                     ],
@@ -1044,7 +1050,7 @@ class _EvidenceTile extends StatelessWidget {
                         child: Text(
                           'Photo added',
                           style: AppTextStyles.titleMedium.copyWith(
-                            color: NuvoColors.navy,
+                            color: context.themeColors.ink,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1052,7 +1058,7 @@ class _EvidenceTile extends StatelessWidget {
                       ),
                       IconButton(
                         icon: const Icon(Icons.close_rounded, size: 18),
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                         onPressed: onClear,
                         tooltip: 'Remove photo',
                       ),
@@ -1087,12 +1093,12 @@ class _EvidenceSheetOption extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: NuvoColors.icyBlue,
+          color: context.semanticColors.neutral.surface,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: NuvoColors.navy),
+            Icon(icon, size: 20, color: context.themeColors.ink),
             const SizedBox(width: 12),
             Text(label, style: AppTextStyles.titleMedium),
           ],

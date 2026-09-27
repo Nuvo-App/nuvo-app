@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/theme/nuvo_tokens.dart';
 import '../../../../core/widgets/nuvo_button.dart';
 import '../../../../core/widgets/nuvo_motion.dart';
 import '../../../../core/widgets/pressable_scale.dart';
@@ -10,24 +9,25 @@ import '../../data/arena_models.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 
-const _kNavy = NuvoColors.navy;
 const _kBlue = NuvoColors.blue;
-const _kMuted = NuvoColors.textMuted;
-const _kBorder = NuvoColors.border;
-const _kIcy = NuvoColors.icyBlue;
 
-const _kCardShadow = [
-  BoxShadow(
-    color: Color.fromRGBO(10, 26, 51, 0.06),
-    blurRadius: 12,
-    offset: Offset(0, 4),
-  ),
-  BoxShadow(
-    color: Color.fromRGBO(10, 26, 51, 0.03),
-    blurRadius: 3,
-    offset: Offset(0, 1),
-  ),
-];
+/// The card shadow follows the theme ink-shadow — navy soft-drop on light,
+/// near-black on dark — instead of a fixed light-theme rgba.
+List<BoxShadow> _cardShadow(BuildContext context) {
+  final inkShadow = context.themeColors.inkShadow;
+  return [
+    BoxShadow(
+      color: inkShadow.withValues(alpha: 0.06),
+      blurRadius: 12,
+      offset: const Offset(0, 4),
+    ),
+    BoxShadow(
+      color: inkShadow.withValues(alpha: 0.03),
+      blurRadius: 3,
+      offset: const Offset(0, 1),
+    ),
+  ];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,7 +108,7 @@ class ArenaGreetingHeader extends StatelessWidget {
             children: [
               Text(
                 '$greeting, $firstName',
-                style: AppTextStyles.titleLarge.copyWith(color: _kNavy),
+                style: AppTextStyles.titleLarge.copyWith(color: context.themeColors.ink),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -116,7 +116,7 @@ class ArenaGreetingHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   headerPulse,
-                  style: AppTextStyles.bodySmall.copyWith(color: _kMuted),
+                  style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -132,8 +132,8 @@ class ArenaGreetingHeader extends StatelessWidget {
           child: Container(
             width: 38,
             height: 38,
-            decoration: const BoxDecoration(
-              color: _kNavy,
+            decoration: BoxDecoration(
+              color: context.themeColors.ink,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
@@ -217,7 +217,7 @@ class _RaceTab extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? _kNavy : _kMuted,
+                color: isSelected ? context.themeColors.ink : context.themeColors.inkSubtle,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -267,8 +267,8 @@ class ArenaFocusBoardCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: NuvoColors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _kNavy, width: 1.5),
-        boxShadow: _kCardShadow,
+        border: Border.all(color: context.themeColors.ink, width: 1.5),
+        boxShadow: _cardShadow(context),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -293,7 +293,7 @@ class ArenaFocusBoardCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   board.boardContext,
-                  style: AppTextStyles.bodySmall.copyWith(color: _kMuted),
+                  style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
                 ),
               )
             else ...[
@@ -322,7 +322,7 @@ class ArenaFocusBoardCard extends StatelessWidget {
               _PressureLine(board: board),
             ],
             const SizedBox(height: 16),
-            const Divider(height: 1, thickness: 0.5, color: _kBorder),
+            Divider(height: 1, thickness: 0.5, color: context.themeColors.border),
             const SizedBox(height: 14),
             _BlueButton(label: board.primaryActionLabel, onTap: onSubmitProof),
             const SizedBox(height: 4),
@@ -335,7 +335,7 @@ class ArenaFocusBoardCard extends StatelessWidget {
                 child: Text(
                   'Open board',
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: _kMuted,
+                    color: context.themeColors.inkSubtle,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -390,15 +390,15 @@ class _RaceBoardTitleBlock extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: NuvoTokens.gray100,
+                    color: context.themeColors.panel,
                     borderRadius: BorderRadius.circular(99),
                   ),
                   child: Text(
                     pillLabel,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: _kNavy,
+                      color: context.themeColors.ink,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -413,7 +413,7 @@ class _RaceBoardTitleBlock extends StatelessWidget {
                       style: AppTextStyles.headlineMedium.copyWith(
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.3,
-                        color: _kNavy,
+                        color: context.themeColors.ink,
                       ),
                     ),
                   ),
@@ -445,7 +445,7 @@ class _RaceBoardTitleBlock extends StatelessWidget {
                 pillLabel != null
                     ? 'First to ${pillLabel.split(' ').last}'
                     : board.boardContext,
-                style: AppTextStyles.bodySmall.copyWith(color: _kMuted),
+                style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
               ),
             ],
           ),
@@ -507,17 +507,17 @@ class _CrewDots extends StatelessWidget {
                 width: dotSize,
                 height: dotSize,
                 decoration: BoxDecoration(
-                  color: NuvoTokens.gray100,
+                  color: context.themeColors.panel,
                   shape: BoxShape.circle,
                   border: Border.all(color: NuvoColors.white, width: 2),
                 ),
                 alignment: Alignment.center,
                 child: Text(
                   '+$overflowCount',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 8,
                     fontWeight: FontWeight.w700,
-                    color: _kNavy,
+                    color: context.themeColors.ink,
                   ),
                 ),
               ),
@@ -540,7 +540,7 @@ class _DotCircle extends StatelessWidget {
       width: 28,
       height: 28,
       decoration: BoxDecoration(
-        color: isCurrentUser ? _kIcy : NuvoTokens.gray100,
+        color: isCurrentUser ? context.semanticColors.neutral.surface : context.themeColors.panel,
         shape: BoxShape.circle,
         border: Border.all(color: NuvoColors.white, width: 2),
       ),
@@ -550,7 +550,7 @@ class _DotCircle extends StatelessWidget {
         style: TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w800,
-          color: isCurrentUser ? _kBlue : _kNavy,
+          color: isCurrentUser ? _kBlue : context.themeColors.ink,
         ),
       ),
     );
@@ -599,10 +599,10 @@ class _LeaderboardRow extends StatelessWidget {
                 )
               : Text(
                   '$rank',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
-                    color: _kMuted,
+                    color: context.themeColors.inkSubtle,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -614,7 +614,7 @@ class _LeaderboardRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: isUser ? FontWeight.w700 : FontWeight.w500,
-              color: isUser ? _kBlue : _kNavy,
+              color: isUser ? _kBlue : context.themeColors.ink,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -624,7 +624,7 @@ class _LeaderboardRow extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: isUser ? FontWeight.w700 : FontWeight.w400,
-            color: isUser ? _kBlue : _kMuted,
+            color: isUser ? _kBlue : context.themeColors.inkSubtle,
           ),
         ),
       ],
@@ -634,7 +634,7 @@ class _LeaderboardRow extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: _kIcy,
+          color: context.semanticColors.neutral.surface,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: _kBlue, width: 1.5),
         ),
@@ -676,7 +676,7 @@ class _PressureLine extends StatelessWidget {
             child: Text(
               text,
               style: AppTextStyles.bodySmall.copyWith(
-                color: _kNavy,
+                color: context.themeColors.ink,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -739,13 +739,13 @@ class ArenaMoreBoardsGrid extends StatelessWidget {
           children: [
             Text(
               'More Boards',
-              style: AppTextStyles.titleMedium.copyWith(color: _kNavy),
+              style: AppTextStyles.titleMedium.copyWith(color: context.themeColors.ink),
             ),
             const Spacer(),
             Text(
               'View all',
               style: AppTextStyles.bodySmall.copyWith(
-                color: _kMuted,
+                color: context.themeColors.inkSubtle,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -774,8 +774,8 @@ class _MoreBoardCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: NuvoColors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _kBorder, width: 1),
-          boxShadow: _kCardShadow,
+          border: Border.all(color: context.themeColors.border, width: 1),
+          boxShadow: _cardShadow(context),
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
@@ -784,10 +784,10 @@ class _MoreBoardCard extends StatelessWidget {
             children: [
               Text(
                 board.title.toUpperCase(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
-                  color: _kNavy,
+                  color: context.themeColors.ink,
                   letterSpacing: 0.5,
                 ),
                 maxLines: 2,
@@ -797,10 +797,10 @@ class _MoreBoardCard extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   '${board.racerCount} ${board.racerCount == 1 ? 'Racer' : 'Racers'}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: _kMuted,
+                    color: context.themeColors.inkSubtle,
                   ),
                 ),
               ],
@@ -808,10 +808,10 @@ class _MoreBoardCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${board.progressPercent}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: _kNavy,
+                    color: context.themeColors.ink,
                   ),
                 ),
               ],
@@ -821,7 +821,7 @@ class _MoreBoardCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 4,
-                  backgroundColor: _kIcy,
+                  backgroundColor: context.themeColors.track,
                   valueColor: const AlwaysStoppedAnimation<Color>(_kBlue),
                 ),
               ),

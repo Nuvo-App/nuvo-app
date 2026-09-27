@@ -7,10 +7,10 @@ import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_motion.dart';
 
-// Was bespoke #071B35/#2F7CFF — now the one navy/blue everywhere, per the
-// design guide's "4-5 colors used for almost everything" rule (matches the
-// fix in track_view_screen.dart's trackside chrome).
-const _kTrackNavy = NuvoColors.navy;
+// Was bespoke #071B35/#2F7CFF — now the shared dark trackside bar color,
+// matching the dark page so the bar doesn't sit as a navy slab over
+// camera/proof surfaces.
+const _kTrackNavy = NuvoColors.darkPage;
 const _kTrackActiveBlue = NuvoColors.blue;
 
 /// One root destination of the app shell. THE canonical tab table: the
@@ -176,12 +176,12 @@ class NuvoBottomNav extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.hero),
-          border: Border.all(color: NuvoColors.navy, width: 1.5),
-          boxShadow: const [
+          border: Border.all(color: context.themeColors.border, width: 1.5),
+          boxShadow: [
             BoxShadow(
-              color: NuvoColors.inkNavy,
+              color: context.themeColors.inkShadow,
               blurRadius: 0,
-              offset: Offset(0, 3),
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -472,9 +472,15 @@ class _VerifyNavButtonState extends State<_VerifyNavButton>
                     curve: Curves.easeOut,
                     child: TweenAnimationBuilder<Color?>(
                       tween: ColorTween(
+                        // Unselected is a quiet ink disc on light; on dark
+                        // surfaces navy vanishes, so the disc lifts to the
+                        // raised panel tone instead.
                         end: widget.selected
                             ? NuvoColors.actionBlue
-                            : NuvoColors.navy,
+                            : (CupertinoTheme.brightnessOf(context) ==
+                                    Brightness.dark
+                                ? c.panel
+                                : NuvoColors.navy),
                       ),
                       duration: NuvoMotion.select,
                       curve: Curves.easeOut,
@@ -484,12 +490,12 @@ class _VerifyNavButtonState extends State<_VerifyNavButton>
                         decoration: BoxDecoration(
                           color: fill,
                           shape: BoxShape.circle,
-                          border: Border.all(color: NuvoColors.navy, width: 1.5),
-                          boxShadow: const [
+                          border: Border.all(color: c.border, width: 1.5),
+                          boxShadow: [
                             BoxShadow(
-                              color: NuvoColors.inkNavy,
+                              color: c.inkShadow,
                               blurRadius: 0,
-                              offset: Offset(0, 2),
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),

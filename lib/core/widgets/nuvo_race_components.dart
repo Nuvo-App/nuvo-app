@@ -86,7 +86,7 @@ class RacePlacement extends StatelessWidget {
     final color = _placementColor(rank);
     final fgColor = onDark
         ? (color ?? NuvoColors.white.withValues(alpha: 0.85))
-        : (color ?? NuvoColors.navy);
+        : (color ?? context.themeColors.ink);
 
     return Text(
       '$prefix$rank',
@@ -128,10 +128,11 @@ class RaceProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final progress = (progressPercent / 100).clamp(0.0, 1.0);
     final trackColor = onDark
         ? Colors.white.withValues(alpha: 0.16)
-        : NuvoColors.trackBg;
+        : c.track;
     final fillColor = progress >= 1
         ? NuvoColors.success
         : NuvoColors.actionBlue;
@@ -175,7 +176,7 @@ class RaceProgress extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: onDark
                           ? Colors.white.withValues(alpha: 0.30)
-                          : NuvoColors.border,
+                          : c.border,
                     ),
                   ),
                 ),
@@ -192,7 +193,7 @@ class RaceProgress extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: fillColor,
                       shape: BoxShape.circle,
-                      border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
+                      border: Border.all(color: c.border, width: 1.5),
                     ),
                   ),
                 ),
@@ -206,7 +207,7 @@ class RaceProgress extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: NuvoColors.success,
                       shape: BoxShape.circle,
-                      border: Border.all(color: NuvoColors.inkNavy, width: 1.5),
+                      border: Border.all(color: c.border, width: 1.5),
                     ),
                     child: const Icon(
                       Icons.check_rounded,
@@ -239,7 +240,7 @@ class RacePeople extends StatelessWidget {
     this.emptySlots = 0,
     this.size = 24,
     this.max = 3,
-    this.borderColor = NuvoColors.white,
+    this.borderColor,
   });
 
   final List<({String initials, String? photoUrl, String id})> avatars;
@@ -247,10 +248,15 @@ class RacePeople extends StatelessWidget {
   final int emptySlots;
   final double size;
   final int max;
-  final Color borderColor;
+
+  /// Ring around each avatar so stacked faces separate cleanly. Defaults
+  /// to the ambient surface so the ring matches whatever the row sits on
+  /// in both themes.
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = this.borderColor ?? context.themeColors.surface;
     final filled = avatars.length;
     final showEmpty = emptySlots > 0;
     final overflow = total > max;
@@ -305,7 +311,7 @@ class RacePeople extends StatelessWidget {
                 height: size,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: NuvoColors.panel,
+                  color: context.themeColors.panel,
                   border: Border.all(color: borderColor, width: ringWidth),
                 ),
                 alignment: Alignment.center,
@@ -314,7 +320,7 @@ class RacePeople extends StatelessWidget {
                   style: TextStyle(
                     fontSize: (size * 0.3).clamp(6.0, 10.0),
                     fontWeight: FontWeight.w800,
-                    color: NuvoColors.navy,
+                    color: context.themeColors.ink,
                     height: 1.0,
                   ),
                 ),
@@ -332,14 +338,15 @@ class _EmptyCrewSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: NuvoColors.page,
+        color: c.page,
         border: Border.all(
-          color: NuvoColors.border.withValues(alpha: 0.7),
+          color: c.border.withValues(alpha: 0.7),
           width: 1.5,
         ),
       ),
@@ -347,7 +354,7 @@ class _EmptyCrewSlot extends StatelessWidget {
       child: Icon(
         Icons.add_rounded,
         size: size * 0.42,
-        color: NuvoColors.textDim,
+        color: c.inkDim,
       ),
     );
   }
@@ -374,12 +381,13 @@ class RaceProgressLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final labelColor = onDark
         ? NuvoColors.white.withValues(alpha: 0.85)
-        : NuvoColors.navy;
+        : c.ink;
     final targetColor = onDark
         ? NuvoColors.white.withValues(alpha: 0.55)
-        : NuvoColors.textMuted;
+        : c.inkSubtle;
     final valueStyle = AppTextStyles.statLarge(
       compact ? 13 : 15,
       color: labelColor,
@@ -391,7 +399,10 @@ class RaceProgressLabel extends StatelessWidget {
       TextSpan(
         children: [
           TextSpan(text: progressLabel, style: valueStyle),
-          TextSpan(text: ' to $targetLabel', style: targetStyle),
+          // A best-attempt / lowest-wins race has no denominator — callers
+          // pass targetLabel '' and the score stands alone ("78 strokes").
+          if (targetLabel.isNotEmpty)
+            TextSpan(text: ' to $targetLabel', style: targetStyle),
         ],
       ),
       maxLines: 1,
@@ -466,6 +477,7 @@ class RaceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final hasProof = progressPercent > 0;
 
     return PressableScale(
@@ -473,8 +485,8 @@ class RaceHero extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          border: Border.all(color: NuvoColors.navy, width: 2),
-          boxShadow: AppShadows.hardLarge,
+          border: Border.all(color: c.border, width: 2),
+          boxShadow: AppShadows.hardOffset(c.inkShadow, offset: const Offset(7, 7)),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(NuvoRadii.lg - 1),
@@ -482,9 +494,9 @@ class RaceHero extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── White body: race identity + track lane ──
+              // ── Raised body: race identity + track lane ──
               Container(
-                color: NuvoColors.surface,
+                color: c.surface,
                 // Tightened from a flat NuvoSpacing.lg (16) on every edge —
                 // this card (Compete's featured race, Verify's Up Next) was
                 // taller than its five lines of content needed. Same
@@ -506,7 +518,7 @@ class RaceHero extends StatelessWidget {
                           child: Text(
                             raceTitle,
                             style: AppTextStyles.featuredRaceTitle.copyWith(
-                              color: NuvoColors.navy,
+                              color: c.ink,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -521,9 +533,11 @@ class RaceHero extends StatelessWidget {
                     const SizedBox(height: 4),
                     // Movement · target
                     Text(
-                      '$activityLabel · $targetLabel',
+                      targetLabel.isEmpty
+                          ? activityLabel
+                          : '$activityLabel · $targetLabel',
                       style: AppTextStyles.raceRowMeta.copyWith(
-                        color: NuvoColors.muted,
+                        color: c.inkMuted,
                         fontWeight: FontWeight.w600,
                       ),
                       maxLines: 1,
@@ -582,7 +596,7 @@ class RaceHero extends StatelessWidget {
                               Text(
                                 'Start line',
                                 style: AppTextStyles.labelSmall.copyWith(
-                                  color: NuvoColors.navy,
+                                  color: c.ink,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 11,
                                   letterSpacing: 0.4,
@@ -603,7 +617,7 @@ class RaceHero extends StatelessWidget {
                           Text(
                             _ordinal(rank!),
                             style: AppTextStyles.placementLabel(
-                              color: _placementColor(rank) ?? NuvoColors.navy,
+                              color: _placementColor(rank) ?? c.ink,
                               size: 13,
                             ),
                           ),
@@ -779,7 +793,7 @@ class RaceRow extends StatelessWidget {
                     Text(
                       'At start',
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.textDim,
+                        color: context.themeColors.inkDim,
                         fontWeight: FontWeight.w700,
                         fontSize: 10,
                         letterSpacing: 0.3,
@@ -884,7 +898,7 @@ class RaceResultRow extends StatelessWidget {
               Text(
                 placementStr,
                 style: AppTextStyles.placementLabel(
-                  color: _placementColor(rank) ?? NuvoColors.textMuted,
+                  color: _placementColor(rank) ?? context.themeColors.inkSubtle,
                   size: 14,
                 ),
               ),
@@ -1010,7 +1024,7 @@ class RaceActivityRow extends StatelessWidget {
                       child: Text(
                         statusNote!,
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.navy,
+                          color: context.themeColors.ink,
                           fontWeight: FontWeight.w800,
                           fontSize: 10,
                         ),
@@ -1053,6 +1067,7 @@ class RaceWaitingSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final subtitle =
         '$raceCount ${raceCount == 1 ? 'race' : 'races'} need crew';
 
@@ -1067,9 +1082,9 @@ class RaceWaitingSummary extends StatelessWidget {
               vertical: NuvoSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: NuvoColors.surface,
+              color: c.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.quiet,
+              border: Border.all(color: c.border, width: 1.25),
             ),
             child: Row(
               children: [
@@ -1098,9 +1113,9 @@ class RaceWaitingSummary extends StatelessWidget {
                 AnimatedRotation(
                   turns: expanded ? 0.25 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_right_rounded,
-                    color: NuvoColors.textDim,
+                    color: c.inkDim,
                     size: 18,
                   ),
                 ),
@@ -1133,6 +1148,7 @@ class RaceFinishedSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final subtitle =
         '$raceCount ${raceCount == 1 ? 'race' : 'races'}'
         ' · $wonCount ${wonCount == 1 ? 'win' : 'wins'}';
@@ -1148,9 +1164,9 @@ class RaceFinishedSummary extends StatelessWidget {
               vertical: NuvoSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: NuvoColors.surface,
+              color: c.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              border: NuvoBorders.quiet,
+              border: Border.all(color: c.border, width: 1.25),
             ),
             child: Row(
               children: [
@@ -1176,9 +1192,9 @@ class RaceFinishedSummary extends StatelessWidget {
                 AnimatedRotation(
                   turns: expanded ? 0.25 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: const Icon(
+                  child: Icon(
                     Icons.chevron_right_rounded,
-                    color: NuvoColors.textDim,
+                    color: c.inkDim,
                     size: 18,
                   ),
                 ),
@@ -1213,6 +1229,7 @@ class RaceQuickStart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return PressableScale(
       onTap: onTap,
       scale: 0.97,
@@ -1222,13 +1239,13 @@ class RaceQuickStart extends StatelessWidget {
           vertical: 10,
         ),
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: c.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.quiet,
+          border: Border.all(color: c.border, width: 1.25),
         ),
         child: Row(
           children: [
-            Icon(icon, color: NuvoColors.navy, size: 20),
+            Icon(icon, color: c.ink, size: 20),
             const SizedBox(width: NuvoSpacing.sm),
             Flexible(
               child: Column(
@@ -1246,7 +1263,7 @@ class RaceQuickStart extends StatelessWidget {
                     target,
                     style: AppTextStyles.statLarge(
                       11,
-                      color: NuvoColors.muted,
+                      color: c.inkMuted,
                       weight: FontWeight.w700,
                     ),
                     maxLines: 1,

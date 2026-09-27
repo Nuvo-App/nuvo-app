@@ -61,6 +61,7 @@ class NuvoAvatar extends StatelessWidget {
 
     if (localBytes != null) {
       child = _circle(
+        context,
         child: Image.memory(
           localBytes!,
           width: size,
@@ -76,6 +77,7 @@ class NuvoAvatar extends StatelessWidget {
         child = CachedNetworkImage(
           imageUrl: url,
           imageBuilder: (_, provider) => _circle(
+            context,
             child: Image(
               image: provider,
               width: size,
@@ -84,22 +86,23 @@ class NuvoAvatar extends StatelessWidget {
               alignment: Alignment.center,
             ),
           ),
-          placeholder: (_, _) => _fallback(),
-          errorWidget: (_, _, _) => _fallback(),
+          placeholder: (_, _) => _fallback(context),
+          errorWidget: (_, _, _) => _fallback(context),
         );
       } else if (asset != null && asset.isNotEmpty) {
         child = _circle(
+          context,
           child: Image.asset(
             asset,
             width: size,
             height: size,
             fit: BoxFit.cover,
             alignment: Alignment.center,
-            errorBuilder: (context, error, stackTrace) => _fallback(),
+            errorBuilder: (context, error, stackTrace) => _fallback(context),
           ),
         );
       } else {
-        child = _fallback();
+        child = _fallback(context);
       }
     }
 
@@ -114,27 +117,28 @@ class NuvoAvatar extends StatelessWidget {
     return child;
   }
 
-  Widget _fallback() => _circle(
+  Widget _fallback(BuildContext context) => _circle(
+    context,
     child: Center(
       child: Text(
         _clamp(initials),
         style: TextStyle(
           fontSize: (size * 0.36).clamp(7.0, 20.0),
           fontWeight: FontWeight.w800,
-          color: textColor ?? NuvoColors.navy,
+          color: textColor ?? context.themeColors.ink,
           height: 1.0,
         ),
       ),
     ),
   );
 
-  Widget _circle({required Widget child}) {
+  Widget _circle(BuildContext context, {required Widget child}) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: bgColor ?? NuvoColors.panel,
+        color: bgColor ?? context.themeColors.panel,
         border: borderColor != null
             ? Border.all(color: borderColor!, width: borderWidth)
             : null,
@@ -276,7 +280,7 @@ class NuvoAvatarStack extends StatelessWidget {
                 height: size,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: NuvoColors.panel,
+                  color: context.themeColors.panel,
                   border: Border.all(color: borderColor, width: ringWidth),
                 ),
                 alignment: Alignment.center,
@@ -285,7 +289,7 @@ class NuvoAvatarStack extends StatelessWidget {
                   style: TextStyle(
                     fontSize: (size * 0.3).clamp(6.0, 10.0),
                     fontWeight: FontWeight.w800,
-                    color: NuvoColors.navy,
+                    color: context.themeColors.ink,
                     height: 1.0,
                   ),
                 ),

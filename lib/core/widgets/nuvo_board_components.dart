@@ -75,10 +75,11 @@ class NuvoRaceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final progress = progressPercent;
     final center = rankLabel.replaceFirst('#', '');
     final showHeader = badgeLabel != null || progress != null;
-    final borderColor = isComplete ? NuvoColors.success : NuvoColors.inkNavy;
+    final borderColor = isComplete ? NuvoColors.success : c.border;
     const accentBlue = NuvoColors.actionBlue;
 
     return Container(
@@ -89,10 +90,13 @@ class NuvoRaceHero extends StatelessWidget {
         NuvoTokens.space16,
       ),
       decoration: BoxDecoration(
-        color: NuvoTokens.card,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
         border: Border.all(color: borderColor, width: 2),
-        boxShadow: AppShadows.hardShadow5,
+        boxShadow: AppShadows.hardOffset(
+          c.inkShadow,
+          offset: const Offset(7, 7),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +118,7 @@ class NuvoRaceHero extends StatelessWidget {
             Text(
               title!,
               style: AppTextStyles.headlineMedium.copyWith(
-                color: NuvoColors.navy,
+                color: c.ink,
                 letterSpacing: 0,
               ),
               maxLines: 2,
@@ -127,7 +131,7 @@ class NuvoRaceHero extends StatelessWidget {
             const SizedBox(height: NuvoTokens.space4),
             Text(
               contextLine!,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -154,7 +158,7 @@ class NuvoRaceHero extends StatelessWidget {
             decoration: BoxDecoration(
               color: isComplete
                   ? NuvoColors.success.withValues(alpha: 0.08)
-                  : NuvoColors.panel,
+                  : c.panel,
               borderRadius: BorderRadius.circular(NuvoRadii.sm),
               border: Border.all(
                 color: isComplete
@@ -183,7 +187,7 @@ class NuvoRaceHero extends StatelessWidget {
                                 ? 'Finish line crossed.'
                                 : 'Make your next move.'),
                         style: AppTextStyles.titleMedium.copyWith(
-                          color: NuvoColors.navy,
+                          color: c.ink,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -192,7 +196,7 @@ class NuvoRaceHero extends StatelessWidget {
                       Text(
                         subcopy,
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: c.inkMuted,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -210,23 +214,23 @@ class NuvoRaceHero extends StatelessWidget {
                         total: racerCount,
                         size: 34,
                         max: 4,
-                        borderColor: NuvoColors.white,
+                        borderColor: c.surface,
                       ),
                       if (daysLeft != null && !isComplete) ...[
                         const SizedBox(height: NuvoTokens.space4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.schedule_rounded,
                               size: 11,
-                              color: NuvoColors.muted,
+                              color: c.inkMuted,
                             ),
                             const SizedBox(width: NuvoTokens.space4),
                             Text(
                               '${daysLeft}d left',
                               style: AppTextStyles.labelSmall.copyWith(
-                                color: NuvoColors.muted,
+                                color: c.inkMuted,
                               ),
                             ),
                           ],
@@ -264,6 +268,7 @@ class NuvoRankMoment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -276,7 +281,7 @@ class NuvoRankMoment extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 9),
           child: Text(
             caption,
-            style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.labelMedium.copyWith(color: c.inkMuted),
           ),
         ),
       ],
@@ -292,6 +297,7 @@ class NuvoBoardLane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final pct = participant.progressPercent.clamp(0, 100);
     final isLeader = participant.rank == 1;
     final avatarSize = participant.isCurrentUser
@@ -301,29 +307,26 @@ class NuvoBoardLane extends StatelessWidget {
         : 48.0;
     final avatarOuterSize = avatarSize + 8;
     final minHeight = participant.isCurrentUser ? 128.0 : 108.0;
-    final activeColor = participant.isCurrentUser
-        ? NuvoColors.blue
-        : NuvoColors.navy;
+    final activeColor = participant.isCurrentUser ? NuvoColors.blue : c.ink;
     final ringColor = participant.isCurrentUser
         ? NuvoColors.blue
         : isLeader
         ? NuvoColors.gold
-        : NuvoColors.white;
+        : c.surface;
     final content = Container(
       constraints: BoxConstraints(minHeight: minHeight),
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       decoration: BoxDecoration(
-        color: participant.isCurrentUser
-            ? NuvoColors.icyBlue
-            : NuvoColors.white,
+        color: participant.isCurrentUser ? c.panelLight : c.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: participant.isCurrentUser
-              ? NuvoColors.actionBlue
-              : NuvoColors.inkNavy,
+          color: participant.isCurrentUser ? NuvoColors.actionBlue : c.border,
           width: 2,
         ),
-        boxShadow: AppShadows.hardShadow4,
+        boxShadow: AppShadows.hardOffset(
+          c.inkShadow,
+          offset: const Offset(5, 5),
+        ),
       ),
       child: Row(
         children: [
@@ -334,7 +337,7 @@ class NuvoBoardLane extends StatelessWidget {
             decoration: BoxDecoration(
               color: participant.isCurrentUser
                   ? NuvoColors.blue.withValues(alpha: 0.12)
-                  : NuvoColors.panel,
+                  : c.panel,
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -356,7 +359,7 @@ class NuvoBoardLane extends StatelessWidget {
                       child: Text(
                         participant.isCurrentUser ? 'You' : participant.name,
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.navy,
+                          color: c.ink,
                           fontWeight: participant.isCurrentUser
                               ? FontWeight.w800
                               : FontWeight.w600,
@@ -388,7 +391,7 @@ class NuvoBoardLane extends StatelessWidget {
                           Container(
                             height: 4,
                             decoration: BoxDecoration(
-                              color: NuvoColors.trackBg,
+                              color: c.track,
                               borderRadius: BorderRadius.circular(999),
                             ),
                           ),
@@ -411,7 +414,7 @@ class NuvoBoardLane extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(color: ringColor, width: 2),
-                                color: NuvoColors.white,
+                                color: c.surface,
                                 boxShadow: const [
                                   BoxShadow(
                                     color: Color(0x1807152B),
@@ -426,17 +429,17 @@ class NuvoBoardLane extends StatelessWidget {
                                 size: avatarSize,
                                 bgColor: activeColor,
                                 textColor: NuvoColors.white,
-                                borderColor: NuvoColors.white,
+                                borderColor: c.surface,
                                 borderWidth: 2,
                               ),
                             ),
                           ),
-                          const Positioned(
+                          Positioned(
                             right: 0,
                             child: Icon(
                               Icons.flag_rounded,
                               size: 13,
-                              color: NuvoColors.muted,
+                              color: c.inkMuted,
                             ),
                           ),
                         ],
@@ -468,13 +471,14 @@ class NuvoBoardMovementStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: c.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.inkNavy, width: 2),
-        boxShadow: AppShadows.hardShadow3,
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(c.inkShadow),
       ),
       child: Row(
         children: [
@@ -487,7 +491,7 @@ class NuvoBoardMovementStrip extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+              style: AppTextStyles.labelMedium.copyWith(color: c.ink),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -528,7 +532,7 @@ class NuvoConfirmSheet extends StatelessWidget {
   }) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: NuvoColors.white,
+      backgroundColor: context.themeColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -544,6 +548,7 @@ class NuvoConfirmSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
@@ -551,22 +556,14 @@ class NuvoConfirmSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 34,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: NuvoColors.border,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-            ),
+            // Shell owns the drag handle (theme showDragHandle) — sheet
+            // content starts below it.
             const SizedBox(height: 22),
             Text(title, style: AppTextStyles.headlineMedium),
             const SizedBox(height: 8),
             Text(
               message,
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
             ),
             const SizedBox(height: 22),
             NuvoDangerButton(
@@ -607,14 +604,15 @@ class NuvoRaceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return PressableScale(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: c.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.divider),
+          border: Border.all(color: c.divider),
         ),
         child: Row(
           children: [
@@ -632,7 +630,7 @@ class NuvoRaceRow extends StatelessWidget {
                   Text(
                     subtitle,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
+                      color: c.inkMuted,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -650,7 +648,7 @@ class NuvoRaceRow extends StatelessWidget {
               style: AppTextStyles.labelMedium.copyWith(
                 color: progressPercent >= 100
                     ? NuvoColors.success
-                    : NuvoColors.muted,
+                    : c.inkMuted,
               ),
             ),
           ],

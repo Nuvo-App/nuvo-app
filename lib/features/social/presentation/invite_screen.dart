@@ -257,7 +257,7 @@ class _RacePreview extends StatelessWidget {
               children: [
                 const SizedBox(height: 12),
                 Text('You’re invited to a race',
-                    style: AppTextStyles.labelSmall
+                    style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)
                         .copyWith(color: NuvoColors.blue)),
                 const SizedBox(height: 8),
                 Text(c.title, style: AppTextStyles.displaySmall),
@@ -282,7 +282,7 @@ class _RacePreview extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Text('Created by ${c.creatorName}',
-                        style: AppTextStyles.bodyMedium),
+                        style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)),
                   ]),
               ],
             ).nuvoEnter(),
@@ -354,8 +354,8 @@ class _PersonPreview extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text('@${c.username}',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: NuvoColors.textMuted)),
+                      style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)
+                          .copyWith(color: context.themeColors.inkSubtle)),
                 ],
                 const SizedBox(height: 10),
                 Text(
@@ -363,7 +363,7 @@ class _PersonPreview extends StatelessWidget {
                       ? 'Send a connect request to add them to your crew.'
                       : 'Add them to your crew to race together.',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium,
+                  style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
                 ),
               ],
             ).nuvoEnter(),
@@ -400,13 +400,13 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: NuvoColors.panel,
+        color: context.themeColors.panel,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 15, color: NuvoColors.textMuted),
+        Icon(icon, size: 15, color: context.themeColors.inkSubtle),
         const SizedBox(width: 6),
-        Text(text, style: AppTextStyles.labelSmall),
+        Text(text, style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)),
       ]),
     );
   }

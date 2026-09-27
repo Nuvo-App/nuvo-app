@@ -182,7 +182,7 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
                   '@$username',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium
+                  style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)
                       .copyWith(color: t.inkSubtle),
                 ),
               ],
@@ -234,7 +234,7 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
           // quiet zone, so this card is one place theme colors do NOT apply.
           color: NuvoColors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: NuvoColors.navy, width: 2.5),
+          border: Border.all(color: context.themeColors.border, width: 2.5),
           boxShadow: const [
             BoxShadow(
               color: NuvoColors.neutralShadow,
@@ -248,19 +248,19 @@ class _MyNuvoScreenState extends ConsumerState<MyNuvoScreen> {
             data: invite.url,
             version: QrVersions.auto,
             size: 168,
-            eyeStyle: const QrEyeStyle(
+            eyeStyle: QrEyeStyle(
               eyeShape: QrEyeShape.square,
-              color: NuvoColors.navy,
+              color: context.themeColors.ink,
             ),
-            dataModuleStyle: const QrDataModuleStyle(
+            dataModuleStyle: QrDataModuleStyle(
               dataModuleShape: QrDataModuleShape.square,
-              color: NuvoColors.navy,
+              color: context.themeColors.ink,
             ),
           ),
           const SizedBox(height: 10),
           Text('Scan to add me',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: NuvoColors.textMuted)),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                  .copyWith(color: context.themeColors.inkSubtle)),
         ]),
       ),
     );
@@ -350,7 +350,7 @@ class _CodeChipState extends State<_CodeChip> {
                   _copied ? Icons.check_rounded : Icons.copy_rounded,
                   key: ValueKey(_copied),
                   size: 13,
-                  color: _copied ? NuvoColors.successOn : t.inkSubtle,
+                  color: _copied ? context.semanticColors.success.on : t.inkSubtle,
                 ),
               ),
             ],

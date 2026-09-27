@@ -173,7 +173,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
     return Scaffold(
       // Navy chrome, not black — the camera preview itself is the only
       // legitimately black surface (a live feed, not a fill choice).
-      backgroundColor: NuvoColors.navy,
+      backgroundColor: context.themeColors.ink,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -206,7 +206,7 @@ class _QrScanScreenState extends ConsumerState<QrScanScreen>
         ),
       );
     }
-    return Container(color: NuvoColors.navy, child: Center(child: _statusCard()));
+    return Container(color: context.themeColors.ink, child: Center(child: _statusCard()));
   }
 
   Widget _statusCard() {
@@ -369,18 +369,18 @@ class _MessageCard extends StatelessWidget {
       margin: const EdgeInsets.all(32),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: NuvoColors.page,
+        color: context.themeColors.page,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 36, color: NuvoColors.textMuted),
+          Icon(icon, size: 36, color: context.themeColors.inkSubtle),
           const SizedBox(height: 12),
           Text(title, style: AppTextStyles.titleMedium, textAlign: TextAlign.center),
           const SizedBox(height: 6),
           Text(body,
-              style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.textMuted),
+              style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkSubtle),
               textAlign: TextAlign.center),
           if (ctaLabel != null) ...[
             const SizedBox(height: 16),
