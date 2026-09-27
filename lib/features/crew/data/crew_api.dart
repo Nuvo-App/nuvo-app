@@ -52,6 +52,7 @@ class PublicProfileCard {
     this.profilePhotoUrl,
     this.isPrivate = false,
     this.lastActiveAt,
+    this.level,
   });
 
   final String id;
@@ -66,6 +67,10 @@ class PublicProfileCard {
   /// Real presence timestamp — only populated for connected people.
   final DateTime? lastActiveAt;
 
+  /// Server-owned Nuvo Level — null when the viewer can't see this member's
+  /// full profile.
+  final int? level;
+
   factory PublicProfileCard.fromJson(Map<String, dynamic> j) => PublicProfileCard(
         id: j['id'] as String,
         displayName: j['displayName'] as String? ?? 'Nuvo member',
@@ -76,6 +81,7 @@ class PublicProfileCard {
         profilePhotoUrl: j['profilePhotoUrl'] as String?,
         isPrivate: j['isPrivate'] as bool? ?? false,
         lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
+        level: j['level'] as int?,
       );
 }
 

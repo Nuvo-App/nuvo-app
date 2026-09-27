@@ -45,6 +45,7 @@ import {
   openAttempt,
 } from '../domain/raceAttempts';
 import { recordPersonalBestIfImproved } from '../domain/raceBests';
+import { reconcileProgression } from '../domain/progression';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
@@ -2036,6 +2037,17 @@ racesRouter.post('/:id/proof', async (c) => {
         .bind('rejected', err instanceof Error ? err.message : 'Submission rejected', moveId).run();
       return c.json(badRequest(err instanceof Error ? err.message : 'Submission rejected'), 400);
     }
+  }
+
+  // Progression is a projection of race truth — reconcile after the action
+  // commits, in the background, so an XP failure can never fail the proof.
+  if (result) {
+    const db = c.env.DB;
+    c.executionCtx.waitUntil(
+      reconcileProgression(db, userId).catch((err) =>
+        console.error('[progression] reconcile failed:', err),
+      ),
+    );
   }
 
   const updated = await getRace(c.env.DB, race.id);

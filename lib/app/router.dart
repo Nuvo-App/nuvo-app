@@ -25,6 +25,7 @@ import '../features/onboarding/presentation/member_pass_screen.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/pass/presentation/pass_screen.dart';
+import '../features/profile/presentation/badges_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/move/presentation/move_screen.dart';
@@ -333,6 +334,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile/edit',
         pageBuilder: (_, state) => _authPage(state, const EditProfileScreen()),
+      ),
+      GoRoute(
+        path: '/profile/badges',
+        pageBuilder: (_, state) => _authPage(state, const BadgesScreen()),
       ),
       if (kDebugMode)
         GoRoute(

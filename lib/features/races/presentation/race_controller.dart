@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../arena/presentation/arena_controller.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../profile/application/progression_controller.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
@@ -950,8 +951,13 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
       presentationUserId: () => ref.read(authControllerProvider).user?.id ?? '',
       // Any race write immediately revalidates the Arena snapshot (it is
       // derived from races) so a race created in the composer shows up in the
-      // Arena without the user navigating there and back.
-      onMutated: () => ref.read(arenaControllerProvider.notifier).markStale(),
+      // Arena without the user navigating there and back. Progression
+      // refetches too — the server reconciles XP on read, so this keeps the
+      // level bar current right after proof/finish events.
+      onMutated: () {
+        ref.read(arenaControllerProvider.notifier).markStale();
+        ref.read(progressionControllerProvider.notifier).load();
+      },
     );
     if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
       controller.loadRaces(force: false);

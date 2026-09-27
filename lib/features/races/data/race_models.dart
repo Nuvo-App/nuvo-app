@@ -302,6 +302,7 @@ class PublicUser {
     this.addedAt,
     this.profilePhotoUrl,
     this.lastActiveAt,
+    this.level,
   });
 
   final String id;
@@ -311,6 +312,10 @@ class PublicUser {
   final String initials;
   final String? addedAt;
   final String? profilePhotoUrl;
+
+  /// Server-owned Nuvo Level for identity surfaces — null when the viewer
+  /// cannot see this member's full profile.
+  final int? level;
 
   /// Real, server-recorded presence — touched on session restore. Null means
   /// never recorded (older account) or unknown; never fabricated client-side.
@@ -327,6 +332,7 @@ class PublicUser {
     lastActiveAt: DateTime.tryParse(
       json['lastActiveAt'] as String? ?? '',
     )?.toUtc(),
+    level: json['level'] as int?,
   );
 
   String get handleLine {

@@ -383,6 +383,28 @@ class _State extends ConsumerState<PublicProfileScreen> {
                       style: AppTextStyles.bodySmall
                           .copyWith(color: NuvoColors.textMuted)),
                 ],
+                // Nuvo Level — competitive identity, same visibility rule as
+                // the name/photo (server returns null when hidden).
+                if (card.level != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.themeColors.panelLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Lv. ${card.level}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.blue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
                 // Real presence, crew only — same rule as the crew list.
                 if (card.connectionStatus == CrewConnectionStatus.connected &&
                     crewPresenceLabel(card.lastActiveAt) != null) ...[

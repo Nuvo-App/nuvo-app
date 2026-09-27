@@ -18,6 +18,7 @@ import { motionRouter, motionSessionsRouter } from './routes/motion';
 import { verificationSessionsRouter } from './routes/verificationSessions';
 import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
+import { progressionRouter } from './routes/progression';
 import { crewRouter } from './routes/crew';
 import { reportsRouter } from './routes/reports';
 import { invitesRouter } from './routes/invites';
@@ -299,6 +300,9 @@ app.route('/profile', profileRouter);
 
 // ── Pass routes ───────────────────────────────────────────────────────────────
 app.route('/pass', passRouter);
+
+// ── Progression (Nuvo Levels) ─────────────────────────────────────────────────
+app.route('/progression', progressionRouter);
 
 // ── Social routes ─────────────────────────────────────────────────────────────
 app.route('/users', usersRouter);

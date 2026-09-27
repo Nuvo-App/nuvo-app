@@ -137,6 +137,7 @@ async function resetTestDemoAccount(
       db.prepare('DELETE FROM race_progress WHERE race_id = ?').bind(race.id),
       db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id),
       db.prepare('DELETE FROM race_members WHERE race_id = ?').bind(race.id),
+      db.prepare('DELETE FROM race_events WHERE race_id = ?').bind(race.id),
       db.prepare('DELETE FROM races WHERE id = ?').bind(race.id),
     ]);
   }
@@ -147,6 +148,11 @@ async function resetTestDemoAccount(
     db.prepare('DELETE FROM race_members WHERE user_id = ?').bind(userId),
     db.prepare('DELETE FROM race_invites WHERE created_by = ?').bind(userId),
     db.prepare('DELETE FROM crew_connections WHERE user_id = ? OR crew_user_id = ?').bind(userId, userId),
+    db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM user_progression WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM user_unlocks WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM user_featured_badges WHERE user_id = ?').bind(userId),
+    db.prepare('DELETE FROM race_events WHERE actor_user_id = ? OR subject_user_id = ?').bind(userId, userId),
     db.prepare(
       `UPDATE profiles
        SET full_name = NULL, username = NULL, avatar_url = NULL,
@@ -329,6 +335,12 @@ async function hardDeleteAccount(
   await db.prepare('DELETE FROM proofs WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM race_participants WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM people WHERE user_id = ?').bind(userId).run();
+
+  // Progression — XP ledger, cached level, unlock grants, featured badges.
+  await db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM user_progression WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM user_unlocks WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM user_featured_badges WHERE user_id = ?').bind(userId).run();
 
   // Invites the user minted die with them; uses they made of others' invites
   // are unlinked too.

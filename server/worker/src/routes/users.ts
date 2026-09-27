@@ -3,6 +3,7 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { canViewFullProfile, isBlocked } from '../lib/privacy';
 import { canSeeIdentity, crewConnectionStatus } from '../domain/crewLifecycle';
+import { publicLevelFor } from '../domain/progression';
 
 export const usersRouter = new Hono<AppEnv>();
 
@@ -167,6 +168,10 @@ usersRouter.get('/:id', async (c) => {
     connectionStatus,
   );
 
+  // Nuvo Level is part of a member's competitive identity — it follows the
+  // same visibility rule as the name/photo.
+  const level = canSee ? await publicLevelFor(c.env.DB, targetId) : null;
+
   return c.json({
     ok: true,
     user: {
@@ -186,6 +191,7 @@ usersRouter.get('/:id', async (c) => {
       profilePhotoUrl: canSee ? row.avatar_url : null,
       isPrivate: Boolean(row.private_profile),
       connectionStatus,
+      level,
       // Presence is a crew signal — the client only renders it for connected
       // people, matching the crew-list rule (strangers don't get a readout).
       lastActiveAt:
