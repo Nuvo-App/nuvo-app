@@ -318,7 +318,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           final installer = ref.read(motionPackageInstallerProvider);
           final install = await installer.ensureInstalled(
             sessionRemoteSpec,
-            releaseChecksum: _verificationReleaseChecksum,
+            releaseChecksum: _verificationReleaseChecksum ?? '',
           );
           if (!install.runnable) {
             setState(() {

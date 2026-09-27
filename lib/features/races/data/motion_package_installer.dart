@@ -157,9 +157,11 @@ class MotionPackageInstaller {
     }
     return _inFlight.putIfAbsent(
       spec.releaseId,
-      () => _install(spec, manifest, releaseChecksum).whenComplete(
-        () => _inFlight.remove(spec.releaseId),
-      ),
+      // NB: the callback must not RETURN the removed future — whenComplete
+      // would await the very future it lives on, deadlocking the install.
+      () => _install(spec, manifest, releaseChecksum).whenComplete(() {
+        _inFlight.remove(spec.releaseId);
+      }),
     );
   }
 
@@ -272,7 +274,14 @@ class MotionPackageInstaller {
     if (url == null) {
       return const _StagedOutcome.invalidUrl();
     }
-    final bytes = await _downloader(url, asset.bytes);
+    Uint8List? bytes;
+    try {
+      // A throwing downloader is just a failed fetch — the release must
+      // fail closed, not crash the install path.
+      bytes = await _downloader(url, asset.bytes);
+    } catch (_) {
+      return null;
+    }
     if (bytes == null) return null;
     if (bytes.length != asset.bytes) {
       return const _StagedOutcome.bad('size_mismatch');
@@ -307,14 +316,14 @@ class MotionPackageInstaller {
     final expectedPath =
         '/motion/releases/${spec.releaseId}/assets/${asset.id}';
     final raw = asset.url;
-    Uri? uri;
+    final Uri uri;
     if (raw.startsWith('/')) {
-      uri = api.replace(path: raw, query: '');
+      uri = api.replace(path: raw);
     } else {
-      uri = Uri.tryParse(raw);
-      if (uri == null || !uri.isScheme('https')) return null;
+      final parsed = Uri.tryParse(raw);
+      if (parsed == null || !parsed.isScheme('https')) return null;
+      uri = parsed;
     }
-    if (uri == null) return null;
     if (uri.host != api.host) return null;
     if (uri.path != expectedPath) return null;
     return uri.toString();

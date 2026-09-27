@@ -92,7 +92,9 @@ void main() {
       );
 
   MotionPackageInstaller installer() => MotionPackageInstaller(
-        downloader: (url, maxBytes) async => network[url],
+        // The installer resolves manifest paths to absolute first-party
+        // URLs; the fixture network is keyed by path.
+        downloader: (url, maxBytes) async => network[Uri.parse(url).path],
       );
 
   setUp(() {
@@ -150,13 +152,17 @@ void main() {
 
     test('bad checksum on a required asset refuses the package', () async {
       final releaseId = 'rel-bad-sha';
-      network[assetUrl(releaseId, 'engine')] = utf8.encode('{"tampered":true}');
+      // Same byte length as the real payload, different content — the check
+      // that fires must be sha256, not size.
+      final good = specBytes();
+      final tampered = Uint8List.fromList(good)..[0] ^= 0xff;
+      network[assetUrl(releaseId, 'engine')] = tampered;
       // Manifest declares the checksum of the REAL bytes.
       final s = spec(
         releaseId: releaseId,
         assets: [
           assetJson(releaseId, 'engine',
-              type: 'motion_v2_spec_v1', bytes: specBytes()),
+              type: 'motion_v2_spec_v1', bytes: good),
         ],
       );
       final result =
@@ -236,7 +242,7 @@ void main() {
       final inst = MotionPackageInstaller(
         downloader: (url, maxBytes) async {
           fetched++;
-          return specBytes();
+          return Uint8List.fromList(specBytes());
         },
       );
       final s = spec(
@@ -267,7 +273,7 @@ void main() {
         downloader: (url, maxBytes) async {
           fetches++;
           await Future<void>.delayed(const Duration(milliseconds: 10));
-          return network[url];
+          return network[Uri.parse(url).path];
         },
       );
       network[assetUrl(releaseId, 'engine')] = engine;
@@ -300,7 +306,7 @@ void main() {
         downloader: (url, maxBytes) async {
           calls++;
           if (calls == 1) throw StateError('network dropped');
-          return network[url];
+          return network[Uri.parse(url).path];
         },
       );
       network[assetUrl(releaseId, 'engine')] = engine;
@@ -368,7 +374,7 @@ void main() {
       const store = MotionPackageStore();
       var nowMs = 0;
       final inst = MotionPackageInstaller(
-        downloader: (url, maxBytes) async => network[url],
+        downloader: (url, maxBytes) async => network[Uri.parse(url).path],
         nowMs: () => nowMs,
       );
       final engine = specBytes();
@@ -573,7 +579,10 @@ void main() {
             assetJson('rel-exotic', 'engine',
                 type: 'motion_v2_spec_v1', bytes: specBytes()),
           ],
-        )..['activity'] = {'displayName': 'Future Motion'},
+        )..['activity'] = {
+            'displayName': 'Future Motion',
+            'measurementType': 'repetitions',
+          },
         'createdAt': '',
         'updatedAt': '',
       });
