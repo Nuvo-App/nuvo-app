@@ -296,14 +296,17 @@ async function hardDeleteAccount(
       await db.prepare("DELETE FROM invites WHERE target_type = 'race' AND target_id = ?").bind(race.id).run();
       // Proof evidence uploaded under this race's key prefix — including
       // objects owned by former members — must not orphan in R2.
+      // SUBSTR prefix match: D1 rejects LIKE patterns this long
+      // ("LIKE or GLOB pattern too complex").
+      const mediaPrefix = `proof-evidence/${race.id}/`;
       const raceMedia = await db
-        .prepare("SELECT object_key FROM media_objects WHERE object_key LIKE ?")
-        .bind(`proof-evidence/${race.id}/%`)
+        .prepare('SELECT object_key FROM media_objects WHERE SUBSTR(object_key, 1, ?) = ?')
+        .bind(mediaPrefix.length, mediaPrefix)
         .all<{ object_key: string }>();
       for (const obj of raceMedia.results) {
         try { await r2.delete(obj.object_key); } catch { /* idempotent */ }
       }
-      await db.prepare('DELETE FROM media_objects WHERE object_key LIKE ?').bind(`proof-evidence/${race.id}/%`).run();
+      await db.prepare('DELETE FROM media_objects WHERE SUBSTR(object_key, 1, ?) = ?').bind(mediaPrefix.length, mediaPrefix).run();
     }
   }
 
@@ -334,7 +337,16 @@ async function hardDeleteAccount(
   await db.prepare('DELETE FROM verification_sessions WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM proofs WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM race_participants WHERE user_id = ?').bind(userId).run();
-  await db.prepare('DELETE FROM people WHERE user_id = ?').bind(userId).run();
+  // Anonymize rather than delete: race_members.person_id is NOT NULL with an
+  // FK to people, so surviving shared-race memberships must keep a valid
+  // person row. Tombstoning also frees the unique username for re-signup.
+  await db.prepare(
+    `UPDATE people
+     SET user_id = NULL, display_name = 'Deleted User', username = NULL,
+         avatar_url = NULL, avatar_r2_key = NULL, bio = NULL,
+         status = 'deleted', updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = ?`,
+  ).bind(userId).run();
 
   // Progression — XP ledger, cached level, unlock grants, featured badges.
   await db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(userId).run();

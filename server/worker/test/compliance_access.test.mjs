@@ -325,7 +325,10 @@ test('DELETE /auth/account succeeds without MOTION_DATA_MASTER_KEY and covers ev
     'DELETE FROM verification_sessions',
     'DELETE FROM proofs',
     'DELETE FROM race_participants',
-    'DELETE FROM people',
+    // people is tombstoned, not deleted — race_members.person_id is NOT NULL
+    // with an FK to people, so surviving shared-race memberships still need a
+    // valid row. The anonymize strips identity and frees the unique username.
+    'UPDATE people',
     'DELETE FROM invites',
     'DELETE FROM invite_uses',
     'UPDATE race_events SET actor_user_id = NULL',
