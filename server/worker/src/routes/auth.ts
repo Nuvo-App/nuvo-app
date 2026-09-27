@@ -10,7 +10,13 @@ import {
   memberIdToSlug,
 } from '../lib/crypto';
 import { verifyGoogleIdToken } from '../lib/google';
-import { verifyAppleIdToken } from '../lib/apple';
+import {
+  verifyAppleIdToken,
+  appleServiceConfig,
+  exchangeAppleAuthorizationCode,
+  revokeAppleCredentialForUser,
+  type AppleServiceConfig,
+} from '../lib/apple';
 import { sendVerificationCode } from '../lib/resend';
 import { normalizeEmail, isValidEmail } from '../lib/validation';
 import { deleteUserMotionData } from '../lib/motion_privacy';
@@ -238,8 +244,15 @@ async function hardDeleteAccount(
   r2: R2Bucket,
   motionMasterKey: string | undefined,
   userId: string,
+  appleConfig?: AppleServiceConfig,
 ): Promise<void> {
   const user = await db.prepare('SELECT primary_email FROM users WHERE id = ?').bind(userId).first<UserRow>();
+
+  // Sign in with Apple: revoke the user's Apple grant before the identity
+  // row (and its refresh token) disappears. Runs FIRST so the stored token
+  // still exists; a transient Apple failure leaves an anonymized credential
+  // for the scheduled retry instead of blocking deletion.
+  await revokeAppleCredentialForUser(db, appleConfig, userId);
 
   // Revoke the per-account motion key and remove both encrypted artifacts and
   // their indexes before the account identity is marked deleted.
@@ -310,8 +323,13 @@ async function hardDeleteAccount(
     }
   }
 
-  // Delete user-specific records.
-  await db.prepare('DELETE FROM auth_identities WHERE user_id = ?').bind(userId).run();
+  // Delete user-specific records. An Apple identity whose revocation failed
+  // keeps an anonymized row (provider_user_id nulled, refresh token intact)
+  // for the scheduled retry — skip it here so the token survives.
+  await db
+    .prepare('DELETE FROM auth_identities WHERE user_id = ? AND provider_refresh_token IS NULL')
+    .bind(userId)
+    .run();
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
   if (user?.primary_email) {
     await db.prepare('DELETE FROM email_codes WHERE email = ?').bind(user.primary_email).run();
@@ -595,9 +613,17 @@ authRouter.post('/google', async (c) => {
 
 // POST /auth/apple
 authRouter.post('/apple', async (c) => {
-  let body: { idToken?: unknown; fullName?: unknown };
+  let body: {
+    idToken?: unknown;
+    fullName?: unknown;
+    authorizationCode?: unknown;
+  };
   try {
-    body = await c.req.json<{ idToken?: unknown; fullName?: unknown }>();
+    body = await c.req.json<{
+      idToken?: unknown;
+      fullName?: unknown;
+      authorizationCode?: unknown;
+    }>();
   } catch {
     return c.json({ ok: false, error: 'Invalid request body' }, 400);
   }
@@ -607,12 +633,37 @@ authRouter.post('/apple', async (c) => {
     return c.json({ ok: false, error: 'idToken required' }, 400);
   }
   const fullName = typeof body.fullName === 'string' ? body.fullName : null;
+  const authorizationCode =
+    typeof body.authorizationCode === 'string' && body.authorizationCode
+      ? body.authorizationCode
+      : null;
 
   let appleInfo;
   try {
     appleInfo = await verifyAppleIdToken(idToken, c.env.APPLE_BUNDLE_ID);
   } catch {
     return c.json({ ok: false, error: 'Apple sign-in failed' }, 401);
+  }
+
+  // Exchange the one-time authorizationCode for an Apple refresh token so a
+  // later account deletion can revoke the grant (App Review 5.1.1(v)). A
+  // failed/absent exchange never blocks sign-in — the identity just has no
+  // revocable credential, same as legacy beta accounts.
+  let appleRefreshToken: string | null = null;
+  const appleConfig = appleServiceConfig(c.env);
+  if (authorizationCode && appleConfig) {
+    try {
+      const exchange = await exchangeAppleAuthorizationCode(
+        appleConfig,
+        authorizationCode,
+      );
+      appleRefreshToken = exchange.refreshToken;
+    } catch (err) {
+      console.error(
+        '[apple] authorization code exchange failed:',
+        (err as Error).message,
+      );
+    }
   }
 
   const email = normalizeEmail(appleInfo.email);
@@ -629,16 +680,21 @@ authRouter.post('/apple', async (c) => {
   if (!existingIdentity) {
     await c.env.DB.prepare(
       `INSERT INTO auth_identities
-         (id, user_id, provider, provider_user_id, email, email_verified, display_name, created_at)
-       VALUES (?, ?, 'apple', ?, ?, 1, ?, CURRENT_TIMESTAMP)`,
+         (id, user_id, provider, provider_user_id, email, email_verified, display_name, provider_refresh_token, created_at)
+       VALUES (?, ?, 'apple', ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)`,
     )
-      .bind(generateId(), user.id, appleInfo.sub, email, fullName)
+      .bind(generateId(), user.id, appleInfo.sub, email, fullName, appleRefreshToken)
       .run();
   } else {
+    // COALESCE: a re-auth exchange that returns no refresh_token must not
+    // wipe the stored credential.
     await c.env.DB.prepare(
-      'UPDATE auth_identities SET display_name = COALESCE(?, display_name) WHERE id = ?',
+      `UPDATE auth_identities
+       SET display_name = COALESCE(?, display_name),
+           provider_refresh_token = COALESCE(?, provider_refresh_token)
+       WHERE id = ?`,
     )
-      .bind(fullName, existingIdentity.id)
+      .bind(fullName, appleRefreshToken, existingIdentity.id)
       .run();
   }
 
@@ -854,6 +910,12 @@ authRouter.post('/age-attestation', requireAuth, async (c) => {
 // DELETE /auth/account  (requires auth — hard delete / anonymization)
 authRouter.delete('/account', requireAuth, async (c) => {
   const userId = c.get('userId');
-  await hardDeleteAccount(c.env.DB, c.env.PROFILE_PHOTOS, c.env.MOTION_DATA_MASTER_KEY, userId);
+  await hardDeleteAccount(
+    c.env.DB,
+    c.env.PROFILE_PHOTOS,
+    c.env.MOTION_DATA_MASTER_KEY,
+    userId,
+    appleServiceConfig(c.env),
+  );
   return c.json({ ok: true });
 });

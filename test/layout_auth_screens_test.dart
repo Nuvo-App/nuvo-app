@@ -23,6 +23,7 @@ class _AuthTestRepository extends AuthRepository {
   final reviewers = <String>[];
   final googleTokens = <String>[];
   final appleTokens = <String>[];
+  final appleAuthCodes = <String?>[];
   Completer<void>? pendingEmail;
   bool failEmail = false;
   static const user = AuthUser(
@@ -56,8 +57,13 @@ class _AuthTestRepository extends AuthRepository {
   }
 
   @override
-  Future<AuthUser> signInWithApple(String idToken, {String? fullName}) async {
+  Future<AuthUser> signInWithApple(
+    String idToken, {
+    String? fullName,
+    String? authorizationCode,
+  }) async {
     appleTokens.add(idToken);
+    appleAuthCodes.add(authorizationCode);
     return user;
   }
 }
@@ -348,6 +354,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(repository.appleTokens, ['test-apple-token']);
+      expect(repository.appleAuthCodes, ['test-code']);
       await tester.ensureVisible(find.text('Continue with Google'));
       await tester.tap(find.text('Continue with Google'));
       await tester.pump();

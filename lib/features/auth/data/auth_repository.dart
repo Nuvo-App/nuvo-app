@@ -162,8 +162,13 @@ class AuthRepository {
   Future<AuthUser> signInWithApple(
     String idToken, {
     String? fullName,
+    String? authorizationCode,
   }) async {
-    final res = await _api.signInWithApple(idToken, fullName: fullName);
+    final res = await _api.signInWithApple(
+      idToken,
+      fullName: fullName,
+      authorizationCode: authorizationCode,
+    );
     await _store.saveTokens(
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,

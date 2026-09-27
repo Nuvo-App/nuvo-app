@@ -182,10 +182,12 @@ class AuthApi {
   Future<AuthResponse> signInWithApple(
     String idToken, {
     String? fullName,
+    String? authorizationCode,
   }) async {
     final json = await _post('/auth/apple', {
       'idToken': idToken,
       'fullName': ?fullName,
+      'authorizationCode': ?authorizationCode,
     });
     return AuthResponse.fromJson(json);
   }

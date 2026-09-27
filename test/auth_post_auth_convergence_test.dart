@@ -90,6 +90,7 @@ class _ScriptedAuthRepo extends AuthRepository {
   Future<AuthUser> signInWithApple(
     String idToken, {
     String? fullName,
+    String? authorizationCode,
   }) async {
     calls.add('apple');
     return user;
@@ -135,6 +136,7 @@ class _MutableUserRepo extends AuthRepository {
   Future<AuthUser> signInWithApple(
     String idToken, {
     String? fullName,
+    String? authorizationCode,
   }) async =>
       _user();
 

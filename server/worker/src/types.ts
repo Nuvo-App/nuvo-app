@@ -3,6 +3,12 @@ export type AppEnv = {
     DB: D1Database;
     GOOGLE_IOS_CLIENT_ID: string;
     APPLE_BUNDLE_ID: string;
+    // Sign in with Apple token exchange — required for account-deletion
+    // revocation (App Review 5.1.1(v)). All three via `wrangler secret put`;
+    // client_id is APPLE_BUNDLE_ID for the native app.
+    APPLE_TEAM_ID?: string;
+    APPLE_KEY_ID?: string;
+    APPLE_PRIVATE_KEY?: string;
     RESEND_API_KEY: string;
     RESEND_FROM_EMAIL: string;
     JWT_SECRET: string;
