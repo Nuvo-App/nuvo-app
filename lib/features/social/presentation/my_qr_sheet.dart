@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
+import '../../auth/presentation/auth_controller.dart';
 import '../data/invite_models.dart';
 import '../social_providers.dart';
 
@@ -53,6 +54,22 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
 
   Future<void> _mint() async {
     setState(() => _error = false);
+    // Presentation/offline demo sessions can't mint a real invite — the
+    // sentinel token would 401. Render a deterministic fixture code pointing
+    // at the demo pass URL so the sheet still works without connectivity.
+    if (isPresentationDemoUser(ref.read(authControllerProvider).user)) {
+      if (mounted) {
+        setState(
+          () => _invite = const MintedInvite(
+            token: 'demo-crew-invite',
+            url: 'https://getnuvo.net/invite/demo-crew-invite',
+            code: 'NUVO-DEMO',
+            kind: 'crew_connect',
+          ),
+        );
+      }
+      return;
+    }
     try {
       final invite = await ref.read(inviteRepositoryProvider).mintMyCrewInvite();
       if (mounted) setState(() => _invite = invite);
@@ -121,7 +138,14 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
             decoration: BoxDecoration(
               color: NuvoColors.white,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: NuvoColors.navy, width: 2),
+              border: Border.all(color: NuvoColors.blue, width: 3),
+              boxShadow: const [
+                BoxShadow(
+                  color: NuvoColors.neutralShadow,
+                  blurRadius: 0,
+                  offset: Offset(5, 5),
+                ),
+              ],
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               QrImageView(
@@ -156,19 +180,7 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
               Share.share('Connect with me on Nuvo — ${invite.url}'),
         ),
         const SizedBox(height: 10),
-        NuvoSecondaryButton(
-          label: 'Copy link',
-          icon: Icons.link_rounded,
-          expand: true,
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: invite.url));
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Link copied.')),
-              );
-            }
-          },
-        ),
+        NuvoCopyButton(text: invite.url, expand: true),
       ],
     );
   }

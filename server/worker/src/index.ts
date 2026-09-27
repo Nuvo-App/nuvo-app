@@ -1,6 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppEnv, ProfileRow } from './types';
+import { purgeExpiredMotionData } from './lib/motion_privacy';
+import { sweepRaceLifecycle } from './domain/raceFinalize';
+import { notifyLifecycleTransitions, runNotificationJob } from './domain/notificationPolicy';
+import { claimDueJobs } from './domain/notificationJobs';
 import { authRouter } from './routes/auth';
 import { profileRouter } from './routes/profile';
 import { passRouter } from './routes/pass';
@@ -16,6 +20,7 @@ import { crewRouter } from './routes/crew';
 import { reportsRouter } from './routes/reports';
 import { invitesRouter } from './routes/invites';
 import { notificationsRouter } from './routes/notifications';
+import { reactionsRouter } from './routes/reactions';
 import { devicesRouter } from './routes/devices';
 import { requireAuth } from './lib/jwt';
 import { ALLOWED_WEB_ORIGINS } from './lib/response';
@@ -123,6 +128,17 @@ app.get('/j/:token', async (c) => {
   return c.html(inviteFallbackHtml({ token, origin, preview, status }));
 });
 
+/// Bounded string-list extraction from registry `metadata_json` — returns
+/// null when the value isn't a clean list so callers keep their fallback.
+function metadataStringList(value: unknown, max: number): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > max) return null;
+  const entries = value.filter(
+    (entry): entry is string =>
+      typeof entry === 'string' && entry.trim().length > 0 && entry.length <= 140,
+  );
+  return entries.length === value.length ? entries.map((e) => e.trim()) : null;
+}
+
 // ── Public race-activity catalog ──────────────────────────────────────────────
 // Unauthenticated on purpose: it's static, non-sensitive reference data, and
 // exposing it makes "is the deployed Worker's activity allowlist current?"
@@ -166,6 +182,20 @@ app.get('/races/activities', async (c) => {
       engineType: entry.engineType,
       requiredCapabilities: entry.requiredCapabilities,
       minimumAppBuild: entry.minimumAppBuild,
+      // Decorative pre-verify preview animation only — never consumed by the
+      // camera verifier. Absent/invalid on the client falls back to the
+      // bundled compiled sequence, so this is safe to leave unset.
+      previewSequence: entry.metadata?.previewSequence ?? null,
+      // Registry-published display metadata. Lets a motion this build never
+      // compiled for present real instructions and camera framing instead of
+      // generic fallbacks. Bounded on the client; absent → generic guidance.
+      instructions: metadataStringList(entry.metadata?.instructions, 6) ??
+        entry.legacy?.instructions ?? [],
+      cameraOrientation: typeof entry.metadata?.cameraOrientation === 'string'
+        ? entry.metadata.cameraOrientation
+        : entry.legacy?.cameraOrientation ?? 'front',
+      aliases: metadataStringList(entry.metadata?.aliases, 8) ??
+        entry.legacy?.aliases ?? [],
     }));
     const etag = `\"${catalog.catalogVersion}:${activities.length}\"`;
     c.header('ETag', etag);
@@ -232,6 +262,7 @@ app.route('/users', usersRouter);
 app.route('/crew', crewRouter);
 app.route('/invites', invitesRouter);
 app.route('/notifications', notificationsRouter);
+app.route('/reactions', reactionsRouter);
 app.route('/devices', devicesRouter);
 
 // ── Reporting and safety routes ───────────────────────────────────────────────
@@ -279,4 +310,45 @@ app.onError((err, c) => {
 
 app.notFound((c) => c.json({ ok: false, error: 'Not found' }, 404));
 
-export default app;
+// Keep the Hono request surface intact for local tests while exposing the
+// Cloudflare scheduled handler used for the 90-day motion-data purge and the
+// race lifecycle sweep (start lines crossed + deadline finalization). Race
+// correctness never depends on this cadence — the same transitions run
+// lazily on reads — but notifications for races nobody is looking at do.
+const worker = Object.assign(app, {
+  scheduled: async (
+    controller: ScheduledController,
+    env: AppEnv['Bindings'],
+    ctx: ExecutionContext,
+  ) => {
+    ctx.waitUntil(
+      (async () => {
+        // The 90-day purge runs on the daily trigger only — the minute
+        // trigger exists for lifecycle edges + notification reminders.
+        if (controller.cron === '0 3 * * *') {
+          try {
+            await purgeExpiredMotionData(env.DB, env.PROFILE_PHOTOS);
+          } catch (err) {
+            console.error('[cron] motion purge failed:', (err as Error).message);
+          }
+        }
+        try {
+          const transitions = await sweepRaceLifecycle(env.DB);
+          await notifyLifecycleTransitions(env, (p) => ctx.waitUntil(p), transitions);
+        } catch (err) {
+          console.error('[cron] race lifecycle sweep failed:', (err as Error).message);
+        }
+        try {
+          const jobs = await claimDueJobs(env.DB);
+          for (const job of jobs) {
+            await runNotificationJob(env, (p) => ctx.waitUntil(p), job);
+          }
+        } catch (err) {
+          console.error('[cron] notification jobs failed:', (err as Error).message);
+        }
+      })(),
+    );
+  },
+});
+
+export default worker;

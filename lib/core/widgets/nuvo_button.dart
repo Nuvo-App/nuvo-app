@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
@@ -6,6 +9,7 @@ import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/nuvo_responsive.dart';
 import '../theme/nuvo_tokens.dart';
+import 'nuvo_motion.dart';
 import 'pressable_scale.dart';
 
 /// Nuvo button system.
@@ -52,7 +56,7 @@ Widget _buttonContent({
     mainAxisSize: MainAxisSize.min,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      if (leadingWidget != null) ...[leadingWidget, const SizedBox(width: 9)],
+      if (leadingWidget != null) ...[leadingWidget, const SizedBox(width: 8)],
       // A button label must never truncate to "Submit…". When the button is
       // narrower than the label, shrink the text to fit instead of clipping it.
       Flexible(
@@ -89,6 +93,7 @@ Widget _buttonShell({
   double borderWidth = 3,
   bool expand = false,
   List<BoxShadow>? shadows,
+  double horizontalPadding = 24,
 }) {
   // Grow the control height only on genuinely large phones, and only slightly,
   // so small-screen / test viewports keep the designed height exactly.
@@ -104,6 +109,7 @@ Widget _buttonShell({
     borderWidth: borderWidth,
     expand: expand,
     shadows: shadows,
+    horizontalPadding: horizontalPadding,
     child: child,
   );
 
@@ -122,6 +128,7 @@ class _PhysicalButtonShell extends StatefulWidget {
     this.borderColor,
     this.expand = false,
     this.shadows,
+    this.horizontalPadding = 24,
   });
 
   final Widget child;
@@ -134,50 +141,90 @@ class _PhysicalButtonShell extends StatefulWidget {
   final double borderWidth;
   final bool expand;
   final List<BoxShadow>? shadows;
+  final double horizontalPadding;
 
   @override
   State<_PhysicalButtonShell> createState() => _PhysicalButtonShellState();
 }
 
-class _PhysicalButtonShellState extends State<_PhysicalButtonShell> {
-  bool _pressed = false;
+class _PhysicalButtonShellState extends State<_PhysicalButtonShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: NuvoMotion.pressIn,
+  );
 
-  void _setPressed(bool value) {
-    if (!widget.enabled || _pressed == value) return;
-    setState(() => _pressed = value);
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _press(double target) {
+    if (!widget.enabled || widget.onTap == null) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.value = target;
+      return;
+    }
+    if (target == 0) {
+      // Spring release: easeOutBack dips just past rest so the button pops
+      // off its shadow instead of gliding back.
+      _ctrl.animateTo(
+        0,
+        duration: NuvoMotion.pressOut,
+        curve: NuvoMotion.spring,
+      );
+    } else {
+      _ctrl.forward();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pressedOffset = _pressed ? 4.0 : 0.0;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: widget.enabled ? widget.onTap : null,
-      onTapDown: (_) => _setPressed(true),
-      onTapCancel: () => _setPressed(false),
-      onTapUp: (_) => _setPressed(false),
+      onTapDown: (_) => _press(1),
+      onTapCancel: () => _press(0),
+      onTapUp: (_) => _press(0),
       child: AnimatedOpacity(
         duration: const Duration(milliseconds: 120),
         opacity: widget.enabled ? 1 : 0.58,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 90),
-          curve: Curves.easeOut,
-          transform: Matrix4.translationValues(pressedOffset, pressedOffset, 0),
-          width: widget.expand ? double.infinity : null,
-          height: widget.height,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.color,
-            borderRadius: BorderRadius.circular(widget.radius),
-            border: widget.borderColor == null
-                ? null
-                : Border.all(
-                    color: widget.borderColor!,
-                    width: widget.borderWidth,
-                  ),
-            boxShadow: _pressed ? null : widget.shadows,
-          ),
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, child) {
+            final t = _ctrl.value;
+            // The face travels toward its shadow while the shadow keeps a
+            // compressed residual (5px → 2px) — "pressed through", not
+            // "shadow deleted".
+            final travel = NuvoMotion.buttonPressDepth * t;
+            final shadowKeep = 1 - NuvoMotion.shadowCompress * t;
+            return Container(
+              transform: Matrix4.translationValues(travel, travel, 0),
+              width: widget.expand ? double.infinity : null,
+              height: widget.height,
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.horizontalPadding,
+              ),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: widget.color,
+                borderRadius: BorderRadius.circular(widget.radius),
+                border: widget.borderColor == null
+                    ? null
+                    : Border.all(
+                        color: widget.borderColor!,
+                        width: widget.borderWidth,
+                      ),
+                boxShadow: widget.shadows
+                    ?.map(
+                      (s) => s.copyWith(offset: s.offset * shadowKeep),
+                    )
+                    .toList(),
+              ),
+              child: child,
+            );
+          },
           child: widget.child,
         ),
       ),
@@ -200,6 +247,7 @@ class NuvoPrimaryButton extends StatelessWidget {
     this.flat = false,
     this.subtleLift = false,
     this.height,
+    this.horizontalPadding,
   });
 
   final String label;
@@ -214,6 +262,13 @@ class NuvoPrimaryButton extends StatelessWidget {
   /// emphasis (e.g. a chunkier hero action row) without changing every
   /// other caller's default.
   final double? height;
+
+  /// Overrides the default 24px internal horizontal padding. Use a smaller
+  /// value for a button that must sit in a narrow flex column (e.g. a
+  /// secondary action in a multi-button row) so icon + label have real room
+  /// instead of both being squeezed by a padding sized for a full-width
+  /// button.
+  final double? horizontalPadding;
 
   /// Kept for API compatibility. A flat primary now still carries a shadow —
   /// the lighter [AppShadows.hardSmall] instead of the hero [AppShadows.hardMedium]
@@ -246,6 +301,7 @@ class NuvoPrimaryButton extends StatelessWidget {
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
+      horizontalPadding: horizontalPadding ?? 24,
       child: _buttonContent(
         label: label,
         textColor: enabled ? NuvoColors.white : NuvoColors.disabledText,
@@ -285,6 +341,7 @@ class NuvoOutlineButton extends StatelessWidget {
     this.flat = false,
     this.iconOnly = false,
     this.height,
+    this.horizontalPadding,
   });
 
   final String label;
@@ -303,6 +360,10 @@ class NuvoOutlineButton extends StatelessWidget {
   /// Overrides the default 46/56 height — see [NuvoPrimaryButton.height].
   final double? height;
 
+  /// Overrides the default 24px internal horizontal padding — see
+  /// [NuvoPrimaryButton.horizontalPadding].
+  final double? horizontalPadding;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
@@ -316,6 +377,7 @@ class NuvoOutlineButton extends StatelessWidget {
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
+      horizontalPadding: horizontalPadding ?? 24,
       child: iconOnly
           ? Semantics(
               label: label.isEmpty ? null : label,
@@ -338,6 +400,103 @@ class NuvoOutlineButton extends StatelessWidget {
 
 typedef NuvoSecondaryButton = NuvoOutlineButton;
 
+// ── Copy — a secondary-tier control whose surface confirms itself ──────────
+
+/// A copy action that answers locally: press → the link icon pops into a
+/// check, the label becomes [copiedLabel], a confirm haptic lands, and the
+/// control resets itself after ~2.5s. No SnackBar — the surface is the
+/// response (docs/ui/NUVO_PLAY_SYSTEM.md §13.2).
+///
+/// Outline-tier chrome so it swaps in wherever a `NuvoSecondaryButton`
+/// copy action lived. Errors stay global: if [onCopy] throws, callers
+/// decide whether to surface it — this control never claims success.
+class NuvoCopyButton extends StatefulWidget {
+  const NuvoCopyButton({
+    super.key,
+    required this.text,
+    this.label = 'Copy link',
+    this.copiedLabel = 'Copied',
+    this.icon = Icons.link_rounded,
+    this.expand = false,
+    this.small = false,
+    this.height,
+    this.enabled = true,
+  });
+
+  /// What lands on the clipboard on tap.
+  final String text;
+  final String label;
+  final String copiedLabel;
+  final IconData icon;
+  final bool expand;
+  final bool small;
+  final double? height;
+  final bool enabled;
+
+  @override
+  State<NuvoCopyButton> createState() => _NuvoCopyButtonState();
+}
+
+class _NuvoCopyButtonState extends State<NuvoCopyButton> {
+  bool _copied = false;
+  Timer? _reset;
+
+  Future<void> _copy() async {
+    if (_copied) return; // a second tap during the reset is a no-op
+    await Clipboard.setData(ClipboardData(text: widget.text));
+    if (!mounted) return;
+    NuvoHaptics.confirm();
+    setState(() => _copied = true);
+    _reset?.cancel();
+    _reset = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _reset?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.enabled && widget.text.isNotEmpty;
+    final copied = _copied;
+    return _buttonShell(
+      context: context,
+      height: widget.height ?? (widget.small ? 46 : 56),
+      radius: widget.small ? NuvoRadii.md : NuvoRadii.button,
+      color: copied ? NuvoColors.successSurface : NuvoColors.surface,
+      borderColor: !enabled
+          ? NuvoColors.border
+          : copied
+              ? NuvoColors.success
+              : NuvoColors.navy,
+      shadows: enabled ? AppShadows.hardSmall : null,
+      onTap: enabled ? _copy : null,
+      enabled: enabled,
+      expand: widget.expand,
+      child: AnimatedSwitcher(
+        duration: NuvoMotion.select,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(scale: anim, child: child),
+        ),
+        child: KeyedSubtree(
+          key: ValueKey(copied),
+          child: _buttonContent(
+            label: copied ? widget.copiedLabel : widget.label,
+            textColor: copied ? NuvoColors.successOn : NuvoColors.navy,
+            icon: copied ? Icons.check_rounded : widget.icon,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
 // ── Tertiary — the "2d" button: same fill+outline construction as the 3d
 // tiers, but no drop shadow. Use for lower-emphasis actions (a settings page,
 // a secondary control) where the 3d tiers' physical pop isn't warranted.
@@ -352,6 +511,7 @@ class NuvoTertiaryButton extends StatelessWidget {
     this.leadingWidget,
     this.expand = false,
     this.small = false,
+    this.height,
   });
 
   final String label;
@@ -361,12 +521,15 @@ class NuvoTertiaryButton extends StatelessWidget {
   final bool expand;
   final bool small;
 
+  /// Overrides the default 44/52 height — see [NuvoPrimaryButton.height].
+  final double? height;
+
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     return _buttonShell(
       context: context,
-      height: small ? 44 : 52,
+      height: height ?? (small ? 44 : 52),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
       color: NuvoTokens.gray100,
       borderColor: NuvoTokens.gray300,
@@ -396,6 +559,7 @@ class NuvoGhostButton extends NuvoTertiaryButton {
     super.icon,
     super.expand,
     super.small,
+    super.height,
   });
 }
 

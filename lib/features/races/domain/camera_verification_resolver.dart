@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Icons;
 
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../ai/object_composition_spec.dart';
@@ -32,6 +33,7 @@ class CameraVerificationEligibility {
     this.remoteVerifierSpec,
     this.objectCompositionSpec,
     this.verifierReleaseId,
+    this.remoteActivityDefinition,
   });
 
   final String raceId;
@@ -48,8 +50,15 @@ class CameraVerificationEligibility {
   final ObjectCompositionSpec? objectCompositionSpec;
   final String? verifierReleaseId;
 
+  /// Display metadata for a remote-only activity (one with no compiled
+  /// [MotionActivityType]). Sourced from the control-plane catalog or the
+  /// release spec's activity block — never from another motion's identity.
+  final MotionActivityDefinition? remoteActivityDefinition;
+
+  /// The movement's display definition. Compiled movements resolve from the
+  /// bundled catalog; remote-only movements resolve from [remoteActivityDefinition].
   MotionActivityDefinition? get movementDefinition =>
-      motionActivityForType(movementType);
+      motionActivityForType(movementType) ?? remoteActivityDefinition;
 
   bool get isCustomVerifier =>
       source == CameraVerificationSource.customVerifier;
@@ -62,7 +71,17 @@ class CameraVerificationEligibility {
 /// Backend `verifier_type` for a non-physical / honor-logged goal.
 const manualLogVerifierType = 'manual_log';
 
-CameraVerificationEligibility resolveCameraVerification(Race race) {
+/// Resolves camera-verification eligibility for a race.
+///
+/// [remoteDefinitions] are the control-plane catalog definitions (e.g. from
+/// `availableMotionActivities(snapshot, capabilities)`). They provide display
+/// metadata for remote-only activities that have no compiled
+/// [MotionActivityType]; when absent, the release spec's own `activity` block
+/// still carries enough metadata to run the verifier.
+CameraVerificationEligibility resolveCameraVerification(
+  Race race, {
+  List<MotionActivityDefinition>? remoteDefinitions,
+}) {
   // A non-physical goal is authoritatively not camera-verifiable — never let a
   // movement-sounding title ("Run 5 miles this week") infer a camera flow.
   if (race.verifierType == manualLogVerifierType ||
@@ -82,7 +101,7 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
     return _resolveCustomVerification(race);
   }
 
-  final remote = _resolveRemoteRelease(race);
+  final remote = _resolveRemoteRelease(race, remoteDefinitions);
   if (remote != null) return remote;
 
   final explicitValue = race.activityId ?? race.aiActivityType;
@@ -135,7 +154,10 @@ CameraVerificationEligibility resolveCameraVerification(Race race) {
   );
 }
 
-CameraVerificationEligibility? _resolveRemoteRelease(Race race) {
+CameraVerificationEligibility? _resolveRemoteRelease(
+  Race race,
+  List<MotionActivityDefinition>? remoteDefinitions,
+) {
   final raw = race.verifierSpec;
   final engine = raw?['engineType'];
   if (raw == null || engine == null || engine == 'native_v1') return null;
@@ -174,28 +196,41 @@ CameraVerificationEligibility? _resolveRemoteRelease(Race race) {
             spec.releaseId != race.verifierReleaseId)) {
       return _remoteIneligible(race, 'remote_release_identity_mismatch');
     }
-    final movement = MotionActivityType.fromBackendValue(spec.activityId);
-    if (movement == null || movement == MotionActivityType.remote) {
+    final compiled = MotionActivityType.fromBackendValue(spec.activityId);
+    final bool isCompiled = compiled != null &&
+        compiled != MotionActivityType.remote &&
+        supportedMotionActivityTypes.contains(compiled);
+    // Remote-only activity: the stable ID is data, not an enum member. Its
+    // rules spec still runs on an engine this build supports; display
+    // metadata comes from the catalog definition or the spec's activity block.
+    final remoteDefinition = isCompiled
+        ? motionActivityForType(compiled)
+        : _remoteDefinitionFor(spec, remoteDefinitions);
+    if (!isCompiled && remoteDefinition == null && spec.activity == null) {
       return _remoteIneligible(
         race,
-        'remote_activity_not_supported_by_runtime',
+        'remote_activity_metadata_missing',
       );
     }
-    final definition = motionActivityForType(movement);
     return CameraVerificationEligibility(
       raceId: race.id,
       raceTitle: race.title,
       isCameraVerifiable: true,
-      movementType: movement,
+      movementType: isCompiled ? compiled : MotionActivityType.remote,
       source: CameraVerificationSource.remoteRelease,
-      preferredCameraView:
-          definition?.preferredCameraView ?? PreferredCameraView.frontPreferred,
-      instructions:
-          definition?.instructions ??
+      preferredCameraView: remoteDefinition?.preferredCameraView ??
+          _cameraViewFromSpecActivity(spec) ??
+          PreferredCameraView.frontPreferred,
+      instructions: remoteDefinition?.instructions ??
+          spec.activity?.instructions ??
           const ['Keep the required body regions visible.'],
-      reason: 'remote_release_resolved',
+      reason: isCompiled
+          ? 'remote_release_resolved'
+          : 'remote_activity_resolved',
       remoteVerifierSpec: spec,
       verifierReleaseId: race.verifierReleaseId,
+      remoteActivityDefinition:
+          isCompiled ? null : remoteDefinition ?? _definitionFromSpec(spec),
     );
   } on RemoteVerifierSpecException {
     return _remoteIneligible(race, 'invalid_remote_verifier_spec');
@@ -352,4 +387,69 @@ MotionActivityType? _supportedActivityFromBackendValue(String? value) {
   final type = MotionActivityType.fromBackendValue(value);
   if (type == null) return null;
   return supportedMotionActivityTypes.contains(type) ? type : null;
+}
+
+/// Catalog definition for a remote-only activity ID, if the control plane
+/// published one and this build lists it as compatible.
+MotionActivityDefinition? _remoteDefinitionFor(
+  RemoteVerifierSpec spec,
+  List<MotionActivityDefinition>? remoteDefinitions,
+) {
+  if (remoteDefinitions == null) return null;
+  for (final definition in remoteDefinitions) {
+    if (definition.activityId == spec.activityId) return definition;
+  }
+  return null;
+}
+
+PreferredCameraView? _cameraViewFromSpecActivity(RemoteVerifierSpec spec) =>
+    switch (spec.activity?.preferredCameraView) {
+      'side' => PreferredCameraView.sideOrDiagonalRequired,
+      'front_or_angle' => PreferredCameraView.frontOrSlightAngle,
+      'front' => PreferredCameraView.frontPreferred,
+      _ => null,
+    };
+
+/// Builds display metadata from the release spec's own `activity` block so a
+/// remote-only motion can present itself even with no catalog snapshot
+/// (offline, cache miss, or stale catalog). Returns null without a block —
+/// callers then mark the race ineligible rather than borrow another
+/// motion's identity.
+MotionActivityDefinition? _definitionFromSpec(RemoteVerifierSpec spec) {
+  final info = spec.activity;
+  if (info == null) return null;
+  final isDuration =
+      info.measurementType == 'duration' ||
+      spec.measurementType == 'duration';
+  return MotionActivityDefinition(
+    type: MotionActivityType.remote,
+    backendId: spec.activityId,
+    title: info.displayName,
+    metric: isDuration ? RaceMetric.seconds : RaceMetric.reps,
+    suggestedTargets: [info.defaultTarget],
+    supportedFormats: const [RaceFormat.firstToGoal],
+    aliases: [info.displayName.toLowerCase()],
+    proofLabel: info.displayName,
+    cameraInstruction: switch (_cameraViewFromSpecActivity(spec)) {
+      PreferredCameraView.sideOrDiagonalRequired =>
+        'Stand sideways. Keep your full body in frame.',
+      PreferredCameraView.frontOrSlightAngle =>
+        'Angle your body to the camera. Keep your full body in frame.',
+      _ => 'Stand facing the camera. Keep your full body in frame.',
+    },
+    instructions: info.instructions.isNotEmpty
+        ? info.instructions
+        : const ['Keep the required body regions visible.'],
+    icon: Icons.fitness_center_rounded,
+    framingLabel: 'Follow the release framing guide',
+    preferredCameraView:
+        _cameraViewFromSpecActivity(spec) ?? PreferredCameraView.frontPreferred,
+    category: MovementCategory.fullBody,
+    isHold: isDuration,
+    measurementType: isDuration
+        ? MotionMeasurementType.duration
+        : MotionMeasurementType.repetitions,
+    displayUnitOverride: info.unit,
+    releaseId: spec.releaseId,
+  );
 }

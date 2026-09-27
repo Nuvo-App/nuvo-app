@@ -6,11 +6,8 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart' show ApiException;
 import 'notification_models.dart';
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 const _timeout = Duration(seconds: 20);
 
 class NotificationApi {
@@ -44,7 +41,7 @@ class NotificationApi {
   }
 
   Future<NotificationPage> list(String token, {String? cursor}) async {
-    final uri = Uri.parse('$_kApiBase/notifications').replace(
+    final uri = Uri.parse('$kNuvoApiBase/notifications').replace(
       queryParameters: {'cursor': ?cursor},
     );
     final res = await _guard(() => _client.get(uri, headers: _headers(token)));
@@ -54,7 +51,7 @@ class NotificationApi {
   Future<void> markRead(String token, String id) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/notifications/$id/read'),
+        Uri.parse('$kNuvoApiBase/notifications/$id/read'),
         headers: _headers(token),
       ),
     );
@@ -64,7 +61,7 @@ class NotificationApi {
   Future<void> markAllRead(String token) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/notifications/read-all'),
+        Uri.parse('$kNuvoApiBase/notifications/read-all'),
         headers: _headers(token),
       ),
     );

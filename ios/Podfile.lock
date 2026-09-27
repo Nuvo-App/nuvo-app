@@ -50,14 +50,14 @@ PODS:
   - Flutter (1.0.0)
   - flutter_secure_storage (6.0.0):
     - Flutter
-  - google_mlkit_barcode_scanning (0.14.2):
+  - google_mlkit_barcode_scanning (0.15.0):
     - Flutter
     - google_mlkit_commons
     - GoogleMLKit/BarcodeScanning (~> 9.0.0)
-  - google_mlkit_commons (0.11.1):
+  - google_mlkit_commons (0.12.0):
     - Flutter
     - MLKitVision (~> 10.0.0)
-  - google_mlkit_pose_detection (0.14.1):
+  - google_mlkit_pose_detection (0.15.0):
     - Flutter
     - google_mlkit_commons
     - GoogleMLKit/PoseDetection (~> 9.0.0)
@@ -177,6 +177,8 @@ PODS:
   - PromisesSwift (2.4.1):
     - PromisesObjC (= 2.4.1)
   - RecaptchaInterop (101.0.0)
+  - rive_native (0.0.1):
+    - Flutter
   - share_plus (0.0.1):
     - Flutter
   - sign_in_with_apple (0.0.1):
@@ -202,6 +204,7 @@ DEPENDENCIES:
   - image_cropper (from `.symlinks/plugins/image_cropper/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - onnxruntime (from `.symlinks/plugins/onnxruntime/ios`)
+  - rive_native (from `.symlinks/plugins/rive_native/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - sign_in_with_apple (from `.symlinks/plugins/sign_in_with_apple/ios`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
@@ -266,6 +269,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/image_picker_ios/ios"
   onnxruntime:
     :path: ".symlinks/plugins/onnxruntime/ios"
+  rive_native:
+    :path: ".symlinks/plugins/rive_native/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
   sign_in_with_apple:
@@ -289,9 +294,9 @@ SPEC CHECKSUMS:
   FirebaseMessaging: 3b26e2cee503815e01c3701236b020aa9b576f09
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
-  google_mlkit_barcode_scanning: 12d8422d8f7b00726dedf9cac00188a2b98750c2
-  google_mlkit_commons: a5e4ffae5bc59ea4c7b9025dc72cb6cb79dc1166
-  google_mlkit_pose_detection: 211eabf55f5ea8d6a9537fdade0a37148fc84d8b
+  google_mlkit_barcode_scanning: f69335a73c797a582d5effc61175d1721020d770
+  google_mlkit_commons: b4dfe2f6ae4cbf24010dc6640a28984d01343c86
+  google_mlkit_pose_detection: a486c984c5db4e5c57cf8f1053660e3f3d84964c
   google_sign_in_ios: b48bb9af78576358a168361173155596c845f0b9
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleMLKit: b1eee21a41c57704fe72483b15c85cb2c0cd7444
@@ -317,12 +322,13 @@ SPEC CHECKSUMS:
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   PromisesSwift: 217dea0fd5d2ad65222a109c48698add13cc1c5b
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  rive_native: c8fbe631855835dc84f7d59befcdb43de3ac48d4
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   sign_in_with_apple: c5dcc141574c8c54d5ac99dd2163c0c72ad22418
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   TOCropViewController: a916930c465b5d9445a74d95e0c0da931771b4df
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
-PODFILE CHECKSUM: 8ea0b2d251de9e3fe8357b876667f298583c5ae2
+PODFILE CHECKSUM: 144a16030a1b8545af4628a6d25a2a208971d237
 
 COCOAPODS: 1.16.2

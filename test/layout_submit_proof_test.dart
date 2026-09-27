@@ -18,16 +18,17 @@ class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
 
   @override
-  Future<RestoreResult> restoreSession() async =>
-      RestoreOk(const AuthUser(
-    id: 'user-1',
-    email: 'test@getnuvo.net',
-    fullName: 'Test User',
-    username: 'testuser',
-    onboardingComplete: true,
-    hasMemberPass: true,
-    termsAccepted: true,
-  ));
+  Future<RestoreResult> restoreSession() async => RestoreOk(
+    const AuthUser(
+      id: 'user-1',
+      email: 'test@getnuvo.net',
+      fullName: 'Test User',
+      username: 'testuser',
+      onboardingComplete: true,
+      hasMemberPass: true,
+      termsAccepted: true,
+    ),
+  );
 }
 
 /// A pushup race with explicit activityId so the resolver finds pushUps.
@@ -112,7 +113,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('movement demo is present (not removed)', (tester) async {
+    testWidgets('pre-verify setup guidance is present', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -122,7 +123,17 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      expect(find.text('Do this'), findsOneWidget);
+      // push_ups now renders an animated Rive preview instead of the plain
+      // "Camera opens after Begin" static card (RiveMovementPreview.supports)
+      // — both surfaces carry this same accessibility label, so it's the
+      // stable way to assert the pre-verify guidance surface is present
+      // regardless of which visual backs it.
+      expect(
+        find.bySemanticsLabel(
+          'Camera verification is ready. Tap Begin to open the camera.',
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

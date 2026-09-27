@@ -22,6 +22,8 @@ export interface PushPayload {
   body?: string;
   category: string;
   dest?: { type: string; id?: string; context?: string };
+  /** The durable inbox row this push mirrors — lets the client beacon opens. */
+  notificationId?: string;
 }
 
 interface DeviceRow {
@@ -80,6 +82,7 @@ export async function sendPush(
               notification: { title: payload.title, body: payload.body ?? '' },
               data: {
                 category: payload.category,
+                notificationId: payload.notificationId ?? '',
                 destType: payload.dest?.type ?? '',
                 destId: payload.dest?.id ?? '',
                 destContext: payload.dest?.context ?? '',

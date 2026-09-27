@@ -4,6 +4,8 @@ import { requireAuth } from '../lib/jwt';
 import { generateDemoSnapshot, type ArenaBoard, type ArenaSnapshot, type ArenaMiniLeaderboardRow } from '../lib/demoArenaWorld';
 import { activityForId, normalizeMetric } from '../domain/raceActivities';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
+import { finalizeRaceIfEnded } from '../domain/raceFinalize';
+import { notifyLifecycleTransitions, type LifecycleTransitionLike } from '../domain/notificationPolicy';
 
 export const arenaRouter = new Hono<AppEnv>();
 
@@ -34,6 +36,7 @@ interface LightRaceRow {
   creator_id: string;
   start_at: string | null;
   end_at: string | null;
+  score_direction: string | null;
 }
 
 interface LightParticipantRow {
@@ -137,18 +140,19 @@ arenaRouter.get('/', async (c) => {
     });
   }
 
-  const snapshot = await buildRealSnapshot(db, userId);
+  const snapshot = await buildRealSnapshot(c.env, userId);
   return c.json({ ok: true, snapshot });
 });
 
-async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaSnapshot> {
+async function buildRealSnapshot(env: AppEnv['Bindings'], userId: string): Promise<ArenaSnapshot> {
+  const db = env.DB;
   // Fetch races this user created or joined (same criteria as GET /races).
   const raceRows = await db
     .prepare(
       `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.target_unit,
               r.metric, r.activity_id, r.format, r.verification_type,
               r.verification_method, r.movement_type, r.creator_id,
-              r.start_at, r.end_at
+              r.start_at, r.end_at, r.score_direction
        FROM races r
        LEFT JOIN race_members rm ON rm.race_id = r.id AND rm.user_id = ? AND rm.status = 'active'
        WHERE r.deleted_at IS NULL AND (r.creator_id = ? OR rm.user_id IS NOT NULL)
@@ -167,6 +171,26 @@ async function buildRealSnapshot(db: D1Database, userId: string): Promise<ArenaS
       activity: [],
       results: [],
     };
+  }
+
+  // Lazy lifecycle: an Arena load past a deadline finalizes the race
+  // (atomic claim inside — one writer wins). Results then bucket correctly.
+  // Transitions publish through the policy here — the cron sweep only
+  // scans still-active races, so a finalize claimed by this read would
+  // otherwise emit its events but lose its race_completed notifications.
+  const now = new Date();
+  const transitions: LifecycleTransitionLike[] = [];
+  for (const race of races) {
+    if (race.status === 'active' && race.end_at && new Date(race.end_at).getTime() <= now.getTime()) {
+      const fin = await finalizeRaceIfEnded(db, race, now);
+      if (fin.finalized) {
+        race.status = 'completed';
+        transitions.push({ race, events: fin.events });
+      }
+    }
+  }
+  if (transitions.length > 0) {
+    await notifyLifecycleTransitions(env, undefined, transitions);
   }
 
   // Fetch all participant rows for these races in one query.

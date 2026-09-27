@@ -141,9 +141,11 @@ class CloudBasketballObjectDotProducer implements ObjectDotProducer {
   }
 }
 
-/// Minimal RGB letterbox conversion for the two camera formats used by the
-/// app. It intentionally produces only a tensor; it does not retain the
-/// source image after inference returns.
+/// Minimal BGR top-left letterbox conversion for the two camera formats used
+/// by the basketball model. The published YOLOX release expects raw 0-255
+/// values, no normalization, and a pad value of 114. It intentionally
+/// produces only a tensor; it does not retain the source image after
+/// inference returns.
 class _CameraTensor {
   _CameraTensor(this.data);
 
@@ -156,18 +158,20 @@ class _CameraTensor {
     }
     final output = Float32List(3 * size * size);
     final scale = math.min(size / image.width, size / image.height);
-    final resizedWidth = (image.width * scale).round();
-    final resizedHeight = (image.height * scale).round();
-    final padX = (size - resizedWidth) ~/ 2;
-    final padY = (size - resizedHeight) ~/ 2;
+    // The basketball release uses top-left letterboxing. The decoder applies
+    // the same scale without subtracting a centered pad, so these must stay
+    // aligned with the model contract.
+    const double padValue = 114;
+    const padX = 0;
+    const padY = 0;
     final isBgra = image.format.group == ImageFormatGroup.bgra8888;
     for (var y = 0; y < size; y++) {
       final sourceY = ((y - padY) / scale).floor();
       for (var x = 0; x < size; x++) {
         final sourceX = ((x - padX) / scale).floor();
-        var red = 0;
-        var green = 0;
-        var blue = 0;
+        var red = padValue;
+        var green = padValue;
+        var blue = padValue;
         if (sourceX >= 0 &&
             sourceY >= 0 &&
             sourceX < image.width &&
@@ -177,9 +181,9 @@ class _CameraTensor {
                 sourceY * yPlane.bytesPerRow +
                 sourceX * (yPlane.bytesPerPixel ?? 4);
             if (pixel + 2 < yPlane.bytes.length) {
-              blue = yPlane.bytes[pixel];
-              green = yPlane.bytes[pixel + 1];
-              red = yPlane.bytes[pixel + 2];
+              blue = yPlane.bytes[pixel].toDouble();
+              green = yPlane.bytes[pixel + 1].toDouble();
+              red = yPlane.bytes[pixel + 2].toDouble();
             }
           } else {
             final uvPlane = image.planes.length > 1 ? image.planes[1] : yPlane;
@@ -195,19 +199,20 @@ class _CameraTensor {
               // ImageFormatGroup.nv21 stores the chroma pair as V then U.
               final v = uvPlane.bytes[uvIndex].toDouble() - 128;
               final u = uvPlane.bytes[uvIndex + 1].toDouble() - 128;
-              red = (luma + 1.402 * v).round().clamp(0, 255);
-              green = (luma - 0.344136 * u - 0.714136 * v).round().clamp(
-                0,
-                255,
-              );
-              blue = (luma + 1.772 * u).round().clamp(0, 255);
+              red = (luma + 1.402 * v).round().clamp(0, 255).toDouble();
+              green = (luma - 0.344136 * u - 0.714136 * v)
+                  .round()
+                  .clamp(0, 255)
+                  .toDouble();
+              blue = (luma + 1.772 * u).round().clamp(0, 255).toDouble();
             }
           }
         }
         final index = y * size + x;
-        output[index] = red / 255;
-        output[size * size + index] = green / 255;
-        output[2 * size * size + index] = blue / 255;
+        // ONNX input is BGR, not RGB, and the release does not normalize.
+        output[index] = blue;
+        output[size * size + index] = green;
+        output[2 * size * size + index] = red;
       }
     }
     return _CameraTensor(output);

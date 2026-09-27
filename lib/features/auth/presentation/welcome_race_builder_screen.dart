@@ -1,17 +1,24 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_flip_text.dart';
+import '../../onboarding/data/first_use_store.dart';
+import '../../races/domain/motion_activity.dart';
+import '../../races/domain/motion_activity_catalog.dart';
+import '../../races/presentation/widgets/rive_movement_preview.dart';
+import 'welcome_auth_screen.dart';
 import 'welcome_onboarding_state.dart';
+import 'welcome_opening_cinematic.dart';
 
 class WelcomeRaceBuilderScreen extends ConsumerStatefulWidget {
   const WelcomeRaceBuilderScreen({super.key});
@@ -24,53 +31,70 @@ class WelcomeRaceBuilderScreen extends ConsumerStatefulWidget {
 class _WelcomeRaceBuilderScreenState
     extends ConsumerState<WelcomeRaceBuilderScreen>
     with TickerProviderStateMixin {
-  static const _pageCount = 6;
+  static const _pageCount = 5;
   late final PageController _pageController;
-  late final AnimationController _sceneController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 18000),
-  )..forward();
-  late final AnimationController _ambientController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 3600),
-  )..repeat();
-  late final AnimationController _practiceController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2400),
-  );
+  late final AnimationController _ambientController;
+  late final List<_ActivityOption> _activityOptions;
 
   int _page = 0;
-  FitnessGoal _selectedGoal = FitnessGoal.strength;
-  bool _practiceStarted = false;
-  bool _ready = false;
-  Timer? _readyTimer;
+  // Jumping Jacks — the working Rive preview already supports it, and the
+  // movement page already used it, so this keeps the same activity in view
+  // through the rest of onboarding.
+  int _selectedActivityIndex = 1;
+  // Every page now manages its own one-time entrance/readiness locally (see
+  // _onPageNReady below) instead of sharing one flag/timer driven by page
+  // changes — sharing one previously meant leaving a page could silently
+  // un-ready a different page that reused the same field. Each flag is set
+  // once and never reset; returning to an already-ready page is never a
+  // replay.
+  bool _page0Ready = false;
+  bool _page1Ready = false;
+  bool _page2Ready = false;
+  bool _page3Ready = false;
+
+  bool get _pageReady => switch (_page) {
+    0 => _page0Ready,
+    1 => _page1Ready,
+    2 => _page2Ready,
+    3 => _page3Ready,
+    // Page 4 (auth) owns its own actions directly and never shows the
+    // shared footer, so its readiness is never actually read for rendering.
+    _ => true,
+  };
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    ref
-        .read(welcomeOnboardingStateProvider.notifier)
-        .selectFitnessGoal(_selectedGoal);
-    _startReadyTimer();
+    _activityOptions = _buildOnboardingActivityOptions();
+    // Constructed eagerly (not as a lazy `late final` field initializer) so
+    // the onboarding page tree staying unbuilt behind the opening cinematic
+    // can never make dispose() the first access — that would create a
+    // ticker against an already-deactivated context.
+    _ambientController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3600),
+    );
+    // Continuous decorative background; its own opacity is gated by page/
+    // readiness state below, so it's safe to just let it run.
+    _ambientController.repeat();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Seeds the shared welcome-builder state that /welcome's own preview
+      // reads (untouched auth-screen internals) — this pre-auth flow no
+      // longer exposes a fitness-goal picker itself, so this is just a
+      // stable default rather than a live selection.
+      ref
+          .read(welcomeOnboardingStateProvider.notifier)
+          .selectFitnessGoal(FitnessGoal.strength);
+    });
   }
 
   @override
   void dispose() {
-    _readyTimer?.cancel();
     _pageController.dispose();
-    _sceneController.dispose();
     _ambientController.dispose();
-    _practiceController.dispose();
     super.dispose();
-  }
-
-  void _startReadyTimer() {
-    _readyTimer?.cancel();
-    _ready = false;
-    _readyTimer = Timer(const Duration(milliseconds: 2400), () {
-      if (mounted) setState(() => _ready = true);
-    });
   }
 
   void _goToPage(int page) {
@@ -83,192 +107,182 @@ class _WelcomeRaceBuilderScreenState
     );
   }
 
-  void _next() {
-    if (_page == _pageCount - 1) {
-      if (_practiceController.value >= .99) {
-        context.go('/welcome');
-      } else {
-        _startPractice();
-      }
-      return;
-    }
-    _goToPage(_page + 1);
+  void _next() => _goToPage(_page + 1);
+
+  void _selectActivity(int index) {
+    if (_selectedActivityIndex == index) return;
+    HapticFeedback.selectionClick();
+    // Illustrative onboarding selection only — local state, no backend call
+    // and no real race is created.
+    setState(() => _selectedActivityIndex = index);
   }
 
-  void _selectGoal(FitnessGoal goal) {
-    if (_selectedGoal == goal) return;
-    HapticFeedback.selectionClick();
-    ref.read(welcomeOnboardingStateProvider.notifier).selectFitnessGoal(goal);
-    setState(() => _selectedGoal = goal);
+  /// Every page owns its own entrance (animation → hold → CTA) and reports
+  /// back through one of these exactly once, when it's actually ready —
+  /// never in response to a page change, timer, or rebuild.
+  void _onPage0Ready() {
+    if (_page0Ready) return;
+    setState(() => _page0Ready = true);
+  }
+
+  void _onPage1Ready() {
+    if (_page1Ready) return;
+    setState(() => _page1Ready = true);
+  }
+
+  void _onPage2Ready() {
+    if (_page2Ready) return;
+    setState(() => _page2Ready = true);
+  }
+
+  void _onPage3Ready() {
+    if (_page3Ready) return;
+    setState(() => _page3Ready = true);
   }
 
   void _onPageChanged(int page) {
+    // Every page manages its own one-time entrance/readiness locally (see
+    // _onPageNReady) and is never rebuilt from scratch by the PageView —
+    // returning to one is never a replay.
     setState(() => _page = page);
-    _sceneController.forward(from: 0);
-    _startReadyTimer();
+    // Reaching the auth page means the whole product narrative ran — the
+    // cinematic never needs to replay on later signed-out launches.
+    if (page == _pageCount - 1) {
+      unawaited(ref.read(firstUseStoreProvider).markIntroSeen());
+    }
   }
 
   void _skipToAuth() {
+    // Skipping is a choice made after seeing the product story begins — the
+    // install counts as onboarded to the intro either way.
+    unawaited(ref.read(firstUseStoreProvider).markIntroSeen());
     context.go('/welcome');
-  }
-
-  Future<void> _startPractice() async {
-    if (_practiceStarted) return;
-    HapticFeedback.mediumImpact();
-    setState(() => _practiceStarted = true);
-    await _practiceController.forward(from: 0);
-    if (mounted) setState(() {});
   }
 
   String get _buttonLabel => switch (_page) {
     0 => 'See how it works',
     1 => 'Keep going',
-    2 => 'See the board move',
-    3 => 'Choose my direction',
-    4 => 'Practice the move',
-    _ =>
-      _practiceController.value >= .99
-          ? 'Create my first race'
-          : 'Practice the move',
+    2 => 'Choose my direction',
+    _ => 'Continue',
   };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: NuvoColors.page,
-      body: SafeArea(
-        child: AnimatedBuilder(
-          animation: Listenable.merge([
-            _sceneController,
-            _practiceController,
-            _ambientController,
-          ]),
-          builder: (context, _) => LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxHeight < 720;
-              final atmosphereReveal = _page == 0
-                  ? Curves.easeInOutCubic.transform(
-                      ((_sceneController.value - .80) / .20).clamp(0.0, 1.0),
-                    )
-                  : 1.0;
-              final chromeReveal = _page == 0
-                  ? Curves.easeOutCubic.transform(
-                      ((_sceneController.value - .995) / .005).clamp(0.0, 1.0),
-                    )
-                  : 1.0;
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _AmbientPainter(
-                        progress: _ambientController.value,
-                        opacity: atmosphereReveal * .15,
-                      ),
-                    ),
-                  ),
-                  Column(
-                    children: [
-                      Opacity(
-                        opacity: chromeReveal,
-                        child: IgnorePointer(
-                          ignoring: chromeReveal < .99,
-                          child: _OnboardingHeader(
-                            page: _page,
-                            pageCount: _pageCount,
-                            compact: compact,
-                            onBack: _page == 0
-                                ? null
-                                : () => _goToPage(_page - 1),
-                            onSkip: _page == 0 ? null : _skipToAuth,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: PageView(
-                          controller: _pageController,
-                          onPageChanged: _onPageChanged,
-                          children: [
-                            TickerMode(
-                              enabled: _page == 0,
-                              child: _WelcomePage(
-                                compact: compact,
-                                sceneProgress: _sceneController.value,
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 1,
-                              child: _LeaderboardPage(
-                                compact: compact,
-                                sceneProgress: _sceneController.value,
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 2,
-                              child: _ProofPage(compact: compact),
-                            ),
-                            TickerMode(
-                              enabled: _page == 3,
-                              child: _BoardMovePage(compact: compact),
-                            ),
-                            TickerMode(
-                              enabled: _page == 4,
-                              child: _GoalPage(
-                                selected: _selectedGoal,
-                                compact: compact,
-                                onSelected: _selectGoal,
-                              ),
-                            ),
-                            TickerMode(
-                              enabled: _page == 5,
-                              child: _PracticePage(
-                                goal: _selectedGoal,
-                                progress: _practiceController.value,
-                                started: _practiceStarted,
-                                compact: compact,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 460),
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment.topCenter,
-                        clipBehavior: Clip.none,
-                        child: _page == 0 && !_ready
-                            ? const SizedBox.shrink()
-                            : Opacity(
-                                opacity: _page == 0 ? (_ready ? 1 : 0) : chromeReveal,
-                                child: FadeTransition(
-                                  opacity: CurvedAnimation(
-                                    parent: _sceneController,
-                                    curve: const Interval(
-                                      .35,
-                                      1,
-                                      curve: Curves.easeOut,
-                                    ),
-                                  ),
-                                  child: _OnboardingFooter(
-                                    page: _page,
-                                    pageCount: _pageCount,
-                                    label: _buttonLabel,
-                                    onPressed: _next,
-                                    enabled: _ready,
-                                    compact: compact,
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+      body: SafeArea(child: _buildOnboarding(context)),
     );
   }
+
+  Widget _buildOnboarding(BuildContext context) => AnimatedBuilder(
+    animation: _ambientController,
+    builder: (context, _) => LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 720;
+        final ready = _pageReady;
+        // Page 0's own atmosphere fades in with its own readiness.
+        final atmosphereReveal = _page == 0 ? (ready ? 1.0 : 0.0) : 1.0;
+        final isLastPage = _page == _pageCount - 1;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _AmbientPainter(
+                  progress: _ambientController.value,
+                  opacity: atmosphereReveal * .15,
+                ),
+              ),
+            ),
+            Column(
+              children: [
+                _OnboardingHeader(
+                  page: _page,
+                  pageCount: _pageCount,
+                  compact: compact,
+                  onBack: _page == 0 ? null : () => _goToPage(_page - 1),
+                  // The final auth screen has nowhere else to skip to.
+                  onSkip: (_page == 0 || isLastPage) ? null : _skipToAuth,
+                  showTrailing: !isLastPage,
+                ),
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    onPageChanged: _onPageChanged,
+                    // The cinematic + first-screen entrance must not be
+                    // bypassable by an accidental swipe — only once it has
+                    // settled can the PageView move at all.
+                    physics: _page == 0 && !ready
+                        ? const NeverScrollableScrollPhysics()
+                        : const PageScrollPhysics(),
+                    children: [
+                      TickerMode(
+                        enabled: _page == 0,
+                        child: _WelcomePage(
+                          compact: compact,
+                          onReady: _onPage0Ready,
+                        ),
+                      ),
+                      TickerMode(
+                        enabled: _page == 1,
+                        child: _LeaderboardPage(
+                          compact: compact,
+                          onReady: _onPage1Ready,
+                        ),
+                      ),
+                      TickerMode(
+                        enabled: _page == 2,
+                        child: _MovementPage(
+                          compact: compact,
+                          onReady: _onPage2Ready,
+                        ),
+                      ),
+                      TickerMode(
+                        enabled: _page == 3,
+                        child: _ActivityPageContainer(
+                          options: _activityOptions,
+                          selectedIndex: _selectedActivityIndex,
+                          compact: compact,
+                          onSelected: _selectActivity,
+                          onReady: _onPage3Ready,
+                        ),
+                      ),
+                      TickerMode(enabled: _page == 4, child: const _AuthPage()),
+                    ],
+                  ),
+                ),
+                // The final auth screen owns its own Sign up / Log in
+                // actions directly (see _AuthPage) — it never shows the
+                // shared single-CTA footer.
+                if (!isLastPage)
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 460),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.none,
+                    child: !ready
+                        ? const SizedBox.shrink()
+                        // Every page's footer readiness IS that page's own
+                        // entrance settling — never a page-unrelated shared
+                        // timeline. The CTA slides up from the bottom once,
+                        // the moment it's allowed to exist at all.
+                        : _CtaReveal(
+                            child: _OnboardingFooter(
+                              page: _page,
+                              pageCount: _pageCount,
+                              label: _buttonLabel,
+                              onPressed: _next,
+                              enabled: ready,
+                              compact: compact,
+                            ),
+                          ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 class _OnboardingHeader extends StatelessWidget {
@@ -278,6 +292,7 @@ class _OnboardingHeader extends StatelessWidget {
     required this.compact,
     required this.onBack,
     this.onSkip,
+    this.showTrailing = true,
   });
 
   final int page;
@@ -285,6 +300,11 @@ class _OnboardingHeader extends StatelessWidget {
   final bool compact;
   final VoidCallback? onBack;
   final VoidCallback? onSkip;
+
+  /// False on the final auth screen: no Skip, and no "x / y" page count —
+  /// there's nowhere else to go and nothing left to communicate as "still
+  /// in progress".
+  final bool showTrailing;
 
   @override
   Widget build(BuildContext context) {
@@ -297,12 +317,7 @@ class _OnboardingHeader extends StatelessWidget {
           SizedBox(
             width: 42,
             child: onBack == null
-                ? Image.asset(
-                    AssetPaths.splashFrame(90),
-                    width: 34,
-                    height: 34,
-                    fit: BoxFit.contain,
-                  )
+                ? null
                 : IconButton(
                     tooltip: 'Back',
                     onPressed: onBack,
@@ -314,36 +329,34 @@ class _OnboardingHeader extends StatelessWidget {
                     ),
                   ),
           ),
-          Image.asset(
-            'assets/branding/nuvotext.png',
-            width: compact ? 86 : 104,
-            height: compact ? 26 : 31,
-            fit: BoxFit.contain,
-          ),
           const Spacer(),
-          if (onSkip != null)
-            GestureDetector(
-              onTap: onSkip,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text(
-                  'Skip',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: NuvoColors.muted,
-                    fontWeight: FontWeight.w700,
+          if (showTrailing)
+            if (onSkip != null)
+              GestureDetector(
+                onTap: onSkip,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    'Skip',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
+              )
+            else
+              Text(
+                '${page + 1} / $pageCount',
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: NuvoColors.muted,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            )
-          else
-            Text(
-              '${page + 1} / $pageCount',
-              style: AppTextStyles.labelLarge.copyWith(
-                color: NuvoColors.muted,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
         ],
       ),
     );
@@ -402,295 +415,191 @@ class _OnboardingFooter extends StatelessWidget {
   }
 }
 
-class _WelcomePage extends StatelessWidget {
-  const _WelcomePage({required this.compact, required this.sceneProgress});
+/// Plays a single slide-up + fade-in the moment it's first built — used for
+/// every self-managed page's CTA, which only exists once that page's own
+/// entrance has actually settled. An explicit controller (not an implicit
+/// widget) is used deliberately: an implicit animation has no "before" value
+/// to animate from on its first build, so it would just snap straight to
+/// its target instead of visibly sliding in.
+class _CtaReveal extends StatefulWidget {
+  const _CtaReveal({required this.child});
 
-  final bool compact;
-  final double sceneProgress;
-
-  @override
-  Widget build(BuildContext context) {
-    final sceneSeconds = sceneProgress * 18;
-    final immersiveReveal =
-        1 -
-        Curves.easeInOutCubic.transform(
-          ((sceneSeconds - 11.6) / .8).clamp(0.0, 1.0),
-        );
-    final explanationProgress = Curves.easeInOutCubic.transform(
-      ((sceneSeconds - 12.5) / 5.4).clamp(0.0, 1.0),
-    );
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(22, compact ? 8 : 20, 22, 4),
-      child: Stack(
-        fit: StackFit.expand,
-        clipBehavior: Clip.none,
-        children: [
-          IgnorePointer(
-            child: Opacity(
-              opacity: immersiveReveal,
-              child: CustomPaint(
-                painter: _ImmersiveRacePainter(progress: sceneProgress),
-                child: const SizedBox.expand(),
-              ),
-            ),
-          ),
-          Center(
-            child: Opacity(
-              opacity: explanationProgress,
-              child: _TypedWelcomeExplanation(
-                sceneSeconds: sceneSeconds,
-                compact: compact,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TypedWelcomeExplanation extends StatelessWidget {
-  const _TypedWelcomeExplanation({
-    required this.sceneSeconds,
-    required this.compact,
-  });
-
-  final double sceneSeconds;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final firstLine = Curves.easeOutCubic.transform(
-      ((sceneSeconds - 12.5) / 2.0).clamp(0.0, 1.0),
-    );
-    final secondLine = Curves.easeOutCubic.transform(
-      ((sceneSeconds - 14.75) / 1.0).clamp(0.0, 1.0),
-    );
-    final thirdLine = Curves.easeOutCubic.transform(
-      ((sceneSeconds - 16.0) / .75).clamp(0.0, 1.0),
-    );
-    final supportReveal = Curves.easeOutCubic.transform(
-      ((sceneSeconds - 17.35) / .55).clamp(0.0, 1.0),
-    );
-    return SizedBox(
-      width: double.infinity,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _CinematicLine(
-            text: 'Your goals',
-            reveal: firstLine,
-            compact: compact,
-          ),
-          SizedBox(height: (compact ? 3 : 5) * secondLine),
-          _CinematicRevealSlot(
-            reveal: secondLine,
-            child: _CinematicLine(
-              text: 'are now',
-              reveal: secondLine,
-              compact: compact,
-            ),
-          ),
-          SizedBox(height: (compact ? 3 : 5) * thirdLine),
-          _CinematicRevealSlot(
-            reveal: thirdLine,
-            child: _CinematicLine(
-              text: 'competition.',
-              reveal: thirdLine,
-              compact: compact,
-              color: NuvoColors.blue,
-            ),
-          ),
-          SizedBox(height: (compact ? 20 : 28) * supportReveal),
-          _CinematicRevealSlot(
-            reveal: supportReveal,
-            child: Text(
-              'Set a finish line, pull in your crew, and make every move visible.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyLarge.copyWith(
-                color: NuvoColors.muted,
-                height: 1.25,
-                fontSize: compact ? 16 : 19,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CinematicRevealSlot extends StatelessWidget {
-  const _CinematicRevealSlot({required this.reveal, required this.child});
-
-  final double reveal;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: Align(
-        alignment: Alignment.topCenter,
-        heightFactor: reveal,
-        child: child,
-      ),
-    );
-  }
+  State<_CtaReveal> createState() => _CtaRevealState();
 }
 
-class _CinematicLine extends StatelessWidget {
-  const _CinematicLine({
-    required this.text,
-    required this.reveal,
-    required this.compact,
-    this.fontSize,
-    this.color = NuvoColors.navy,
-  });
+class _CtaRevealState extends State<_CtaReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  bool _started = false;
 
-  final String text;
-  final double reveal;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) {
+      final t = Curves.easeOut.transform(_controller.value);
+      return Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, 22 * (1 - t)),
+          child: widget.child,
+        ),
+      );
+    },
+  );
+}
+
+/// Screen 0 and Screen 1 are one continuous composition. The cinematic path
+/// draws and holds at its finished frame (WelcomeOpeningCinematic never
+/// unmounts or gets crossfaded away); once it's held, this page's own short
+/// text/CTA entrance plays on top of that same still frame — no swap to a
+/// different tree, no separate "slide".
+class _WelcomePage extends StatefulWidget {
+  const _WelcomePage({required this.compact, required this.onReady});
+
   final bool compact;
-  final double? fontSize;
-  final Color color;
+  final VoidCallback onReady;
+
+  @override
+  State<_WelcomePage> createState() => _WelcomePageState();
+}
+
+class _WelcomePageState extends State<_WelcomePage>
+    with AutomaticKeepAliveClientMixin {
+  bool _textStarted = false;
+  bool _readyReported = false;
+  Timer? _holdTimer;
+
+  // PageView disposes offscreen pages by default, which would replay this
+  // page's one-shot cinematic/text entrance every time the user swiped back
+  // to it. Its state must survive being scrolled away.
+  @override
+  bool get wantKeepAlive => true;
+
+  void _onPathComplete() {
+    setState(() => _textStarted = true);
+  }
+
+  void _onTextSettled() {
+    if (_readyReported) return;
+    // Every onboarding page holds its settled final state for a beat before
+    // the CTA appears — the text finishing is not itself the cue.
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    _holdTimer = Timer(
+      reducedMotion
+          ? const Duration(milliseconds: 300)
+          : const Duration(milliseconds: 1500),
+      () {
+        if (!mounted || _readyReported) return;
+        _readyReported = true;
+        widget.onReady();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: reveal,
-      child: Transform.translate(
-        offset: Offset(0, 20 * (1 - reveal)),
-        child: Transform.scale(
-          alignment: Alignment.center,
-          scale: .94 + (.06 * reveal),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.displayMedium.copyWith(
-              color: color,
-              fontSize: fontSize ?? (compact ? 41 : 56),
-              height: .94,
-              letterSpacing: -1.6,
-              fontWeight: FontWeight.w800,
+    super.build(context);
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        WelcomeOpeningCinematic(onComplete: _onPathComplete),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, widget.compact ? 12 : 20),
+            child: _WelcomeEntranceText(
+              play: _textStarted,
+              compact: widget.compact,
+              onCompleted: _onTextSettled,
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
 
-class _ImmersiveRacePainter extends CustomPainter {
-  const _ImmersiveRacePainter({required this.progress});
+class _WelcomeEntranceText extends StatelessWidget {
+  const _WelcomeEntranceText({
+    required this.play,
+    required this.compact,
+    required this.onCompleted,
+  });
 
-  final double progress;
+  final bool play;
+  final bool compact;
+  final VoidCallback onCompleted;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    // One motion language: the point settles, shrinks, and then becomes the
-    // tip of the same route that grows behind it. The holds are intentional.
-    final dotZoom = Curves.easeOutCubic.transform(
-      ((progress - .03) / .10).clamp(0.0, 1.0),
+  Widget build(BuildContext context) {
+    // The cinematic's finish arriving is the trigger; the headline flips in
+    // a beat later and the supporting line follows on its own short delay —
+    // sequenced, not simultaneous. The support line reports settling so the
+    // page can hold before the CTA.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        NuvoFlipText(
+          'Welcome to Nuvo.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.displayMedium.copyWith(
+            color: NuvoColors.navy,
+            fontSize: compact ? 30 : 36,
+            height: 1.05,
+          ),
+          play: play,
+          delay: const Duration(milliseconds: 140),
+          duration: const Duration(milliseconds: 1500),
+        ),
+        SizedBox(height: compact ? 8 : 12),
+        NuvoFlipText(
+          'Your goals are now something you can compete on with friends.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodyLarge.copyWith(
+            color: NuvoColors.muted,
+            height: 1.3,
+            fontSize: compact ? 16 : 19,
+          ),
+          play: play,
+          delay: const Duration(milliseconds: 620),
+          duration: const Duration(milliseconds: 1700),
+          onCompleted: onCompleted,
+        ),
+      ],
     );
-    final routeProgress = Curves.easeOutCubic.transform(
-      ((progress - .13) / .37).clamp(0.0, 1.0),
-    );
-    final flagReveal = Curves.easeOutCubic.transform(
-      ((progress - .47) / .09).clamp(0.0, 1.0),
-    );
-    final center = Offset(size.width / 2, size.height * .48);
-    final target = _racePath(size);
-    final targetMetrics = target.computeMetrics().toList();
-    if (targetMetrics.isEmpty) return;
-    final targetMetric = targetMetrics.first;
-
-    final targetEnd = targetMetric.getTangentForOffset(targetMetric.length);
-    final targetStart = targetMetric.getTangentForOffset(0);
-    if (targetEnd == null || targetStart == null) return;
-
-    final morphStart = Offset.lerp(
-      center,
-      targetStart.position,
-      routeProgress,
-    )!;
-    final morphEnd = Offset.lerp(center, targetEnd.position, routeProgress)!;
-    final morphControlOne = Offset.lerp(
-      center,
-      Offset(size.width * .24, size.height * .05),
-      routeProgress,
-    )!;
-    final morphControlTwo = Offset.lerp(
-      center,
-      Offset(size.width * .55, size.height * .98),
-      routeProgress,
-    )!;
-    final route = Path()
-      ..moveTo(morphStart.dx, morphStart.dy)
-      ..cubicTo(
-        morphControlOne.dx,
-        morphControlOne.dy,
-        morphControlTwo.dx,
-        morphControlTwo.dy,
-        morphEnd.dx,
-        morphEnd.dy,
-      );
-    final routeMetrics = route.computeMetrics().toList();
-    if (routeMetrics.isEmpty) return;
-    final routeMetric = routeMetrics.first;
-    final tip = routeProgress > 0
-        ? routeMetric.getTangentForOffset(routeMetric.length * routeProgress)
-        : null;
-
-    if (routeProgress > 0) {
-      final revealedPath = routeMetric.extractPath(
-        0,
-        routeMetric.length * routeProgress,
-      );
-      canvas.drawPath(
-        revealedPath,
-        Paint()
-          ..color = NuvoColors.navy
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 19
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawPath(
-        revealedPath,
-        Paint()
-          ..color = NuvoColors.blue
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 8
-          ..strokeCap = StrokeCap.round,
-      );
-
-      if (flagReveal > 0) {
-        _drawNuvoFlag(
-          canvas,
-          anchor: targetEnd.position,
-          scale: 1.35,
-          opacity: flagReveal,
-        );
-      }
-    }
-
-    final dotPosition = tip?.position ?? center;
-    final zoomedRadius = Tween<double>(begin: 76, end: 12).transform(dotZoom);
-    final dotRadius = routeProgress > 0
-        ? Tween<double>(begin: 12, end: 10).transform(routeProgress)
-        : zoomedRadius;
-    final dotGlow = Paint()
-      ..color = NuvoColors.blue.withValues(
-        alpha: .18 + (.16 * (1 - routeProgress)),
-      )
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 28);
-    canvas.drawCircle(dotPosition, dotRadius + 12, dotGlow);
-    canvas.drawCircle(dotPosition, dotRadius, Paint()..color = NuvoColors.blue);
   }
-
-  @override
-  bool shouldRepaint(covariant _ImmersiveRacePainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }
 
 Path _racePath(Size size) => Path()
@@ -760,118 +669,79 @@ void _drawNuvoFlag(
   );
 }
 
-class _LeaderboardPage extends StatelessWidget {
-  const _LeaderboardPage({required this.compact, required this.sceneProgress});
+class _LeaderboardPage extends StatefulWidget {
+  const _LeaderboardPage({required this.compact, required this.onReady});
 
   final bool compact;
-  final double sceneProgress;
+  final VoidCallback onReady;
+
+  @override
+  State<_LeaderboardPage> createState() => _LeaderboardPageState();
+}
+
+/// Isolated from the legacy 18s scene controller, same as page 0: the
+/// overtake board plays and settles on its own, this page's own short text
+/// entrance follows, then a deliberate hold before the CTA. Nothing here
+/// ever advances the PageView on its own.
+class _LeaderboardPageState extends State<_LeaderboardPage>
+    with AutomaticKeepAliveClientMixin {
+  bool _textStarted = false;
+  Timer? _holdTimer;
+  bool _readyReported = false;
+
+  // Same reasoning as page 0: don't let PageView dispose this page (and
+  // replay its overtake) just because the user swiped away and back.
+  @override
+  bool get wantKeepAlive => true;
+
+  void _onBoardSettled() {
+    setState(() => _textStarted = true);
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    // Hold the completed first-place board for a beat so the viewer
+    // actually registers the overtake before the CTA appears.
+    _holdTimer = Timer(
+      reducedMotion
+          ? const Duration(milliseconds: 300)
+          : const Duration(milliseconds: 1550),
+      () {
+        if (!mounted || _readyReported) return;
+        _readyReported = true;
+        widget.onReady();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // This page is intentionally a visual pause between the idea and proof
-    // pages. The board owns the stage first; its explanation arrives later.
+    super.build(context);
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 20),
-      child: Center(
-        child: _LeaderboardVisual(progress: sceneProgress, compact: compact),
-      ),
-    );
-  }
-}
-
-class _ProofPage extends StatelessWidget {
-  const _ProofPage({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return _PageBody(
-      eyebrow: 'AI MOTION PROOF',
-      title: 'Move real.\nCount real.',
-      body: 'Nuvo checks the movement before it moves the board.',
-      compact: compact,
-      visual: const _ProofVisual(),
-    );
-  }
-}
-
-class _BoardMovePage extends StatelessWidget {
-  const _BoardMovePage({required this.compact});
-
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return _PageBody(
-      eyebrow: 'THE MOVE',
-      title: 'Proof turns\neffort into\nprogress.',
-      body:
-          'Submit proof, move up, and give your crew something real to chase.',
-      compact: compact,
-      visual: const _ProofFlowVisual(),
-    );
-  }
-}
-
-class _PageBody extends StatelessWidget {
-  const _PageBody({
-    required this.eyebrow,
-    required this.title,
-    required this.body,
-    required this.visual,
-    required this.compact,
-  });
-
-  final String eyebrow;
-  final String title;
-  final String body;
-  final Widget visual;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(22, compact ? 10 : 24, 22, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            eyebrow,
-            style: AppTextStyles.brandLabel.copyWith(
-              color: NuvoColors.blue,
-              letterSpacing: 2.2,
-            ),
-          ),
-          SizedBox(height: compact ? 8 : 12),
-          Text(
-            title,
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: compact ? 34 : 42,
-              height: .95,
-              letterSpacing: -1.2,
-            ),
-          ),
-          SizedBox(height: compact ? 8 : 12),
-          Text(
-            body,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyLarge.copyWith(
-              color: NuvoColors.muted,
-              height: 1.25,
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.only(top: compact ? 4 : 12),
-                child: visual,
+      padding: EdgeInsets.symmetric(horizontal: widget.compact ? 14 : 20),
+      // Top-aligned rather than `Center`-ed: the footer below the PageView
+      // appears/disappears on its own (unrelated) 2.4s timer as pages
+      // change, which shrinks or grows this page's available height. A
+      // vertically centered layout would visibly re-center — and so shift
+      // the board — every time that happens. Anchoring to the top makes
+      // this page's position depend only on constant padding above it.
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: _LeaderboardVisual(
+                play: _textStarted,
+                compact: widget.compact,
+                onBoardSettled: _onBoardSettled,
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1107,170 +977,472 @@ class _HeroRaceVisual extends StatelessWidget {
 }
 
 class _LeaderboardVisual extends StatelessWidget {
-  const _LeaderboardVisual({required this.progress, required this.compact});
+  const _LeaderboardVisual({
+    required this.play,
+    required this.compact,
+    required this.onBoardSettled,
+  });
 
-  final double progress;
+  final bool play;
   final bool compact;
+  final VoidCallback onBoardSettled;
 
   @override
   Widget build(BuildContext context) {
-    final boardIn = Curves.easeOutCubic.transform(
-      (progress / .06).clamp(0.0, 1.0),
+    // The board stays fully visible the whole time; once it settles the
+    // three lines flip in underneath as one cascading statement — each
+    // line's delay overlaps the previous line's flip so it reads as a wave,
+    // not three separate entrances.
+    final lineStyle = AppTextStyles.displayMedium.copyWith(
+      color: NuvoColors.navy,
+      fontSize: compact ? 32 : 42,
+      height: .94,
+      letterSpacing: -1.6,
+      fontWeight: FontWeight.w800,
     );
-    final youMove = Curves.easeInOutCubic.transform(
-      ((progress - .10) / .22).clamp(0.0, 1.0),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _OvertakeBoard(compact: compact, onSettled: onBoardSettled),
+        SizedBox(height: compact ? 18 : 26),
+        NuvoFlipText(
+          'Every rep',
+          textAlign: TextAlign.center,
+          style: lineStyle,
+          play: play,
+          duration: const Duration(milliseconds: 1150),
+        ),
+        SizedBox(height: compact ? 4 : 6),
+        NuvoFlipText(
+          'changes your',
+          textAlign: TextAlign.center,
+          style: lineStyle,
+          play: play,
+          delay: const Duration(milliseconds: 350),
+          duration: const Duration(milliseconds: 1150),
+        ),
+        SizedBox(height: compact ? 4 : 6),
+        NuvoFlipText(
+          'position.',
+          textAlign: TextAlign.center,
+          style: lineStyle.copyWith(color: NuvoColors.blue),
+          play: play,
+          delay: const Duration(milliseconds: 700),
+          duration: const Duration(milliseconds: 1150),
+        ),
+      ],
     );
-    final mayaMove = Curves.easeOutCubic.transform(
-      ((progress - .12) / .18).clamp(0.0, 1.0),
-    );
-    final priyaMove = Curves.easeInCubic.transform(
-      ((progress - .12) / .22).clamp(0.0, 1.0),
-    );
-    final settle = Curves.easeOutBack.transform(
-      ((progress - .32) / .08).clamp(0.0, 1.0),
-    );
-    final zoom = Curves.easeInOutCubic.transform(
-      ((progress - .41) / .12).clamp(0.0, 1.0),
-    );
-    final boardOut = Curves.easeInCubic.transform(
-      ((progress - .54) / .10).clamp(0.0, 1.0),
-    );
-    final textReveal = Curves.easeOutCubic.transform(
-      ((progress - .62) / .10).clamp(0.0, 1.0),
-    );
-    final firstLine = Curves.easeOutCubic.transform(
-      ((progress - .63) / .055).clamp(0.0, 1.0),
-    );
-    final secondLine = Curves.easeOutCubic.transform(
-      ((progress - .71) / .06).clamp(0.0, 1.0),
-    );
-    final thirdLine = Curves.easeOutCubic.transform(
-      ((progress - .80) / .065).clamp(0.0, 1.0),
-    );
-    final winner = youMove > .96;
+  }
+}
 
+/// The physical overtake: REST (registering "you're third") → the score
+/// changes → GRAB → LIFT/CARRY above the stack → the other two rows shift
+/// down underneath it → DROP into first → a tiny elastic settle. Plays once
+/// per mount, then holds its final order. Deliberately slow — this is a
+/// story the viewer watches, not a transition to wait out.
+class _OvertakeBoard extends StatefulWidget {
+  const _OvertakeBoard({required this.compact, required this.onSettled});
+
+  final bool compact;
+  final VoidCallback onSettled;
+
+  @override
+  State<_OvertakeBoard> createState() => _OvertakeBoardState();
+}
+
+class _OvertakeBoardState extends State<_OvertakeBoard>
+    with SingleTickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 3150);
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _duration,
+  )..addStatusListener(_onStatus);
+  bool _started = false;
+  bool _settled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  void _onStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || _settled) return;
+    _settled = true;
+    widget.onSettled();
+  }
+
+  @override
+  void dispose() {
+    _controller.removeStatusListener(_onStatus);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) =>
+        _OvertakeBoardScene(t: _controller.value, compact: widget.compact),
+  );
+}
+
+class _OvertakeBoardScene extends StatelessWidget {
+  const _OvertakeBoardScene({required this.t, required this.compact});
+
+  final double t;
+  final bool compact;
+
+  // Phase boundaries as fractions of the 3150ms total (see class doc):
+  // settle 0–700ms (register "you're third"), score change 700–1200ms,
+  // grab 1200–1350ms, carry 1350–2500ms (rows shift down, gently staggered,
+  // 1500–2350ms / 1580–2400ms within it), the card eases into first
+  // 2500–2850ms, with a tiny placed-not-dropped settle in the final 300ms.
+  static const _scoreStart = 700 / 3150;
+  static const _scoreEnd = 1200 / 3150;
+  static const _grabStart = 1200 / 3150;
+  static const _grabEnd = 1350 / 3150;
+  static const _carryStart = 1350 / 3150;
+  static const _carryEnd = 2500 / 3150;
+  static const _mayaDownStart = 1500 / 3150;
+  static const _mayaDownEnd = 2350 / 3150;
+  static const _priyaDownStart = 1580 / 3150;
+  static const _priyaDownEnd = 2400 / 3150;
+  static const _dropStart = 2500 / 3150;
+  static const _settleStart = 2850 / 3150;
+
+  @override
+  Widget build(BuildContext context) {
     final rowHeight = compact ? 62.0 : 72.0;
     final rowGap = compact ? 9.0 : 12.0;
-    final stageHeight = compact ? 328.0 : 360.0;
+    final stageHeight = compact ? 300.0 : 330.0;
     final stageWidth = compact ? 320.0 : 348.0;
     final groupHeight = (rowHeight * 3) + (rowGap * 2);
     final groupTop = (stageHeight - groupHeight) / 2;
     final firstRow = groupTop;
     final secondRow = firstRow + rowHeight + rowGap;
     final thirdRow = secondRow + rowHeight + rowGap;
-    final youTop = thirdRow - ((thirdRow - firstRow) * youMove);
-    final mayaTop = firstRow + ((secondRow - firstRow) * mayaMove);
-    final priyaTop = secondRow + ((thirdRow - secondRow) * priyaMove);
+    // Lifted only modestly above the stack — this is a card being carried
+    // up past the others, not launched into the air above them.
+    final aboveRow = firstRow - 22;
+
+    final scoreT = Curves.easeOut.transform(
+      ((t - _scoreStart) / (_scoreEnd - _scoreStart)).clamp(0.0, 1.0),
+    );
+    final grab = Curves.easeOut.transform(
+      ((t - _grabStart) / (_grabEnd - _grabStart)).clamp(0.0, 1.0),
+    );
+    final carryUp = Curves.easeInOutCubic.transform(
+      ((t - _carryStart) / (_carryEnd - _carryStart)).clamp(0.0, 1.0),
+    );
+    final mayaDown = Curves.easeInOutCubic.transform(
+      ((t - _mayaDownStart) / (_mayaDownEnd - _mayaDownStart)).clamp(0.0, 1.0),
+    );
+    final priyaDown = Curves.easeInOutCubic.transform(
+      ((t - _priyaDownStart) / (_priyaDownEnd - _priyaDownStart)).clamp(
+        0.0,
+        1.0,
+      ),
+    );
+    final drop = Curves.easeInOutCubic.transform(
+      ((t - _dropStart) / (_settleStart - _dropStart)).clamp(0.0, 1.0),
+    );
+    // A gentle placed-not-dropped correction: easeOutBack's own overshoot is
+    // scaled down to a couple of pixels rather than let ride at full size.
+    final settle = Curves.easeOutBack.transform(
+      ((t - _settleStart) / (1 - _settleStart)).clamp(0.0, 1.0),
+    );
+    final winner = t > _settleStart;
+    final youScore = lerpDouble(2, 8, scoreT)!.round();
+
+    // Grab lifts the card just 3px before the carry's own larger ascent
+    // takes over — the two hand off smoothly since grab is already fully
+    // settled (grab == 1) by the moment carryUp starts moving.
+    final microLift = -3.0 * grab * (1 - carryUp);
+    final ascendY = lerpDouble(thirdRow, aboveRow, carryUp)!;
+    // A small placed correction rides on top of the fully-dropped position;
+    // it decays to 0 by the end of the settle window.
+    final landingCorrection = 3.0 * (settle - 1.0);
+    final youTop = drop > 0
+        ? lerpDouble(aboveRow, firstRow, drop)! + landingCorrection
+        : ascendY + microLift;
+
+    // A small horizontal deviation while carried keeps the card close to
+    // its column — this is a carry, not a wide swing out and back.
+    final arcT = carryUp * (1 - drop);
+    final youDx = math.sin(arcT * math.pi) * 16;
+
+    final carriedAmount = (((grab * .4) + (carryUp * .6)) * (1 - drop)).clamp(
+      0.0,
+      1.0,
+    );
+    // A very small elastic correction on scale, not a dramatic pulse.
+    final settleWobble = .05 * (settle - 1.0);
+    final youScale = drop > 0
+        ? lerpDouble(1.02, 1.0, drop)! + settleWobble
+        : 1.0 + (.02 * grab) + (.005 * carryUp);
+    final youShadow = BoxShadow.lerp(
+      AppShadows.hardSmall.first,
+      AppShadows.hardMedium.first,
+      carriedAmount,
+    )!;
+
+    // The other two rows shift down by exactly one slot to make room, with
+    // a slight stagger between them. Their own scores never change — only
+    // their rank does, once overtaken.
+    final mayaTop = firstRow + ((secondRow - firstRow) * mayaDown);
+    final priyaTop = secondRow + ((thirdRow - secondRow) * priyaDown);
 
     return SizedBox(
       width: stageWidth,
       height: stageHeight,
       child: Stack(
-        alignment: Alignment.center,
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(
-            child: Opacity(
-              opacity: boardIn * (1 - boardOut),
-              child: Transform.scale(
-                alignment: Alignment.center,
-                scale: 1 - (.18 * zoom),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      top: youTop,
-                      left: 0,
-                      right: 0,
-                      child: Transform.scale(
-                        scale: .96 + (.04 * boardIn) + (.025 * settle),
-                        child: _RankRow(
-                          height: rowHeight,
-                          rank: winner ? '1' : '3',
-                          name: 'You',
-                          score: winner ? '6 / 10' : '2 / 10',
-                          active: winner,
-                          emphasis: winner || settle > .1,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: mayaTop,
-                      left: 0,
-                      right: 0,
-                      child: _RankRow(
-                        height: rowHeight,
-                        rank: winner ? '2' : '1',
-                        name: 'Maya Chen',
-                        score: winner ? '4 / 10' : '6 / 10',
-                      ),
-                    ),
-                    Positioned(
-                      top: priyaTop,
-                      left: 0,
-                      right: 0,
-                      child: _RankRow(
-                        height: rowHeight,
-                        rank: winner ? '3' : '2',
-                        name: 'Priya Nair',
-                        score: winner ? '2 / 10' : '4 / 10',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          Positioned(
+            top: mayaTop,
+            left: 0,
+            right: 0,
+            child: _RankRow(
+              height: rowHeight,
+              rank: winner ? '2' : '1',
+              name: 'Maya Chen',
+              score: '6 / 10',
             ),
           ),
           Positioned(
+            top: priyaTop,
             left: 0,
             right: 0,
-            top: 0,
-            bottom: 0,
-            child: Opacity(
-              opacity: textReveal,
-              child: Transform.translate(
-                offset: Offset(0, 14 * (1 - textReveal)),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _CinematicRevealSlot(
-                      reveal: firstLine,
-                      child: _CinematicLine(
-                        text: 'Every rep',
-                        reveal: firstLine,
-                        compact: compact,
-                        fontSize: compact ? 38 : 48,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 5 : 7),
-                    _CinematicRevealSlot(
-                      reveal: secondLine,
-                      child: _CinematicLine(
-                        text: 'changes your',
-                        reveal: secondLine,
-                        compact: compact,
-                        fontSize: compact ? 38 : 48,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 5 : 7),
-                    _CinematicRevealSlot(
-                      reveal: thirdLine,
-                      child: _CinematicLine(
-                        text: 'position.',
-                        reveal: thirdLine,
-                        compact: compact,
-                        fontSize: compact ? 38 : 48,
-                        color: NuvoColors.blue,
-                      ),
-                    ),
-                  ],
+            child: _RankRow(
+              height: rowHeight,
+              rank: winner ? '3' : '2',
+              name: 'Priya Nair',
+              score: '4 / 10',
+            ),
+          ),
+          // "You" is always the topmost Stack child — it must visibly pass
+          // over the other two rows while carried, at every phase, not just
+          // while its own opacity/scale happen to be highest.
+          Positioned(
+            top: youTop,
+            left: 0,
+            right: 0,
+            child: Transform.translate(
+              offset: Offset(youDx, 0),
+              child: Transform.scale(
+                scale: youScale,
+                child: _RankRow(
+                  height: rowHeight,
+                  rank: winner ? '1' : '3',
+                  name: 'You',
+                  score: '$youScore / 10',
+                  active: winner,
+                  emphasis: true,
+                  shadowOverride: [youShadow],
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _MovementPage extends StatefulWidget {
+  const _MovementPage({required this.compact, required this.onReady});
+
+  final bool compact;
+  final VoidCallback onReady;
+
+  @override
+  State<_MovementPage> createState() => _MovementPageState();
+}
+
+/// "I do the real movement, Nuvo can understand/count it" — demonstrated
+/// with the actual working Rive jumping-jack preview, not a fabricated proof
+/// card. The rep counter is driven by this page's own short local timeline
+/// (the preview loops continuously and exposes no per-rep callback), synced
+/// to the preview's documented ~1s cycle. Isolated from the legacy 18s scene
+/// controller, same as every other redesigned page.
+class _MovementPageState extends State<_MovementPage>
+    with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+  static const _duration = Duration(milliseconds: 4100);
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _duration,
+  )..addStatusListener(_onStatus);
+  bool _started = false;
+  bool _readyReported = false;
+  Timer? _holdTimer;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  void _onStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    _holdTimer = Timer(
+      reducedMotion
+          ? const Duration(milliseconds: 300)
+          : const Duration(milliseconds: 1400),
+      () {
+        if (!mounted || _readyReported) return;
+        _readyReported = true;
+        widget.onReady();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    _controller.removeStatusListener(_onStatus);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    // No `Expanded`/fixed layout here — short devices (the 320×568 class)
+    // can't fit the headline + Rive preview + counter without scrolling,
+    // and this page has no other safety net against that.
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(22, widget.compact ? 10 : 24, 22, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          NuvoFlipText(
+            'Just do the activity.',
+            style: AppTextStyles.displayMedium.copyWith(
+              color: NuvoColors.navy,
+              fontSize: widget.compact ? 34 : 42,
+              height: .95,
+              letterSpacing: -1.2,
+            ),
+            delay: const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 1400),
+          ),
+          SizedBox(height: widget.compact ? 8 : 12),
+          NuvoFlipText(
+            'Nuvo verifies your movement and updates your progress.',
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: NuvoColors.muted,
+              height: 1.25,
+            ),
+            delay: const Duration(milliseconds: 700),
+            duration: const Duration(milliseconds: 1600),
+          ),
+          SizedBox(height: widget.compact ? 16 : 24),
+          Center(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) => _MovementVisual(
+                t: _controller.value,
+                compact: widget.compact,
+              ),
+            ),
+          ),
+          SizedBox(height: widget.compact ? 8 : 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _MovementVisual extends StatelessWidget {
+  const _MovementVisual({required this.t, required this.compact});
+
+  final double t;
+  final bool compact;
+
+  // Boundaries as fractions of the 4100ms total: 400ms settle, three ~1s
+  // reps with short gaps between them, then a brief "Verified" reveal.
+  static const _rep1At = 1400 / 4100;
+  static const _rep2At = 2600 / 4100;
+  static const _rep3At = 3800 / 4100;
+
+  @override
+  Widget build(BuildContext context) {
+    final reps = t >= _rep3At
+        ? 3
+        : t >= _rep2At
+        ? 2
+        : t >= _rep1At
+        ? 1
+        : 0;
+    final verified = t >= 1;
+    final size = compact ? 210.0 : 280.0;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: size,
+          height: size,
+          child: RiveJumpingJackPreview(
+            fallback: Icon(
+              Icons.accessibility_new_rounded,
+              size: size * .5,
+              color: NuvoColors.navy.withValues(alpha: .3),
+            ),
+          ),
+        ),
+        SizedBox(height: compact ? 16 : 22),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: verified
+              ? Row(
+                  key: const ValueKey('verified'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: NuvoColors.blue,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Verified',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: NuvoColors.navy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  '$reps / 3',
+                  key: ValueKey(reps),
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+        ),
+      ],
     );
   }
 }
@@ -1283,6 +1455,7 @@ class _RankRow extends StatelessWidget {
     this.height = 58,
     this.active = false,
     this.emphasis = false,
+    this.shadowOverride,
   }) : ghost = false;
 
   final String rank;
@@ -1292,6 +1465,7 @@ class _RankRow extends StatelessWidget {
   final bool active;
   final bool ghost;
   final bool emphasis;
+  final List<BoxShadow>? shadowOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -1308,7 +1482,9 @@ class _RankRow extends StatelessWidget {
         color: NuvoColors.surface.withValues(alpha: ghost ? .7 : 1),
         borderRadius: BorderRadius.circular(height * .27),
         border: Border.all(color: NuvoColors.navy, width: active ? 2.4 : 1.6),
-        boxShadow: active || emphasis ? AppShadows.hardSmall : null,
+        boxShadow:
+            shadowOverride ??
+            (active || emphasis ? AppShadows.hardSmall : null),
       ),
       child: Row(
         children: [
@@ -1354,301 +1530,260 @@ class _RankRow extends StatelessWidget {
   }
 }
 
-class _ProofVisual extends StatefulWidget {
-  const _ProofVisual();
+class _ActivityOption {
+  const _ActivityOption({
+    required this.chipLabel,
+    required this.eyebrow,
+    required this.exampleLabel,
+    required this.icon,
+  });
 
-  @override
-  State<_ProofVisual> createState() => _ProofVisualState();
+  final String chipLabel;
+  final String eyebrow;
+  final String exampleLabel;
+  final IconData icon;
 }
 
-class _ProofVisualState extends State<_ProofVisual>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2200),
-  )..repeat();
+/// Built from the production movement catalog (motion_activity_catalog.dart)
+/// rather than a second, invented category system — titles, categories, and
+/// icons here are the exact same ones the real race composer uses. Only
+/// "Teach Nuvo" has no catalog entry (it produces a custom pose spec, not a
+/// [MotionActivityType]), so it gets a simple illustrative label instead —
+/// tapping it does not enter the real Teach Nuvo flow.
+List<_ActivityOption> _buildOnboardingActivityOptions() {
+  final pushUps = motionActivityForType(MotionActivityType.pushUps)!;
+  final jumpingJacks = motionActivityForType(MotionActivityType.jumpingJacks)!;
+  final plank = motionActivityForType(MotionActivityType.plankHold)!;
+  final running = motionActivityForType(MotionActivityType.runningInPlace)!;
+
+  return [
+    _ActivityOption(
+      chipLabel: pushUps.title,
+      eyebrow: pushUps.category.label.toUpperCase(),
+      // 50 is one of pushUps' own suggestedTargets — not invented.
+      exampleLabel: '50 ${pushUps.title}',
+      icon: pushUps.icon,
+    ),
+    _ActivityOption(
+      chipLabel: jumpingJacks.title,
+      eyebrow: jumpingJacks.category.label.toUpperCase(),
+      exampleLabel: '50 ${jumpingJacks.title}',
+      icon: jumpingJacks.icon,
+    ),
+    _ActivityOption(
+      chipLabel: plank.title,
+      eyebrow: plank.category.label.toUpperCase(),
+      // Plank is a duration goal — targetLabel formats its own defaultTarget
+      // as "20 seconds" the same way the composer would.
+      exampleLabel: '${plank.title}: ${plank.targetLabel(plank.defaultTarget)}',
+      icon: plank.icon,
+    ),
+    _ActivityOption(
+      chipLabel: running.title,
+      eyebrow: running.category.label.toUpperCase(),
+      // runningInPlace's own defaultTarget/unit already read as "50 steps".
+      exampleLabel:
+          '${running.title}: ${running.targetLabel(running.defaultTarget)}',
+      icon: running.icon,
+    ),
+    const _ActivityOption(
+      chipLabel: 'Teach Nuvo',
+      eyebrow: 'CUSTOM',
+      exampleLabel: 'Your Own Movement',
+      icon: Icons.auto_awesome_rounded,
+    ),
+  ];
+}
+
+class _ActivityPageContainer extends StatefulWidget {
+  const _ActivityPageContainer({
+    required this.options,
+    required this.selectedIndex,
+    required this.compact,
+    required this.onSelected,
+    required this.onReady,
+  });
+
+  final List<_ActivityOption> options;
+  final int selectedIndex;
+  final bool compact;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onReady;
+
+  @override
+  State<_ActivityPageContainer> createState() => _ActivityPageContainerState();
+}
+
+/// Isolated from the legacy scene timeline, same as every other redesigned
+/// page: a short settle, then hold, then the CTA slides up. This page's
+/// content itself is static (no reveal choreography to run), so the only
+/// state owned here is that hold.
+class _ActivityPageContainerState extends State<_ActivityPageContainer>
+    with AutomaticKeepAliveClientMixin {
+  bool _started = false;
+  bool _readyReported = false;
+  Timer? _holdTimer;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    _holdTimer = Timer(
+      reducedMotion
+          ? const Duration(milliseconds: 300)
+          : const Duration(milliseconds: 900),
+      () {
+        if (!mounted || _readyReported) return;
+        _readyReported = true;
+        widget.onReady();
+      },
+    );
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _holdTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final phase = _controller.value;
-        final checked = phase > .68;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: double.infinity,
-              height: 246,
-              decoration: BoxDecoration(
-                color: NuvoColors.navy,
-                borderRadius: BorderRadius.circular(26),
-                boxShadow: AppShadows.hardSmall,
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CustomPaint(
-                    size: const Size(double.infinity, 246),
-                    painter: _PosePainter(phase: phase),
-                  ),
-                  Positioned(
-                    top: 16,
-                    left: 18,
-                    child: Text(
-                      'EXAMPLE PROOF',
-                      style: AppTextStyles.brandLabel.copyWith(
-                        color: NuvoColors.white,
-                        letterSpacing: 1.8,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 18,
-                    top: 16,
-                    child: Text(
-                      checked ? 'VERIFIED' : 'CHECKING',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: checked ? NuvoColors.blue : NuvoColors.white,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 18,
-                    child: Text(
-                      '${4 + (phase * 2).floor()} / 10 REPS',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: NuvoColors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'AI reads the movement before the board moves.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-            ),
-          ],
-        );
-      },
+    super.build(context);
+    return _ActivityPage(
+      options: widget.options,
+      selectedIndex: widget.selectedIndex,
+      compact: widget.compact,
+      onSelected: widget.onSelected,
     );
   }
 }
 
-class _ProofFlowVisual extends StatefulWidget {
-  const _ProofFlowVisual();
-
-  @override
-  State<_ProofFlowVisual> createState() => _ProofFlowVisualState();
-}
-
-class _ProofFlowVisualState extends State<_ProofFlowVisual>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2400),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        final phase = _controller.value;
-        final active = (phase * 3).floor().clamp(0, 2);
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                _FlowStep(label: 'SUBMIT\nPROOF', active: active == 0),
-                _FlowConnector(active: active >= 1),
-                _FlowStep(label: 'AI\nCHECKS IT', active: active == 1),
-                _FlowConnector(active: active >= 2),
-                _FlowStep(label: 'BOARD\nMOVES', active: active == 2),
-              ],
-            ),
-            const SizedBox(height: 28),
-            SizedBox(
-              height: 72,
-              child: CustomPaint(
-                painter: _ProgressPainter(progress: phase),
-                child: const SizedBox.expand(),
-              ),
-            ),
-            const SizedBox(height: 6),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
-              child: Text(
-                switch (active) {
-                  0 => 'You show the work.',
-                  1 => 'Nuvo checks the motion.',
-                  _ => 'Your place changes.',
-                },
-                key: ValueKey(active),
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: active == 2 ? NuvoColors.blue : NuvoColors.muted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _FlowStep extends StatelessWidget {
-  const _FlowStep({required this.label, required this.active});
-
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        height: 92,
-        padding: const EdgeInsets.all(8),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? NuvoColors.blue : NuvoColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.navy, width: 1.4),
-          boxShadow: active ? AppShadows.hardSmall : null,
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: active ? NuvoColors.white : NuvoColors.navy,
-            fontWeight: FontWeight.w900,
-            letterSpacing: .7,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FlowConnector extends StatelessWidget {
-  const _FlowConnector({required this.active});
-
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Icon(
-        Icons.arrow_forward_rounded,
-        size: 18,
-        color: active ? NuvoColors.blue : NuvoColors.muted,
-      ),
-    );
-  }
-}
-
-class _GoalPage extends StatelessWidget {
-  const _GoalPage({
-    required this.selected,
+class _ActivityPage extends StatelessWidget {
+  const _ActivityPage({
+    required this.options,
+    required this.selectedIndex,
     required this.compact,
     required this.onSelected,
   });
 
-  final FitnessGoal selected;
+  final List<_ActivityOption> options;
+  final int selectedIndex;
   final bool compact;
-  final ValueChanged<FitnessGoal> onSelected;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    final target = selected == FitnessGoal.endurance ? 50 : 10;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(22, compact ? 10 : 24, 22, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'YOUR FIRST RACE',
-            style: AppTextStyles.brandLabel.copyWith(
-              color: NuvoColors.blue,
-              letterSpacing: 2.2,
-            ),
+    final selected = options[selectedIndex];
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        key: const ValueKey('onboarding-activity-scroll'),
+        padding: EdgeInsets.fromLTRB(22, compact ? 10 : 24, 22, 8),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: math.max(0, constraints.maxHeight - (compact ? 18 : 32)),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'What do you want\nto train for?',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: compact ? 34 : 42,
-              height: .96,
-              letterSpacing: -1.2,
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    selected.title.toUpperCase(),
-                    style: AppTextStyles.brandLabel.copyWith(
-                      color: NuvoColors.navy,
-                      letterSpacing: 2.2,
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'YOUR FIRST RACE',
+                  style: AppTextStyles.brandLabel.copyWith(
+                    color: NuvoColors.blue,
+                    letterSpacing: 2.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                NuvoFlipText(
+                  'What do you want\nto race on?',
+                  style: AppTextStyles.displayMedium.copyWith(
+                    color: NuvoColors.navy,
+                    fontSize: constraints.maxWidth < 360
+                        ? 28
+                        : (compact ? 32 : 38),
+                    height: .96,
+                    letterSpacing: -1.2,
+                  ),
+                  delay: const Duration(milliseconds: 150),
+                  duration: const Duration(milliseconds: 1400),
+                ),
+                // The eyebrow, example label, and path are one visual mass —
+                // centering only the text while the path painter's own geometry
+                // reads off-center (see _RacePathPainter) would still look
+                // lopsided, so this whole block is centered as a unit and the
+                // painter itself centers its rendered bounds within its box.
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Center(
+                      child: Column(
+                        key: const ValueKey('onboarding-activity-visual'),
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            selected.eyebrow,
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.brandLabel.copyWith(
+                              color: NuvoColors.navy,
+                              letterSpacing: 2.2,
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          NuvoFlipText(
+                            selected.exampleLabel,
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.headlineLarge.copyWith(
+                              color: NuvoColors.navy,
+                              fontSize: 26,
+                            ),
+                            duration: const Duration(
+                              milliseconds: 1200,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: compact ? 76 : 128,
+                            width: double.infinity,
+                            child: const CustomPaint(
+                              key: ValueKey('onboarding-activity-path'),
+                              painter: _RacePathPainter(progress: 0),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    '$target ${selected.suggestedActivity}',
-                    style: AppTextStyles.headlineLarge.copyWith(
-                      color: NuvoColors.navy,
-                      fontSize: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: compact ? 100 : 128,
-                    width: double.infinity,
-                    child: const CustomPaint(
-                      painter: _RacePathPainter(progress: 0),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                _ActivityChips(
+                  options: options,
+                  selectedIndex: selectedIndex,
+                  onSelected: onSelected,
+                ),
+              ],
             ),
           ),
-          _GoalSelector(selected: selected, onSelected: onSelected),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _GoalSelector extends StatelessWidget {
-  const _GoalSelector({required this.selected, required this.onSelected});
+class _ActivityChips extends StatelessWidget {
+  const _ActivityChips({
+    required this.options,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
-  final FitnessGoal selected;
-  final ValueChanged<FitnessGoal> onSelected;
+  final List<_ActivityOption> options;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1657,152 +1792,46 @@ class _GoalSelector extends StatelessWidget {
       spacing: 5,
       runSpacing: 6,
       children: [
-        for (final goal in FitnessGoal.values)
-          GestureDetector(
-            onTap: () => onSelected(goal),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-              decoration: BoxDecoration(
-                color: selected == goal ? NuvoColors.blue : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: selected == goal ? NuvoColors.blue : NuvoColors.navy,
-                  width: 1.2,
+        for (var i = 0; i < options.length; i++)
+          Semantics(
+            key: ValueKey('onboarding-activity-$i'),
+            button: true,
+            selected: i == selectedIndex,
+            child: InkWell(
+              onTap: () => onSelected(i),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                decoration: BoxDecoration(
+                  color: i == selectedIndex
+                      ? NuvoColors.blue
+                      : NuvoColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: NuvoColors.navy, width: 1.2),
+                  boxShadow: i == selectedIndex ? AppShadows.hardSmall : null,
                 ),
-                boxShadow: selected == goal ? AppShadows.hardSmall : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    goal.icon,
-                    size: 15,
-                    color: selected == goal
-                        ? NuvoColors.white
-                        : NuvoColors.navy,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _shortLabel(goal),
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: selected == goal
-                          ? NuvoColors.white
-                          : NuvoColors.navy,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  String _shortLabel(FitnessGoal goal) => switch (goal) {
-    FitnessGoal.strength => 'Strength',
-    FitnessGoal.endurance => 'Endurance',
-    FitnessGoal.consistency => 'Consistency',
-    FitnessGoal.crew => 'Crew',
-    FitnessGoal.milestone => 'Milestone',
-  };
-}
-
-class _PracticePage extends StatelessWidget {
-  const _PracticePage({
-    required this.goal,
-    required this.progress,
-    required this.started,
-    required this.compact,
-  });
-
-  final FitnessGoal goal;
-  final double progress;
-  final bool started;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final reps = (progress * 3).floor().clamp(0, 3);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(22, compact ? 10 : 24, 22, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'PRACTICE MODE',
-            style: AppTextStyles.brandLabel.copyWith(
-              color: NuvoColors.blue,
-              letterSpacing: 2.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'See how your\nmove becomes proof.',
-            style: AppTextStyles.displayMedium.copyWith(
-              color: NuvoColors.navy,
-              fontSize: compact ? 34 : 42,
-              height: .96,
-              letterSpacing: -1.2,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'This is an example using ${goal.suggestedActivity}. Your real proof happens inside a race.',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
-          ),
-          Expanded(
-            child: Center(
-              child: SizedBox(
-                width: double.infinity,
-                height: compact ? 230 : 270,
-                child: Stack(
-                  alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: NuvoColors.navy,
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: AppShadows.hardSmall,
+                    if (MediaQuery.sizeOf(context).width >= 360) ...[
+                      Icon(
+                        options[i].icon,
+                        size: 15,
+                        color: i == selectedIndex
+                            ? NuvoColors.white
+                            : NuvoColors.navy,
                       ),
-                    ),
-                    CustomPaint(
-                      size: Size.infinite,
-                      painter: _PracticePosePainter(progress: progress),
-                    ),
-                    Positioned(
-                      top: 15,
-                      left: 17,
-                      child: Text(
-                        'EXAMPLE PROOF',
-                        style: AppTextStyles.brandLabel.copyWith(
-                          color: NuvoColors.white,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 15,
-                      right: 17,
-                      child: Text(
-                        progress >= .99 ? 'READY' : 'PRACTICE',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.blue,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 16,
-                      child: Text(
-                        '$reps / 3 REPS',
-                        style: AppTextStyles.titleMedium.copyWith(
-                          color: NuvoColors.white,
-                        ),
+                      const SizedBox(width: 4),
+                    ],
+                    Text(
+                      options[i].chipLabel,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: i == selectedIndex
+                            ? NuvoColors.white
+                            : NuvoColors.navy,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ],
@@ -1810,19 +1839,16 @@ class _PracticePage extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            started
-                ? progress >= .99
-                      ? 'That is how proof moves the board.'
-                      : 'Follow the movement as the example plays.'
-                : 'Tap practice to watch three example reps.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
-          ),
-        ],
-      ),
+      ],
     );
   }
+}
+
+class _AuthPage extends StatelessWidget {
+  const _AuthPage();
+
+  @override
+  Widget build(BuildContext context) => const WelcomeAuthScreen(embedded: true);
 }
 
 class _RacePathPainter extends CustomPainter {
@@ -1833,6 +1859,62 @@ class _RacePathPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final path = _racePath(size);
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final start = metric.getTangentForOffset(0);
+    final end = metric.getTangentForOffset(metric.length);
+    if (start == null || end == null) return;
+
+    // The route's own control points don't produce a visually centered
+    // curve by themselves (a curve can be mathematically centered while its
+    // rendered mass — plus the finish marker, which sits past the route's
+    // own endpoint — reads as biased to one side). Measure the actual
+    // rendered bounds, including the finish marker's extent, and translate
+    // so that combined mass is centered in the given canvas.
+    final flagExtent = Rect.fromLTRB(
+      end.position.dx + 8,
+      end.position.dy - 28,
+      end.position.dx + 44,
+      end.position.dy + 20,
+    );
+    final visualBounds = path
+        .getBounds()
+        .inflate(8)
+        .expandToInclude(flagExtent);
+    var pathCenterX = 0.0;
+    for (var i = 0; i < 64; i++) {
+      pathCenterX += metric
+          .getTangentForOffset(metric.length * (i + .5) / 64)!
+          .position
+          .dx;
+    }
+    final pathArea = metric.length * 12;
+    final visualCenterX =
+        ((pathCenterX / 64) * pathArea +
+            (end.position.dx + 25) * 350 +
+            start.position.dx * 200) /
+        (pathArea + 550);
+    final scale = math.min(
+      1.0,
+      math.min(
+        (size.width - 8) / visualBounds.width,
+        (size.height - 8) / visualBounds.height,
+      ),
+    );
+    final offsetX = (size.width / 2 - visualCenterX * scale).clamp(
+      4 - visualBounds.left * scale,
+      size.width - 4 - visualBounds.right * scale,
+    );
+    final centeringOffset = Offset(
+      offsetX,
+      size.height / 2 - visualBounds.center.dy * scale,
+    );
+
+    canvas.save();
+    canvas.translate(centeringOffset.dx, centeringOffset.dy);
+    canvas.scale(scale);
+
     final navy = Paint()
       ..color = NuvoColors.navy
       ..style = PaintingStyle.stroke
@@ -1844,365 +1926,15 @@ class _RacePathPainter extends CustomPainter {
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
     canvas.drawPath(path, navy);
-    final metrics = path.computeMetrics().toList();
-    if (metrics.isNotEmpty) {
-      canvas.drawPath(
-        metrics.first.extractPath(0, metrics.first.length * progress),
-        blue,
-      );
-    }
-    final metric = path.computeMetrics().first;
-    final start = metric.getTangentForOffset(0);
-    final end = metric.getTangentForOffset(metric.length);
-    if (start == null || end == null) return;
+    canvas.drawPath(metric.extractPath(0, metric.length * progress), blue);
     canvas.drawCircle(start.position, 8, Paint()..color = NuvoColors.blue);
     _drawNuvoFlag(canvas, anchor: end.position, scale: 1, opacity: 1);
+
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _RacePathPainter oldDelegate) =>
-      oldDelegate.progress != progress;
-}
-
-class _PosePainter extends CustomPainter {
-  const _PosePainter({required this.phase});
-
-  final double phase;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-
-    // Keep the proof example visually related to the race path, rather than
-    // presenting a disconnected pose skeleton in the middle of the card.
-    final path = Path()
-      ..moveTo(size.width * .16, size.height * .76)
-      ..cubicTo(
-        size.width * .30,
-        size.height * .22,
-        size.width * .61,
-        size.height * .88,
-        size.width * .79,
-        size.height * .28,
-      );
-    final metric = path.computeMetrics().first;
-    final travel = Curves.easeInOutCubic.transform(
-      (phase * .86 + .07).clamp(0.0, 1.0).toDouble(),
-    );
-    final tangent = metric.getTangentForOffset(metric.length * travel);
-    if (tangent == null) return;
-
-    final direction = Offset(math.cos(tangent.angle), math.sin(tangent.angle));
-    final normal = Offset(-direction.dy, direction.dx);
-    final swing = math.sin(phase * math.pi * 2) * .18;
-    final position = tangent.position + normal * 4;
-    final scale = (size.shortestSide / 246).clamp(.78, 1.04).toDouble();
-    final runnerAngle = tangent.angle + math.pi / 2 + swing;
-
-    final tether = Paint()
-      ..color = NuvoColors.white.withValues(alpha: .22)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 13
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final tetherCore = Paint()
-      ..color = NuvoColors.blue.withValues(alpha: .92)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, tether);
-    canvas.drawPath(path, tetherCore);
-
-    canvas.save();
-    canvas.translate(position.dx, position.dy);
-    canvas.rotate(runnerAngle);
-    canvas.scale(scale);
-
-    final outer = Paint()
-      ..color = NuvoColors.navy
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final inner = Paint()
-      ..color = NuvoColors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 7
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final coral = Paint()..color = NuvoColors.coral;
-    final highlight = Paint()..color = NuvoColors.white.withValues(alpha: .9);
-
-    final chest = const Offset(0, -4);
-    final head = const Offset(0, -34);
-    final shoulder = const Offset(0, -10);
-    final hip = const Offset(0, 22);
-    final leftElbow = Offset(-25 - swing * 15, -2);
-    final leftHand = Offset(-42 - swing * 20, 18);
-    final rightElbow = Offset(24 + swing * 12, -19);
-    final rightHand = Offset(45 + swing * 20, -43);
-    final leftKnee = Offset(-19 - swing * 11, 43);
-    final leftFoot = Offset(-47 - swing * 18, 65);
-    final rightKnee = Offset(23 + swing * 11, 37);
-    final rightFoot = Offset(48 + swing * 16, 55);
-    final handOffset =
-        Offset(
-          rightHand.dx * math.cos(runnerAngle) -
-              rightHand.dy * math.sin(runnerAngle),
-          rightHand.dx * math.sin(runnerAngle) +
-              rightHand.dy * math.cos(runnerAngle),
-        ) *
-        scale;
-    final hand = position + handOffset;
-
-    void limb(Offset start, Offset end) {
-      canvas.drawLine(start, end, outer);
-      canvas.drawLine(start, end, inner);
-    }
-
-    limb(shoulder, leftElbow);
-    limb(leftElbow, leftHand);
-    limb(shoulder, rightElbow);
-    limb(rightElbow, rightHand);
-    limb(hip, leftKnee);
-    limb(leftKnee, leftFoot);
-    limb(hip, rightKnee);
-    limb(rightKnee, rightFoot);
-
-    // A compact, layered body gives the figure the outlined game-piece read
-    // without reverting to the generic joint-and-bones stick figure.
-    canvas.drawCircle(chest, 17, Paint()..color = NuvoColors.navy);
-    canvas.drawCircle(chest, 14, highlight);
-    canvas.drawCircle(chest, 11, coral);
-    canvas.drawCircle(head, 22, Paint()..color = NuvoColors.navy);
-    canvas.drawCircle(head, 18, highlight);
-    canvas.drawCircle(head, 15, coral);
-    canvas.drawCircle(head.translate(-5, -6), 3.2, highlight);
-
-    // The raised hand meets the tether with a small electric-blue hook point.
-    canvas.drawCircle(rightHand, 7, Paint()..color = NuvoColors.navy);
-    canvas.drawCircle(rightHand, 4, Paint()..color = NuvoColors.blue);
-    canvas.restore();
-
-    final hookPath = Path()
-      ..moveTo(hand.dx, hand.dy)
-      ..quadraticBezierTo(
-        hand.dx + direction.dx * 13,
-        hand.dy + direction.dy * 13,
-        tangent.position.dx,
-        tangent.position.dy,
-      );
-    canvas.drawPath(
-      hookPath,
-      Paint()
-        ..color = NuvoColors.white.withValues(alpha: .7)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _PosePainter oldDelegate) =>
-      oldDelegate.phase != phase;
-}
-
-class _PracticePosePainter extends CustomPainter {
-  const _PracticePosePainter({required this.progress});
-
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-
-    // The practice visual is a small contained motion system: the runner,
-    // hook, and tether share one path so the movement reads as intentional.
-    final path = Path()
-      ..moveTo(size.width * .14, size.height * .77)
-      ..cubicTo(
-        size.width * .24,
-        size.height * .18,
-        size.width * .47,
-        size.height * .86,
-        size.width * .78,
-        size.height * .27,
-      );
-    final metric = path.computeMetrics().first;
-    final travel = Curves.easeInOutCubic.transform(progress.clamp(0.0, 1.0));
-    final tangent = metric.getTangentForOffset(metric.length * travel);
-    if (tangent == null) return;
-
-    final direction = Offset(math.cos(tangent.angle), math.sin(tangent.angle));
-    final normal = Offset(-direction.dy, direction.dx);
-    final swing = math.sin(progress * math.pi * 4);
-    final bob = math.sin(progress * math.pi * 6) * 3;
-
-    final tether = Paint()
-      ..color = NuvoColors.navy.withValues(alpha: .96)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final tetherCore = Paint()
-      ..color = NuvoColors.blue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawPath(path, tether);
-    canvas.drawPath(path, tetherCore);
-
-    final start = metric.getTangentForOffset(0)?.position;
-    if (start != null) {
-      canvas.drawCircle(start, 8, Paint()..color = NuvoColors.blue);
-      canvas.drawCircle(
-        start,
-        11,
-        Paint()
-          ..color = NuvoColors.navy
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3,
-      );
-    }
-
-    final runnerPosition = tangent.position + normal * (10 + bob);
-    final runnerAngle = tangent.angle + math.pi / 2 + swing * .1;
-    canvas.save();
-    canvas.translate(runnerPosition.dx, runnerPosition.dy);
-    canvas.rotate(runnerAngle);
-    _drawHookRunner(canvas, swing: swing, progress: progress);
-    canvas.restore();
-
-    // A short hook line gives the figure a physical connection to the course.
-    final hookOffset = Offset(
-      -math.sin(runnerAngle) * 23,
-      math.cos(runnerAngle) * 23,
-    );
-    final hook = runnerPosition + hookOffset;
-    final hookPath = Path()
-      ..moveTo(hook.dx, hook.dy)
-      ..quadraticBezierTo(
-        hook.dx + direction.dx * 16,
-        hook.dy + direction.dy * 16,
-        tangent.position.dx,
-        tangent.position.dy,
-      );
-    canvas.drawPath(
-      hookPath,
-      Paint()
-        ..color = NuvoColors.white.withValues(alpha: .76)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  void _drawHookRunner(
-    Canvas canvas, {
-    required double swing,
-    required double progress,
-  }) {
-    final outer = Paint()
-      ..color = NuvoColors.navy
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final inner = Paint()
-      ..color = NuvoColors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final joints = Paint()..color = NuvoColors.blue;
-    final body = Paint()..color = NuvoColors.coral;
-    final highlight = Paint()..color = NuvoColors.white.withValues(alpha: .8);
-
-    final reach = math.sin(progress * math.pi * 2) * 5;
-    final head = const Offset(0, -34);
-    final chest = const Offset(0, -7);
-    final hip = const Offset(0, 22);
-    final shoulder = const Offset(0, -12);
-    final leftElbow = Offset(-25 - swing * 5, -2 + reach);
-    final rightElbow = Offset(27 + swing * 4, -18 - reach);
-    final leftHand = Offset(-38 - swing * 8, 20 + reach * .4);
-    final rightHand = Offset(44 + swing * 8, -38 - reach * .6);
-    final leftKnee = Offset(-19 - swing * 5, 43);
-    final rightKnee = Offset(24 + swing * 6, 37);
-    final leftFoot = Offset(-48 - swing * 8, 64);
-    final rightFoot = Offset(47 + swing * 6, 55);
-
-    void limb(Offset a, Offset b) {
-      canvas.drawLine(a, b, outer);
-      canvas.drawLine(a, b, inner);
-    }
-
-    limb(shoulder, leftElbow);
-    limb(leftElbow, leftHand);
-    limb(shoulder, rightElbow);
-    limb(rightElbow, rightHand);
-    limb(hip, leftKnee);
-    limb(leftKnee, leftFoot);
-    limb(hip, rightKnee);
-    limb(rightKnee, rightFoot);
-
-    canvas.drawCircle(chest, 15, outer..style = PaintingStyle.fill);
-    canvas.drawCircle(chest, 10, body);
-    canvas.drawCircle(head, 21, outer..style = PaintingStyle.fill);
-    canvas.drawCircle(head, 16, body);
-    canvas.drawCircle(head.translate(-5, -5), 3, highlight);
-
-    for (final point in [
-      chest,
-      leftElbow,
-      rightElbow,
-      leftKnee,
-      rightKnee,
-      rightHand,
-    ]) {
-      canvas.drawCircle(point, 6, joints);
-      canvas.drawCircle(
-        point,
-        6,
-        Paint()
-          ..color = NuvoColors.navy
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PracticePosePainter oldDelegate) =>
-      oldDelegate.progress != progress;
-}
-
-class _ProgressPainter extends CustomPainter {
-  const _ProgressPainter({required this.progress});
-
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final y = size.height / 2;
-    final start = Offset(12, y);
-    final end = Offset(size.width - 12, y);
-    final base = Paint()
-      ..color = NuvoColors.navy.withValues(alpha: .18)
-      ..strokeWidth = 8
-      ..strokeCap = StrokeCap.round;
-    final active = Paint()
-      ..color = NuvoColors.blue
-      ..strokeWidth = 8
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(start, end, base);
-    canvas.drawLine(start, Offset.lerp(start, end, progress)!, active);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ProgressPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }
 

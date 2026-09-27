@@ -3,8 +3,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/demo/presentation_demo.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../social/domain/nuvo_destination.dart';
 import '../data/notification_api.dart';
 import '../data/notification_models.dart';
 import '../data/notification_repository.dart';
@@ -53,11 +55,20 @@ class NotificationState {
 }
 
 class NotificationController extends StateNotifier<NotificationState> {
-  NotificationController(this._repo, {this.onSessionExpired})
-      : super(const NotificationState());
+  NotificationController(
+    this._repo, {
+    this.onSessionExpired,
+    this.isPresentationDemo = _neverPresentationDemo,
+  }) : super(const NotificationState());
 
   final NotificationRepository _repo;
   final VoidCallback? onSessionExpired;
+
+  /// Presentation/demo sessions never hit the API — fixture inbox only. The
+  /// offline-demo sentinel token would 401 every call otherwise (and the
+  /// resulting session-expired cascade would sign the demo out).
+  final bool Function() isPresentationDemo;
+  static bool _neverPresentationDemo() => false;
 
   static const _cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
@@ -104,6 +115,10 @@ class NotificationController extends StateNotifier<NotificationState> {
     if (mounted) {
       state = state.copyWith(loading: !state.hasData, refreshing: state.hasData, error: null);
     }
+    if (isPresentationDemo()) {
+      if (mounted && generation == _generation) _applyFixtures();
+      return;
+    }
     try {
       final page = await _repo.list();
       if (generation != _generation) return; // superseded by a sign-out
@@ -117,6 +132,12 @@ class NotificationController extends StateNotifier<NotificationState> {
       }
     } on ApiException catch (e) {
       if (generation != _generation) return;
+      // A demo session must never surface a network error — if the session
+      // resolved as presentation mode mid-flight, fixtures win.
+      if (isPresentationDemo()) {
+        if (mounted) _applyFixtures();
+        return;
+      }
       if (e.statusCode == 401) {
         if (mounted) state = state.copyWith(loading: false, refreshing: false);
         onSessionExpired?.call();
@@ -132,6 +153,10 @@ class NotificationController extends StateNotifier<NotificationState> {
     } catch (e, st) {
       if (generation != _generation) return;
       debugPrint('[NotificationController] $e\n$st');
+      if (isPresentationDemo()) {
+        if (mounted) _applyFixtures();
+        return;
+      }
       if (mounted) {
         state = state.copyWith(
           loading: false,
@@ -142,9 +167,18 @@ class NotificationController extends StateNotifier<NotificationState> {
     }
   }
 
+  void _applyFixtures() {
+    final items = PresentationDemoData.notifications();
+    _loadedAt = DateTime.now();
+    state = NotificationState(
+      items: items,
+      unreadCount: items.where((n) => !n.read).length,
+    );
+  }
+
   Future<void> loadMore() async {
     final cursor = state.nextCursor;
-    if (cursor == null || state.loadingMore) return;
+    if (cursor == null || state.loadingMore || isPresentationDemo()) return;
     final generation = _generation;
     state = state.copyWith(loadingMore: true);
     try {
@@ -172,9 +206,36 @@ class NotificationController extends StateNotifier<NotificationState> {
       items: state.items.map((n) => n.id == id ? n.copyWith(read: true) : n).toList(),
       unreadCount: (state.unreadCount - 1).clamp(0, 1 << 30),
     );
+    if (isPresentationDemo()) return;
     try {
       await _repo.markRead(id);
     } catch (_) {/* optimistic; a refresh will reconcile */}
+  }
+
+  /// A crew mutation (accept/decline/remove/connect) just resolved the
+  /// pending request from [userId]. The server marks its crew_request
+  /// notifications read inside the same write; this mirrors that locally so
+  /// the inbox and bell stop showing a stale actionable request immediately,
+  /// without waiting for the next fetch.
+  void resolveCrewRequest(String userId) {
+    if (!mounted) return;
+    var resolved = 0;
+    final items = state.items.map((n) {
+      final dest = n.destination;
+      if (n.read ||
+          n.category != 'crew_request' ||
+          dest is! ProfileDestination ||
+          dest.userId != userId) {
+        return n;
+      }
+      resolved++;
+      return n.copyWith(read: true);
+    }).toList();
+    if (resolved == 0) return;
+    state = state.copyWith(
+      items: items,
+      unreadCount: (state.unreadCount - resolved).clamp(0, 1 << 30),
+    );
   }
 
   Future<void> markAllRead() async {
@@ -183,6 +244,7 @@ class NotificationController extends StateNotifier<NotificationState> {
       items: state.items.map((n) => n.copyWith(read: true)).toList(),
       unreadCount: 0,
     );
+    if (isPresentationDemo()) return;
     try {
       await _repo.markAllRead();
     } catch (_) {}
@@ -214,6 +276,8 @@ final notificationControllerProvider =
     ref.watch(notificationRepositoryProvider),
     onSessionExpired: () =>
         ref.read(authControllerProvider.notifier).sessionExpired(),
+    isPresentationDemo: () =>
+        isPresentationDemoUser(ref.read(authControllerProvider).user),
   );
   if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
     controller.load(force: false);
@@ -222,8 +286,18 @@ final notificationControllerProvider =
     if (next.status == AuthStatus.unauthenticated) {
       controller.clear();
     } else if (next.status == AuthStatus.authenticated &&
-        prev?.status != AuthStatus.authenticated) {
+        (prev?.status != AuthStatus.authenticated ||
+            prev?.user?.id != next.user?.id)) {
+      // A different signed-in user must never see the previous inbox.
+      controller.clear();
       controller.load(force: false);
+    }
+  });
+  ref.listen<bool>(presentationModeEnabledProvider, (_, _) {
+    // Toggling presentation mode swaps fixture ↔ real inbox entirely.
+    controller.clear();
+    if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+      controller.load(force: true);
     }
   });
   return controller;

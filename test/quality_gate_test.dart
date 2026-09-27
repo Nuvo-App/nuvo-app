@@ -171,7 +171,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        expect(find.text('Start race'), findsOneWidget);
+        expect(find.text('Start'), findsOneWidget);
         expect(find.text('Join'), findsOneWidget);
       });
 
@@ -240,7 +240,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        expect(find.byType(SingleChildScrollView), findsWidgets);
+        expect(find.byType(Scrollable), findsWidgets);
       });
 
       testWidgets('Pass/Crew: no overflow', (tester) async {

@@ -424,6 +424,25 @@ export function normalizeActivityId(value: string | null | undefined): RaceActiv
   return undefined;
 }
 
+const LOOSE_ACTIVITY_ID = /^[a-z0-9][a-z0-9_]{1,79}$/;
+
+/**
+ * Like [normalizeActivityId] but registry-aware: an ID outside the static
+ * catalog is preserved as a validated raw string when it has the safe
+ * snake_case shape — it is never mapped to a different motion. Returns
+ * undefined only for empty or unsafe input. Registry-published activities
+ * (e.g. a motion shipped after this Worker build) are data, not enum members.
+ */
+export function normalizeActivityIdLoose(
+  value: string | null | undefined,
+): string | undefined {
+  const canonical = normalizeActivityId(value);
+  if (canonical) return canonical;
+  if (!value) return undefined;
+  const normalized = value.toLowerCase().trim().replace(/[-\s]+/g, '_');
+  return LOOSE_ACTIVITY_ID.test(normalized) ? normalized : undefined;
+}
+
 export function normalizeMetric(value: string | null | undefined, activity?: RaceActivityDefinition): RaceMetric | undefined {
   if (!value) return activity?.defaultMetric;
   const normalized = value.toLowerCase().trim();

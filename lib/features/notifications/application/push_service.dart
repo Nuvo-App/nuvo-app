@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -6,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../auth/presentation/auth_controller.dart';
+import '../../social/application/deep_link_controller.dart';
 import '../../social/domain/nuvo_destination.dart';
 import '../data/device_api.dart';
 import 'notification_controller.dart';
@@ -27,15 +30,14 @@ class PushService {
   bool _available = false;
   bool _started = false;
   String? _lastToken;
-  GoRouter? _router;
 
   bool get isAvailable => _available;
 
-  /// Call once from app start, after the router exists.
+  /// Call once from app start, after the router exists (the router itself
+  /// lives on DeepLinkController — taps route through it, not here).
   Future<void> start(GoRouter router) async {
     if (_started) return;
     _started = true;
-    _router = router;
     try {
       await Firebase.initializeApp();
       _available = true;
@@ -98,17 +100,33 @@ class PushService {
     );
   }
 
-  void _routeFromMessage(RemoteMessage message) {
-    final data = message.data;
+  /// Parse a push payload's data block into a destination — pure, so the
+  /// mapping is testable without a RemoteMessage.
+  static NuvoDestination? destinationFromPushData(Map<String, dynamic> data) {
     String? nn(Object? v) => (v is String && v.isNotEmpty) ? v : null;
-    final dest = NuvoDestination.fromDescriptor({
+    return NuvoDestination.fromDescriptor({
       'type': nn(data['destType']),
       'id': nn(data['destId']),
       'context': nn(data['destContext']),
     });
+  }
+
+  void _routeFromMessage(RemoteMessage message) {
+    final dest = destinationFromPushData(message.data);
     if (dest == null) return;
     _ref.read(notificationControllerProvider.notifier).markStale();
-    _router?.go(dest.location);
+    // Push taps take the same canonical path as every other inbound link:
+    // auth-aware, pending-destination stashed when logged out — never a raw
+    // router.go (which skipped requiresAuth and could leak a stale account's
+    // destination into a logged-out or different account's session).
+    final authed =
+        _ref.read(authControllerProvider).status == AuthStatus.authenticated;
+    unawaited(
+      _ref.read(deepLinkControllerProvider).handleDestination(
+            dest,
+            authed: authed,
+          ),
+    );
   }
 }
 

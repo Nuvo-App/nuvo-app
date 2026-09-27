@@ -85,3 +85,7 @@ android/key.properties
 # Motion-QA experiment output — generated, huge, never commit
 test/motion_qa/lab/
 test/motion_qa/experiment_results/
+
+# Local scratch/QA harnesses
+tmp/
+flutter_*.png

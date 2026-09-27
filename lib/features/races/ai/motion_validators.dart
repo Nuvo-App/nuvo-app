@@ -56,7 +56,28 @@ class MovementDefinition {
     required this.unit,
     required this.defaultTarget,
     this.isHold = false,
+    this.remoteActivityId,
   });
+
+  /// Definition for a control-plane motion this build has no compiled
+  /// identity for. [type] is [MovementType.unsupported] and [activity] is
+  /// [AiMotionActivity.remote] — the real stable ID lives in
+  /// [remoteActivityId] so proof/display never borrows another motion's name.
+  factory MovementDefinition.remote({
+    required String activityId,
+    required String title,
+    required String unit,
+    int defaultTarget = 1,
+    bool isHold = false,
+  }) => MovementDefinition(
+    type: MovementType.unsupported,
+    activity: AiMotionActivity.remote,
+    title: title,
+    unit: unit,
+    defaultTarget: defaultTarget,
+    isHold: isHold,
+    remoteActivityId: activityId,
+  );
 
   final MovementType type;
   final AiMotionActivity activity;
@@ -64,6 +85,11 @@ class MovementDefinition {
   final String unit;
   final int defaultTarget;
   final bool isHold;
+
+  /// Server-owned activity ID for remote motions; null for compiled presets.
+  final String? remoteActivityId;
+
+  String get effectiveActivityId => remoteActivityId ?? activity.backendValue;
 
   String targetLabel(int target) => isHold ? '$target sec' : '$target $unit';
 }
@@ -274,6 +300,9 @@ AiMotionActivity? _aiMotionActivityForType(MotionActivityType type) {
     MotionActivityType.stepUps => AiMotionActivity.stepUps,
     MotionActivityType.calfRaises => AiMotionActivity.calfRaises,
     MotionActivityType.lateralSteps => AiMotionActivity.lateralSteps,
+    // Basketball is handled by the remote object-composition runtime, never
+    // by the local pose-validator switch.
+    MotionActivityType.basketballShot => null,
     MotionActivityType.remote => null,
   };
 }
@@ -512,6 +541,13 @@ MotionValidator createMotionValidator(
     statusText: 'Tracking burpees',
     coachingTextActive: 'Crouch, hands down, then stand tall',
     coachingTextIncomplete: 'Full body needed',
+  ),
+  // Remote activities always run on a control-plane engine selected by the
+  // release spec — never on a local preset validator. Throwing keeps an
+  // unknown motion from silently borrowing another activity's validator.
+  AiMotionActivity.remote => throw ArgumentError(
+    'AiMotionActivity.remote has no local validator; remote motions run '
+    'through a control-plane engine from their release spec.',
   ),
 };
 
@@ -979,9 +1015,7 @@ class PushupsValidator extends _BaseValidator {
     final rightShoulder = frame.point('rightShoulder')!;
     final dx = leftShoulder.x - rightShoulder.x;
     final dy = leftShoulder.y - rightShoulder.y;
-    final shoulderSpan = math.sqrt(
-      dx * dx + dy * dy,
-    );
+    final shoulderSpan = math.sqrt(dx * dx + dy * dy);
 
     final leftHip = frame.point('leftHip');
     final rightHip = frame.point('rightHip');

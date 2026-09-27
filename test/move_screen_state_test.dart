@@ -69,8 +69,10 @@ class _RetryRaceRepo extends RaceRepository {
   @override
   Future<List<Race>> getRaces() {
     _calls++;
-    // Throw on first 2 calls (constructor + auth listener), succeed on 3rd (retry).
-    if (_calls <= 2) {
+    // The standalone screen test creates the provider while auth is still
+    // restoring, so the authenticated listener makes one initial request.
+    // The first explicit retry is therefore the second call.
+    if (_calls == 1) {
       return Future.error(const ApiException(500, 'Internal Server Error'));
     }
     return Future.value(races);

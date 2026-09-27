@@ -13,6 +13,14 @@
         "--web-port",
         "8080"
       ]
+    },
+    {
+      "name": "Nuvo – Dev API",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=NUVO_API_BASE_URL=https://nuvo-api-dev.getnuvoapp.workers.dev"
+      ]
     }
   ]
 }

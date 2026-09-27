@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
+import 'nuvo_motion.dart';
 
 class NuvoMoveLogItem extends StatelessWidget {
   const NuvoMoveLogItem({
@@ -53,8 +54,9 @@ class NuvoMoveLogItem extends StatelessWidget {
     // Flat row — the containing list provides the single surface. No border,
     // no shadow, no margin: shadows mean "tappable surface", and a log entry
     // is content.
-    return InkWell(
+    return NuvoPressable(
       onTap: onTap,
+      haptic: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(

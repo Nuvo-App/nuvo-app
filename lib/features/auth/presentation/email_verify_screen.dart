@@ -58,14 +58,18 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.statusCode == 401
+          _error = isNetworkAuthError(e)
+              ? "Can't reach Nuvo. Check your connection and try again."
+              : e.statusCode == 401
               ? 'Invalid or expired code. Use the newest code from your email.'
               : e.statusCode >= 500
               ? 'Nuvo hit a snag. Try again.'
               : 'Could not verify your code. Try again.';
           _loading = false;
-          for (final c in _controllers) {
-            c.clear();
+          if (!isNetworkAuthError(e)) {
+            for (final c in _controllers) {
+              c.clear();
+            }
           }
         });
       }
@@ -73,8 +77,9 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
       debugPrint('[EmailVerify] finish sign-in failed (${e.runtimeType}): $e');
       if (mounted) {
         setState(() {
-          _error =
-              'Code accepted, but Nuvo could not finish sign-in. Refresh and try again.';
+          _error = isNetworkAuthError(e)
+              ? "Can't reach Nuvo. Check your connection and try again."
+              : 'Code accepted, but Nuvo could not finish sign-in. Refresh and try again.';
           _loading = false;
         });
       }

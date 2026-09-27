@@ -11,7 +11,9 @@ import '../../../core/widgets/nuvo_shared_components.dart';
 import 'auth_controller.dart';
 
 class EmailStartScreen extends ConsumerStatefulWidget {
-  const EmailStartScreen({super.key});
+  const EmailStartScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<EmailStartScreen> createState() => _EmailStartScreenState();
@@ -58,9 +60,14 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     });
     try {
       if (_isReviewerEmail) {
+        // The entered email flows through unchanged: the API maps
+        // testing@getnuvo.net to the shared review credential itself, and the
+        // controller's offline-demo fallback keys off the entered identity —
+        // the store-testing account may demo offline in release builds, the
+        // team credential may not.
         await ref
             .read(authControllerProvider.notifier)
-            .signInReviewer('team@getnuvo.net', _passwordController.text);
+            .signInReviewer(email, _passwordController.text);
         return;
       } else {
         await ref.read(authControllerProvider.notifier).startEmailAuth(email);
@@ -70,7 +77,9 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       debugPrint('[EmailStart] startEmailAuth failed (${e.runtimeType}): $e');
       if (mounted) {
         setState(() {
-          _error = _isReviewerEmail
+          _error = isNetworkAuthError(e)
+              ? "Can't reach Nuvo. Check your connection and try again."
+              : _isReviewerEmail
               ? 'Invalid review credentials.'
               : 'Could not send code. Please try again.';
           _loading = false;
@@ -79,8 +88,80 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
     }
   }
 
+  Widget _buildFields() => AutofillGroup(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NuvoTextInput(
+          controller: _emailController,
+          label: 'Email',
+          hint: 'your@email.com',
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          textInputAction: _isReviewerEmail
+              ? TextInputAction.next
+              : TextInputAction.done,
+          autocorrect: false,
+          enableSuggestions: false,
+          onSubmitted: (_) {
+            if (!_isReviewerEmail && _canSubmit) _submit();
+          },
+          onChanged: (_) => setState(() => _error = null),
+        ),
+        if (_isReviewerEmail) ...[
+          const SizedBox(height: 14),
+          NuvoTextInput(
+            controller: _passwordController,
+            label: 'Password',
+            hint: 'Password',
+            obscureText: true,
+            autofillHints: const [AutofillHints.password],
+            textInputAction: TextInputAction.done,
+            autocorrect: false,
+            enableSuggestions: false,
+            onSubmitted: (_) {
+              if (_canSubmit) _submit();
+            },
+            onChanged: (_) => setState(() => _error = null),
+          ),
+        ],
+        if (widget.embedded || _error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Semantics(
+              liveRegion: _error != null,
+              child: Text(
+                _error ??
+                    (_isReviewerEmail
+                        ? 'Use your reviewer account password.'
+                        : "We'll email you a sign-in code."),
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: _error == null ? NuvoColors.muted : NuvoColors.danger,
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildFields(),
+          const SizedBox(height: 20),
+          NuvoPrimaryButton(
+            label: 'Log in',
+            expand: true,
+            loading: _loading,
+            onPressed: _canSubmit ? _submit : null,
+          ),
+        ],
+      );
+    }
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
@@ -114,32 +195,7 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
                               ),
                             ),
                             const SizedBox(height: 30),
-                            NuvoTextInput(
-                              controller: _emailController,
-                              label: 'Email',
-                              hint: 'your@email.com',
-                              keyboardType: TextInputType.emailAddress,
-                              onChanged: (_) => setState(() => _error = null),
-                            ),
-                            if (_isReviewerEmail) ...[
-                              const SizedBox(height: 14),
-                              NuvoTextInput(
-                                controller: _passwordController,
-                                label: 'Password',
-                                hint: 'Password',
-                                obscureText: true,
-                                onChanged: (_) => setState(() => _error = null),
-                              ),
-                            ],
-                            if (_error != null) ...[
-                              const SizedBox(height: 10),
-                              Text(
-                                _error!,
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.danger,
-                                ),
-                              ),
-                            ],
+                            _buildFields(),
                           ],
                         ),
                       )

@@ -30,6 +30,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
   }
 
   Future<void> _join() async {
+    FocusScope.of(context).unfocus();
     final code = _codeController.text.trim().toUpperCase();
     if (code.isEmpty) {
       setState(() => _error = 'Enter an invite code.');
@@ -45,12 +46,18 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
       final race = await ref
           .read(raceControllerProvider.notifier)
           .joinRaceByCode(code);
-      // Replace the join flow — you're in the race now.
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("You're in the race.")));
+      }
       if (mounted) context.go('/race/${race.id}');
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = e.message.trim().isEmpty
+              ? 'That invite code didn’t work. Check it and try again.'
+              : e.message;
           _loading = false;
         });
       }
@@ -100,10 +107,33 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: NuvoColors.dangerSurface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: NuvoColors.dangerBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline_rounded,
+                              color: NuvoColors.danger,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.dangerOn,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

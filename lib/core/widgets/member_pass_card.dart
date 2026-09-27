@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../data/models/user_profile.dart';
-import '../constants/asset_paths.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
@@ -44,10 +43,13 @@ class MemberPassCard extends StatelessWidget {
           Row(
             children: [
               Image.asset(
-                AssetPaths.nuvoLogo,
+                // Use the complete `elite.icon` render here. The old
+                // transparent mark was mostly empty canvas on a light pass,
+                // which made the icon read as faint and undersized.
+                'assets/branding/nuvo_app_icon.png',
                 width: 34,
                 height: 34,
-                fit: BoxFit.contain,
+                fit: BoxFit.cover,
               ),
               const SizedBox(width: 12),
               Text(

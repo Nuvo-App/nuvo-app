@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../../core/demo/presentation_demo.dart';
 import '../data/arena_api.dart';
 import '../data/arena_models.dart';
 import '../data/arena_repository.dart';
@@ -45,11 +46,20 @@ class ArenaState {
 }
 
 class ArenaController extends StateNotifier<ArenaState> {
-  ArenaController(this._repo, {this.onSessionExpired})
-    : super(const ArenaState());
+  ArenaController(
+    this._repo, {
+    this.onSessionExpired,
+    this.isPresentationDemo = _neverPresentationDemo,
+    this.presentationUserId = _emptyPresentationUserId,
+  }) : super(const ArenaState());
 
   final ArenaRepository _repo;
   final VoidCallback? onSessionExpired;
+  final bool Function() isPresentationDemo;
+  final String Function() presentationUserId;
+
+  static bool _neverPresentationDemo() => false;
+  static String _emptyPresentationUserId() => '';
   static const _cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
   Future<void>? _loadInFlight;
@@ -114,7 +124,9 @@ class ArenaController extends StateNotifier<ArenaState> {
       );
     }
     try {
-      final snapshot = await _repo.getArenaSnapshot();
+      final snapshot = isPresentationDemo()
+          ? PresentationDemoData.arenaSnapshot(presentationUserId())
+          : await _repo.getArenaSnapshot();
       if (generation != _generation) return; // superseded by a sign-out
       _snapshotLoadedAt = DateTime.now();
       if (mounted) state = ArenaState(snapshot: snapshot);
@@ -176,6 +188,10 @@ final arenaControllerProvider =
     StateNotifierProvider<ArenaController, ArenaState>((ref) {
       final controller = ArenaController(
         ref.watch(arenaRepositoryProvider),
+        isPresentationDemo: () =>
+            isPresentationDemoUser(ref.read(authControllerProvider).user),
+        presentationUserId: () =>
+            ref.read(authControllerProvider).user?.id ?? '',
         onSessionExpired: () {
           debugPrint('[Arena] session expired — notifying AuthController');
           ref.read(authControllerProvider.notifier).sessionExpired();

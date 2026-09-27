@@ -9,6 +9,7 @@ class ChaseContext {
     this.leaderPhotoUrl,
     this.leaderGap,
     this.daysLeft,
+    this.timeLeft,
   });
 
   final int? myRank;
@@ -19,27 +20,54 @@ class ChaseContext {
   final int? leaderGap;
   final int? daysLeft;
 
+  /// Compact countdown for deadline races ("3d", "4h", "12m") — derived from
+  /// the server's `timeRemainingSeconds`/`serverTime`, never device-clock
+  /// guesswork about how much race time is left.
+  final String? timeLeft;
+
   static ChaseContext compute(Race race, String userId) {
+    // The server's viewerContext is the canonical competitive read — when the
+    // payload carries one, use its rank/gaps/leader instead of recomputing
+    // standings locally (single source of race truth).
+    final vc = race.viewerContext;
+    final lowerIsBetter = race.scoreDirection == 'lower';
+
     final sorted = [...race.participants]
       ..sort((a, b) {
         final rankA = a.rank ?? 9999;
         final rankB = b.rank ?? 9999;
         if (rankA != rankB) return rankA.compareTo(rankB);
+        // Without server ranks: fastest-time races sort ascending (a zero
+        // means "hasn't attempted" and ranks last); others descending.
+        if (lowerIsBetter) {
+          final av = a.progressValue <= 0 ? 1 << 30 : a.progressValue;
+          final bv = b.progressValue <= 0 ? 1 << 30 : b.progressValue;
+          return av.compareTo(bv);
+        }
         return b.progressValue.compareTo(a.progressValue);
       });
 
     final myIndex = sorted.indexWhere((p) => p.userId == userId);
-    final myRank = myIndex >= 0 ? sorted[myIndex].rank ?? myIndex + 1 : null;
+    final myRank =
+        vc?.rank ??
+        (myIndex >= 0 ? sorted[myIndex].rank ?? myIndex + 1 : null);
     final total = sorted.length;
 
     final myPart = race.participantFor(userId);
-    final myValue = myPart?.progressValue ?? 0;
+    final myValue = vc?.viewerScore ?? myPart?.progressValue ?? 0;
 
-    final leader = sorted.isNotEmpty ? sorted.first : null;
-    final isLeading = leader?.userId == userId;
-    final leaderGap = leader != null && !isLeading
-        ? (leader.progressValue - myValue)
-        : 0;
+    final leader =
+        vc?.leaderUserId != null
+            ? race.participantFor(vc!.leaderUserId!)
+            : (sorted.isNotEmpty ? sorted.first : null);
+    final isLeading = vc?.isLeading ?? (leader?.userId == userId);
+    final leaderGap =
+        vc?.gapToLeader ??
+        (leader != null && !isLeading
+            ? (lowerIsBetter
+                  ? myValue - leader.progressValue
+                  : leader.progressValue - myValue)
+            : 0);
 
     final personAhead = myIndex > 0 ? sorted[myIndex - 1] : null;
 
@@ -50,14 +78,20 @@ class ChaseContext {
       if (isLeading) {
         final second = sorted.length > 1 ? sorted[1] : null;
         if (second != null) {
-          final gap = myValue - second.progressValue;
+          final gap = lowerIsBetter
+              ? second.progressValue - myValue
+              : myValue - second.progressValue;
           final name = _firstName(second.displayName);
           chaseCopy = gap > 0
               ? 'Defend your lead. $name is $gap behind.'
               : 'Tied with $name. Next move wins.';
         }
       } else if (personAhead != null) {
-        final gapToPass = personAhead.progressValue - myValue;
+        final gapToPass =
+            vc?.gapToNextRank ??
+            (lowerIsBetter
+                ? myValue - personAhead.progressValue
+                : personAhead.progressValue - myValue);
         final name = _firstName(personAhead.displayName);
         if (gapToPass <= 0) {
           chaseCopy = 'Tied with $name. Next move wins.';
@@ -73,12 +107,23 @@ class ChaseContext {
       }
     }
 
+    // Deadline math runs off the server clock — device time is display only.
+    final serverNow =
+        DateTime.tryParse(race.serverTime ?? '')?.toUtc() ??
+        DateTime.now().toUtc();
     int? daysLeft;
-    if (race.finishLineAt != null) {
-      try {
-        final finish = DateTime.parse(race.finishLineAt!);
-        daysLeft = finish.difference(DateTime.now()).inDays.clamp(0, 9999);
-      } catch (_) {}
+    String? timeLeft;
+    final remainingSeconds = vc?.timeRemainingSeconds;
+    if (remainingSeconds != null) {
+      timeLeft = _compactCountdown(remainingSeconds);
+      daysLeft = (remainingSeconds / 86400).floor().clamp(0, 9999);
+    } else if (race.finishLineAt != null) {
+      final finish = DateTime.tryParse(race.finishLineAt!);
+      if (finish != null) {
+        final secs = finish.difference(serverNow).inSeconds.clamp(0, 99999999);
+        daysLeft = (secs / 86400).floor();
+        timeLeft = _compactCountdown(secs);
+      }
     }
 
     return ChaseContext(
@@ -93,7 +138,16 @@ class ChaseContext {
           : null,
       leaderGap: leaderGap > 0 ? leaderGap : null,
       daysLeft: daysLeft,
+      timeLeft: timeLeft,
     );
+  }
+
+  /// "3d" / "4h" / "12m" / "<1m" — compact deadline countdown.
+  static String _compactCountdown(int seconds) {
+    if (seconds >= 86400) return '${seconds ~/ 86400}d';
+    if (seconds >= 3600) return '${seconds ~/ 3600}h';
+    if (seconds >= 60) return '${seconds ~/ 60}m';
+    return '<1m';
   }
 
   static String _firstName(String name) {

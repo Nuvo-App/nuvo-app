@@ -4,7 +4,7 @@ import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
-import { activityForId, normalizeActivityId, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
+import { activityForId, normalizeActivityIdLoose, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
 import {
   CUSTOM_VERIFIER_TYPE,
   MANUAL_VERIFIER_TYPE,
@@ -13,15 +13,35 @@ import {
   configFromBody,
   customConfigFromBody,
   manualConfigFromBody,
+  registryConfigFromBody,
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission } from '../domain/raceScoring';
 import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
+import {
+  deadlineEligibility,
+  finalizeRaceIfEnded,
+  lockedFieldsPresent,
+  markRaceStartedIfDue,
+  rulesLocked,
+  scoreDirectionFor,
+} from '../domain/raceFinalize';
+import { recordRaceEvents, type RaceEventInput } from '../domain/raceEvents';
+import { notifyEvent, notifyLifecycleTransitions, notifyRaceEvents, type LifecycleTransitionLike } from '../domain/notificationPolicy';
+import { scheduleRaceStartingSoon } from '../domain/notificationJobs';
+import { computeViewerContext } from '../domain/raceContext';
+import {
+  attemptsUsed,
+  bindableOpenAttempt,
+  closeAttempt,
+  formatUsesAttempts,
+  openAttempt,
+} from '../domain/raceAttempts';
+import { recordPersonalBestIfImproved } from '../domain/raceBests';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
-import { safeEmit } from '../domain/notifications';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
-import { readMotionRelease } from '../domain/motionRegistry';
+import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
 
 export const racesRouter = new Hono<AppEnv>();
 racesRouter.use('*', requireAuth);
@@ -148,9 +168,12 @@ async function getProfileName(db: D1Database, userId: string): Promise<string | 
 }
 
 function raceConfigFromRow(race: RaceRow): RaceConfig | null {
-  const activityId = normalizeActivityId(race.activity_id ?? race.movement_type);
+  // Registry-published activities have no static catalog entry — the loose
+  // normalizer preserves their raw ID so the row still produces a config
+  // instead of silently degrading to "no verifier".
+  const activityId = normalizeActivityIdLoose(race.activity_id ?? race.movement_type);
   const activity = activityForId(activityId);
-  if (!activity || !activityId) return null;
+  if (!activityId) return null;
   const metric = normalizeMetric(race.metric ?? race.target_unit, activity);
   if (!metric) return null;
   const format = ((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as RaceFormat;
@@ -203,17 +226,20 @@ async function notifyRaceJoined(
   userId: string,
   wasMember: boolean,
 ): Promise<void> {
+  if (!wasMember) {
+    await recordRaceEvents(c.env.DB, race.id, [
+      { type: 'race_joined', actorUserId: userId, subjectUserId: userId, payload: { title: race.title } },
+    ]);
+  }
   if (wasMember || race.creator_id === userId) return;
   const joiner = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
-  await safeEmit(c, {
+  await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+    type: 'race_member_joined',
     userId: race.creator_id,
-    category: 'race_joined',
     actorUserId: userId,
-    title: `${joiner} joined ${race.title}`,
-    dest: { type: 'race', id: race.id },
-    entityType: 'race',
-    entityId: race.id,
-    dedupeKey: `race_joined:${race.id}:${userId}`,
+    actorName: joiner,
+    raceId: race.id,
+    raceTitle: race.title,
   });
 }
 
@@ -234,7 +260,7 @@ async function ensureProgress(db: D1Database, raceId: string, userId: string): P
   ).bind(generateId(), raceId, userId).run();
 }
 
-async function rankedScores(db: D1Database, raceId: string): Promise<RankedScore[]> {
+async function rankedScores(db: D1Database, raceId: string, direction: 'higher' | 'lower' = 'higher'): Promise<RankedScore[]> {
   const rows = await db.prepare(
     `SELECT rm.user_id, rm.joined_at, rp.progress_value, rp.completed_at
      FROM race_members rm
@@ -246,11 +272,11 @@ async function rankedScores(db: D1Database, raceId: string): Promise<RankedScore
     joined_at: row.joined_at,
     progress_value: row.progress_value ?? 0,
     completed_at: row.completed_at,
-  })));
+  })), { direction: direction === 'lower' ? 'asc' : 'desc' });
 }
 
-async function recomputeRanks(db: D1Database, raceId: string): Promise<RankedScore[]> {
-  const ranked = await rankedScores(db, raceId);
+async function recomputeRanks(db: D1Database, raceId: string, direction: 'higher' | 'lower' = 'higher'): Promise<RankedScore[]> {
+  const ranked = await rankedScores(db, raceId, direction);
   const stmts = ranked.map((r) => db.prepare(
     'UPDATE race_progress SET rank_cache = ? WHERE race_id = ? AND user_id = ?'
   ).bind(r.rank, raceId, r.user_id));
@@ -290,11 +316,6 @@ interface RaceScoringConfig {
   targetValue: number | null;
 }
 
-async function rankForUser(db: D1Database, raceId: string, userId: string): Promise<number | null> {
-  const ranked = await rankedScores(db, raceId);
-  return ranked.find((row) => row.user_id === userId)?.rank ?? null;
-}
-
 function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
   const presetConfig = raceConfigFromRow(race);
   if (presetConfig) {
@@ -324,11 +345,22 @@ function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
   };
 }
 
-async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<SubmissionResult> {
+interface ScoredSubmission extends SubmissionResult {
+  /** Domain events this submission produced (already persisted). */
+  events: RaceEventInput[];
+  /** Member rows for notification fan-out (names resolved by caller). */
+  memberIds: string[];
+  /** The rank-1 member before this submission (for displaced-leader copy). */
+  leaderUserIdBefore: string | null;
+  finished: boolean;
+}
+
+async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<ScoredSubmission> {
   const scoring = raceScoringConfigFromRow(race);
   if (!scoring) throw new Error('Race is missing activity configuration');
   const increment = Math.max(0, Math.floor(value));
   if (increment <= 0) throw new Error('Verified value must be greater than 0');
+  const direction = scoreDirectionFor(race);
 
   const progress = await db.prepare(
     'SELECT progress_value, completed_at FROM race_progress WHERE race_id = ? AND user_id = ?'
@@ -336,7 +368,12 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
   if (!progress) throw new Error('Only race participants can submit proof');
 
   const current = progress?.progress_value ?? 0;
-  const previousRank = await rankForUser(db, race.id, userId);
+  // One pre-submission ranking captures both the submitter's previous rank
+  // and the leader who may be displaced — no second scan.
+  const rankedBefore = await rankedScores(db, race.id, direction);
+  const previousRank = rankedBefore.find((row) => row.user_id === userId)?.rank ?? null;
+  const leaderBefore = rankedBefore[0]?.user_id ?? null;
+
   const scored = applyVerifiedSubmission({
     format: scoring.format,
     scoringRule: scoring.scoringRule,
@@ -352,8 +389,9 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
     `UPDATE race_progress SET progress_value = ?, progress_percent = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
      WHERE race_id = ? AND user_id = ?`
   ).bind(scored.newScore, scored.progressPercent, completedAt, race.id, userId).run();
-  const ranked = await recomputeRanks(db, race.id);
+  const ranked = await recomputeRanks(db, race.id, direction);
   const newRank = ranked.find((row) => row.user_id === userId)?.rank ?? null;
+  const leaderAfter = ranked[0]?.user_id ?? null;
 
   let raceCompleted = false;
   let winnerUserId: string | null = race.winner_user_id ?? null;
@@ -374,6 +412,86 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
     }
   }
 
+  // Live-poll version counter + durable domain events.
+  await db.prepare('UPDATE races SET version = COALESCE(version, 0) + 1 WHERE id = ?').bind(race.id).run();
+
+  const events: RaceEventInput[] = [
+    {
+      type: 'progress_accepted',
+      actorUserId: userId,
+      subjectUserId: userId,
+      payload: {
+        value: increment,
+        previousScore: current,
+        newScore: scored.newScore,
+        previousRank,
+        newRank,
+        format: scoring.format,
+      },
+    },
+  ];
+  if (previousRank !== null && newRank !== null && newRank !== previousRank) {
+    // Members whose rank sat between the submitter's new and old rank were
+    // just overtaken — the notification policy decides which of those drops
+    // are worth an interruption (podium contention / crew only).
+    const overtakenUserIds = rankedBefore
+      .filter(
+        (r) =>
+          r.user_id !== userId &&
+          r.rank >= newRank &&
+          r.rank < previousRank,
+      )
+      .map((r) => r.user_id)
+      .slice(0, 50);
+    events.push({
+      type: 'rank_changed',
+      actorUserId: userId,
+      subjectUserId: userId,
+      payload: { previousRank, newRank, overtakenUserIds },
+    });
+  }
+  // Lead change = a different member now holds rank 1. Subject is the
+  // displaced leader so consumers can target the overtake notification.
+  if (leaderAfter && leaderBefore !== leaderAfter) {
+    events.push({
+      type: 'lead_changed',
+      actorUserId: leaderAfter,
+      subjectUserId: leaderBefore,
+      payload: { newLeaderUserId: leaderAfter, displacedUserId: leaderBefore },
+    });
+  }
+  const finished = scored.completed;
+  if (finished) {
+    events.push({
+      type: 'participant_finished',
+      actorUserId: userId,
+      subjectUserId: userId,
+      payload: { score: scored.newScore, finishedAt: completedAt },
+    });
+  }
+  if (raceCompleted && winnerUserId) {
+    events.push(
+      {
+        type: 'race_finished',
+        payload: {
+          title: race.title,
+          format: scoring.format,
+          winnerUserId,
+          tiedForFirst: false,
+          topScore: scored.newScore,
+        },
+      },
+      {
+        type: 'winner_determined',
+        subjectUserId: winnerUserId,
+        payload: { score: scored.newScore, rank: 1, tied: false },
+      },
+    );
+  }
+  await recordRaceEvents(db, race.id, events);
+
+  const memberIds = ranked.map((row) => row.user_id);
+
   return {
     verifiedValue: increment,
     previousScore: current,
@@ -383,10 +501,14 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
     peoplePassed: previousRank && newRank && newRank < previousRank ? previousRank - newRank : 0,
     raceCompleted,
     winnerUserId,
+    events,
+    memberIds,
+    leaderUserIdBefore: leaderBefore,
+    finished,
   };
 }
 
-type ParticipantRow = { id: string; user_id: string; joined_at: string; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
+type ParticipantRow = { id: string; user_id: string; joined_at: string; finished_at?: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
 type MoveRow = MoveLogRow & { display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
 type StandingRow = { user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
 
@@ -422,6 +544,7 @@ function shapeRaceResponse(
   visibilityCtx: { allowedIds: Set<string>; blockedEitherWay: Set<string> },
   submissionResult?: SubmissionResult,
   releasedSpec?: Record<string, unknown> | null,
+  viewerAttempts?: { used: number; openAttemptId: string | null },
 ) {
   const { participants, moves, invite, finalStandings } = collections;
   const { allowedIds, blockedEitherWay } = visibilityCtx;
@@ -458,6 +581,31 @@ function shapeRaceResponse(
   const verifier = parsedVerifierSpec(race, releasedSpec);
   const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
+  const scoreDirection = scoreDirectionFor(race);
+  const now = new Date();
+
+  const viewerContext = computeViewerContext({
+    raceId: race.id,
+    format: scoring?.format ?? 'first_to_goal',
+    targetValue: race.target_value,
+    startAt: race.start_at,
+    endAt: race.end_at,
+    storedStatus: race.status,
+    winnerUserId: race.winner_user_id ?? null,
+    scoreDirection,
+    attemptLimit: race.attempt_limit ?? null,
+    attemptDurationSeconds: race.attempt_duration_seconds ?? null,
+    standings: participants.map((p) => ({
+      userId: p.user_id,
+      score: p.progress_value ?? 0,
+      rank: p.rank_cache,
+      finishedAt: p.finished_at ?? null,
+    })),
+    attemptsUsed: viewerAttempts?.used ?? 0,
+    openAttemptId: viewerAttempts?.openAttemptId ?? null,
+    viewerUserId,
+    now,
+  });
 
   return {
     id: race.id,
@@ -466,7 +614,7 @@ function shapeRaceResponse(
     description: race.description,
     category: '',
     goalType: mapRaceTypeToGoalType(race.race_type),
-    activityId: isCustomVerifier ? null : config?.activityId ?? normalizeActivityId(race.activity_id ?? race.movement_type) ?? null,
+    activityId: isCustomVerifier ? null : config?.activityId ?? normalizeActivityIdLoose(race.activity_id ?? race.movement_type) ?? null,
     metric: isCustomVerifier ? scoring?.metric ?? 'reps' : config?.metric ?? normalizeMetric(race.metric ?? race.target_unit, config ? activityForId(config.activityId) : undefined) ?? null,
     format: scoring?.format ?? 'first_to_goal',
     scoringRule: scoring?.scoringRule ?? 'cumulative_sum',
@@ -490,6 +638,11 @@ function shapeRaceResponse(
     winnerUserId: race.winner_user_id ?? null,
     completedAt: race.completed_at ?? null,
     verifierReleaseId: race.verifier_release_id ?? null,
+    scoreDirection,
+    version: race.version ?? 0,
+    leaderUserId: participants.length > 0 ? participants[0].user_id : null,
+    serverTime: now.toISOString(),
+    viewerContext,
     startLineAt: race.start_at,
     finishLineAt: race.end_at,
     rules: '',
@@ -510,6 +663,7 @@ function shapeRaceResponse(
         progressPercent: p.progress_percent ?? 0,
         rank: p.rank_cache,
         joinedAt: p.joined_at,
+        finishedAt: p.finished_at ?? null,
       };
     }),
     recentProofs: moves.map((m) => {
@@ -564,14 +718,55 @@ function shapeRaceResponse(
 /// Single-race response — detail/create/join/proof endpoints. Fetches this
 /// race's sub-collections plus the viewer's visibility context, then shapes.
 async function buildRaceResponse(
-  db: D1Database,
+  env: AppEnv['Bindings'],
   viewerUserId: string | undefined,
   race: RaceRow,
   submissionResult?: SubmissionResult,
 ) {
+  const db = env.DB;
+  // Lazy lifecycle: correctness never waits for cron. A read that crosses a
+  // start line emits race_started once; a read past end_at finalizes
+  // (atomic claim inside — concurrent callers can't double-finalize).
+  // Transitions must also reach the notification policy HERE — the cron
+  // sweep only scans still-active races, so an edge claimed by this read
+  // would otherwise produce its durable events but lose its notifications.
+  const now = new Date();
+  const transitions: LifecycleTransitionLike[] = [];
+  if (race.status === 'active') {
+    if (race.end_at && new Date(race.end_at).getTime() <= now.getTime()) {
+      const fin = await finalizeRaceIfEnded(db, race, now);
+      if (fin.finalized) {
+        race = { ...race, status: 'completed', completed_at: race.end_at, winner_user_id: fin.winnerUserId };
+        transitions.push({ race, events: fin.events });
+      }
+    } else if (race.start_at && new Date(race.start_at).getTime() <= now.getTime()) {
+      if (await markRaceStartedIfDue(db, race, now)) {
+        transitions.push({
+          race,
+          events: [{ type: 'race_started', payload: { title: race.title, startAt: race.start_at } }],
+        });
+      }
+    }
+  }
+  if (transitions.length > 0) {
+    await notifyLifecycleTransitions(env, undefined, transitions);
+  }
+
+  const viewerAttempts = viewerUserId && formatUsesAttempts((race.format ?? race.race_type) as string)
+    ? {
+        used: await attemptsUsed(db, race.id, viewerUserId),
+        openAttemptId: (
+          await db
+            .prepare("SELECT id FROM race_attempts WHERE race_id = ? AND user_id = ? AND status = 'open'")
+            .bind(race.id, viewerUserId)
+            .first<{ id: string }>()
+        )?.id ?? null,
+      }
+    : undefined;
+
   const [participants, moves, invite, finalStandings, release] = await Promise.all([
     db.prepare(
-      `SELECT rm.id, rm.user_id, rm.joined_at,
+      `SELECT rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
               p.private_profile,
@@ -602,6 +797,11 @@ async function buildRaceResponse(
     ).bind(race.id).all<StandingRow>(),
     race.verifier_release_id
       ? readMotionRelease(db, race.verifier_release_id)
+      // Older preset races may not have received a registry assignment. Feed
+      // the current stable spec to the client so Verify can open, then let the
+      // verification-session route persist the repaired assignment.
+      : race.activity_id
+      ? stableReleaseForActivity(db, race.activity_id, viewerUserId)
       : Promise.resolve(null),
   ]);
 
@@ -613,6 +813,7 @@ async function buildRaceResponse(
     visibilityCtx,
     submissionResult,
     release?.spec ?? null,
+    viewerAttempts,
   );
 }
 
@@ -638,18 +839,48 @@ function groupByRaceId<T extends { race_id: string }>(rows: T[], cap?: number): 
 /// waterfall that made Compete/Verify (both backed by this endpoint) slow
 /// to populate while Arena's already-batched /arena endpoint loaded fast.
 async function buildRaceResponsesBatch(
-  db: D1Database,
+  env: AppEnv['Bindings'],
   viewerUserId: string,
   races: RaceRow[],
 ): Promise<unknown[]> {
   if (races.length === 0) return [];
+  const db = env.DB;
+
+  // Lazy lifecycle on the read path: ended races finalize once (atomic
+  // claim), races past their start line emit race_started once — and the
+  // transitions publish here, or their notifications are lost (the sweep
+  // only scans still-active races).
+  const now = new Date();
+  const transitions: LifecycleTransitionLike[] = [];
+  for (const race of races) {
+    if (race.status !== 'active') continue;
+    if (race.end_at && new Date(race.end_at).getTime() <= now.getTime()) {
+      const fin = await finalizeRaceIfEnded(db, race, now);
+      if (fin.finalized) {
+        race.status = 'completed';
+        race.completed_at = race.end_at;
+        race.winner_user_id = fin.winnerUserId;
+        transitions.push({ race: { ...race }, events: fin.events });
+      }
+    } else if (race.start_at && new Date(race.start_at).getTime() <= now.getTime()) {
+      if (await markRaceStartedIfDue(db, race, now)) {
+        transitions.push({
+          race,
+          events: [{ type: 'race_started', payload: { title: race.title, startAt: race.start_at } }],
+        });
+      }
+    }
+  }
+  if (transitions.length > 0) {
+    await notifyLifecycleTransitions(env, undefined, transitions);
+  }
 
   const ids = races.map((r) => r.id);
   const placeholders = ids.map(() => '?').join(', ');
 
   const [participantsRows, movesRows, invitesRows, standingsRows, visibilityCtx] = await Promise.all([
     db.prepare(
-      `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at,
+      `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
               p.private_profile, p.username,
@@ -735,7 +966,7 @@ racesRouter.post('/join-code', async (c) => {
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
   await notifyRaceJoined(c, race, userId, wasMember);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // GET /races
@@ -749,7 +980,7 @@ racesRouter.get('/', async (c) => {
   ).bind(userId, userId).all<RaceRow>();
   let races: unknown[];
   try {
-    races = await buildRaceResponsesBatch(c.env.DB, userId, rows.results);
+    races = await buildRaceResponsesBatch(c.env, userId, rows.results);
   } catch (err) {
     // Batch failed for the whole page (e.g. one bad row) — fall back to the
     // slower per-race path so one corrupt race doesn't blank the entire list.
@@ -758,7 +989,7 @@ racesRouter.get('/', async (c) => {
     races = [];
     for (const row of rows.results) {
       try {
-        races.push(await buildRaceResponse(c.env.DB, userId, row));
+        races.push(await buildRaceResponse(c.env, userId, row));
       } catch (rowErr) {
         const rowMessage = rowErr instanceof Error ? rowErr.message : String(rowErr);
         console.error('[races] GET /races skipping corrupt race:', row.id, rowMessage);
@@ -799,7 +1030,25 @@ racesRouter.post('/', async (c) => {
   const verificationType = isCustomConfig
     ? 'movecheck'
     : mapProofRequirementToVerificationType(verificationRaw);
-  const structuredConfig = isCustomConfig || manual ? null : configFromBody(body);
+  let structuredConfig = isCustomConfig || manual ? null : configFromBody(body);
+  if (!isCustomConfig && !manual && structuredConfig && 'error' in structuredConfig) {
+    // The static catalog rejected the activity — but a control-plane activity
+    // this Worker predates may still be legitimate. When the ID normalizes to
+    // a safe registry shape, look the activity up in the motion registry and
+    // build the config from its published metric/format bounds. Only a
+    // supported activity with a live stable pointer can be raced.
+    const looseId = normalizeActivityIdLoose(
+      stringOrNull(body.activityId) ?? stringOrNull(body.activity_id) ?? stringOrNull(body.aiActivityType),
+    );
+    const registryActivity = looseId
+      ? await readRegistryActivity(c.env.DB, looseId)
+      : null;
+    if (registryActivity &&
+        registryActivity.availability === 'supported' &&
+        registryActivity.releaseId) {
+      structuredConfig = registryConfigFromBody(body, registryActivity);
+    }
+  }
   if (!isCustomConfig && !manual && verificationType === 'movecheck' && structuredConfig && 'error' in structuredConfig) {
     return c.json(badRequest(structuredConfig.error), 400);
   }
@@ -819,21 +1068,23 @@ racesRouter.post('/', async (c) => {
   const endAt = custom?.endsAt ?? manual?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
   const raceFormat = custom?.format ?? manual?.format ?? config?.format ?? raceType;
-  const raceActivityId = custom || manual ? null : config?.activityId ?? normalizeActivityId(movementType);
-  const raceMetric = custom?.metric ?? manual?.metric ?? config?.metric ?? normalizeMetric(stringOrNull(body.metric) ?? targetUnit, activityForId(normalizeActivityId(movementType)));
+  const raceActivityId = custom || manual ? null : config?.activityId ?? normalizeActivityIdLoose(movementType);
+  const raceMetric = custom?.metric ?? manual?.metric ?? config?.metric ?? normalizeMetric(stringOrNull(body.metric) ?? targetUnit, activityForId(normalizeActivityIdLoose(movementType)));
   const raceScoringRule = custom?.scoringRule ?? manual?.scoringRule ?? config?.scoringRule ?? 'cumulative_sum';
   const raceAttemptDurationSeconds = custom?.attemptDurationSeconds ?? config?.attemptDurationSeconds ?? null;
   const raceAttemptLimit = custom?.attemptLimit ?? config?.attemptLimit ?? null;
   const raceVerificationMethod = custom?.verificationMethod ?? config?.verificationMethod ?? (verificationType === 'movecheck' ? 'camera_pose' : verificationType);
   const raceTimezone = custom?.timezone ?? manual?.timezone ?? config?.timezone ?? 'America/New_York';
   const raceRecurrence = custom?.recurrence ?? manual?.recurrence ?? config?.recurrence ?? 'none';
+  // 'lower' = fastest/lowest verified value wins (time-attack races).
+  const raceScoreDirection = body.scoreDirection === 'lower' || body.score_direction === 'lower' ? 'lower' : 'higher';
 
   // Preset races are assigned to the stable immutable release at creation.
   // Custom-pose and manual races deliberately stay on their existing paths.
   let presetRelease = null;
   if (raceActivityId && !custom && !manual) {
     try {
-      presetRelease = await stableReleaseForActivity(c.env.DB, raceActivityId);
+      presetRelease = await stableReleaseForActivity(c.env.DB, raceActivityId, userId);
     } catch (error) {
       // Keep the pre-0015 compatibility path usable while the registry
       // migration rolls out. A race must never silently point at a wrong
@@ -853,9 +1104,9 @@ racesRouter.post('/', async (c) => {
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
           attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-          timezone, recurrence, status, visibility, start_at, end_at,
+          timezone, recurrence, status, visibility, start_at, end_at, score_direction,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -882,13 +1133,14 @@ racesRouter.post('/', async (c) => {
         visibility,
         startAt,
         endAt,
+        raceScoreDirection,
       )
     : c.env.DB.prepare(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at,
+          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -911,6 +1163,7 @@ racesRouter.post('/', async (c) => {
         visibility,
         startAt,
         endAt,
+        raceScoreDirection,
       );
 
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
@@ -948,8 +1201,26 @@ racesRouter.post('/', async (c) => {
   if (!race) {
     return c.json({ ok: false, error: 'Race was created but could not be loaded.' }, 500);
   }
-  await recomputeRanks(c.env.DB, raceId);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) }, 201);
+  await recomputeRanks(c.env.DB, raceId, raceScoreDirection);
+  await recordRaceEvents(c.env.DB, raceId, [
+    {
+      type: 'race_created',
+      actorUserId: userId,
+      payload: {
+        title,
+        format: raceFormat,
+        metric: raceMetric,
+        targetValue,
+        startAt,
+        endAt,
+        scoreDirection: raceScoreDirection,
+      },
+    },
+  ]);
+  // Scheduled start line → "starts in 30 min" reminder job (notification
+  // policy owns reminders; the race itself never depends on it firing).
+  if (startAt) await scheduleRaceStartingSoon(c.env.DB, raceId, startAt);
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) }, 201);
 });
 
 // GET /races/:id
@@ -957,7 +1228,7 @@ racesRouter.get('/:id', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id') ?? '');
   if (!race) return c.json(badRequest('Race not found'), 404);
   try {
-    return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+    return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[races] GET /races/:id buildRaceResponse failed:', race.id, message);
@@ -974,6 +1245,29 @@ racesRouter.patch('/:id', async (c) => {
 
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
+
+  // Rule immutability: once competition has begun (any verified proof, or a
+  // scheduled start line already passed) the fields that define the
+  // competition are locked. Title/description/visibility/status always
+  // stay editable — cancel and rename are not rule rewrites.
+  const lockedAttempt = lockedFieldsPresent(body);
+  if (lockedAttempt.length > 0) {
+    const verified = await c.env.DB
+      .prepare("SELECT id FROM move_logs WHERE race_id = ? AND status = 'verified' LIMIT 1")
+      .bind(race.id)
+      .first<{ id: string }>();
+    if (
+      rulesLocked({ startAt: race.start_at, hasVerifiedMoves: Boolean(verified), now: new Date() })
+    ) {
+      return c.json(
+        badRequest(
+          `Race rules are locked once competition starts (${lockedAttempt.join(', ')}). ` +
+            'You can still rename the race or cancel it.',
+        ),
+        409,
+      );
+    }
+  }
 
   const updates: string[] = [];
   const values: unknown[] = [];
@@ -1015,12 +1309,16 @@ racesRouter.patch('/:id', async (c) => {
   if (typeof body.status === 'string' && RACE_STATUSES.has(body.status)) { updates.push('status = ?'); values.push(body.status); }
   if (typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility)) { updates.push('visibility = ?'); values.push(body.visibility); }
 
-  if (updates.length === 0) return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  if (updates.length === 0) return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 
   updates.push('updated_at = CURRENT_TIMESTAMP');
   await c.env.DB.prepare(`UPDATE races SET ${updates.join(', ')} WHERE id = ?`).bind(...values, race.id).run();
   const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), updated!) });
+  // A moved start line re-arms the pre-start reminder (INSERT OR IGNORE on
+  // the job dedupe key keeps this idempotent; stale jobs self-cancel at
+  // claim time because they re-check the race's actual start_at).
+  if (updated?.start_at) await scheduleRaceStartingSoon(c.env.DB, race.id, updated.start_at);
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
 });
 
 async function setRaceStatus(c: Context<AppEnv>, status: string) {
@@ -1030,7 +1328,7 @@ async function setRaceStatus(c: Context<AppEnv>, status: string) {
   if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can change this race'), 403);
   await c.env.DB.prepare('UPDATE races SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(status, race.id).run();
   const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), updated!) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
 }
 
 racesRouter.post('/:id/archive', (c) => setRaceStatus(c, 'archived'));
@@ -1075,7 +1373,7 @@ racesRouter.post('/:id/join', async (c) => {
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
   await notifyRaceJoined(c, race, userId, wasMember);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // POST /races/:id/participants
@@ -1106,18 +1404,17 @@ racesRouter.post('/:id/participants', async (c) => {
   await ensureMember(c.env.DB, race.id, targetUserId);
   await ensureProgress(c.env.DB, race.id, targetUserId);
   if (!targetWasMember && targetUserId !== userId) {
-    await safeEmit(c, {
+    const actorName = await getProfileName(c.env.DB, userId);
+    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+      type: 'race_invited',
       userId: targetUserId,
-      category: 'race_invite',
       actorUserId: userId,
-      title: `You were added to ${race.title}`,
-      dest: { type: 'race', id: race.id },
-      entityType: 'race',
-      entityId: race.id,
-      dedupeKey: `race_invite:${race.id}:${targetUserId}`,
+      actorName,
+      raceId: race.id,
+      raceTitle: race.title,
     });
   }
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // POST /races/:id/members (new endpoint, same as /participants)
@@ -1148,18 +1445,17 @@ racesRouter.post('/:id/members', async (c) => {
   await ensureMember(c.env.DB, race.id, targetUserId);
   await ensureProgress(c.env.DB, race.id, targetUserId);
   if (!targetWasMember && targetUserId !== userId) {
-    await safeEmit(c, {
+    const actorName = await getProfileName(c.env.DB, userId);
+    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+      type: 'race_invited',
       userId: targetUserId,
-      category: 'race_invite',
       actorUserId: userId,
-      title: `You were added to ${race.title}`,
-      dest: { type: 'race', id: race.id },
-      entityType: 'race',
-      entityId: race.id,
-      dedupeKey: `race_invite:${race.id}:${targetUserId}`,
+      actorName,
+      raceId: race.id,
+      raceTitle: race.title,
     });
   }
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // DELETE /races/:id/members/:userId
@@ -1175,7 +1471,7 @@ racesRouter.delete('/:id/members/:userId', async (c) => {
   await c.env.DB.prepare(
     "UPDATE race_members SET status = 'removed' WHERE race_id = ? AND user_id = ?"
   ).bind(race.id, targetUserId).run();
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // POST /races/:id/invite-code
@@ -1188,7 +1484,7 @@ racesRouter.post('/:id/invite-code', async (c) => {
   const existing = await c.env.DB.prepare(
     `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
   ).bind(race.id).first<InviteRow>();
-  if (existing) return c.json({ ok: true, inviteCode: existing.invite_code, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  if (existing) return c.json({ ok: true, inviteCode: existing.invite_code, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 
   let code = generateInviteCode();
   for (let i = 0; i < 5; i++) {
@@ -1201,7 +1497,7 @@ racesRouter.post('/:id/invite-code', async (c) => {
     `INSERT INTO race_invites (id, race_id, created_by, invite_code, status, created_at)
      VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`
   ).bind(generateId(), race.id, userId, code).run();
-  return c.json({ ok: true, inviteCode: code, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, inviteCode: code, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // POST /races/:id/move-log
@@ -1214,7 +1510,11 @@ racesRouter.post('/:id/move-log', async (c) => {
 
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  // One authoritative lifecycle check — same eligibility as /proof. A
+  // scheduled race cannot silently accept progress before its start line.
+  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') {
+    return c.json(badRequest('Race is not active'), 400);
+  }
 
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
@@ -1251,7 +1551,7 @@ racesRouter.post('/:id/move-log', async (c) => {
   if (status === 'verified') await applyMoveProgress(c.env.DB, race, userId, value);
 
   const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), updated!) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
 });
 
 // GET /races/:id/move-logs
@@ -1316,7 +1616,7 @@ racesRouter.patch('/:id/progress/:userId', async (c) => {
   ).bind(progressValue, newPercent, completedAt, race.id, targetUserId).run();
   await recomputeRanks(c.env.DB, race.id);
 
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), race) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
 // POST /races/:id/proof - legacy endpoint, maps to move_logs.
@@ -1367,10 +1667,18 @@ racesRouter.post('/:id/proof', async (c) => {
           winnerUserId: updated?.winner_user_id ?? race.winner_user_id ?? null,
         }
         : undefined;
-      return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), updated!, result), submissionResult: result ?? null });
+      return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!, result), submissionResult: result ?? null });
     }
   }
-  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') return c.json(badRequest('Race is not active'), 400);
+  // Time authority: the server clock decides eligibility. A submission inside
+  // the window is always fine; past the deadline it survives only when the
+  // client-reported capture time precedes end_at AND arrives within the
+  // grace window (bounded clock-skew tolerance — see domain/raceFinalize).
+  const capturedAtRaw = stringOrNull(body.capturedAt) ?? stringOrNull(body.captured_at) ?? null;
+  const capturedAt = capturedAtRaw ? new Date(capturedAtRaw) : null;
+  const eligibility = deadlineEligibility(race, capturedAt, new Date());
+  if (eligibility === 'closed') return c.json(badRequest('Race is not active'), 400);
+
   const value = isAiMotion ? nonNegativeIntOrNull(body.value) : positiveIntOrNull(body.value);
   const increment = value ?? 0;
   if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
@@ -1440,6 +1748,8 @@ racesRouter.post('/:id/proof', async (c) => {
     target_value: targetValue,
     frames_analyzed: framesAnalyzed,
     valid_pose_frames: validPoseFrames,
+    captured_at: capturedAt?.toISOString() ?? null,
+    accepted_in_grace: eligibility === 'grace',
     ...(isCustom ? {
       completion_events: completionEvents,
       invalid_attempt_count: invalidAttemptCount,
@@ -1467,7 +1777,7 @@ racesRouter.post('/:id/proof', async (c) => {
     userId,
     isAiMotion ? 'movecheck' : 'manual',
     activityType,
-    normalizeActivityId(activityType),
+    normalizeActivityIdLoose(activityType),
     metric ?? scoring.metric,
     increment,
     race.target_unit,
@@ -1479,8 +1789,19 @@ racesRouter.post('/:id/proof', async (c) => {
     clientSubmissionId,
   ).run();
 
-  let result: SubmissionResult | undefined;
+  let result: ScoredSubmission | undefined;
   if (moveStatus === 'verified') {
+    // Attempt races require a declared attempt. Auto-bind: the client opens
+    // an attempt, then submits proof through this same unchanged payload —
+    // the open attempt claims the verified score (duration enforced in
+    // bindableOpenAttempt via deadline + grace).
+    const usesAttempts = formatUsesAttempts(scoring.format);
+    const boundAttempt = usesAttempts ? await bindableOpenAttempt(c.env.DB, race, userId) : null;
+    if (usesAttempts && !boundAttempt) {
+      await c.env.DB.prepare('UPDATE move_logs SET status = ?, summary = ? WHERE id = ?')
+        .bind('rejected', 'No open attempt — start an attempt first.', moveId).run();
+      return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
+    }
     try {
       result = await applyMoveProgress(c.env.DB, race, userId, increment);
       await c.env.DB.prepare(
@@ -1494,6 +1815,64 @@ racesRouter.post('/:id/proof', async (c) => {
         result.raceCompleted ? 1 : 0,
         moveId,
       ).run();
+
+      if (boundAttempt) {
+        await closeAttempt(c.env.DB, boundAttempt.id, increment, moveId);
+        const attemptEvents: RaceEventInput[] = [
+          {
+            type: 'attempt_completed',
+            actorUserId: userId,
+            subjectUserId: userId,
+            payload: {
+              attemptId: boundAttempt.id,
+              attemptIndex: boundAttempt.attempt_index,
+              score: increment,
+              durationSeconds: race.attempt_duration_seconds ?? null,
+            },
+          },
+        ];
+        const pb = await recordPersonalBestIfImproved(c.env.DB, race, userId, increment, moveId);
+        if (pb.improved) {
+          attemptEvents.push({
+            type: 'personal_best',
+            actorUserId: userId,
+            subjectUserId: userId,
+            payload: { previousBest: pb.previousBest, newBest: pb.newBest, metric: race.metric ?? 'reps' },
+          });
+        }
+        await recordRaceEvents(c.env.DB, race.id, attemptEvents);
+      }
+
+      // Publish the events that map to notification categories
+      // (lead_changed → displaced leader, rank_changed → overtaken members
+      // in contention, race_finished → all members). The policy itself
+      // decides feed-only vs. delivery — the gate here must include every
+      // event type it can act on, or a rank-only submission would persist
+      // rank_changed but never deliver the overtake notification.
+      if (
+        result.events.some(
+          (e) =>
+            e.type === 'lead_changed' ||
+            e.type === 'rank_changed' ||
+            e.type === 'race_finished',
+        )
+      ) {
+        const memberRows = await c.env.DB
+          .prepare(
+            `SELECT rm.user_id, COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name
+             FROM race_members rm LEFT JOIN profiles p ON p.user_id = rm.user_id
+             WHERE rm.race_id = ? AND rm.status = 'active'`,
+          )
+          .bind(race.id)
+          .all<{ user_id: string; display_name: string }>();
+        await notifyRaceEvents(
+          c.env,
+          (p) => c.executionCtx.waitUntil(p),
+          race,
+          result.events,
+          memberRows.results,
+        );
+      }
     } catch (err) {
       await c.env.DB.prepare('UPDATE move_logs SET status = ?, summary = ? WHERE id = ?')
         .bind('rejected', err instanceof Error ? err.message : 'Submission rejected', moveId).run();
@@ -1502,7 +1881,7 @@ racesRouter.post('/:id/proof', async (c) => {
   }
 
   const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), updated!, result), submissionResult: result ?? null });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!, result), submissionResult: result ?? null });
 });
 
 // GET /races/:id/proofs - legacy endpoint, maps to move_logs.
@@ -1587,21 +1966,319 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
 
   // Notify the submitter of the review outcome (skip self-review).
   if (move.user_id !== userId && (newStatus === 'verified' || newStatus === 'rejected')) {
-    await safeEmit(c, {
+    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+      type: 'proof_reviewed',
       userId: move.user_id,
-      category: newStatus === 'verified' ? 'proof_accepted' : 'proof_rejected',
       actorUserId: userId,
-      title:
-        newStatus === 'verified'
-          ? `Your proof for ${race.title} was accepted`
-          : `Your proof for ${race.title} needs another try`,
-      dest: { type: 'race', id: race.id },
-      entityType: 'move_log',
-      entityId: move.id,
-      dedupeKey: `proof_review:${move.id}:${newStatus}`,
+      raceId: race.id,
+      raceTitle: race.title,
+      moveId: move.id,
+      outcome: newStatus,
+      value: move.value,
+      unit: race.metric ?? race.target_unit,
     });
   }
 
   const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env.DB, c.get('userId'), updated!) });
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
+});
+
+// ── Attempts ─────────────────────────────────────────────────────────────────
+
+// POST /races/:id/attempts — declare an attempt (best_attempt/timed_attempt).
+// The authoritative start timestamp is written HERE, server-side; the next
+// verified /proof submission binds to this open attempt automatically.
+racesRouter.post('/:id/attempts', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  const member = await isRaceMember(c.env.DB, race.id, userId);
+  if (!member && race.creator_id !== userId) {
+    return c.json(badRequest('Only race participants can start an attempt'), 403);
+  }
+
+  let body: Record<string, unknown> = {};
+  try { body = await c.req.json(); } catch { /* empty body is fine */ }
+  const clientAttemptId = stringOrNull(body.clientAttemptId) ?? stringOrNull(body.client_attempt_id) ?? null;
+
+  const res = await openAttempt(c.env.DB, race, userId, clientAttemptId);
+  if (!res.ok) {
+    const status = res.error === 'attempt_in_progress' ? 409 : 400;
+    const message =
+      res.error === 'attempt_in_progress'
+        ? 'You already have an attempt in progress'
+        : res.error === 'attempt_limit_reached'
+          ? 'No attempts left in this race'
+          : res.error === 'not_active'
+            ? 'Race is not active'
+            : 'This race does not use attempts';
+    return c.json(badRequest(message), status);
+  }
+
+  const attempt = res.attempt!;
+  // Idempotent replays return the same attempt — don't double-emit.
+  const isNew = !clientAttemptId || attempt.client_attempt_id === clientAttemptId;
+  if (isNew && !attempt.submitted_at) {
+    await recordRaceEvents(c.env.DB, race.id, [
+      {
+        type: 'attempt_started',
+        actorUserId: userId,
+        subjectUserId: userId,
+        payload: { attemptId: attempt.id, attemptIndex: attempt.attempt_index },
+      },
+    ]);
+  }
+
+  const used = res.attemptsUsed ?? (await attemptsUsed(c.env.DB, race.id, userId));
+  return c.json({
+    ok: true,
+    attempt: {
+      id: attempt.id,
+      attemptIndex: attempt.attempt_index,
+      status: attempt.status,
+      startedAt: attempt.started_at,
+      deadlineAt: attempt.deadline_at,
+      clientAttemptId: attempt.client_attempt_id,
+    },
+    attemptsUsed: used,
+    attemptsRemaining: race.attempt_limit != null ? Math.max(0, race.attempt_limit - used) : null,
+    serverTime: new Date().toISOString(),
+  });
+});
+
+// GET /races/:id/events — the durable domain log for this race. Feeds the
+// race-history surface and lets Crew/notifications consume transitions
+// without reverse-engineering race state.
+racesRouter.get('/:id/events', async (c) => {
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50), 1), 100);
+  const before = c.req.query('before');
+
+  const rows = await c.env.DB
+    .prepare(
+      `SELECT id, event_type, actor_user_id, subject_user_id, payload_json, created_at
+       FROM race_events
+       WHERE race_id = ? ${before ? 'AND created_at < ?' : ''}
+       ORDER BY created_at DESC LIMIT ?`,
+    )
+    .bind(...(before ? [race.id, before, limit] : [race.id, limit]))
+    .all<{
+      id: string;
+      event_type: string;
+      actor_user_id: string | null;
+      subject_user_id: string | null;
+      payload_json: string | null;
+      created_at: string;
+    }>();
+
+  return c.json({
+    ok: true,
+    events: rows.results.map((e) => ({
+      id: e.id,
+      type: e.event_type,
+      actorUserId: e.actor_user_id,
+      subjectUserId: e.subject_user_id,
+      payload: e.payload_json ? (JSON.parse(e.payload_json) as Record<string, unknown>) : null,
+      createdAt: e.created_at,
+    })),
+  });
+});
+
+// GET /races/:id/live — compact poll payload for an in-progress race.
+// `version` bumps on every score/member write; an unchanged version means
+// nothing moved — cheap polls for live-feel UI without shipping histories.
+racesRouter.get('/:id/live', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  const sinceVersion = Number(c.req.query('version') ?? -1);
+  const version = race.version ?? 0;
+  if (sinceVersion >= 0 && sinceVersion === version) {
+    return c.json({ ok: true, unchanged: true, version, serverTime: new Date().toISOString() });
+  }
+
+  const participantRows = await c.env.DB
+    .prepare(
+      `SELECT rm.user_id, rm.finished_at, rm.joined_at,
+              COALESCE(rp.progress_value, 0) as progress_value,
+              rp.progress_percent, rp.rank_cache
+       FROM race_members rm
+       LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
+       WHERE rm.race_id = ? AND rm.status = 'active'
+       ORDER BY COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC`,
+    )
+    .bind(race.id)
+    .all<{
+      user_id: string;
+      finished_at: string | null;
+      joined_at: string;
+      progress_value: number;
+      progress_percent: number | null;
+      rank_cache: number | null;
+    }>();
+
+  const scoring = raceScoringConfigFromRow(race);
+  const standings = participantRows.results.map((p) => ({
+    userId: p.user_id,
+    score: p.progress_value ?? 0,
+    rank: p.rank_cache,
+    finishedAt: p.finished_at,
+  }));
+  const viewerContext = computeViewerContext({
+    raceId: race.id,
+    format: scoring?.format ?? 'first_to_goal',
+    targetValue: race.target_value,
+    startAt: race.start_at,
+    endAt: race.end_at,
+    storedStatus: race.status,
+    winnerUserId: race.winner_user_id ?? null,
+    scoreDirection: scoreDirectionFor(race),
+    attemptLimit: race.attempt_limit ?? null,
+    attemptDurationSeconds: race.attempt_duration_seconds ?? null,
+    standings,
+    attemptsUsed: userId ? await attemptsUsed(c.env.DB, race.id, userId) : 0,
+    openAttemptId: userId
+      ? (
+          await c.env.DB
+            .prepare("SELECT id FROM race_attempts WHERE race_id = ? AND user_id = ? AND status = 'open'")
+            .bind(race.id, userId)
+            .first<{ id: string }>()
+        )?.id ?? null
+      : null,
+    viewerUserId: userId,
+  });
+
+  return c.json({
+    ok: true,
+    unchanged: false,
+    raceId: race.id,
+    version,
+    serverTime: new Date().toISOString(),
+    status: effectiveRaceStatus(race.status, race.start_at, race.end_at),
+    winnerUserId: race.winner_user_id ?? null,
+    participants: standings.map((s) => ({
+      userId: s.userId,
+      score: s.score,
+      rank: s.rank,
+      finishedAt: s.finishedAt,
+    })),
+    viewer: viewerContext,
+  });
+});
+
+// POST /races/:id/rematch — clone the race definition + roster into a fresh
+// race. The strongest retention loop in the system: a finished race should
+// produce the next one in one tap.
+racesRouter.post('/:id/rematch', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  const member = await isRaceMember(c.env.DB, race.id, userId);
+  if (!member && race.creator_id !== userId) {
+    return c.json(badRequest('Only race participants can start a rematch'), 403);
+  }
+  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'You must accept the Terms of Service before creating a race' }, 403);
+  }
+
+  const newRaceId = generateId();
+  const personId = await ensurePersonId(c.env.DB, userId);
+  await c.env.DB
+    .prepare(
+      `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
+        target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
+        attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
+        timezone, recurrence, status, visibility, start_at, end_at, score_direction, verifier_release_id,
+        created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+    .bind(
+      newRaceId,
+      userId,
+      race.title,
+      race.description,
+      race.format ?? race.race_type,
+      race.movement_type,
+      race.verification_type,
+      race.target_value,
+      race.target_unit,
+      race.activity_id,
+      race.metric,
+      race.format ?? 'first_to_goal',
+      race.scoring_rule ?? 'cumulative_sum',
+      race.attempt_duration_seconds,
+      race.attempt_limit,
+      race.verification_method,
+      race.verifier_type,
+      race.verifier_version,
+      race.verifier_spec_json,
+      race.custom_activity_name,
+      race.timezone ?? 'America/New_York',
+      'none', // rematch resets recurrence — the new race starts fresh
+      race.visibility,
+      null, // start line: the rematch begins when created
+      null, // deadlines are not carried over
+      race.score_direction ?? 'higher',
+      race.verifier_release_id,
+    )
+    .run();
+
+  const requesterName = await getProfileName(c.env.DB, userId);
+  await c.env.DB
+    .prepare(
+      `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at, cached_display_name)
+       VALUES (?, ?, ?, ?, 'creator', 'active', CURRENT_TIMESTAMP, ?)`,
+    )
+    .bind(generateId(), newRaceId, userId, personId, requesterName)
+    .run();
+  await ensureProgress(c.env.DB, newRaceId, userId);
+
+  // Re-pull the previous roster as active members — they raced together
+  // already; leaving is one tap. Each gets a race_invite notification.
+  const roster = await c.env.DB
+    .prepare("SELECT user_id FROM race_members WHERE race_id = ? AND status = 'active' AND user_id != ?")
+    .bind(race.id, userId)
+    .all<{ user_id: string }>();
+  for (const row of roster.results) {
+    await ensureMember(c.env.DB, newRaceId, row.user_id);
+    await ensureProgress(c.env.DB, newRaceId, row.user_id);
+    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+      type: 'race_invited',
+      userId: row.user_id,
+      actorUserId: userId,
+      actorName: requesterName,
+      raceId: newRaceId,
+      raceTitle: race.title,
+      rematch: true,
+    });
+  }
+
+  const newRace = await getRace(c.env.DB, newRaceId);
+  await recordRaceEvents(c.env.DB, newRaceId, [
+    {
+      type: 'race_created',
+      actorUserId: userId,
+      payload: { title: race.title, rematchOf: race.id, format: race.format ?? race.race_type },
+    },
+    {
+      type: 'rematch_requested',
+      actorUserId: userId,
+      payload: { sourceRaceId: race.id, sourceTitle: race.title, rosterSize: roster.results.length + 1 },
+    },
+  ]);
+  // Mirror the rematch onto the SOURCE race's log — Crew/feed readers of the
+  // finished race see that a rematch exists.
+  await recordRaceEvents(c.env.DB, race.id, [
+    {
+      type: 'rematch_requested',
+      actorUserId: userId,
+      payload: { rematchRaceId: newRaceId, sourceTitle: race.title },
+    },
+  ]);
+
+  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), newRace!) }, 201);
 });

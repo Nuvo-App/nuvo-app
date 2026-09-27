@@ -119,6 +119,54 @@ void main() {
       expect(draft, isNotNull);
       expect(draft!.targetValue, greaterThan(0));
     });
+
+    test('first-to-goal payload stays free of timing fields', () {
+      final payload = draftFromIdea('First to 100 pushups')!.toCreatePayload();
+      expect(payload.containsKey('finishLineAt'), isFalse);
+      expect(payload.containsKey('attemptDurationSeconds'), isFalse);
+      expect(payload.containsKey('attemptLimit'), isFalse);
+    });
+
+    test('deadline modes emit finishLineAt + attempt fields on the wire', () {
+      final base = draftFromIdea('First to 100 pushups')!;
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+
+      final most = base.copyWith(
+        format: RaceFormat.mostInWindow,
+        finishLineAt: deadline,
+      );
+      expect(most.toCreatePayload()['format'], 'most_in_window');
+      expect(most.toCreatePayload()['finishLineAt'], deadline);
+
+      final battle = base.copyWith(
+        format: RaceFormat.timedAttempt,
+        finishLineAt: deadline,
+        attemptDurationSeconds: 60,
+        attemptLimit: 3,
+      );
+      final payload = battle.toCreatePayload();
+      expect(payload['format'], 'timed_attempt');
+      expect(payload['finishLineAt'], deadline);
+      expect(payload['attemptDurationSeconds'], 60);
+      expect(payload['attemptLimit'], 3);
+    });
+
+    test('clearTiming resets deadline + attempt fields', () {
+      final deadline = DateTime.utc(2026, 10, 1).toIso8601String();
+      final timed = draftFromIdea('First to 100 pushups')!.copyWith(
+        format: RaceFormat.timedAttempt,
+        finishLineAt: deadline,
+        attemptDurationSeconds: 60,
+      );
+      final back = timed.copyWith(
+        format: RaceFormat.firstToGoal,
+        clearTiming: true,
+      );
+      expect(back.format, RaceFormat.firstToGoal);
+      expect(back.finishLineAt, isNull);
+      expect(back.attemptDurationSeconds, isNull);
+      expect(back.toCreatePayload().containsKey('finishLineAt'), isFalse);
+    });
   });
 
   group('Race System V2 activity catalog invariants', () {

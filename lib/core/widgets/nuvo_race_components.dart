@@ -5,6 +5,7 @@ import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_avatar.dart';
+import 'nuvo_race_path.dart';
 import 'pressable_scale.dart';
 
 /// Canonical race components for Nuvo.
@@ -428,6 +429,8 @@ class RaceHero extends StatelessWidget {
     this.actionLabel = 'View leaderboard',
     this.ctaIcon,
     this.showRank = true,
+    this.raceId,
+    this.headerAction,
   });
 
   final String activityLabel;
@@ -441,6 +444,18 @@ class RaceHero extends StatelessWidget {
   final String actionLabel;
   final IconData? ctaIcon;
   final bool showRank;
+
+  /// The race's stable identity. When provided, the track is rendered as
+  /// [NuvoRacePath] — a curved path whose shape is unique to this race but
+  /// deterministic (same race, same path, every rebuild). When omitted, this
+  /// falls back to the plain linear [RaceProgress] bar for callers that
+  /// don't have a stable race identity to seed from.
+  final String? raceId;
+
+  /// Optional quiet control pinned to the title row's trailing edge (the
+  /// featured card's "Updates ↻" flip affordance). Kept small — the title
+  /// stays dominant and the CTA strip keeps its single action.
+  final Widget? headerAction;
 
   @override
   Widget build(BuildContext context) {
@@ -463,23 +478,38 @@ class RaceHero extends StatelessWidget {
               // ── White body: race identity + track lane ──
               Container(
                 color: NuvoColors.surface,
+                // Tightened from a flat NuvoSpacing.lg (16) on every edge —
+                // this card (Compete's featured race, Verify's Up Next) was
+                // taller than its five lines of content needed. Same
+                // padding rhythm, less of it.
                 padding: const EdgeInsets.fromLTRB(
                   NuvoSpacing.lg,
-                  NuvoSpacing.lg,
-                  NuvoSpacing.lg,
                   NuvoSpacing.md,
+                  NuvoSpacing.lg,
+                  NuvoSpacing.sm,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Race title
-                    Text(
-                      raceTitle,
-                      style: AppTextStyles.featuredRaceTitle.copyWith(
-                        color: NuvoColors.navy,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    // Race title (+ optional quiet header action)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            raceTitle,
+                            style: AppTextStyles.featuredRaceTitle.copyWith(
+                              color: NuvoColors.navy,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (headerAction != null) ...[
+                          const SizedBox(width: 8),
+                          headerAction!,
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     // Movement · target
@@ -492,15 +522,25 @@ class RaceHero extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: NuvoSpacing.lg),
-                    // Race lane — prominent track on white
-                    RaceProgress(
-                      progressPercent: progressPercent,
-                      onDark: false,
-                      trackHeight: 5,
-                      dotDiameter: 16,
-                    ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: NuvoSpacing.md),
+                    // Race lane — prominent track on white. A unique-per-race
+                    // curved path when we have a stable race identity to
+                    // seed it from; otherwise the plain linear bar.
+                    if (raceId != null)
+                      NuvoRacePath(
+                        key: ValueKey('race-path-$raceId'),
+                        raceId: raceId!,
+                        progress: progressPercent / 100,
+                        variant: NuvoRacePathVariant.compact,
+                      )
+                    else
+                      RaceProgress(
+                        progressPercent: progressPercent,
+                        onDark: false,
+                        trackHeight: 5,
+                        dotDiameter: 16,
+                      ),
+                    const SizedBox(height: 6),
                     // Lane context
                     Row(
                       children: [
@@ -554,33 +594,44 @@ class RaceHero extends StatelessWidget {
               Container(
                 color: NuvoColors.actionBlue,
                 padding: const EdgeInsets.symmetric(
-                  horizontal: NuvoSpacing.xl,
-                  vertical: NuvoSpacing.md,
+                  horizontal: NuvoSpacing.lg,
+                  vertical: NuvoSpacing.sm,
                 ),
                 child: Row(
                   children: [
                     racerStack,
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: onOpen,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            actionLabel,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: NuvoColors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
+                    const SizedBox(width: 8),
+                    // Flexible, not a bare Row after a Spacer — a long label
+                    // ("View leaderboard") plus the racer stack could exceed
+                    // the strip's width on a narrow phone; this shrinks the
+                    // label (ellipsis) instead of overflowing the Row.
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: onOpen,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                actionLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: NuvoColors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Icon(
-                            ctaIcon ?? Icons.arrow_forward_rounded,
-                            color: NuvoColors.white,
-                            size: 16,
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Icon(
+                              ctaIcon ?? Icons.arrow_forward_rounded,
+                              color: NuvoColors.white,
+                              size: 16,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -900,7 +951,9 @@ class RaceActivityRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$movementLabel${valueStr != null ? ' · $valueStr' : ''}',
+                      // "who moved · what · how much" — an activity row is
+                      // about the person, not just the race.
+                      '$actorName · $movementLabel${valueStr != null ? ' · $valueStr' : ''}',
                       style: AppTextStyles.raceRowMeta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1063,6 +1116,16 @@ class RaceFinishedSummary extends StatelessWidget {
                     ],
                   ),
                 ),
+                // A win record is the payoff — a quiet gold mark, not a
+                // banner, so the summary communicates results at a glance.
+                if (wonCount > 0) ...[
+                  const Icon(
+                    Icons.emoji_events_rounded,
+                    color: NuvoColors.gold,
+                    size: 18,
+                  ),
+                  const SizedBox(width: NuvoSpacing.sm),
+                ],
                 AnimatedRotation(
                   turns: expanded ? 0.25 : 0,
                   duration: const Duration(milliseconds: 200),

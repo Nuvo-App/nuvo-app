@@ -59,6 +59,12 @@ abstract class RemoteVerifierRuntime {
       'Step back until the required body regions are visible.',
     'hold_form_lost' => 'Hold the position steadily to keep the count moving.',
     'waiting_for_start' => 'Start from the ready position.',
+    'sequence_pose_lost' =>
+      'Stay in frame — the sequence restarts when pose is lost.',
+    'sequence_rep_timeout' => 'Too slow — restart the motion from the start.',
+    'sequence_phase_timeout' =>
+      'Move through each part of the motion a little faster.',
+    'sequence_phase_lost' => 'Restart the motion from the beginning.',
     _ => 'Keep your movement in frame and try again.',
   };
 }
@@ -201,6 +207,131 @@ class HoldV1Runtime extends RemoteVerifierRuntime {
   }
 }
 
+/// Executes a strict linear `sequence_match_v1` phase chain.
+///
+/// Reset semantics — the state machine only counts a rep when a full valid
+/// sequence actually happened:
+///
+/// * The sequence "begins" only when phase 0's predicates (plus the optional
+///   [RemoteVerifierSpec.startRules] readiness gate) hold for
+///   `minDwellFrames` consecutive frames. A frame that satisfies a later
+///   phase can never count on its own — the index only moves 0→1→…→complete.
+/// * Once begun, exceeding `repTimeoutMs`, a phase's `maxDwellMs`, or more
+///   than `breakToleranceFrames` consecutive predicate misses resets to
+///   phase 0 with a reason diagnostic.
+/// * Missing required landmarks PAUSE the machine (dwell/miss counters do
+///   not move) up to `lostPoseMs`; beyond that the sequence resets.
+/// * Within break tolerance a miss resets the dwell counter but not the
+///   sequence — the phase still needs its full run of consecutive holds.
+///   Hysteresis: hovering around a threshold stalls progress instead of
+///   chattering the machine, and only a sustained break resets it.
+class SequenceMatchV1Runtime extends RemoteVerifierRuntime {
+  SequenceMatchV1Runtime({required super.spec, required super.target});
+
+  int _phaseIndex = 0;
+  int _dwellFrames = 0;
+  int _missFrames = 0;
+  DateTime? _sequenceStartedAt;
+  DateTime? _phaseEnteredAt;
+  DateTime? _lostSince;
+
+  bool get _began => _phaseIndex > 0;
+
+  void _resetSequence() {
+    _phaseIndex = 0;
+    _dwellFrames = 0;
+    _missFrames = 0;
+    _sequenceStartedAt = null;
+    _phaseEnteredAt = null;
+  }
+
+  @override
+  RemoteVerifierUpdate update(NuvoPoseFrame frame) {
+    if (!_started) start();
+    if (!frame.hasPoints(spec.requiredLandmarks)) {
+      // Lost pose: idle (pre-sequence) stays notReady; mid-sequence pauses
+      // until lostPoseMs, then resets — a rep must be seen end-to-end.
+      if (!_began) return notReady('missing_required_regions');
+      _lostSince ??= frame.createdAt;
+      if (frame.createdAt.difference(_lostSince!).inMilliseconds >
+          spec.lostPoseMs) {
+        _resetSequence();
+        return notReady('sequence_pose_lost');
+      }
+      return _result(RemoteRuntimeState.tracking, 'sequence_pose_pause');
+    }
+    _lostSince = null;
+
+    final phase = spec.phases[_phaseIndex];
+
+    // Whole-sequence timeout — applies only after a sequence has begun;
+    // waiting indefinitely at phase 0 is allowed.
+    if (_began &&
+        _sequenceStartedAt != null &&
+        frame.createdAt.difference(_sequenceStartedAt!).inMilliseconds >
+            spec.repTimeoutMs) {
+      _resetSequence();
+      return _result(RemoteRuntimeState.ready, 'sequence_rep_timeout');
+    }
+
+    // Per-phase time cap — same rule: only mid-sequence.
+    if (_began &&
+        phase.maxDwellMs != null &&
+        _phaseEnteredAt != null &&
+        frame.createdAt.difference(_phaseEnteredAt!).inMilliseconds >
+            phase.maxDwellMs!) {
+      _resetSequence();
+      return _result(RemoteRuntimeState.ready, 'sequence_phase_timeout');
+    }
+
+    final satisfied =
+        _satisfied(phase, frame) &&
+        (_began || spec.startRules.isEmpty || _all(spec.startRules, frame));
+    if (satisfied) {
+      _missFrames = 0;
+      _dwellFrames++;
+      if (_dwellFrames >= phase.minDwellFrames) {
+        _dwellFrames = 0;
+        if (phase.completesRep) {
+          count++;
+          _resetSequence();
+          return _result(RemoteRuntimeState.repAccepted, 'rep_accepted');
+        }
+        _phaseIndex++;
+        _phaseEnteredAt = frame.createdAt;
+        _sequenceStartedAt ??= frame.createdAt;
+        return _result(RemoteRuntimeState.tracking, 'sequence_phase_advance');
+      }
+    } else {
+      _dwellFrames = 0;
+      _missFrames++;
+      if (_missFrames > phase.breakToleranceFrames) {
+        _resetSequence();
+        return _result(RemoteRuntimeState.ready, 'sequence_phase_lost');
+      }
+    }
+    return _result(
+      _began ? RemoteRuntimeState.tracking : RemoteRuntimeState.ready,
+      'sequence_phase_$_phaseIndex',
+    );
+  }
+
+  bool _satisfied(SequencePhase phase, NuvoPoseFrame frame) =>
+      phase.predicates.every((predicate) => predicate.matches(frame));
+
+  RemoteVerifierUpdate _result(RemoteRuntimeState state, String diagnostic) =>
+      RemoteVerifierUpdate(
+        state: count >= target ? RemoteRuntimeState.completed : state,
+        count: count,
+        progress: math.min(1, target == 0 ? 0 : count / target),
+        confidence: state == RemoteRuntimeState.repAccepted ? 0.9 : 0.78,
+        guidance: count >= target
+            ? 'Target complete.'
+            : 'Move through the full motion with control.',
+        diagnostic: diagnostic,
+      );
+}
+
 RemoteVerifierRuntime createRemoteVerifierRuntime({
   required RemoteVerifierSpec spec,
   required int target,
@@ -219,6 +350,10 @@ RemoteVerifierRuntime createRemoteVerifierRuntime({
       target: target,
     ),
     RemoteEngineType.holdV1 => HoldV1Runtime(spec: spec, target: target),
+    RemoteEngineType.sequenceMatchV1 => SequenceMatchV1Runtime(
+      spec: spec,
+      target: target,
+    ),
   };
 }
 

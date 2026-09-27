@@ -105,8 +105,10 @@ void main() {
     r.finish(outcome: MotionSessionOutcome.failed, detectedValue: 2);
     // Point staging at a temp dir by writing the blob ourselves via the queue.
     await q.enqueue(r.build());
-    // First enqueue triggers one failing attempt.
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+    // First enqueue triggers one failing attempt via an unawaited flush() —
+    // give it real wall-clock margin to run, since under a heavily loaded
+    // test run (many parallel shards) a thin fixed delay here is flaky.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     expect(attempts, greaterThanOrEqualTo(1));
 
     await q.flush(); // retry succeeds

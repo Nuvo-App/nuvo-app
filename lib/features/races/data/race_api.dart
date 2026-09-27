@@ -19,11 +19,8 @@ import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'ai_motion_models.dart';
 import 'motion_analysis_contract.dart';
 import 'race_models.dart';
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 
 class MotionCatalogFetch {
   const MotionCatalogFetch({this.json, this.etag, this.notModified = false});
@@ -108,7 +105,7 @@ class RaceApi {
     if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
     final res = await _guard(
       () => _client.get(
-        Uri.parse('$_kApiBase/races/activities'),
+        Uri.parse('$kNuvoApiBase/races/activities'),
         headers: headers,
       ),
     );
@@ -130,7 +127,7 @@ class RaceApi {
     if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
     final res = await _guard(
       () => _client.get(
-        Uri.parse('$_kApiBase/motion/releases/$releaseId'),
+        Uri.parse('$kNuvoApiBase/motion/releases/$releaseId'),
         headers: headers,
       ),
     );
@@ -163,7 +160,7 @@ class RaceApi {
     if (etag != null && etag.isNotEmpty) headers['If-None-Match'] = etag;
     final res = await _guard(
       () => _client.get(
-        Uri.parse('$_kApiBase/motion/models/$modelVersion/artifact'),
+        Uri.parse('$kNuvoApiBase/motion/models/$modelVersion/artifact'),
         headers: headers,
       ),
     );
@@ -278,7 +275,7 @@ class RaceApi {
   }) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/motion-sessions'),
+        Uri.parse('$kNuvoApiBase/motion-sessions'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/gzip',
@@ -359,7 +356,7 @@ class RaceApi {
 
   Future<Map<String, dynamic>> _get(String path, String token) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$_kApiBase$path'), headers: _headers(token)),
+      () => _client.get(Uri.parse('$kNuvoApiBase$path'), headers: _headers(token)),
     );
     return _decode(res);
   }
@@ -371,7 +368,7 @@ class RaceApi {
   ) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase$path'),
+        Uri.parse('$kNuvoApiBase$path'),
         headers: _headers(token),
         body: jsonEncode(body),
       ),
@@ -386,7 +383,7 @@ class RaceApi {
   ) async {
     final res = await _guard(
       () => _client.patch(
-        Uri.parse('$_kApiBase$path'),
+        Uri.parse('$kNuvoApiBase$path'),
         headers: _headers(token),
         body: jsonEncode(body),
       ),
@@ -397,7 +394,7 @@ class RaceApi {
   Future<Map<String, dynamic>> _delete(String path, String token) async {
     final res = await _guard(
       () => _client.delete(
-        Uri.parse('$_kApiBase$path'),
+        Uri.parse('$kNuvoApiBase$path'),
         headers: _headers(token),
       ),
     );
@@ -413,7 +410,7 @@ class RaceApi {
 
   Future<List<PublicUser>> searchUsers(String token, String query) async {
     final uri = Uri.parse(
-      '$_kApiBase/users/search',
+      '$kNuvoApiBase/users/search',
     ).replace(queryParameters: {'q': query});
     final res = await _guard(() => _client.get(uri, headers: _headers(token)));
     final json = _decode(res);
@@ -689,5 +686,40 @@ class RaceApi {
     if (summary != null) body['verificationSummary'] = summary;
     final json = await _patch('/races/$raceId/proofs/$proofId', token, body);
     return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  /// Open a server-timestamped attempt for a best-attempt / timed race.
+  /// The attempt binds to the next verified proof submission. Pass a stable
+  /// [clientAttemptId] to make retries idempotent.
+  Future<RaceAttemptResult> startAttempt(
+    String token,
+    String raceId, {
+    String? clientAttemptId,
+  }) async {
+    final json = await _post('/races/$raceId/attempts', token, {
+      'clientAttemptId': ?clientAttemptId,
+    });
+    return RaceAttemptResult.fromJson(json);
+  }
+
+  /// One-step rematch — the server clones participants + settings into a new
+  /// race and returns it ready to race.
+  Future<Race> rematchRace(String token, String raceId) async {
+    final json = await _post('/races/$raceId/rematch', token, {});
+    return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  /// Compact live-state payload for polling screens — no proof history.
+  /// Pass the last seen [version] to get a cheap `{unchanged: true}` reply.
+  Future<RaceLiveState> getRaceLiveState(
+    String token,
+    String raceId, {
+    int? version,
+  }) async {
+    final json = await _get(
+      '/races/$raceId/live${version != null ? '?version=$version' : ''}',
+      token,
+    );
+    return RaceLiveState.fromJson(json);
   }
 }

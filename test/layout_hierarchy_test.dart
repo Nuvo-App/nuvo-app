@@ -73,9 +73,7 @@ void main() {
       );
     });
 
-    testWidgets('Start race CTA is wider than Join CTA (2:1 ratio)', (
-      tester,
-    ) async {
+    testWidgets('Start is the primary CTA, Join is secondary', (tester) async {
       tester.view.physicalSize = const Size(375, 812);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -83,34 +81,23 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
 
-      final startFinder = find.text('Start race');
+      final startFinder = find.text('Start');
       final joinFinder = find.text('Join');
       expect(startFinder, findsOneWidget);
       expect(joinFinder, findsOneWidget);
 
-      // Both buttons are inside Expanded widgets in a Row.
-      // Start race should have flex: 2, Join should have flex: 1.
-      // Verify by checking the rendered widths.
-      final startBox = tester.renderObject<RenderBox>(
+      // Hierarchy is expressed by button emphasis: Start is the filled
+      // primary, Join is the quiet outline.
+      expect(
         find.ancestor(
           of: startFinder,
           matching: find.byType(NuvoPrimaryButton),
         ),
+        findsOneWidget,
       );
-      final joinBox = tester.renderObject<RenderBox>(
-        find.ancestor(of: joinFinder, matching: find.byType(NuvoOutlineButton)),
-      );
-
-      final startWidth = startBox.size.width;
-      final joinWidth = joinBox.size.width;
-
-      // Start race should be roughly 2x wider than Join (allowing for
-      // the 10px SizedBox gap between them).
       expect(
-        startWidth > joinWidth,
-        isTrue,
-        reason:
-            'Start race CTA should be wider than Join CTA to establish hierarchy.',
+        find.ancestor(of: joinFinder, matching: find.byType(NuvoOutlineButton)),
+        findsOneWidget,
       );
     });
 

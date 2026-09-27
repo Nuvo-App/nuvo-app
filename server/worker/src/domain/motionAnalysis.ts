@@ -2,6 +2,17 @@ export const motionAnalysisSchemaVersion = 1;
 export const motionModelVersion = 'nuvo-motion-baseline-v1';
 export const motionValidatorVersion = 'nuvo-motion-server-rules-v1';
 
+// Server-side defense-in-depth for JSON motion requests. Camera capture also
+// filters these names before they become a client artifact.
+export const BODY_LANDMARK_NAMES = new Set([
+  'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
+  'leftWrist', 'rightWrist', 'leftPinky', 'rightPinky',
+  'leftIndex', 'rightIndex', 'leftThumb', 'rightThumb',
+  'leftHip', 'rightHip', 'leftKnee', 'rightKnee',
+  'leftAnkle', 'rightAnkle', 'leftHeel', 'rightHeel',
+  'leftFootIndex', 'rightFootIndex',
+]);
+
 export type MotionLandmark = {
   x: number;
   y: number;
@@ -76,8 +87,14 @@ export function validateMotionRequest(input: unknown): MotionAnalysisRequest {
   if (!Array.isArray(value.frames) || value.frames.length < 2 || value.frames.length > 900) {
     throw new Error('frames must contain between 2 and 900 frames.');
   }
-  const frames = value.frames as MotionFrame[];
-  if (!frames.every(validFrame)) throw new Error('frames contain invalid landmarks.');
+  const inputFrames = value.frames as MotionFrame[];
+  if (!inputFrames.every(validFrame)) throw new Error('frames contain invalid landmarks.');
+  const frames = inputFrames.map((frame) => ({
+    ...frame,
+    landmarks: Object.fromEntries(
+      Object.entries(frame.landmarks).filter(([name]) => BODY_LANDMARK_NAMES.has(name)),
+    ),
+  }));
   const targetReps = value.targetReps === undefined ? undefined : value.targetReps;
   if (targetReps !== undefined && (!finite(targetReps) || targetReps < 1 || targetReps > 10000)) {
     throw new Error('targetReps is invalid.');

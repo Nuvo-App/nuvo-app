@@ -31,6 +31,9 @@ class RaceDraft {
     this.goalKind = RaceGoalKind.movement,
     this.manualGoalName,
     this.manualUnit,
+    this.finishLineAt,
+    this.attemptDurationSeconds,
+    this.attemptLimit,
   });
 
   /// Movement (camera) or manual (honor-logged) goal.
@@ -62,6 +65,22 @@ class RaceDraft {
   final String? customUnit;
 
   final CustomPoseVerifierSpec? verifierSpec;
+
+  /// Absolute finish line (ISO-8601). Required for [RaceFormat.mostInWindow]
+  /// and any attempt race that should close on a deadline; the server is the
+  /// authority on what "before the finish line" means.
+  final String? finishLineAt;
+
+  /// For [RaceFormat.timedAttempt]: how long each attempt runs, in seconds.
+  final int? attemptDurationSeconds;
+
+  /// Optional cap on how many attempts each racer may take.
+  final int? attemptLimit;
+
+  bool get isDeadlineMode =>
+      format == RaceFormat.mostInWindow ||
+      format == RaceFormat.bestAttempt ||
+      format == RaceFormat.timedAttempt;
 
   bool get isCustom =>
       customActivityName != null && customActivityName!.isNotEmpty;
@@ -113,6 +132,10 @@ class RaceDraft {
     RaceGoalKind? goalKind,
     String? manualGoalName,
     String? manualUnit,
+    String? finishLineAt,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
+    bool clearTiming = false,
   }) {
     final nextActivity = activity ?? this.activity;
     final nextTarget = targetValue ?? this.targetValue;
@@ -133,6 +156,11 @@ class RaceDraft {
       goalKind: goalKind ?? this.goalKind,
       manualGoalName: manualGoalName ?? this.manualGoalName,
       manualUnit: manualUnit ?? this.manualUnit,
+      finishLineAt: clearTiming ? null : finishLineAt ?? this.finishLineAt,
+      attemptDurationSeconds: clearTiming
+          ? null
+          : attemptDurationSeconds ?? this.attemptDurationSeconds,
+      attemptLimit: clearTiming ? null : attemptLimit ?? this.attemptLimit,
     );
   }
 
@@ -153,6 +181,11 @@ class RaceDraft {
       targetValue: targetValue ?? this.targetValue,
       recurrence: recurrence,
       visibility: visibility,
+      // Timing survives an activity switch — a timed battle stays a timed
+      // battle when the user swaps push-ups for squats.
+      finishLineAt: finishLineAt,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
     );
   }
 
@@ -180,8 +213,20 @@ class RaceDraft {
       'proofMode': 'ai_check',
       'aiActivityType': activity.activityId,
       'visibility': visibility,
+      ..._timingPayload(),
     };
   }
+
+  /// Finish-line / attempt fields shared by camera and manual payloads —
+  /// omitted entirely when unset so first-to-goal races stay byte-identical
+  /// to the pre-V2 contract.
+  Map<String, dynamic> _timingPayload() => {
+    if (finishLineAt != null && finishLineAt!.isNotEmpty)
+      'finishLineAt': finishLineAt,
+    if (attemptDurationSeconds != null)
+      'attemptDurationSeconds': attemptDurationSeconds,
+    if (attemptLimit != null) 'attemptLimit': attemptLimit,
+  };
 
   Map<String, dynamic> _manualCreatePayload() {
     final unit = (manualUnit ?? 'done').trim();
@@ -200,6 +245,7 @@ class RaceDraft {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'manual',
       'visibility': visibility,
+      ..._timingPayload(),
     };
   }
 }

@@ -1,24 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/race_display.dart';
+import '../domain/motion_activity.dart';
 import 'board_moved_screen.dart';
+import 'motion_catalog_provider.dart';
 import 'race_controller.dart';
-import 'widgets/preset_movement_demos.dart';
+import 'widgets/rive_movement_preview.dart';
 
 class SubmitProofScreen extends ConsumerStatefulWidget {
   const SubmitProofScreen({super.key, required this.raceId});
@@ -40,6 +45,15 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   bool _submittingManual = false;
   String? _manualError;
 
+  /// Control-plane definitions for resolving remote-only race activities
+  /// (motions this build has no compiled enum for). Falls back to bundled
+  /// definitions when the catalog has not loaded yet.
+  List<MotionActivityDefinition> get _remoteDefinitions =>
+      availableMotionActivities(
+        ref.read(motionCatalogProvider).valueOrNull,
+        ref.read(motionCapabilitiesProvider),
+      );
+
   @override
   void dispose() {
     _logController.dispose();
@@ -48,6 +62,11 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   }
 
   Future<void> _submitManual(Race race) async {
+    // A manual-goal race has no Begin button — the real submit is the guide's
+    // last action instead.
+    if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
+      completeFirstRaceGuide(ref);
+    }
     final value = int.tryParse(_logController.text.trim());
     if (value == null || value <= 0) {
       setState(() => _manualError = 'Enter how much you completed.');
@@ -120,18 +139,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
-      final eligibility = resolveCameraVerification(race);
-      // Show a pre-verify movement demo before the camera opens when a
-      // demo is available for the movement. Other camera-verifiable presets
-      // skip straight to the AI Motion screen.
-      final hasPreVerifyDemo =
-          eligibility.isCameraVerifiable &&
-          eligibility.movementType != null &&
-          movementDemoForType(eligibility.movementType!) != null;
-      if (eligibility.isCameraVerifiable && !hasPreVerifyDemo && mounted) {
-        context.push('/race/${widget.raceId}/proof/ai-motion');
-        return;
-      }
+      final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
       setState(() {
         _race = race;
         _raceLoading = false;
@@ -153,46 +161,56 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   @override
   Widget build(BuildContext context) {
     final race = _race;
-    final isPreVerify = !_raceLoading &&
+    final isPreVerify =
+        !_raceLoading &&
         _raceError == null &&
         race != null &&
         _isPreVerify(race);
 
-    return Scaffold(
+    final screen = Scaffold(
       backgroundColor: NuvoColors.page,
       bottomNavigationBar: _bottomBar(race),
       body: SafeArea(
-        child: isPreVerify
-            ? _centeredPreVerifyBody(race)
-            : _defaultBody(race),
+        child: isPreVerify ? _centeredPreVerifyBody(race) : _defaultBody(race),
       ),
     );
+
+    // Final coach step: the real Begin button on the pre-verify setup.
+    // Only while that button actually exists (camera-verifiable race, loaded).
+    if (ref.watch(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup &&
+        isPreVerify) {
+      return Stack(
+        children: [
+          screen,
+          FirstRaceGuideCoach(
+            step: FirstRaceGuideStep.verifySetup,
+            targetKey: FirstRaceGuideKeys.verifyBegin,
+            eyebrow: 'READY TO MOVE',
+            title: 'Get in position.',
+            body: 'Tap Begin when you’re ready.',
+          ),
+        ],
+      );
+    }
+    return screen;
   }
 
   bool _isPreVerify(Race race) {
-    final eligibility = resolveCameraVerification(race);
-    return eligibility.isCameraVerifiable &&
-        eligibility.movementType != null &&
-        movementDemoForType(eligibility.movementType!) != null;
+    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
+    return eligibility.isCameraVerifiable && eligibility.movementType != null;
   }
 
   Widget _defaultBody(Race? race) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-      children: _raceLoading
-          ? _loadingContent()
-          : _raceError != null
-              ? _errorContent()
-              : _formContent(race!),
-    )
-        .animate()
-        .fadeIn(duration: 240.ms, curve: Curves.easeOut)
-        .slideY(
-          begin: 0.03,
-          end: 0,
-          duration: 280.ms,
-          curve: Curves.easeOutCubic,
-        );
+    return NuvoFadeScroll(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+        children: _raceLoading
+            ? _loadingContent()
+            : _raceError != null
+            ? _errorContent()
+            : _formContent(race!),
+      ),
+    );
   }
 
   Widget _centeredPreVerifyBody(Race race) {
@@ -203,10 +221,21 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         children: [
           Align(alignment: Alignment.centerLeft, child: _backRow()),
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: _preVerifyContent(race),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: _preVerifyContent(race),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -235,7 +264,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     final backToRace = NuvoTertiaryButton(
       label: 'Back to race',
       expand: true,
-      onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+      onPressed: _leave,
     );
 
     if (_raceLoading) {
@@ -254,7 +283,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
     if (_raceError != null || race == null) return [backToRace];
 
-    final eligibility = resolveCameraVerification(race);
+    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
     if (!eligibility.isCameraVerifiable) {
       return [
         NuvoPrimaryButton(
@@ -271,6 +300,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
     return [
       NuvoPrimaryButton(
+        key: FirstRaceGuideKeys.verifyBegin,
         label: 'Begin',
         icon: Icons.camera_alt_rounded,
         expand: true,
@@ -288,6 +318,11 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     CameraVerificationEligibility eligibility,
   ) async {
     if (_navigating) return;
+    // Begin is the guide's final coached action — the camera flow teaches
+    // itself from here.
+    if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
+      completeFirstRaceGuide(ref);
+    }
     setState(() => _navigating = true);
     HapticFeedback.mediumImpact();
     debugLogCameraVerificationDecision(
@@ -299,6 +334,24 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       await context.push('/race/${widget.raceId}/proof/ai-motion');
     } finally {
       if (mounted) setState(() => _navigating = false);
+    }
+  }
+
+  Future<void> _leave() async {
+    if (!_submittingManual && !_navigating) {
+      safePopOrGo(context, '/race/${widget.raceId}');
+      return;
+    }
+    final confirmed = await showNuvoConfirmDialog(
+      context,
+      title: 'Leave proof submission?',
+      message: 'Your current proof will not be submitted.',
+      cancelLabel: 'Keep recording',
+      confirmLabel: 'Leave',
+      destructive: false,
+    );
+    if (confirmed == true && mounted) {
+      safePopOrGo(context, '/race/${widget.raceId}');
     }
   }
 
@@ -334,12 +387,10 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   // ── Form ─────────────────────────────────────────────────────────────────────
 
   List<Widget> _formContent(Race race) {
-    final eligibility = resolveCameraVerification(race);
+    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
 
-    // Show pre-verify movement demo when a demo is available.
-    if (eligibility.isCameraVerifiable &&
-        eligibility.movementType != null &&
-        movementDemoForType(eligibility.movementType!) != null) {
+    // Keep every camera-verifiable movement on the same quiet setup screen.
+    if (_isPreVerify(race)) {
       return _preVerifyContent(race);
     }
 
@@ -376,8 +427,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       else
         _ManualLogCard(
           race: race,
-          startingProgress:
-              _uid == null ? 0 : race.participantFor(_uid!)?.progressValue ?? 0,
+          startingProgress: _uid == null
+              ? 0
+              : race.participantFor(_uid!)?.progressValue ?? 0,
           valueController: _logController,
           noteController: _noteController,
           error: _manualError,
@@ -387,16 +439,14 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
 
   /// Dedicated pre-verification movement instruction shown before the camera opens.
   List<Widget> _preVerifyContent(Race race) {
-    final eligibility = resolveCameraVerification(race);
+    final eligibility = resolveCameraVerification(race, remoteDefinitions: _remoteDefinitions);
     final movementName =
         eligibility.movementDefinition?.title ?? race.displayTitle;
     final framingLabel =
         eligibility.movementDefinition?.framingLabel ??
         'Full body inside frame';
     final goalLabel = race.targetValue != null ? raceTargetLabel(race) : null;
-
     return [
-      // Movement name — large, clear
       Text(
         movementName,
         style: AppTextStyles.headlineLarge.copyWith(
@@ -404,17 +454,20 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           letterSpacing: -0.9,
         ),
         textAlign: TextAlign.center,
-      ).animate().fadeIn(duration: 220.ms),
+      ),
       if (goalLabel != null) ...[
         const SizedBox(height: 6),
         Text(
           'First to $goalLabel',
           style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.muted),
           textAlign: TextAlign.center,
-        ).animate(delay: 60.ms).fadeIn(duration: 220.ms),
+        ),
       ],
 
       const SizedBox(height: 32),
+
+      _PreVerifySetupCard(movementType: eligibility.movementType),
+      const SizedBox(height: 24),
 
       // Camera/setup instruction
       Text(
@@ -424,19 +477,17 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           height: 1.4,
         ),
         textAlign: TextAlign.center,
-      ).animate(delay: 120.ms).fadeIn(duration: 220.ms),
+      ),
       const SizedBox(height: 6),
       Text(
         'Stand where Nuvo can see your whole body.',
         style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
         textAlign: TextAlign.center,
-      ).animate(delay: 160.ms).fadeIn(duration: 220.ms),
+      ),
     ];
   }
 
-  Widget _backRow() => NuvoBackButton(
-    onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
-  );
+  Widget _backRow() => NuvoBackButton(onPressed: _leave);
 }
 
 // ── MoveCheck card ────────────────────────────────────────────────────────────
@@ -541,6 +592,88 @@ class _MoveCheckCard extends StatelessWidget {
   }
 }
 
+/// Pre-verification movement cue. The camera screen remains the source of
+/// truth for live verification; this surface is decorative guidance only.
+class _PreVerifySetupCard extends ConsumerWidget {
+  const _PreVerifySetupCard({this.movementType});
+
+  final MotionActivityType? movementType;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final movement = movementType;
+    // Decorative-only lookup: an unloaded/errored catalog just means no
+    // remote preview override, never a verification-affecting failure.
+    final remotePreviewJson = movement == null
+        ? null
+        : ref
+            .watch(motionCatalogProvider)
+            .whenOrNull(
+              data: (snapshot) => snapshot.previewSequenceFor(
+                movement.backendValue,
+              ),
+            );
+    final showRivePreview =
+        movement != null &&
+        RiveMovementPreview.supports(
+          movement,
+          remotePreviewJson: remotePreviewJson,
+        );
+    return Semantics(
+      label: 'Camera verification is ready. Tap Begin to open the camera.',
+      child: Container(
+        width: double.infinity,
+        padding: showRivePreview
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+        decoration: showRivePreview
+            ? const BoxDecoration(color: Colors.transparent)
+            : BoxDecoration(
+                color: NuvoColors.blueSurface,
+                borderRadius: BorderRadius.circular(NuvoRadii.card),
+                border: Border.all(color: NuvoColors.navy, width: 2),
+              ),
+        child: SizedBox(
+          height: showRivePreview ? 300 : 78,
+          child: showRivePreview
+              ? RiveMovementPreview(
+                  movement: movement,
+                  fallback: const _StaticPreVerifyCue(),
+                  remotePreviewJson: remotePreviewJson,
+                )
+              : const _StaticPreVerifyCue(),
+        ),
+      ),
+    );
+  }
+}
+
+class _StaticPreVerifyCue extends StatelessWidget {
+  const _StaticPreVerifyCue();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 78,
+      child: Row(
+        children: [
+          const Icon(Icons.videocam_outlined, color: NuvoColors.blue, size: 30),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              'Camera opens after Begin',
+              style: AppTextStyles.titleMedium.copyWith(
+                color: NuvoColors.navy,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FramingGuidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -616,15 +749,13 @@ class _SkeletonBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: NuvoColors.divider.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(radius),
-          ),
-        )
-        .animate(onPlay: (c) => c.repeat(reverse: true))
-        .fadeIn(duration: 620.ms, begin: 0.45, curve: Curves.easeInOut);
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: NuvoColors.divider.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
   }
 }
 
@@ -729,9 +860,7 @@ class _ManualLogCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               error!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.danger,
-              ),
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger),
             ),
           ],
         ],

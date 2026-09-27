@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'auth_controller.dart';
+import '../data/auth_models.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
 class RouterNotifier extends ChangeNotifier {
@@ -43,8 +44,14 @@ class RouterNotifier extends ChangeNotifier {
     // retry experience with the normal header and nav intact. Every other
     // protected destination bounces back to Arena instead — one offline
     // home, not a dead end on whatever screen last happened to be loading.
+    // Exception: /profile stays reachable — it renders entirely from local
+    // state and hosts Sign out, the only way off a session that can never
+    // re-authenticate on this network (e.g. a stale store-review login that
+    // needs to be replaced by the offline demo sign-in).
     if (authState.status == AuthStatus.offline) {
-      if (loc == '/splash' || loc == '/arena') return null;
+      if (loc == '/splash' || loc == '/arena' || loc == '/profile') {
+        return null;
+      }
       final dest = _isProtected(loc) ? '/arena' : null;
       debugPrint('[Router] offline → $loc : redirect=$dest');
       return dest;
@@ -71,8 +78,18 @@ class RouterNotifier extends ChangeNotifier {
       return null;
     }
 
+    // Mandatory post-auth setup (name, username, member pass) applies to
+    // every account, not just internal @getnuvo.net test accounts — a real
+    // person's crew shouldn't see "Nuvo member" because profile setup was
+    // never required of them.
     if (!user.onboardingComplete) {
-      if (_isAuthPreOnboarding(loc) || loc == '/welcome/intro') {
+      if (_isAuthPreOnboarding(loc) ||
+          loc == '/welcome/intro' ||
+          // Accounts that owe setup cannot wander the app — protected
+          // non-onboarding routes bounce back to the questionnaire.
+          // Onboarding routes themselves stay reachable so member-pass can
+          // finish.
+          (_isProtected(loc) && !loc.startsWith('/onboarding/'))) {
         return '/onboarding/profile';
       }
       return null;
@@ -80,15 +97,47 @@ class RouterNotifier extends ChangeNotifier {
 
     // Onboarded: hand auth / onboarding / intro routes back to the app.
     if (_isAuthOrOnboarding(loc) || loc == '/welcome/intro') {
-      if (authState.guideFirstRace) {
-        _ref.read(firstRaceGuideProvider.notifier).state =
-            FirstRaceGuideStep.competeStart;
-        return '/compete';
-      }
+      if (_shouldArmGuide(authState, user)) return '/compete';
       return '/arena';
     }
 
+    // A guide-eligible account landing on the canonical home (cold launch
+    // hands authenticated users to /arena) gets the coach exactly once —
+    // while a guide step is already armed the user may roam freely, and a
+    // finished guide leaves /arena alone.
+    if (loc == '/arena' &&
+        _ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.idle &&
+        authState.guideFirstRace &&
+        firstRaceGuideAllowed(_ref, user)) {
+      _armGuide();
+      return '/compete';
+    }
+
     return null;
+  }
+
+  // Redirect can run inside the router's build/restoration phase — provider
+  // state must never be written synchronously from here, so the arm is
+  // deferred to the next microtask. Navigation to /compete commits first;
+  // the coach mounts the moment the step flips.
+  void _armGuide() {
+    Future<void>.microtask(() {
+      _ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.competeStart;
+    });
+  }
+
+  bool _shouldArmGuide(AuthState authState, AuthUser user) {
+    if (!authState.guideFirstRace) return false;
+    final step = _ref.read(firstRaceGuideProvider);
+    if (step == FirstRaceGuideStep.idle) {
+      if (!firstRaceGuideAllowed(_ref, user)) return false;
+      _armGuide();
+      return true;
+    }
+    // Mid-guide: keep them on the guide's screen; a finished guide frees
+    // every destination.
+    return step != FirstRaceGuideStep.complete;
   }
 
   // Routes that require authentication
@@ -100,6 +149,8 @@ class RouterNotifier extends ChangeNotifier {
       loc.startsWith('/profile') ||
       loc.startsWith('/race/') ||
       loc.startsWith('/races/') ||
+      loc.startsWith('/crew/') ||
+      loc.startsWith('/my-nuvo') ||
       loc.startsWith('/proof/') ||
       loc.startsWith('/scan') ||
       loc.startsWith('/u/') ||

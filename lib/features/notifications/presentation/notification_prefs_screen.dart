@@ -3,17 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/theme/nuvo_entrance.dart';
+import '../../../core/widgets/nuvo_back_header.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
+import '../../../core/widgets/nuvo_toggle.dart';
 import '../data/notification_prefs.dart';
 
-final _prefsApiProvider = Provider<NotificationPrefsApi>((_) => NotificationPrefsApi());
+final notificationPrefsApiProvider =
+    Provider<NotificationPrefsApi>((_) => NotificationPrefsApi());
 
 /// `/settings/notifications` — grouped in-app + push toggles per category.
+///
+/// A quiet control panel, not a social surface: one App/Push column header
+/// per section, compact rows, hairline dividers. Preference semantics are
+/// untouched — the two toggles stay independent because the backend treats
+/// in-app and push as separate channels.
 class NotificationPrefsScreen extends ConsumerStatefulWidget {
   const NotificationPrefsScreen({super.key});
 
@@ -38,34 +46,39 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
       _error = null;
     });
     try {
-      final p = await ref.read(_prefsApiProvider).list();
+      final p = await ref.read(notificationPrefsApiProvider).list();
       if (mounted) setState(() => _prefs = p);
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
   }
 
-  Future<void> _toggle(NotificationPref pref, {bool? inApp, bool? push}) async {
+  Future<void> _toggle(
+    NotificationPref pref, {
+    bool? inApp,
+    bool? push,
+  }) async {
     final updated = NotificationPref(
       category: pref.category,
       inApp: inApp ?? pref.inApp,
       push: push ?? pref.push,
     );
     setState(() {
-      _prefs = _prefs!.map((p) => p.category == pref.category ? updated : p).toList();
+      _prefs = _prefs!
+          .map((p) => p.category == pref.category ? updated : p)
+          .toList();
       _saving.add(pref.category);
     });
     try {
-      await ref.read(_prefsApiProvider).update(
-            pref.category,
-            inApp: inApp,
-            push: push,
-          );
+      await ref
+          .read(notificationPrefsApiProvider)
+          .update(pref.category, inApp: inApp, push: push);
     } catch (_) {
       if (mounted) {
         setState(() {
-          _prefs =
-              _prefs!.map((p) => p.category == pref.category ? pref : p).toList();
+          _prefs = _prefs!
+              .map((p) => p.category == pref.category ? pref : p)
+              .toList();
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Couldn't save that. Try again.")),
@@ -82,14 +95,13 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
       topBar: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 12, 0),
-          child: Row(children: [
-            NuvoBackButton(
-              onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
-            ),
-            const SizedBox(width: 8),
-            Text('Notifications', style: AppTextStyles.screenTitle),
-          ]),
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+          child: NuvoBackHeader(
+            title: 'Notifications',
+            onBack: () => context.canPop()
+                ? context.pop()
+                : context.go('/profile'),
+          ),
         ),
       ),
       child: _body(),
@@ -99,106 +111,178 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
   Widget _body() {
     if (_error != null) {
       return Center(
-        child: NuvoErrorState(message: "Couldn't load your settings.", onRetry: _load),
+        child: NuvoErrorState(
+          message: "Couldn't load your settings.",
+          onRetry: _load,
+        ),
       );
     }
     final prefs = _prefs;
     if (prefs == null) return const Center(child: NuvoLoadingIndicator());
 
+    final c = context.themeColors;
     final groups = <String, List<NotificationPref>>{};
     for (final p in prefs) {
       groups.putIfAbsent(p.display.group, () => []).add(p);
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 32),
       children: [
         Text(
-          'Choose what reaches you in the app and as a push. Push arrives once '
-          'notifications are turned on for Nuvo on this device.',
-          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.textMuted),
+          'Control in-app and push alerts.',
+          style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
         ),
-        const SizedBox(height: 20),
-        for (final entry in groups.entries) ...[
-          Text(entry.key.toUpperCase(),
-              style: AppTextStyles.labelSmall.copyWith(
-                color: NuvoColors.textMuted,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8,
-              )),
-          const SizedBox(height: 8),
+        const SizedBox(height: NuvoSpacing.xl),
+        for (final entry in groups.entries.toList().asMap().entries) ...[
+          _SectionHeader(label: entry.value.key.toUpperCase()),
+          const SizedBox(height: NuvoSpacing.sm),
           Container(
             decoration: BoxDecoration(
-              color: NuvoColors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: NuvoColors.border),
+              color: c.surface,
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              border: Border.all(color: c.border),
             ),
-            child: Column(
-              children: [
-                for (var i = 0; i < entry.value.length; i++) ...[
-                  if (i > 0) const Divider(height: 1),
-                  _PrefRow(
-                    pref: entry.value[i],
-                    onInApp: (v) => _toggle(entry.value[i], inApp: v),
-                    onPush: (v) => _toggle(entry.value[i], push: v),
-                  ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(NuvoRadii.md - 1),
+              child: Column(
+                children: [
+                  for (var i = 0; i < entry.value.value.length; i++) ...[
+                    if (i > 0)
+                      Divider(height: 1, thickness: 1, color: c.border),
+                    _PrefRow(
+                      pref: entry.value.value[i],
+                      saving: _saving.contains(
+                        entry.value.value[i].category,
+                      ),
+                      onInApp: (v) =>
+                          _toggle(entry.value.value[i], inApp: v),
+                      onPush: (v) =>
+                          _toggle(entry.value.value[i], push: v),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ).nuvoEnter(
-            delay: Duration(
-              milliseconds: 40 * groups.keys.toList().indexOf(entry.key),
-            ),
+            delay: Duration(milliseconds: 40 * entry.key),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: NuvoSpacing.xl),
         ],
       ],
     );
   }
 }
 
+/// One column header per section — "App / Push" is declared once over the
+/// two toggle columns instead of repeated inside every row.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final headerStyle = AppTextStyles.labelSmall.copyWith(
+      color: c.inkMuted,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.8,
+    );
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: headerStyle)),
+        SizedBox(
+          width: _colW,
+          child: Center(
+            child: ExcludeSemantics(child: Text('App', style: headerStyle)),
+          ),
+        ),
+        SizedBox(
+          width: _colW,
+          child: Center(
+            child: ExcludeSemantics(child: Text('Push', style: headerStyle)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Width of each toggle column — the section header labels and every row
+/// share it so App and Push line up as real columns.
+const _colW = 52.0;
+
 class _PrefRow extends StatelessWidget {
-  const _PrefRow({required this.pref, required this.onInApp, required this.onPush});
+  const _PrefRow({
+    required this.pref,
+    required this.saving,
+    required this.onInApp,
+    required this.onPush,
+  });
 
   final NotificationPref pref;
+  final bool saving;
   final ValueChanged<bool> onInApp;
   final ValueChanged<bool> onPush;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+    final c = context.themeColors;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 52),
+      padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
       child: Row(
         children: [
           Expanded(
-            child: Text(pref.display.label,
-                style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy)),
+            child: Text(
+              pref.display.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
+            ),
           ),
-          _MiniToggle(label: 'App', value: pref.inApp, onChanged: onInApp),
-          const SizedBox(width: 4),
-          _MiniToggle(label: 'Push', value: pref.push, onChanged: onPush),
+          _ToggleCell(
+            semanticLabel:
+                '${pref.display.label}, app notifications',
+            value: pref.inApp,
+            onChanged: saving ? null : onInApp,
+          ),
+          _ToggleCell(
+            semanticLabel:
+                '${pref.display.label}, push notifications',
+            value: pref.push,
+            onChanged: saving ? null : onPush,
+          ),
         ],
       ),
     );
   }
 }
 
-class _MiniToggle extends StatelessWidget {
-  const _MiniToggle({required this.label, required this.value, required this.onChanged});
-  final String label;
+class _ToggleCell extends StatelessWidget {
+  const _ToggleCell({
+    required this.semanticLabel,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String semanticLabel;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.textMuted)),
-        Transform.scale(
-          scale: 0.8,
-          child: Switch(value: value, onChanged: onChanged),
+    return SizedBox(
+      width: _colW,
+      child: Center(
+        // The column headers are visual; each toggle carries its own full
+        // phrase for screen readers ("Race starting, app notifications").
+        child: Semantics(
+          label: semanticLabel,
+          child: NuvoToggle(value: value, onChanged: onChanged),
         ),
-      ],
+      ),
     );
   }
 }

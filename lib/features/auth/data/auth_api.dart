@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'auth_models.dart';
+import '../../../core/network/api_base.dart';
 
 /// Every auth request fails fast rather than hanging a stalled socket — a hung
 /// refresh/me call used to leave the app on a grey screen indefinitely.
@@ -26,11 +27,10 @@ Never _throwTransport(Object error) {
 }
 
 // Compile-time injectable base URL.
-// Run with: flutter run --dart-define=NUVO_API_BASE_URL=http://localhost:8787
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
+//
+// Local dev against dev worker:
+//   flutter run --dart-define=NUVO_API_BASE_URL=https://nuvo-api-dev.getnuvoapp.workers.dev
+// Release/TestFlight builds: no flag — default is prod.
 
 class ApiException implements Exception {
   final int statusCode;
@@ -56,7 +56,7 @@ class AuthApi {
     Map<String, dynamic> body, {
     String? accessToken,
   }) async {
-    final url = '$_kApiBase$path';
+    final url = '$kNuvoApiBase$path';
     try {
       final res = await _client
           .post(
@@ -92,7 +92,7 @@ class AuthApi {
     try {
       final res = await _client
           .get(
-            Uri.parse('$_kApiBase$path'),
+            Uri.parse('$kNuvoApiBase$path'),
             headers: _headers(accessToken: accessToken),
           )
           .timeout(_kAuthRequestTimeout);
@@ -122,7 +122,7 @@ class AuthApi {
     String path, {
     String? accessToken,
   }) async {
-    final url = '$_kApiBase$path';
+    final url = '$kNuvoApiBase$path';
     try {
       final res = await _client
           .delete(

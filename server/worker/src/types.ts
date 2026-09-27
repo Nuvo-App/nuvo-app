@@ -10,6 +10,9 @@ export type AppEnv = {
     // Shared secret gating the internal Motion Session lookup endpoints
     // (`/internal/*`). Set via `wrangler secret put INTERNAL_API_KEY`.
     INTERNAL_API_KEY?: string;
+    // Dedicated key-encryption material for motion artifacts. Configure with
+    // `wrangler secret put MOTION_DATA_MASTER_KEY`; never reuse JWT_SECRET.
+    MOTION_DATA_MASTER_KEY?: string;
     API_BASE_URL: string;
     PROFILE_PHOTOS: R2Bucket;
     // Push (phase F) — dormant until both are set via `wrangler secret put`.
@@ -134,6 +137,10 @@ export interface RaceRow {
   winner_user_id?: string | null;
   completed_at?: string | null;
   verifier_release_id?: string | null;
+  score_direction?: string | null;
+  version?: number | null;
+  is_live_session?: number | null;
+  live_window_seconds?: number | null;
   status: string;
   visibility: string;
   public_join_enabled: number;
@@ -153,6 +160,9 @@ export interface RaceMemberRow {
   joined_at: string;
   cached_display_name: string | null;
   cached_avatar_url: string | null;
+  ready_at?: string | null;
+  finished_at?: string | null;
+  finish_rank?: number | null;
 }
 
 export interface RaceProgressRow {

@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/presentation/auth_controller.dart';
 
@@ -167,13 +168,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             ),
                             const SizedBox(height: 24),
 
-                            Text(
+                            NuvoFlipText(
                               'Build your profile',
                               style: AppTextStyles.headlineLarge.copyWith(
                                 fontSize: 32,
                                 letterSpacing: -0.9,
                                 color: NuvoColors.navy,
                               ),
+                              delay: const Duration(milliseconds: 200),
+                              duration: const Duration(milliseconds: 1300),
                             ),
                             const SizedBox(height: 8),
                             Text(

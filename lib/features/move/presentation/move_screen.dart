@@ -10,6 +10,8 @@ import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
+import '../../../core/widgets/nuvo_motion.dart';
+import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
@@ -44,9 +46,13 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
   bool _completedExpanded = false;
   bool _recentExpanded = false;
 
-  static const _readyCap = 3;
-  static const _completedCap = 5;
-  static const _recentCap = 5;
+  // Generous defaults, not "exactly enough to match a mockup" — a real
+  // viewport with real data should read as populated, not artificially
+  // truncated to three rows with a blank lower half. "See all" still exists
+  // for the true long tail.
+  static const _readyCap = 8;
+  static const _completedCap = 8;
+  static const _recentCap = 8;
 
   void _setSegment(_VerifySegment next) {
     if (next == _segment) return;
@@ -112,7 +118,12 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
 
     return Scaffold(
       backgroundColor: NuvoColors.page,
+      // bottom:false — the shell's own SafeArea + Scaffold's bottomNavigationBar
+      // already account for the nav; a second bottom-safe inset here doubled
+      // up with the nav's own reserved height on some layouts (root cause of
+      // the "content behind nav" reports, see MainShell's doc-comment).
       body: SafeArea(
+        bottom: false,
         child: ListView(
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
@@ -270,35 +281,79 @@ class _SegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A FILTER, not three stacked buttons: label + count share one line, so
+    // the whole control reads as a compact segmented switcher (~48–56px
+    // total) rather than a tall three-button module. The selection is a
+    // single pill that SLIDES between slots — the state moves, instead of a
+    // new widget appearing per tab.
+    final selectedIndex = _VerifySegment.values.indexOf(segment);
+    final selectedColor = switch (segment) {
+      _VerifySegment.ready => NuvoColors.blue,
+      _VerifySegment.completed => NuvoColors.success,
+      _VerifySegment.recent => NuvoColors.accent,
+    };
+
     return Container(
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        // A filter tray, not a card: quiet ice fill, no navy frame —
+        // the sliding colored pill carries all the state weight.
+        color: NuvoColors.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
       ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
+      padding: const EdgeInsets.all(3),
+      child: Stack(
         children: [
-          _SegmentTab(
-            label: 'Ready',
-            count: readyCount,
-            selected: segment == _VerifySegment.ready,
-            color: NuvoColors.blue,
-            onTap: () => onChanged(_VerifySegment.ready),
+          Positioned.fill(
+            child: AnimatedAlign(
+              // -1 / 0 / +1 across the three equal slots.
+              alignment: Alignment(selectedIndex - 1.0, 0),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: FractionallySizedBox(
+                widthFactor: 1 / 3,
+                heightFactor: 1,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    color: selectedColor,
+                    borderRadius: BorderRadius.circular(NuvoRadii.xs),
+                  ),
+                ),
+              ),
+            ),
           ),
-          _SegmentTab(
-            label: 'Completed',
-            count: completedCount,
-            selected: segment == _VerifySegment.completed,
-            color: NuvoColors.success,
-            onTap: () => onChanged(_VerifySegment.completed),
-          ),
-          _SegmentTab(
-            label: 'Recent',
-            count: recentCount,
-            selected: segment == _VerifySegment.recent,
-            color: NuvoColors.warning,
-            onTap: () => onChanged(_VerifySegment.recent),
+          Row(
+            children: [
+              _SegmentTab(
+                label: 'Ready',
+                count: readyCount,
+                icon: Icons.pending_actions_rounded,
+                selected: segment == _VerifySegment.ready,
+                // The sliding pill carries the accent color; the tab only
+                // needs the on-pill foreground when selected.
+                onPill: NuvoColors.white,
+                onTap: () => onChanged(_VerifySegment.ready),
+              ),
+              _SegmentTab(
+                label: 'Completed',
+                count: completedCount,
+                icon: Icons.check_circle_outline_rounded,
+                selected: segment == _VerifySegment.completed,
+                onPill: NuvoColors.white,
+                onTap: () => onChanged(_VerifySegment.completed),
+              ),
+              _SegmentTab(
+                label: 'Recent',
+                count: recentCount,
+                icon: Icons.history_rounded,
+                selected: segment == _VerifySegment.recent,
+                // Recent is history, not a warning: the restrained tan
+                // accent pill takes navy text instead of white.
+                onPill: NuvoColors.navy,
+                onTap: () => onChanged(_VerifySegment.recent),
+              ),
+            ],
           ),
         ],
       ),
@@ -310,46 +365,63 @@ class _SegmentTab extends StatelessWidget {
   const _SegmentTab({
     required this.label,
     required this.count,
+    required this.icon,
     required this.selected,
-    required this.color,
+    required this.onPill,
     required this.onTap,
   });
 
   final String label;
   final int count;
+  final IconData icon;
   final bool selected;
-  final Color color;
+
+  /// Foreground color when the sliding pill is underneath this tab.
+  final Color onPill;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    // Label + count share one line — a compact filter tab, not a stacked
+    // two-line button. The count reads as secondary (smaller, dimmer) but
+    // never disappears into its own row. The pill behind carries the state
+    // color; this tab is transparent hit surface + foreground only.
+    final fg = selected ? onPill : NuvoColors.textMuted;
     return Expanded(
-      child: GestureDetector(
+      child: NuvoPressable(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? color : Colors.transparent,
-            borderRadius: BorderRadius.circular(NuvoRadii.xs),
-          ),
-          child: Column(
+        haptic: false,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  fontSize: 13,
-                  color: selected ? NuvoColors.white : NuvoColors.textMuted,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontSize: 13,
+                    color: fg,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                  ),
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(width: 4),
               Text(
                 '$count',
+                maxLines: 1,
                 style: AppTextStyles.labelSmall.copyWith(
-                  fontSize: 10,
-                  color: selected ? NuvoColors.white : NuvoColors.textDim,
+                  fontSize: 11,
+                  color: selected
+                      ? fg.withValues(alpha: 0.75)
+                      : NuvoColors.textDim,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -391,6 +463,9 @@ class _ReadySegment extends StatelessWidget {
         subtitle: 'Start or join a race to begin logging moves.',
         actionLabel: 'Start a race',
         onAction: onStartRace,
+        // "Ready to verify" is an actionable state, not a problem — brand
+        // blue, not the semantic warning color reserved for actual issues.
+        accent: NuvoColors.blue,
       );
     }
 
@@ -419,9 +494,9 @@ class _ReadySegment extends StatelessWidget {
               Text('Also ready', style: AppTextStyles.sectionTitle),
               const Spacer(),
               if (hasMore)
-                GestureDetector(
+                NuvoPressable(
                   onTap: onToggleExpand,
-                  behavior: HitTestBehavior.opaque,
+                  haptic: false,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -438,33 +513,24 @@ class _ReadySegment extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: NuvoColors.surface,
-              borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: NuvoBorders.quiet,
+          const SizedBox(height: 6),
+          // Level-0 rows directly on the page — this is a pick-list of
+          // movements to perform, not a list of records. The movement glyph
+          // carries the "what", the meta line carries the finish line.
+          for (var i = 0; i < visibleAlsoReady.length; i++) ...[
+            _ReadyMovementRow(
+              race: visibleAlsoReady[i],
+              userId: userId,
+              onTap: () => onVerify(visibleAlsoReady[i]),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                for (var i = 0; i < visibleAlsoReady.length; i++) ...[
-                  _VerifyRaceRow(
-                    race: visibleAlsoReady[i],
-                    userId: userId,
-                    onTap: () => onVerify(visibleAlsoReady[i]),
-                  ),
-                  if (i < visibleAlsoReady.length - 1)
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      indent: 54,
-                      color: NuvoColors.divider,
-                    ),
-                ],
-              ],
-            ),
-          ),
+            if (i < visibleAlsoReady.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 50,
+                color: NuvoColors.divider,
+              ),
+          ],
         ],
       ],
     );
@@ -503,6 +569,7 @@ class _UpNextCard extends StatelessWidget {
     }).toList();
 
     return RaceHero(
+      raceId: race.id,
       activityLabel: activity,
       targetLabel: target,
       raceTitle: race.displayTitle,
@@ -522,10 +589,18 @@ class _UpNextCard extends StatelessWidget {
   }
 }
 
-// ── Verify race row — uses canonical RaceRow with verify-specific onTap ──────
+// ── Ready movement row — pick a movement, go move ────────────────────────────
 
-class _VerifyRaceRow extends StatelessWidget {
-  const _VerifyRaceRow({required this.race, required this.onTap, this.userId});
+/// A lean action row for "Also ready": movement glyph, race name, the
+/// movement + progress meta, arrow. No card, no progress track — the loud
+/// "Up next" hero above already carries the race identity; this row's only
+/// job is "do this movement next."
+class _ReadyMovementRow extends StatelessWidget {
+  const _ReadyMovementRow({
+    required this.race,
+    required this.onTap,
+    this.userId,
+  });
 
   final Race race;
   final String? userId;
@@ -534,32 +609,64 @@ class _VerifyRaceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final myPart = userId != null ? race.participantFor(userId!) : null;
-    final pct = raceProgressPercent(race, myPart);
     final activity = raceActivityTitle(race);
     final progressLabel = raceProgressLabel(race, myPart);
-    final rank = rankForUser(race, userId);
-    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
-      final name = p.displayName.trim();
-      final initials = name.isEmpty
-          ? '?'
-          : name
-                .split(RegExp(r'\s+'))
-                .where((w) => w.isNotEmpty)
-                .take(2)
-                .map((w) => w[0].toUpperCase())
-                .join();
-      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
-    }).toList();
+    final icon =
+        raceActivityDefinition(race)?.icon ?? Icons.fitness_center_rounded;
 
-    return RaceRow(
-      raceTitle: race.displayTitle,
-      movementLabel: activity,
-      progressLabel: progressLabel,
-      progressPercent: pct,
-      rank: rank,
-      participantCount: race.participantCount,
-      avatars: avatars,
+    return PressableScale(
       onTap: onTap,
+      scale: 0.98,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                // Actionable = blue. These rows invite a move right now,
+                // so the glyph well carries Nuvo's action color at a quiet
+                // tint — same semantic as the Ready segment pill.
+                color: NuvoColors.blue.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: NuvoColors.blue, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    race.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.raceRowTitle.copyWith(fontSize: 15),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$activity · $progressLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.raceRowMeta.copyWith(
+                      fontSize: 12,
+                      color: NuvoColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              color: NuvoColors.textDim,
+              size: 17,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -604,9 +711,9 @@ class _CompletedSegment extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: GestureDetector(
+              child: NuvoPressable(
                 onTap: onToggleExpand,
-                behavior: HitTestBehavior.opaque,
+                haptic: false,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -731,9 +838,9 @@ class _RecentSegment extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: GestureDetector(
+              child: NuvoPressable(
                 onTap: onToggleExpand,
-                behavior: HitTestBehavior.opaque,
+                haptic: false,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -856,6 +963,7 @@ class _SegmentEmptyState extends StatelessWidget {
     required this.subtitle,
     this.actionLabel,
     this.onAction,
+    this.accent = NuvoColors.blue,
   });
 
   final IconData icon;
@@ -863,6 +971,7 @@ class _SegmentEmptyState extends StatelessWidget {
   final String subtitle;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -872,7 +981,7 @@ class _SegmentEmptyState extends StatelessWidget {
       body: subtitle,
       ctaLabel: actionLabel,
       onCta: onAction,
-      accent: NuvoColors.warning,
+      accent: accent,
       compact: true,
     );
   }
@@ -889,7 +998,8 @@ class _EmptyState extends StatelessWidget {
     return NuvoEmptyState(
       icon: Icons.directions_run_rounded,
       title: 'Nothing to verify yet',
-      body: 'Create a race, then log your moves here. Nuvo checks each one and '
+      body:
+          'Create a race, then log your moves here. Nuvo checks each one and '
           'moves the leaderboard.',
       ctaLabel: 'Create a race',
       onCta: onStart,

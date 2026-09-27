@@ -10,6 +10,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../domain/proof_status.dart';
 
 class BoardMovedArgs {
@@ -170,37 +171,39 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                           ).animate(delay: 380.ms).fadeIn(duration: 280.ms),
                           const SizedBox(height: 24),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                width: 2,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '+$_valueLabel',
-                                  style: AppTextStyles.titleLarge.copyWith(
-                                    color: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    width: 2,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'Added to your total',
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.72),
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '+$_valueLabel',
+                                      style: AppTextStyles.titleLarge.copyWith(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Added to your total',
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.72,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          )
+                              )
                               .animate(delay: 460.ms)
                               .fadeIn(duration: 300.ms)
                               .shimmer(
@@ -223,10 +226,9 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                         onPressed: () => context.go('/race/$raceId'),
                       ),
                       const SizedBox(height: 12),
-                      GestureDetector(
-                        onTap: () =>
-                            context.go('/race/$raceId/proof'),
-                        behavior: HitTestBehavior.opaque,
+                      NuvoPressable(
+                        onTap: () => context.go('/race/$raceId/proof'),
+                        haptic: false,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Text(
@@ -266,11 +268,7 @@ class _CheckMedallion extends StatelessWidget {
         ),
       ],
     ),
-    child: const Icon(
-      Icons.check_rounded,
-      color: NuvoColors.success,
-      size: 40,
-    ),
+    child: const Icon(Icons.check_rounded, color: NuvoColors.success, size: 40),
   );
 }
 
@@ -282,40 +280,41 @@ class _RankReveal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        if (before != null) ...[
-          Text(
-            '#$before',
-            style: AppTextStyles.number(
-              24,
-              color: Colors.white.withValues(alpha: 0.5),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (before != null) ...[
+              Text(
+                '#$before',
+                style: AppTextStyles.number(
+                  24,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+              ),
+              const SizedBox(width: 14),
+              const NuvoIcon(NuvoIconType.arrow, color: Colors.white, size: 18),
+              const SizedBox(width: 14),
+            ],
+            CountUpText(
+              value: after,
+              prefix: '#',
+              duration: const Duration(milliseconds: 560),
+              style: AppTextStyles.number(
+                52,
+                color: Colors.white,
+                weight: FontWeight.w900,
+              ),
             ),
-          ),
-          const SizedBox(width: 14),
-          const NuvoIcon(
-            NuvoIconType.arrow,
-            color: Colors.white,
-            size: 18,
-          ),
-          const SizedBox(width: 14),
-        ],
-        CountUpText(
-          value: after,
-          prefix: '#',
-          duration: const Duration(milliseconds: 560),
-          style: AppTextStyles.number(
-            52,
-            color: Colors.white,
-            weight: FontWeight.w900,
-          ),
-        ),
-      ],
-    )
+          ],
+        )
         .animate(delay: 180.ms)
         .fadeIn(duration: 300.ms)
-        .slideY(begin: 0.2, end: 0, duration: 380.ms, curve: Curves.easeOutBack);
+        .slideY(
+          begin: 0.2,
+          end: 0,
+          duration: 380.ms,
+          curve: Curves.easeOutBack,
+        );
   }
 }
 
@@ -341,10 +340,8 @@ class _BurstState extends State<_Burst> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _c,
-    builder: (_, _) => CustomPaint(
-      painter: _BurstPainter(_c.value),
-      size: Size.infinite,
-    ),
+    builder: (_, _) =>
+        CustomPaint(painter: _BurstPainter(_c.value), size: Size.infinite),
   );
 }
 
@@ -482,13 +479,13 @@ class _NotVerifiedView extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        "That move didn't count",
+                        'Proof needs another try',
                         style: AppTextStyles.headlineLarge,
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Try again with your whole body in frame and good light.',
+                        'We couldn’t verify this proof. Try again with your whole body in frame and good light.',
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: NuvoColors.muted,
                         ),
@@ -506,8 +503,7 @@ class _NotVerifiedView extends StatelessWidget {
                   NuvoPrimaryButton(
                     label: 'Try again',
                     expand: true,
-                    onPressed: () =>
-                        context.go('/race/$raceId/proof'),
+                    onPressed: () => context.go('/race/$raceId/proof'),
                   ),
                   const SizedBox(height: 12),
                   NuvoTertiaryButton(

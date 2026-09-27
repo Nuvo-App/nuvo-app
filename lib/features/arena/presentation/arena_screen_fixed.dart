@@ -13,7 +13,9 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_podium.dart';
+import '../../../core/widgets/nuvo_race_path.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
@@ -24,16 +26,20 @@ import 'arena_controller.dart';
 
 const _arenaBackground = NuvoColors.page;
 const _arenaSurface = NuvoColors.surface;
-const _arenaLine = NuvoColors.border;
 const _arenaText = NuvoColors.navy;
 const _arenaMuted = NuvoColors.textMuted;
 const _arenaBlue = NuvoColors.blue;
 const _arenaGreen = NuvoColors.success;
 
 class ArenaScreen extends ConsumerStatefulWidget {
-  const ArenaScreen({super.key, this.preview = false});
+  const ArenaScreen({super.key, this.preview = false, this.debugSnapshot});
 
   final bool preview;
+
+  /// Test seam: when provided, this snapshot is rendered verbatim instead
+  /// of the arena controller's — lets widget tests drive specific boards
+  /// (solo, head-to-head, full podium) without stubbing providers.
+  final ArenaSnapshot? debugSnapshot;
 
   @override
   ConsumerState<ArenaScreen> createState() => _ArenaScreenState();
@@ -59,7 +65,9 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         ? null
         : ref.watch(arenaControllerProvider);
     final raceState = widget.preview ? null : ref.watch(raceControllerProvider);
-    final snapshot = widget.preview ? _previewSnapshot() : arenaState?.snapshot;
+    final snapshot = widget.preview
+        ? (widget.debugSnapshot ?? _previewSnapshot())
+        : (widget.debugSnapshot ?? arenaState?.snapshot);
     final raceById = {
       for (final race in raceState?.races ?? const <Race>[]) race.id: race,
     };
@@ -67,6 +75,76 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final activeBoard = boards.isEmpty
         ? null
         : boards[_boardPage.clamp(0, boards.length - 1)];
+
+    // First-composition budget — computed once, used twice:
+    //   1. heroHeight: "Your Next Move" is the primary object, but the
+    //      leaderboard below it owns real estate too. The card's ceiling is
+    //      whatever the usable viewport leaves after the header, section
+    //      labels, the action row, and the full standings unit. Budgeting
+    //      against the standings — not a bare viewport fraction — keeps the
+    //      whole board above the dock instead of its useful half.
+    //   2. seamGap: the gap before "Recent activity" grows until that
+    //      section starts at or below the dock's top edge — nothing from
+    //      the next section peeks above the dock at rest.
+    //
+    // The fold is the dock's TOP EDGE, not bottomPadding (that's a scroll
+    // clearance contract and can end inside the dock zone). Height is
+    // density-tier driven, never raw width: two phones in the same tier
+    // get the same card. The card has exactly two legal compositions —
+    // compact (~296px, smaller type/pads) and tall (≥324px) — nothing in
+    // between, or it clips its own content. When even compact won't fit
+    // the page scrolls; the card never renders shorter than its content.
+    final media = MediaQuery.of(context);
+    final dockTop = media.size.height -
+        NuvoBottomNav.navDockHeight -
+        media.padding.bottom;
+    final usableViewport =
+        dockTop - media.padding.top - 10; // breathing unit above the dock
+    final heroBase = switch (usableViewport) {
+      < 560 => 300.0, // compact phones
+      < 800 => 340.0, // standard
+      _ => 400.0, // large
+    };
+    final standingsCount = activeBoard == null
+        ? 0
+        : _standingsCount(activeBoard, raceById[activeBoard.id]);
+    // Standings extents as they actually render — the flat solo leader
+    // state, two head-to-head rows, the flat podium. Measured extents,
+    // not upper bounds: over-reserving starves the hero while the floor
+    // forces it back.
+    final leaderboardReserve = switch (standingsCount) {
+      0 => 0.0,
+      1 => 150.0, // flat leader state
+      2 => 120.0, // two head-to-head rows
+      _ => 140.0, // three-place podium
+    };
+    // What the usable viewport already spent before the hero: the screen
+    // header (~110 — Arena + greeting sliver above the list), then in the
+    // list: top pad + label + hero gap + [dots] + actions + section beat +
+    // leaderboard label + its gap.
+    final fixedElsewhere = 110.0 + 6 + 20 + 8 +
+        (boards.length > 1 ? 20 : 0) +
+        8 + 64 + 20 + 20 + 10;
+    final allowance =
+        usableViewport - fixedElsewhere - leaderboardReserve;
+    final heroHeight =
+        allowance >= 324 ? math.min(heroBase, allowance) : 296.0;
+    // The seam uses LOWER-bound extents (a deliberately under-counted
+    // header/labels/standings total) so the gap can only overshoot — the
+    // next section always starts at or below the dock's top edge, never
+    // peeking above it at rest. 30px is the normal section gap.
+    final seamGap = math.max(
+      30.0,
+      (usableViewport + 10) -
+          (240.0 + (boards.length > 1 ? 20 : 0)) -
+          heroHeight -
+          switch (standingsCount) {
+            0 => 0.0,
+            1 => 130.0,
+            2 => 105.0,
+            _ => 120.0,
+          },
+    );
     final greeting =
         user?.fullName?.trim().split(RegExp(r'\s+')).first ?? 'there';
     final loading =
@@ -145,7 +223,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                   // above the nav; see the tightened gaps below.
                   padding: EdgeInsets.fromLTRB(
                     NuvoSpacing.pageHorizontal,
-                    20,
+                    6,
                     NuvoSpacing.pageHorizontal,
                     NuvoBottomNav.bottomPadding(context),
                   ),
@@ -157,67 +235,31 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             ? '${_boardPage + 1} / ${boards.length}'
                             : null,
                       ),
-                      const SizedBox(height: 12),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          // "Your Next Move" is the primary object on the
-                          // page. The card height is derived from a target
-                          // proportion (a touch taller than wide), then
-                          // bounded by the *usable* viewport so the first
-                          // composition still ends on the leaderboard — never
-                          // a fixed pixel height, so it holds proportions
-                          // across phone sizes. On a very small phone it hits
-                          // the floor and the page simply scrolls.
-                          final media = MediaQuery.of(context);
-                          final usableViewport = media.size.height -
-                              media.padding.top -
-                              NuvoBottomNav.bottomPadding(context);
-                          final desired = constraints.maxWidth * 1.16;
-                          // Never below the card's own content height (a
-                          // shorter box would clip); never past ~44% of the
-                          // usable viewport (past that the first composition
-                          // spills below the leaderboard). On a tiny phone
-                          // the floor wins and the page scrolls — allowed.
-                          //
-                          // The card's *height budget* is unchanged from
-                          // before — the fix for the dead space this budget
-                          // used to produce is in _NextMoveHero below (no
-                          // more forced spaceBetween stretch), not here.
-                          const contentFloor = 284.0;
-                          final maxH = math.max(
-                            contentFloor,
-                            usableViewport * 0.46,
-                          );
-                          final heroHeight =
-                              desired.clamp(contentFloor, maxH).toDouble();
-                          return SizedBox(
-                            height: heroHeight,
-                            child: PageView.builder(
-                              controller: _boardsController,
-                              clipBehavior: Clip.hardEdge,
-                              itemCount: boards.length,
-                              onPageChanged: (page) =>
-                                  setState(() => _boardPage = page),
-                              padEnds: false,
-                              itemBuilder: (context, index) =>
-                                  _BoardCarouselItem(
-                                    controller: _boardsController,
-                                    index: index,
-                                    board: boards[index],
-                                    heroHeight: heroHeight,
-                                    isLast: index == boards.length - 1,
-                                    onOpen: () =>
-                                        _openBoard(context, boards[index]),
-                                  ),
-                            ),
-                          );
-                        },
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: heroHeight,
+                        child: PageView.builder(
+                          controller: _boardsController,
+                          clipBehavior: Clip.hardEdge,
+                          itemCount: boards.length,
+                          onPageChanged: (page) =>
+                              setState(() => _boardPage = page),
+                          padEnds: false,
+                          itemBuilder: (context, index) => _BoardCarouselItem(
+                            controller: _boardsController,
+                            index: index,
+                            board: boards[index],
+                            heroHeight: heroHeight,
+                            isLast: index == boards.length - 1,
+                            onOpen: () => _openBoard(context, boards[index]),
+                          ),
+                        ),
                       ),
                       if (boards.length > 1) ...[
                         const SizedBox(height: 6),
                         _PageDots(count: boards.length, selected: _boardPage),
                       ],
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
                       KeyedSubtree(
                         key: ValueKey('board-sections-${activeBoard.id}'),
                         child: Column(
@@ -233,12 +275,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                               onStart: () => context.push('/races/new'),
                               onJoin: () => context.push('/races/join'),
                             ),
-                            // Shorter card reclaims real room here — the
-                            // leaderboard section gets to breathe instead of
-                            // rank 4+ getting exposed to fill the space.
-                            const SizedBox(height: 28),
+                            // Moderate section beat — the leaderboard
+                            // section owns real estate below the actions
+                            // (20px floor: never glued to the buttons).
+                            const SizedBox(height: 20),
                             const _SectionLabel(title: 'Leaderboard'),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 10),
                             _Standings(
                               board: activeBoard,
                               // Prefer the authoritative race so this shows the
@@ -251,7 +293,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 30),
+                      SizedBox(height: seamGap),
                       _SectionLabel(
                         title: 'Recent activity',
                         trailing: snapshot!.activity.isEmpty
@@ -536,8 +578,9 @@ class _NextMoveHero extends StatelessWidget {
                         ],
                       ),
                       SizedBox(height: tall ? 14 : 6),
-                      _RaceProgressTrack(
+                      NuvoRacePath(
                         key: ValueKey('progress-${board.id}'),
+                        raceId: board.id,
                         progress: pct / 100,
                       ),
                     ],
@@ -552,8 +595,14 @@ class _NextMoveHero extends StatelessWidget {
               ),
             ),
           ),
-          GestureDetector(
+          NuvoPressable(
             onTap: onOpen,
+            // Nearly-full scale: the band lives inside the card's clip, so a
+            // big shrink would reveal white slivers at the edges — a small
+            // sink reads as pressed without breaking the silhouette.
+            scale: 0.99,
+            translateY: 2,
+            haptic: false,
             child: Container(
               // The chunky blue footer — a real tappable band, sized up with
               // the card.
@@ -594,34 +643,6 @@ class _NextMoveHero extends StatelessWidget {
       ),
     );
   }
-}
-
-class _RaceProgressTrack extends StatelessWidget {
-  const _RaceProgressTrack({super.key, required this.progress});
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Race progress',
-    value: '${(progress.clamp(0, 1) * 100).round()}%',
-    child: TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: progress),
-      duration: const Duration(milliseconds: 700),
-      curve: Curves.easeOutCubic,
-      builder: (context, animatedProgress, child) => SizedBox(
-        // Left at 42 — the flag-pole artwork in _RaceProgressPainter uses
-        // absolute pixel offsets (not size-relative), so shrinking this
-        // risks clipping it. The gap/padding trims above and heroHeight
-        // reduction below carry the height savings instead.
-        height: 42,
-        child: CustomPaint(
-          painter: _RaceProgressPainter(progress: animatedProgress),
-          child: child,
-        ),
-      ),
-      child: const SizedBox.expand(),
-    ),
-  );
 }
 
 class _RaceDetails extends StatelessWidget {
@@ -667,123 +688,6 @@ class _RaceDetails extends StatelessWidget {
       ],
     );
   }
-}
-
-/// A simplified route toward a finish line — two broad, gentle curves (an
-/// up-bend then a down-bend back to the baseline), not a single shallow
-/// quadratic bow that reads as a straight generic progress bar. Every
-/// stroke and marker stays within the painter's bounds at 0%, 50%, and
-/// 100%: the curve amplitude is a fixed fraction of the available height,
-/// well inside the stroke's own radius margin.
-class _RaceProgressPainter extends CustomPainter {
-  const _RaceProgressPainter({required this.progress});
-  final double progress;
-
-  static const _strokeWidth = 16.0;
-  static const _progressWidth = 10.0;
-
-  Path _routePath(Size size) {
-    final startX = 14.0;
-    final finishX = size.width - 36;
-    final midX = (startX + finishX) / 2;
-    final baseY = size.height / 2;
-    // Amplitude is a fraction of the half-height left after the stroke's own
-    // radius, so the curve can never push the stroke edge past the canvas
-    // bounds regardless of the widget's height.
-    final margin = _strokeWidth / 2;
-    final amplitude = ((size.height / 2) - margin).clamp(0.0, double.infinity) * 0.72;
-
-    return Path()
-      ..moveTo(startX, baseY)
-      // Broad upward bend from start to the midpoint.
-      ..cubicTo(
-        startX + (midX - startX) * 0.35,
-        baseY - amplitude,
-        startX + (midX - startX) * 0.65,
-        baseY - amplitude,
-        midX,
-        baseY,
-      )
-      // Broad downward bend from the midpoint to the finish line.
-      ..cubicTo(
-        midX + (finishX - midX) * 0.35,
-        baseY + amplitude,
-        midX + (finishX - midX) * 0.65,
-        baseY + amplitude,
-        finishX,
-        baseY,
-      );
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = _routePath(size);
-    final metric = path.computeMetrics().first;
-    final finish = Offset(size.width - 36, size.height / 2);
-
-    // Uncompleted route: a pale, quiet neutral — the course itself, not yet
-    // run.
-    final track = Paint()
-      ..color = NuvoColors.trackBg
-      ..strokeWidth = _strokeWidth
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path, track);
-
-    final clampedProgress = progress.clamp(0.0, 1.0);
-    final coveredLength = metric.length * clampedProgress;
-
-    // Completed portion: Nuvo blue, drawn over the pale route via
-    // PathMetric.extractPath so it follows the same curve exactly.
-    if (coveredLength > 0) {
-      final progressPaint = Paint()
-        ..color = NuvoColors.blue
-        ..strokeWidth = _progressWidth
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke;
-      canvas.drawPath(metric.extractPath(0, coveredLength), progressPaint);
-    }
-
-    // The marker sits at the racer's actual current distance along the
-    // route — never pinned to the start once progress is above zero.
-    final tangent = metric.getTangentForOffset(
-      coveredLength.clamp(0.0, metric.length),
-    );
-    final markerPosition = tangent?.position ?? Offset(14, size.height / 2);
-    final markerPaint = Paint()
-      ..color = NuvoColors.blue
-      ..style = PaintingStyle.fill;
-    final markerRadius = clampedProgress <= 0 ? 7.0 : 10.0;
-    canvas.drawCircle(markerPosition, markerRadius, markerPaint);
-    canvas.drawCircle(
-      markerPosition,
-      markerRadius,
-      Paint()
-        ..color = NuvoColors.navy
-        ..strokeWidth = 1.5
-        ..style = PaintingStyle.stroke,
-    );
-
-    // Finish flag at the route's actual endpoint.
-    final flagPaint = Paint()..color = _arenaText;
-    final flagX = finish.dx + 12;
-    canvas.drawRect(
-      Rect.fromLTWH(flagX, 5, 2, 28),
-      Paint()..color = _arenaLine,
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(flagX + 2, 5)
-        ..lineTo(size.width - 3, 10)
-        ..lineTo(flagX + 2, 16)
-        ..close(),
-      flagPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RaceProgressPainter oldDelegate) =>
-      oldDelegate.progress != progress;
 }
 
 class _PageDots extends StatelessWidget {
@@ -838,6 +742,7 @@ class _QuickActions extends StatelessWidget {
           onPressed: onSubmit,
           expand: true,
           height: 64,
+          horizontalPadding: 16,
         ),
       ),
       const SizedBox(width: 8),
@@ -851,6 +756,7 @@ class _QuickActions extends StatelessWidget {
           onPressed: onStart,
           expand: true,
           height: 64,
+          horizontalPadding: 8,
         ),
       ),
       const SizedBox(width: 8),
@@ -862,10 +768,20 @@ class _QuickActions extends StatelessWidget {
           onPressed: onJoin,
           expand: true,
           height: 64,
+          horizontalPadding: 8,
         ),
       ),
     ],
   );
+}
+
+/// How many racers the standings unit will present — decides how much of
+/// the first viewport the leaderboard reserves for the hero budget.
+int _standingsCount(ArenaBoard board, Race? race) {
+  if (race != null && race.participants.isNotEmpty) {
+    return race.participants.length;
+  }
+  return board.miniLeaderboard.length;
 }
 
 class _Standings extends StatelessWidget {
@@ -925,6 +841,34 @@ class _Standings extends StatelessWidget {
       );
     }
 
+    // One racer is a valid state — a designed leader panel, not a lonely
+    // podium slot: rank, avatar, identity, score, and the board's own
+    // context line ("Solo · add crew from the race room") as the pull.
+    if (entries.length == 1) {
+      return _SoloLeaderState(entry: entries.first, board: board);
+    }
+
+    // Two racers is a head-to-head — rows, not a three-slot podium with an
+    // empty seat. Same row treatment as ranks 4+: rank, avatar, name, score,
+    // the viewer's row carrying the blue surface.
+    if (entries.length == 2) {
+      return _OutlinedSheet(
+        child: Column(
+          children: [
+            _StandingRow(entry: entries[0]),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: NuvoColors.divider,
+              indent: 16,
+              endIndent: 16,
+            ),
+            _StandingRow(entry: entries[1]),
+          ],
+        ),
+      );
+    }
+
     final rest = entries.length > 3 ? entries.sublist(3) : const <_LbEntry>[];
 
     return NuvoPodium(
@@ -961,6 +905,82 @@ class _Standings extends StatelessWidget {
                 ],
               ),
             ),
+    );
+  }
+}
+
+/// The one-racer leaderboard: a deliberate leader state, not a lonely podium
+/// slot and NOT a second card — the same flat treatment the podium uses
+/// (badge, avatar, identity, score) so one racer reads as *leading* rather
+/// than boxed in. The board's own context line — "Solo · add crew from the
+/// race room" — reads as the pull, not a caveat. All real data.
+class _SoloLeaderState extends StatelessWidget {
+  const _SoloLeaderState({required this.entry, required this.board});
+  final _LbEntry entry;
+  final ArenaBoard board;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Placement badge — the same gold '1' the podium stamps on its
+        // raised slot.
+        Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: NuvoColors.gold,
+            borderRadius: BorderRadius.circular(NuvoRadii.badge),
+            border: Border.all(color: NuvoColors.navy, width: 1.5),
+          ),
+          child: Text(
+            '${entry.rank}',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: NuvoColors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        NuvoAvatar(
+          initials: entry.initials ?? _initials(entry.name),
+          photoUrl: entry.photoUrl,
+          size: 52,
+          bgColor: nuvoAvatarColorFor(entry.seed),
+          textColor: NuvoColors.white,
+          borderColor: entry.isMe ? _arenaBlue : NuvoColors.navy,
+          borderWidth: 2.5,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          entry.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.titleMedium.copyWith(
+            color: _arenaText,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          entry.stat,
+          style: AppTextStyles.raceRowMeta.copyWith(
+            color: _arenaBlue,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        if (board.boardContext.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            board.boardContext,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
+          ),
+        ],
+      ],
     );
   }
 }

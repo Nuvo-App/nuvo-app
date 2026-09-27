@@ -12,10 +12,7 @@ import 'nuvo_character_painter.dart';
 /// widget interpolates between these poses and renders them with
 /// [NuvoCharacterPainter].
 class MovementDemo {
-  const MovementDemo({
-    required this.poses,
-    required this.duration,
-  });
+  const MovementDemo({required this.poses, required this.duration});
 
   /// Ordered key poses for one complete movement cycle.
   /// The animation interpolates from poses[0] → poses[1] → ... → poses[last]
@@ -51,6 +48,7 @@ class NuvoMovementAnimation extends StatefulWidget {
     required this.demo,
     this.bodyColor = NuvoColors.navy,
     this.accentColor = NuvoColors.blue,
+    this.style = NuvoCharacterStyle.solid,
     this.outlineColor = Colors.transparent,
     this.outlineWidth = 0,
   });
@@ -58,6 +56,7 @@ class NuvoMovementAnimation extends StatefulWidget {
   final MovementDemo demo;
   final Color bodyColor;
   final Color accentColor;
+  final NuvoCharacterStyle style;
   final Color outlineColor;
   final double outlineWidth;
 
@@ -106,6 +105,7 @@ class _NuvoMovementAnimationState extends State<NuvoMovementAnimation>
               pose: pose,
               bodyColor: widget.bodyColor,
               accentColor: widget.accentColor,
+              style: widget.style,
               outlineColor: widget.outlineColor,
               outlineWidth: widget.outlineWidth,
             ),

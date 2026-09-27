@@ -6,11 +6,8 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart' show ApiException;
 import '../../races/data/race_models.dart' show PublicUser;
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 const _timeout = Duration(seconds: 20);
 
 /// Connect result — public profile connects immediately, private goes pending.
@@ -18,12 +15,31 @@ enum ConnectOutcome { active, pending }
 
 enum CrewConnectionStatus { none, connected, pendingOutgoing, pendingIncoming }
 
-CrewConnectionStatus _connFrom(String? raw) => switch (raw) {
+CrewConnectionStatus crewConnectionStatusFrom(String? raw) => switch (raw) {
       'connected' => CrewConnectionStatus.connected,
       'pending_outgoing' => CrewConnectionStatus.pendingOutgoing,
       'pending_incoming' => CrewConnectionStatus.pendingIncoming,
       _ => CrewConnectionStatus.none,
     };
+
+class CrewSearchResult {
+  const CrewSearchResult({
+    required this.user,
+    required this.connectionStatus,
+    this.mutualCount = 0,
+  });
+  final PublicUser user;
+  final CrewConnectionStatus connectionStatus;
+
+  /// Crew members I share with this person — the "why suggested" context.
+  final int mutualCount;
+}
+
+class CrewRequestPage {
+  const CrewRequestPage({this.incoming = const [], this.outgoing = const []});
+  final List<PublicUser> incoming;
+  final List<PublicUser> outgoing;
+}
 
 class PublicProfileCard {
   const PublicProfileCard({
@@ -35,6 +51,7 @@ class PublicProfileCard {
     this.memberId,
     this.profilePhotoUrl,
     this.isPrivate = false,
+    this.lastActiveAt,
   });
 
   final String id;
@@ -46,15 +63,19 @@ class PublicProfileCard {
   final String? profilePhotoUrl;
   final bool isPrivate;
 
+  /// Real presence timestamp — only populated for connected people.
+  final DateTime? lastActiveAt;
+
   factory PublicProfileCard.fromJson(Map<String, dynamic> j) => PublicProfileCard(
         id: j['id'] as String,
         displayName: j['displayName'] as String? ?? 'Nuvo member',
         initials: j['initials'] as String? ?? 'N',
-        connectionStatus: _connFrom(j['connectionStatus'] as String?),
+        connectionStatus: crewConnectionStatusFrom(j['connectionStatus'] as String?),
         username: j['username'] as String?,
         memberId: j['memberId'] as String?,
         profilePhotoUrl: j['profilePhotoUrl'] as String?,
         isPrivate: j['isPrivate'] as bool? ?? false,
+        lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
       );
 }
 
@@ -90,7 +111,7 @@ class CrewApi {
 
   Future<List<PublicUser>> getCrew(String token) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$_kApiBase/crew'), headers: _headers(token)),
+      () => _client.get(Uri.parse('$kNuvoApiBase/crew'), headers: _headers(token)),
     );
     final json = _decode(res);
     return (json['crew'] as List<dynamic>? ?? [])
@@ -98,19 +119,33 @@ class CrewApi {
         .toList();
   }
 
-  Future<List<PublicUser>> getRequests(String token) async {
+  Future<CrewRequestPage> getRequestPage(String token) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$_kApiBase/crew/requests'), headers: _headers(token)),
+      () => _client.get(Uri.parse('$kNuvoApiBase/crew/requests'), headers: _headers(token)),
     );
     final json = _decode(res);
-    return (json['requests'] as List<dynamic>? ?? [])
-        .map((e) => PublicUser.fromJson(e as Map<String, dynamic>))
-        .toList();
+    List<PublicUser> users(String key) => (json[key] as List<dynamic>? ?? [])
+        .map((e) => PublicUser.fromJson(e as Map<String, dynamic>)).toList();
+    return CrewRequestPage(incoming: users('requests'), outgoing: users('outgoing'));
+  }
+
+  Future<List<CrewSearchResult>> search(String token, String query) async {
+    final uri = Uri.parse('$kNuvoApiBase/users/search').replace(queryParameters: {'q': query});
+    final res = await _guard(() => _client.get(uri, headers: _headers(token)));
+    final json = _decode(res);
+    return (json['users'] as List<dynamic>? ?? []).map((value) {
+      final user = value as Map<String, dynamic>;
+      return CrewSearchResult(
+        user: PublicUser.fromJson(user),
+        connectionStatus: crewConnectionStatusFrom(user['connectionStatus'] as String?),
+        mutualCount: (user['mutualCount'] as num?)?.toInt() ?? 0,
+      );
+    }).toList();
   }
 
   Future<PublicProfileCard> getUser(String token, String userId) async {
     final res = await _guard(
-      () => _client.get(Uri.parse('$_kApiBase/users/$userId'), headers: _headers(token)),
+      () => _client.get(Uri.parse('$kNuvoApiBase/users/$userId'), headers: _headers(token)),
     );
     final json = _decode(res);
     return PublicProfileCard.fromJson(json['user'] as Map<String, dynamic>);
@@ -119,7 +154,7 @@ class CrewApi {
   Future<ConnectOutcome> add(String token, String userId) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/crew/add'),
+        Uri.parse('$kNuvoApiBase/crew/add'),
         headers: _headers(token),
         body: jsonEncode({'userId': userId}),
       ),
@@ -131,7 +166,7 @@ class CrewApi {
   Future<void> acceptRequest(String token, String userId) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/crew/requests/$userId/accept'),
+        Uri.parse('$kNuvoApiBase/crew/requests/$userId/accept'),
         headers: _headers(token),
       ),
     );
@@ -141,7 +176,7 @@ class CrewApi {
   Future<void> declineRequest(String token, String userId) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/crew/requests/$userId/decline'),
+        Uri.parse('$kNuvoApiBase/crew/requests/$userId/decline'),
         headers: _headers(token),
       ),
     );
@@ -151,7 +186,7 @@ class CrewApi {
   Future<void> remove(String token, String userId) async {
     final res = await _guard(
       () => _client.delete(
-        Uri.parse('$_kApiBase/crew/$userId'),
+        Uri.parse('$kNuvoApiBase/crew/$userId'),
         headers: _headers(token),
       ),
     );

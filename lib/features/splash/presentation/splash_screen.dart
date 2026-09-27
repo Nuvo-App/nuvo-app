@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/asset_paths.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../onboarding/data/first_use_store.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -29,6 +30,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   bool _navigated = false;
   bool _continueRequested = false;
   bool _framesPrecached = false;
+  bool _sequenceStarted = false;
+  bool _firstUseReady = false;
+  bool _replayIntroAfterLogout = false;
   Timer? _autoContinueTimer;
 
   @override
@@ -63,7 +67,43 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             _tryNavigate();
           }
         });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startSequence());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // First-use flags (intro-seen, per-account guide completion) gate the
+      // signed-out launch destination, so they must be read before routing.
+      await ref.read(firstUseStoreProvider).ensureLoaded();
+      if (!mounted) return;
+      _firstUseReady = true;
+      _resolveLaunch();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _resolveLaunch());
+  }
+
+  void _resolveLaunch() {
+    if (!mounted || _navigated) return;
+    final status = ref.read(authControllerProvider).status;
+    if (status == AuthStatus.loading) return;
+    // The first-use flag only gates the unauthenticated redirect decision
+    // below — it must not block starting the animated sequence for signed-in
+    // / offline users, or their launch would wait on an unrelated disk read.
+    if (status == AuthStatus.unauthenticated) {
+      if (!_firstUseReady) return;
+      _navigated = true;
+      _autoContinueTimer?.cancel();
+      // The cinematic is a first-use experience: once this install has seen
+      // it, a signed-out launch goes straight to auth. The dedicated testing
+      // account's forced logout and the explicit demo replay intentionally
+      // bypass the flag so QA can re-walk the full opening.
+      final replay =
+          _replayIntroAfterLogout ||
+          ref.read(demoReplayProvider) ||
+          !ref.read(firstUseStoreProvider).introSeen;
+      context.go(replay ? '/welcome/intro' : '/welcome');
+      return;
+    }
+    if (!_sequenceStarted) {
+      _sequenceStarted = true;
+      _startSequence();
+    }
   }
 
   Future<void> _startSequence() async {
@@ -128,18 +168,35 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
 
     final user = authState.user;
-    if (user != null && isNuvoStoreDemoEmail(user.email)) {
+    if (user != null &&
+        isNuvoStoreDemoEmail(user.email) &&
+        user.id != 'offline-demo-user') {
       // testing@getnuvo.net must always start fresh from the splash screen
-      // and walk through the full first-launch flow.
+      // and walk through the full first-launch flow. Flag the replay before
+      // logout — sign-out clears the demo flags, and the unauthenticated
+      // launch that follows must still land on the cinematic, not /welcome.
+      // A local-only offline demo session (sentinel tokens, fixture data)
+      // is exempt: it can never reach the API, so force-logging it out would
+      // strand a venue demo behind a sign-in that needs connectivity.
+      _replayIntroAfterLogout = true;
       await ref.read(authControllerProvider.notifier).logout();
       return;
     }
 
     _navigated = true;
     if (user != null) {
-      if (user.isDemo ||
+      // The intro replay is a first-use experience: an eligible account walks
+      // it ONCE. Once this account's guide completion is persisted, later
+      // signed-in launches go straight to the app — the coach must never
+      // re-appear on every sign-in. testing@getnuvo.net never reaches this
+      // branch (it logged out above), so its always-replay contract holds.
+      final guideDone = ref
+          .read(firstUseStoreProvider)
+          .isGuideDone(user.email);
+      final replayIntro =
           ref.read(demoReplayProvider) ||
-          authState.guideFirstRace) {
+          ((user.isDemo || authState.guideFirstRace) && !guideDone);
+      if (replayIntro) {
         ref.read(demoReplayProvider.notifier).state = true;
         context.go('/welcome/intro');
         return;
@@ -161,11 +218,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   Widget build(BuildContext context) {
     ref.listen<AuthState>(authControllerProvider, (_, next) {
+      _resolveLaunch();
       if (next.status != AuthStatus.loading) {
         if (_animationDone) _startAutoContinueTimer();
         _tryNavigate();
       }
     });
+
+    final status = ref.watch(
+      authControllerProvider.select((state) => state.status),
+    );
+    if (status == AuthStatus.loading || status == AuthStatus.unauthenticated) {
+      return const Scaffold(backgroundColor: _bg);
+    }
 
     return Scaffold(
       backgroundColor: _bg,

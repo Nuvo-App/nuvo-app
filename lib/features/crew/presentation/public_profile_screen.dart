@@ -2,19 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/theme/nuvo_entrance.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
-import '../../races/data/race_models.dart' show PublicUser;
+import '../../auth/presentation/auth_controller.dart';
+import '../../races/data/race_models.dart'
+    show PublicUser, Race, RaceParticipant;
+import '../../races/domain/race_display.dart'
+    show raceProgressLabel, serverRankedParticipants;
+import '../../races/presentation/create_race_screen.dart'
+    show RaceCreatePrefill;
+import '../../races/presentation/race_controller.dart';
 import '../application/crew_controller.dart';
 import '../data/crew_api.dart';
+import '../domain/crew_presence.dart';
 
 /// `/u/:id` — a public person card. Where `ProfileDestination` (a scanned
 /// profile QR, a crew_request notification tap) lands. Connect / Accept follows
@@ -44,6 +55,15 @@ class _State extends ConsumerState<PublicProfileScreen> {
       _card = null;
       _error = null;
     });
+    // Presentation demo people resolve locally — the session is offline-safe
+    // and demo ids never exist on the server anyway.
+    if (isPresentationDemoUser(ref.read(authControllerProvider).user)) {
+      final demo = presentationDemoProfile(widget.userId);
+      if (demo != null) {
+        if (mounted) setState(() => _card = demo);
+        return;
+      }
+    }
     try {
       final card = await ref.read(crewRepositoryProvider).getUser(widget.userId);
       if (mounted) setState(() => _card = card);
@@ -106,6 +126,36 @@ class _State extends ConsumerState<PublicProfileScreen> {
           _card = _withStatus(card, CrewConnectionStatus.connected);
         });
         _snack('Added to your crew.');
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _snack(e.message);
+      }
+    }
+  }
+
+  Future<void> _remove() async {
+    final card = _card;
+    if (card == null) return;
+    final confirmed = await showNuvoConfirmDialog(
+      context,
+      title: 'Remove from crew?',
+      message:
+          '${card.displayName} will no longer be in your crew. You can add '
+          'them again later.',
+      confirmLabel: 'Remove',
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(crewControllerProvider.notifier).remove(card.id);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _card = _withStatus(card, CrewConnectionStatus.none);
+        });
+        _snack('Removed from your crew.');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -210,8 +260,43 @@ class _State extends ConsumerState<PublicProfileScreen> {
                       style: AppTextStyles.bodySmall
                           .copyWith(color: NuvoColors.textMuted)),
                 ],
+                // Real presence, crew only — same rule as the crew list.
+                if (card.connectionStatus == CrewConnectionStatus.connected &&
+                    crewPresenceLabel(card.lastActiveAt) != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: crewPresenceFor(card.lastActiveAt) ==
+                                  CrewPresence.active
+                              ? NuvoColors.success
+                              : NuvoColors.textMuted,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        crewPresenceLabel(card.lastActiveAt)!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: crewPresenceFor(card.lastActiveAt) ==
+                                  CrewPresence.active
+                              ? NuvoColors.successOn
+                              : NuvoColors.textMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ).nuvoEnter(),
+            // Racing together — races I'm in that this person races too,
+            // derived from RaceController's cache (no extra fetch).
+            _sharedRaces(),
             const Spacer(),
             _cta(card),
           ],
@@ -220,35 +305,171 @@ class _State extends ConsumerState<PublicProfileScreen> {
     );
   }
 
+  Widget _sharedRaces() {
+    final races = ref
+        .watch(raceControllerProvider)
+        .races
+        .where((r) => r.status == 'active' && r.isParticipant(widget.userId))
+        .take(3)
+        .toList();
+    if (races.isEmpty) return const SizedBox.shrink();
+    final myId = ref.read(authControllerProvider).user?.id ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: NuvoColors.border),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: Column(
+            children: [
+              for (var i = 0; i < races.length; i++)
+                _SharedRaceRow(
+                  race: races[i],
+                  myId: myId,
+                  userId: widget.userId,
+                  isLast: i == races.length - 1,
+                  onTap: () => context.push('/race/${races[i].id}'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _cta(PublicProfileCard card) {
-    switch (card.connectionStatus) {
-      case CrewConnectionStatus.connected:
-        return const _Badge(
-          icon: Icons.check_circle_rounded,
-          label: 'In your crew',
-          color: NuvoColors.success,
-        );
-      case CrewConnectionStatus.pendingOutgoing:
-        return const _Badge(
-          icon: Icons.schedule_rounded,
-          label: 'Request sent',
-          color: NuvoColors.warning,
-        );
-      case CrewConnectionStatus.pendingIncoming:
-        return NuvoPrimaryButton(
-          label: 'Accept crew request',
-          expand: true,
-          loading: _busy,
-          onPressed: _busy ? null : _accept,
-        );
-      case CrewConnectionStatus.none:
-        return NuvoPrimaryButton(
-          label: card.isPrivate ? 'Send crew request' : 'Add to crew',
-          expand: true,
-          loading: _busy,
-          onPressed: _busy ? null : _connect,
-        );
+    return NuvoStateMorph(
+      stateKey: card.connectionStatus,
+      child: switch (card.connectionStatus) {
+        CrewConnectionStatus.connected => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const _Badge(
+                icon: Icons.check_circle_rounded,
+                label: 'In your crew',
+                color: NuvoColors.success,
+              ),
+              const SizedBox(height: 14),
+              NuvoPrimaryButton(
+                label: 'Race ${card.displayName.split(' ').first}',
+                icon: Icons.flag_rounded,
+                expand: true,
+                onPressed: () => context.push(
+                  '/races/new',
+                  extra: RaceCreatePrefill(
+                    idea: 'First to 100 Pushups',
+                    withUser: _asUser(card),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              NuvoTertiaryButton(
+                label: 'Remove from crew',
+                expand: true,
+                onPressed: _busy ? null : _remove,
+              ),
+            ],
+          ),
+        CrewConnectionStatus.pendingOutgoing => const _Badge(
+            icon: Icons.schedule_rounded,
+            label: 'Request sent',
+            color: NuvoColors.warning,
+          ),
+        CrewConnectionStatus.pendingIncoming => NuvoPrimaryButton(
+            label: 'Accept crew request',
+            expand: true,
+            loading: _busy,
+            onPressed: _busy ? null : _accept,
+          ),
+        CrewConnectionStatus.none => NuvoPrimaryButton(
+            label: card.isPrivate ? 'Send crew request' : 'Add to crew',
+            expand: true,
+            loading: _busy,
+            onPressed: _busy ? null : _connect,
+          ),
+      },
+    );
+  }
+}
+
+class _SharedRaceRow extends StatelessWidget {
+  const _SharedRaceRow({
+    required this.race,
+    required this.myId,
+    required this.userId,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  final Race race;
+  final String myId;
+  final String userId;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // Server-rank order + format-aware progress from race_display — Crew
+    // never guesses scoring direction or "/target" semantics.
+    final ordered = serverRankedParticipants(race);
+    String line(RaceParticipant? p, String fallback) {
+      if (p == null) return fallback;
+      final rank = ordered.indexWhere((x) => x.userId == p.userId);
+      final rankLabel = rank >= 0 ? '#${rank + 1} · ' : '';
+      return '$rankLabel${raceProgressLabel(race, p)}';
     }
+
+    return Column(
+      children: [
+        NuvoPressable(
+          onTap: onTap,
+          haptic: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        race.displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: NuvoColors.navy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${line(race.participantFor(userId), '—')} · you ${line(race.participantFor(myId), '—')}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: NuvoColors.textMuted,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (!isLast)
+          const Divider(height: 1, color: NuvoColors.border, indent: 14),
+      ],
+    );
   }
 }
 

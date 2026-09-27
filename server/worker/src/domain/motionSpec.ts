@@ -4,6 +4,7 @@ const ALLOWED_ENGINES = new Set([
   'alternating_rep_v1',
   'hold_v1',
   'object_composition_v1',
+  'sequence_match_v1',
 ]);
 
 const ALLOWED_LANDMARKS = new Set([
@@ -19,6 +20,8 @@ const ALLOWED_SPEC_KEYS = new Set([
   'holdRules', 'minHoldMs', 'maxHoldMs', 'nativeValidatorKey',
   'requiredObjects', 'composition',
   'model',
+  'activity', 'package',
+  'phases', 'repTimeoutMs', 'lostPoseMs',
 ]);
 
 export class MotionSpecValidationError extends Error {
@@ -181,6 +184,220 @@ function composition(value: unknown, objectIds: Set<string>) {
   boundedNumber(item.madeRadius, 'composition_made_radius', 0.001, 1);
 }
 
+// sequence_match_v1 — the closed predicate grammar. Exactly four kinds; a
+// predicate may only carry the fields its kind owns, so the wire format can
+// never smuggle in an expression the engine doesn't interpret.
+const SEQUENCE_PREDICATE_KEYS: Record<string, Set<string>> = {
+  landmark_axis: new Set(['kind', 'point', 'axis', 'operator', 'threshold', 'minLikelihood']),
+  angle: new Set(['kind', 'a', 'b', 'c', 'operator', 'degrees', 'minLikelihood']),
+  axis_delta: new Set(['kind', 'a', 'b', 'axis', 'operator', 'delta', 'minLikelihood']),
+  segment_ratio: new Set(['kind', 'a', 'b', 'refA', 'refB', 'operator', 'ratio', 'minLikelihood']),
+};
+
+function sequenceOperator(value: unknown, field: string): void {
+  if (!['gt', 'gte', 'lt', 'lte'].includes(String(value))) {
+    throw new MotionSpecValidationError(`${field}_operator_invalid`);
+  }
+}
+
+function sequenceLikelihood(value: unknown, field: string): void {
+  if (value !== undefined &&
+      (typeof value !== 'number' || !Number.isFinite(value) || value < 0.2 || value > 1)) {
+    throw new MotionSpecValidationError(`${field}_likelihood_invalid`);
+  }
+}
+
+function sequenceLandmark(entry: Record<string, unknown>, field: string, prefix: string): void {
+  const name = stringValue(entry[field], `${prefix}_${field}`);
+  if (!ALLOWED_LANDMARKS.has(name)) {
+    throw new MotionSpecValidationError(`${prefix}_${field}_landmark_invalid`);
+  }
+}
+
+function sequencePredicate(entry: unknown, field: string): void {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    throw new MotionSpecValidationError(`${field}_predicate_invalid`);
+  }
+  const item = entry as Record<string, unknown>;
+  const kind = stringValue(item.kind, `${field}_kind`, 40);
+  const keys = SEQUENCE_PREDICATE_KEYS[kind];
+  if (!keys) throw new MotionSpecValidationError(`${field}_kind_invalid`);
+  if (Object.keys(item).some((key) => !keys.has(key))) {
+    throw new MotionSpecValidationError(`${field}_unknown_key`);
+  }
+  sequenceOperator(item.operator, field);
+  sequenceLikelihood(item.minLikelihood, field);
+  switch (kind) {
+    case 'landmark_axis':
+      sequenceLandmark(item, 'point', field);
+      if (item.axis !== 'x' && item.axis !== 'y') throw new MotionSpecValidationError(`${field}_axis_invalid`);
+      boundedNumber(item.threshold, `${field}_threshold`, 0, 1);
+      break;
+    case 'angle':
+      sequenceLandmark(item, 'a', field);
+      sequenceLandmark(item, 'b', field);
+      sequenceLandmark(item, 'c', field);
+      boundedNumber(item.degrees, `${field}_degrees`, 0, 180);
+      break;
+    case 'axis_delta':
+      sequenceLandmark(item, 'a', field);
+      sequenceLandmark(item, 'b', field);
+      if (item.axis !== 'x' && item.axis !== 'y') throw new MotionSpecValidationError(`${field}_axis_invalid`);
+      boundedNumber(item.delta, `${field}_delta`, -1, 1);
+      break;
+    case 'segment_ratio':
+      sequenceLandmark(item, 'a', field);
+      sequenceLandmark(item, 'b', field);
+      sequenceLandmark(item, 'refA', field);
+      sequenceLandmark(item, 'refB', field);
+      boundedNumber(item.ratio, `${field}_ratio`, 0, 8);
+      break;
+  }
+}
+
+// V1 enforces a STRICT LINEAR chain — no branches, no cycles: every phase's
+// `next` must be exactly the following phase's id, and only the last phase
+// may complete. Any deviation fails the spec.
+function sequencePhases(value: unknown, stableFrames: number): void {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 8) {
+    throw new MotionSpecValidationError('sequence_phases_invalid');
+  }
+  const ids: string[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new MotionSpecValidationError('sequence_phase_invalid');
+    }
+    const phase = entry as Record<string, unknown>;
+    const allowed = new Set(['id', 'predicates', 'minDwellFrames', 'breakToleranceFrames', 'maxDwellMs', 'next']);
+    if (Object.keys(phase).some((key) => !allowed.has(key))) {
+      throw new MotionSpecValidationError('sequence_phase_unknown_key');
+    }
+    const id = stringValue(phase.id, 'phase_id', 40);
+    if (!/^[a-z0-9_]{1,40}$/.test(id)) throw new MotionSpecValidationError('phase_id_invalid');
+    ids.push(id);
+    const predicates = phase.predicates;
+    if (!Array.isArray(predicates) || predicates.length === 0 || predicates.length > 6) {
+      throw new MotionSpecValidationError('phase_predicates_invalid');
+    }
+    predicates.forEach((predicate, index) => sequencePredicate(predicate, `phase_${id}_predicate_${index}`));
+    boundedInt(phase.minDwellFrames, 'phase_min_dwell_frames', 1, 30, stableFrames);
+    boundedInt(phase.breakToleranceFrames, 'phase_break_tolerance_frames', 0, 8, 1);
+    if (phase.maxDwellMs !== undefined) {
+      boundedInt(phase.maxDwellMs, 'phase_max_dwell_ms', 50, 60 * 1000, 0);
+    }
+    stringValue(phase.next, 'phase_next', 40);
+  }
+  if (new Set(ids).size !== ids.length) throw new MotionSpecValidationError('phase_id_duplicate');
+  for (let i = 0; i < ids.length; i++) {
+    const expected = i === ids.length - 1 ? 'complete' : ids[i + 1];
+    if ((value[i] as Record<string, unknown>).next !== expected) {
+      throw new MotionSpecValidationError('sequence_chain_invalid');
+    }
+  }
+}
+
+const ACTIVITY_BLOCK_KEYS = new Set([
+  'displayName', 'measurementType', 'defaultTarget', 'preferredCameraView',
+  'instructions', 'unit', 'coachingTextActive', 'coachingTextIncomplete',
+]);
+
+const ACTIVITY_CAMERA_VIEWS = new Set(['front', 'side', 'front_or_angle']);
+
+function activityBlock(value: unknown) {
+  if (value === undefined) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MotionSpecValidationError('activity_invalid');
+  }
+  const item = value as Record<string, unknown>;
+  if (Object.keys(item).some((key) => !ACTIVITY_BLOCK_KEYS.has(key))) {
+    throw new MotionSpecValidationError('activity_unknown_key');
+  }
+  stringValue(item.displayName, 'activity_display_name');
+  if (item.measurementType !== 'repetitions' && item.measurementType !== 'duration') {
+    throw new MotionSpecValidationError('activity_measurement_type_invalid');
+  }
+  if (item.preferredCameraView !== undefined &&
+      !ACTIVITY_CAMERA_VIEWS.has(String(item.preferredCameraView))) {
+    throw new MotionSpecValidationError('activity_camera_view_invalid');
+  }
+  if (item.defaultTarget !== undefined) {
+    boundedInt(item.defaultTarget, 'activity_default_target', 1, 100000, 1);
+  }
+  if (item.instructions !== undefined) {
+    const lines = strings(item.instructions, 'activity_instructions', 6);
+    if (lines.some((line) => line.length > 140)) {
+      throw new MotionSpecValidationError('activity_instruction_too_long');
+    }
+  }
+  for (const key of ['unit', 'coachingTextActive', 'coachingTextIncomplete']) {
+    if (item[key] !== undefined) stringValue(item[key], `activity_${key}`, 140);
+  }
+}
+
+const PACKAGE_ASSET_TYPES = new Set([
+  'preview_v1', 'motion_v2_spec_v1', 'onnx_model', 'test_vectors_v1',
+]);
+
+const PACKAGE_ASSET_MAX_BYTES: Record<string, number> = {
+  preview_v1: 256 * 1024,
+  motion_v2_spec_v1: 512 * 1024,
+  onnx_model: 50 * 1024 * 1024,
+  test_vectors_v1: 2 * 1024 * 1024,
+};
+
+const PACKAGE_MAX_ASSETS = 8;
+const PACKAGE_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+
+function packageManifest(value: unknown) {
+  if (value === undefined) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MotionSpecValidationError('package_invalid');
+  }
+  const item = value as Record<string, unknown>;
+  if (Object.keys(item).some((key) => key !== 'packageSchemaVersion' && key !== 'assets')) {
+    throw new MotionSpecValidationError('package_unknown_key');
+  }
+  if (item.packageSchemaVersion !== 1) {
+    throw new MotionSpecValidationError('package_schema_unsupported');
+  }
+  const rawAssets = item.assets;
+  if (!Array.isArray(rawAssets) || rawAssets.length > PACKAGE_MAX_ASSETS) {
+    throw new MotionSpecValidationError('package_assets_invalid');
+  }
+  const seen = new Set<string>();
+  let totalBytes = 0;
+  for (const entry of rawAssets) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new MotionSpecValidationError('package_asset_invalid');
+    }
+    const asset = entry as Record<string, unknown>;
+    if (Object.keys(asset).some((key) =>
+      !['id', 'type', 'sha256', 'url', 'bytes', 'required'].includes(key))) {
+      throw new MotionSpecValidationError('package_asset_unknown_key');
+    }
+    const id = stringValue(asset.id, 'package_asset_id', 64);
+    const type = stringValue(asset.type, 'package_asset_type', 64);
+    const sha256 = stringValue(asset.sha256, 'package_asset_sha256', 80).toLowerCase();
+    stringValue(asset.url, 'package_asset_url', 512);
+    const bytes = asset.bytes;
+    if (!PACKAGE_ASSET_TYPES.has(type)) {
+      throw new MotionSpecValidationError('package_asset_type_unsupported');
+    }
+    if (!/^[0-9a-f]{64}$/.test(sha256)) {
+      throw new MotionSpecValidationError('package_asset_sha256_invalid');
+    }
+    if (typeof bytes !== 'number' || !Number.isInteger(bytes) ||
+        bytes <= 0 || bytes > PACKAGE_ASSET_MAX_BYTES[type]) {
+      throw new MotionSpecValidationError('package_asset_bytes_invalid');
+    }
+    if (!seen.add(id)) throw new MotionSpecValidationError('package_asset_id_duplicate');
+    totalBytes += bytes;
+    if (totalBytes > PACKAGE_MAX_TOTAL_BYTES) {
+      throw new MotionSpecValidationError('package_too_large');
+    }
+  }
+}
+
 export function validateMotionVerifierSpec(
   spec: unknown,
   expected?: { releaseId?: string; activityId?: string },
@@ -193,6 +410,8 @@ export function validateMotionVerifierSpec(
   const unknown = Object.keys(value).filter((key) => !ALLOWED_SPEC_KEYS.has(key));
   if (unknown.length) throw new MotionSpecValidationError('unknown_spec_key');
   if (value.specSchemaVersion !== 1) throw new MotionSpecValidationError('schema_unsupported');
+  activityBlock(value.activity);
+  packageManifest(value.package);
   const releaseId = stringValue(value.releaseId, 'release_id');
   const activityId = stringValue(value.activityId, 'activity_id');
   if (expected?.releaseId && releaseId !== expected.releaseId) throw new MotionSpecValidationError('release_id_mismatch');
@@ -228,6 +447,21 @@ export function validateMotionVerifierSpec(
   boundedInt(value.maxHoldMs, 'max_hold_ms', minHoldMs, 60 * 60 * 1000, 60 * 60 * 1000);
   if (engineType !== 'hold_v1' && (value.minHoldMs !== undefined || value.maxHoldMs !== undefined)) {
     throw new MotionSpecValidationError('hold_timing_not_allowed');
+  }
+  // Sequence fields are engine-scoped: carrying them under another engine
+  // is an authoring bug and fails closed, never silently ignored.
+  const isSequence = engineType === 'sequence_match_v1';
+  if (!isSequence &&
+      (value.phases !== undefined || value.repTimeoutMs !== undefined || value.lostPoseMs !== undefined)) {
+    throw new MotionSpecValidationError('sequence_fields_not_allowed');
+  }
+  if (isSequence) {
+    if (value.measurementType !== undefined && value.measurementType !== 'repetitions') {
+      throw new MotionSpecValidationError('sequence_measurement_invalid');
+    }
+    sequencePhases(value.phases, stableFrames);
+    boundedInt(value.repTimeoutMs, 'rep_timeout_ms', 500, 60 * 1000, 8000);
+    boundedInt(value.lostPoseMs, 'lost_pose_ms', 100, 10 * 1000, 1500);
   }
   void stableFrames;
   return value;

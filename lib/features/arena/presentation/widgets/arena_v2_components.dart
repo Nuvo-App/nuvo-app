@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/nuvo_tokens.dart';
 import '../../../../core/widgets/nuvo_button.dart';
+import '../../../../core/widgets/nuvo_motion.dart';
 import '../../../../core/widgets/pressable_scale.dart';
 import '../../data/arena_models.dart';
 
@@ -124,8 +125,10 @@ class ArenaGreetingHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        GestureDetector(
+        NuvoPressable(
           onTap: onNotifications,
+          scale: 0.94,
+          haptic: false,
           child: Container(
             width: 38,
             height: 38,
@@ -201,9 +204,9 @@ class _RaceTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return NuvoPressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      scale: 0.96,
       child: IntrinsicWidth(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -294,15 +297,25 @@ class ArenaFocusBoardCard extends StatelessWidget {
                 ),
               )
             else ...[
-              for (int i = 0; i < board.miniLeaderboard.length; i++) ...[
-                _LeaderboardRow(
-                  row: board.miniLeaderboard[i],
-                  rank: i + 1,
-                  userName: userName,
-                ),
-                if (i < board.miniLeaderboard.length - 1)
-                  const SizedBox(height: 5),
-              ],
+              // Keyed reorder column — rows physically travel when the
+              // canonical standings change on refresh.
+              NuvoReorderColumn(
+                children: [
+                  for (int i = 0; i < board.miniLeaderboard.length; i++)
+                    Container(
+                      key: ValueKey(board.miniLeaderboard[i].label),
+                      padding: EdgeInsets.only(
+                        bottom:
+                            i < board.miniLeaderboard.length - 1 ? 5 : 0,
+                      ),
+                      child: _LeaderboardRow(
+                        row: board.miniLeaderboard[i],
+                        rank: i + 1,
+                        userName: userName,
+                      ),
+                    ),
+                ],
+              ),
             ],
             if (!isLoadingDetail && board.miniLeaderboard.isNotEmpty) ...[
               const SizedBox(height: 14),
@@ -313,9 +326,9 @@ class ArenaFocusBoardCard extends StatelessWidget {
             const SizedBox(height: 14),
             _BlueButton(label: board.primaryActionLabel, onTap: onSubmitProof),
             const SizedBox(height: 4),
-            GestureDetector(
+            NuvoPressable(
               onTap: onOpenBoard,
-              behavior: HitTestBehavior.opaque,
+              haptic: false,
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 alignment: Alignment.center,

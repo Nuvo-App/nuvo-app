@@ -31,6 +31,7 @@ enum MotionActivityType {
   stepUps('step_ups'),
   calfRaises('calf_raises'),
   lateralSteps('lateral_steps'),
+  basketballShot('basketball_shot'),
 
   /// Placeholder identity for a control-plane activity that has no compiled
   /// Dart enum yet. Its real stable ID lives on [MotionActivityDefinition].
@@ -75,6 +76,11 @@ enum MotionActivityType {
     if (normalized == 'calf raise') return MotionActivityType.calfRaises;
     if (normalized == 'lateral step' || normalized == 'side step') {
       return MotionActivityType.lateralSteps;
+    }
+    if (normalized == 'basketball shot' ||
+        normalized == 'basketball shots' ||
+        normalized == 'shoot a basketball') {
+      return MotionActivityType.basketballShot;
     }
     for (final type in MotionActivityType.values) {
       if (type.backendValue == normalized) return type;
@@ -124,8 +130,8 @@ enum MotionMeasurementType {
 
   static MotionMeasurementType fromRaceMetric(RaceMetric m) =>
       m == RaceMetric.seconds
-          ? MotionMeasurementType.duration
-          : MotionMeasurementType.repetitions;
+      ? MotionMeasurementType.duration
+      : MotionMeasurementType.repetitions;
 }
 
 const double _metresPerMile = 1609.344;
@@ -207,12 +213,11 @@ String formatMotionTarget(
   MotionMeasurementType type,
   int value,
   String pluralUnit,
-) =>
-    switch (type) {
-      MotionMeasurementType.duration => formatDurationLong(value),
-      MotionMeasurementType.distance => formatDistance(value),
-      MotionMeasurementType.repetitions => '$value $pluralUnit',
-    };
+) => switch (type) {
+  MotionMeasurementType.duration => formatDurationLong(value),
+  MotionMeasurementType.distance => formatDistance(value),
+  MotionMeasurementType.repetitions => '$value $pluralUnit',
+};
 
 /// Just the value for a composer suggestion chip: "25" / "45s" / "50 m" / "1 mi".
 String formatMotionGoalOption(MotionMeasurementType type, int value) =>
@@ -229,13 +234,12 @@ String formatMotionProgress(
   int current,
   int target,
   String pluralUnit,
-) =>
-    switch (type) {
-      MotionMeasurementType.duration =>
-        '${formatClock(current)} / ${formatClock(target)}',
-      MotionMeasurementType.distance => formatDistanceProgress(current, target),
-      MotionMeasurementType.repetitions => '$current / $target $pluralUnit',
-    };
+) => switch (type) {
+  MotionMeasurementType.duration =>
+    '${formatClock(current)} / ${formatClock(target)}',
+  MotionMeasurementType.distance => formatDistanceProgress(current, target),
+  MotionMeasurementType.repetitions => '$current / $target $pluralUnit',
+};
 
 /// Default composer question when the activity doesn't override it.
 String defaultGoalPrompt(MotionMeasurementType type, String activityTitle) =>

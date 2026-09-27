@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/member_pass_card.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../data/models/user_profile.dart';
@@ -28,6 +28,8 @@ class _OnboardingMemberPassScreenState
   PassInfo? _passInfo;
   bool _loading = true;
   String? _error;
+  bool _completing = false;
+  String? _continueError;
 
   @override
   void initState() {
@@ -55,6 +57,30 @@ class _OnboardingMemberPassScreenState
         setState(() {
           _error = 'Could not load your member pass.';
           _loading = false;
+        });
+      }
+    }
+  }
+
+  // Graduating onboarding is account state, not navigation: without
+  // completeOnboarding() the server keeps onboarding_complete=false and the
+  // next sign-in bounces the same account back to profile setup while this
+  // manual go('/arena') had bypassed it — the same account got a different
+  // experience depending on entry path.
+  Future<void> _continue() async {
+    setState(() {
+      _completing = true;
+      _continueError = null;
+    });
+    try {
+      await ref.read(authControllerProvider.notifier).completeOnboarding();
+      if (mounted) context.go('/arena');
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _completing = false;
+          _continueError =
+              'Could not finish setup. Check your connection and try again.';
         });
       }
     }
@@ -115,9 +141,11 @@ class _OnboardingMemberPassScreenState
                       ],
                     ),
                     const SizedBox(height: 24),
-                    Text(
+                    NuvoFlipText(
                       'Your pass into the crew.',
                       style: AppTextStyles.displaySmall,
+                      delay: const Duration(milliseconds: 200),
+                      duration: const Duration(milliseconds: 1400),
                     ),
                     const SizedBox(height: 10),
                     Text(
@@ -140,23 +168,7 @@ class _OnboardingMemberPassScreenState
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: NuvoOutlineButton(
-                            label: 'Copy link',
-                            onPressed: () async {
-                              await Clipboard.setData(
-                                ClipboardData(text: shareUrl),
-                              );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Link copied to clipboard.'),
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                        ),
+                        Expanded(child: NuvoCopyButton(text: shareUrl)),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -200,8 +212,19 @@ class _OnboardingMemberPassScreenState
                       label: 'Continue',
                       icon: Icons.arrow_forward_rounded,
                       expand: true,
-                      onPressed: () => context.go('/arena'),
+                      loading: _completing,
+                      onPressed: _completing ? null : _continue,
                     ),
+                    if (_continueError != null) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        _continueError!,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.danger,
+                        ),
+                      ),
+                    ],
                   ],
                 )
                 .animate()

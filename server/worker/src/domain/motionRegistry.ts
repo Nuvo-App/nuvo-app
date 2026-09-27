@@ -64,6 +64,7 @@ export type RegistryActivity = {
   requiredCapabilities: string[];
   minimumAppBuild: string | null;
   legacy: RaceActivityDefinition | null;
+  metadata: Record<string, unknown>;
 };
 
 export type RegistryRelease = {
@@ -123,6 +124,7 @@ function mapActivity(row: RegistryActivityRow): RegistryActivity {
     requiredCapabilities: jsonValue<string[]>(row.required_capabilities_json, []),
     minimumAppBuild: row.minimum_app_build,
     legacy: legacyDefinition(row),
+    metadata: jsonValue<Record<string, unknown>>(row.metadata_json, {}),
   };
 }
 
@@ -174,6 +176,29 @@ export async function readMotionCatalog(
     catalogVersion: version?.version ?? 'registry-1',
     activities: result.results.map(mapActivity),
   };
+}
+
+/// Single-activity registry lookup — used when a race references a motion
+/// that exists only in the control plane (no static catalog entry). Joins the
+/// channel pointer exactly like [readMotionCatalog] so callers see the same
+/// release identity the catalog exposes.
+export async function readRegistryActivity(
+  db: D1Database,
+  activityId: string,
+  channel = 'stable',
+): Promise<RegistryActivity | null> {
+  const row = await db.prepare(
+    'SELECT a.id, a.display_name, a.category, a.proof_label, a.measurement_type, ' +
+    'a.metric, a.suggested_targets_json, a.supported_formats_json, a.icon_key, ' +
+    'a.sort_priority, a.featured, a.availability, a.metadata_json, ' +
+    'cr.release_id, vr.checksum AS release_checksum, vr.engine_type, ' +
+    'vr.required_capabilities_json, vr.minimum_app_build ' +
+    'FROM motion_activities a ' +
+    'LEFT JOIN activity_channel_releases cr ON cr.activity_id = a.id AND cr.channel = ? ' +
+    'LEFT JOIN verifier_releases vr ON vr.id = cr.release_id ' +
+    'WHERE a.id = ? LIMIT 1',
+  ).bind(channel, activityId).first<RegistryActivityRow>();
+  return row ? mapActivity(row) : null;
 }
 
 export async function readMotionRelease(

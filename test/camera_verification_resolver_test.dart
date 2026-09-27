@@ -62,6 +62,7 @@ void main() {
           MotionActivityType.stepUps,
           MotionActivityType.calfRaises,
           MotionActivityType.lateralSteps,
+          MotionActivityType.basketballShot,
         };
         expect(motionActivityDefinitions.map((d) => d.type).toSet(), expected);
         expect(supportedMotionActivityTypes, expected);

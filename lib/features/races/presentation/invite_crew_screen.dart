@@ -1,18 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../social/presentation/race_share_sheet.dart';
@@ -37,6 +36,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
   Set<String> _adding = {};
   String? _inviteCode;
   String? _error;
+  String? _searchError;
   bool _loading = true;
   bool _searching = false;
   bool _generating = false;
@@ -102,11 +102,15 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       setState(() {
         _results = const [];
         _searching = false;
+        _searchError = null;
       });
       return;
     }
-    setState(() => _searching = true);
-    _debounce = Timer(const Duration(milliseconds: 280), () async {
+    setState(() {
+      _searching = true;
+      _searchError = null;
+    });
+    _debounce = Timer(const Duration(milliseconds: 360), () async {
       try {
         final results = await ref
             .read(raceControllerProvider.notifier)
@@ -115,14 +119,15 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
           setState(() {
             _results = results;
             _searching = false;
+            _searchError = null;
           });
         }
       } catch (_) {
         if (mounted) {
-          setState(() => _searching = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Search isn't working right now.")),
-          );
+          setState(() {
+            _searching = false;
+            _searchError = 'We couldn’t find people right now. Try again.';
+          });
         }
       }
     });
@@ -132,6 +137,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       _race?.participants.any((p) => p.userId == userId) ?? false;
 
   Future<void> _addToRace(PublicUser user) async {
+    FocusScope.of(context).unfocus();
     setState(() => _adding = {..._adding, user.id});
     try {
       final race = await ref
@@ -181,18 +187,6 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     }
   }
 
-
-  Future<void> _copyCode() async {
-    final code = _inviteCode;
-    if (code == null) return;
-    await Clipboard.setData(ClipboardData(text: code));
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invite code copied.')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -217,8 +211,9 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child:
-            ListView(
+        child: NuvoFadeScroll(
+          child:
+              ListView(
                   padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
                   children: [
                     NuvoBackButton(
@@ -250,6 +245,14 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                       onChanged: _onSearchChanged,
                     ),
                     const SizedBox(height: 12),
+                    if (_searchError != null)
+                      _InlineState(
+                        icon: Icons.wifi_tethering_error_rounded,
+                        text: _searchError!,
+                        actionLabel: 'Try again',
+                        onPressed: () =>
+                            _onSearchChanged(_searchController.text),
+                      ),
                     for (final user in _results)
                       _InviteUserRow(
                         user: user,
@@ -311,11 +314,11 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                         onPressed: _generating ? null : _createCode,
                       )
                     else
-                      NuvoOutlineButton(
+                      NuvoCopyButton(
+                        text: _inviteCode!,
                         label: 'Copy code',
                         icon: Icons.copy_rounded,
                         expand: true,
-                        onPressed: _copyCode,
                       ),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
@@ -331,6 +334,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                 .animate()
                 .fadeIn(duration: 220.ms, curve: Curves.easeOut)
                 .slideY(begin: 0.03, end: 0, duration: 260.ms),
+        ),
       ),
     );
   }
@@ -369,13 +373,15 @@ class _InviteUserRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 1),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
+        constraints: const BoxConstraints(minHeight: 72),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: const BoxDecoration(
           color: NuvoColors.white,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: NuvoBorders.hero,
+          border: Border(
+            bottom: BorderSide(color: NuvoColors.border, width: 1),
+          ),
         ),
         child: Row(
           children: [
@@ -409,7 +415,7 @@ class _InviteUserRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 112,
+              width: 104,
               child: NuvoOutlineButton(
                 label: loading
                     ? '...'
@@ -435,12 +441,11 @@ class _InviteCodeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: NuvoColors.navy, width: 2),
-        boxShadow: AppShadows.hardMedium,
+        color: NuvoColors.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.md),
+        border: Border.all(color: NuvoColors.border, width: 1.5),
       ),
       child: Row(
         children: [
@@ -448,12 +453,57 @@ class _InviteCodeCard extends StatelessWidget {
             child: Text(
               code ?? 'Create a code',
               style: AppTextStyles.headlineLarge.copyWith(
-                color: NuvoColors.white,
-                fontSize: 26,
+                color: NuvoColors.navy,
+                fontSize: 24,
               ),
             ),
           ),
           const Icon(Icons.key_rounded, color: NuvoColors.blue, size: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineState extends StatelessWidget {
+  const _InlineState({
+    required this.icon,
+    required this.text,
+    this.actionLabel,
+    this.onPressed,
+  });
+
+  final IconData icon;
+  final String text;
+  final String? actionLabel;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, color: NuvoColors.warning, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            ),
+          ),
+          if (actionLabel != null && onPressed != null)
+            TextButton(
+              onPressed: onPressed,
+              child: Text(
+                actionLabel!,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: NuvoColors.blue,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
         ],
       ),
     );
