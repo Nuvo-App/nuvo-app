@@ -1,6 +1,7 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
+import 'race_name_interpreter.dart';
 
 /// Returns the system-generated title for a given activity + target.
 String generatedTitle(MotionActivityDefinition activity, int targetValue) =>
@@ -13,6 +14,23 @@ enum RaceGoalKind {
 
   /// A non-physical / honor goal — progress is logged manually.
   manual,
+}
+
+/// Composer fields that carry provenance. A field enters
+/// [RaceDraft.userEditedFields] the moment the user touches it; title
+/// interpretation may fill any field NOT in this set — USER EDIT WINS.
+enum RaceField {
+  title,
+  activity,
+  goalKind,
+  format,
+  target,
+  timing,
+  manualGoal,
+  manualUnit,
+  recurrence,
+  visibility,
+  scoreDirection,
 }
 
 class RaceDraft {
@@ -34,6 +52,8 @@ class RaceDraft {
     this.finishLineAt,
     this.attemptDurationSeconds,
     this.attemptLimit,
+    this.scoreDirection = 'higher',
+    this.userEditedFields = const {},
   });
 
   /// Movement (camera) or manual (honor-logged) goal.
@@ -76,6 +96,16 @@ class RaceDraft {
 
   /// Optional cap on how many attempts each racer may take.
   final int? attemptLimit;
+
+  /// 'higher' = most/best value wins; 'lower' = lowest value wins (golf,
+  /// fastest time). Maps to `minimum_attempt` scoring on the wire.
+  final String scoreDirection;
+
+  bool get lowerWins => scoreDirection == 'lower';
+
+  /// Fields the user has manually set — provenance only, never sent to the
+  /// backend. Title interpretation must not overwrite these.
+  final Set<RaceField> userEditedFields;
 
   bool get isDeadlineMode =>
       format == RaceFormat.mostInWindow ||
@@ -135,7 +165,10 @@ class RaceDraft {
     String? finishLineAt,
     int? attemptDurationSeconds,
     int? attemptLimit,
+    String? scoreDirection,
     bool clearTiming = false,
+    bool clearCustom = false,
+    Set<RaceField>? markEdited,
   }) {
     final nextActivity = activity ?? this.activity;
     final nextTarget = targetValue ?? this.targetValue;
@@ -150,9 +183,11 @@ class RaceDraft {
       targetValue: nextTarget,
       recurrence: recurrence ?? this.recurrence,
       visibility: visibility ?? this.visibility,
-      customActivityName: customActivityName ?? this.customActivityName,
-      customUnit: customUnit ?? this.customUnit,
-      verifierSpec: verifierSpec ?? this.verifierSpec,
+      customActivityName: clearCustom
+          ? null
+          : customActivityName ?? this.customActivityName,
+      customUnit: clearCustom ? null : customUnit ?? this.customUnit,
+      verifierSpec: clearCustom ? null : verifierSpec ?? this.verifierSpec,
       goalKind: goalKind ?? this.goalKind,
       manualGoalName: manualGoalName ?? this.manualGoalName,
       manualUnit: manualUnit ?? this.manualUnit,
@@ -161,6 +196,10 @@ class RaceDraft {
           ? null
           : attemptDurationSeconds ?? this.attemptDurationSeconds,
       attemptLimit: clearTiming ? null : attemptLimit ?? this.attemptLimit,
+      scoreDirection: scoreDirection ?? this.scoreDirection,
+      userEditedFields: markEdited == null
+          ? userEditedFields
+          : {...userEditedFields, ...markEdited},
     );
   }
 
@@ -186,6 +225,8 @@ class RaceDraft {
       finishLineAt: finishLineAt,
       attemptDurationSeconds: attemptDurationSeconds,
       attemptLimit: attemptLimit,
+      scoreDirection: scoreDirection,
+      userEditedFields: userEditedFields,
     );
   }
 
@@ -213,6 +254,7 @@ class RaceDraft {
       'proofMode': 'ai_check',
       'aiActivityType': activity.activityId,
       'visibility': visibility,
+      if (lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
   }
@@ -245,23 +287,46 @@ class RaceDraft {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'manual',
       'visibility': visibility,
+      if (lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
   }
 }
 
 RaceDraft? draftFromIdea(String idea) {
-  final parsed = parseRaceIdea(idea);
-  final activity = parsed.activity;
-  if (activity == null) return null;
+  if (idea.trim().isEmpty) return null;
+  final i = interpretRaceName(idea);
+  final activity = i.activity;
+  if (activity == null) {
+    // Custom subject — the typed name is the race name; goal is honor-logged.
+    return RaceDraft(
+      title: i.input,
+      hasCustomName: true,
+      activity: motionActivityDefinitions.first,
+      metric: i.metric,
+      format: i.format,
+      targetValue: i.targetValue,
+      recurrence: i.recurrence,
+      goalKind: RaceGoalKind.manual,
+      manualGoalName: i.manualGoalName,
+      manualUnit: i.manualUnit,
+      attemptDurationSeconds: i.attemptDurationSeconds,
+      scoreDirection: i.scoreDirection,
+    );
+  }
+  // Preset + canonical phrasing gets the generated title; anything else
+  // keeps the user's words so the title never lies about the format.
+  final generated = i.format == RaceFormat.firstToGoal;
   return RaceDraft(
-    title: generatedTitle(activity, parsed.targetValue),
-    hasCustomName: false,
+    title: generated ? generatedTitle(activity, i.targetValue) : i.input,
+    hasCustomName: !generated,
     activity: activity,
     metric: activity.metric,
-    format: parsed.format,
-    targetValue: parsed.targetValue,
-    recurrence: parsed.recurrence,
+    format: i.format,
+    targetValue: i.targetValue,
+    recurrence: i.recurrence,
+    attemptDurationSeconds: i.attemptDurationSeconds,
+    scoreDirection: i.scoreDirection,
   );
 }
 

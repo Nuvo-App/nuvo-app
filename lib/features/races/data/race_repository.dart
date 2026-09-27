@@ -142,6 +142,7 @@ class RaceRepository {
     String? recurrence,
     String? targetUnit,
     String? proofMode,
+    String? scoreDirection,
   }) => _withRefresh(
     (token) => _api.createRace(
       token,
@@ -164,6 +165,7 @@ class RaceRepository {
       recurrence: recurrence,
       targetUnit: targetUnit,
       proofMode: proofMode,
+      scoreDirection: scoreDirection,
     ),
   );
 
@@ -231,6 +233,7 @@ class RaceRepository {
     String proofType = 'manual',
     String? note,
     required int value,
+    String? mediaObjectKey,
   }) => _withRefresh(
     (token) => _api.submitProof(
       token,
@@ -238,8 +241,31 @@ class RaceRepository {
       proofType: proofType,
       note: note,
       value: value,
+      mediaObjectKey: mediaObjectKey,
     ),
   );
+
+  /// Step 1 of proof evidence upload — signed URL + object key for this race.
+  Future<({String uploadUrl, String key})> requestProofMediaUploadUrl(
+    String raceId, {
+    required String fileName,
+    required String contentType,
+  }) => _withRefresh(
+    (token) => _api.requestProofMediaUploadUrl(
+      token,
+      raceId,
+      fileName: fileName,
+      contentType: contentType,
+    ),
+  );
+
+  /// Step 2 — PUT the bytes to the signed URL. Same stack as profile photos:
+  /// the URL signature is the credential, so no Bearer header is needed.
+  Future<void> uploadProofMediaBytes(
+    String signedUrl,
+    Uint8List bytes,
+    String contentType,
+  ) => _authApi.uploadBytesToSignedUrl(signedUrl, bytes, contentType);
 
   Future<Race> submitAiMotionProof(
     String raceId, {

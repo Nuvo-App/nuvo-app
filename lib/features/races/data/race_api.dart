@@ -457,6 +457,7 @@ class RaceApi {
     String? recurrence,
     String? targetUnit,
     String? proofMode,
+    String? scoreDirection,
   }) async {
     final body = <String, dynamic>{'title': title, 'goalType': goalType};
     if (description != null) body['description'] = description;
@@ -476,6 +477,7 @@ class RaceApi {
     if (recurrence != null) body['recurrence'] = recurrence;
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;
+    if (scoreDirection != null) body['scoreDirection'] = scoreDirection;
     final json = await _post('/races', token, body);
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
@@ -559,11 +561,31 @@ class RaceApi {
     String proofType = 'manual',
     String? note,
     required int value,
+    String? mediaObjectKey,
   }) async {
     final body = <String, dynamic>{'proofType': proofType, 'value': value};
     if (note != null) body['note'] = note;
+    if (mediaObjectKey != null) body['mediaObjectKey'] = mediaObjectKey;
     final json = await _post('/races/$raceId/proof', token, body);
     return Race.fromJson(json['race'] as Map<String, dynamic>);
+  }
+
+  /// Step 1 of proof evidence upload: a signed PUT URL + object key scoped to
+  /// this race. The key is bound to the proof on submit (mediaObjectKey).
+  Future<({String uploadUrl, String key})> requestProofMediaUploadUrl(
+    String token,
+    String raceId, {
+    required String fileName,
+    required String contentType,
+  }) async {
+    final json = await _post('/races/$raceId/proof-media/upload-url', token, {
+      'fileName': fileName,
+      'contentType': contentType,
+    });
+    return (
+      uploadUrl: json['uploadUrl'] as String,
+      key: json['key'] as String,
+    );
   }
 
   Future<Race> submitAiMotionProof(

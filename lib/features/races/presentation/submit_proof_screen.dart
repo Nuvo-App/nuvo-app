@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -44,6 +47,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   final _noteController = TextEditingController();
   bool _submittingManual = false;
   String? _manualError;
+  XFile? _evidence;
 
   /// Control-plane definitions for resolving remote-only race activities
   /// (motions this build has no compiled enum for). Falls back to bundled
@@ -78,6 +82,26 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     });
     HapticFeedback.mediumImpact();
     try {
+      // Evidence first: upload through the race-scoped signed URL so the
+      // submit can bind the object key — the proof POST stays unchanged
+      // otherwise.
+      String? mediaObjectKey;
+      final evidence = _evidence;
+      if (evidence != null) {
+        final repo = ref.read(raceRepositoryProvider);
+        final contentType = _evidenceContentType(evidence.name);
+        final urls = await repo.requestProofMediaUploadUrl(
+          widget.raceId,
+          fileName: evidence.name,
+          contentType: contentType,
+        );
+        await repo.uploadProofMediaBytes(
+          urls.uploadUrl,
+          await evidence.readAsBytes(),
+          contentType,
+        );
+        mediaObjectKey = urls.key;
+      }
       final note = _noteController.text.trim();
       final updated = await ref
           .read(raceControllerProvider.notifier)
@@ -86,6 +110,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
             proofType: 'manual',
             note: note.isEmpty ? null : note,
             value: value,
+            mediaObjectKey: mediaObjectKey,
           );
       if (!mounted) return;
       final proof = updated.recentProofs.isNotEmpty
@@ -122,6 +147,60 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   }
 
   String? get _uid => ref.read(authControllerProvider).user?.id;
+
+  String _evidenceContentType(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    return ext == 'png'
+        ? 'image/png'
+        : ext == 'webp'
+            ? 'image/webp'
+            : 'image/jpeg';
+  }
+
+  Future<void> _pickEvidence() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: context.themeColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Text('Proof photo', style: AppTextStyles.titleLarge),
+              const SizedBox(height: 16),
+              _EvidenceSheetOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Choose from photos',
+                onTap: () =>
+                    Navigator.of(sheetCtx).pop(ImageSource.gallery),
+              ),
+              const SizedBox(height: 8),
+              _EvidenceSheetOption(
+                icon: Icons.photo_camera_rounded,
+                label: 'Take photo',
+                onTap: () => Navigator.of(sheetCtx).pop(ImageSource.camera),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null) return;
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 1600,
+      imageQuality: 85,
+    );
+    if (picked != null && mounted) {
+      setState(() => _evidence = picked);
+    }
+  }
 
   @override
   void initState() {
@@ -433,6 +512,9 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
           valueController: _logController,
           noteController: _noteController,
           error: _manualError,
+          evidence: _evidence,
+          onPickEvidence: _pickEvidence,
+          onClearEvidence: () => setState(() => _evidence = null),
         ),
     ];
   }
@@ -793,6 +875,9 @@ class _ManualLogCard extends StatelessWidget {
     required this.valueController,
     required this.noteController,
     required this.error,
+    required this.evidence,
+    required this.onPickEvidence,
+    required this.onClearEvidence,
   });
 
   final Race race;
@@ -802,11 +887,17 @@ class _ManualLogCard extends StatelessWidget {
   final TextEditingController valueController;
   final TextEditingController noteController;
   final String? error;
+  final XFile? evidence;
+  final VoidCallback onPickEvidence;
+  final VoidCallback onClearEvidence;
 
   @override
   Widget build(BuildContext context) {
     final unit = race.unit?.trim().isNotEmpty == true ? race.unit! : 'done';
-    final target = race.targetValue;
+    // Attempt races track a best score, not progress toward a finish line —
+    // the stored target is a scale hint, not a goal to chase.
+    final isAttempt = raceFormatUsesAttempts(race.format);
+    final target = isAttempt ? null : race.targetValue;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -856,6 +947,12 @@ class _ManualLogCard extends StatelessWidget {
             label: 'Add a note (optional)',
             maxLines: 2,
           ),
+          const SizedBox(height: 12),
+          _EvidenceTile(
+            evidence: evidence,
+            onPick: onPickEvidence,
+            onClear: onClearEvidence,
+          ),
           if (error != null) ...[
             const SizedBox(height: 10),
             Text(
@@ -864,6 +961,142 @@ class _ManualLogCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Evidence tile ─────────────────────────────────────────────────────────────
+
+/// One row inside the manual card: empty state is a quiet "Add photo"
+/// affordance; once picked it swaps to a thumbnail + remove. Generic — the
+/// label comes from the race's proof language, not a subject-specific screen.
+class _EvidenceTile extends StatelessWidget {
+  const _EvidenceTile({
+    required this.evidence,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final XFile? evidence;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final picked = evidence;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Proof',
+          style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: onPick,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: NuvoColors.icyBlue,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: NuvoColors.navy, width: 1.5),
+            ),
+            child: picked == null
+                ? Row(
+                    children: [
+                      const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 20,
+                        color: NuvoColors.navy,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Add photo',
+                        style: AppTextStyles.titleMedium.copyWith(
+                          color: NuvoColors.navy,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'optional',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.muted,
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(picked.path),
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Photo added',
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: NuvoColors.navy,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        color: NuvoColors.muted,
+                        onPressed: onClear,
+                        tooltip: 'Remove photo',
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Mirror of the sheet-option row used by the profile photo sheet — same
+/// visual language, scoped privately here.
+class _EvidenceSheetOption extends StatelessWidget {
+  const _EvidenceSheetOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: NuvoColors.icyBlue,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: NuvoColors.navy),
+            const SizedBox(width: 12),
+            Text(label, style: AppTextStyles.titleMedium),
+          ],
+        ),
       ),
     );
   }

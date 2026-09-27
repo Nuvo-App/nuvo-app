@@ -27,6 +27,7 @@ import '../data/motion_analysis_contract.dart';
 import '../data/race_api.dart';
 import '../data/race_models.dart';
 import '../data/race_repository.dart';
+import '../domain/motion_activity.dart';
 
 class RaceState {
   const RaceState({
@@ -277,6 +278,7 @@ class RaceController extends StateNotifier<RaceState> {
     String? recurrence,
     String? targetUnit,
     String? proofMode,
+    String? scoreDirection,
   }) async {
     if (isPresentationDemo()) {
       final id =
@@ -312,6 +314,7 @@ class RaceController extends StateNotifier<RaceState> {
       recurrence: recurrence,
       targetUnit: targetUnit,
       proofMode: proofMode,
+      scoreDirection: scoreDirection,
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
@@ -436,6 +439,7 @@ class RaceController extends StateNotifier<RaceState> {
     String proofType = 'manual',
     String? note,
     required int value,
+    String? mediaObjectKey,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -447,11 +451,25 @@ class RaceController extends StateNotifier<RaceState> {
       _upsertRace(race);
       return race;
     }
+    final existing = state.races
+        .where((race) => race.id == raceId)
+        .firstOrNull;
+    if (existing != null && raceFormatUsesAttempts(existing.format)) {
+      // Attempt races reject proofs with no open attempt ("Start an attempt
+      // first"). Declare one; an already-open attempt binds this submission,
+      // so a 409 is success, not failure.
+      try {
+        await _repo.startAttempt(raceId);
+      } on ApiException catch (e) {
+        if (e.statusCode != 409) rethrow;
+      }
+    }
     final race = await _repo.submitProof(
       raceId,
       proofType: proofType,
       note: note,
       value: value,
+      mediaObjectKey: mediaObjectKey,
     );
     if (mounted) {
       state = state.copyWith(

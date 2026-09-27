@@ -1,9 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
+import '../../../core/network/api_base.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -13,6 +15,7 @@ import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
+import '../../auth/data/secure_token_store.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
 import 'race_controller.dart';
@@ -37,6 +40,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
   bool _loading = true;
   bool _saving = false;
   String? _error;
+  String? _accessToken;
 
   RaceProof? get _proof {
     final race = _race;
@@ -68,9 +72,13 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       final race = await ref
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
+      // Evidence media is participant-gated — fetched with the Bearer header,
+      // not as a public URL.
+      final token = await SecureTokenStore().getAccessToken();
       if (mounted) {
         setState(() {
           _race = race;
+          _accessToken = token;
           _summaryController.text = _proof?.verificationSummary ?? '';
           _loading = false;
         });
@@ -129,6 +137,24 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       );
     }
 
+    // Evidence fetch needs the Bearer header — the URL alone won't serve
+    // media to anyone who guesses the path.
+    ImageProvider? _evidenceImage(RaceProof proof) {
+      final media = proof.mediaUrl;
+      final token = _accessToken;
+      if (media == null || token == null) return null;
+      return CachedNetworkImageProvider(
+        media.startsWith('http') ? media : '$kNuvoApiBase$media',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    }
+
+    String _viewerStatus(RaceProof proof) => switch (proof.verificationStatus) {
+      'accepted' || 'verified' || 'ai_verified' => 'Accepted — counts on the leaderboard.',
+      'rejected' => 'Rejected — does not count on the leaderboard.',
+      _ => 'Waiting on the race creator\'s review.',
+    };
+
     final race = _race;
     final proof = _proof;
     if (race == null || proof == null) {
@@ -143,12 +169,16 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       );
     }
 
-    if (race.creatorId != user?.id) {
+    // View ≠ review: any active participant can inspect the proof; only the
+    // creator sees decision controls. Non-participants get nothing.
+    final isOwner = race.creatorId == user?.id;
+    final isParticipant = user != null && race.isParticipant(user.id);
+    if (!isOwner && !isParticipant) {
       return Scaffold(
         backgroundColor: NuvoColors.page,
         body: SafeArea(
           child: NuvoErrorState(
-            message: 'Only the race creator can review moves.',
+            message: 'Move not found.',
             onRetry: () => context.go('/race/${widget.raceId}'),
           ),
         ),
@@ -165,11 +195,24 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     NuvoBackNavRow(
                       onBack: () =>
                           safePopOrGo(context, '/race/${widget.raceId}'),
-                      title: 'Review move',
+                      title: isOwner ? 'Review move' : 'Proof',
                     ),
                     const SizedBox(height: 22),
-                    _MoveSummaryCard(proof: proof, race: race),
+                    _MoveSummaryCard(
+                      proof: proof,
+                      race: race,
+                      evidenceImage: _evidenceImage(proof),
+                    ),
                     const SizedBox(height: 22),
+                    if (!isOwner) ...[
+                      Text(
+                        _viewerStatus(proof),
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: NuvoColors.muted,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ] else ...[
                     NuvoTextInput(
                       controller: _summaryController,
                       label: 'Review note (optional)',
@@ -233,6 +276,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    ],
                   ],
                 )
                 .animate()
@@ -246,10 +290,17 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
 // ── Move summary card ─────────────────────────────────────────────────────────
 
 class _MoveSummaryCard extends StatelessWidget {
-  const _MoveSummaryCard({required this.proof, required this.race});
+  const _MoveSummaryCard({
+    required this.proof,
+    required this.race,
+    this.evidenceImage,
+  });
 
   final RaceProof proof;
   final Race race;
+
+  /// Authed evidence image — null when no media or the viewer can't fetch it.
+  final ImageProvider? evidenceImage;
 
   Color get _statusColor => switch (proof.verificationStatus) {
     'accepted' || 'verified' => NuvoColors.success,
@@ -312,6 +363,18 @@ class _MoveSummaryCard extends StatelessWidget {
               valueLabel,
               style: AppTextStyles.headlineMedium.copyWith(
                 color: NuvoColors.blue,
+              ),
+            ),
+          ],
+          if (evidenceImage != null) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(NuvoRadii.sm),
+              child: Image(
+                image: evidenceImage!,
+                width: double.infinity,
+                fit: BoxFit.fitWidth,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),
           ],

@@ -65,6 +65,15 @@ const RECURRENCES = new Set<RaceRecurrence>(['none', 'daily', 'weekly']);
  */
 export const MANUAL_VERIFIER_TYPE = 'manual_log';
 
+/** 'lower' = fastest/lowest verified value wins (time-attack, golf score). */
+export function scoreDirectionFromBody(
+  body: Record<string, unknown>,
+): 'higher' | 'lower' {
+  return stringValue(body, 'scoreDirection', 'score_direction') === 'lower'
+    ? 'lower'
+    : 'higher';
+}
+
 const MANUAL_PROOF_REQUIREMENTS = new Set([
   'manual',
   'note',
@@ -127,7 +136,7 @@ export function manualConfigFromBody(
     metric: 'reps',
     unit,
     format,
-    scoringRule: scoringRuleForFormat(format),
+    scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
     targetValue,
     recurrence,
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
@@ -370,7 +379,7 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
 
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
-  const scoringRule = scoringRuleForFormat(format);
+  const scoringRule = scoringRuleForFormat(format, scoreDirectionFromBody(body));
 
   return {
     activityId,
@@ -423,7 +432,7 @@ export function registryConfigFromBody(
     activityId: activity.id,
     metric: expectedMetric,
     format,
-    scoringRule: scoringRuleForFormat(format),
+    scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
     targetValue,
     attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),

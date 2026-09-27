@@ -516,6 +516,7 @@ void main() {
               recurrence,
               targetUnit,
               proofMode,
+              scoreDirection,
             }) async {
               presetCalled = true;
               return _race(title: title);
@@ -562,6 +563,7 @@ void main() {
               recurrence,
               targetUnit,
               proofMode,
+              scoreDirection,
             }) async {
               presetCalled = true;
               expect(title, 'First to 30 Jumping Jacks');
@@ -626,6 +628,7 @@ void main() {
                   recurrence,
                   targetUnit,
                   proofMode,
+                  scoreDirection,
                 }) async {
                   return _race(title: title);
                 },

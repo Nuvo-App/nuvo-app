@@ -260,7 +260,20 @@ enum RaceFormat {
 
   final String backendValue;
   final String label;
+
+  static RaceFormat? fromBackendValue(String? value) {
+    for (final f in RaceFormat.values) {
+      if (f.backendValue == value) return f;
+    }
+    return null;
+  }
 }
+
+/// Mirrors the Worker's `formatUsesAttempts` — attempt-race proofs require a
+/// declared open attempt (POST /races/:id/attempts) before the score binds.
+bool raceFormatUsesAttempts(String? format) =>
+    format == RaceFormat.bestAttempt.backendValue ||
+    format == RaceFormat.timedAttempt.backendValue;
 
 enum RaceRecurrence {
   none('none', 'One time'),
@@ -387,24 +400,4 @@ class MotionActivityDefinition {
       formatMotionProgress(resolvedMeasurementType, current, target, unit);
 }
 
-class ParsedRaceIdea {
-  const ParsedRaceIdea({
-    required this.input,
-    required this.targetValue,
-    this.format = RaceFormat.firstToGoal,
-    this.recurrence = RaceRecurrence.none,
-    this.activity,
-    this.isAmbiguous = false,
-  });
 
-  final String input;
-  final MotionActivityDefinition? activity;
-  final int targetValue;
-  final RaceFormat format;
-  final RaceRecurrence recurrence;
-  final bool isAmbiguous;
-
-  bool get aiSupported => activity != null;
-  String get title => input.trim().isEmpty ? 'New race' : input.trim();
-  String get unit => activity?.metric.label ?? 'reps';
-}
