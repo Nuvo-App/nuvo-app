@@ -1,6 +1,7 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
+import '../domain/race_draft.dart';
 
 class Race {
   const Race({
@@ -644,6 +645,7 @@ class RaceProof {
     required this.createdAt,
     this.profilePhotoUrl,
     this.thumbnailUrl,
+    this.mediaUrl,
     this.rankBefore,
     this.rankAfter,
     this.peoplePassed,
@@ -654,6 +656,10 @@ class RaceProof {
   final String displayName;
   final String? profilePhotoUrl;
   final String? thumbnailUrl;
+
+  /// Participant-only evidence path (`/races/:id/proof-media/object/…`) — the
+  /// Worker only emits it to active members; fetch needs the Bearer header.
+  final String? mediaUrl;
   final String proofType;
   final String? aiActivityType;
   final String? note;
@@ -698,8 +704,86 @@ class RaceProof {
     createdAt: json['createdAt'] as String? ?? '',
     profilePhotoUrl: json['profilePhotoUrl'] as String?,
     thumbnailUrl: json['thumbnailUrl'] as String?,
+    mediaUrl: json['mediaUrl'] as String?,
     rankBefore: (json['rankBefore'] as num?)?.toInt(),
     rankAfter: (json['rankAfter'] as num?)?.toInt(),
     peoplePassed: (json['peoplePassed'] as num?)?.toInt(),
+  );
+}
+
+// ── Race creation prefill ─────────────────────────────────────────────────────
+
+/// Navigation extra for `/races/new`. Known entries (quick starts, "Race
+/// {name}", run-it-back) carry a structured [draft] — the title interpreter
+/// is only for USER-WRITTEN [idea] text, read once at the name step.
+class RaceCreatePrefill {
+  const RaceCreatePrefill({this.idea, this.draft, this.withUser});
+
+  /// User-written idea text — interpreted once into a draft by the composer.
+  final String? idea;
+
+  /// Structured draft supplied directly — never re-parsed as text.
+  final RaceDraft? draft;
+
+  /// Person context for "Race {name}" entries — pulled in when the race
+  /// is created.
+  final PublicUser? withUser;
+
+  RaceCreatePrefill copyWith({PublicUser? withUser}) => RaceCreatePrefill(
+    idea: idea,
+    draft: draft,
+    withUser: withUser ?? this.withUser,
+  );
+
+  static RaceDraft _presetDraft(MotionActivityType type, int target) =>
+      draftForActivity(
+        motionActivityForType(type)!,
+      ).copyWith(targetValue: target);
+
+  static final pushups = RaceCreatePrefill(
+    draft: _presetDraft(MotionActivityType.pushUps, 100),
+  );
+  static final squats = RaceCreatePrefill(
+    draft: _presetDraft(MotionActivityType.squats, 15),
+  );
+  static final jumpingJacks = RaceCreatePrefill(
+    draft: _presetDraft(MotionActivityType.jumpingJacks, 500),
+  );
+  static final lunges = RaceCreatePrefill(
+    draft: _presetDraft(MotionActivityType.lunges, 40),
+  );
+  static final plank = RaceCreatePrefill(
+    draft: _presetDraft(MotionActivityType.plankHold, 300),
+  );
+}
+
+/// Builds a structured creation draft from a race's canonical fields —
+/// run-it-back/clone paths must carry fields, never re-interpret the title.
+RaceCreatePrefill prefillFromRace(Race race, {PublicUser? withUser}) {
+  final activity = motionActivityForBackendValue(race.effectiveAiActivityType);
+  if (activity == null) {
+    return RaceCreatePrefill(
+      draft: RaceDraft(
+        title: race.displayTitle,
+        hasCustomName: true,
+        activity: motionActivityDefinitions.first,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: race.targetValue ?? 1,
+      ),
+      withUser: withUser,
+    );
+  }
+  final stored = RaceFormat.fromBackendValue(race.format);
+  return RaceCreatePrefill(
+    draft: draftForActivity(activity).copyWith(
+      title: race.displayTitle,
+      hasCustomName: true,
+      targetValue: race.targetValue ?? activity.defaultTarget,
+      format: stored != null && activity.supportedFormats.contains(stored)
+          ? stored
+          : null,
+    ),
+    withUser: withUser,
   );
 }

@@ -23,8 +23,8 @@ import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
+import '../domain/race_name_interpreter.dart';
 import 'motion_catalog_provider.dart';
-import 'create_race_screen.dart';
 import 'custom_pose/recent_movements_provider.dart';
 import 'custom_pose/teach_movement_screen.dart';
 import 'race_controller.dart';
@@ -69,6 +69,7 @@ typedef ComposerPresetRaceCreator =
       String? recurrence,
       String? targetUnit,
       String? proofMode,
+      String? scoreDirection,
     });
 
 @visibleForTesting
@@ -104,6 +105,7 @@ Future<Race> createRaceForComposerDraft({
     recurrence: payload['recurrence'] as String,
     targetUnit: payload['targetUnit'] as String,
     proofMode: payload['proofMode'] as String,
+    scoreDirection: payload['scoreDirection'] as String?,
   );
 }
 
@@ -158,7 +160,11 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final prefill = widget.prefill;
       if (prefill != null) {
-        var parsed = draftFromIdea(prefill.idea);
+        // Structured drafts (quick starts, run-it-back) are used verbatim —
+        // only a user-written idea is ever interpreted as text.
+        var parsed =
+            prefill.draft ??
+            (prefill.idea != null ? draftFromIdea(prefill.idea!) : null);
         // Race Together ("Race {name}") — the person joins on create, so the
         // race must be crew-joinable from the start.
         if (parsed != null && prefill.withUser != null) {
@@ -875,7 +881,11 @@ class _NamePageState extends State<_NamePage> {
     final isGenerated = value.trim() == widget.draft.generatedTitleText;
     _hasCustomName = !isGenerated;
     widget.onDraftChanged(
-      widget.draft.copyWith(title: value, hasCustomName: _hasCustomName),
+      widget.draft.copyWith(
+        title: value,
+        hasCustomName: _hasCustomName,
+        markEdited: {RaceField.title},
+      ),
     );
   }
 
@@ -883,8 +893,18 @@ class _NamePageState extends State<_NamePage> {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
     _focusNode.unfocus();
+    // THE interpretation event: the committed race name is read ONCE into a
+    // structured draft. Fields the user already edited are protected inside
+    // mergeRaceNameInterpretation — nothing else in the composer infers.
     widget.onDraftChanged(
-      widget.draft.copyWith(title: text, hasCustomName: _hasCustomName),
+      mergeRaceNameInterpretation(
+        widget.draft.copyWith(
+          title: text,
+          hasCustomName: true,
+          markEdited: {RaceField.title},
+        ),
+        interpretRaceName(text),
+      ),
     );
     widget.onNext();
   }
@@ -1062,7 +1082,12 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
 
   void _setKind(RaceGoalKind kind) {
     if (widget.draft.goalKind == kind) return;
-    widget.onDraftChanged(widget.draft.copyWith(goalKind: kind));
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        goalKind: kind,
+        markEdited: {RaceField.goalKind},
+      ),
+    );
     setState(() {});
   }
 
@@ -1075,6 +1100,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         customUnit: _moveUnitController.text.trim().isEmpty
             ? 'reps'
             : _moveUnitController.text.trim(),
+        markEdited: {RaceField.goalKind, RaceField.activity},
       ),
     );
   }
@@ -1086,6 +1112,11 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         goalKind: RaceGoalKind.manual,
         manualGoalName: _manualNameController.text.trim(),
         manualUnit: _manualUnitController.text.trim(),
+        markEdited: {
+          RaceField.goalKind,
+          RaceField.manualGoal,
+          RaceField.manualUnit,
+        },
       ),
     );
   }
@@ -1096,10 +1127,12 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         activity.suggestedTargets.contains(currentTarget) ||
         (currentTarget >= 1 && currentTarget <= 99999);
     widget.onDraftChanged(
-      widget.draft.asPreset(
-        activity: activity,
-        targetValue: keepTarget ? currentTarget : activity.defaultTarget,
-      ),
+      widget.draft
+          .asPreset(
+            activity: activity,
+            targetValue: keepTarget ? currentTarget : activity.defaultTarget,
+          )
+          .copyWith(markEdited: {RaceField.activity}),
     );
     setState(() => _teachMode = false);
     widget.onInput?.call();
@@ -1994,7 +2027,12 @@ class _GoalPageState extends State<_GoalPage> {
     if (clamped == _target) return;
     HapticFeedback.selectionClick();
     setState(() => _target = clamped);
-    widget.onDraftChanged(widget.draft.copyWith(targetValue: clamped));
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        targetValue: clamped,
+        markEdited: {RaceField.target},
+      ),
+    );
     widget.onInput?.call();
   }
 
@@ -2092,8 +2130,11 @@ class _GoalPageState extends State<_GoalPage> {
     return switch (widget.draft.format) {
       RaceFormat.mostInWindow =>
         'Most verified $activityName before the finish line wins.',
-      RaceFormat.bestAttempt =>
-        'Best single $valueLabel wins — every verified attempt counts.',
+      // Attempt races don't chase a target — the number is a scale hint, not
+      // a finish line, so it stays out of the win statement.
+      RaceFormat.bestAttempt => widget.draft.lowerWins
+          ? 'Lowest score wins — every verified attempt counts.'
+          : 'Best single attempt wins — every verified score counts.',
       RaceFormat.timedAttempt =>
         'Most $activityName in '
             '${formatDurationShort(widget.draft.attemptDurationSeconds ?? 60)} '
@@ -2144,6 +2185,7 @@ class _GoalPageState extends State<_GoalPage> {
         attemptDurationSeconds: f == RaceFormat.timedAttempt
             ? widget.draft.attemptDurationSeconds ?? 60
             : widget.draft.attemptDurationSeconds,
+        markEdited: {RaceField.format, RaceField.timing},
       ),
     );
     widget.onInput?.call();
@@ -2168,6 +2210,7 @@ class _GoalPageState extends State<_GoalPage> {
     widget.onDraftChanged(
       widget.draft.copyWith(
         finishLineAt: DateTime.now().toUtc().add(d).toIso8601String(),
+        markEdited: {RaceField.timing},
       ),
     );
     widget.onInput?.call();
@@ -2186,7 +2229,10 @@ class _GoalPageState extends State<_GoalPage> {
   void _setAttemptDuration(int seconds) {
     HapticFeedback.selectionClick();
     widget.onDraftChanged(
-      widget.draft.copyWith(attemptDurationSeconds: seconds),
+      widget.draft.copyWith(
+        attemptDurationSeconds: seconds,
+        markEdited: {RaceField.timing},
+      ),
     );
     widget.onInput?.call();
   }
@@ -2636,7 +2682,10 @@ class _RacersPageState extends State<_RacersPage> {
     setState(() => _inviteCrew = value);
     widget.onInput?.call();
     widget.onDraftChanged(
-      widget.draft.copyWith(visibility: value ? 'invite_code' : 'private'),
+      widget.draft.copyWith(
+        visibility: value ? 'invite_code' : 'private',
+        markEdited: {RaceField.visibility},
+      ),
     );
   }
 

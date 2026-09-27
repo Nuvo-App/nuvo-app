@@ -42,8 +42,45 @@ import { recordPersonalBestIfImproved } from '../domain/raceBests';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
 import { readMotionRelease, readRegistryActivity } from '../domain/motionRegistry';
+import {
+  awsEncode,
+  encodeKeyPath,
+  extensionFor,
+  signUploadToken,
+  verifyUploadToken,
+} from '../lib/uploadMedia';
 
 export const racesRouter = new Hono<AppEnv>();
+
+const PROOF_MEDIA_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function proofMediaKeyPrefix(raceId: string): string {
+  return `proof-evidence/${raceId}/`;
+}
+
+// PUT /races/:id/proof-media/upload — signature in the URL is the credential
+// (same contract as /profile/photo/upload), so this sits above requireAuth.
+racesRouter.put('/:id/proof-media/upload', async (c) => {
+  const raceId = c.req.param('id');
+  const token = c.req.query('token');
+  if (!token) return c.json({ ok: false, error: 'Missing upload token' }, 401);
+
+  const upload = await verifyUploadToken(token, c.env.JWT_SECRET, [
+    proofMediaKeyPrefix(raceId),
+  ]);
+  if (!upload) return c.json({ ok: false, error: 'Invalid upload token' }, 401);
+
+  await c.env.PROFILE_PHOTOS.put(upload.key, c.req.raw.body, {
+    httpMetadata: { contentType: upload.contentType },
+  });
+  await c.env.DB.prepare(
+    "UPDATE media_objects SET status = 'active' WHERE object_key = ?",
+  )
+    .bind(upload.key)
+    .run();
+  return c.json({ ok: true });
+});
+
 racesRouter.use('*', requireAuth);
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -355,6 +392,50 @@ interface ScoredSubmission extends SubmissionResult {
   finished: boolean;
 }
 
+/**
+ * Rebuild a member's score from their remaining verified moves. Used when a
+ * previously verified proof is rejected — trust must be invalidated, not
+ * silently preserved. Folds moves through the race's own scoring rule.
+ */
+async function recomputeRaceProgressForUser(
+  db: D1Database,
+  race: RaceRow,
+  userId: string,
+): Promise<void> {
+  const scoring = raceScoringConfigFromRow(race);
+  if (!scoring) return;
+  const moves = await db
+    .prepare(
+      "SELECT value FROM move_logs WHERE race_id = ? AND user_id = ? AND status = 'verified' ORDER BY created_at ASC",
+    )
+    .bind(race.id, userId)
+    .all<{ value: number | null }>();
+
+  let score = 0;
+  for (const m of moves.results) {
+    const v = m.value ?? 0;
+    if (scoring.scoringRule === 'maximum_attempt') score = Math.max(score, v);
+    else if (scoring.scoringRule === 'minimum_attempt') {
+      score = score > 0 ? Math.min(score, v) : v;
+    } else score += v;
+  }
+  const target = scoring.targetValue && scoring.targetValue > 0 ? scoring.targetValue : null;
+  const progressPercent = target ? Math.min(100, Math.round((score / target) * 100)) : 0;
+  const completed = scoring.format === 'first_to_goal' && Boolean(target && score >= target);
+
+  await db
+    .prepare(
+      `UPDATE race_progress
+       SET progress_value = ?, progress_percent = ?,
+           completed_at = CASE WHEN ? THEN COALESCE(completed_at, CURRENT_TIMESTAMP) ELSE NULL END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE race_id = ? AND user_id = ?`,
+    )
+    .bind(score, progressPercent, completed ? 1 : 0, race.id, userId)
+    .run();
+  await recomputeRanks(db, race.id, scoreDirectionFor(race));
+}
+
 async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<ScoredSubmission> {
   const scoring = raceScoringConfigFromRow(race);
   if (!scoring) throw new Error('Race is missing activity configuration');
@@ -554,7 +635,10 @@ function shapeRaceResponse(
   // a leaderboard / "someone passed you" is unreadable otherwise. Only when
   // the viewer is themselves in this race; blocking still wins.
   const coRacerIds = new Set<string>();
-  if (viewerUserId && participants.some((p) => p.user_id === viewerUserId)) {
+  const viewerIsParticipant = Boolean(
+    viewerUserId && participants.some((p) => p.user_id === viewerUserId),
+  );
+  if (viewerIsParticipant) {
     for (const p of participants) {
       if (p.user_id) coRacerIds.add(p.user_id);
     }
@@ -647,7 +731,7 @@ function shapeRaceResponse(
     finishLineAt: race.end_at,
     rules: '',
     proofRequirement,
-    proofReviewMode: 'auto_accept',
+    proofReviewMode: race.proof_review_mode ?? 'auto_accept',
     visibility: race.visibility,
     inviteCode: invite?.invite_code ?? null,
     createdAt: race.created_at,
@@ -670,6 +754,10 @@ function shapeRaceResponse(
       const meta = parseMetadata(m.metadata_json);
       const isMovecheck = m.source === 'movecheck';
       const visible = visibleFor(m);
+      // Evidence is participant-only media — never hand a spectator a URL.
+      const mediaUrl = viewerIsParticipant && m.media_object_key
+        ? `/races/${race.id}/proof-media/object/${encodeKeyPath(m.media_object_key)}`
+        : null;
       let status: string;
       if (m.status === 'verified') status = isMovecheck ? 'ai_verified' : 'accepted';
       else if (m.status === 'rejected') status = 'rejected';
@@ -690,6 +778,7 @@ function shapeRaceResponse(
         framesAnalyzed: (meta.frames_analyzed as number | undefined) ?? null,
         validPoseFrames: (meta.valid_pose_frames as number | undefined) ?? null,
         durationMs: m.duration_ms,
+        mediaUrl,
         verificationStatus: status,
         verificationSummary: m.summary,
         reviewedBy: null,
@@ -1078,6 +1167,11 @@ racesRouter.post('/', async (c) => {
   const raceRecurrence = custom?.recurrence ?? manual?.recurrence ?? config?.recurrence ?? 'none';
   // 'lower' = fastest/lowest verified value wins (time-attack races).
   const raceScoreDirection = body.scoreDirection === 'lower' || body.score_direction === 'lower' ? 'lower' : 'higher';
+  // 'peer_review' holds manual submissions pending until the creator accepts;
+  // 'auto_accept' (default) scores immediately, rejectable afterwards.
+  const raceProofReviewMode = body.proofReviewMode === 'peer_review' || body.proof_review_mode === 'peer_review'
+    ? 'peer_review'
+    : 'auto_accept';
 
   // Preset races are assigned to the stable immutable release at creation.
   // Custom-pose and manual races deliberately stay on their existing paths.
@@ -1104,9 +1198,9 @@ racesRouter.post('/', async (c) => {
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
           attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-          timezone, recurrence, status, visibility, start_at, end_at, score_direction,
+          timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1134,13 +1228,14 @@ racesRouter.post('/', async (c) => {
         startAt,
         endAt,
         raceScoreDirection,
+        raceProofReviewMode,
       )
     : c.env.DB.prepare(
         `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
           target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
-          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction,
+          attempt_limit, verification_method, timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode,
           created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         raceId,
         userId,
@@ -1164,6 +1259,7 @@ racesRouter.post('/', async (c) => {
         startAt,
         endAt,
         raceScoreDirection,
+        raceProofReviewMode,
       );
 
   const creatorPersonId = await ensurePersonId(c.env.DB, userId);
@@ -1559,6 +1655,7 @@ racesRouter.get('/:id/move-logs', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
 
+  const viewerMember = await isRaceMember(c.env.DB, race.id, c.get('userId'));
   const logs = await c.env.DB.prepare(
     `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url
      FROM move_logs ml
@@ -1578,6 +1675,9 @@ racesRouter.get('/:id/move-logs', async (c) => {
       movementType: m.movement_type,
       value: m.value,
       unit: m.unit,
+      mediaUrl: viewerMember && m.media_object_key
+        ? `/races/${race.id}/proof-media/object/${encodeKeyPath(m.media_object_key)}`
+        : null,
       status: m.status,
       summary: m.summary,
       validatorVersion: m.validator_version,
@@ -1645,6 +1745,18 @@ racesRouter.post('/:id/proof', async (c) => {
   const isAiMotion = proofType === 'ai_motion';
   const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
   if (isCustom && !isAiMotion) return c.json(badRequest('Custom races require AI Motion Proof'), 400);
+  // Optional evidence attachment: must be a proof_evidence object the
+  // submitter uploaded through /proof-media/upload-url for THIS race.
+  const mediaObjectKey = stringOrNull(body.mediaObjectKey) ?? stringOrNull(body.media_object_key) ?? null;
+  if (mediaObjectKey) {
+    const media = await c.env.DB.prepare(
+      "SELECT id FROM media_objects WHERE object_key = ? AND owner_user_id = ? AND purpose = 'proof_evidence'",
+    ).bind(mediaObjectKey, userId).first<{ id: string }>();
+    if (!media || !mediaObjectKey.startsWith(proofMediaKeyPrefix(race.id))) {
+      return c.json(badRequest('Evidence was not uploaded for this race'), 400);
+    }
+  }
+
   const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
   if (isAiMotion && !clientSubmissionId) return c.json(badRequest('clientSubmissionId is required'), 400);
   if (clientSubmissionId) {
@@ -1739,7 +1851,10 @@ racesRouter.post('/:id/proof', async (c) => {
     else if (aiStatus === 'ai_failed' || aiStatus === 'custom_failed') moveStatus = 'rejected';
     else moveStatus = 'pending';
   } else {
-    moveStatus = 'verified';
+    // Review policy: 'peer_review' races hold manual values pending until the
+    // creator accepts; 'auto_accept' (default) trusts the self-report and the
+    // creator can still reject afterwards, which un-scores it.
+    moveStatus = race.proof_review_mode === 'peer_review' ? 'pending' : 'verified';
   }
 
   const metadata = JSON.stringify({
@@ -1769,20 +1884,21 @@ racesRouter.post('/:id/proof', async (c) => {
   const moveId = generateId();
   await c.env.DB.prepare(
     `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, activity_id, metric, value, unit, status, summary,
-      validator_version, duration_ms, metadata_json, client_submission_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+      media_object_key, validator_version, duration_ms, metadata_json, client_submission_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
   ).bind(
     moveId,
     race.id,
     userId,
     isAiMotion ? 'movecheck' : 'manual',
     activityType,
-    normalizeActivityIdLoose(activityType),
+    normalizeActivityIdLoose(activityType) ?? null,
     metric ?? scoring.metric,
     increment,
     race.target_unit,
     moveStatus,
     summary,
+    mediaObjectKey,
     validatorVersion,
     durationMs,
     metadata,
@@ -1884,11 +2000,74 @@ racesRouter.post('/:id/proof', async (c) => {
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!, result), submissionResult: result ?? null });
 });
 
+// POST /races/:id/proof-media/upload-url — signed URL for proof evidence.
+// Membership-gated: only active participants can attach evidence.
+racesRouter.post('/:id/proof-media/upload-url', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+  const member = await c.env.DB.prepare(
+    "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'",
+  ).bind(race.id, userId).first<{ id: string }>();
+  if (!member) return c.json(badRequest('Only race participants can add proof'), 403);
+
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
+  const fileName = typeof body.fileName === 'string' && body.fileName.trim()
+    ? body.fileName.trim()
+    : 'proof.jpg';
+  const contentType = typeof body.contentType === 'string' ? body.contentType.trim().toLowerCase() : 'image/jpeg';
+  if (!PROOF_MEDIA_ALLOWED_TYPES.includes(contentType)) {
+    return c.json(badRequest('Unsupported image type'), 400);
+  }
+
+  const extension = extensionFor(fileName, contentType);
+  const key = `${proofMediaKeyPrefix(race.id)}${userId}/${Date.now()}.${extension}`;
+  const baseUrl = new URL(c.req.url).origin;
+  const token = await signUploadToken({ key, contentType, jwtSecret: c.env.JWT_SECRET });
+  const uploadUrl = `${baseUrl}/races/${race.id}/proof-media/upload?token=${awsEncode(token)}`;
+
+  // Track the object in media_objects immediately so proof binding can
+  // validate ownership + purpose before the bytes even land.
+  await c.env.DB.prepare(
+    `INSERT INTO media_objects (id, owner_user_id, bucket, object_key, public_url, media_type, purpose, status, created_at)
+     VALUES (?, ?, 'nuvor2', ?, ?, 'image', 'proof_evidence', 'pending', CURRENT_TIMESTAMP)`,
+  ).bind(generateId(), userId, key, `${baseUrl}/races/${race.id}/proof-media/object/${encodeKeyPath(key)}`).run();
+
+  return c.json({ uploadUrl, key });
+});
+
+// GET /races/:id/proof-media/object/* — participant-only evidence fetch.
+// View ≠ review: any active member can inspect; only the creator can approve.
+racesRouter.get('/:id/proof-media/object/*', async (c) => {
+  const userId = c.get('userId');
+  const raceId = c.req.param('id');
+  const race = await getRace(c.env.DB, raceId);
+  if (!race) return c.json({ ok: false, error: 'Not found' }, 404);
+  const member = await c.env.DB.prepare(
+    "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'",
+  ).bind(raceId, userId).first<{ id: string }>();
+  if (!member) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  const key = decodeURIComponent(c.req.path.split('/proof-media/object/')[1] ?? '');
+  if (!key.startsWith(proofMediaKeyPrefix(raceId))) {
+    return c.json({ ok: false, error: 'Not found' }, 404);
+  }
+  const object = await c.env.PROFILE_PHOTOS.get(key);
+  if (!object) return c.json({ ok: false, error: 'Not found' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('Cache-Control', 'private, max-age=300');
+  return new Response(object.body, { headers });
+});
+
 // GET /races/:id/proofs - legacy endpoint, maps to move_logs.
 racesRouter.get('/:id/proofs', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
 
+  const viewerMember = await isRaceMember(c.env.DB, race.id, c.get('userId'));
   const logs = await c.env.DB.prepare(
     `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name
      FROM move_logs ml
@@ -1914,6 +2093,9 @@ racesRouter.get('/:id/proofs', async (c) => {
         aiActivityType: m.movement_type,
         note: m.summary,
         value: m.value,
+        mediaUrl: viewerMember && m.media_object_key
+          ? `/races/${race.id}/proof-media/object/${encodeKeyPath(m.media_object_key)}`
+          : null,
         detectedValue: meta.detected_value ?? m.value,
         targetValue: meta.target_value ?? null,
         confidence: meta.confidence ?? null,
@@ -1956,12 +2138,35 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
       ? 'rejected'
       : 'pending';
 
+  // Attempt-format races bind a score to a declared open attempt — same
+  // contract as direct submission (submit opens the attempt; pending proofs
+  // keep it open until review closes it). Validate BEFORE the status write
+  // so a failed accept never leaves a verified-but-unscored proof.
+  const scoring = raceScoringConfigFromRow(race);
+  const needsAttempt = newStatus === 'verified' &&
+    move.status !== 'verified' &&
+    scoring != null &&
+    formatUsesAttempts(scoring.format);
+  const boundAttempt = needsAttempt
+    ? await bindableOpenAttempt(c.env.DB, race, move.user_id)
+    : null;
+  if (needsAttempt && !boundAttempt) {
+    return c.json(badRequest('No open attempt remains to accept this score.'), 400);
+  }
+
   await c.env.DB.prepare(
     'UPDATE move_logs SET status = ?, summary = ? WHERE id = ? AND race_id = ?'
   ).bind(newStatus, stringOrNull(body.verificationSummary) ?? move.summary, move.id, race.id).run();
 
   if (newStatus === 'verified' && move.status !== 'verified') {
     await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0);
+    if (boundAttempt) {
+      await closeAttempt(c.env.DB, boundAttempt.id, move.value ?? 0, move.id);
+    }
+  } else if (move.status === 'verified' && newStatus !== 'verified') {
+    // A reject on a scored proof invalidates its progress — recompute from
+    // the submitter's remaining verified moves.
+    await recomputeRaceProgressForUser(c.env.DB, race, move.user_id);
   }
 
   // Notify the submitter of the review outcome (skip self-review).
@@ -2192,9 +2397,9 @@ racesRouter.post('/:id/rematch', async (c) => {
       `INSERT INTO races (id, creator_id, title, description, race_type, movement_type, verification_type,
         target_value, target_unit, activity_id, metric, format, scoring_rule, attempt_duration_seconds,
         attempt_limit, verification_method, verifier_type, verifier_version, verifier_spec_json, custom_activity_name,
-        timezone, recurrence, status, visibility, start_at, end_at, score_direction, verifier_release_id,
+        timezone, recurrence, status, visibility, start_at, end_at, score_direction, proof_review_mode, verifier_release_id,
         created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
     .bind(
       newRaceId,
@@ -2223,6 +2428,7 @@ racesRouter.post('/:id/rematch', async (c) => {
       null, // start line: the rematch begins when created
       null, // deadlines are not carried over
       race.score_direction ?? 'higher',
+      race.proof_review_mode ?? 'auto_accept',
       race.verifier_release_id,
     )
     .run();

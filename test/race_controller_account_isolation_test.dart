@@ -125,4 +125,127 @@ void main() {
       expect(secondController.state.races.single.id, 'race-b');
     });
   });
+
+  group('attempt binding on submitProof', () {
+    // The Worker rejects proofs to best_attempt/timed_attempt races that have
+    // no open attempt ("Start an attempt before submitting a score"). The
+    // controller must declare an attempt first — invisibly — so a manual
+    // submit stays one obvious action.
+
+    Race attemptRace(String format) => Race(
+      id: 'race-attempt',
+      creatorId: 'user-1',
+      title: 'Highest score',
+      goalType: 'target',
+      targetValue: 100,
+      unit: 'points',
+      format: format,
+      proofRequirement: 'manual',
+      proofMode: 'manual',
+      status: 'active',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    );
+
+    test('best_attempt race declares an attempt before submitting', () async {
+      final repo = _AttemptRepo(attemptRace('best_attempt'));
+      final controller = RaceController(repo);
+      await controller.loadRaces();
+
+      await controller.submitProof('race-attempt', value: 95);
+
+      expect(repo.startAttemptCalls, 1);
+      expect(repo.submitProofCalls, 1);
+      expect(repo.callOrder, ['attempt', 'proof']);
+    });
+
+    test('timed_attempt race declares an attempt before submitting', () async {
+      final repo = _AttemptRepo(attemptRace('timed_attempt'));
+      final controller = RaceController(repo);
+      await controller.loadRaces();
+
+      await controller.submitProof('race-attempt', value: 30);
+
+      expect(repo.startAttemptCalls, 1);
+      expect(repo.submitProofCalls, 1);
+    });
+
+    test('an already-open attempt (409) still submits the proof', () async {
+      final repo = _AttemptRepo(attemptRace('best_attempt'))
+        ..startAttemptError = const ApiException(409, 'attempt already open');
+      final controller = RaceController(repo);
+      await controller.loadRaces();
+
+      await controller.submitProof('race-attempt', value: 95);
+
+      expect(repo.submitProofCalls, 1);
+    });
+
+    test('a real startAttempt failure blocks the submission', () async {
+      final repo = _AttemptRepo(attemptRace('best_attempt'))
+        ..startAttemptError = const ApiException(500, 'server error');
+      final controller = RaceController(repo);
+      await controller.loadRaces();
+
+      await expectLater(
+        controller.submitProof('race-attempt', value: 95),
+        throwsA(isA<ApiException>()),
+      );
+      expect(repo.submitProofCalls, 0);
+    });
+
+    test('first_to_goal race submits without declaring an attempt', () async {
+      final repo = _AttemptRepo(attemptRace('first_to_goal'));
+      final controller = RaceController(repo);
+      await controller.loadRaces();
+
+      await controller.submitProof('race-attempt', value: 5);
+
+      expect(repo.startAttemptCalls, 0);
+      expect(repo.submitProofCalls, 1);
+    });
+  });
+}
+
+class _AttemptRepo extends RaceRepository {
+  _AttemptRepo(this.race) : super(RaceApi(), SecureTokenStore(), AuthApi());
+
+  final Race race;
+  final List<String> callOrder = [];
+  int startAttemptCalls = 0;
+  int submitProofCalls = 0;
+  ApiException? startAttemptError;
+
+  @override
+  Future<List<Race>> getRaces() async => [race];
+
+  @override
+  Future<RaceAttemptResult> startAttempt(
+    String raceId, {
+    String? clientAttemptId,
+  }) async {
+    startAttemptCalls++;
+    callOrder.add('attempt');
+    final error = startAttemptError;
+    if (error != null) throw error;
+    return const RaceAttemptResult(
+      attemptId: 'attempt-1',
+      attemptIndex: 1,
+      status: 'open',
+      attemptsUsed: 1,
+    );
+  }
+
+  @override
+  Future<Race> submitProof(
+    String raceId, {
+    String proofType = 'manual',
+    String? note,
+    required int value,
+    String? mediaObjectKey,
+  }) async {
+    submitProofCalls++;
+    callOrder.add('proof');
+    return race;
+  }
 }

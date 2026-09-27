@@ -1,7 +1,7 @@
 export type RaceActivityId = 'push_ups' | 'jumping_jacks' | 'squats' | 'lunges' | 'plank_hold' | 'high_knees' | 'arm_raises' | 'sumo_squats' | 'side_lunges' | 'deep_squats' | 'squat_jacks' | 'jump_squats' | 'lunge_jumps' | 'running_in_place' | 'treadmill_running' | 'walking_in_place' | 'marching_in_place' | 'butt_kicks' | 'mountain_climbers' | 'burpees' | 'step_ups' | 'calf_raises' | 'lateral_steps' | 'basketball_shot';
 export type RaceMetric = 'reps' | 'seconds';
 export type RaceFormat = 'first_to_goal' | 'most_in_window' | 'best_attempt' | 'timed_attempt';
-export type RaceScoringRule = 'cumulative_sum' | 'maximum_attempt';
+export type RaceScoringRule = 'cumulative_sum' | 'maximum_attempt' | 'minimum_attempt';
 export type VerificationMethod = 'camera_pose';
 export type RaceRecurrence = 'none' | 'daily' | 'weekly';
 
@@ -494,6 +494,13 @@ export function normalizeMetric(value: string | null | undefined, activity?: Rac
   return undefined;
 }
 
-export function scoringRuleForFormat(format: RaceFormat): RaceScoringRule {
-  return format === 'best_attempt' || format === 'timed_attempt' ? 'maximum_attempt' : 'cumulative_sum';
+export function scoringRuleForFormat(
+  format: RaceFormat,
+  scoreDirection: 'higher' | 'lower' = 'higher',
+): RaceScoringRule {
+  if (format === 'best_attempt' || format === 'timed_attempt') {
+    // Stored value stays the real score — direction picks max vs. min.
+    return scoreDirection === 'lower' ? 'minimum_attempt' : 'maximum_attempt';
+  }
+  return 'cumulative_sum';
 }

@@ -745,115 +745,23 @@ MotionActivityDefinition? resolveRaceMotionActivity({
   return null;
 }
 
-/// Infers a supported camera-verified [MotionActivityDefinition] from
-/// free-text fields (title, unit, target unit). Returns null if no supported
-/// movement matches.
-MotionActivityDefinition? inferSupportedMotionActivity(
-  Iterable<String?> values,
-) {
-  final normalized = values
-      .whereType<String>()
-      .join(' ')
+/// The ONE alias matcher — shared by title interpretation and proof-time
+/// activity resolution. Longest alias wins so "jumping jacks" beats "jacks".
+/// Never maintain a second alias table anywhere.
+MotionActivityDefinition? motionActivityFromText(String text) {
+  final normalized = text
       .toLowerCase()
       .replaceAll(RegExp(r'[-_]+'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
   if (normalized.isEmpty) return null;
 
-  if (RegExp(r'(^|[^a-z])push\s*ups?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])pushups?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.pushUps);
-  }
-  if (RegExp(r'(^|[^a-z])squats?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.squats);
-  }
-  if (RegExp(r'(^|[^a-z])jumping\s+jacks?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.jumpingJacks);
-  }
-  if (RegExp(r'(^|[^a-z])lunges?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.lunges);
-  }
-  if (RegExp(r'(^|[^a-z])planks?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.plankHold);
-  }
-  if (RegExp(r'(^|[^a-z])high\s+knees?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])highknees?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.highKnees);
-  }
-  if (RegExp(r'(^|[^a-z])arm\s+raises?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])armraises?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.armRaises);
-  }
-  if (RegExp(r'(^|[^a-z])treadmill([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.treadmillRunning);
-  }
-  if (RegExp(
-        r'(^|[^a-z])running\s+in\s+place([^a-z]|$)',
-      ).hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])run\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.runningInPlace);
-  }
-  if (RegExp(
-        r'(^|[^a-z])walking\s+in\s+place([^a-z]|$)',
-      ).hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])walk\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.walkingInPlace);
-  }
-  if (RegExp(r'(^|[^a-z])marching([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])march\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.marchingInPlace);
-  }
-  if (RegExp(r'(^|[^a-z])butt\s+kicks?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.buttKicks);
-  }
-  if (RegExp(
-    r'(^|[^a-z])mountain\s+climbers?([^a-z]|$)',
-  ).hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.mountainClimbers);
-  }
-  if (RegExp(r'(^|[^a-z])burpees?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.burpees);
-  }
-  if (RegExp(r'(^|[^a-z])step\s*-?\s*ups?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.stepUps);
-  }
-  if (RegExp(r'(^|[^a-z])calf\s+raises?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.calfRaises);
-  }
-  if (RegExp(r'(^|[^a-z])lateral\s+steps?([^a-z]|$)').hasMatch(normalized) ||
-      RegExp(r'(^|[^a-z])side\s+steps?([^a-z]|$)').hasMatch(normalized)) {
-    return motionActivityForType(MotionActivityType.lateralSteps);
-  }
-  return null;
-}
-
-ParsedRaceIdea parseRaceIdea(String input) {
-  final normalized = input.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
-  final target = int.tryParse(
-    RegExp(r'\d+').firstMatch(normalized)?.group(0) ?? '',
-  );
-  final format =
-      normalized.contains('most ') ||
-          normalized.contains('today') ||
-          normalized.contains('weekend')
-      ? RaceFormat.mostInWindow
-      : normalized.contains('longest') || normalized.contains('best')
-      ? RaceFormat.bestAttempt
-      : normalized.contains('second') || normalized.contains('minute')
-      ? RaceFormat.timedAttempt
-      : RaceFormat.firstToGoal;
-  final recurrence = normalized.contains('weekly')
-      ? RaceRecurrence.weekly
-      : normalized.contains('daily')
-      ? RaceRecurrence.daily
-      : RaceRecurrence.none;
-
   MotionActivityDefinition? matched;
   var matchedAliasLength = 0;
   for (final definition in motionActivityDefinitions) {
     for (final alias in definition.aliases) {
       final pattern = RegExp(
-        r'(^|[^a-z])' + RegExp.escape(alias) + r'([^a-z]|$)',
+        '(^|[^a-z])${RegExp.escape(alias)}([^a-z]|\$)',
       );
       if (pattern.hasMatch(normalized) && alias.length > matchedAliasLength) {
         matched = definition;
@@ -861,18 +769,17 @@ ParsedRaceIdea parseRaceIdea(String input) {
       }
     }
   }
+  return matched;
+}
 
-  return ParsedRaceIdea(
-    input: input,
-    activity: matched,
-    targetValue: target ?? matched?.defaultTarget ?? 1,
-    format: matched != null && matched.supportedFormats.contains(format)
-        ? format
-        : RaceFormat.firstToGoal,
-    recurrence: recurrence,
-    isAmbiguous:
-        matched != null &&
-        normalized.contains('weekly') &&
-        matched.type == MotionActivityType.plankHold,
+/// Infers a supported camera-verified [MotionActivityDefinition] from
+/// free-text fields (title, unit, target unit). Used ONLY to rescue legacy
+/// races stored without `aiActivityType` — new race creation never reaches
+/// here; it goes through `interpretRaceName` at the name step.
+MotionActivityDefinition? inferSupportedMotionActivity(
+  Iterable<String?> values,
+) {
+  return motionActivityFromText(
+    values.whereType<String>().join(' '),
   );
 }

@@ -39,6 +39,7 @@ server/worker/.tmp-test-dist/
 server/worker/build/
 server/worker/dist/
 server/worker/.wrangler/
+server/worker/.wrangler-slice/
 
 # Secrets — never commit real values (.example / .dev.vars.example are safe templates)
 **/.dev.vars
