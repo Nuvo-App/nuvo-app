@@ -43,6 +43,15 @@ MotionMeasurementType raceMeasurementType(Race race) {
 String raceDisplayUnit(Race race) {
   final activity = raceActivityDefinition(race);
   if (activity != null) return activity.unit;
+  // A non-motion race still knows its unit from the backend ("strokes",
+  // "books", "seconds"). Falling straight to the metric's default would
+  // print "78 reps" for a golf round.
+  final declared = race.targetUnit ?? race.unit;
+  if (declared != null &&
+      declared.isNotEmpty &&
+      RaceMetric.fromBackendValue(declared) == null) {
+    return declared;
+  }
   return raceMeasurementType(race).defaultPluralUnit;
 }
 
