@@ -215,18 +215,21 @@ final class NuvoColors {
   // Const tokens so dark theme pieces can live in const expressions. These are
   // the resolved values behind `NuvoThemeColors.dark` — prefer
   // `context.themeColors` at call sites over touching these directly.
-  static const Color darkPage = Color(0xFF0A1424);
-  static const Color darkSurface = Color(0xFF111E33);
-  static const Color darkPanel = Color(0xFF1B2B4A);
-  static const Color darkPanelLight = Color(0xFF16233C);
-  static const Color darkInk = Color(0xFFF1F5FB);
-  static const Color darkInkMuted = Color(0xFF93A4BF);
-  static const Color darkInkSubtle = Color(0xFF7E90AC);
-  static const Color darkInkDim = Color(0xFF5F6F8C);
-  static const Color darkBorder = Color(0xFF3D5170);
-  static const Color darkDivider = Color(0xFF1E2C46);
-  static const Color darkTrack = Color(0xFF1B2B4A);
-  static const Color darkInkShadow = Color(0xFF04070D);
+  /// Dark chrome — a near-black neutral foundation, not inverted navy.
+  /// Three tight elevations (page < surface < panel) carry the hierarchy;
+  /// Nuvo blue stays an accent, never the environment.
+  static const Color darkPage = Color(0xFF0B0D11);
+  static const Color darkSurface = Color(0xFF14171D);
+  static const Color darkPanel = Color(0xFF1E242C);
+  static const Color darkPanelLight = Color(0xFF181D25);
+  static const Color darkInk = Color(0xFFF2F4F8);
+  static const Color darkInkMuted = Color(0xFF99A3B1);
+  static const Color darkInkSubtle = Color(0xFF7A8493);
+  static const Color darkInkDim = Color(0xFF59626F);
+  static const Color darkBorder = Color(0xFF2B323C);
+  static const Color darkDivider = Color(0xFF222830);
+  static const Color darkTrack = Color(0xFF20262E);
+  static const Color darkInkShadow = Color(0xFF000000);
 }
 
 abstract final class AppColors {
@@ -361,7 +364,8 @@ class NuvoSemanticColors extends ThemeExtension<NuvoSemanticColors> {
       base: NuvoColors.neutral,
       shadow: Color(0xFF02101F),
       bright: Color(0xFF5B93FF),
-      surface: Color(0xFF0F2447),
+      // Competitive band on dark — a cool lift off the page, not a navy slab.
+      surface: Color(0xFF141E2B),
       border: Color(0xFF2E5FB8),
       on: Color(0xFFCFE0FF),
     ),

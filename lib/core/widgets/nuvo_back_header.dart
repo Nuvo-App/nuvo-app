@@ -32,12 +32,12 @@ class NuvoBackHeader extends StatelessWidget {
             onTap: onBack,
             scale: 0.94,
             haptic: false,
-            child: const SizedBox(
+            child: SizedBox(
               width: 44,
               height: 44,
               child: Icon(
                 Icons.arrow_back_rounded,
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
                 size: 22,
               ),
             ),

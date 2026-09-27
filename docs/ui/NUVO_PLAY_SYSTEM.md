@@ -660,3 +660,173 @@ bright-blue one either.
 `NuvoAlertDialog` interior, `NuvoRippleSurface`, and `NuvoPagePill` are
 implemented; `NuvoFlipCard` is shipped scoped to two semantic-side
 surfaces (person card, featured race).
+
+## 15. Social feed grammar (Crew)
+
+Crew's feed is a social product, not a rendered event table. Content
+creates hierarchy — typography, whitespace, avatars, competitive data, and
+small semantic accents. **Social posts never get a card.** The hard
+navy-edge + offset-shadow surface is scarce: hero race, live race,
+modal — an ordinary feed event is never a physical Nuvo card.
+
+### Social moment (levels 1–2)
+
+Every post — whether it lands on me or not — sits directly on the page:
+
+    avatar + name + timestamp
+        natural-language headline
+        the artifact the event carries
+    bare reactions                the action it earns
+
+The artifact is data, not a panel:
+
+- **Overtake** → `_PostMatchup`: names over numerals (mine on the right
+  in blue) with a proportional split bar under them. The score IS the
+  object — "Noah 41 · You 39" as a duel, never a sentence in a rounded
+  rectangle.
+- **Win / result / PB** → `_EarnedFact`: the earned line in type —
+  `🏆 YOU WON`, `🏆 1ST`, `45 REPS ↗ +5`. Gold colors only the earned
+  line; supporting lines stay muted. Never a cream or tinted background.
+- **Race created** → one slim ice embed, never outlined ("come join
+  this"). It is the only embedded panel left in the feed.
+
+`prominent` (a moment that lands on me) changes exactly one thing: the
+action upgrades from quiet blue text to the compact blue pill
+(`Take it back`, `Rematch`). Nothing else — no border, no shadow, no
+tinted fill.
+
+### Micro event (level 3)
+
+Reactions, crew joins/accepts, race joins, attempt starts — one timeline
+row: small avatar + sentence + timestamp. No card, no reaction bar; any
+aggregate reactions trail the sentence as a tiny suffix.
+
+### Live race
+
+`NuvoLiveRaceCard` is the canonical live surface — the only card-shaped
+object allowed in the feed proper. One primary card is the room's pulse;
+a second live race in the same list renders `compact`.
+
+### Reaction row
+
+Unselected reactions are bare text — glyph + muted count flowing with the
+post. Only *my* reaction earns a surface: a quiet ice fill, no border.
+`NuvoPop` on the glyph, `NuvoNumberFlow` on the count.
+
+### Rhythm
+
+Content, breathing room, hairline. Whitespace does most of the
+separating — the divider is a whisper, not a wall. Do not stack heavy
+horizontal lines where padding would do.
+
+### The three rules that prevent regression
+
+1. **NOT EVERY EVENT GETS A CARD.** If removing the text leaves a generic
+   dashboard rectangle, the chrome is wrong.
+2. **COLOR IS ACCENT, NOT BACKGROUND FLOOD.** Semantic color marks the one
+   element that earns it — blue for action/progress, gold for a win, red
+   for live — never a tinted post background.
+3. **THE HARD SURFACE STAYS SCARCE.** Navy edge + offset shadow is reserved
+   for hero, live, modal, and primary CTAs. Scarcity is what makes it mean
+   anything.
+
+## 16. Inbox + identity surfaces (Notifications, Profile)
+
+### Notification rows
+
+A notification is WHO DID WHAT WHEN + WHAT CAN I DO — never a colored
+container. Rows live directly on the page with hairline separators aligned
+to the text column. Avatar, title, timestamp, optional actions. Unread is
+exactly ONE signal: the accent-colored dot (its color doubles as the
+semantic category — amber attention, red threat, green positive, blue
+otherwise) plus title weight. No color rail, no avatar badge, no unread
+background wash — stacking signals turns an inbox into an admin console.
+Request rows keep real actions: Accept stays the compact blue action,
+Decline secondary.
+
+### Profile
+
+The user is the hero — the identity zone is avatar + name + handle + real
+action chips sitting directly on the page, never inside a card. The
+screen reads as one narrative: identity → competitive snapshot (bare
+stats, thin dividers) → what I'm racing now (the progress track carries
+the state) → what I just accomplished (earned placements, gold only for
+wins) → the quiet personal mark (best finish is one typographic line) →
+the control layer (Your Nuvo / App / Account / Legal as hairline rows in
+the same rhythm). No module is a dashboard box.
+
+## 17. Dark mode
+
+Dark mode is a designed theme, not an inverted light theme. When the user
+flips to dark, Nuvo should read as **BLACK / WHITE / NUVO BLUE** — a
+near-black neutral foundation, cool-white type, and the same Nuvo blue
+that now feels electric because everything else is restrained.
+
+### Principles
+
+- **DARK = NEAR-BLACK NEUTRAL FOUNDATION.** The page is `darkPage`
+  (`0xFF0B0D11`) — almost black with the slightest cool bias, not navy.
+  If a screen reads "dark blue," it is wrong.
+- **BLUE IS ACCENT, NOT ENVIRONMENT.** Nuvo blue marks selected states,
+  scores, progress, and primary actions. It never fills the page, the
+  nav, or generic cards.
+- **MAX 2–3 USEFUL ELEVATION LEVELS.** Level 0 page, level 1 subtle
+  raised surface, level 2 stronger interaction surface. More tiers than
+  that produce unrelated navy shades and dashboard mud.
+- **SEMANTIC COLORS STAY SEMANTIC.** Blue = active/competitive, gold =
+  earned result, red = live/danger, green = success. Semantic tint
+  surfaces (`context.semanticColors.<role>.surface`) are deep shades of
+  the same family — visible, never saturated slabs.
+- **NO WHITE ISLANDS.** A light-surface card that survives into dark is a
+  bug, unless it is a deliberate fixed object (QR quiet zone, camera
+  overlay, the navy Member Pass itself).
+- **NO NAVY FLOOD.** Borders are subtle cool-gray (`darkBorder`), not
+  blue. Containers earn their existence through content — spacing,
+  typography, hairlines, accent before raised rectangles.
+- **SHARED COMPONENTS USE THEME COLORS.** `context.themeColors` for
+  chrome, `context.semanticColors` for roles. Raw `NuvoColors.*`
+  constants are the light values — using them in a build method is a
+  dark-mode leak unless the color is intentionally fixed.
+- **ICONS USE SEMANTIC TIERS.** Primary `ink`, inactive `inkSubtle`,
+  active Nuvo blue, badge red. No navy-on-near-black invisible icons.
+- **DARK MODE IS NOT AN AFTERTHOUGHT.** Any new surface/tint must have a
+  dark answer in the token system before it ships.
+
+### Token table (`NuvoThemeColors.dark`)
+
+| Role | Value | Use |
+|---|---|---|
+| `page` | `0xFF0B0D11` | Level 0 — scaffold/page background |
+| `surface` | `0xFF14171D` | Level 1 — cards, sheets, fields, dock |
+| `panelLight` | `0xFF181D25` | Level 1.5 — tinted fills, subtle lifts |
+| `panel` | `0xFF1E242C` | Level 2 — active pills, icon chips, trays |
+| `track` | `0xFF20262E` | Progress/slider tracks |
+| `ink` | `0xFFF2F4F8` | Primary foreground — headings, icons |
+| `inkMuted` | `0xFF99A3B1` | Secondary text/icons |
+| `inkSubtle` | `0xFF7A8493` | Tertiary text, inactive nav icons |
+| `inkDim` | `0xFF59626F` | Faintest text tier |
+| `border` | `0xFF2B323C` | Subtle cool-gray structural edge |
+| `divider` | `0xFF222830` | Hairlines |
+| `inkShadow` | `0xFF000000` | Hard-offset plate/shadow |
+
+### Semantic tint surfaces (`NuvoSemanticColors.dark`)
+
+| Role | `surface` | `border` | `on` | `bright` |
+|---|---|---|---|---|
+| neutral (competitive band) | `0xFF141E2B` | `0xFF2E5FB8` | `0xFFCFE0FF` | `0xFF5B93FF` |
+| success | `0xFF0E2418` | `0xFF2C7A44` | `0xFFBFF0CB` | `0xFF4ADE6B` |
+| danger | `0xFF2A1216` | `0xFF8A3438` | `0xFFFFC9C9` | `0xFFF95A5E` |
+| warning | `0xFF2A1E0C` | `0xFF9A6A22` | `0xFFFFE0AE` | `0xFFFFB03A` |
+| accent | `0xFF241C14` | `0xFF7A5C40` | `0xFFEBD7C2` | `NuvoColors.accent` |
+
+### Intentional fixed colors (not bugs)
+
+- Whites/inks on colored fills — blue buttons, colored avatar circles,
+  rank medallions, celebration pages (`BoardMovedScreen` success splash).
+- QR quiet zone — white card + dark modules in both themes; scanners
+  need the contrast.
+- Camera overlays — framing guides, scrims, and toast chrome over the
+  live preview are photographic surfaces, not theme chrome.
+- Member Pass — the pass is a physical navy object by design.
+- Track-view scene — the race-track world view is an art-directed
+  deep-navy scene, not app chrome.

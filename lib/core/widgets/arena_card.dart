@@ -33,6 +33,7 @@ class StackedRaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final radius = BorderRadius.circular(compact ? 24 : 30);
 
     return Padding(
@@ -44,7 +45,7 @@ class StackedRaceCard extends StatelessWidget {
             left: 10,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: NuvoColors.navy,
+                color: c.inkShadow,
                 borderRadius: radius,
               ),
             ),
@@ -54,16 +55,16 @@ class StackedRaceCard extends StatelessWidget {
             left: 5,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: NuvoColors.softBlue,
+                color: c.panelLight,
                 borderRadius: radius,
-                border: Border.all(color: NuvoColors.border, width: 1.2),
+                border: Border.all(color: c.border, width: 1.2),
               ),
             ),
           ),
           Container(
             padding: EdgeInsets.all(compact ? 18 : 22),
             decoration: BoxDecoration(
-              color: NuvoColors.white,
+              color: c.surface,
               borderRadius: radius,
               border: Border.all(
                 color: NuvoColors.blue.withValues(alpha: 0.36),
@@ -86,14 +87,14 @@ class StackedRaceCard extends StatelessWidget {
                       (compact
                               ? AppTextStyles.headlineMedium
                               : AppTextStyles.displayMedium)
-                          .copyWith(color: NuvoColors.navy),
+                          .copyWith(color: c.ink),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 8),
                   Text(
                     subtitle!,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.muted,
+                      color: c.inkMuted,
                     ),
                   ),
                 ],
@@ -132,6 +133,7 @@ class CompactRaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final average =
         race.players.map((p) => p.progress).fold<int>(0, (sum, p) => sum + p) /
         race.players.length;
@@ -141,9 +143,9 @@ class CompactRaceCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: NuvoColors.white,
+          color: c.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: NuvoColors.border),
+          border: Border.all(color: c.border),
           boxShadow: [
             BoxShadow(
               color: NuvoColors.navy2.withValues(alpha: 0.04),
@@ -172,7 +174,7 @@ class CompactRaceCard extends StatelessWidget {
               race.description,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
             ),
             const SizedBox(height: 14),
             NuvoProgressBar(value: average / 100, height: 7),
@@ -217,17 +219,18 @@ class _InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: NuvoColors.icyBlue,
+        color: c.panelLight,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: c.border),
       ),
       child: Text(
         label,
         style: AppTextStyles.labelSmall.copyWith(
-          color: NuvoColors.navy,
+          color: c.ink,
           fontWeight: FontWeight.w800,
         ),
       ),

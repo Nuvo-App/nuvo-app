@@ -20,7 +20,9 @@ class ProgressPlayerRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: highlight ? NuvoColors.softBlue : NuvoColors.lavenderRow,
+        color: highlight
+            ? context.themeColors.panelLight
+            : context.themeColors.panel,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: highlight ? NuvoColors.blue : Colors.transparent,
@@ -31,7 +33,9 @@ class ProgressPlayerRow extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 18,
-            backgroundColor: highlight ? NuvoColors.blue : NuvoColors.navy,
+            backgroundColor: highlight
+                ? NuvoColors.blue
+                : context.themeColors.panel,
             child: Text(
               player.initials,
               style: AppTextStyles.labelSmall.copyWith(
@@ -52,7 +56,7 @@ class ProgressPlayerRow extends StatelessWidget {
                         player.name,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.labelLarge.copyWith(
-                          color: NuvoColors.navy,
+                          color: context.themeColors.ink,
                         ),
                       ),
                     ),

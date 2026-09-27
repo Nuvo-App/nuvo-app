@@ -54,7 +54,10 @@ abstract final class AppTheme {
       scaffoldBackgroundColor: NuvoColors.page,
       canvasColor: NuvoColors.page,
       colorScheme: colorScheme,
-      extensions: const [NuvoSemanticColors.standard],
+      extensions: const [
+        NuvoSemanticColors.standard,
+        NuvoThemeColors.light,
+      ],
       visualDensity: VisualDensity.adaptivePlatformDensity,
       splashFactory: InkRipple.splashFactory,
       fontFamily: GoogleFonts.manrope().fontFamily,

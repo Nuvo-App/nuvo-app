@@ -143,8 +143,8 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
             const SizedBox(height: 4),
             Text(
               'Name, @username or member code.',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: NuvoColors.textMuted),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                  .copyWith(color: context.themeColors.inkSubtle),
             ),
             const SizedBox(height: 16),
             NuvoSearchField(
@@ -253,7 +253,7 @@ class _WayIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: NuvoColors.surface,
+      color: context.themeColors.surface,
       borderRadius: BorderRadius.circular(14),
       child: NuvoPressable(
         onTap: onTap,
@@ -262,16 +262,16 @@ class _WayIn extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: NuvoColors.border),
+            border: Border.all(color: context.themeColors.border),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: NuvoColors.navy),
+              Icon(icon, size: 18, color: context.themeColors.ink),
               const SizedBox(width: 8),
               Text(label,
                   style: AppTextStyles.labelLarge
-                      .copyWith(color: NuvoColors.navy)),
+                      .copyWith(color: context.themeColors.ink)),
             ],
           ),
         ),
@@ -289,9 +289,9 @@ class _HubSurface extends StatelessWidget {
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: NuvoColors.surface,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NuvoColors.border),
+        border: Border.all(color: context.themeColors.border),
       ),
       child: Column(children: children),
     );
@@ -316,7 +316,7 @@ class _HubNote extends StatelessWidget {
           text,
           textAlign: TextAlign.center,
           style:
-              AppTextStyles.bodySmall.copyWith(color: NuvoColors.textMuted),
+              AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
         ),
       );
 }
@@ -382,7 +382,7 @@ class _PersonRow extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodyMedium.copyWith(
-                          color: NuvoColors.navy,
+                          color: context.themeColors.ink,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -391,8 +391,8 @@ class _PersonRow extends StatelessWidget {
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: NuvoColors.textMuted),
+                          style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                              .copyWith(color: context.themeColors.inkSubtle),
                         ),
                     ],
                   ),
@@ -403,7 +403,7 @@ class _PersonRow extends StatelessWidget {
           ),
         ),
         if (!isLast)
-          const Divider(height: 1, color: NuvoColors.border, indent: 60),
+          Divider(height: 1, color: context.themeColors.border, indent: 60),
       ],
     );
   }
@@ -469,15 +469,15 @@ class _RequestRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.navy,
+                        color: context.themeColors.ink,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (_handleLine(user).isNotEmpty)
                       Text(
                         _handleLine(user),
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: NuvoColors.textMuted),
+                        style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                            .copyWith(color: context.themeColors.inkSubtle),
                       ),
                   ],
                 ),
@@ -490,15 +490,15 @@ class _RequestRow extends StatelessWidget {
               const SizedBox(width: 8),
               IconButton(
                 onPressed: busy ? null : onDecline,
-                icon: const Icon(Icons.close_rounded,
-                    color: NuvoColors.muted, size: 20),
+                icon: Icon(Icons.close_rounded,
+                    color: context.themeColors.inkMuted, size: 20),
                 visualDensity: VisualDensity.compact,
               ),
             ],
           ),
         ),
         if (!isLast)
-          const Divider(height: 1, color: NuvoColors.border, indent: 60),
+          Divider(height: 1, color: context.themeColors.border, indent: 60),
       ],
     );
   }
@@ -529,7 +529,7 @@ class _SentRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodyMedium.copyWith(
-                    color: NuvoColors.navy,
+                    color: context.themeColors.ink,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -539,7 +539,7 @@ class _SentRow extends StatelessWidget {
           ),
         ),
         if (!isLast)
-          const Divider(height: 1, color: NuvoColors.border, indent: 60),
+          Divider(height: 1, color: context.themeColors.border, indent: 60),
       ],
     );
   }

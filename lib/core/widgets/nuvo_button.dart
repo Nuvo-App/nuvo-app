@@ -8,7 +8,6 @@ import '../theme/app_geometry.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
 import '../theme/nuvo_responsive.dart';
-import '../theme/nuvo_tokens.dart';
 import 'nuvo_motion.dart';
 import 'pressable_scale.dart';
 
@@ -282,21 +281,25 @@ class NuvoPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final enabled = onPressed != null && !loading;
     final List<BoxShadow>? shadows;
     if (!enabled) {
       shadows = null;
     } else if (flat || subtleLift) {
-      shadows = AppShadows.hardSmall;
+      shadows = AppShadows.hardOffset(c.inkShadow);
     } else {
-      shadows = AppShadows.hardMedium;
+      shadows = AppShadows.hardOffset(
+        c.inkShadow,
+        offset: const Offset(5, 5),
+      );
     }
     return _buttonShell(
       context: context,
       height: height ?? (small ? 46 : 56),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: enabled ? NuvoColors.actionBlue : NuvoColors.disabledSurface,
-      borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
+      color: enabled ? NuvoColors.actionBlue : c.panel,
+      borderColor: c.border,
       shadows: shadows,
       onTap: onPressed,
       enabled: enabled,
@@ -304,7 +307,7 @@ class NuvoPrimaryButton extends StatelessWidget {
       horizontalPadding: horizontalPadding ?? 24,
       child: _buttonContent(
         label: label,
-        textColor: enabled ? NuvoColors.white : NuvoColors.disabledText,
+        textColor: enabled ? NuvoColors.white : c.inkDim,
         icon: icon,
         leadingWidget: leadingWidget,
         loading: loading,
@@ -366,14 +369,15 @@ class NuvoOutlineButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final enabled = onPressed != null;
     return _buttonShell(
       context: context,
       height: height ?? (small ? 46 : 56),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: NuvoColors.surface,
-      borderColor: enabled ? NuvoColors.navy : NuvoColors.border,
-      shadows: enabled ? AppShadows.hardSmall : null,
+      color: c.surface,
+      borderColor: c.border,
+      shadows: enabled ? AppShadows.hardOffset(c.inkShadow) : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
@@ -385,12 +389,12 @@ class NuvoOutlineButton extends StatelessWidget {
               child: Center(
                 child: icon == null
                     ? leadingWidget
-                    : Icon(icon, color: NuvoColors.navy, size: 22),
+                    : Icon(icon, color: c.ink, size: 22),
               ),
             )
           : _buttonContent(
               label: label,
-              textColor: NuvoColors.navy,
+              textColor: c.ink,
               icon: icon,
               leadingWidget: leadingWidget,
             ),
@@ -461,19 +465,17 @@ class _NuvoCopyButtonState extends State<NuvoCopyButton> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final success = context.semanticColors.success;
     final enabled = widget.enabled && widget.text.isNotEmpty;
     final copied = _copied;
     return _buttonShell(
       context: context,
       height: widget.height ?? (widget.small ? 46 : 56),
       radius: widget.small ? NuvoRadii.md : NuvoRadii.button,
-      color: copied ? NuvoColors.successSurface : NuvoColors.surface,
-      borderColor: !enabled
-          ? NuvoColors.border
-          : copied
-              ? NuvoColors.success
-              : NuvoColors.navy,
-      shadows: enabled ? AppShadows.hardSmall : null,
+      color: copied ? success.surface : c.surface,
+      borderColor: copied ? success.border : c.border,
+      shadows: enabled ? AppShadows.hardOffset(c.inkShadow) : null,
       onTap: enabled ? _copy : null,
       enabled: enabled,
       expand: widget.expand,
@@ -487,7 +489,7 @@ class _NuvoCopyButtonState extends State<NuvoCopyButton> {
           key: ValueKey(copied),
           child: _buttonContent(
             label: copied ? widget.copiedLabel : widget.label,
-            textColor: copied ? NuvoColors.successOn : NuvoColors.navy,
+            textColor: copied ? success.on : c.ink,
             icon: copied ? Icons.check_rounded : widget.icon,
           ),
         ),
@@ -526,13 +528,14 @@ class NuvoTertiaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final enabled = onPressed != null;
     return _buttonShell(
       context: context,
       height: height ?? (small ? 44 : 52),
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: NuvoTokens.gray100,
-      borderColor: NuvoTokens.gray300,
+      color: c.panel,
+      borderColor: c.divider,
       // 2d: outline only, no drop shadow (kept for API compatibility — the
       // shell's 3px default still applies).
       shadows: null,
@@ -541,7 +544,7 @@ class NuvoTertiaryButton extends StatelessWidget {
       expand: expand,
       child: _buttonContent(
         label: label,
-        textColor: NuvoColors.navy,
+        textColor: c.ink,
         icon: icon,
         leadingWidget: leadingWidget,
       ),
@@ -590,20 +593,21 @@ class NuvoSuccessButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final role = context.semanticColors.success;
     final enabled = onPressed != null && !loading;
     return _buttonShell(
       context: context,
       height: small ? 46 : 54,
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: solid ? NuvoColors.success : NuvoColors.successSurface,
-      borderColor: solid ? NuvoColors.successShadow : NuvoColors.success,
-      shadows: enabled ? _tinted(NuvoColors.successShadow) : null,
+      color: solid ? role.base : role.surface,
+      borderColor: solid ? role.shadow : role.border,
+      shadows: enabled ? _tinted(role.shadow) : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
         label: label,
-        textColor: solid ? NuvoColors.white : NuvoColors.successOn,
+        textColor: solid ? NuvoColors.white : role.on,
         icon: icon,
         loading: loading,
       ),
@@ -643,20 +647,21 @@ class NuvoDangerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final role = context.semanticColors.danger;
     final enabled = onPressed != null && !loading;
     return _buttonShell(
       context: context,
       height: small ? 44 : 54,
       radius: small ? NuvoRadii.md : NuvoRadii.button,
-      color: solid ? NuvoColors.danger : NuvoColors.dangerSurface,
-      borderColor: solid ? NuvoColors.dangerShadow : NuvoColors.danger,
-      shadows: enabled ? _tinted(NuvoColors.dangerShadow) : null,
+      color: solid ? role.base : role.surface,
+      borderColor: solid ? role.shadow : role.border,
+      shadows: enabled ? _tinted(role.shadow) : null,
       onTap: onPressed,
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
         label: label,
-        textColor: solid ? NuvoColors.white : NuvoColors.dangerOn,
+        textColor: solid ? NuvoColors.white : role.on,
         icon: icon,
         loading: loading,
       ),
@@ -673,6 +678,7 @@ class NuvoBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final d = context.rs(46).clamp(44.0, 54.0);
     return Semantics(
       button: true,
@@ -684,14 +690,14 @@ class NuvoBackButton extends StatelessWidget {
           width: d,
           height: d,
           decoration: BoxDecoration(
-            color: NuvoColors.surface,
+            color: c.surface,
             shape: BoxShape.circle,
-            border: Border.all(color: NuvoColors.navy, width: 2),
-            boxShadow: AppShadows.hardSmall,
+            border: Border.all(color: c.border, width: 2),
+            boxShadow: AppShadows.hardOffset(c.inkShadow),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.arrow_back_rounded,
-            color: NuvoColors.navy,
+            color: c.ink,
             size: 20,
           ),
         ),
@@ -705,19 +711,20 @@ class NuvoIconAction extends StatelessWidget {
     super.key,
     required this.icon,
     required this.onTap,
-    this.iconColor = NuvoColors.navy,
+    this.iconColor,
     this.badge = false,
     this.semanticLabel,
   });
 
   final IconData icon;
   final VoidCallback onTap;
-  final Color iconColor;
+  final Color? iconColor;
   final bool badge;
   final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final d = context.rs(42).clamp(42.0, 50.0);
     return Semantics(
       button: true,
@@ -729,15 +736,15 @@ class NuvoIconAction extends StatelessWidget {
           width: d,
           height: d,
           decoration: BoxDecoration(
-            color: NuvoColors.surface,
+            color: c.surface,
             shape: BoxShape.circle,
-            border: Border.all(color: NuvoColors.navy, width: 1.5),
-            boxShadow: AppShadows.hardSmall,
+            border: Border.all(color: c.border, width: 1.5),
+            boxShadow: AppShadows.hardOffset(c.inkShadow),
           ),
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Icon(icon, color: iconColor, size: 19),
+              Icon(icon, color: iconColor ?? c.ink, size: 19),
               if (badge)
                 Positioned(
                   top: 8,
@@ -748,7 +755,7 @@ class NuvoIconAction extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: NuvoColors.dangerBright,
                       shape: BoxShape.circle,
-                      border: Border.all(color: NuvoColors.surface, width: 1.2),
+                      border: Border.all(color: c.surface, width: 1.2),
                     ),
                   ),
                 ),

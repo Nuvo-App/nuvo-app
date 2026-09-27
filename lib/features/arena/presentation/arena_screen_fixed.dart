@@ -24,10 +24,9 @@ import '../../races/presentation/race_controller.dart';
 import '../data/arena_models.dart';
 import 'arena_controller.dart';
 
-const _arenaBackground = NuvoColors.page;
-const _arenaSurface = NuvoColors.surface;
-const _arenaText = NuvoColors.navy;
-const _arenaMuted = NuvoColors.textMuted;
+// Structural chrome (page/surface/ink/muted) resolves through
+// `context.themeColors` at each call site — module-level consts can't
+// follow dark mode. Only the semantic accents stay constant.
 const _arenaBlue = NuvoColors.blue;
 const _arenaGreen = NuvoColors.success;
 
@@ -181,12 +180,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         ref.read(authControllerProvider.notifier).retryRestore();
 
     return Scaffold(
-      backgroundColor: _arenaBackground,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
           color: _arenaBlue,
-          backgroundColor: _arenaSurface,
+          backgroundColor: context.themeColors.surface,
           onRefresh: widget.preview
               ? () async {}
               : () => ref.read(arenaControllerProvider.notifier).loadSnapshot(),
@@ -412,7 +411,7 @@ class _ArenaHeader extends StatelessWidget {
       Text(
         '${_timeGreeting()}, $greeting',
         style: AppTextStyles.titleLarge.copyWith(
-          color: _arenaMuted,
+          color: context.themeColors.inkSubtle,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -439,7 +438,7 @@ class _SectionLabel extends StatelessWidget {
         child: Text(
           title,
           style: AppTextStyles.titleMedium.copyWith(
-            color: _arenaText,
+            color: context.themeColors.ink,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -527,17 +526,21 @@ class _NextMoveHero extends StatelessWidget {
         )
         .toList();
     final footerTotal = board.racerCount ?? footerAvatars.length;
+    final c = context.themeColors;
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: _arenaSurface,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: NuvoColors.navy, width: 2),
-        boxShadow: AppShadows.hardLarge,
+        border: Border.all(color: c.border, width: 2),
+        boxShadow: AppShadows.hardOffset(
+          c.inkShadow,
+          offset: const Offset(7, 7),
+        ),
       ),
       foregroundDecoration: BoxDecoration(
         borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: c.border, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,7 +568,7 @@ class _NextMoveHero extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.headlineMedium.copyWith(
-                          color: _arenaText,
+                          color: context.themeColors.ink,
                           fontSize: tall ? 30 : 28,
                           height: 1.05,
                           letterSpacing: 0,
@@ -593,7 +596,7 @@ class _NextMoveHero extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: AppTextStyles.headlineMedium.copyWith(
-                                  color: _arenaText,
+                                  color: context.themeColors.ink,
                                   fontSize: 24,
                                   letterSpacing: 0,
                                 ),
@@ -692,7 +695,7 @@ class _RaceDetails extends StatelessWidget {
             total: total,
             size: 26,
             max: 3,
-            borderColor: NuvoColors.white,
+            borderColor: context.themeColors.surface,
           ),
           const SizedBox(width: 9),
         ],
@@ -705,7 +708,7 @@ class _RaceDetails extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.labelSmall.copyWith(
-              color: _arenaMuted,
+              color: context.themeColors.inkSubtle,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -732,7 +735,7 @@ class _PageDots extends StatelessWidget {
           decoration: BoxDecoration(
             color: i == selected ? _arenaBlue : Colors.transparent,
             border: Border.all(
-              color: NuvoColors.navy,
+              color: context.themeColors.border,
               width: i == selected ? 1.5 : 1.25,
             ),
             borderRadius: BorderRadius.circular(4),
@@ -860,7 +863,9 @@ class _Standings extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
           child: Text(
             'Your crew will appear here as they join the start line.',
-            style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.themeColors.inkSubtle,
+            ),
           ),
         ),
       );
@@ -881,10 +886,10 @@ class _Standings extends StatelessWidget {
         child: Column(
           children: [
             _StandingRow(entry: entries[0]),
-            const Divider(
+            Divider(
               height: 1,
               thickness: 1,
-              color: NuvoColors.divider,
+              color: context.themeColors.divider,
               indent: 16,
               endIndent: 16,
             ),
@@ -919,10 +924,10 @@ class _Standings extends StatelessWidget {
                   for (var i = 0; i < rest.length; i++) ...[
                     _StandingRow(entry: rest[i]),
                     if (i < rest.length - 1)
-                      const Divider(
+                      Divider(
                         height: 1,
                         thickness: 1,
-                        color: NuvoColors.divider,
+                        color: context.themeColors.divider,
                         indent: 16,
                         endIndent: 16,
                       ),
@@ -957,7 +962,7 @@ class _SoloLeaderState extends StatelessWidget {
           decoration: BoxDecoration(
             color: NuvoColors.gold,
             borderRadius: BorderRadius.circular(NuvoRadii.badge),
-            border: Border.all(color: NuvoColors.navy, width: 1.5),
+            border: Border.all(color: context.themeColors.border, width: 1.5),
           ),
           child: Text(
             '${entry.rank}',
@@ -974,7 +979,7 @@ class _SoloLeaderState extends StatelessWidget {
           size: 52,
           bgColor: nuvoAvatarColorFor(entry.seed),
           textColor: NuvoColors.white,
-          borderColor: entry.isMe ? _arenaBlue : NuvoColors.navy,
+          borderColor: entry.isMe ? _arenaBlue : context.themeColors.border,
           borderWidth: 2.5,
         ),
         const SizedBox(height: 6),
@@ -983,7 +988,7 @@ class _SoloLeaderState extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: AppTextStyles.titleMedium.copyWith(
-            color: _arenaText,
+            color: context.themeColors.ink,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1002,7 +1007,7 @@ class _SoloLeaderState extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
+            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
           ),
         ],
       ],
@@ -1040,9 +1045,9 @@ class _OutlinedSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: _arenaSurface,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: NuvoBorders.quiet,
+        border: Border.all(color: context.themeColors.border, width: 1.25),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.lg - 1),
@@ -1059,7 +1064,7 @@ class _StandingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final me = entry.isMe;
     return Container(
-      color: me ? NuvoColors.blueSurface : null,
+      color: me ? context.themeColors.panel : null,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
@@ -1068,7 +1073,7 @@ class _StandingRow extends StatelessWidget {
             child: Text(
               '${entry.rank}',
               style: AppTextStyles.labelMedium.copyWith(
-                color: _arenaMuted,
+                color: context.themeColors.inkSubtle,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1080,7 +1085,7 @@ class _StandingRow extends StatelessWidget {
             size: 34,
             bgColor: nuvoAvatarColorFor(entry.seed),
             textColor: NuvoColors.white,
-            borderColor: me ? _arenaBlue : NuvoColors.navy,
+            borderColor: me ? _arenaBlue : context.themeColors.border,
             borderWidth: me ? 2 : 1.5,
           ),
           const SizedBox(width: 12),
@@ -1091,14 +1096,14 @@ class _StandingRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.titleMedium.copyWith(
                 fontSize: 15,
-                color: _arenaText,
+                color: context.themeColors.ink,
               ),
             ),
           ),
           Text(
             entry.stat,
             style: AppTextStyles.raceRowMeta.copyWith(
-              color: me ? _arenaBlue : _arenaMuted,
+              color: me ? _arenaBlue : context.themeColors.inkSubtle,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1115,7 +1120,7 @@ class _ActivityStream extends StatelessWidget {
   Widget build(BuildContext context) => items.isEmpty
       ? Text(
           'No updates yet. Your crew activity will appear here.',
-          style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
+          style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
         )
       : Column(
           children: [
@@ -1136,8 +1141,8 @@ class _ActivityRow extends StatelessWidget {
         Container(
           width: 32,
           height: 32,
-          decoration: const BoxDecoration(
-            color: _arenaSurface,
+          decoration: BoxDecoration(
+            color: context.themeColors.surface,
             shape: BoxShape.circle,
           ),
           child: Icon(_activityIcon(item.type), color: _arenaGreen, size: 16),
@@ -1148,13 +1153,13 @@ class _ActivityRow extends StatelessWidget {
             item.text,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(color: _arenaText),
+            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.ink),
           ),
         ),
         const SizedBox(width: 8),
         Text(
           item.timeLabel,
-          style: AppTextStyles.labelSmall.copyWith(color: _arenaMuted),
+          style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle),
         ),
       ],
     ),
@@ -1201,7 +1206,7 @@ class _LoadingState extends StatelessWidget {
           const SizedBox(height: 18),
           Text(
             'Loading your arena',
-            style: AppTextStyles.bodySmall.copyWith(color: _arenaMuted),
+            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
           ),
         ],
       ),
@@ -1223,7 +1228,7 @@ class _ErrorState extends StatelessWidget {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium.copyWith(color: _arenaMuted),
+            style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkSubtle),
           ),
           const SizedBox(height: 16),
           _ArenaButton(

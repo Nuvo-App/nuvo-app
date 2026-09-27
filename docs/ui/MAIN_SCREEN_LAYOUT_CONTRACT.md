@@ -245,3 +245,46 @@ recorded one.
 green = verified/completed; gold = rank/win only; red = rejected/destructive
 verdicts; the sliding segment pill already follows this (blue / success /
 neutral-tan for Recent).
+
+## 16. Main Tab Surface Contract
+
+Every main-tab root must draw its structural colors from
+`context.themeColors` (`NuvoThemeColors` on the active `ThemeData`),
+never from light-only `NuvoColors` constants.
+
+- Page root / scaffold background → `c.page`
+- Cards and content surfaces → `c.surface`
+- Tinted panels / wells / viewer highlights → `c.panel` / `c.panelLight`
+- Primary text and structural ink → `c.ink`; secondary → `c.inkMuted`,
+  `c.inkSubtle`, `c.inkDim`
+- Borders → `c.border`; hairlines → `c.divider`; progress tracks → `c.track`
+- Hard offset shadows → `AppShadows.hardOffset(c.inkShadow, offset: ...)`,
+  never the light-only `hardSmall` / `hardMedium` / `hardLarge` constants
+
+`NuvoColors` constants remain correct only for semantic accents (action
+blue, success, danger, warning, gold/podium), brand chrome (logo marks,
+the navy member pass), and foregrounds sitting on top of a semantic
+surface (white on action blue).
+
+Dark mode must be compositional, not shell-level: `AppTheme.dark()`
+registers `NuvoThemeColors.dark`, and the persisted mode comes from
+`nuvoThemeModeProvider`. A page that reads correctly in light but hardcodes
+a light root is a bug — fix the shared primitive or the screen's tokens,
+never patch the shell.
+
+## 17. Content Flow Contract
+
+Short content flows at normal section rhythm. Do not vertically
+distribute sections to fill the viewport and do not reserve invisible
+space for rows that are not rendered.
+
+- `fold.seam(used)` exists to push the *fold-straddling* continuation
+  past the viewport edge — it belongs between a fold-budgeted list and
+  its remainder (§8). Do not use a seam to relocate later page sections:
+  a seam after the last placed row pushes every following section a full
+  remaining-viewport away, which is how Profile's dead gap happened.
+- If the content after the fold isn't a capped list, render it directly —
+  no seam, no `SliverFillRemaining` pinning, no `Spacer` to reach the dock.
+- The dock owns bottom occlusion (`NuvoBottomNav` + dock reserve); pages
+  own content flow. A page may end above the dock with honest breathing
+  room — that is a feature, not a void to fill.

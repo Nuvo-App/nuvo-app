@@ -25,17 +25,23 @@ class MemberPassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     if (dark) return _buildDark(context);
 
     return Container(
       padding: EdgeInsets.all(compact ? 18 : 22),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: c.surface,
         borderRadius: BorderRadius.circular(
           compact ? NuvoRadii.lg : NuvoRadii.hero,
         ),
-        border: NuvoBorders.quiet,
-        boxShadow: compact ? null : AppShadows.heroShadow,
+        border: Border.all(color: c.border, width: 1.25),
+        boxShadow: compact
+            ? null
+            : AppShadows.hardOffset(
+                c.inkShadow,
+                offset: const Offset(7, 7),
+              ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -55,7 +61,7 @@ class MemberPassCard extends StatelessWidget {
               Text(
                 'NUVO PASS',
                 style: AppTextStyles.brandLabel.copyWith(
-                  color: NuvoColors.navy,
+                  color: c.ink,
                   fontSize: 13,
                 ),
               ),
@@ -86,14 +92,14 @@ class MemberPassCard extends StatelessWidget {
           Text(
             profile.name,
             style: AppTextStyles.headlineLarge.copyWith(
-              color: NuvoColors.navy,
+              color: c.ink,
               fontSize: compact ? 22 : 28,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             profile.username,
-            style: AppTextStyles.labelLarge.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.labelLarge.copyWith(color: c.inkMuted),
           ),
           SizedBox(height: compact ? 20 : 28),
           Center(
@@ -106,14 +112,14 @@ class MemberPassCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: NuvoColors.white.withValues(alpha: 0.78),
+              color: c.surface.withValues(alpha: 0.78),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: NuvoColors.border),
+              border: Border.all(color: c.border),
             ),
             child: Text(
               'ID: ${profile.memberId}',
               style: AppTextStyles.labelMedium.copyWith(
-                color: NuvoColors.navy,
+                color: c.ink,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -124,6 +130,7 @@ class MemberPassCard extends StatelessWidget {
   }
 
   Widget _buildDark(BuildContext context) {
+    final c = context.themeColors;
     // Compact is a real constraint here, not a cosmetic tweak: this card
     // sits at the top of Crew's first viewport, above "Find people" and
     // "Closest race" — actual people and race relationships, which is what
@@ -143,7 +150,10 @@ class MemberPassCard extends StatelessWidget {
           compact ? NuvoRadii.lg : NuvoRadii.hero,
         ),
         border: Border.all(color: NuvoColors.navy, width: 2),
-        boxShadow: AppShadows.hardLarge,
+        boxShadow: AppShadows.hardOffset(
+          c.inkShadow,
+          offset: const Offset(7, 7),
+        ),
       ),
       child: compact
           ? Row(

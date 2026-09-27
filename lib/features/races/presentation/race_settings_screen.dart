@@ -231,15 +231,15 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     final isCameraRace = eligibility?.isCameraVerifiable == true;
 
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: NuvoColors.page,
-        body: Center(child: NuvoLoadingIndicator()),
+      return Scaffold(
+        backgroundColor: context.themeColors.page,
+        body: const Center(child: NuvoLoadingIndicator()),
       );
     }
 
     if (_race == null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: context.themeColors.page,
         body: SafeArea(
           child: NuvoErrorState(
             message: _error ?? 'Race settings could not load.',
@@ -251,7 +251,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
 
     if (!isOwner) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: context.themeColors.page,
         body: SafeArea(
           child: NuvoErrorState(
             message: 'Only the race creator can edit race settings.',
@@ -262,7 +262,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: NuvoFadeScroll(
           child: ListView(
@@ -285,7 +285,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             const SizedBox(height: 8),
             Text(
               'Change your race details, rules, and status.',
-              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodyLarge.copyWith(color: context.themeColors.inkMuted),
             ),
             const SizedBox(height: 24),
             _Section(
@@ -504,16 +504,16 @@ class _SettingsActionGroup extends StatelessWidget {
       borderRadius: BorderRadius.circular(NuvoRadii.lg),
       child: Container(
         decoration: BoxDecoration(
-          color: NuvoColors.surface,
+          color: context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          border: Border.all(color: NuvoColors.border, width: 1.25),
+          border: Border.all(color: context.themeColors.border, width: 1.25),
         ),
         child: Column(
           children: [
             for (var i = 0; i < actions.length; i++) ...[
               actions[i],
               if (i < actions.length - 1)
-                const Divider(height: 1, indent: 66, color: NuvoColors.border),
+                Divider(height: 1, indent: 66, color: context.themeColors.border),
             ],
           ],
         ),
@@ -539,11 +539,11 @@ class _SettingsAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleColor = destructive ? NuvoColors.danger : NuvoColors.navy;
-    final iconColor = destructive ? NuvoColors.danger : NuvoColors.navy;
+    final titleColor = destructive ? NuvoColors.danger : context.themeColors.ink;
+    final iconColor = destructive ? NuvoColors.danger : context.themeColors.ink;
     final iconBackground = destructive
         ? NuvoColors.dangerSurface
-        : NuvoColors.panelLight;
+        : context.themeColors.panelLight;
     return Semantics(
       button: true,
       enabled: onPressed != null,
@@ -581,7 +581,7 @@ class _SettingsAction extends StatelessWidget {
                     Text(
                       subtitle,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                     ),
                   ],
@@ -645,23 +645,23 @@ class _Menu extends StatelessWidget {
       initialValue: values.containsKey(value) ? value : values.keys.first,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.labelMedium.copyWith(color: NuvoColors.navy),
+        labelStyle: AppTextStyles.labelMedium.copyWith(color: context.themeColors.ink),
         hintStyle: AppTextStyles.bodyMedium.copyWith(
-          color: NuvoColors.textMuted,
+          color: context.themeColors.inkSubtle,
         ),
         filled: true,
-        fillColor: NuvoColors.white,
+        fillColor: context.themeColors.surface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 13,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.border),
+          borderSide: BorderSide(color: context.themeColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.border),
+          borderSide: BorderSide(color: context.themeColors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(NuvoRadii.md),
@@ -693,16 +693,16 @@ class _MovementSummary extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: context.themeColors.border, width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Movement',
-            style: AppTextStyles.labelSmall.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkMuted),
           ),
           const SizedBox(height: 4),
           Text(
@@ -712,7 +712,7 @@ class _MovementSummary extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             'Target is measured in $unit.',
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
           ),
         ],
       ),

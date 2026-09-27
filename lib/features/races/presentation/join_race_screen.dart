@@ -113,7 +113,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: NuvoColors.dangerSurface,
+                          color: context.semanticColors.danger.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: NuvoColors.dangerBorder),
                         ),
@@ -129,7 +129,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                               child: Text(
                                 _error!,
                                 style: AppTextStyles.bodySmall.copyWith(
-                                  color: NuvoColors.dangerOn,
+                                  color: context.semanticColors.danger.on,
                                 ),
                               ),
                             ),

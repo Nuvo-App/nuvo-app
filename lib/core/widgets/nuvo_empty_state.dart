@@ -59,9 +59,9 @@ class NuvoEmptyState extends StatelessWidget {
           width: tile,
           height: tile,
           decoration: BoxDecoration(
-            color: _roleSurface(accent),
+            color: _roleSurface(context, accent),
             borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: Border.all(color: _roleBorder(accent)),
+            border: Border.all(color: _roleBorder(context, accent)),
           ),
           child: Icon(icon, size: compact ? 20 : 24, color: accent),
         ),
@@ -69,13 +69,15 @@ class NuvoEmptyState extends StatelessWidget {
         Text(
           title,
           style: (compact ? AppTextStyles.titleLarge : AppTextStyles.headlineMedium)
-              .copyWith(color: NuvoColors.navy),
+              .copyWith(color: context.themeColors.ink),
           textAlign: align,
         ),
         const SizedBox(height: 8),
         Text(
           body,
-          style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: context.themeColors.inkMuted,
+          ),
           textAlign: align,
         ),
         if (ctaLabel != null && onCta != null) ...[
@@ -112,16 +114,22 @@ class NuvoEmptyState extends StatelessWidget {
   }
 }
 
-Color _roleSurface(Color accent) => switch (accent) {
-  NuvoColors.success => NuvoColors.successSurface,
-  NuvoColors.danger => NuvoColors.dangerSurface,
-  NuvoColors.warning => NuvoColors.warningSurface,
-  _ => NuvoColors.blueSurface,
-};
+Color _roleSurface(BuildContext context, Color accent) {
+  final s = context.semanticColors;
+  return switch (accent) {
+    NuvoColors.success => s.success.surface,
+    NuvoColors.danger => s.danger.surface,
+    NuvoColors.warning => s.warning.surface,
+    _ => s.neutral.surface,
+  };
+}
 
-Color _roleBorder(Color accent) => switch (accent) {
-  NuvoColors.success => NuvoColors.successBorder,
-  NuvoColors.danger => NuvoColors.dangerBorder,
-  NuvoColors.warning => NuvoColors.warningBorder,
-  _ => NuvoColors.blueBorder,
-};
+Color _roleBorder(BuildContext context, Color accent) {
+  final s = context.semanticColors;
+  return switch (accent) {
+    NuvoColors.success => s.success.border,
+    NuvoColors.danger => s.danger.border,
+    NuvoColors.warning => s.warning.border,
+    _ => s.neutral.border,
+  };
+}

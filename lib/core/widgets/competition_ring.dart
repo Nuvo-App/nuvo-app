@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/nuvo_tokens.dart';
 
 /// A reusable circular race progress component.
@@ -176,6 +177,7 @@ class _CompetitionRingState extends State<CompetitionRing>
               ringThickness: size.ringThickness,
               progressPercent: _maxProgress,
               progress: _controller.value,
+              ringColor: context.themeColors.ink,
             ),
             child: Stack(
               children: [
@@ -364,20 +366,22 @@ class _RingPainter extends CustomPainter {
     required this.ringThickness,
     required this.progressPercent,
     required this.progress,
+    required this.ringColor,
   });
 
   final Rect arcRect;
   final double ringThickness;
   final int progressPercent;
   final double progress;
+  final Color ringColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = arcRect.width / 2;
 
-    // Navy outline track — the ring itself, not an outer wrapper
-    const navyOutline = NuvoTokens.inkNavy;
+    // Ink outline track — the ring itself, not an outer wrapper
+    final navyOutline = ringColor;
     const brightBlue = NuvoTokens.actionBlue;
 
     final trackPaint = Paint()
@@ -438,5 +442,6 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RingPainter oldDelegate) =>
       oldDelegate.progress != progress ||
-      oldDelegate.progressPercent != progressPercent;
+      oldDelegate.progressPercent != progressPercent ||
+      oldDelegate.ringColor != ringColor;
 }

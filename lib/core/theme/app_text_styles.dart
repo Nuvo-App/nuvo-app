@@ -6,6 +6,11 @@ import 'app_colors.dart';
 /// Typography — Manrope throughout, with bold editorial display styles and
 /// compact labels that match Nuvo's sport identity.
 abstract final class AppTextStyles {
+  // Color defaults resolve through DefaultTextStyle — a null color inherits
+  // the theme-aware body color (navy on light via textTheme.bodyMedium,
+  // chrome ink on dark via AppTheme.dark's bodyColor). Styles that must pin
+  // a tone pass `color` explicitly: muted roles keep the shared steel-grey
+  // family that reads correctly on both themes, semantic hues stay fixed.
   static TextStyle _manrope(
     double size,
     FontWeight weight, {
@@ -15,7 +20,7 @@ abstract final class AppTextStyles {
   }) => GoogleFonts.manrope(
     fontSize: size,
     fontWeight: weight,
-    color: color ?? AppColors.textPrimary,
+    color: color,
     height: height ?? 1.45,
     letterSpacing: letterSpacing,
   );
@@ -47,8 +52,15 @@ abstract final class AppTextStyles {
   // ── Body ────────────────────────────────────────────────────────────────────
   static TextStyle get bodyLarge => _manrope(17, FontWeight.w500, height: 1.5);
 
-  static TextStyle get bodyMedium =>
-      _manrope(15, FontWeight.w500, height: 1.45);
+  // bodyMedium is the DefaultTextStyle source via ThemeData.textTheme —
+  // it must carry an explicit color so inherited styles resolve navy on
+  // light (AppTheme.dark overrides it to chrome ink via bodyColor).
+  static TextStyle get bodyMedium => _manrope(
+    15,
+    FontWeight.w500,
+    color: AppColors.textPrimary,
+    height: 1.45,
+  );
 
   static TextStyle get bodySmall => _manrope(
     13,
@@ -86,7 +98,7 @@ abstract final class AppTextStyles {
   }) => GoogleFonts.manrope(
     fontSize: size,
     fontWeight: weight,
-    color: color ?? AppColors.textPrimary,
+    color: color,
     height: 1.0,
     letterSpacing: -0.3,
     fontFeatures: const [FontFeature.tabularFigures()],
@@ -113,7 +125,7 @@ abstract final class AppTextStyles {
   /// Section kicker / eyebrow. Alias of [eyebrow].
   static TextStyle get sectionKicker => eyebrow;
 
-  /// Readable structural section title (14/w700/navy).
+  /// Readable structural section title (14/w700/ink).
   /// Use for section headers like "Your races", "Up next", "Quick starts".
   /// Not uppercase — communicates structure without dashboard feel.
   ///
@@ -123,14 +135,13 @@ abstract final class AppTextStyles {
   /// feeds three headings on that screen — a larger size pushes that
   /// section back into the first viewport on larger phones.
   static TextStyle get sectionTitle =>
-      _manrope(14, FontWeight.w700, color: NuvoColors.navy, height: 1.2);
+      _manrope(14, FontWeight.w700, height: 1.2);
 
-  /// Screen title (30/w800/navy, tight tracking).
+  /// Screen title (30/w800/ink, tight tracking).
   /// Use for the primary title on every tab screen: Compete, Verify, Crew, Profile.
   static TextStyle get screenTitle => _manrope(
     30,
     FontWeight.w800,
-    color: NuvoColors.navy,
     height: 1.10,
     letterSpacing: -0.8,
   );
@@ -155,7 +166,7 @@ abstract final class AppTextStyles {
   }) => GoogleFonts.manrope(
     fontSize: size,
     fontWeight: weight,
-    color: color ?? AppColors.textPrimary,
+    color: color,
     height: 1.0,
     letterSpacing: -0.5,
     fontFeatures: const [FontFeature.tabularFigures()],
@@ -169,7 +180,7 @@ abstract final class AppTextStyles {
   }) => _manrope(
     size,
     weight,
-    color: color ?? AppColors.textPrimary,
+    color: color,
     height: 1.1,
   );
 }

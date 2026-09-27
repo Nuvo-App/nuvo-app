@@ -65,7 +65,7 @@ class NuvoMoveLogItem extends StatelessWidget {
               initials: _initials,
               photoUrl: profilePhotoUrl,
               size: 36,
-              borderColor: NuvoColors.navy,
+              borderColor: context.themeColors.border,
               borderWidth: 1.5,
             ),
             const SizedBox(width: 12),
@@ -83,7 +83,7 @@ class NuvoMoveLogItem extends StatelessWidget {
                   Text(
                     '$actionLine${timeLabel.isNotEmpty ? ' · $timeLabel' : ''}',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
+                      color: context.themeColors.inkMuted,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -96,7 +96,9 @@ class NuvoMoveLogItem extends StatelessWidget {
               Text(
                 valueLabel!,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: isPositive ? NuvoColors.successOn : NuvoColors.dangerOn,
+                  color: isPositive
+                      ? context.semanticColors.success.on
+                      : context.semanticColors.danger.on,
                   fontWeight: FontWeight.w800,
                 ),
               ),

@@ -190,15 +190,15 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: NuvoColors.page,
-        body: Center(child: NuvoLoadingIndicator()),
+      return Scaffold(
+        backgroundColor: context.themeColors.page,
+        body: const Center(child: NuvoLoadingIndicator()),
       );
     }
 
     if (_race == null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: context.themeColors.page,
         body: SafeArea(
           child: NuvoErrorState(
             message: _error ?? 'Invite details could not load.',
@@ -209,7 +209,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child: NuvoFadeScroll(
           child:
@@ -232,7 +232,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                     Text(
                       _race!.title,
                       style: AppTextStyles.bodyLarge.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -349,7 +349,7 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       label.toUpperCase(),
       style: AppTextStyles.labelMedium.copyWith(
-        color: NuvoColors.textMuted,
+        color: context.themeColors.inkSubtle,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.8,
       ),
@@ -377,10 +377,10 @@ class _InviteUserRow extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(minHeight: 72),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        decoration: const BoxDecoration(
-          color: NuvoColors.white,
+        decoration: BoxDecoration(
+          color: context.themeColors.surface,
           border: Border(
-            bottom: BorderSide(color: NuvoColors.border, width: 1),
+            bottom: BorderSide(color: context.themeColors.border, width: 1),
           ),
         ),
         child: Row(
@@ -400,7 +400,7 @@ class _InviteUserRow extends StatelessWidget {
                   Text(
                     user.displayName,
                     style: AppTextStyles.bodyMedium.copyWith(
-                      color: NuvoColors.navy,
+                      color: context.themeColors.ink,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -408,7 +408,7 @@ class _InviteUserRow extends StatelessWidget {
                   Text(
                     user.handleLine,
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: NuvoColors.muted,
+                      color: context.themeColors.inkMuted,
                     ),
                   ),
                 ],
@@ -443,9 +443,9 @@ class _InviteCodeCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: NuvoColors.panelLight,
+        color: context.themeColors.panelLight,
         borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: NuvoColors.border, width: 1.5),
+        border: Border.all(color: context.themeColors.border, width: 1.5),
       ),
       child: Row(
         children: [
@@ -453,7 +453,7 @@ class _InviteCodeCard extends StatelessWidget {
             child: Text(
               code ?? 'Create a code',
               style: AppTextStyles.headlineLarge.copyWith(
-                color: NuvoColors.navy,
+                color: context.themeColors.ink,
                 fontSize: 24,
               ),
             ),
@@ -490,7 +490,7 @@ class _InlineState extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
             ),
           ),
           if (actionLabel != null && onPressed != null)
@@ -519,7 +519,7 @@ class _SmallPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
+      style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.inkMuted),
     );
   }
 }

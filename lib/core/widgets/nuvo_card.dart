@@ -26,16 +26,19 @@ class NuvoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     Widget card = Container(
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: NuvoColors.card,
+        color: c.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
         border: Border.all(
-          color: borderColor ?? NuvoColors.border,
+          color: borderColor ?? c.border,
           width: borderWidth,
         ),
-        boxShadow: elevated ? AppShadows.hardMedium : null,
+        boxShadow: elevated
+            ? AppShadows.hardOffset(c.inkShadow, offset: const Offset(5, 5))
+            : null,
       ),
       child: child,
     );
