@@ -44,6 +44,57 @@ internalRouter.get('/motion/releases/:releaseId', async (c) => {
   return c.json({ ok: true, release });
 });
 
+// ── Moderation review ────────────────────────────────────────────────────────
+// Report triage lives ONLY on the internal surface — an ordinary user JWT must
+// never read the global report queue or change moderation state.
+
+internalRouter.get('/reports', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT r.*, reporter.full_name as reporter_name, reporter.username as reporter_username
+     FROM reports r
+     LEFT JOIN profiles reporter ON reporter.user_id = r.reporter_user_id
+     ORDER BY
+       CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,
+       r.created_at DESC
+     LIMIT 100`,
+  ).all<import('../types').ReportRow & { reporter_name: string | null; reporter_username: string | null }>();
+
+  return c.json({
+    ok: true,
+    reports: rows.results.map((row) => ({
+      id: row.id,
+      reporterUserId: row.reporter_user_id,
+      reporterDisplayName: row.reporter_name ?? row.reporter_username ?? 'Nuvo member',
+      targetType: row.target_type,
+      targetId: row.target_id,
+      reason: row.reason,
+      status: row.status,
+      reviewedBy: row.reviewed_by,
+      notes: row.notes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    })),
+  });
+});
+
+internalRouter.post('/reports/:id', async (c) => {
+  const reportId = c.req.param('id');
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body' }, 400); }
+
+  const status = typeof body.status === 'string' ? (body.status as string).trim() : '';
+  const notes = typeof body.notes === 'string' ? (body.notes as string).trim() : null;
+  if (!['pending', 'reviewed', 'resolved', 'dismissed'].includes(status)) {
+    return c.json({ ok: false, error: 'status must be pending | reviewed | resolved | dismissed' }, 400);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE reports SET status = ?, notes = ?, reviewed_by = 'internal-operator', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+  ).bind(status, notes, reportId).run();
+
+  return c.json({ ok: true });
+});
+
 function bodyString(body: Record<string, unknown>, key: string, fallback = ''): string {
   return typeof body[key] === 'string' ? String(body[key]).trim() : fallback;
 }

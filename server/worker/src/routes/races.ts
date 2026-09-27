@@ -2,6 +2,12 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { AppEnv, MoveLogRow, RaceProgressRow, RaceRow } from '../types';
 import { requireAuth } from '../lib/jwt';
+import {
+  checkRaceJoinEligibility,
+  isBlockedEitherWay,
+  resolveRaceAccess,
+} from '../lib/raceAccess';
+import { evaluateRaceSafety } from '../domain/raceSafety';
 import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityIdLoose, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
@@ -246,8 +252,17 @@ async function ensurePersonId(db: D1Database, userId: string): Promise<string> {
 }
 
 async function ensureMember(db: D1Database, raceId: string, userId: string, role = 'racer'): Promise<void> {
-  const existing = await db.prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string }>();
-  if (existing) return;
+  const existing = await db.prepare('SELECT id, status FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string; status: string }>();
+  if (existing) {
+    // A stale 'left'/'removed' row must not lock the user out — rejoining
+    // reactivates the same membership rather than inserting a duplicate.
+    if (existing.status !== 'active') {
+      await db.prepare(
+        "UPDATE race_members SET status = 'active', role = ?, joined_at = CURRENT_TIMESTAMP WHERE id = ?"
+      ).bind(role, existing.id).run();
+    }
+    return;
+  }
   const displayName = await getProfileName(db, userId);
   const personId = await ensurePersonId(db, userId);
   await db.prepare(
@@ -282,7 +297,7 @@ async function notifyRaceJoined(
 
 async function isRaceMember(db: D1Database, raceId: string, userId: string): Promise<boolean> {
   const row = await db
-    .prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?')
+    .prepare("SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'")
     .bind(raceId, userId)
     .first<{ id: string }>();
   return Boolean(row);
@@ -733,7 +748,11 @@ function shapeRaceResponse(
     proofRequirement,
     proofReviewMode: race.proof_review_mode ?? 'auto_accept',
     visibility: race.visibility,
-    inviteCode: invite?.invite_code ?? null,
+    // The invite code is insider data — returning it to a non-member would
+    // hand any signed-in user the key to join the race.
+    inviteCode: viewerIsParticipant || viewerUserId === race.creator_id
+      ? invite?.invite_code ?? null
+      : null,
     createdAt: race.created_at,
     updatedAt: race.updated_at,
     participants: participants.map((p) => {
@@ -1050,6 +1069,9 @@ racesRouter.post('/join-code', async (c) => {
   const race = await getRace(c.env.DB, invite.race_id);
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (await isBlockedEitherWay(c.env.DB, userId, race.creator_id)) {
+    return c.json(badRequest('You cannot join this race'), 403);
+  }
 
   const wasMember = await isRaceMember(c.env.DB, race.id, userId);
   await ensureMember(c.env.DB, race.id, userId);
@@ -1101,6 +1123,15 @@ racesRouter.post('/', async (c) => {
 
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   if (!title) return c.json(badRequest('title is required'), 400);
+
+  // FlexiRace safety boundary — the client may interpret anything, but the
+  // server is the last word on what becomes a race (raceSafety.ts mirrors the
+  // Dart category policy).
+  const raceSubjectText = `${title} ${stringOrNull(body.customActivityName) ?? stringOrNull(body.custom_activity_name) ?? ''}`.trim();
+  const safety = evaluateRaceSafety(raceSubjectText);
+  if (!safety.ok) {
+    return c.json({ ok: false, error: safety.reason, safetyCategory: safety.category }, 400);
+  }
 
   const raceTypeRaw = typeof body.goalType === 'string' ? body.goalType : 'manual';
   const verificationRaw = typeof body.proofRequirement === 'string' ? body.proofRequirement : 'manual';
@@ -1323,6 +1354,8 @@ racesRouter.post('/', async (c) => {
 racesRouter.get('/:id', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id') ?? '');
   if (!race) return c.json(badRequest('Race not found'), 404);
+  const access = await resolveRaceAccess(c.env.DB, race, c.get('userId'));
+  if (!access.canRead) return c.json(badRequest('Race not found'), 404);
   try {
     return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
   } catch (err) {
@@ -1461,10 +1494,8 @@ racesRouter.post('/:id/join', async (c) => {
   if (!(await hasAcceptedTerms(c.env.DB, userId))) {
     return c.json({ ok: false, error: 'You must accept the Terms of Service before joining a race' }, 403);
   }
-  if (race.visibility === 'private') return c.json(badRequest('Use an invite code to join this race'), 403);
-  if (race.visibility === 'public_demo' && !race.public_join_enabled) {
-    return c.json(badRequest('Joining is not enabled for this public race'), 403);
-  }
+  const eligibility = await checkRaceJoinEligibility(c.env.DB, race, userId);
+  if (!eligibility.ok) return c.json(badRequest(eligibility.error), eligibility.status as 400 | 403);
   const wasMember = await isRaceMember(c.env.DB, race.id, userId);
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
@@ -1484,9 +1515,9 @@ racesRouter.post('/:id/participants', async (c) => {
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
 
-  const current = await c.env.DB.prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = \'active\'')
-    .bind(race.id, userId).first<{ id: string }>();
-  if (race.creator_id !== userId && !current) return c.json(badRequest('Only race crew can add participants'), 403);
+  // Organizer flow only — an ordinary participant must not silently insert
+  // arbitrary users into a race.
+  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can add participants'), 403);
 
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
@@ -1495,6 +1526,9 @@ racesRouter.post('/:id/participants', async (c) => {
 
   const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'").bind(targetUserId).first<{ id: string }>();
   if (!target) return c.json(badRequest('User not found'), 404);
+  if (await isBlockedEitherWay(c.env.DB, userId, targetUserId)) {
+    return c.json(badRequest('You cannot add this user'), 403);
+  }
 
   const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
   await ensureMember(c.env.DB, race.id, targetUserId);
@@ -1525,9 +1559,9 @@ racesRouter.post('/:id/members', async (c) => {
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
 
-  const current = await c.env.DB.prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = \'active\'')
-    .bind(race.id, userId).first<{ id: string }>();
-  if (race.creator_id !== userId && !current) return c.json(badRequest('Only race crew can add members'), 403);
+  // Organizer flow only — an ordinary participant must not silently insert
+  // arbitrary users into a race.
+  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can add members'), 403);
 
   let body: Record<string, unknown>;
   try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
@@ -1536,6 +1570,9 @@ racesRouter.post('/:id/members', async (c) => {
 
   const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'").bind(targetUserId).first<{ id: string }>();
   if (!target) return c.json(badRequest('User not found'), 404);
+  if (await isBlockedEitherWay(c.env.DB, userId, targetUserId)) {
+    return c.json(badRequest('You cannot add this user'), 403);
+  }
 
   const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
   await ensureMember(c.env.DB, race.id, targetUserId);
@@ -1633,6 +1670,11 @@ racesRouter.post('/:id/move-log', async (c) => {
   if (source === 'movecheck' && movementType && movementType !== race.movement_type) {
     return c.json(badRequest('Movement type does not match race movement type'), 400);
   }
+
+  // Submitting a move auto-joins the race — enforce the same entry policy as
+  // /:id/join so a private-race ID alone cannot mint membership.
+  const joinEligibility = await checkRaceJoinEligibility(c.env.DB, race, userId);
+  if (!joinEligibility.ok) return c.json(badRequest(joinEligibility.error), joinEligibility.status as 400 | 403);
 
   await ensureMember(c.env.DB, race.id, userId);
   await ensureProgress(c.env.DB, race.id, userId);
@@ -2258,6 +2300,8 @@ racesRouter.post('/:id/attempts', async (c) => {
 racesRouter.get('/:id/events', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
+  const eventAccess = await resolveRaceAccess(c.env.DB, race, c.get('userId'));
+  if (!eventAccess.isInsider) return c.json(badRequest('Race not found'), 404);
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50), 1), 100);
   const before = c.req.query('before');
 
@@ -2298,6 +2342,8 @@ racesRouter.get('/:id/live', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
+  const liveAccess = await resolveRaceAccess(c.env.DB, race, userId);
+  if (!liveAccess.isInsider) return c.json(badRequest('Race not found'), 404);
 
   const sinceVersion = Number(c.req.query('version') ?? -1);
   const version = race.version ?? 0;

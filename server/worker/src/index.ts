@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppEnv, ProfileRow } from './types';
 import { purgeExpiredMotionData } from './lib/motion_privacy';
+import { purgeExpiredAuthData } from './lib/dataRetention';
 import { sweepRaceLifecycle } from './domain/raceFinalize';
 import { notifyLifecycleTransitions, runNotificationJob } from './domain/notificationPolicy';
 import { claimDueJobs } from './domain/notificationJobs';
@@ -372,6 +373,11 @@ const worker = Object.assign(app, {
             await purgeExpiredMotionData(env.DB, env.PROFILE_PHOTOS);
           } catch (err) {
             console.error('[cron] motion purge failed:', (err as Error).message);
+          }
+          try {
+            await purgeExpiredAuthData(env.DB);
+          } catch (err) {
+            console.error('[cron] auth-data purge failed:', (err as Error).message);
           }
         }
         try {

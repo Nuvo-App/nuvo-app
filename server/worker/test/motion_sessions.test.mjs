@@ -12,7 +12,7 @@ const JWT_SECRET = 'test-secret';
 const INTERNAL_KEY = 'internal-test-key';
 
 // ── Minimal fakes for D1 + R2 ─────────────────────────────────────────────────
-function makeEnv({ withInternalKey = true, model = null, artifact = null } = {}) {
+function makeEnv({ withInternalKey = true, model = null, artifact = null, consent = 1 } = {}) {
   const sessions = [];
   const accountKeys = new Map();
   const objects = new Map();
@@ -53,7 +53,7 @@ function makeEnv({ withInternalKey = true, model = null, artifact = null } = {})
           if (q.includes('FROM motion_account_keys')) return accountKeys.get(args[0]) ?? null;
           if (q.includes('FROM motion_model_releases')) return model;
           if (q.includes('FROM users')) {
-            return { id: args[0], primary_email: 'a@b.com', status: 'active', full_name: 'A', username: 'aaa' };
+            return { id: args[0], primary_email: 'a@b.com', status: 'active', full_name: 'A', username: 'aaa', motion_training_consent: consent };
           }
           if (q.includes('session_id = ?')) rows = rows.filter((r) => r.session_id === args[0]);
           if (q.includes('user_id = ?')) rows = rows.filter((r) => r.user_id === args[0]);
@@ -158,6 +158,24 @@ test('POST /motion-sessions rejects a missing metadata header', async () => {
     body: gzipSync(Buffer.from('{}')),
   }, makeEnv());
   assert.equal(res.status, 400);
+});
+
+test('POST /motion-sessions stores nothing when contribution consent is off', async () => {
+  const env = makeEnv({ consent: 0 });
+  const token = await signJwt({ sub: 'u-noconsent', iat: 0, exp: 9999999999 }, JWT_SECRET);
+  const res = await app.request('/motion-sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Motion-Session': metaHeader({ sessionId: 'ms_noconsent' }),
+    },
+    body: gzipSync(Buffer.from('{"frames":[]}')),
+  }, env);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.stored, false);
+  assert.equal(env.__sessions.length, 0);
+  assert.equal(env.__objects.size, 0);
 });
 
 test('internal routes are 503 when INTERNAL_API_KEY is unset', async () => {

@@ -17,11 +17,9 @@ import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart'
-    show PublicUser, Race, RaceParticipant;
+    show PublicUser, Race, RaceParticipant, RaceCreatePrefill;
 import '../../races/domain/race_display.dart'
     show raceProgressLabel, serverRankedParticipants;
-import '../../races/presentation/create_race_screen.dart'
-    show RaceCreatePrefill;
 import '../../races/presentation/race_controller.dart';
 import '../application/crew_controller.dart';
 import '../data/crew_api.dart';
@@ -188,6 +186,122 @@ class _State extends ConsumerState<PublicProfileScreen> {
     }
   }
 
+  Future<void> _report() async {
+    final reason = await _askReason('Report this person?');
+    if (!mounted || reason == null) return;
+    try {
+      await ref
+          .read(crewRepositoryProvider)
+          .reportUser(widget.userId, reason: reason);
+      _snack('Thanks — our team will take a look.');
+    } on ApiException catch (e) {
+      _snack(e.message);
+    }
+  }
+
+  Future<void> _block() async {
+    final card = _card;
+    final confirmed = await showNuvoConfirmDialog(
+      context,
+      title: 'Block ${card?.displayName ?? 'this person'}?',
+      message:
+          'They won\u2019t be able to connect with you or race with you on Nuvo. '
+          'You can unblock them later.',
+      confirmLabel: 'Block',
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(crewRepositoryProvider).blockUser(widget.userId);
+      _snack('Blocked.');
+      _exit();
+    } on ApiException catch (e) {
+      _snack(e.message);
+    }
+  }
+
+  Future<String?> _askReason(String title) async {
+    final controller = TextEditingController();
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: NuvoColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          20,
+          24,
+          24 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title, style: AppTextStyles.titleLarge),
+            const SizedBox(height: 6),
+            Text(
+              'What\u2019s wrong? This goes to the Nuvo review team.',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: NuvoColors.textMuted),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                hintText: 'Optional details',
+              ),
+            ),
+            const SizedBox(height: 8),
+            NuvoPrimaryButton(
+              label: 'Send report',
+              icon: Icons.flag_outlined,
+              expand: true,
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            ),
+          ],
+        ),
+      ),
+    );
+    return value;
+  }
+
+  void _overflow() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: NuvoColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text('Report this person'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _report();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block_rounded),
+              title: const Text('Block this person'),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _block();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return NuvoPage(
@@ -195,7 +309,16 @@ class _State extends ConsumerState<PublicProfileScreen> {
         bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-          child: Row(children: [NuvoBackButton(onPressed: _exit)]),
+          child: Row(
+            children: [
+              NuvoBackButton(onPressed: _exit),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.more_horiz_rounded),
+                onPressed: _overflow,
+              ),
+            ],
+          ),
         ),
       ),
       child: _body(),
@@ -284,8 +407,8 @@ class _State extends ConsumerState<PublicProfileScreen> {
                         style: AppTextStyles.bodySmall.copyWith(
                           color: crewPresenceFor(card.lastActiveAt) ==
                                   CrewPresence.active
-                              ? NuvoColors.successOn
-                              : NuvoColors.textMuted,
+                              ? context.semanticColors.success.on
+                              : context.themeColors.inkSubtle,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -360,8 +483,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
                 expand: true,
                 onPressed: () => context.push(
                   '/races/new',
-                  extra: RaceCreatePrefill(
-                    idea: 'First to 100 Pushups',
+                  extra: RaceCreatePrefill.pushups.copyWith(
                     withUser: _asUser(card),
                   ),
                 ),

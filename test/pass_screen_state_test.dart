@@ -171,6 +171,17 @@ class _FakeCrewRepo implements CrewRepository {
   Future<void> declineRequest(String userId) async {}
   @override
   Future<void> remove(String userId) async {}
+
+  @override
+  Future<void> reportUser(String userId, {String? reason}) async {}
+  @override
+  Future<void> reportRace(String raceId, {String? reason}) async {}
+  @override
+  Future<void> reportContent(String contentId, {String? reason}) async {}
+  @override
+  Future<void> blockUser(String userId) async {}
+  @override
+  Future<void> unblockUser(String userId) async {}
 }
 
 class _FakeNotifRepo implements NotificationRepository {
@@ -571,23 +582,25 @@ void main() {
       await tester.pumpAndSettle();
 
       // Front = identity/relationship layer, stable actions below.
-      expect(find.text('Stats ↻'), findsOneWidget);
+      expect(find.text('Your matchup ↻'), findsOneWidget);
       expect(find.text('Race Noah'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
 
-      // Flip to the competitive layer.
-      await tester.tap(find.text('Stats ↻'));
+      // Flip to the competitive layer — the rivalry reveal.
+      await tester.tap(find.text('Your matchup ↻'));
       await tester.pumpAndSettle();
-      expect(find.text('NOAH VS YOU'), findsOneWidget);
-      expect(find.text('About ↻'), findsOneWidget);
-      expect(find.text('RECENT'), findsOneWidget);
-      expect(find.textContaining('shared race'), findsOneWidget);
+      expect(find.text('VS'), findsOneWidget);
+      expect(find.text('NOAH'), findsOneWidget);
+      expect(find.text('YOU'), findsOneWidget);
+      expect(find.text('About Noah ↻'), findsOneWidget);
+      expect(find.text('RECENT MATCHUPS'), findsOneWidget);
+      expect(find.textContaining('TOGETHER'), findsOneWidget);
 
-      // Flip back — chrome (handle, affordance, actions) never moved.
-      await tester.tap(find.text('About ↻'));
+      // Flip back — chrome (affordance, actions) never moved.
+      await tester.tap(find.text('About Noah ↻'));
       await tester.pumpAndSettle();
-      expect(find.text('Stats ↻'), findsOneWidget);
-      expect(find.text('NOAH VS YOU'), findsNothing);
+      expect(find.text('Your matchup ↻'), findsOneWidget);
+      expect(find.text('VS'), findsNothing);
     });
 
     testWidgets('brand-new user gets the true empty note', (tester) async {

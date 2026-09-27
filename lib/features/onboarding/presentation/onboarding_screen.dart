@@ -29,6 +29,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   late final TextEditingController _usernameController;
   bool _privateStats = true;
   bool _termsAccepted = false;
+  bool _ageAttested = false;
   bool _loading = false;
   bool? _usernameAvailable;
   bool _usernameChecking = false;
@@ -95,12 +96,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _usernameController.text.trim().length >= 3 &&
       _usernameAvailable == true &&
       _termsAccepted &&
+      _ageAttested &&
       !_loading;
 
   Future<void> _continue() async {
     if (!_termsAccepted) {
       setState(
         () => _error = 'Please accept the Terms of Service to continue.',
+      );
+      return;
+    }
+    if (!_ageAttested) {
+      setState(
+        () => _error = 'Please confirm you are at least 13 to continue.',
       );
       return;
     }
@@ -111,12 +119,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     try {
       final controller = ref.read(authControllerProvider.notifier);
       await controller.acceptTerms();
+      await controller.attestAge();
       await controller.saveProfile(
         fullName: _nameController.text.trim(),
         username: _usernameController.text.trim().toLowerCase(),
         privateProfile: _privateStats,
       );
-      if (mounted) context.go('/onboarding/member-pass');
+      if (mounted) context.go('/onboarding/motion-consent');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -405,6 +414,37 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                           ),
                                           const TextSpan(text: '.'),
                                         ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Checkbox.adaptive(
+                                  value: _ageAttested,
+                                  fillColor: WidgetStateProperty.resolveWith(
+                                    (states) => states.contains(WidgetState.selected)
+                                        ? NuvoColors.blue
+                                        : null,
+                                  ),
+                                  onChanged: (value) => setState(
+                                    () => _ageAttested = value ?? false,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 8,
+                                      right: 8,
+                                    ),
+                                    child: Text(
+                                      'I am at least 13 years old.',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: NuvoColors.muted,
                                       ),
                                     ),
                                   ),

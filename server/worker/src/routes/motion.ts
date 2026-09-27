@@ -14,6 +14,79 @@ import {
 export const motionRouter = new Hono<AppEnv>();
 motionRouter.use('*', requireAuth);
 
+// ── Motion contribution consent ────────────────────────────────────────────
+// Server-backed state on the users row — onboarding + Settings write through
+// here; every collection path re-checks it before storing artifacts.
+
+export const MOTION_CONSENT_VERSION = 'motion-training-v1';
+
+async function readMotionConsent(db: D1Database, userId: string) {
+  const row = await db
+    .prepare(
+      `SELECT motion_training_consent, motion_consent_version, motion_consented_at,
+              motion_consent_revoked_at, age_attested_at
+       FROM users WHERE id = ?`,
+    )
+    .bind(userId)
+    .first<{
+      motion_training_consent: number;
+      motion_consent_version: string | null;
+      motion_consented_at: string | null;
+      motion_consent_revoked_at: string | null;
+      age_attested_at: string | null;
+    }>();
+  return {
+    consented: row?.motion_training_consent === 1,
+    version: row?.motion_consent_version ?? null,
+    consentedAt: row?.motion_consented_at ?? null,
+    revokedAt: row?.motion_consent_revoked_at ?? null,
+    ageAttested: Boolean(row?.age_attested_at),
+  };
+}
+
+export async function hasMotionConsent(db: D1Database, userId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT motion_training_consent FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ motion_training_consent: number }>();
+  return row?.motion_training_consent === 1;
+}
+
+motionRouter.get('/consent', async (c) => {
+  return c.json({ ok: true, consent: await readMotionConsent(c.env.DB, c.get('userId')) });
+});
+
+motionRouter.put('/consent', async (c) => {
+  const userId = c.get('userId');
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const consented = body.consented === true;
+
+  const current = await readMotionConsent(c.env.DB, userId);
+  // Eligibility is enforced here too — a user who has not attested the minimum
+  // age can never enter the training dataset, regardless of client state.
+  if (consented && !current.ageAttested) {
+    return c.json({ ok: false, error: 'Age eligibility must be confirmed first.' }, 403);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE users SET
+       motion_training_consent = ?,
+       motion_consent_version = ?,
+       motion_consented_at = CASE WHEN ? THEN COALESCE(motion_consented_at, CURRENT_TIMESTAMP) ELSE motion_consented_at END,
+       motion_consent_revoked_at = CASE WHEN ? THEN NULL ELSE CURRENT_TIMESTAMP END,
+       updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+  ).bind(
+    consented ? 1 : 0,
+    consented ? MOTION_CONSENT_VERSION : null,
+    consented ? 1 : 0,
+    consented ? 1 : 0,
+    userId,
+  ).run();
+  return c.json({ ok: true, consent: await readMotionConsent(c.env.DB, userId) });
+});
+
 motionRouter.post('/analyze', async (c) => {
   let body: unknown;
   try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
@@ -118,6 +191,12 @@ function str(v: unknown, fallback = ''): string {
 
 motionSessionsRouter.post('/', async (c) => {
   const userId = c.get('userId');
+  // Consent gate — no landmark artifact is retained for a non-consenting
+  // account. Return a stored:false success (not an error) so the client's
+  // upload queue drains instead of retrying forever.
+  if (!(await hasMotionConsent(c.env.DB, userId))) {
+    return c.json({ ok: true, stored: false, reason: 'motion_consent_off' });
+  }
   const header = c.req.header('X-Motion-Session');
   if (!header) return c.json({ ok: false, error: 'Missing X-Motion-Session metadata header.' }, 400);
 
@@ -248,11 +327,16 @@ motionRouter.post('/training/examples', async (c) => {
   let body: unknown;
   try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
   const value = body as Record<string, unknown>;
-  if (value.consentVersion !== 'motion-training-v1') return c.json({ ok: false, error: 'Training consent is required.' }, 403);
+  if (value.consentVersion !== MOTION_CONSENT_VERSION) return c.json({ ok: false, error: 'Training consent is required.' }, 403);
   if (typeof value.motionId !== 'string' || !Array.isArray(value.frames)) return c.json({ ok: false, error: 'motionId and frames are required.' }, 400);
   const request = validateMotionRequest({ schemaVersion: motionAnalysisSchemaVersion, motionId: value.motionId, frames: value.frames, durationMs: value.durationMs });
   const id = generateId();
   const userId = c.get('userId');
+  // A payload flag alone is not consent — the server-backed state is the
+  // source of truth so a forged/stale client can't write training rows.
+  if (!(await hasMotionConsent(c.env.DB, userId))) {
+    return c.json({ ok: false, error: 'Training consent is required.' }, 403);
+  }
   let accountKey: Uint8Array;
   let accountRef: string;
   try {

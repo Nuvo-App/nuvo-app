@@ -163,6 +163,39 @@ class CrewApi {
     return json['status'] == 'pending' ? ConnectOutcome.pending : ConnectOutcome.active;
   }
 
+  Future<void> _postJson(String token, String path, Map<String, dynamic> body) async {
+    final res = await _guard(
+      () => _client.post(
+        Uri.parse('$kNuvoApiBase$path'),
+        headers: _headers(token),
+        body: jsonEncode(body),
+      ),
+    );
+    _decode(res);
+  }
+
+  Future<void> _delete(String token, String path) async {
+    final res = await _guard(
+      () => _client.delete(Uri.parse('$kNuvoApiBase$path'), headers: _headers(token)),
+    );
+    _decode(res);
+  }
+
+  Future<void> reportUser(String token, String userId, {String? reason}) =>
+      _postJson(token, '/reports/users/$userId', {'reason': ?reason});
+
+  Future<void> reportRace(String token, String raceId, {String? reason}) =>
+      _postJson(token, '/reports/races/$raceId', {'reason': ?reason});
+
+  Future<void> reportContent(String token, String contentId, {String? reason}) =>
+      _postJson(token, '/reports/content/$contentId', {'reason': ?reason});
+
+  Future<void> blockUser(String token, String userId) =>
+      _postJson(token, '/reports/blocks/$userId', const {});
+
+  Future<void> unblockUser(String token, String userId) =>
+      _delete(token, '/reports/blocks/$userId');
+
   Future<void> acceptRequest(String token, String userId) async {
     final res = await _guard(
       () => _client.post(

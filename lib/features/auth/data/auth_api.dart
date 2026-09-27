@@ -212,11 +212,62 @@ class AuthApi {
     return AuthUser.fromJson(json['user'] as Map<String, dynamic>);
   }
 
+  Future<Map<String, dynamic>> _put(
+    String path,
+    Map<String, dynamic> body, {
+    String? accessToken,
+  }) async {
+    try {
+      final res = await _client
+          .put(
+            Uri.parse('$kNuvoApiBase$path'),
+            headers: _headers(accessToken: accessToken),
+            body: jsonEncode(body),
+          )
+          .timeout(_kAuthRequestTimeout);
+      debugPrint('[AuthApi] PUT $path → ${res.statusCode}');
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode >= 400) {
+        throw ApiException(
+          res.statusCode,
+          json['error'] as String? ?? 'Request failed',
+        );
+      }
+      return json;
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      debugPrint('[AuthApi] PUT $path network error (${e.runtimeType}): $e');
+      _throwTransport(e);
+    }
+  }
+
   Future<void> deleteAccount(String accessToken) =>
       _delete('/auth/account', accessToken: accessToken);
 
   Future<void> acceptTerms(String accessToken) =>
       _post('/auth/terms', {}, accessToken: accessToken);
+
+  /// Eligibility attestation (13+) — records a timestamp, never a birthday.
+  Future<void> attestAge(String accessToken) =>
+      _post('/auth/age-attestation', {}, accessToken: accessToken);
+
+  /// Server-backed motion-training consent state.
+  Future<Map<String, dynamic>> getMotionConsent(String accessToken) async {
+    final json = await _get('/motion/consent', accessToken: accessToken);
+    return json['consent'] as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> setMotionConsent(
+    String accessToken, {
+    required bool consented,
+  }) async {
+    final json = await _put(
+      '/motion/consent',
+      {'consented': consented},
+      accessToken: accessToken,
+    );
+    return json['consent'] as Map<String, dynamic>;
+  }
 
   // ── Profile ───────────────────────────────────────────────────────────────
 

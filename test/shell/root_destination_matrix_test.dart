@@ -106,6 +106,17 @@ class _CrewRepo implements CrewRepository {
   Future<void> declineRequest(String userId) async {}
   @override
   Future<void> remove(String userId) async {}
+
+  @override
+  Future<void> reportUser(String userId, {String? reason}) async {}
+  @override
+  Future<void> reportRace(String raceId, {String? reason}) async {}
+  @override
+  Future<void> reportContent(String contentId, {String? reason}) async {}
+  @override
+  Future<void> blockUser(String userId) async {}
+  @override
+  Future<void> unblockUser(String userId) async {}
 }
 
 class _FeedRepo extends CrewActivityRepository {
