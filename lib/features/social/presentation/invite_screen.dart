@@ -15,19 +15,17 @@ import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../crew/application/crew_controller.dart';
+import '../../notifications/application/notification_controller.dart';
 import '../../notifications/application/push_service.dart';
+import '../../notifications/domain/notification_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../application/deep_link_controller.dart';
 import '../data/invite_models.dart';
 import '../domain/nuvo_destination.dart';
 import '../social_providers.dart';
 
-String _initials(String name) {
-  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-  if (parts.isEmpty) return 'N';
-  if (parts.length == 1) return parts.first.characters.take(1).toString().toUpperCase();
-  return (parts[0].characters.first + parts[1].characters.first).toUpperCase();
-}
+String _initials(String name) => notificationInitials(name);
 
 /// `/invite/:token` — the one screen every invite link, QR scan and web
 /// fallback lands on. Previews before it does anything; accepting is an
@@ -118,6 +116,11 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       } catch (_) {
         /* navigation still proceeds; the detail screen will refetch */
       }
+    } else if (result.kind == 'crew_connect') {
+      // The connection is canonical in CrewController — mark both it and the
+      // inbox stale so the new member/request shows without a restart.
+      ref.read(crewControllerProvider.notifier).markStale();
+      ref.read(notificationControllerProvider.notifier).markStale();
     }
     // First race join / first crew connect is the contextual moment to ask
     // for push permission (no-op until Firebase is configured).

@@ -27,6 +27,34 @@ class PoseDetectorService {
   final Duration _minFrameInterval;
   final PoseLandmarkSmoother _smoother = PoseLandmarkSmoother();
 
+  // ML Kit also returns facial landmarks. Nuvo's verifier only needs the
+  // articulated body joints, so facial points never enter a pose frame or
+  // motion-session artifact.
+  static const _bodyLandmarks = <PoseLandmarkType>{
+    PoseLandmarkType.leftShoulder,
+    PoseLandmarkType.rightShoulder,
+    PoseLandmarkType.leftElbow,
+    PoseLandmarkType.rightElbow,
+    PoseLandmarkType.leftWrist,
+    PoseLandmarkType.rightWrist,
+    PoseLandmarkType.leftPinky,
+    PoseLandmarkType.rightPinky,
+    PoseLandmarkType.leftIndex,
+    PoseLandmarkType.rightIndex,
+    PoseLandmarkType.leftThumb,
+    PoseLandmarkType.rightThumb,
+    PoseLandmarkType.leftHip,
+    PoseLandmarkType.rightHip,
+    PoseLandmarkType.leftKnee,
+    PoseLandmarkType.rightKnee,
+    PoseLandmarkType.leftAnkle,
+    PoseLandmarkType.rightAnkle,
+    PoseLandmarkType.leftHeel,
+    PoseLandmarkType.rightHeel,
+    PoseLandmarkType.leftFootIndex,
+    PoseLandmarkType.rightFootIndex,
+  };
+
   bool _isProcessingFrame = false;
   bool _disposed = false;
   DateTime? _lastProcessedAt;
@@ -110,6 +138,7 @@ class PoseDetectorService {
       final pose = poses.first;
       final points = <String, NuvoPosePoint>{};
       for (final entry in pose.landmarks.entries) {
+        if (!_bodyLandmarks.contains(entry.key)) continue;
         points[entry.key.name] = NuvoPosePoint(
           x: (entry.value.x / image.width).clamp(0.0, 1.0),
           y: (entry.value.y / image.height).clamp(0.0, 1.0),

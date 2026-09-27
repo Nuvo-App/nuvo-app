@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+
 import 'auth_api.dart';
 import 'auth_models.dart';
 import 'secure_token_store.dart';
@@ -28,6 +30,11 @@ class RestoreUnreachable extends RestoreResult {
   const RestoreUnreachable();
 }
 
+/// Refresh-token sentinel marking a debug-only offline demo session. Real
+/// tokens never carry this prefix, so restore can short-circuit on it
+/// instead of hitting the network.
+const kOfflineDemoRefreshToken = 'offline-demo-refresh';
+
 class AuthRepository {
   AuthRepository(this._api, this._store);
 
@@ -42,6 +49,10 @@ class AuthRepository {
   Future<RestoreResult> restoreSession() async {
     final refreshToken = await _store.getRefreshToken();
     if (refreshToken == null) return const RestoreNoSession();
+    // Debug-only offline demo session — skip the network entirely.
+    if (refreshToken == kOfflineDemoRefreshToken) {
+      return RestoreOk(offlineDemoUser());
+    }
 
     final String accessToken;
     try {
@@ -51,25 +62,57 @@ class AuthRepository {
         await _store.clear();
         return const RestoreNoSession();
       }
-      return const RestoreUnreachable();
+      return _unreachableOrDemo();
     } catch (_) {
-      return const RestoreUnreachable();
+      return _unreachableOrDemo();
     }
 
     await _store.saveAccessToken(accessToken);
 
     try {
       final user = await _api.getMe(accessToken);
+      // Stamp the account email so a later offline launch can prove this
+      // session belongs to the reviewer/demo identity.
+      await _store.saveAccountEmail(user.email);
       return RestoreOk(user);
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 404) {
         await _store.clear();
         return const RestoreNoSession();
       }
-      return const RestoreUnreachable();
+      return _unreachableOrDemo();
     } catch (_) {
-      return const RestoreUnreachable();
+      return _unreachableOrDemo();
     }
+  }
+
+  /// Whether the stored session may fall back to the fully local demo
+  /// session when the server can't be reached. Same rule as
+  /// AuthController._offlineDemoAllowed, keyed off the stored account email
+  /// (the only identity an offline restore has): the dedicated
+  /// store-testing identity always qualifies; in debug builds the shared
+  /// team credential, the presentation-toggle account, and sessions that
+  /// predate email persistence (no stored email) qualify too — a dead
+  /// retry screen helps no one while developing or demoing.
+  bool _offlineDemoAllowedForEmail(String? email) {
+    final e = email?.trim().toLowerCase();
+    if (e == 'testing@getnuvo.net' || e == 'testing@getnuvo') return true;
+    if (!kDebugMode) return false;
+    return e == null ||
+        e.isEmpty ||
+        e == 'team@getnuvo.net' ||
+        e == 'sideswifter2010@gmail.com';
+  }
+
+  /// Unreachable restore for a session that belongs to the reviewer/demo
+  /// identity lands in the local demo session instead of the offline
+  /// retry — that account is fixture-only anyway. Everyone else keeps the
+  /// tokens + retry contract unchanged.
+  Future<RestoreResult> _unreachableOrDemo() async {
+    if (_offlineDemoAllowedForEmail(await _store.getAccountEmail())) {
+      return RestoreOk(offlineDemoUser());
+    }
+    return const RestoreUnreachable();
   }
 
   // Wraps an authenticated API call. On 401 silently refreshes the access
@@ -102,6 +145,7 @@ class AuthRepository {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
     );
+    await _store.saveAccountEmail(res.user.email);
     return res.user;
   }
 
@@ -111,6 +155,7 @@ class AuthRepository {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
     );
+    await _store.saveAccountEmail(res.user.email);
     return res.user;
   }
 
@@ -123,6 +168,7 @@ class AuthRepository {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
     );
+    await _store.saveAccountEmail(res.user.email);
     return res.user;
   }
 
@@ -132,7 +178,21 @@ class AuthRepository {
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,
     );
+    await _store.saveAccountEmail(res.user.email);
     return res.user;
+  }
+
+  /// Debug-only: local session for the dedicated store-testing identity when
+  /// the API is unreachable. Writes sentinel tokens so cold-start restore
+  /// re-enters the same offline session instead of bouncing to a retry.
+  Future<AuthUser> signInOfflineDemo() async {
+    final user = offlineDemoUser();
+    await _store.saveTokens(
+      accessToken: 'offline-demo-access',
+      refreshToken: kOfflineDemoRefreshToken,
+    );
+    await _store.saveAccountEmail(user.email);
+    return user;
   }
 
   Future<AuthUser> getMe() => _withRefresh(_api.getMe);
@@ -190,8 +250,9 @@ class AuthRepository {
   Future<void> logout() async {
     try {
       await _withRefresh(_api.logout);
-    } on ApiException {
-      // Best-effort server logout; always clear local tokens.
+    } catch (_) {
+      // Best-effort server logout; always clear local tokens. Transport
+      // failures (offline, TLS) must not escape — logout is always local-first.
     }
     await _store.clear();
   }

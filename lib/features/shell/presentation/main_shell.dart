@@ -20,27 +20,33 @@ import '../../races/presentation/motion_catalog_provider.dart';
 /// See docs/agents/18-data-freshness-contract.md.
 ///
 /// LAYOUT CONTRACT: every tab shares one `Scaffold(bottomNavigationBar:
-/// ..., extendBody: false)`. Scaffold reserves exactly the nav's rendered
-/// height for the body — the body's usable viewport physically ends above
-/// the dock, so no screen can paint content underneath it. There used to be
-/// a second code path here (a `Stack` that floated the nav over Arena's
-/// body with `extendBody: true`) which was the actual cause of Arena
-/// content rendering behind the dock — not insufficient bottom padding on
-/// Arena's own scroll view. Do not reintroduce a per-tab layout branch here;
-/// if a screen needs different chrome, that belongs in the screen, not the
-/// shell.
+/// ..., extendBody: true)`. The nav is a floating dock — a compact rounded
+/// container inset from the screen edges, resting on the device bottom
+/// inset — and each tab's body extends to the screen's bottom edge, visible
+/// in the dock's horizontal margins while scrolling. Because the dock
+/// overlays content, scrollable screens must end their scroll views with
+/// `NuvoBottomNav.bottomPadding(context)` so the last row clears it.
+/// Scaffold already folds the nav's rendered height into the body's
+/// `MediaQuery.padding.bottom` — `bottomPadding` only adds the shared
+/// section gap on top of that; never re-add the dock or the safe inset
+/// inside a tab screen. One shared composition for every tab — do not
+/// reintroduce a per-tab layout branch; if a screen needs different chrome,
+/// that belongs in the screen, not the shell.
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.child});
 
+  /// In production this is the `StatefulNavigationShell` handed to the
+  /// router's `StatefulShellRoute` builder — it renders the five branch
+  /// Navigators through [NuvoTabStack] (see `navigatorContainerBuilder` in
+  /// router.dart), which keeps every visited tab mounted and animates the
+  /// switch directionally. In widget tests it can be any plain child.
   final Widget child;
 
-  // Maps nav index → shell route path.
-  static const _paths = [
-    '/arena', // 0 Arena
-    '/compete', // 1 Races
-    '/move', // 2 Verify
-    '/pass', // 3 Crew
-    '/profile', // 4 Profile
+  // Nav index → shell route path, derived from the canonical destination
+  // table in bottom_nav.dart — the same order the router uses to declare
+  // its StatefulShellRoute branches, so nav index == branch index always.
+  static final _paths = [
+    for (final d in nuvoDestinations) d.path,
   ];
 
   @override
@@ -120,14 +126,21 @@ class _MainShellState extends ConsumerState<MainShell>
   }
 
   int _indexFor(String location) {
-    if (location.startsWith('/compete')) return 1;
-    if (location.startsWith('/move')) return 2;
-    if (location.startsWith('/pass')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    for (var i = 0; i < nuvoDestinations.length; i++) {
+      if (location.startsWith(nuvoDestinations[i].path)) return i;
+    }
     return 0;
   }
 
   void _onTapTab(int index) {
+    // Debug-only trace of the tap → destination resolution. If a tab ever
+    // shows the wrong page again, this line plus the [NuvoNav] route print
+    // in router.dart pin down exactly where the mapping diverges.
+    assert(() {
+      final d = nuvoDestinations[index];
+      debugPrint('[NuvoNav] tap index=$index → ${d.label} (${d.path})');
+      return true;
+    }());
     // Revalidate the data behind the destination tab before showing it.
     // (A deliberate, single, user-initiated tap — unlike the automatic
     // self-heal/resume triggers above, this is allowed to attempt a request
@@ -147,12 +160,22 @@ class _MainShellState extends ConsumerState<MainShell>
         ref.read(notificationControllerProvider.notifier).revalidate();
         break;
     }
-    context.go(MainShell._paths[index]);
+    // Each branch keeps its own Navigator and its last location — goBranch
+    // restores the destination exactly where the user left it (scroll,
+    // selection, pushed routes). `initialLocation` stays false so re-tapping
+    // the current tab does not pop the user back to the branch root.
+    if (widget.child case final StatefulNavigationShell shell) {
+      shell.goBranch(index, initialLocation: false);
+    } else {
+      context.go(MainShell._paths[index]);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = _indexFor(GoRouterState.of(context).uri.path);
+    final currentIndex = widget.child is StatefulNavigationShell
+        ? (widget.child as StatefulNavigationShell).currentIndex
+        : _indexFor(GoRouterState.of(context).uri.path);
 
     final navigation = NuvoBottomNav(
       key: TrackSideLayoutKeys.navigation,
@@ -163,8 +186,8 @@ class _MainShellState extends ConsumerState<MainShell>
     );
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
-      extendBody: false,
+      backgroundColor: context.themeColors.page,
+      extendBody: true,
       body: SafeArea(bottom: false, child: widget.child),
       bottomNavigationBar: navigation,
     );

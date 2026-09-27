@@ -13,6 +13,7 @@ import { verifyGoogleIdToken } from '../lib/google';
 import { verifyAppleIdToken } from '../lib/apple';
 import { sendVerificationCode } from '../lib/resend';
 import { normalizeEmail, isValidEmail } from '../lib/validation';
+import { deleteUserMotionData } from '../lib/motion_privacy';
 
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -217,8 +218,17 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
   };
 }
 
-async function hardDeleteAccount(db: D1Database, r2: R2Bucket, userId: string): Promise<void> {
+async function hardDeleteAccount(
+  db: D1Database,
+  r2: R2Bucket,
+  motionMasterKey: string | undefined,
+  userId: string,
+): Promise<void> {
   const user = await db.prepare('SELECT primary_email FROM users WHERE id = ?').bind(userId).first<UserRow>();
+
+  // Revoke the per-account motion key and remove both encrypted artifacts and
+  // their indexes before the account identity is marked deleted.
+  await deleteUserMotionData(db, r2, motionMasterKey, userId);
 
   // Delete the current and any prior profile photos from R2.
   const objectKeys = await db.prepare('SELECT object_key FROM media_objects WHERE owner_user_id = ?').bind(userId).all<{ object_key: string }>();
@@ -709,6 +719,17 @@ authRouter.get('/me', requireAuth, async (c) => {
   if (c.req.query('resetDemo') === '1') {
     await resetTestDemoAccount(c.env.DB, userId, user.primary_email ?? '');
   }
+  // Crew presence signal — every session restore / re-check is a real "this
+  // person was just active" event. Best-effort; never blocks the response.
+  const touchLastActive = c.env.DB.prepare(
+    'UPDATE users SET last_active_at = CURRENT_TIMESTAMP WHERE id = ?',
+  )
+    .bind(userId)
+    .run()
+    .catch(() => {});
+  if (c.executionCtx?.waitUntil) {
+    c.executionCtx.waitUntil(touchLastActive);
+  }
   const userObj = await buildUserObject(c.env.DB, userId, user.primary_email ?? '');
   return c.json({ user: userObj });
 });
@@ -725,6 +746,6 @@ authRouter.post('/terms', requireAuth, async (c) => {
 // DELETE /auth/account  (requires auth — hard delete / anonymization)
 authRouter.delete('/account', requireAuth, async (c) => {
   const userId = c.get('userId');
-  await hardDeleteAccount(c.env.DB, c.env.PROFILE_PHOTOS, userId);
+  await hardDeleteAccount(c.env.DB, c.env.PROFILE_PHOTOS, c.env.MOTION_DATA_MASTER_KEY, userId);
   return c.json({ ok: true });
 });

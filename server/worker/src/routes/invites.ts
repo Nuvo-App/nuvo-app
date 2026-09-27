@@ -4,14 +4,17 @@ import type { AppEnv } from '../types';
 import { generateId } from '../lib/crypto';
 import { requireAuth, verifyJwt } from '../lib/jwt';
 import { hasAcceptedTerms } from '../lib/terms';
-import { isBlocked, isProfilePrivate, resolveRaceMemberVisibility } from '../lib/privacy';
+import { isBlocked, resolveRaceMemberVisibility } from '../lib/privacy';
+import { transitionCrew } from '../domain/crewLifecycle';
 import {
   ensureMember,
   ensureProgress,
   getProfileName,
   getRace,
 } from '../domain/raceMembership';
-import { safeEmit } from '../domain/notifications';
+import { deliverNotificationPushes } from '../domain/notifications';
+import { notifyEvent } from '../domain/notificationPolicy';
+import { recordRaceEvent } from '../domain/raceEvents';
 import {
   INVITE_KINDS,
   type InviteKind,
@@ -349,17 +352,23 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     const { created } = await ensureMember(c.env.DB, race.id, userId);
     await ensureProgress(c.env.DB, race.id, userId);
     await recordUse(c.env.DB, row, userId, alreadyUsed);
+    if (created) {
+      await recordRaceEvent(c.env.DB, race.id, {
+        type: 'race_joined',
+        actorUserId: userId,
+        subjectUserId: userId,
+        payload: { title: race.title, via: 'invite' },
+      });
+    }
     if (created && race.creator_id !== userId) {
       const joiner = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
-      await safeEmit(c, {
+      await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+        type: 'race_member_joined',
         userId: race.creator_id,
-        category: 'race_joined',
         actorUserId: userId,
-        title: `${joiner} joined ${race.title}`,
-        dest: { type: 'race', id: race.id },
-        entityType: 'race',
-        entityId: race.id,
-        dedupeKey: `race_joined:${race.id}:${userId}`,
+        actorName: joiner,
+        raceId: race.id,
+        raceTitle: race.title,
       });
     }
     return c.json({
@@ -386,31 +395,15 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     .first<{ id: string }>();
   if (!target) return c.json({ ok: false, status: 'not_found' }, 404);
 
-  const targetPrivate = await isProfilePrivate(c.env.DB, targetUserId);
-  const connectionStatus = targetPrivate ? 'pending' : 'active';
-
-  // Canonical directional rows, kept in sync (matches the existing crew route).
-  await upsertConnection(c.env.DB, userId, targetUserId, connectionStatus, userId);
-  await upsertConnection(
-    c.env.DB,
-    targetUserId,
-    userId,
-    connectionStatus === 'active' ? 'active' : 'pending',
-    userId,
-  );
+  // Same lifecycle as /crew/add: resolves the previous pair, writes both
+  // directional rows, honours the target's private profile, heals a mutual
+  // request into 'active', resolves stale request notifications and emits
+  // the connect notification — all inside one D1 batch.
+  const transition = await transitionCrew(c.env.DB, userId, targetUserId, 'connect');
+  const connectionStatus = transition?.status === 'active' ? 'active' : 'pending';
   await recordUse(c.env.DB, row, userId, alreadyUsed);
-  if (connectionStatus === 'pending') {
-    const who = (await getProfileName(c.env.DB, userId)) ?? 'Someone';
-    await safeEmit(c, {
-      userId: targetUserId,
-      category: 'crew_request',
-      actorUserId: userId,
-      title: `${who} wants to connect`,
-      dest: { type: 'profile', id: userId },
-      entityType: 'crew_request',
-      entityId: userId,
-      dedupeKey: `crew_request:${userId}`,
-    });
+  if (transition) {
+    await deliverNotificationPushes(c, transition.notificationIds);
   }
 
   return c.json({
@@ -420,26 +413,6 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
     destination: { type: 'profile', id: targetUserId },
   });
 });
-
-async function upsertConnection(
-  db: D1Database,
-  userId: string,
-  crewUserId: string,
-  status: string,
-  requestedBy: string,
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO crew_connections (id, user_id, crew_user_id, status, requested_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON CONFLICT(user_id, crew_user_id) DO UPDATE SET
-         status = CASE WHEN crew_connections.status = 'active' THEN 'active' ELSE excluded.status END,
-         requested_by = COALESCE(crew_connections.requested_by, excluded.requested_by),
-         updated_at = CURRENT_TIMESTAMP`,
-    )
-    .bind(generateId(), userId, crewUserId, status, requestedBy)
-    .run();
-}
 
 async function recordUse(
   db: D1Database,

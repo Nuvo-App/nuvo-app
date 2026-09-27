@@ -3,6 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 account_id = "d618e374fb4ffb44dbc770dd07431f79"
 
+[triggers]
+# 03:00 UTC — motion-data purge. Every 5 min — race lifecycle sweep
+# (deadline finalization + race_starting). Reads finalize lazily too, so the
+# 5-minute cadence only bounds notification latency, never correctness.
+crons = ["0 3 * * *", "*/5 * * * *"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "nuvo_db"
@@ -14,5 +20,22 @@ binding = "PROFILE_PHOTOS"
 bucket_name = "nuvor2"
 
 [vars]
+RESEND_FROM_EMAIL = "no-reply@getnuvo.net"
+APPLE_BUNDLE_ID = "net.getnuvo.app"
+
+[env.dev]
+name = "nuvo-api-dev"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "nuvo_db_dev"
+database_id = "29193d3c-cf97-444a-8338-6f7c1b407a26"
+migrations_dir = "migrations"
+
+[[env.dev.r2_buckets]]
+binding = "PROFILE_PHOTOS"
+bucket_name = "nuvor2-dev"
+
+[env.dev.vars]
 RESEND_FROM_EMAIL = "no-reply@getnuvo.net"
 APPLE_BUNDLE_ID = "net.getnuvo.app"

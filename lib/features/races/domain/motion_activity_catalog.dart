@@ -74,7 +74,7 @@ const motionActivityDefinitions = [
       'Go lower.',
       'Stand tall to finish the rep.',
     ],
-    icon: Icons.person_outline_rounded,
+    icon: Icons.sports_kabaddi_rounded,
     framingLabel: 'Full body centered in frame',
     preferredCameraView: PreferredCameraView.frontPreferred,
     category: MovementCategory.lowerBody,
@@ -618,6 +618,37 @@ const motionActivityDefinitions = [
     featured: false,
     sortPriority: 14,
   ),
+  MotionActivityDefinition(
+    type: MotionActivityType.basketballShot,
+    title: 'Basketball Shot',
+    metric: RaceMetric.reps,
+    suggestedTargets: [1, 3, 5, 10],
+    supportedFormats: [
+      RaceFormat.firstToGoal,
+      RaceFormat.mostInWindow,
+      RaceFormat.bestAttempt,
+    ],
+    aliases: ['basketball shot', 'basketball shots', 'shoot a basketball'],
+    proofLabel: 'made basketball shots',
+    cameraInstruction: 'Player, ball, and hoop visible',
+    instructions: [
+      'Keep your hands, ball, and hoop visible.',
+      'Release the ball toward the hoop.',
+      'Hold still until the shot is evaluated.',
+    ],
+    icon: Icons.sports_basketball_rounded,
+    framingLabel: 'Player, ball, and hoop visible',
+    preferredCameraView: PreferredCameraView.frontOrSlightAngle,
+    category: MovementCategory.cardio,
+    featured: false,
+    sortPriority: 30,
+    engineType: 'object_composition_v1',
+    requiredCapabilities: [
+      'pose_landmarks_v1',
+      'object_dots_v1',
+      'object_composition_v1',
+    ],
+  ),
 ];
 
 /// All preset movement types that support camera verification.
@@ -636,19 +667,15 @@ final List<MotionActivityDefinition> featuredActivities = [
 
 /// All movements sorted by [sortPriority] within their category,
 /// then categories in enum order.
-final List<MotionActivityDefinition> sortedActivities = [
-  ...motionActivityDefinitions,
-]..sort((a, b) {
-    final catCompare =
-        a.category.index.compareTo(b.category.index);
-    if (catCompare != 0) return catCompare;
-    return a.sortPriority.compareTo(b.sortPriority);
-  });
+final List<MotionActivityDefinition> sortedActivities =
+    [...motionActivityDefinitions]..sort((a, b) {
+      final catCompare = a.category.index.compareTo(b.category.index);
+      if (catCompare != 0) return catCompare;
+      return a.sortPriority.compareTo(b.sortPriority);
+    });
 
 /// Movements in a specific category, sorted by [sortPriority].
-List<MotionActivityDefinition> activitiesByCategory(
-  MovementCategory category,
-) {
+List<MotionActivityDefinition> activitiesByCategory(MovementCategory category) {
   final result = [
     for (final d in motionActivityDefinitions)
       if (d.category == category) d,
@@ -760,11 +787,15 @@ MotionActivityDefinition? inferSupportedMotionActivity(
   if (RegExp(r'(^|[^a-z])treadmill([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.treadmillRunning);
   }
-  if (RegExp(r'(^|[^a-z])running\s+in\s+place([^a-z]|$)').hasMatch(normalized) ||
+  if (RegExp(
+        r'(^|[^a-z])running\s+in\s+place([^a-z]|$)',
+      ).hasMatch(normalized) ||
       RegExp(r'(^|[^a-z])run\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.runningInPlace);
   }
-  if (RegExp(r'(^|[^a-z])walking\s+in\s+place([^a-z]|$)').hasMatch(normalized) ||
+  if (RegExp(
+        r'(^|[^a-z])walking\s+in\s+place([^a-z]|$)',
+      ).hasMatch(normalized) ||
       RegExp(r'(^|[^a-z])walk\s+in\s+place([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.walkingInPlace);
   }
@@ -775,7 +806,9 @@ MotionActivityDefinition? inferSupportedMotionActivity(
   if (RegExp(r'(^|[^a-z])butt\s+kicks?([^a-z]|$)').hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.buttKicks);
   }
-  if (RegExp(r'(^|[^a-z])mountain\s+climbers?([^a-z]|$)').hasMatch(normalized)) {
+  if (RegExp(
+    r'(^|[^a-z])mountain\s+climbers?([^a-z]|$)',
+  ).hasMatch(normalized)) {
     return motionActivityForType(MotionActivityType.mountainClimbers);
   }
   if (RegExp(r'(^|[^a-z])burpees?([^a-z]|$)').hasMatch(normalized)) {

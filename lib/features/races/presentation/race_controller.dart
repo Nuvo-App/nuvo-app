@@ -221,6 +221,12 @@ class RaceController extends StateNotifier<RaceState> {
       }
     } on ApiException catch (e) {
       if (generation != _generation) return;
+      // A demo session must never surface a network error — if the session
+      // resolved as presentation mode mid-flight, fixtures win.
+      if (isPresentationDemo()) {
+        if (mounted) _applyFixtures();
+        return;
+      }
       // Keep cached races visible on a failed background refresh.
       if (mounted) {
         state = state.copyWith(
@@ -231,6 +237,10 @@ class RaceController extends StateNotifier<RaceState> {
       }
     } catch (_) {
       if (generation != _generation) return;
+      if (isPresentationDemo()) {
+        if (mounted) _applyFixtures();
+        return;
+      }
       if (mounted) {
         state = state.copyWith(
           loading: false,
@@ -239,6 +249,12 @@ class RaceController extends StateNotifier<RaceState> {
         );
       }
     }
+  }
+
+  void _applyFixtures() {
+    _racesLoadedAt = DateTime.now();
+    state = RaceState(races: PresentationDemoData.races(presentationUserId()));
+    onMutated?.call();
   }
 
   Future<Race> createRace({
@@ -501,6 +517,23 @@ class RaceController extends StateNotifier<RaceState> {
     required int framesAnalyzed,
     required int durationMs,
   }) async {
+    if (_isPresentationLocalRace(raceId)) {
+      final race = _applyPresentationProof(
+        raceId,
+        proofType: 'ai_motion',
+        value: value,
+        detectedValue: value,
+        targetValue: targetValue,
+        confidence: confidence,
+        validatorVersion: validatorVersion,
+        framesAnalyzed: framesAnalyzed,
+        durationMs: durationMs,
+        verificationStatus: 'ai_verified',
+        verificationSummary: verificationSummary,
+      );
+      _upsertRace(race);
+      return race;
+    }
     final race = await _repo.submitObjectCompositionProof(
       raceId,
       activityId: activityId,
@@ -639,6 +672,27 @@ class RaceController extends StateNotifier<RaceState> {
     _upsertRace(race); // non-silent: bump loadedAt + nudge Arena
     return race;
   }
+
+  /// Open a server-timestamped attempt (best-attempt / timed races). The
+  /// returned `serverTime`/`deadlineAt` are authoritative for the attempt
+  /// window — the next verified proof binds to this attempt automatically.
+  Future<RaceAttemptResult> startAttempt(
+    String raceId, {
+    String? clientAttemptId,
+  }) => _repo.startAttempt(raceId, clientAttemptId: clientAttemptId);
+
+  /// Clone a finished race's settings + roster into a fresh race — the
+  /// one-tap "race again" loop.
+  Future<Race> rematchRace(String raceId) async {
+    final race = await _repo.rematchRace(raceId);
+    _upsertRace(race);
+    return race;
+  }
+
+  /// Compact live-state poll — no proof history, cheap when `version` is
+  /// unchanged.
+  Future<RaceLiveState> getRaceLiveState(String raceId, {int? version}) =>
+      _repo.getRaceLiveState(raceId, version: version);
 
   Future<Race> reviewProof(
     String raceId,

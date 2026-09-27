@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --env dev",
     "deploy": "wrangler deploy",
+    "deploy:dev": "wrangler deploy --env dev",
+    "deploy:prod": "wrangler deploy",
+    "migrate:dev": "wrangler d1 migrations apply nuvo_db_dev --remote --env dev",
+    "migrate:prod": "wrangler d1 migrations apply nuvo_db --remote",
     "typecheck": "tsc --noEmit",
     "test": "rm -rf .tmp-test-dist && tsc --module commonjs --moduleResolution node --outDir .tmp-test-dist --noEmit false && node --test test/*.test.mjs"
   },

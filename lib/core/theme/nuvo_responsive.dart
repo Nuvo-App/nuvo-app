@@ -53,6 +53,45 @@ extension NuvoResponsiveX on BuildContext {
   /// Shortest-side buckets for coarse layout decisions.
   bool get isCompactWidth => MediaQuery.sizeOf(this).width < 360;
   bool get isLargeWidth => MediaQuery.sizeOf(this).width >= 600;
+
+  /// The page-content height actually available to a feature screen after
+  /// the top safe area and the persistent bottom navigation are removed —
+  /// the real "usable viewport" a screen's first-fold hierarchy has to fit
+  /// inside, not the raw device height.
+  double get nuvoUsableHeight {
+    final media = MediaQuery.of(this);
+    return media.size.height - media.padding.top - media.padding.bottom;
+  }
+
+  /// Vertical density tier derived from AVAILABLE HEIGHT (not device model
+  /// or width) — a short phone (iPhone SE-class) or a phone in a reduced
+  /// window gets [NuvoDensity.compact]; a typical modern phone gets
+  /// [NuvoDensity.regular]; a tall phone gets [NuvoDensity.large]. Screens
+  /// use this to shrink hero size/section gaps on short viewports instead of
+  /// scaling the whole UI proportionally (which would shrink tap targets).
+  NuvoDensity get nuvoDensity {
+    final usable = nuvoUsableHeight;
+    if (usable < 700) return NuvoDensity.compact;
+    if (usable > 860) return NuvoDensity.large;
+    return NuvoDensity.regular;
+  }
+}
+
+/// Vertical density tier — see [NuvoResponsiveX.nuvoDensity].
+enum NuvoDensity { compact, regular, large }
+
+extension NuvoDensityX on NuvoDensity {
+  /// Pick a value for this density tier.
+  T pick<T>({required T compact, required T regular, required T large}) {
+    switch (this) {
+      case NuvoDensity.compact:
+        return compact;
+      case NuvoDensity.regular:
+        return regular;
+      case NuvoDensity.large:
+        return large;
+    }
+  }
 }
 
 extension NuvoTextStyleScaleX on TextStyle {

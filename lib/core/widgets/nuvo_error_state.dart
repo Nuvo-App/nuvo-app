@@ -4,6 +4,7 @@ import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
 import 'nuvo_button.dart';
+import 'nuvo_motion.dart';
 
 class NuvoErrorState extends StatelessWidget {
   const NuvoErrorState({
@@ -92,9 +93,9 @@ class NuvoOfflineBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          GestureDetector(
+          NuvoPressable(
             onTap: onRetry,
-            behavior: HitTestBehavior.opaque,
+            haptic: false,
             child: Text(
               'Try again',
               style: AppTextStyles.labelSmall.copyWith(

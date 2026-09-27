@@ -75,7 +75,16 @@ void main() {
   const resolver = VerifierRuntimeResolver();
 
   group('preset registration contract — every catalog preset, every layer', () {
-    for (final def in motionActivityDefinitions) {
+    // Entries with a custom `engineType` (e.g. basketball_shot's
+    // `object_composition_v1`) use a different runtime than the standard
+    // preset-pose route this suite verifies end to end, and are intentionally
+    // excluded from the backend's public RACE_ACTIVITY_CATALOG for the same
+    // reason — see server/worker/src/domain/raceActivities.ts and
+    // test/preset_activity_round_trip_test.dart.
+    final presetPoseDefs = motionActivityDefinitions
+        .where((def) => def.engineType == null)
+        .toList();
+    for (final def in presetPoseDefs) {
       final type = def.type;
       final id = type.backendValue;
 
@@ -151,14 +160,14 @@ void main() {
       // Every AiMotionActivity that a preset maps to must have a validator
       // case, and every catalog preset must map to a distinct AiMotionActivity.
       final mapped = <AiMotionActivity>{};
-      for (final def in motionActivityDefinitions) {
+      for (final def in presetPoseDefs) {
         final ai = AiMotionActivity.fromBackendValue(def.type.backendValue);
         expect(mapped.add(ai), isTrue,
             reason: '${def.type.backendValue} maps to ${ai.name}, already used '
                 '— AiMotionActivity.fromBackendValue is missing a case and '
                 'falling through to a default');
       }
-      expect(mapped.length, motionActivityDefinitions.length);
+      expect(mapped.length, presetPoseDefs.length);
     });
 
     test('verifyValidatorDispatchComplete passes', () {
@@ -182,7 +191,7 @@ void main() {
         'unit:${def.metric.backendValue.padRight(7)} '
         'serialize:${draftForActivity(def).toCreatePayload()['activityId'] == id ? 'yes' : 'NO '}  '
         'deserialize:${MotionActivityType.fromBackendValue(id) == def.type ? 'yes' : 'NO '}  '
-        'validator:${createMotionValidator(ai, 1).activity == ai ? 'yes' : 'NO '}  '
+        'validator:${ai == AiMotionActivity.remote ? 'n/a (remote engine)' : (createMotionValidator(ai, 1).activity == ai ? 'yes' : 'NO ')}  '
         'proof:${res.canCreateRuntime && res.type == VerifierType.presetPose ? 'yes' : 'NO '}',
       );
     }

@@ -210,6 +210,23 @@ final class NuvoColors {
   // ── Short aliases ─────────────────────────────────────────────────────────────
   static const Color mint = success;
   static const Color prize = gold;
+
+  // ── Dark-mode structural palette ──────────────────────────────────────────────
+  // Const tokens so dark theme pieces can live in const expressions. These are
+  // the resolved values behind `NuvoThemeColors.dark` — prefer
+  // `context.themeColors` at call sites over touching these directly.
+  static const Color darkPage = Color(0xFF0A1424);
+  static const Color darkSurface = Color(0xFF111E33);
+  static const Color darkPanel = Color(0xFF1B2B4A);
+  static const Color darkPanelLight = Color(0xFF16233C);
+  static const Color darkInk = Color(0xFFF1F5FB);
+  static const Color darkInkMuted = Color(0xFF93A4BF);
+  static const Color darkInkSubtle = Color(0xFF7E90AC);
+  static const Color darkInkDim = Color(0xFF5F6F8C);
+  static const Color darkBorder = Color(0xFF3D5170);
+  static const Color darkDivider = Color(0xFF1E2C46);
+  static const Color darkTrack = Color(0xFF1B2B4A);
+  static const Color darkInkShadow = Color(0xFF04070D);
 }
 
 abstract final class AppColors {
@@ -337,6 +354,51 @@ class NuvoSemanticColors extends ThemeExtension<NuvoSemanticColors> {
     ),
   );
 
+  /// Dark-mode roles — same hues, tint surfaces drop to deep shades of the
+  /// same family and `on` text lifts so tints stay readable on dark chrome.
+  static const NuvoSemanticColors dark = NuvoSemanticColors(
+    neutral: NuvoColorRole(
+      base: NuvoColors.neutral,
+      shadow: Color(0xFF02101F),
+      bright: Color(0xFF5B93FF),
+      surface: Color(0xFF0F2447),
+      border: Color(0xFF2E5FB8),
+      on: Color(0xFFCFE0FF),
+    ),
+    success: NuvoColorRole(
+      base: NuvoColors.success,
+      shadow: Color(0xFF04280F),
+      bright: Color(0xFF4ADE6B),
+      surface: Color(0xFF0E2418),
+      border: Color(0xFF2C7A44),
+      on: Color(0xFFBFF0CB),
+    ),
+    danger: NuvoColorRole(
+      base: NuvoColors.danger,
+      shadow: Color(0xFF2B0909),
+      bright: Color(0xFFF95A5E),
+      surface: Color(0xFF2A1216),
+      border: Color(0xFF8A3438),
+      on: Color(0xFFFFC9C9),
+    ),
+    warning: NuvoColorRole(
+      base: NuvoColors.warning,
+      shadow: Color(0xFF3A2203),
+      bright: Color(0xFFFFB03A),
+      surface: Color(0xFF2A1E0C),
+      border: Color(0xFF9A6A22),
+      on: Color(0xFFFFE0AE),
+    ),
+    accent: NuvoColorRole(
+      base: NuvoColors.accent,
+      shadow: Color(0xFF1F130B),
+      bright: NuvoColors.accent,
+      surface: Color(0xFF241C14),
+      border: Color(0xFF7A5C40),
+      on: Color(0xFFEBD7C2),
+    ),
+  );
+
   @override
   NuvoSemanticColors copyWith({
     NuvoColorRole? neutral,
@@ -370,4 +432,144 @@ extension NuvoSemanticColorsX on BuildContext {
   NuvoSemanticColors get semanticColors =>
       Theme.of(this).extension<NuvoSemanticColors>() ??
       NuvoSemanticColors.standard;
+}
+
+/// Structural chrome colours — page, surfaces, ink, edges — resolved per
+/// theme brightness. `NuvoColors.*` constants are the light values; use
+/// `context.themeColors` in code that must follow dark mode instead of
+/// reaching for the constants directly.
+@immutable
+class NuvoThemeColors extends ThemeExtension<NuvoThemeColors> {
+  const NuvoThemeColors({
+    required this.page,
+    required this.surface,
+    required this.panel,
+    required this.panelLight,
+    required this.ink,
+    required this.inkMuted,
+    required this.inkSubtle,
+    required this.inkDim,
+    required this.border,
+    required this.divider,
+    required this.track,
+    required this.inkShadow,
+  });
+
+  /// Scaffold/page background.
+  final Color page;
+
+  /// Card/sheet/field fill.
+  final Color surface;
+
+  /// Tinted fills — active pills, icon chips.
+  final Color panel;
+  final Color panelLight;
+
+  /// Primary foreground — headings, outlines, icons (light: navy).
+  final Color ink;
+
+  /// Secondary text/icons (light: muted).
+  final Color inkMuted;
+
+  /// Tertiary text (light: textMuted).
+  final Color inkSubtle;
+
+  /// Faintest text (light: textDim).
+  final Color inkDim;
+
+  /// Structural outlines — the signature ink edge on light, a lifted slate
+  /// edge that keeps the same silhouette on dark.
+  final Color border;
+  final Color divider;
+  final Color track;
+
+  /// Hard-offset plate/shadow under raised surfaces.
+  final Color inkShadow;
+
+  static const NuvoThemeColors light = NuvoThemeColors(
+    page: NuvoColors.page,
+    surface: NuvoColors.surface,
+    panel: NuvoColors.panel,
+    panelLight: NuvoColors.panelLight,
+    ink: NuvoColors.navy,
+    inkMuted: NuvoColors.muted,
+    inkSubtle: NuvoColors.textMuted,
+    inkDim: NuvoColors.textDim,
+    border: NuvoColors.border,
+    divider: NuvoColors.divider,
+    track: NuvoColors.trackBg,
+    inkShadow: NuvoColors.navy,
+  );
+
+  /// Deep navy-ink dark — darker than the brand navy so surfaces still lift
+  /// off the page, ink flips to a cold white, and the edge stays visible.
+  static const NuvoThemeColors dark = NuvoThemeColors(
+    page: NuvoColors.darkPage,
+    surface: NuvoColors.darkSurface,
+    panel: NuvoColors.darkPanel,
+    panelLight: NuvoColors.darkPanelLight,
+    ink: NuvoColors.darkInk,
+    inkMuted: NuvoColors.darkInkMuted,
+    inkSubtle: NuvoColors.darkInkSubtle,
+    inkDim: NuvoColors.darkInkDim,
+    border: NuvoColors.darkBorder,
+    divider: NuvoColors.darkDivider,
+    track: NuvoColors.darkTrack,
+    inkShadow: NuvoColors.darkInkShadow,
+  );
+
+  @override
+  NuvoThemeColors copyWith({
+    Color? page,
+    Color? surface,
+    Color? panel,
+    Color? panelLight,
+    Color? ink,
+    Color? inkMuted,
+    Color? inkSubtle,
+    Color? inkDim,
+    Color? border,
+    Color? divider,
+    Color? track,
+    Color? inkShadow,
+  }) => NuvoThemeColors(
+    page: page ?? this.page,
+    surface: surface ?? this.surface,
+    panel: panel ?? this.panel,
+    panelLight: panelLight ?? this.panelLight,
+    ink: ink ?? this.ink,
+    inkMuted: inkMuted ?? this.inkMuted,
+    inkSubtle: inkSubtle ?? this.inkSubtle,
+    inkDim: inkDim ?? this.inkDim,
+    border: border ?? this.border,
+    divider: divider ?? this.divider,
+    track: track ?? this.track,
+    inkShadow: inkShadow ?? this.inkShadow,
+  );
+
+  @override
+  NuvoThemeColors lerp(ThemeExtension<NuvoThemeColors>? other, double t) {
+    if (other is! NuvoThemeColors) return this;
+    Color l(Color a, Color b) => Color.lerp(a, b, t)!;
+    return NuvoThemeColors(
+      page: l(page, other.page),
+      surface: l(surface, other.surface),
+      panel: l(panel, other.panel),
+      panelLight: l(panelLight, other.panelLight),
+      ink: l(ink, other.ink),
+      inkMuted: l(inkMuted, other.inkMuted),
+      inkSubtle: l(inkSubtle, other.inkSubtle),
+      inkDim: l(inkDim, other.inkDim),
+      border: l(border, other.border),
+      divider: l(divider, other.divider),
+      track: l(track, other.track),
+      inkShadow: l(inkShadow, other.inkShadow),
+    );
+  }
+}
+
+extension NuvoThemeColorsX on BuildContext {
+  /// Structural chrome colours for this context's theme brightness.
+  NuvoThemeColors get themeColors =>
+      Theme.of(this).extension<NuvoThemeColors>() ?? NuvoThemeColors.light;
 }

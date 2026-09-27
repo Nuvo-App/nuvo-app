@@ -6,8 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
 import '../core/theme/nuvo_responsive.dart';
+import '../core/theme/nuvo_theme_mode.dart';
 import '../features/auth/presentation/auth_controller.dart';
 import '../features/notifications/application/push_service.dart';
+import '../features/onboarding/data/first_use_store.dart';
+import '../features/onboarding/presentation/first_use_guide.dart';
 import '../features/social/application/deep_link_controller.dart';
 import 'router.dart';
 
@@ -40,27 +43,58 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
       if (prev?.status == AuthStatus.authenticated &&
           next.status == AuthStatus.unauthenticated) {
         ref.read(pushServiceProvider).onSignedOut();
+        // Demo-replay / first-race guide flags are process state — clear them
+        // on sign-out so they cannot bleed into a different account's session.
+        ref.read(demoReplayProvider.notifier).state = false;
+        ref.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.idle;
         return;
       }
       final becameAuthed = prev?.status != AuthStatus.authenticated &&
           next.status == AuthStatus.authenticated;
       if (!becameAuthed) return;
       ref.read(pushServiceProvider).onSignedIn();
-      if (!(next.user?.onboardingComplete ?? false)) return;
+      final user = next.user;
+      if (user == null) return;
+      // Defer the stashed destination only while the account still owes
+      // mandatory setup (name, username, member pass) — every account owes
+      // it now, not just internal test accounts.
+      if (!user.onboardingComplete) return;
       final location = await ref.read(pendingDestinationStoreProvider).consume();
       if (location != null && location.isNotEmpty) router.go(location);
     });
+
+    // Persist first-race-guide completion per account so a finished (or
+    // skipped) guide never re-arms for that account on this install, while a
+    // different account signing in later still gets its own guide.
+    ref.listen<FirstRaceGuideStep>(firstRaceGuideProvider, (prev, next) {
+      if (next != FirstRaceGuideStep.complete ||
+          prev == FirstRaceGuideStep.complete) {
+        return;
+      }
+      final email = ref.read(authControllerProvider).user?.email;
+      if (email != null) {
+        ref.read(firstUseStoreProvider).markGuideDone(email);
+      }
+    });
+
+    final themeMode = ref.watch(nuvoThemeModeProvider);
+    final brightness = themeMode == ThemeMode.dark
+        ? Brightness.dark
+        : Brightness.light;
 
     final app = MaterialApp.router(
       title: 'Nuvo',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeMode,
       routerConfig: router,
       builder: _appBuilder,
     );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: AppTheme.overlay,
+      value: AppTheme.overlayFor(brightness),
       child: app,
     );
   }

@@ -1,18 +1,22 @@
 import {
   activityForId,
   normalizeActivityId,
+  normalizeActivityIdLoose,
   normalizeMetric,
   scoringRuleForFormat,
-  type RaceActivityId,
   type RaceFormat,
   type RaceMetric,
   type RaceRecurrence,
   type RaceScoringRule,
   type VerificationMethod,
 } from './raceActivities';
+import type { RegistryActivity } from './motionRegistry';
 
 export interface RaceConfig {
-  activityId: RaceActivityId;
+  /// The server-owned activity identity — a static-catalog ID for compiled
+  /// motions, or a registry-published ID for remote-only motions. Stored and
+  /// compared verbatim; never coerced to another activity.
+  activityId: string;
   metric: RaceMetric;
   format: RaceFormat;
   scoringRule: RaceScoringRule;
@@ -384,8 +388,55 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
   };
 }
 
+/**
+ * Builds a race config for a control-plane activity that has no static
+ * catalog entry (a motion published after this Worker build). The registry
+ * row supplies metric/format bounds; everything else mirrors configFromBody.
+ */
+export function registryConfigFromBody(
+  body: Record<string, unknown>,
+  activity: RegistryActivity,
+): RaceConfig | { error: string } {
+  const expectedMetric = normalizeMetric(activity.metric) ?? 'reps';
+  const requested = normalizeMetric(
+    stringValue(body, 'metric', 'targetUnit', 'unit'),
+  );
+  if (requested && requested !== expectedMetric) {
+    return { error: `${activity.displayName} cannot use that metric.` };
+  }
+
+  const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
+  const format = FORMATS.has(rawFormat as RaceFormat) ? rawFormat as RaceFormat : undefined;
+  if (!format ||
+      (activity.supportedFormats.length > 0 &&
+       !activity.supportedFormats.includes(format))) {
+    return { error: `${activity.displayName} does not support that win condition yet.` };
+  }
+
+  const targetValue = intValue(body, 'targetValue', 'target_value');
+  if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
+
+  const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
+  const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
+
+  return {
+    activityId: activity.id,
+    metric: expectedMetric,
+    format,
+    scoringRule: scoringRuleForFormat(format),
+    targetValue,
+    attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
+    attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
+    verificationMethod: 'camera_pose',
+    timezone: stringValue(body, 'timezone') ?? 'America/New_York',
+    startsAt: stringValue(body, 'startsAt', 'startLineAt') ?? null,
+    endsAt: stringValue(body, 'endsAt', 'finishLineAt') ?? null,
+    recurrence,
+  };
+}
+
 export function assertSubmissionCompatible(config: RaceConfig, activityId: string | null, metric: string | null): string | null {
-  if (normalizeActivityId(activityId) !== config.activityId) return 'Verified movement does not match this race.';
+  if (normalizeActivityIdLoose(activityId) !== config.activityId) return 'Verified movement does not match this race.';
   if (normalizeMetric(metric, activityForId(config.activityId)) !== config.metric) return 'Verified metric does not match this race.';
   return null;
 }

@@ -13,6 +13,7 @@ import '_ls_stub.dart' if (dart.library.html) '_ls_web.dart' as ls;
 class SecureTokenStore {
   static const _accessKey = 'nuvo_access_token';
   static const _refreshKey = 'nuvo_refresh_token';
+  static const _emailKey = 'nuvo_account_email';
 
   static const _secureStorage = FlutterSecureStorage(
     iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
@@ -62,6 +63,23 @@ class SecureTokenStore {
     }
   }
 
+  /// Persist the signed-in account's email — the only identity signal an
+  /// offline restore has (a refresh token doesn't say whose session it is).
+  /// Best-effort: a failed write just means the demo fallback won't engage.
+  Future<void> saveAccountEmail(String email) async {
+    if (kIsWeb) {
+      ls.setItem(_emailKey, email);
+      return;
+    }
+    try {
+      await _secureStorage.write(key: _emailKey, value: email);
+    } catch (e) {
+      debugPrint(
+        '[TokenStore] native saveAccountEmail failed (${e.runtimeType})',
+      );
+    }
+  }
+
   /// Read a key, retrying once on a transient Keychain error before giving up.
   /// Never wipes storage.
   Future<String?> _readNative(String key) async {
@@ -98,12 +116,18 @@ class SecureTokenStore {
     return _readNative(_refreshKey);
   }
 
+  Future<String?> getAccountEmail() async {
+    if (kIsWeb) return ls.getItem(_emailKey);
+    return _readNative(_emailKey);
+  }
+
   // ── Clear ─────────────────────────────────────────────────────────────────
 
   Future<void> clear() async {
     if (kIsWeb) {
       ls.removeItem(_accessKey);
       ls.removeItem(_refreshKey);
+      ls.removeItem(_emailKey);
       debugPrint('[TokenStore] web: tokens cleared');
       return;
     }
@@ -111,6 +135,7 @@ class SecureTokenStore {
       await Future.wait([
         _secureStorage.delete(key: _accessKey),
         _secureStorage.delete(key: _refreshKey),
+        _secureStorage.delete(key: _emailKey),
       ]);
     } catch (e) {
       debugPrint('[TokenStore] native clear failed (${e.runtimeType})');

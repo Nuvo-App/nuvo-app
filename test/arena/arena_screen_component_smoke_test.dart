@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nuvo/core/widgets/bottom_nav.dart';
 import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
@@ -79,10 +80,19 @@ void main() {
   ) async {
     await pumpArena(tester);
 
-    expect(find.text('submitted 20 pushups'), findsNothing);
+    // Activity is ordinary scroll content — it may already peek into the
+    // first viewport (no artificial spacer), and after scrolling it must end
+    // fully above the floating dock's top edge.
+    final navTop = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -520));
     await tester.pumpAndSettle();
     expect(find.text('Recent activity'), findsOneWidget);
-    expect(find.text('submitted 20 pushups'), findsOneWidget);
+    final raItem = find.text('submitted 20 pushups');
+    expect(raItem, findsOneWidget);
+    expect(
+      tester.getBottomLeft(raItem).dy,
+      lessThanOrEqualTo(navTop),
+      reason: 'activity content scrolls fully above the dock',
+    );
   });
 }

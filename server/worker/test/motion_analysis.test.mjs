@@ -52,3 +52,16 @@ test('poor visibility produces needs_review rather than a confident verdict', ()
   assert.ok(result.uncertainty > 0.5);
   assert.match(result.failureReasons[0], /visible clearly enough/);
 });
+
+test('validated motion requests discard facial landmarks before analysis', () => {
+  const request = validateMotionRequest({
+    schemaVersion: motionAnalysisSchemaVersion,
+    motionId: 'jumping_jacks',
+    frames: [
+      { timestampMs: 0, landmarks: { nose: { x: 0.5, y: 0.2 }, leftHip: { x: 0.45, y: 0.6 } } },
+      { timestampMs: 100, landmarks: { mouthLeft: { x: 0.5, y: 0.25 }, rightHip: { x: 0.55, y: 0.6 } } },
+    ],
+  });
+  assert.deepEqual(Object.keys(request.frames[0].landmarks), ['leftHip']);
+  assert.deepEqual(Object.keys(request.frames[1].landmarks), ['rightHip']);
+});

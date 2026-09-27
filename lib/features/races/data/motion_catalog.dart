@@ -22,6 +22,10 @@ class MotionCatalogActivity {
     required this.engineType,
     required this.featured,
     required this.sortPriority,
+    this.previewSequence,
+    this.instructions = const [],
+    this.cameraOrientation,
+    this.aliases = const [],
   });
 
   final String id;
@@ -41,6 +45,21 @@ class MotionCatalogActivity {
   final String? engineType;
   final bool featured;
   final int sortPriority;
+
+  /// Decorative pre-verify preview animation spec (see
+  /// `RemotePreviewSpec.tryParse`). Never consumed by the camera verifier —
+  /// absent or invalid falls back to the bundled compiled preview.
+  final Map<String, dynamic>? previewSequence;
+
+  /// Server-published setup instructions for activities that have no
+  /// compiled definition. Empty → generic remote guidance is used.
+  final List<String> instructions;
+
+  /// 'front' | 'side' | 'front_or_angle' camera hint from the registry.
+  final String? cameraOrientation;
+
+  /// Server-published search/display aliases.
+  final List<String> aliases;
 
   factory MotionCatalogActivity.fromJson(Map<String, dynamic> json) {
     final rawTargets = json['suggestedTargets'];
@@ -85,6 +104,22 @@ class MotionCatalogActivity {
       sortPriority: json['sortPriority'] is num
           ? (json['sortPriority'] as num).toInt()
           : 100,
+      previewSequence: json['previewSequence'] is Map
+          ? Map<String, dynamic>.from(json['previewSequence'] as Map)
+          : null,
+      instructions: json['instructions'] is List
+          ? [
+              for (final entry in json['instructions'] as List)
+                if (entry is String && entry.trim().isNotEmpty) entry.trim(),
+            ]
+          : const [],
+      cameraOrientation: json['cameraOrientation'] as String?,
+      aliases: json['aliases'] is List
+          ? [
+              for (final entry in json['aliases'] as List)
+                if (entry is String && entry.trim().isNotEmpty) entry.trim(),
+            ]
+          : const [],
     );
   }
 
@@ -106,6 +141,7 @@ class MotionCatalogActivity {
     'engineType': engineType,
     'featured': featured,
     'sortPriority': sortPriority,
+    if (previewSequence != null) 'previewSequence': previewSequence,
   };
 
   /// An unknown activity is displayable only when the release advertises a
@@ -118,11 +154,21 @@ class MotionCatalogActivity {
         'state_machine_v1',
         'alternating_rep_v1',
         'hold_v1',
+        'object_composition_v1',
       }.contains(engineType) &&
       releaseId != null &&
       releaseChecksum != null &&
       engineType != null &&
       requiredCapabilities.every(capabilities.contains);
+
+  /// Registry camera hint → camera preference. Unknown/absent values default
+  /// to front-preferred, matching the previous generic behavior.
+  PreferredCameraView preferredCameraViewFromHint() => switch (
+      cameraOrientation) {
+    'side' => PreferredCameraView.sideOrDiagonalRequired,
+    'front_or_angle' => PreferredCameraView.frontOrSlightAngle,
+    _ => PreferredCameraView.frontPreferred,
+  };
 
   MotionActivityDefinition? toDefinition(Set<String> capabilities) {
     if (!isCompatibleWith(capabilities)) return null;
@@ -136,8 +182,11 @@ class MotionCatalogActivity {
         .map(_raceFormatFor)
         .whereType<RaceFormat>()
         .toList();
+    final type = id == 'basketball_shot'
+        ? MotionActivityType.basketballShot
+        : MotionActivityType.remote;
     return MotionActivityDefinition(
-      type: MotionActivityType.remote,
+      type: type,
       backendId: id,
       title: displayName,
       metric: metricValue,
@@ -145,17 +194,28 @@ class MotionCatalogActivity {
       supportedFormats: formats.isEmpty
           ? const [RaceFormat.firstToGoal]
           : formats,
-      aliases: [displayName.toLowerCase()],
-      proofLabel: proofLabel,
-      cameraInstruction: 'Follow the on-screen framing guide.',
-      instructions: const [
-        'Keep the required body regions visible.',
-        'Move at a steady pace.',
-        'Finish each rep cleanly.',
+      aliases: [
+        displayName.toLowerCase(),
+        for (final alias in aliases) alias.toLowerCase(),
       ],
+      proofLabel: proofLabel,
+      cameraInstruction: switch (preferredCameraViewFromHint()) {
+        PreferredCameraView.sideOrDiagonalRequired =>
+          'Stand sideways. Keep your full body in frame.',
+        PreferredCameraView.frontOrSlightAngle =>
+          'Angle your body to the camera. Keep your full body in frame.',
+        _ => 'Stand facing the camera. Keep your full body in frame.',
+      },
+      instructions: instructions.isNotEmpty
+          ? instructions
+          : const [
+              'Keep the required body regions visible.',
+              'Move at a steady pace.',
+              'Finish each rep cleanly.',
+            ],
       icon: _iconFor(iconKey),
       framingLabel: 'Follow the release framing guide',
-      preferredCameraView: PreferredCameraView.frontPreferred,
+      preferredCameraView: preferredCameraViewFromHint(),
       category: _categoryFor(category),
       isHold: measurement == MotionMeasurementType.duration,
       featured: featured,
@@ -236,6 +296,15 @@ class MotionCatalogSnapshot {
     'etag': etag,
     'activities': activities.map((activity) => activity.toJson()).toList(),
   };
+
+  /// The decorative pre-verify preview spec published for [activityId], if
+  /// any. Never consumed by the camera verifier.
+  Map<String, dynamic>? previewSequenceFor(String activityId) {
+    for (final activity in activities) {
+      if (activity.id == activityId) return activity.previewSequence;
+    }
+    return null;
+  }
 
   List<MotionActivityDefinition> toDefinitions(Set<String> capabilities) {
     final definitions = <MotionActivityDefinition>[];

@@ -3,7 +3,11 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
-import { assignmentForNextSession } from '../domain/motionAssignments';
+import {
+  assignmentForNextSession,
+  assignmentInsert,
+  stableReleaseForActivity,
+} from '../domain/motionAssignments';
 import { recordReleaseMetric } from '../domain/motionTelemetry';
 
 export const verificationSessionsRouter = new Hono<AppEnv>();
@@ -111,7 +115,22 @@ verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireA
   if (!member) return c.json({ ok: false, error: 'Join the race before submitting proof.' }, 403);
   if (!race.activity_id) return c.json({ ok: false, error: 'This race does not have a supported verifier.' }, 409);
 
-  const assignment = await assignmentForNextSession(c.env.DB, raceId);
+  let assignment = await assignmentForNextSession(c.env.DB, raceId);
+  // Races created before the motion registry rollout may have an activity but
+  // no assignment row. Repair that compatibility gap on the first proof
+  // attempt instead of making the user recreate the race.
+  if (!assignment && race.activity_id) {
+    const stableRelease = await stableReleaseForActivity(c.env.DB, race.activity_id, userId);
+    if (stableRelease) {
+      await c.env.DB.batch([
+        assignmentInsert(c.env.DB, raceId, stableRelease, 'follow_compatible_patch', 'lazy_backfill'),
+        c.env.DB.prepare(
+          'UPDATE races SET verifier_release_id = COALESCE(verifier_release_id, ?) WHERE id = ?',
+        ).bind(stableRelease.id, raceId),
+      ]);
+      assignment = await assignmentForNextSession(c.env.DB, raceId);
+    }
+  }
   if (!assignment || assignment.assignment.activityId !== race.activity_id) {
     return c.json({ ok: false, code: 'verifier_unavailable', error: 'A compatible verifier is not available for this race yet.' }, 503);
   }

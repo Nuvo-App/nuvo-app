@@ -132,6 +132,40 @@ void main() {
       expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
     });
 
+    testWidgets('featured race card flips between action and status faces', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
+      await tester.pumpAndSettle();
+
+      // Both faces stay mounted (the inactive one is the invisible sizing
+      // twin under IgnorePointer/Opacity(0)) — "visible" means not hidden
+      // by the sizer, not merely present in the tree.
+      bool visible(String text) {
+        for (final e in find.text(text).evaluate()) {
+          final ignore = e.findAncestorWidgetOfExactType<IgnorePointer>();
+          final opacity = e.findAncestorWidgetOfExactType<Opacity>();
+          final hidden = (ignore?.ignoring ?? false) ||
+              (opacity != null && opacity.opacity == 0);
+          if (!hidden) return true;
+        }
+        return false;
+      }
+
+      expect(visible('RACE STATUS'), isFalse);
+      expect(find.text('Updates ↻'), findsOneWidget);
+
+      await tester.tap(find.text('Updates ↻'));
+      await tester.pumpAndSettle();
+      expect(visible('RACE STATUS'), isTrue);
+      expect(find.text('Race ↻'), findsOneWidget);
+
+      await tester.tap(find.text('Race ↻'));
+      await tester.pumpAndSettle();
+      expect(visible('RACE STATUS'), isFalse);
+      expect(find.text('Updates ↻'), findsOneWidget);
+    });
+
     testWidgets('uses NuvoRaceRow for active race rows', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
@@ -191,20 +225,44 @@ void main() {
       expect(find.byType(NuvoFinishedSummary), findsOneWidget);
     });
 
-    testWidgets('uses NuvoQuickStart for quick start tiles', (tester) async {
+    testWidgets('quick starts section renders its tiles', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
       await tester.pumpAndSettle();
+      expect(find.text('Quick starts'), findsOneWidget);
       // 5 quick start tiles.
-      expect(find.byType(NuvoQuickStart), findsNWidgets(5));
+      expect(find.text('Pushups'), findsOneWidget);
+      expect(find.text('Squats'), findsOneWidget);
+      expect(find.text('Jumping Jacks'), findsOneWidget);
+      expect(find.text('Lunges'), findsOneWidget);
+      expect(find.text('Plank'), findsOneWidget);
+      // Each tile reads as a game preset — "First to N", not "N reps".
+      expect(find.text('First to 100'), findsOneWidget);
+      expect(find.text('First to 500'), findsOneWidget);
+      expect(find.text('300-sec hold'), findsOneWidget);
     });
 
-    testWidgets('active race row shows progress percent, not placement', (
+    testWidgets('quick start tiles do not overflow at 320px', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        _buildApp(_StubRaceRepo([_cameraRace(participantCount: 3)])),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // The narrowest tile still shows its full preset line.
+      expect(find.text('First to 100'), findsOneWidget);
+    });
+
+    testWidgets('active race row shows progress, not placement', (
       tester,
     ) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
-      // Active rows should show "%" progress.
-      expect(find.textContaining('%'), findsWidgets);
+      // Active rows show progress toward the target (e.g. "20 / 100 reps").
+      expect(find.textContaining('/ 100 reps'), findsWidgets);
     });
 
     testWidgets('finished race row shows placement, not progress percent', (
@@ -232,8 +290,38 @@ void main() {
     testWidgets('waiting section shows crew slot icon, not generic checkmark', (
       tester,
     ) async {
+      // A waiting race (<= 1 participant) whose only racer is someone else,
+      // so the summary can render their avatar plus empty crew slots.
+      final waitingRace = _cameraRace(
+        id: 'w1',
+        title: 'Pushup Waiting',
+        participantCount: 1,
+      );
       final waiting = [
-        _cameraRace(id: 'w1', title: 'Pushup Waiting', participantCount: 1),
+        Race(
+          id: waitingRace.id,
+          creatorId: 'user-2',
+          title: waitingRace.title,
+          goalType: waitingRace.goalType,
+          targetValue: waitingRace.targetValue,
+          unit: waitingRace.unit,
+          proofRequirement: waitingRace.proofRequirement,
+          proofMode: waitingRace.proofMode,
+          verificationMethod: waitingRace.verificationMethod,
+          status: waitingRace.status,
+          createdAt: waitingRace.createdAt,
+          updatedAt: waitingRace.updatedAt,
+          participants: [
+            const RaceParticipant(
+              id: 'part-1',
+              userId: 'user-2',
+              displayName: 'Racer Two',
+              progressValue: 0,
+              progressPercent: 0,
+              joinedAt: '2026-01-01T00:00:00Z',
+            ),
+          ],
+        ),
       ];
       final active = [
         _cameraRace(id: 'a1', title: 'Squat Active', participantCount: 3),
@@ -243,8 +331,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Waiting section should use group_add icon, not check.
-      expect(find.byIcon(Icons.group_add_rounded), findsOneWidget);
+      // Waiting section renders empty crew slots (add icon), not a check.
+      expect(find.byIcon(Icons.add_rounded), findsWidgets);
       expect(find.byIcon(Icons.check_rounded), findsNothing);
     });
 
@@ -388,7 +476,7 @@ void main() {
     testWidgets('Start race and Join present in header', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
-      expect(find.text('Start race'), findsOneWidget);
+      expect(find.text('Start'), findsOneWidget);
       expect(find.text('Join'), findsOneWidget);
     });
 
@@ -450,7 +538,7 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.text('Start race'), findsOneWidget);
+      expect(find.text('Start'), findsOneWidget);
       expect(find.text('Join'), findsOneWidget);
     });
 

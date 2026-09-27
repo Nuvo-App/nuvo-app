@@ -15,11 +15,13 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_move_log_item.dart';
+import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../../core/widgets/nuvo_podium.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
-import '../../social/presentation/race_share_sheet.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -65,12 +67,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _silentRefresh() async {
+  Future<void> _silentRefresh({bool syncArena = false}) async {
     if (_loading) return;
     try {
       final race = await ref
           .read(raceControllerProvider.notifier)
-          .getRaceDetail(widget.id);
+          .getRaceDetail(widget.id, syncArena: syncArena);
       if (mounted) setState(() => _race = race);
     } catch (e) {
       // Background refresh failed — preserve the already-loaded race on
@@ -90,7 +92,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         _loading = false;
       });
       // Still refresh from network in the background
-      _silentRefresh();
+      _silentRefresh(syncArena: true);
       return;
     }
 
@@ -101,7 +103,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     try {
       final race = await ref
           .read(raceControllerProvider.notifier)
-          .getRaceDetail(widget.id);
+          .getRaceDetail(widget.id, syncArena: true);
       if (mounted) {
         setState(() {
           _race = race;
@@ -207,6 +209,86 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     return 'Could not $action. Try again.';
   }
 
+  /// Verify-and-score path for the primary CTA. Attempt races open a
+  /// server-timestamped attempt first — the proof that follows binds to it.
+  Future<void> _verify(
+    Race race,
+    CameraVerificationEligibility eligibility, {
+    required bool usesAttempts,
+  }) async {
+    // The guide follows the user into the verifier — Begin on the proof
+    // setup screen is the final coached action.
+    if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.raceDetail) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.verifySetup;
+    }
+    debugLogCameraVerificationDecision(
+      race,
+      eligibility,
+      routeAction: 'race_detail_to_submit_proof',
+    );
+
+    if (usesAttempts) {
+      setState(() => _busy = true);
+      try {
+        await ref
+            .read(raceControllerProvider.notifier)
+            .startAttempt(race.id);
+      } on ApiException catch (e) {
+        if (mounted) {
+          setState(() => _busy = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_friendlyApiError(e, 'start an attempt'))),
+          );
+        }
+        return;
+      } catch (_) {
+        if (mounted) {
+          setState(() => _busy = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not start an attempt.')),
+          );
+        }
+        return;
+      }
+      if (mounted) setState(() => _busy = false);
+    }
+
+    if (!mounted) return;
+    await context.push('/race/${race.id}/proof');
+    _load();
+  }
+
+  /// One-tap rematch — the server clones settings + roster into a fresh race.
+  Future<void> _rematch() async {
+    final race = _race;
+    if (race == null) return;
+    setState(() => _busy = true);
+    try {
+      final next = await ref
+          .read(raceControllerProvider.notifier)
+          .rematchRace(race.id);
+      if (mounted) {
+        setState(() => _busy = false);
+        context.pushReplacement('/race/${next.id}');
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_friendlyApiError(e, 'start a rematch'))),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not start a rematch.')),
+        );
+      }
+    }
+  }
+
   Future<void> _goToInviteCrew(String raceId) async {
     if (_navigating) return;
     setState(() => _navigating = true);
@@ -301,34 +383,27 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               : 'Finish line crossed.')
         : chase?.chaseCopy;
     final recentMoveCount = race.recentProofs.length;
+    // Attempt formats (best attempt / timed battle) open a server-timestamped
+    // attempt first — the verified proof binds to it automatically.
+    final usesAttempts =
+        race.format == 'best_attempt' || race.format == 'timed_attempt';
     final primaryLabel = canJoin
         ? 'Join race'
         : myRaceComplete
-        ? 'Start another race'
-        : eligibility.isCameraVerifiable
-        ? 'Verify now'
+        ? (isOwner || isParticipant ? 'Race again' : 'Start another race')
+        : canVerify
+        ? (usesAttempts ? 'Start attempt' : 'Verify now')
         : 'Unsupported';
     final onPrimary = _busy
         ? null
         : canJoin
         ? _joinRace
         : myRaceComplete
-        ? () => context.push('/races/new')
+        ? (isOwner || isParticipant
+              ? _rematch
+              : () => context.push('/races/new'))
         : canVerify
-        ? () async {
-            if (ref.read(firstRaceGuideProvider) ==
-                FirstRaceGuideStep.raceDetail) {
-              ref.read(firstRaceGuideProvider.notifier).state =
-                  FirstRaceGuideStep.complete;
-            }
-            debugLogCameraVerificationDecision(
-              race,
-              eligibility,
-              routeAction: 'race_detail_to_submit_proof',
-            );
-            await context.push('/race/${race.id}/proof');
-            _load();
-          }
+        ? () => _verify(race, eligibility, usesAttempts: usesAttempts)
         : null;
 
     final showBottomBar =
@@ -348,7 +423,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         bottom: false,
         child: RefreshIndicator(
           onRefresh: _load,
-          child: ListView(
+          child: NuvoFadeScroll(
+            child: ListView(
             padding: EdgeInsets.fromLTRB(18, 16, 18, showBottomBar ? 24 : 56),
             children: [
               if (myRaceComplete)
@@ -382,6 +458,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   onMenu: isOwner
                       ? () => context.push('/race/${race.id}/settings')
                       : null,
+                  timeLeft: chase?.timeLeft,
                 ),
 
               if (raceIsActive(race) && !eligibility.isCameraVerifiable) ...[
@@ -412,15 +489,14 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   NuvoEmptyState(
                     icon: Icons.group_add_rounded,
                     title: 'No one on the board yet',
-                    body: 'Invite your crew — the leaderboard fills in as '
+                    body:
+                        'Invite your crew — the leaderboard fills in as '
                         'people join and log their first move.',
                     ctaLabel: isOwner ? 'Invite crew' : null,
-                    onCta: isOwner
-                        ? () => _goToInviteCrew(race.id)
-                        : null,
+                    onCta: isOwner ? () => _goToInviteCrew(race.id) : null,
                     compact: true,
                   )
-                else if (sorted.length >= 2)
+                else
                   NuvoPodium(
                     top: [
                       for (var i = 0; i < sorted.take(3).length; i++)
@@ -441,17 +517,13 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                             rankOffset: 3,
                           )
                         : null,
-                  )
-                else
-                  _LeaderboardGroup(
-                    race: race,
-                    participants: sorted,
-                    userId: user?.id,
                   ),
               ],
 
               // ── Your progress (the focal card) ─────────────────────────────
-              if (isParticipant && !myRaceComplete && race.targetValue != null) ...[
+              if (isParticipant &&
+                  !myRaceComplete &&
+                  race.targetValue != null) ...[
                 const SizedBox(height: 20),
                 _YourProgressCard(
                   measurementType: raceMeasurementType(race),
@@ -466,7 +538,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               ],
 
               // ── Path to goal (only for goals with no numeric target) ────
-              if (isParticipant && !myRaceComplete && race.targetValue == null) ...[
+              if (isParticipant &&
+                  !myRaceComplete &&
+                  race.targetValue == null) ...[
                 const SizedBox(height: 24),
                 const _SectionLabel(label: 'Path to goal'),
                 const SizedBox(height: 12),
@@ -476,19 +550,6 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   progressValue: myPart?.progressValue,
                   targetValue: race.targetValue,
                   unit: raceDisplayUnit(race),
-                ),
-              ],
-
-              // ── Invite crew ────────────────────────────────────────────
-              if (canVerify && isOwner && !myRaceComplete) ...[
-                const SizedBox(height: 20),
-                NuvoSecondaryButton(
-                  label: 'Invite crew',
-                  icon: Icons.person_add_alt_1_rounded,
-                  expand: true,
-                  onPressed: (_busy || _navigating)
-                      ? null
-                      : () => _goToInviteCrew(race.id),
                 ),
               ],
 
@@ -534,20 +595,22 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 const SizedBox(height: 28),
                 const _SectionLabel(label: 'Manage'),
                 const SizedBox(height: 12),
-                _ManageRow(
-                  icon: Icons.edit_rounded,
-                  label: 'Edit race',
-                  onTap: () => context.push('/race/${race.id}/settings'),
-                ),
-                const SizedBox(height: 8),
-                _ManageRow(
-                  icon: Icons.ios_share_rounded,
-                  label: 'Share race — link & QR',
-                  onTap: () => showRaceShareSheet(
-                    context,
-                    raceId: race.id,
-                    raceTitle: race.title,
-                  ),
+                _ManageGroup(
+                  children: [
+                    if (!myRaceComplete)
+                      _ManageRow(
+                        icon: Icons.person_add_alt_1_rounded,
+                        label: 'Invite crew',
+                        onTap: (_busy || _navigating)
+                            ? null
+                            : () => _goToInviteCrew(race.id),
+                      ),
+                    _ManageRow(
+                      icon: Icons.edit_rounded,
+                      label: 'Edit race',
+                      onTap: () => context.push('/race/${race.id}/settings'),
+                    ),
+                  ],
                 ),
               ],
 
@@ -562,22 +625,28 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               ],
             ],
           ),
+          ),
         ),
       ),
     );
 
     final guide = ref.watch(firstRaceGuideProvider);
-    if (guide != FirstRaceGuideStep.raceDetail) return screen;
+    // verifySetup here means the user backed out of the proof screen before
+    // Begin — the coach reacquires the Verify bar instead of pointing at a
+    // route they left.
+    if (guide != FirstRaceGuideStep.raceDetail &&
+        guide != FirstRaceGuideStep.verifySetup) {
+      return screen;
+    }
     return Stack(
       children: [
         screen,
         FirstRaceGuideCoach(
           step: guide,
           targetKey: FirstRaceGuideKeys.racePrimary,
-          eyebrow: 'MAKE THE FIRST MOVE',
-          title: 'This button moves your leaderboard.',
-          body:
-              'Tap Verify now to submit your first proof and see your progress update.',
+          eyebrow: 'MAKE A MOVE',
+          title: 'Tap Verify when you’re ready.',
+          body: 'It adds progress to your leaderboard.',
         ),
       ],
     );
@@ -592,6 +661,7 @@ class _LiveRaceHeader extends StatelessWidget {
     required this.eligibility,
     required this.onBack,
     this.onMenu,
+    this.timeLeft,
   });
 
   final Race race;
@@ -599,12 +669,37 @@ class _LiveRaceHeader extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onMenu;
 
+  /// Compact deadline countdown ("4h", "3d") from server time — shown for
+  /// deadline races only.
+  final String? timeLeft;
+
+  /// One-line description of how this race is won, per format.
+  static String modeSubtitle(
+    Race race,
+    CameraVerificationEligibility eligibility,
+  ) {
+    final target = race.targetValue;
+    switch (race.format) {
+      case 'most_in_window':
+        return 'Most ${raceDisplayUnit(race)} before the finish line';
+      case 'best_attempt':
+        return 'Best single attempt wins';
+      case 'timed_attempt':
+        final seconds = race.attemptDurationSeconds;
+        return seconds != null
+            ? 'Timed battle — most in ${formatDurationShort(seconds)}'
+            : 'Timed battle';
+      default:
+        return target != null
+            ? 'First to ${raceTargetLabel(race)}'
+            : eligibility.movementDefinition?.title ??
+                  'Keep moving to the finish';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final target = race.targetValue;
-    final subtitle = target != null
-        ? 'First to ${raceTargetLabel(race)}'
-        : eligibility.movementDefinition?.title ?? 'Keep moving to the finish';
+    final subtitle = modeSubtitle(race, eligibility);
 
     final count = race.participantCount;
     final racerLine = '$count ${count == 1 ? 'racer' : 'racers'}';
@@ -642,7 +737,48 @@ class _LiveRaceHeader extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
+        if (timeLeft != null) ...[
+          const SizedBox(height: 12),
+          _DeadlinePill(timeLeft: timeLeft!),
+        ],
       ],
+    );
+  }
+}
+
+/// "Finish line · 4h left" — server-time countdown for deadline races.
+class _DeadlinePill extends StatelessWidget {
+  const _DeadlinePill({required this.timeLeft});
+
+  final String timeLeft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: NuvoColors.panel,
+        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+        border: Border.all(color: NuvoColors.navy, width: 1.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.timer_outlined,
+            size: 14,
+            color: NuvoColors.navy,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Finish line · $timeLeft left',
+            style: AppTextStyles.labelLarge.copyWith(
+              color: NuvoColors.navy,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -713,10 +849,7 @@ class _YourProgressCard extends StatelessWidget {
                   targetValue,
                   unit,
                 ),
-                style: AppTextStyles.statLarge(
-                  context.rs(30),
-                  color: accent,
-                ),
+                style: AppTextStyles.statLarge(context.rs(30), color: accent),
               ),
               const Spacer(),
               Text(
@@ -786,12 +919,17 @@ class _VerifyBar extends StatelessWidget {
         18,
         10 + MediaQuery.paddingOf(context).bottom,
       ),
-      child: NuvoPrimaryButton(
-        label: label,
-        icon: Icons.arrow_forward_rounded,
-        expand: true,
-        loading: loading,
-        onPressed: onPressed,
+      // Join → Verify morphs in place when canonical membership lands —
+      // the bar's one surface changes state instead of swapping labels.
+      child: NuvoStateMorph(
+        stateKey: label,
+        child: NuvoPrimaryButton(
+          label: label,
+          icon: Icons.arrow_forward_rounded,
+          expand: true,
+          loading: loading,
+          onPressed: onPressed,
+        ),
       ),
     );
   }
@@ -1020,7 +1158,7 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _LeaderboardGroup extends StatelessWidget {
+class _LeaderboardGroup extends StatefulWidget {
   const _LeaderboardGroup({
     required this.race,
     required this.participants,
@@ -1037,27 +1175,73 @@ class _LeaderboardGroup extends StatelessWidget {
   final int rankOffset;
 
   @override
+  State<_LeaderboardGroup> createState() => _LeaderboardGroupState();
+}
+
+class _LeaderboardGroupState extends State<_LeaderboardGroup> {
+  int? _viewerRank;
+
+  int? _rankOf(List<RaceParticipant> list) {
+    if (widget.userId == null) return null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].userId == widget.userId) {
+        return list[i].rank ?? widget.rankOffset + i + 1;
+      }
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _viewerRank = _rankOf(widget.participants);
+  }
+
+  @override
+  void didUpdateWidget(covariant _LeaderboardGroup oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = _rankOf(widget.participants);
+    // Meaningful haptic only when the *viewer* climbs the board — other
+    // participants' moves stay silent. Lower number = better rank.
+    if (next != null && _viewerRank != null && next < _viewerRank!) {
+      NuvoHaptics.confirm();
+    }
+    _viewerRank = next;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final participants = widget.participants;
     return _OutlinedSheet(
-      child: Column(
+      // Keyed FLIP column: rows physically travel to their new slot when
+      // canonical standings reorder. Animation never computes ranks — the
+      // keys just let it track each row across updates.
+      child: NuvoReorderColumn(
         children: [
-          for (var i = 0; i < participants.length; i++) ...[
-            _LeaderboardCompactRow(
-              race: race,
-              participant: participants[i],
-              rank: participants[i].rank ?? rankOffset + i + 1,
-              isCurrentUser:
-                  userId != null && participants[i].userId == userId,
-            ),
-            if (i < participants.length - 1)
-              const Divider(
-                height: 1,
-                thickness: 1,
-                color: NuvoColors.divider,
-                indent: 16,
-                endIndent: 16,
+          for (var i = 0; i < participants.length; i++)
+            Container(
+              key: ValueKey(participants[i].userId),
+              child: Column(
+                children: [
+                  _LeaderboardCompactRow(
+                    race: widget.race,
+                    participant: participants[i],
+                    rank:
+                        participants[i].rank ?? widget.rankOffset + i + 1,
+                    isCurrentUser: widget.userId != null &&
+                        participants[i].userId == widget.userId,
+                  ),
+                  if (i < participants.length - 1)
+                    const Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: NuvoColors.divider,
+                      indent: 16,
+                      endIndent: 16,
+                    ),
+                ],
               ),
-          ],
+            ),
         ],
       ),
     );
@@ -1111,8 +1295,8 @@ class _LeaderboardCompactRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 24,
-            child: Text(
-              '$rank',
+            child: NuvoNumberFlow(
+              value: rank,
               style: AppTextStyles.labelMedium.copyWith(
                 color: NuvoColors.textMuted,
                 fontWeight: FontWeight.w800,
@@ -1168,26 +1352,43 @@ class _FinalStandingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _OutlinedSheet(
-      child: Column(
-        children: [
-          for (var i = 0; i < standings.length; i++) ...[
-            _FinalStandingRow(
-              standing: standings[i],
-              isCurrentUser: standings[i].userId == userId,
-              race: race,
-            ),
-            if (i < standings.length - 1)
-              const Divider(
-                height: 1,
-                thickness: 1,
-                color: NuvoColors.divider,
-                indent: 16,
-                endIndent: 16,
+    return NuvoPodium(
+      top: [
+        for (final standing in standings.take(3))
+          NuvoPodiumEntry(
+            rank: standing.rank,
+            name: standing.displayName,
+            statLabel: standing.scoreValue > 0
+                ? raceScoreLabel(race, standing.scoreValue)
+                : 'Finished',
+            photoUrl: standing.profilePhotoUrl,
+            avatarSeedId: standing.userId,
+            isCurrentUser: standing.userId == userId,
+          ),
+      ],
+      rest: standings.length > 3
+          ? _OutlinedSheet(
+              child: Column(
+                children: [
+                  for (var i = 3; i < standings.length; i++) ...[
+                    _FinalStandingRow(
+                      standing: standings[i],
+                      isCurrentUser: standings[i].userId == userId,
+                      race: race,
+                    ),
+                    if (i < standings.length - 1)
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: NuvoColors.divider,
+                        indent: 16,
+                        endIndent: 16,
+                      ),
+                  ],
+                ],
               ),
-          ],
-        ],
-      ),
+            )
+          : null,
     );
   }
 }
@@ -1240,10 +1441,18 @@ class _MoveLogGroup extends StatelessWidget {
 }
 
 String _rulesCopy(Race race) {
-  if (race.format == 'first_to_goal') {
-    return 'Every verified session adds to your total. First racer to the finish line wins.';
-  }
-  return 'Verify moves before the finish line. Nuvo updates the leaderboard.';
+  return switch (race.format) {
+    'first_to_goal' =>
+      'Every verified session adds to your total. First racer to the finish line wins.',
+    'most_in_window' =>
+      'Every verified session adds to your total. Most on the board when the finish line hits wins.',
+    'best_attempt' =>
+      'Your best verified attempt is your score. Attempt again anytime before the finish line.',
+    'timed_attempt' =>
+      'Start an attempt and race the clock. Your best timed run is your score.',
+    _ =>
+      'Verify moves before the finish line. Nuvo updates the leaderboard.',
+  };
 }
 
 // ── Checkpoint path ────────────────────────────────────────────────────────────
@@ -1600,7 +1809,6 @@ String _heroSubcopy({
   return parts.join(' ');
 }
 
-
 // ── Section label ─────────────────────────────────────────────────────────────
 
 class _SectionLabel extends StatelessWidget {
@@ -1701,6 +1909,38 @@ class _FinalStandingRow extends StatelessWidget {
 
 // ── Manage row ────────────────────────────────────────────────────────────────
 
+class _ManageGroup extends StatelessWidget {
+  const _ManageGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: NuvoColors.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: NuvoColors.divider),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i < children.length - 1)
+              const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 62,
+                color: NuvoColors.divider,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _ManageRow extends StatelessWidget {
   const _ManageRow({
     required this.icon,
@@ -1710,31 +1950,28 @@ class _ManageRow extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return PressableScale(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: NuvoColors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: NuvoColors.navy, width: 2),
-        ),
+        constraints: const BoxConstraints(minHeight: 64),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            Icon(icon, color: NuvoColors.navy, size: 18),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: NuvoColors.icyBlue,
+                shape: BoxShape.circle,
               ),
+              child: Icon(icon, color: NuvoColors.navy, size: 18),
             ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
             const NuvoIcon(
               NuvoIconType.arrow,
               color: NuvoColors.muted,

@@ -4,6 +4,13 @@ import { readMotionCatalog, readMotionRelease } from '../domain/motionRegistry';
 import { validateMotionVerifierSpec } from '../domain/motionSpec';
 import { adaptationRecommendation, decideEvaluation, parseEvaluationReport } from '../domain/motionEvaluation';
 import { generateId, hashValue } from '../lib/crypto';
+import {
+  decryptMotionBytes,
+  decryptMotionText,
+  getMotionDataKeyByRef,
+  isMotionEncryptionEnvelope,
+  motionAccountRef,
+} from '../lib/motion_privacy';
 
 // Internal Motion Session lookup — for the coding agent / support tooling to
 // pull what Nuvo actually saw during a verification attempt. Gated on a shared
@@ -293,10 +300,36 @@ async function decompressGzip(buf: ArrayBuffer): Promise<ArrayBuffer> {
 async function fullSession(c: Context<AppEnv>, row: SessionRow) {
   const obj = await c.env.PROFILE_PHOTOS.get(String(row.object_key));
   let artifact: unknown = null;
+  let metadata: unknown = null;
   if (obj) {
     try {
-      const bytes = await decompressGzip(await obj.arrayBuffer());
-      artifact = JSON.parse(new TextDecoder().decode(bytes));
+      let bytes = new Uint8Array(await obj.arrayBuffer());
+      if (isMotionEncryptionEnvelope(bytes)) {
+        const key = await getMotionDataKeyByRef(
+          c.env.DB,
+          c.env.MOTION_DATA_MASTER_KEY,
+          String(row.user_id),
+        );
+        if (!key) throw new Error('Motion data key is unavailable.');
+        const decrypted = await decryptMotionBytes(key, bytes);
+        bytes = new Uint8Array(decrypted).slice();
+      }
+      const compressed = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      const decompressed = await decompressGzip(compressed);
+      artifact = JSON.parse(new TextDecoder().decode(decompressed));
+      if (typeof row.metadata_json === 'string') {
+        let metadataText = row.metadata_json;
+        if (isMotionEncryptionEnvelope(new TextEncoder().encode(metadataText))) {
+          const key = await getMotionDataKeyByRef(
+            c.env.DB,
+            c.env.MOTION_DATA_MASTER_KEY,
+            String(row.user_id),
+          );
+          if (!key) throw new Error('Motion data key is unavailable.');
+          metadataText = await decryptMotionText(key, metadataText);
+        }
+        metadata = JSON.parse(metadataText);
+      }
     } catch (e) {
       artifact = { error: `Could not decode artifact: ${e instanceof Error ? e.message : String(e)}` };
     }
@@ -304,7 +337,7 @@ async function fullSession(c: Context<AppEnv>, row: SessionRow) {
   return {
     ok: true as const,
     session: sessionSummary(row),
-    metadata: typeof row.metadata_json === 'string' ? JSON.parse(row.metadata_json) : null,
+    metadata,
     artifact,
   };
 }
@@ -366,12 +399,13 @@ internalRouter.get('/motion-sessions/:sessionId', async (c) => {
 // A user's sessions, newest first; optional ?activityId= and ?outcome= filters.
 internalRouter.get('/users/:userId/motion-sessions', async (c) => {
   const userId = c.req.param('userId');
+  const accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
   const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 20), 1), 100);
   const activityId = c.req.query('activityId');
   const outcome = c.req.query('outcome');
 
-  const clauses = ['user_id = ?'];
-  const binds: unknown[] = [userId];
+  const clauses = ['user_id IN (?, ?)'];
+  const binds: unknown[] = [userId, accountRef];
   if (activityId) { clauses.push('activity_id = ?'); binds.push(activityId); }
   if (outcome) { clauses.push('outcome = ?'); binds.push(outcome); }
   binds.push(limit);
@@ -386,12 +420,13 @@ internalRouter.get('/users/:userId/motion-sessions', async (c) => {
 // The user's single latest session (optionally for one activity) + its artifact.
 internalRouter.get('/users/:userId/motion-sessions/latest', async (c) => {
   const userId = c.req.param('userId');
+  const accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
   const activityId = c.req.query('activityId');
   const row = await c.env.DB.prepare(
     `SELECT ${SUMMARY_COLS}, metadata_json FROM motion_sessions
-      WHERE user_id = ?${activityId ? ' AND activity_id = ?' : ''}
+      WHERE user_id IN (?, ?)${activityId ? ' AND activity_id = ?' : ''}
       ORDER BY created_at DESC LIMIT 1`,
-  ).bind(...(activityId ? [userId, activityId] : [userId])).first<SessionRow>();
+  ).bind(...(activityId ? [userId, accountRef, activityId] : [userId, accountRef])).first<SessionRow>();
   if (!row) return c.json({ ok: false, error: 'No sessions for this user.' }, 404);
   return c.json(await fullSession(c, row));
 });

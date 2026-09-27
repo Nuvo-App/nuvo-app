@@ -375,7 +375,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.textContaining('Pushups'), findsOneWidget);
       expect(find.text('Morning Pushup Race'), findsOneWidget);
-      expect(find.textContaining("You're 2nd"), findsOneWidget);
+      expect(find.text('2nd'), findsOneWidget);
       expect(find.text('View leaderboard'), findsOneWidget);
     });
 

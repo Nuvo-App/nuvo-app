@@ -163,6 +163,20 @@ NuvoPoseFrame _armOnlyPushupFrame({required bool active}) {
     'rightHip': _p(0.58, 0.55),
   });
 }
+
+NuvoPoseFrame _lowConfidencePushupFrame({required bool active}) {
+  final shoulderY = 0.36 + (active ? 0.08 : 0);
+  return _frame({
+    'leftShoulder': _p(0.34, shoulderY, likelihood: 0.32),
+    'rightShoulder': _p(0.66, shoulderY, likelihood: 0.32),
+    'leftElbow': _p(0.26, 0.40, likelihood: 0.32),
+    'rightElbow': _p(0.74, 0.40, likelihood: 0.32),
+    'leftWrist': _p(0.18, 0.48, likelihood: 0.32),
+    'rightWrist': _p(0.82, 0.48, likelihood: 0.32),
+    // Deliberately omit hips: floor/background conditions often make these
+    // points unreliable while the upper-body pushup signal remains clear.
+  });
+}
 // torsoHeight = |0.62 - 0.30| = 0.32
 // ratio = (0.64 - 0.62) / 0.32 = 0.0625 < 0.58 → ACTIVE ✅
 
@@ -768,5 +782,27 @@ void main() {
 
       expect(validator.currentValue, 0);
     });
+
+    test(
+      'counts with low-confidence upper-body landmarks and missing hips',
+      () {
+        final validator = PushupsValidator(targetValue: 1);
+        validator.start();
+
+        for (final frame in [
+          _lowConfidencePushupFrame(active: false),
+          _lowConfidencePushupFrame(active: false),
+          _lowConfidencePushupFrame(active: true),
+          _lowConfidencePushupFrame(active: true),
+          _lowConfidencePushupFrame(active: false),
+          _lowConfidencePushupFrame(active: false),
+        ]) {
+          validator.update(frame);
+        }
+
+        expect(validator.currentValue, 1);
+        expect(validator.fullBodyVisible, isTrue);
+      },
+    );
   });
 }

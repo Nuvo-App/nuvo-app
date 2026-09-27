@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/widgets/nuvo_error_state.dart';
+import 'package:nuvo/core/widgets/nuvo_race_components.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -215,13 +216,49 @@ void main() {
       await tester.tap(find.text('Recent'));
       await tester.pumpAndSettle();
 
-      // Recent proof entry should show the user name.
-      expect(find.text('Test User'), findsWidgets);
+      // Recent proof entry should show the user name (rendered inline in the
+      // row's "who · what · how much" meta line).
+      expect(find.textContaining('Test User'), findsWidgets);
       // Completed race should NOT be visible.
       expect(find.textContaining('Pushup Completed'), findsNothing);
     });
 
-    testWidgets('40 ready races: Also ready capped at 3', (tester) async {
+    testWidgets('selection pill slides between segment slots', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildApp(
+          _StubRaceRepo([
+            _readyRace(id: 'r1', title: 'Squat Ready'),
+            _completedRace(id: 'c1', title: 'Completed'),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      AnimatedAlign pill() =>
+          tester.widget<AnimatedAlign>(find.byType(AnimatedAlign));
+
+      // Ready is selected by default — the pill sits in the left slot.
+      expect(pill().alignment, const Alignment(-1, 0));
+
+      await tester.tap(find.text('Completed'));
+      await tester.pumpAndSettle();
+      // Same pill widget moved to the middle slot rather than a new
+      // selected widget appearing.
+      expect(pill().alignment, const Alignment(0, 0));
+
+      await tester.tap(find.text('Recent'));
+      await tester.pumpAndSettle();
+      expect(pill().alignment, const Alignment(1, 0));
+    });
+
+    testWidgets('40 ready races: Also ready capped at 8, not artificially at 3', (
+      tester,
+    ) async {
+      // The cap was raised from a mockup-matched 3 to 8 — a real viewport
+      // with real data should read as populated, not truncated to a
+      // cherry-picked few rows with a blank lower half.
       await tester.pumpWidget(
         _buildApp(_StubRaceRepo(_generateReadyRaces(40))),
       );
@@ -229,48 +266,48 @@ void main() {
 
       // Up next shows first race.
       expect(find.textContaining('Ready 1'), findsOneWidget);
-      // 3 capped "Also ready" rows (races 2, 3, 4).
-      expect(find.textContaining('Ready 2'), findsOneWidget);
-      expect(find.textContaining('Ready 3'), findsOneWidget);
-      expect(find.textContaining('Ready 4'), findsOneWidget);
-      // Race 5 should NOT be visible (capped at 3).
-      expect(find.textContaining('Ready 5'), findsNothing);
+      // 8 capped "Also ready" rows (races 2 through 9).
+      for (var i = 2; i <= 9; i++) {
+        expect(find.textContaining('Ready $i'), findsOneWidget);
+      }
+      // Race 10 should NOT be visible (capped at 8).
+      expect(find.textContaining('Ready 10'), findsNothing);
       // "See all" should be visible.
       expect(find.textContaining('See all'), findsOneWidget);
     });
 
     testWidgets('See all expands Also ready', (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateReadyRaces(5))));
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateReadyRaces(12))));
       await tester.pumpAndSettle();
 
-      // Initially Race 5 is hidden.
-      expect(find.textContaining('Ready 5'), findsNothing);
+      // Initially Race 12 is hidden (cap is 8, "Also ready" holds races 2–12).
+      expect(find.textContaining('Ready 12'), findsNothing);
 
       // Tap "See all".
       await tester.tap(find.textContaining('See all'));
       await tester.pumpAndSettle();
 
-      // Now Race 5 should be visible.
-      expect(find.textContaining('Ready 5'), findsOneWidget);
+      // Now Race 12 should be visible.
+      expect(find.textContaining('Ready 12'), findsOneWidget);
       // "Show less" should be visible.
       expect(find.text('Show less'), findsOneWidget);
     });
 
     testWidgets('Show less collapses Also ready', (tester) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateReadyRaces(5))));
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateReadyRaces(12))));
       await tester.pumpAndSettle();
 
       // Expand.
       await tester.tap(find.textContaining('See all'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Ready 5'), findsOneWidget);
+      expect(find.textContaining('Ready 12'), findsOneWidget);
 
       // Collapse.
       await tester.tap(find.text('Show less'));
       await tester.pumpAndSettle();
 
-      // Race 5 should be hidden again.
-      expect(find.textContaining('Ready 5'), findsNothing);
+      // Race 12 should be hidden again.
+      expect(find.textContaining('Ready 12'), findsNothing);
     });
 
     testWidgets('Ready empty state', (tester) async {
@@ -339,6 +376,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('smallest viewport (320x568) does not overflow', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        _buildApp(_StubRaceRepo(_generateReadyRaces(10))),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('compact header shows "Verify" title and ready count', (
       tester,
     ) async {
@@ -347,6 +399,65 @@ void main() {
 
       expect(find.text('Verify'), findsOneWidget);
       expect(find.textContaining('ready to move'), findsOneWidget);
+    });
+
+    testWidgets('segmented control stays a compact filter, not three CTAs', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(
+        _buildApp(_StubRaceRepo(_generateReadyRaces(10))),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // Each segment tab must stay in the compact-filter range (~48-56px for
+      // the whole control including its navy container padding/border). The
+      // selection state lives on the sliding pill behind the tabs now, so
+      // the tab itself is the transparent hit area (GestureDetector).
+      final tab = find.ancestor(
+        of: find.text('Ready'),
+        matching: find.byType(GestureDetector),
+      );
+      expect(tab, findsOneWidget);
+      final tabHeight = tester.getSize(tab).height;
+      expect(
+        tabHeight,
+        lessThan(52),
+        reason:
+            'segment tab should be a compact filter row, not a button '
+            '(measured: $tabHeight)',
+      );
+      expect(tabHeight, greaterThan(28));
+    });
+
+    testWidgets('Up next card stays bounded — no oversized blank middle', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(
+        _buildApp(_StubRaceRepo(_generateReadyRaces(10))),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // The actionable hero shares RaceHero — a medium surface, not a
+      // poster. Bound it well under the Arena hero's budget.
+      final hero = find.byType(RaceHero);
+      expect(hero, findsOneWidget);
+      final heroHeight = tester.getSize(hero).height;
+      expect(
+        heroHeight,
+        lessThan(280),
+        reason:
+            'Up next should be a compact actionable card '
+            '(measured: $heroHeight)',
+      );
+      expect(heroHeight, greaterThan(120));
     });
   });
 }

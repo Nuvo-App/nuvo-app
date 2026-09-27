@@ -8,8 +8,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
+import '../data/race_models.dart' show PublicUser;
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
@@ -17,9 +19,14 @@ import 'custom_pose/learned_custom_movement_provider.dart';
 import 'race_controller.dart';
 
 class RaceCreatePrefill {
-  const RaceCreatePrefill({required this.idea});
+  const RaceCreatePrefill({required this.idea, this.withUser});
 
   final String idea;
+
+  /// Person context for "Race {name}" entry points (Crew → Race Together).
+  /// The composer keeps the same single flow; this just starts the race with
+  /// that person in mind: they get pulled in when the race is created.
+  final PublicUser? withUser;
 
   static const pushups = RaceCreatePrefill(idea: 'First to 100 Pushups');
   static const squats = RaceCreatePrefill(idea: 'First to 15 Squats');
@@ -88,9 +95,7 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
   void _parseIdea() {
     final parsed = draftFromIdea(_ideaController.text);
     if (parsed == null) {
-      final names = motionActivityDefinitions
-          .map((d) => d.title)
-          .join(', ');
+      final names = motionActivityDefinitions.map((d) => d.title).join(', ');
       setState(() {
         _error = 'Nuvo can verify $names.';
       });
@@ -199,8 +204,8 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
             proofRequirement: 'ai_check',
             proofReviewMode: 'auto_accept',
             visibility: _inviteCrew ? 'invite_code' : 'private',
-            aiActivityType: draft.activity.type.backendValue,
-            activityId: draft.activity.type.backendValue,
+            aiActivityType: draft.activity.activityId,
+            activityId: draft.activity.activityId,
             metric: draft.metric.backendValue,
             format: draft.format.backendValue,
             recurrence: draft.recurrence.backendValue,
@@ -285,108 +290,115 @@ class _CreateRaceScreenState extends ConsumerState<CreateRaceScreen> {
               const _SectionTitle('Activity'),
               const SizedBox(height: 10),
               Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final activity in motionActivityDefinitions)
-                  _PillChoice(
-                    label: activity.title,
-                    selected: activity.type == _draft.activity.type,
-                    onTap: () => _setActivity(activity),
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final activity in motionActivityDefinitions)
+                    _PillChoice(
+                      label: activity.title,
+                      selected: activity.type == _draft.activity.type,
+                      onTap: () => _setActivity(activity),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 26),
+              const _SectionTitle('How someone wins'),
+              const SizedBox(height: 10),
+              for (final format in const [RaceFormat.firstToGoal])
+                _ChoiceRow(
+                  label: format.label,
+                  selected: _draft.format == format,
+                  onTap: () => _setDraft(_draft.copyWith(format: format)),
+                ),
+              const SizedBox(height: 26),
+              _SectionTitle('Goal \u00b7 ${_draft.metric.label}'),
+              const SizedBox(height: 10),
+              NuvoTextInput(
+                controller: _targetController,
+                label: 'Target ${_draft.metric.label}',
+                keyboardType: TextInputType.number,
+                hint: '${_draft.activity.defaultTarget}',
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 26),
+              const _SectionTitle('Repeat'),
+              const SizedBox(height: 10),
+              for (final recurrence in const [RaceRecurrence.none])
+                _ChoiceRow(
+                  label: recurrence == RaceRecurrence.daily
+                      ? 'Starts fresh every day'
+                      : recurrence == RaceRecurrence.weekly
+                      ? 'Starts fresh every week'
+                      : 'One time',
+                  selected: _draft.recurrence == recurrence,
+                  onTap: () =>
+                      _setDraft(_draft.copyWith(recurrence: recurrence)),
+                ),
+              const SizedBox(height: 26),
+              const _SectionTitle('Racers'),
+              const SizedBox(height: 10),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _inviteCrew,
+                onChanged: (value) => setState(() => _inviteCrew = value),
+                title: Text(
+                  'Pull in your crew',
+                  style: AppTextStyles.bodyMedium,
+                ),
+                subtitle: Text(
+                  _inviteCrew
+                      ? 'Create an invite code after setup.'
+                      : 'Start solo.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
                   ),
-              ],
-            ),
-            const SizedBox(height: 26),
-            const _SectionTitle('How someone wins'),
-            const SizedBox(height: 10),
-            for (final format in const [RaceFormat.firstToGoal])
-              _ChoiceRow(
-                label: format.label,
-                selected: _draft.format == format,
-                onTap: () => _setDraft(_draft.copyWith(format: format)),
-              ),
-            const SizedBox(height: 26),
-            _SectionTitle('Goal \u00b7 ${_draft.metric.label}'),
-            const SizedBox(height: 10),
-            NuvoTextInput(
-              controller: _targetController,
-              label: 'Target ${_draft.metric.label}',
-              keyboardType: TextInputType.number,
-              hint: '${_draft.activity.defaultTarget}',
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 26),
-            const _SectionTitle('Repeat'),
-            const SizedBox(height: 10),
-            for (final recurrence in const [RaceRecurrence.none])
-              _ChoiceRow(
-                label: recurrence == RaceRecurrence.daily
-                    ? 'Starts fresh every day'
-                    : recurrence == RaceRecurrence.weekly
-                    ? 'Starts fresh every week'
-                    : 'One time',
-                selected: _draft.recurrence == recurrence,
-                onTap: () => _setDraft(_draft.copyWith(recurrence: recurrence)),
-              ),
-            const SizedBox(height: 26),
-            const _SectionTitle('Racers'),
-            const SizedBox(height: 10),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: _inviteCrew,
-              onChanged: (value) => setState(() => _inviteCrew = value),
-              title: Text('Pull in your crew', style: AppTextStyles.bodyMedium),
-              subtitle: Text(
-                _inviteCrew
-                    ? 'Create an invite code after setup.'
-                    : 'Start solo.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _ReviewBlock(draft: _draft, target: _targetController.text),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: NuvoColors.danger,
-              ),
-            ),
-          ],
-          if (_isCustom) ...[
-            const SizedBox(height: 26),
-            const _SectionTitle('Goal'),
-            const SizedBox(height: 10),
-            NuvoTextInput(
-              controller: _targetController,
-              label: 'Target reps',
-              keyboardType: TextInputType.number,
-              hint: '10',
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 26),
-            const _SectionTitle('Racers'),
-            const SizedBox(height: 10),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: _inviteCrew,
-              onChanged: (value) => setState(() => _inviteCrew = value),
-              title: Text('Pull in your crew', style: AppTextStyles.bodyMedium),
-              subtitle: Text(
-                _inviteCrew
-                    ? 'Create an invite code after setup.'
-                    : 'Start solo.',
+              const SizedBox(height: 24),
+              _ReviewBlock(draft: _draft, target: _targetController.text),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
                 style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
+                  color: NuvoColors.danger,
                 ),
               ),
-            ),
+            ],
+            if (_isCustom) ...[
+              const SizedBox(height: 26),
+              const _SectionTitle('Goal'),
+              const SizedBox(height: 10),
+              NuvoTextInput(
+                controller: _targetController,
+                label: 'Target reps',
+                keyboardType: TextInputType.number,
+                hint: '10',
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 26),
+              const _SectionTitle('Racers'),
+              const SizedBox(height: 10),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _inviteCrew,
+                onChanged: (value) => setState(() => _inviteCrew = value),
+                title: Text(
+                  'Pull in your crew',
+                  style: AppTextStyles.bodyMedium,
+                ),
+                subtitle: Text(
+                  _inviteCrew
+                      ? 'Create an invite code after setup.'
+                      : 'Start solo.',
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: NuvoColors.muted,
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
         ).animate().fadeIn(duration: 240.ms).slideY(begin: 0.03, end: 0),
       ),
       bottomNavigationBar: SafeArea(
@@ -433,8 +445,9 @@ class _ChoiceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return NuvoPressable(
       onTap: onTap,
+      haptic: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(

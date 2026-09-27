@@ -68,7 +68,7 @@ void main() {
     await pumpArena(tester);
 
     expect(find.text('Your next move'), findsOneWidget);
-    expect(find.text('You lead Alex by 17 reps.'), findsOneWidget);
+    expect(find.text('See race board'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

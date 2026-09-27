@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_geometry.dart';
 import '../theme/app_text_styles.dart';
+import 'nuvo_motion.dart';
 
 // Was bespoke #071B35/#2F7CFF — now the one navy/blue everywhere, per the
 // design guide's "4-5 colors used for almost everything" rule (matches the
@@ -12,36 +13,73 @@ import '../theme/app_text_styles.dart';
 const _kTrackNavy = NuvoColors.navy;
 const _kTrackActiveBlue = NuvoColors.blue;
 
+/// One root destination of the app shell. THE canonical tab table: the
+/// order of [nuvoDestinations] IS the index contract — nav highlight,
+/// `MainShell`'s route mapping, the `StatefulShellRoute` branch order, and
+/// `NuvoTabStack`'s transition direction all derive from this single list.
+/// 0 Arena · 1 Compete · 2 Verify · 3 Crew · 4 Profile.
+class NuvoDestination {
+  const NuvoDestination({
+    required this.path,
+    required this.label,
+    required this.icon,
+  });
+
+  final String path;
+  final String label;
+  final IconData icon;
+}
+
+const nuvoDestinations = <NuvoDestination>[
+  NuvoDestination(
+    path: '/arena',
+    label: 'Arena',
+    icon: Icons.stadium_outlined,
+  ),
+  NuvoDestination(
+    path: '/compete',
+    label: 'Compete',
+    icon: Icons.emoji_events_outlined,
+  ),
+  NuvoDestination(
+    path: '/move',
+    label: 'Verify',
+    icon: Icons.gpp_good_outlined,
+  ),
+  NuvoDestination(path: '/pass', label: 'Crew', icon: Icons.group_outlined),
+  NuvoDestination(
+    path: '/profile',
+    label: 'Profile',
+    icon: Icons.person_outline,
+  ),
+];
+
 /// Bottom navigation for Nuvo.
 ///
-/// GEOMETRY CONTRACT:
-///   _dockHeight         — visible dock container height
-///   _dockPadding        — internal vertical padding
-///   _dockInternal       — usable height inside dock (= _dockHeight - _dockPadding*2)
-///   _verifyRise         — how far Verify extends above the dock top edge
-///   _topReserve         — space above dock for Verify rise + breathing
-///   _bottomGap*         — gap between dock bottom and screen bottom (excl. safe area)
-///   _contentGap         — extra breathing room between dock top and page content
+/// FLOATING DOCK: the nav is a compact white rounded container inset from
+/// the screen edges — it behaves like a control, not a section of the
+/// screen. `MainShell` hosts it with `Scaffold(bottomNavigationBar: ...,
+/// extendBody: true)`: page content extends to the bottom edge and is
+/// visible in the dock's horizontal margins while scrolling.
 ///
-/// This widget always sits in `Scaffold.bottomNavigationBar` (see
-/// `MainShell`), with `extendBody: false` — Scaffold reserves exactly this
-/// widget's rendered height (`_occupiedHeight` + the dock's own safe-area
-/// handling) from the body, so a screen's scrollable content structurally
-/// cannot end up underneath the dock. [bottomPadding] is therefore only a
-/// small cosmetic gap for a scrollable page's last item, not a manual
-/// overlap-avoidance margin — do not inflate it to "fix" clipped content;
-/// that means the shell's Scaffold composition regressed, not that this
-/// number is too small.
+/// Because the body extends behind/around the dock, [bottomPadding] is the
+/// contract every scrollable screen applies to its final padding so the
+/// last row can scroll fully clear of the dock instead of hiding behind it.
 ///
-/// CONTENT FIT MATH (normal button):
-///   icon(20) + spacing(2) + label(11) + padding(5*2) = 43px
-///   Must be <= _dockInternal (50px) → 7px headroom ✓
+/// GEOMETRY CONTRACT (single source of truth):
+///   navDockHeight — the dock's visual height (58px), above the safe inset.
+///   navScrollClearance — the one section gap below a screen's last row.
+///   bottomPadding(context) = MediaQuery.padding.bottom + navScrollClearance
 ///
-/// CONTENT FIT MATH (Verify button):
-///   icon(18) + spacing(2) + label(11) + padding(5*2) = 41px
-///   AnimatedContainer height = 50px → fits in _dockInternal
-///   Verify SizedBox = _dockInternal + _verifyRise = 50 + 10 = 60px
-///   Aligned topCenter → rises 10px above dock, 0px below
+/// The dock's bottom edge sits exactly on the device bottom inset — nothing
+/// is drawn inside the home-indicator gesture zone, and the inset is never
+/// doubled into the dock's own height. Scaffold reports the dock's total
+/// rendered height (dock + inset) through the body's `padding.bottom`, so
+/// screens cannot double-count the shell.
+///
+/// CONTENT FIT MATH (per tab): icon(20) + gap(1) + label(~11) ≈ 32px inside
+/// navDockHeight(58). Every Expanded cell is a full-height, 1/5-width tap
+/// target (≥44px) regardless of how quiet the visuals are.
 class NuvoBottomNav extends StatelessWidget {
   const NuvoBottomNav({
     super.key,
@@ -58,54 +96,55 @@ class NuvoBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   // ── Geometry contract ──────────────────────────────────────────────────────
-  static const double _dockHeight = 64;
-  static const double _dockPadding = 7;
-  static const double _dockInternal = _dockHeight - _dockPadding * 2; // 50
-  static const double _verifyRise = 10;
-  static const double _topReserve =
-      _verifyRise + 4; // 14 — Verify rise + breathing
-  static const double _bottomGapNoInset = 10;
-  static const double _bottomGapWithInset = 8;
-  static const double _contentGap = 8;
-  static const double _horizontalMargin = 16;
 
-  // Dark mode (Arena) uses a simpler full-width bar.
-  static const double _darkHeight = 60;
+  /// The dock's visual height — compact by design. Content owns the screen.
+  static const double navDockHeight = 58;
 
-  /// A small courtesy gap below a scrollable page's last item.
+  /// Horizontal margin between the dock and the screen edges.
+  static const double navDockInset = 16;
+
+  /// How far Verify's circle rises above the dock's top edge.
+  static const double navVerifyRaise = 8;
+
+  /// Content height of the dark trackside bar (non-shell screens).
+  static const double navContentHeight = 48;
+
+  /// Section gap reserved below a scroll view's last row, on top of the dock.
+  /// Deliberately small — it separates content from the dock, it does not
+  /// double the dock's height.
+  static const double navScrollClearance = 10;
+
+  /// The one shared bottom-content inset every scrollable screen uses for
+  /// its final padding. MUST be called with a context inside the shell body
+  /// (all five tab screens qualify): Scaffold already inflates that context's
+  /// `padding.bottom` by the nav's full rendered height — dock plus device
+  /// safe inset — so adding those again here would double-count the shell.
+  /// That double-count was the old "white shelf": it reserved
+  /// bar + (bar + inset) + a large gap under every tab.
   ///
-  /// This used to return the dock's *full* occupied height, because the
-  /// shell used to float the nav over the body (`extendBody: true` + a
-  /// `Stack`, on Arena specifically) and screens had to manually reserve
-  /// space so their own content wasn't painted underneath it. That per-tab
-  /// branch is gone — every tab now renders through
-  /// `Scaffold(bottomNavigationBar: ..., extendBody: false)`, which reserves
-  /// the dock's exact height from the body itself. Overlap is now
-  /// structurally impossible, so this is just breathing room, decoupled
-  /// from the dock's geometry.
-  static double bottomPadding(BuildContext context) => _contentGap * 2;
+  /// With `extendBody: true` the page continues to the screen edge, so this
+  /// reserves the dock's full height, Verify's rise above the dock's top
+  /// edge, plus the section gap — the last row always scrolls clear instead
+  /// of ending behind the dock or the elevated circle.
+  static double bottomPadding(BuildContext context) =>
+      MediaQuery.paddingOf(context).bottom +
+      navVerifyRaise +
+      navScrollClearance;
 
-  static double _occupiedHeight(double safeBottom) {
-    final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
-    return _topReserve + _dockHeight + bottomGap + safeBottom;
-  }
-
-  static const _items = [
-    _NavItem(icon: Icons.stadium_outlined, label: 'Arena'),
-    _NavItem(icon: Icons.emoji_events_outlined, label: 'Compete'),
-    _NavItem(icon: Icons.gpp_good_outlined, label: 'Verify'),
-    _NavItem(icon: Icons.group_outlined, label: 'Crew'),
-    _NavItem(icon: Icons.person_outline, label: 'Profile'),
+  /// Nav items derive from the canonical [nuvoDestinations] table — never
+  /// maintain a parallel destination list.
+  static final _items = [
+    for (final d in nuvoDestinations)
+      _NavItem(icon: d.icon, label: d.label),
   ];
 
   @override
   Widget build(BuildContext context) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
-    final bottomGap = safeBottom == 0 ? _bottomGapNoInset : _bottomGapWithInset;
 
     if (isDark) {
       return Container(
-        height: _darkHeight + safeBottom,
+        height: navContentHeight + safeBottom,
         color: _kTrackNavy,
         padding: EdgeInsets.only(bottom: safeBottom),
         child: Row(
@@ -126,40 +165,39 @@ class NuvoBottomNav extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      height: _occupiedHeight(safeBottom),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Container(
-          height: _dockHeight,
-          margin: EdgeInsets.fromLTRB(
-            _horizontalMargin,
-            0,
-            _horizontalMargin,
-            bottomGap + safeBottom,
-          ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: 6,
-            vertical: _dockPadding,
-          ),
-          decoration: BoxDecoration(
-            color: NuvoColors.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(color: NuvoColors.divider, width: 1),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              for (var index = 0; index < _items.length; index++)
-                _NavButton(
-                  item: _items[index],
-                  selected: currentIndex == index,
-                  isPrimary: index == 2,
-                  isDark: false,
-                  onTap: () => _tap(index),
-                ),
-            ],
-          ),
+    // Floating dock — white rounded container inset from the edges, resting
+    // directly on the safe inset. Nuvo structure comes from the thin navy
+    // edge + offset navy shadow (the app's tactile shadow language), not
+    // from a divider or a full-width surface.
+    return Padding(
+      padding: EdgeInsets.fromLTRB(navDockInset, 0, navDockInset, safeBottom),
+      child: Container(
+        height: navDockHeight,
+        decoration: BoxDecoration(
+          color: context.themeColors.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.hero),
+          border: Border.all(color: NuvoColors.navy, width: 1.5),
+          boxShadow: const [
+            BoxShadow(
+              color: NuvoColors.inkNavy,
+              blurRadius: 0,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          key: rowKey,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var index = 0; index < _items.length; index++)
+              _NavButton(
+                item: _items[index],
+                selected: currentIndex == index,
+                isPrimary: index == 2,
+                isDark: false,
+                onTap: () => _tap(index),
+              ),
+          ],
         ),
       ),
     );
@@ -179,7 +217,7 @@ class _NavItem {
   final String label;
 }
 
-class _NavButton extends StatelessWidget {
+class _NavButton extends StatefulWidget {
   const _NavButton({
     required this.item,
     required this.selected,
@@ -195,93 +233,88 @@ class _NavButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (isPrimary && !isDark) {
+    if (widget.isPrimary && !widget.isDark) {
       return Expanded(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: _VerifyNavButton(item: item, selected: selected, onTap: onTap),
+        child: _VerifyNavButton(
+          item: widget.item,
+          selected: widget.selected,
+          onTap: widget.onTap,
         ),
       );
     }
 
-    final color = isDark
-        ? (selected ? _kTrackActiveBlue : NuvoColors.white)
-        : (selected ? NuvoColors.blue : NuvoColors.textMuted);
-    final alpha = selected ? 1.0 : (isDark ? 0.75 : 1.0);
-    final labelColor = color.withValues(alpha: alpha);
+    // Selection is color + a small lift, not a capsule: the active
+    // destination reads through Nuvo blue on icon + label and rises ~2px
+    // while everyone else stays quiet ink.
+    final inactiveColor = widget.isDark
+        ? NuvoColors.white.withValues(alpha: 0.75)
+        : context.themeColors.inkSubtle;
+    final activeColor = widget.isDark ? _kTrackActiveBlue : NuvoColors.blue;
 
+    // Expanded cell + opaque hit test: the whole 1/5-width, full-height cell
+    // is the tap target. The visual stays compact and quiet inside it.
     return Expanded(
       child: Semantics(
-        selected: selected,
+        selected: widget.selected,
         button: true,
-        label: item.label,
+        label: widget.item.label,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: onTap,
+          onTap: widget.onTap,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
           child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
+            child: AnimatedScale(
+              scale: _pressed ? 0.92 : 1.0,
+              duration: NuvoMotion.pressIn,
               curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: isDark
-                  ? null
-                  : BoxDecoration(
-                      color: selected
-                          ? NuvoColors.panel
-                          : CupertinoColors.transparent,
-                      borderRadius: BorderRadius.circular(NuvoRadii.md),
-                      border: selected
-                          ? Border.all(
-                              color: NuvoColors.blue.withValues(alpha: 0.15),
-                              width: 1,
-                            )
-                          : null,
-                    ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (item.asset != null && isDark)
-                    SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: ClipRect(
-                        child: OverflowBox(
-                          maxWidth: 48,
-                          maxHeight: 48,
-                          child: Image.asset(
-                            item.asset!,
-                            height: 48,
-                            color: labelColor,
-                            colorBlendMode: BlendMode.srcIn,
-                          ),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: widget.selected ? 1.0 : 0.0),
+                duration: NuvoMotion.select,
+                curve: NuvoMotion.settle,
+                builder: (context, selected, _) {
+                  final color =
+                      Color.lerp(inactiveColor, activeColor, selected)!;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Transform.translate(
+                        offset: Offset(0, -2 * selected),
+                        child: _icon(color),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        widget.item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textScaler: const TextScaler.linear(1),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: widget.selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          height: 1.1,
                         ),
                       ),
-                    )
-                  else if (item.asset != null)
-                    Image.asset(
-                      item.asset!,
-                      height: 20,
-                      color: labelColor,
-                      colorBlendMode: BlendMode.srcIn,
-                    )
-                  else
-                    Icon(item.icon!, size: isDark ? 20 : 20, color: labelColor),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textScaler: const TextScaler.linear(1),
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: labelColor,
-                      fontSize: isDark ? 10 : 10,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -289,8 +322,46 @@ class _NavButton extends StatelessWidget {
       ),
     );
   }
+
+  Widget _icon(Color color) {
+    if (widget.item.asset != null && widget.isDark) {
+      return SizedBox(
+        width: 20,
+        height: 20,
+        child: ClipRect(
+          child: OverflowBox(
+            maxWidth: 44,
+            maxHeight: 44,
+            child: Image.asset(
+              widget.item.asset!,
+              height: 44,
+              color: color,
+              colorBlendMode: BlendMode.srcIn,
+            ),
+          ),
+        ),
+      );
+    }
+    if (widget.item.asset != null) {
+      return Image.asset(
+        widget.item.asset!,
+        height: 20,
+        color: color,
+        colorBlendMode: BlendMode.srcIn,
+      );
+    }
+    return Icon(widget.item.icon!, size: 20, color: color);
+  }
 }
 
+/// Verify is Nuvo's central action — it gets the reference's center-action
+/// treatment: a compact circle raised slightly above the dock's top edge.
+/// The elevation is a few pixels of silhouette, not a FAB; the label stays at
+/// the shared baseline with the other four destinations and the cell keeps
+/// the same 1/5 width so neighbours never shift.
+///
+/// Inactive: navy circle, white icon — structural emphasis.
+/// Active: Nuvo blue circle, white icon — unmistakably the current tab.
 class _VerifyNavButton extends StatefulWidget {
   const _VerifyNavButton({
     required this.item,
@@ -306,8 +377,16 @@ class _VerifyNavButton extends StatefulWidget {
   State<_VerifyNavButton> createState() => _VerifyNavButtonState();
 }
 
-class _VerifyNavButtonState extends State<_VerifyNavButton> {
+class _VerifyNavButtonState extends State<_VerifyNavButton>
+    with SingleTickerProviderStateMixin {
   bool _pressed = false;
+
+  /// One-shot pulse when Verify becomes the active destination — a brief
+  /// rise-and-settle on the circle, restrained (peak ~9%).
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: NuvoMotion.select,
+  );
 
   void _setPressed(bool value) {
     if (_pressed == value) return;
@@ -315,23 +394,24 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final pressedOffset = _pressed ? 1.5 : 0.0;
-    // AnimatedContainer fits inside dock internal height.
-    // SizedBox is taller by _verifyRise so the button rises above the dock.
-    final containerHeight = NuvoBottomNav._dockInternal; // 50
-    final sizedBoxHeight =
-        NuvoBottomNav._dockInternal + NuvoBottomNav._verifyRise; // 60
+  void didUpdateWidget(covariant _VerifyNavButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) {
+      _pulse.forward(from: 0);
+    }
+  }
 
-    // Verify keeps its distinctive raised-shield shape whether selected or
-    // not — but only the *current* tab may read as active. Selected: solid
-    // blue, white content (unmistakably "on"). Unselected: plain surface
-    // fill, quiet ink content, thin neutral border — the same "off" register
-    // every other tab uses, just in this button's own shape.
-    final fill = widget.selected ? NuvoColors.actionBlue : NuvoColors.surface;
-    final border = widget.selected ? NuvoColors.navy : NuvoColors.border;
-    final borderWidth = widget.selected ? 1.25 : 1.0;
-    final content = widget.selected ? NuvoColors.white : NuvoColors.textMuted;
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    const circleSize = 40.0;
+    final labelColor = widget.selected ? NuvoColors.blue : c.inkSubtle;
 
     return Semantics(
       selected: widget.selected,
@@ -343,50 +423,88 @@ class _VerifyNavButtonState extends State<_VerifyNavButton> {
         onTapDown: (_) => _setPressed(true),
         onTapCancel: () => _setPressed(false),
         onTapUp: (_) => _setPressed(false),
-        child: SizedBox(
-          width: 56,
-          height: sizedBoxHeight,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 90),
-              curve: Curves.easeOut,
-              transform: Matrix4.translationValues(
-                pressedOffset,
-                pressedOffset,
-                0,
-              ),
-              width: 52,
-              height: containerHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-              decoration: BoxDecoration(
-                color: fill,
-                borderRadius: BorderRadius.circular(NuvoRadii.button),
-                border: Border.all(color: border, width: borderWidth),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(widget.item.icon, size: 18, color: content),
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textScaler: const TextScaler.linear(1),
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: content,
-                      fontSize: 10,
-                      fontWeight: widget.selected
-                          ? FontWeight.w800
-                          : FontWeight.w600,
-                      height: 1.1,
-                    ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            // Label pinned to the shared baseline — same position as every
+            // other destination's label inside the dock.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 7,
+              child: Center(
+                child: Text(
+                  widget.item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textScaler: const TextScaler.linear(1),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: labelColor,
+                    fontSize: 10,
+                    fontWeight: widget.selected
+                        ? FontWeight.w800
+                        : FontWeight.w600,
+                    height: 1.1,
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            // The elevated circle. Parent is the unclipped cell Stack, so the
+            // circle can peek above the dock's top edge by [navVerifyRaise].
+            Positioned(
+              left: 0,
+              right: 0,
+              top: -NuvoBottomNav.navVerifyRaise,
+              child: Center(
+                child: AnimatedBuilder(
+                  animation: _pulse,
+                  builder: (context, child) {
+                    // Rise ~9% then settle back to exactly 1 — a physical
+                    // "I'm active" acknowledgment, never a cartoon bounce.
+                    final t = _pulse.value;
+                    final pulse = 1 + 0.09 * (t < 0.5 ? t * 2 : (1 - t) * 2);
+                    return Transform.scale(scale: pulse, child: child);
+                  },
+                  child: AnimatedScale(
+                    scale: _pressed ? 0.92 : 1.0,
+                    duration: NuvoMotion.pressIn,
+                    curve: Curves.easeOut,
+                    child: TweenAnimationBuilder<Color?>(
+                      tween: ColorTween(
+                        end: widget.selected
+                            ? NuvoColors.actionBlue
+                            : NuvoColors.navy,
+                      ),
+                      duration: NuvoMotion.select,
+                      curve: Curves.easeOut,
+                      builder: (context, fill, _) => Container(
+                        width: circleSize,
+                        height: circleSize,
+                        decoration: BoxDecoration(
+                          color: fill,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: NuvoColors.navy, width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: NuvoColors.inkNavy,
+                              blurRadius: 0,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          widget.item.icon,
+                          size: 20,
+                          color: NuvoColors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

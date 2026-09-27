@@ -9,11 +9,15 @@ import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
+import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
+import 'package:nuvo/features/races/presentation/movement_preview/rive_movement_sequences.dart';
 import 'package:nuvo/features/races/presentation/race_controller.dart';
 import 'package:nuvo/features/races/presentation/submit_proof_screen.dart';
 import 'package:nuvo/features/races/presentation/widgets/movement_demo.dart';
 import 'package:nuvo/features/races/presentation/widgets/preset_movement_demos.dart';
+import 'package:nuvo/features/races/presentation/widgets/rive_movement_preview.dart';
+import 'package:rive/rive.dart' hide PaintingStyle;
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
@@ -35,7 +39,8 @@ const _presetCases = <(String id, String title, String unit)>[
 ];
 
 final originalPresetCases = {
-  for (final (id, _, _) in _presetCases) motionActivityForBackendValue(id)!.type,
+  for (final (id, _, _) in _presetCases)
+    motionActivityForBackendValue(id)!.type,
 };
 
 Race _raceFor(String activityId, String title, String unit) => Race(
@@ -114,48 +119,49 @@ Widget _buildTestApp(Race race) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  group('SubmitProofScreen pre-verify demo for all 13 presets', () {
+  group('SubmitProofScreen pre-verify setup for all 13 presets', () {
     for (final (id, title, unit) in _presetCases) {
-      testWidgets(
-        '$id shows NuvoMovementAnimation BEFORE Begin (no auto-skip)',
-        (tester) async {
-          final race = _raceFor(id, title, unit);
-          await tester.pumpWidget(_buildTestApp(race));
+      testWidgets('$id shows movement setup BEFORE Begin', (tester) async {
+        final race = _raceFor(id, title, unit);
+        await tester.pumpWidget(_buildTestApp(race));
 
-          // Pump a few frames to let the async race load + animation start.
-          // The looping animation never settles, so use pump with duration.
-          await tester.pump(const Duration(milliseconds: 100));
-          await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
 
-          // The pre-verify animation must be visible.
+        final movementType = motionActivityForBackendValue(id)!.type;
+        if (RiveMovementPreview.supports(movementType)) {
           expect(
-            find.byType(NuvoMovementAnimation),
+            find.byType(RiveWidgetBuilder),
             findsOneWidget,
-            reason: '$id should show NuvoMovementAnimation before Begin',
+            reason: '$id should use the data-bound Nuvo Rive preview',
           );
-
-          // "Do this" label must be present.
+        } else {
           expect(
-            find.text('Do this'),
+            find.text('Camera opens after Begin'),
             findsOneWidget,
-            reason: '$id should show "Do this" label',
+            reason: '$id should show the static verification setup',
           );
-
-          // Begin button must be present.
           expect(
-            find.text('Begin'),
-            findsOneWidget,
-            reason: '$id should show Begin button',
-          );
-
-          // AI Motion screen must NOT have opened yet.
-          expect(
-            find.byType(_AiMotionPlaceholder),
+            find.byType(RiveWidgetBuilder),
             findsNothing,
-            reason: '$id should NOT auto-navigate to AI Motion screen',
+            reason: '$id should keep its existing fallback preview',
           );
-        },
-      );
+        }
+
+        // Begin button must be present.
+        expect(
+          find.text('Begin'),
+          findsOneWidget,
+          reason: '$id should show Begin button',
+        );
+
+        // AI Motion screen must NOT have opened yet.
+        expect(
+          find.byType(_AiMotionPlaceholder),
+          findsNothing,
+          reason: '$id should NOT auto-navigate to AI Motion screen',
+        );
+      });
 
       testWidgets('$id tapping Begin navigates to the ai-motion route', (
         tester,
@@ -202,16 +208,19 @@ void main() {
       }
     });
 
-    test('movementDemoForType returns non-null for all 13 original preset IDs', () {
-      for (final (id, _, _) in _presetCases) {
-        // Verify via the catalog that each ID resolves to a definition
-        // and that definition has a demo.
-        final def = motionActivityForBackendValue(id);
-        expect(def, isNotNull, reason: 'No catalog definition for $id');
-        final demo = movementDemoForType(def!.type);
-        expect(demo, isNotNull, reason: 'No demo for $id');
-      }
-    });
+    test(
+      'movementDemoForType returns non-null for all 13 original preset IDs',
+      () {
+        for (final (id, _, _) in _presetCases) {
+          // Verify via the catalog that each ID resolves to a definition
+          // and that definition has a demo.
+          final def = motionActivityForBackendValue(id);
+          expect(def, isNotNull, reason: 'No catalog definition for $id');
+          final demo = movementDemoForType(def!.type);
+          expect(demo, isNotNull, reason: 'No demo for $id');
+        }
+      },
+    );
   });
 
   group('AI Motion screen isolation', () {
@@ -224,5 +233,26 @@ void main() {
         expect(find.byType(NuvoMovementAnimation), findsNothing);
       },
     );
+  });
+
+  test('new Rive preview phases match their validator-facing motion', () {
+    final lunge = riveMovementSequenceFor(MotionActivityType.lunges);
+    expect(lunge.poseAt(0.25).rightKneeAngle, lessThan(0));
+    expect(lunge.poseAt(0.75).leftKneeAngle, greaterThan(0));
+
+    final raises = riveMovementSequenceFor(MotionActivityType.armRaises);
+    expect(raises.poseAt(0.5).leftShoulderAngle, isNot(-180));
+    expect(raises.poseAt(0.5).rightShoulderAngle, isNot(180));
+
+    for (final type in [
+      MotionActivityType.runningInPlace,
+      MotionActivityType.treadmillRunning,
+      MotionActivityType.marchingInPlace,
+    ]) {
+      final sequence = riveMovementSequenceFor(type);
+      expect(sequence.poseAt(0.2).leftKneeAngle, isNot(0));
+      expect(sequence.poseAt(0.8).rightKneeAngle, isNot(0));
+      expect(sequence.poseAt(1).isFiniteAndPositive, isTrue);
+    }
   });
 }

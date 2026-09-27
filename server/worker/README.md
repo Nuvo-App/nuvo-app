@@ -93,3 +93,33 @@ npm run typecheck
 
 See `.dev.vars.example` for the full list.
 Secrets go in `.dev.vars` locally and `wrangler secret put` for remote.
+
+## Environments
+
+There are two deployed environments:
+
+| Environment | Worker name | D1 | R2 | Deploy | Migrate |
+|---|---|---|---|---|---|
+| Production | `nuvo-api` | `nuvo_db` | `nuvor2` | `npm run deploy:prod` | `npm run migrate:prod` |
+| Dev | `nuvo-api-dev` | `nuvo_db_dev` | `nuvor2-dev` | `npm run deploy:dev` | `npm run migrate:dev` |
+
+`npm run dev` runs `wrangler dev --env dev` against the dev D1/R2 bindings.
+
+Beta/TestFlight builds of the app compile with no `--dart-define`, so they
+always point at production. Point a local `flutter run` at dev with:
+
+```bash
+flutter run --dart-define=NUVO_API_BASE_URL=https://nuvo-api-dev.getnuvoapp.workers.dev
+```
+
+### Safety rules
+
+- **Additive-only API changes**: never rename/remove fields or change JSON
+  shapes the shipped app reads. New behavior = new fields or new endpoints.
+- **Additive-only migrations**: new tables/columns with defaults; never drop
+  or rename columns the beta build depends on.
+- Migration files are append-only (`migrations/00NN_*.sql`). Never edit an
+  existing migration.
+- Deploy to `--env dev` (`npm run deploy:dev`) freely; deploy to prod
+  (`npm run deploy:prod`) only for reviewed fixes.
+- After any backend change: `npm run typecheck` must pass clean.

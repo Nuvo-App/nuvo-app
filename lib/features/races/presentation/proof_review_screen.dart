@@ -178,16 +178,26 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 10),
-                      Text(
-                        _error!,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.danger,
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: NuvoColors.dangerSurface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: NuvoColors.dangerBorder),
+                        ),
+                        child: Text(
+                          _error!,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: NuvoColors.dangerOn,
+                          ),
                         ),
                       ),
                     ],
                     const SizedBox(height: 22),
-                    NuvoPrimaryButton(
-                      label: 'Accept move',
+                    Text('Proof decision', style: AppTextStyles.titleMedium),
+                    const SizedBox(height: 10),
+                    NuvoSuccessButton(
+                      label: 'Accept proof',
                       icon: Icons.check_rounded,
                       expand: true,
                       loading: _saving,
@@ -195,14 +205,14 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     ),
                     const SizedBox(height: 12),
                     NuvoOutlineButton(
-                      label: 'Ask to resubmit',
+                      label: 'Ask for another proof',
                       icon: Icons.rate_review_rounded,
                       expand: true,
                       onPressed: _saving ? null : () => _review('needs_review'),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'The racer can submit again after reviewing your note.',
+                      'The racer can submit another proof after reading your note.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: NuvoColors.muted,
                       ),
@@ -210,14 +220,14 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     ),
                     const SizedBox(height: 12),
                     NuvoDangerButton(
-                      label: 'Reject move',
+                      label: 'Reject proof',
                       icon: Icons.close_rounded,
                       expand: true,
                       onPressed: _saving ? null : () => _review('rejected'),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'This declines the move.',
+                      'This declines the proof and keeps it out of the leaderboard.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: NuvoColors.muted,
                       ),

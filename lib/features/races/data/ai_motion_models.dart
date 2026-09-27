@@ -21,7 +21,14 @@ enum AiMotionActivity {
   burpees,
   stepUps,
   calfRaises,
-  lateralSteps;
+  lateralSteps,
+
+  /// Placeholder for a control-plane motion this build has no compiled
+  /// identity for. The real stable ID always travels as a plain string
+  /// alongside — see [AiMotionResult.remoteActivityId]. [remote] must never
+  /// be used to *select* verifier behavior; it only marks display/proof
+  /// identity so an unknown motion is never silently treated as a known one.
+  remote;
 
   String get backendValue => switch (this) {
     AiMotionActivity.jumpingJacks => 'jumping_jacks',
@@ -47,6 +54,7 @@ enum AiMotionActivity {
     AiMotionActivity.stepUps => 'step_ups',
     AiMotionActivity.calfRaises => 'calf_raises',
     AiMotionActivity.lateralSteps => 'lateral_steps',
+    AiMotionActivity.remote => 'remote',
   };
 
   String get label => switch (this) {
@@ -73,6 +81,7 @@ enum AiMotionActivity {
     AiMotionActivity.stepUps => 'step-ups',
     AiMotionActivity.calfRaises => 'calf raises',
     AiMotionActivity.lateralSteps => 'lateral steps',
+    AiMotionActivity.remote => 'motion',
   };
 
   static AiMotionActivity fromBackendValue(String value) => switch (value) {
@@ -108,7 +117,10 @@ enum AiMotionActivity {
     'side_steps' ||
     'side steps' =>
       AiMotionActivity.lateralSteps,
-    _ => AiMotionActivity.pushUps,
+    // Unknown activity IDs must NEVER silently become a known motion. Remote
+    // control-plane activities parse to [remote]; the real ID travels as a
+    // string on the result/spec, not through this enum.
+    _ => AiMotionActivity.remote,
   };
 }
 
@@ -139,6 +151,9 @@ class AiMotionResult {
     required this.validPoseFrames,
     required this.durationMs,
     required this.validatorVersion,
+    this.remoteActivityId,
+    this.remoteActivityLabel,
+    this.remoteMeasurementType,
   });
 
   final AiMotionActivity activity;
@@ -152,8 +167,28 @@ class AiMotionResult {
   final int durationMs;
   final String validatorVersion;
 
+  /// Server-owned activity ID for remote (non-enum) motions. When set, the
+  /// proof payload reports THIS id — never an enum guess.
+  final String? remoteActivityId;
+  final String? remoteActivityLabel;
+
+  /// 'repetitions' or 'duration' for remote motions; mirrors
+  /// [RemoteVerifierSpec.measurementType] without a compiled definition.
+  final String? remoteMeasurementType;
+
   bool get isVerified => verificationStatus == 'ai_verified';
-  bool get isHold => activity == AiMotionActivity.plankHold;
+
+  /// The activity identity submitted as proof — the raw remote id when the
+  /// verifier ran a remote package, the compiled enum value otherwise.
+  String get effectiveActivityId => remoteActivityId ?? activity.backendValue;
+
+  /// Display label — remote label when present, enum label otherwise.
+  String get effectiveActivityLabel => remoteActivityLabel ?? activity.label;
+
+  bool get isHold =>
+      remoteMeasurementType != null
+          ? remoteMeasurementType == 'duration'
+          : activity == AiMotionActivity.plankHold;
 
   Map<String, dynamic> toProofPayload({
     required String clientSubmissionId,
@@ -161,9 +196,9 @@ class AiMotionResult {
   }) => {
     'proofType': 'ai_motion',
     'clientSubmissionId': clientSubmissionId,
-    'activityType': activity.backendValue,
+    'activityType': effectiveActivityId,
     'metric': metric,
-    'note': 'AI motion proof: $detectedReps ${activity.label} detected.',
+    'note': 'AI motion proof: $detectedReps $effectiveActivityLabel detected.',
     'value': detectedReps,
     'targetValue': targetReps,
     'detectedValue': detectedReps,

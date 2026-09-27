@@ -601,6 +601,11 @@ class NuvoTextInput extends StatelessWidget {
     this.enabled = true,
     this.prefixIcon,
     this.obscureText = false,
+    this.autofillHints,
+    this.textInputAction,
+    this.onSubmitted,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
   });
 
   final TextEditingController controller;
@@ -617,6 +622,11 @@ class NuvoTextInput extends StatelessWidget {
   final bool enabled;
   final Widget? prefixIcon;
   final bool obscureText;
+  final Iterable<String>? autofillHints;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   @override
   Widget build(BuildContext context) {
@@ -638,6 +648,11 @@ class NuvoTextInput extends StatelessWidget {
           autofocus: autofocus,
           enabled: enabled,
           obscureText: obscureText,
+          autofillHints: autofillHints,
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
+          autocorrect: autocorrect,
+          enableSuggestions: enableSuggestions,
           style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.navy),
           decoration: InputDecoration(
             hintText: hint,
@@ -653,17 +668,11 @@ class NuvoTextInput extends StatelessWidget {
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              borderSide: const BorderSide(
-                color: NuvoColors.border,
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: NuvoColors.border, width: 2),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),
-              borderSide: const BorderSide(
-                color: NuvoColors.border,
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: NuvoColors.border, width: 2),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(NuvoRadii.md),

@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 
-class PressableScale extends StatefulWidget {
+import 'nuvo_motion.dart';
+
+/// Compatibility shim for [NuvoPressable].
+///
+/// Kept so the existing call sites across cards, rows, chips, and hero
+/// surfaces all inherit the shared physical press (translate toward the
+/// shadow + spring release) without a per-file migration. New code should
+/// use [NuvoPressable] directly.
+class PressableScale extends StatelessWidget {
   const PressableScale({
     super.key,
     required this.child,
@@ -13,58 +21,15 @@ class PressableScale extends StatefulWidget {
   final double scale;
 
   @override
-  State<PressableScale> createState() => _PressableScaleState();
-}
-
-class _PressableScaleState extends State<PressableScale>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _onPress(_) {
-    if (widget.onTap == null) return;
-    _ctrl.animateTo(
-      1.0,
-      duration: const Duration(milliseconds: 80),
-      curve: Curves.easeIn,
-    );
-  }
-
-  void _onRelease() {
-    _ctrl.animateTo(
-      0.0,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: _onPress,
-      onTapCancel: _onRelease,
-      onTapUp: (_) => _onRelease(),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (_, child) => Transform.scale(
-          scale: 1.0 - (1.0 - widget.scale) * _ctrl.value,
-          child: child,
-        ),
-        child: widget.child,
-      ),
+    return NuvoPressable(
+      onTap: onTap,
+      scale: scale,
+      // Silent: PressableScale never fired haptics, and it wraps everything
+      // from rows to hero cards — opting all of them into haptics would be
+      // spam. Selective haptics belong on NuvoPressable call sites.
+      haptic: false,
+      child: child,
     );
   }
 }

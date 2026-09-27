@@ -28,17 +28,67 @@ type ReleasePointerRow = {
   status: string;
 };
 
+/// Deterministic per-user rollout bucket in [0, 100):
+/// `sha256(userId:releaseId)[0..3] % 100`. The same user always lands in the
+/// same bucket for a given release, so a rollout cohort is stable across
+/// requests and devices — no per-request randomness.
+export async function rolloutBucketForUser(
+  userId: string,
+  releaseId: string,
+): Promise<number> {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(`${userId}:${releaseId}`),
+    ),
+  );
+  const value =
+    ((digest[0] << 24) | (digest[1] << 16) | (digest[2] << 8) | digest[3]) >>> 0;
+  return value % 100;
+}
+
+/// The stable release immediately before [excludeReleaseId] for an activity —
+/// used when a partial rollout buckets a user out of the current pointer.
+async function previousStableRelease(
+  db: D1Database,
+  activityId: string,
+  excludeReleaseId: string,
+): Promise<RegistryRelease | null> {
+  const row = await db.prepare(
+    'SELECT id FROM verifier_releases WHERE activity_id = ? AND status = ? AND id <> ? ' +
+    'ORDER BY published_at DESC, created_at DESC LIMIT 1',
+  ).bind(activityId, 'stable', excludeReleaseId).first<{ id: string }>();
+  return row ? readMotionRelease(db, row.id) : null;
+}
+
+/**
+ * Resolves the stable release for an activity. When the channel pointer is a
+ * partial rollout (`0 < rollout_percent < 100`) and a [userId] is available,
+ * the user's deterministic bucket decides: in-bucket users get the pointed
+ * release; out-of-bucket users fall back to the previous stable release so
+ * they are never left without a verifier while a rollout is ramping.
+ * Without a userId a partial rollout serves the pointed release — the race-
+ * creation path always supplies one, so this only affects anonymous reads.
+ */
 export async function stableReleaseForActivity(
   db: D1Database,
   activityId: string,
+  userId?: string,
 ): Promise<RegistryRelease | null> {
-  const row = await db.prepare(
-    'SELECT vr.id FROM activity_channel_releases cr ' +
+  const pointer = await db.prepare(
+    'SELECT vr.id, cr.rollout_percent FROM activity_channel_releases cr ' +
     'JOIN verifier_releases vr ON vr.id = cr.release_id ' +
     'WHERE cr.activity_id = ? AND cr.channel = ? AND cr.rollout_percent > 0 ' +
     'AND vr.status = ? LIMIT 1',
-  ).bind(activityId, 'stable', 'stable').first<{ id: string }>();
-  return row ? readMotionRelease(db, row.id) : null;
+  ).bind(activityId, 'stable', 'stable').first<{ id: string; rollout_percent: number }>();
+  if (!pointer) return null;
+  if (userId && pointer.rollout_percent < 100) {
+    const bucket = await rolloutBucketForUser(userId, pointer.id);
+    if (bucket >= pointer.rollout_percent) {
+      return previousStableRelease(db, activityId, pointer.id);
+    }
+  }
+  return readMotionRelease(db, pointer.id);
 }
 
 export async function assignmentForRace(

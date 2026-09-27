@@ -1,5 +1,6 @@
 import '../data/ai_motion_models.dart';
 import '../domain/camera_verification_resolver.dart';
+import '../domain/motion_activity.dart';
 import 'custom_pose/custom_pose_sequence_runtime.dart';
 import 'custom_pose/custom_pose_verifier_spec.dart';
 import 'custom_pose/normalized_pose.dart';
@@ -150,9 +151,10 @@ class PresetPoseVerifierRuntime implements VerifierRuntime {
 }
 
 /// Adapts a validated control-plane runtime to the existing camera proof
-/// contract. The adapter deliberately requires a compiled movement definition
-/// for the proof payload so a remote release can never silently fall back to a
-/// different activity identity.
+/// contract. [movement] may be a compiled preset definition or a
+/// [MovementDefinition.remote] carrying the server-owned activity ID — the
+/// proof payload reports [MovementDefinition.effectiveActivityId] so a remote
+/// motion is never silently labeled as another activity.
 class RemotePoseVerifierRuntime implements VerifierRuntime {
   RemotePoseVerifierRuntime({
     required RemoteVerifierSpec spec,
@@ -235,6 +237,12 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
         validPoseFrames: _validPoseFrames,
         durationMs: update?.elapsedMs ?? 0,
         validatorVersion: '${_spec.releaseId}:${_spec.schemaVersion}',
+        remoteActivityId: _movement.remoteActivityId,
+        remoteActivityLabel:
+            _movement.remoteActivityId != null ? _movement.title : null,
+        remoteMeasurementType: _movement.remoteActivityId != null
+            ? _spec.measurementType
+            : null,
       ),
     );
   }
@@ -376,8 +384,34 @@ class VerifierRuntimeResolver {
   MovementDefinition? _movementDefinitionForEligibility(
     CameraVerificationEligibility eligibility,
   ) {
+    if (!eligibility.isCameraVerifiable) return null;
     final movementType = eligibility.movementType;
-    if (!eligibility.isCameraVerifiable || movementType == null) return null;
-    return movementDefinitionForType(movementType);
+    if (movementType != null && movementType != MotionActivityType.remote) {
+      return movementDefinitionForType(movementType);
+    }
+    // Remote release for a motion this build has no compiled identity for:
+    // build the definition from delivered metadata — the remote catalog
+    // definition, then the spec's activity block, then the bare spec identity.
+    final spec = eligibility.remoteVerifierSpec;
+    if (spec == null) return null;
+    final definition = eligibility.remoteActivityDefinition;
+    if (definition != null) {
+      return MovementDefinition.remote(
+        activityId: definition.activityId,
+        title: definition.title,
+        unit: definition.unit,
+        defaultTarget: definition.defaultTarget,
+        isHold: definition.isHold ||
+            spec.measurementType == 'duration',
+      );
+    }
+    final info = spec.activity;
+    return MovementDefinition.remote(
+      activityId: spec.activityId,
+      title: info?.displayName ?? spec.activityId.replaceAll('_', ' '),
+      unit: info?.unit ?? 'reps',
+      defaultTarget: info?.defaultTarget ?? 1,
+      isHold: spec.measurementType == 'duration',
+    );
   }
 }

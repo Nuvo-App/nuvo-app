@@ -32,8 +32,8 @@ If you are adding a control that references a race, its tap target is
 | Path | Screen | Page transition | Params | Notes |
 |---|---|---|---|---|
 | `/splash` | `SplashScreen` | none | — | Entry. Restores session, then `go`es to `/arena` or `/welcome/intro`. |
-| `/welcome/intro` | `WelcomeRaceBuilderScreen` | cupertino | — | Pre-auth race builder / demo. |
-| `/welcome` | `WelcomeAuthScreen` | cupertino | — | Sign-in (email / Google / Apple). |
+| `/welcome/intro` | `WelcomeRaceBuilderScreen` | cupertino | — | Welcome → Leaderboard → Movement → Activity → embedded `WelcomeAuthScreen`. No intermediate auth-choice page, Skip, or dots on final Auth. Create account pushes `/auth/email`; Log in switches to the shared email-code form inline and pushes `/auth/verify` after sending a code. |
+| `/welcome` | `WelcomeAuthScreen` | cupertino | `?mode=login` (optional) | The same signup/login composition as the final intro page. Email / Google / Apple behavior is unchanged. Default remains signup. No pre-auth completion flag or completion API write; account completion remains server-owned. |
 | `/auth/email` | `EmailStartScreen` | cupertino | — | |
 | `/auth/verify` | `EmailVerifyScreen` | cupertino | `extra: String email` | On success sets auth state; router redirects. |
 | `/onboarding/profile` | `OnboardingScreen` | cupertino | — | |
@@ -46,7 +46,8 @@ If you are adding a control that references a race, its tap target is
 | `/profile` | `ProfileScreen` | none (tab) | — | Identity, history, settings. |
 | `/races/new` | `RaceComposerScreen` | cupertino | `extra: RaceCreatePrefill?` | 5-step composer. On create → `go` to race/invite. |
 | `/races/join` | `JoinRaceScreen` | cupertino | — | Invite-code entry. On join → `go` to race. |
-| `/internal/teach-movement` | `TeachMovementScreen` | slide-up | `?fixture=ready` (debug) | Custom movement capture. |
+| `/races/teach` | `TeachMovementScreen` | slide-up | `?fixture=ready` (debug) | Custom movement capture. Reached from the race composer. |
+| `/internal/teach-movement` | → redirect to `/races/teach` | — | `?fixture=ready` (debug) | Legacy alias; no separate screen. |
 | `/race/:id` | `RaceDetailScreen` | detail slide | `id` | **The race page / leaderboard.** Active vs completed layouts. |
 | `/race/:id/settings` | `RaceSettingsScreen` | cupertino | `id` | "Edit race" (owner only). |
 | `/race/:id/edit` | → redirect | — | `id` | **Legacy alias** → `/race/:id/settings`. Do not add a screen here. |
@@ -55,8 +56,11 @@ If you are adding a control that references a race, its tap target is
 | `/race/:id/proof/ai-motion` | `AiMotionProofScreen` | slide-up | `id` | Live camera verification. |
 | `/race/:id/board-moved` | `BoardMovedScreen` | cupertino | `extra: BoardMovedArgs` | Celebration / result. Reached by `pushReplacement`. Exits with `go('/race/:id')`. |
 | `/race/:id/proofs/:proofId` | `ProofReviewScreen` | cupertino | `id`, `proofId` | Owner reviews a submitted proof. |
-| `/proof/:id` | `ProofScreen` | none | `id` | Thin shim: immediately `go`es to `/race/:id/proof`. Deep-link/notification target only. |
+| `/proof/:id` | → redirect to `/race/:id/proof` | — | `id` | Legacy deep-link/notification alias; no intermediate screen. |
 | `/profile/edit` | `EditProfileScreen` | cupertino | — | |
+| `/crew/add` | `AddCrewScreen` | cupertino | — | Add to Crew hub — search, scan, My Nuvo, requests. Reached from Crew. |
+| `/my-nuvo` | `MyNuvoScreen` | cupertino | — | Member identity surface — QR, member code, share/copy/scan. Reached from Crew header/people strip and Add to Crew. |
+| `/dev/rive-calibration` | `RiveCalibrationScreen` | cupertino | — | Debug-only manual Nuvo Rive calibration route; absent in release builds. |
 
 ---
 
@@ -65,19 +69,35 @@ If you are adding a control that references a race, its tap target is
 ```
 splash ──► arena (restored)  |  welcome/intro (no session)
 
-welcome/intro ──► welcome ──► auth/email ──► auth/verify ──► (router) ─┐
-welcome ──► [Google/Apple] ──► (router) ──────────────────────────────┤
+welcome/intro (final Auth) or welcome ──► auth/email ──► auth/verify ──► (router) ─┐
+                         ├─► inline email login ──► auth/verify ──► (router) ───┤
+                         └─► [Google/Apple] ──► (router) ──────────────────────┤
                                                                       ▼
                               onboarding/profile ──► onboarding/member-pass ──► arena
-                                              (or straight to /compete if guideFirstRace)
+                                              (member-pass Continue calls completeOnboarding()
+                                               before /arena — the account graduates
+                                               server-side, so the next sign-in lands
+                                               identically. Fresh sign-ins never set
+                                               guideFirstRace; only a restored demo-account
+                                               session can still arm the /compete guide.)
+
+The post-auth questionnaire (/onboarding/profile → /onboarding/member-pass) is
+the INTERNAL/demo setup path: the guard only routes accounts whose canonical
+email domain is exactly getnuvo.net (isInternalNuvoAccount in
+auth_models.dart) through it. Public accounts skip straight to /arena — even
+with onboardingComplete=false — and are bounced off /onboarding/* routes.
+Internal accounts that owe setup are bounced TO /onboarding/profile from any
+protected non-onboarding route. Provider never participates in the decision.
 
 ┌──────────── bottom-nav tabs (context.go, never push) ────────────┐
 │  arena   pass   compete   move   profile                          │
 └──────────────────────────────────────────────────────────────────┘
    │        │        │        │        │
    │        │        │        │        └─► /profile/edit
-   │        │        │        │        └─► /race/:id            (history rows)
-   │        │        │        │        └─► /pass                (pass shortcut)
+   │        │        │        │        ├─► /race/:id            (racing-now + result rows)
+   │        │        │        │        ├─► /pass                (member pass chip + row)
+   │        │        │        │        ├─► /my-nuvo             (identity "My Nuvo" chip)
+   │        │        │        │        └─► /compete             (empty-state "Find a race")
    │        │        │        │
    │        │        │        └─► /race/:id                     (up-next card, rows)
    │        │        │        └─► /race/:id/proof               (openVerification → then reloads)
@@ -86,7 +106,12 @@ welcome ──► [Google/Apple] ──► (router) ─────────�
    │        │        └─► /race/:id           ★ featured card + every row (was inconsistent — fixed)
    │        │        └─► /races/new  ·  /races/join
    │        │
-   │        └─► (crew management — in-screen)
+   │        ├─► /crew/add                     (people-strip Add tile, Find people)
+   │        │      └─► /scan · /my-nuvo
+   │        ├─► /my-nuvo                      (header QR icon, "You" tile)
+   │        ├─► /scan                         (scan affordances)
+   │        ├─► /u/:id                        (avatars, feed rows, roster)
+   │        └─► /race/:id                     (activity feed, racing together)
    │
    └─► /race/:id                             ("See race board" + board tap + quick action)
    └─► /races/new  ·  /races/join
@@ -131,6 +156,19 @@ screen → `safePopOrGo(/race/:id)`.
 
 **Join a race:** `push /races/join` → enter code → `go /race/:id`.
 
+**Race Together (from a crew profile):** `/u/:id` → "Race {name}" → `push
+/races/new` with `extra: RaceCreatePrefill(withUser: …)` → composer (racers
+step shows the person; visibility forced `invite_code`) → on create the
+composer calls `addRaceParticipant` → `go /race/:id` (fallback `go
+/race/:id/invite` if the add fails).
+
+**Add to Crew:** `/pass` → `push /crew/add` → search (`/users/search`), scan
+(`push /scan`), or My Nuvo (`push /my-nuvo`); incoming/outgoing requests live
+here. Accept/decline use the same crew lifecycle as the Crew roster.
+
+**My Nuvo:** `push /my-nuvo` → show QR, share link (`share_plus`), copy link,
+or `push /scan`.
+
 **Submit camera proof:** `/race/:id` (pinned "Verify now") → `push
 /race/:id/proof` → (if a demo exists, pre-verify; else auto) `push
 /race/:id/proof/ai-motion` → record → `pushReplacement /race/:id/board-moved`
@@ -166,8 +204,9 @@ Save → `go /race/:id`. (Archive / Cancel / Delete → `go /race/:id` or
    email) must have a safe fallback when `extra` is null (both do — keep it).
    Prefer path/query params for anything that must survive a cold deep link.
 7. **Protected routes.** Anything under `/arena|/pass|/compete|/move|/profile|
-   /race/|/races/|/proof/|/onboarding/` is gated by `auth_gate.dart`. New
-   protected areas must be added to `_isProtected` there.
+   /race/|/races/|/crew/|/my-nuvo|/proof/|/scan|/u/|/notifications|/settings/|
+   /onboarding/` is gated by `auth_gate.dart`. New protected areas must be
+   added to `_isProtected` there.
 8. **Post-auth routing is provider-agnostic.** `auth_gate.dart` decides the
    landing screen from `onboardingComplete` + `guideFirstRace` only — never
    from which route sign-in started on. Email, Google and Apple must always
@@ -186,8 +225,8 @@ Save → `go /race/:id`. (Archive / Cancel / Delete → `go /race/:id` or
 - `race_settings_screen.dart` uses `context.go('/race/:id')` for its "Back to
   race" button and error-retry (lines ~246, ~391) where `safePopOrGo` would be
   lighter. Harmless (same destination) but inconsistent.
-- `/proof/:id` (`ProofScreen`) is a redirect-in-disguise — it renders a screen
-  that immediately `go`es. Could be a real `redirect:` in the router instead.
+- `/proof/:id` is now a direct router redirect to `/race/:id/proof`; there is no
+  intermediate proof screen.
 - `create_race_screen.dart` (`CreateRaceScreen`) still exists and is
   camera-only; the live composer is `RaceComposerScreen`. `CreateRaceScreen`
   appears unused as a route — verify and delete, or wire it as the non-camera

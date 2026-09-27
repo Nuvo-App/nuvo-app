@@ -64,16 +64,25 @@ class NuvoCharacterPose {
   }
 }
 
-/// Paints an illustrated Nuvo athlete from a [NuvoCharacterPose].
+/// Visual treatment for the reusable movement guide.
+///
+/// Solid is used for the expressive Nuvo character. Line art is reserved for
+/// instructional previews, where a neutral figure is easier to read than a
+/// face and a filled silhouette.
+enum NuvoCharacterStyle { solid, lineArt }
+
+/// Paints a neutral movement preview from a [NuvoCharacterPose].
 ///
 /// The character is built from filled rounded body segments — capsules for
 /// limbs, a rounded torso shape, and a circular head — so it reads as one
-/// continuous person, not a skeleton.
+/// continuous movement guide. It intentionally contains no face or brand mark
+/// so it reads as an instruction, not a person watching the user.
 class NuvoCharacterPainter extends CustomPainter {
   NuvoCharacterPainter({
     required this.pose,
     this.bodyColor = const Color(0xFF07152D),
     this.accentColor = const Color(0xFF1264FF),
+    this.style = NuvoCharacterStyle.solid,
     this.outlineColor = Colors.white,
     this.outlineWidth = 0,
     this.backgroundRadius = 0,
@@ -86,6 +95,9 @@ class NuvoCharacterPainter extends CustomPainter {
 
   /// Accent colour for the chest "N" and optional highlights.
   final Color accentColor;
+
+  /// Whether this is an expressive character or a neutral instruction figure.
+  final NuvoCharacterStyle style;
 
   /// Outline colour for the character silhouette.
   final Color outlineColor;
@@ -117,6 +129,28 @@ class NuvoCharacterPainter extends CustomPainter {
     final lAnk = p(pose.leftAnkle);
     final rAnk = p(pose.rightAnkle);
 
+    if (style == NuvoCharacterStyle.lineArt) {
+      _paintLineArt(
+        canvas,
+        head: head,
+        neck: neck,
+        leftShoulder: lSh,
+        rightShoulder: rSh,
+        leftElbow: lEl,
+        rightElbow: rEl,
+        leftWrist: lWr,
+        rightWrist: rWr,
+        leftHip: lHip,
+        rightHip: rHip,
+        leftKnee: lKn,
+        rightKnee: rKn,
+        leftAnkle: lAnk,
+        rightAnkle: rAnk,
+        size: size,
+      );
+      return;
+    }
+
     // Derived sizes
     final torsoLen = (neck - Offset.lerp(lHip, rHip, 0.5)!).distance;
     final limbWidth = torsoLen * 0.14;
@@ -134,11 +168,11 @@ class NuvoCharacterPainter extends CustomPainter {
 
     final outlinePaint = outlineWidth > 0
         ? (Paint()
-          ..color = outlineColor
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round
-          ..isAntiAlias = true)
+            ..color = outlineColor
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..isAntiAlias = true)
         : null;
 
     // ── Draw order: back legs → torso → front legs → arms → head ────────
@@ -167,19 +201,60 @@ class NuvoCharacterPainter extends CustomPainter {
     _drawCircle(canvas, lWr, foreArmWidth * 0.55, bodyPaint, outlinePaint);
     _drawCircle(canvas, rWr, foreArmWidth * 0.55, bodyPaint, outlinePaint);
 
-    // Head — drawn last so neck overlap is hidden
+    // Head — drawn last so neck overlap is hidden.
     _drawCircle(canvas, head, headRadius, bodyPaint, outlinePaint);
+  }
 
-    // Eyes give the character the readable Stickman Hook-style face.
-    _drawEyes(canvas, head, headRadius);
+  void _paintLineArt(
+    Canvas canvas, {
+    required Offset head,
+    required Offset neck,
+    required Offset leftShoulder,
+    required Offset rightShoulder,
+    required Offset leftElbow,
+    required Offset rightElbow,
+    required Offset leftWrist,
+    required Offset rightWrist,
+    required Offset leftHip,
+    required Offset rightHip,
+    required Offset leftKnee,
+    required Offset rightKnee,
+    required Offset leftAnkle,
+    required Offset rightAnkle,
+    required Size size,
+  }) {
+    final stroke = (size.shortestSide * 0.028).clamp(2.0, 3.5);
+    final paint = Paint()
+      ..color = bodyColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = true;
 
-    // Chest "N" accent
-    _drawChestAccent(
-      canvas,
-      Offset.lerp(neck, Offset.lerp(lHip, rHip, 0.5)!, 0.45)!,
-      torsoLen * 0.08,
-      accentColor,
-    );
+    void segment(Offset a, Offset b) => canvas.drawLine(a, b, paint);
+
+    // A simple neutral figure keeps the movement readable without a face,
+    // heavy body fills, or decorative marks that can feel uncanny in a setup
+    // instruction.
+    final shoulderMid = Offset.lerp(leftShoulder, rightShoulder, 0.5)!;
+    final hipMid = Offset.lerp(leftHip, rightHip, 0.5)!;
+    segment(neck, shoulderMid);
+    segment(shoulderMid, hipMid);
+    segment(leftShoulder, rightShoulder);
+    segment(leftHip, rightHip);
+
+    segment(leftShoulder, leftElbow);
+    segment(leftElbow, leftWrist);
+    segment(rightShoulder, rightElbow);
+    segment(rightElbow, rightWrist);
+    segment(leftHip, leftKnee);
+    segment(leftKnee, leftAnkle);
+    segment(rightHip, rightKnee);
+    segment(rightKnee, rightAnkle);
+
+    final headRadius = (size.shortestSide * 0.065).clamp(5.0, 8.0);
+    canvas.drawCircle(head, headRadius, paint);
   }
 
   void _drawCapsule(
@@ -191,11 +266,7 @@ class NuvoCharacterPainter extends CustomPainter {
     Paint? outlinePaint,
   ) {
     if (outlinePaint != null) {
-      canvas.drawLine(
-        a,
-        b,
-        outlinePaint..strokeWidth = width + outlineWidth,
-      );
+      canvas.drawLine(a, b, outlinePaint..strokeWidth = width + outlineWidth);
     }
     canvas.drawLine(
       a,
@@ -274,11 +345,15 @@ class NuvoCharacterPainter extends CustomPainter {
       final outlineRect = RRect.fromRectAndRadius(
         Rect.fromPoints(
           Offset(
-            math.min(lSh.dx, lHip.dx) - shoulderWidth * 0.05 - outlineWidth * 0.5,
+            math.min(lSh.dx, lHip.dx) -
+                shoulderWidth * 0.05 -
+                outlineWidth * 0.5,
             lSh.dy - outlineWidth * 0.5,
           ),
           Offset(
-            math.max(rSh.dx, rHip.dx) + shoulderWidth * 0.05 + outlineWidth * 0.5,
+            math.max(rSh.dx, rHip.dx) +
+                shoulderWidth * 0.05 +
+                outlineWidth * 0.5,
             lHip.dy + outlineWidth * 0.5,
           ),
         ),
@@ -313,71 +388,12 @@ class NuvoCharacterPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  void _drawEyes(Canvas canvas, Offset headCenter, double headRadius) {
-    final eyeY = headCenter.dy - headRadius * 0.12;
-    final eyeOffset = headRadius * 0.28;
-    final eyeRadius = headRadius * 0.22;
-    final pupilRadius = eyeRadius * 0.42;
-
-    final whitePaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    final pupilPaint = Paint()
-      ..color = bodyColor.withValues(alpha: 0.9)
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    final leftEye = Offset(headCenter.dx - eyeOffset, eyeY);
-    final rightEye = Offset(headCenter.dx + eyeOffset, eyeY);
-
-    canvas.drawCircle(leftEye, eyeRadius, whitePaint);
-    canvas.drawCircle(rightEye, eyeRadius, whitePaint);
-    canvas.drawCircle(leftEye, pupilRadius, pupilPaint);
-    canvas.drawCircle(rightEye, pupilRadius, pupilPaint);
-  }
-
-  void _drawChestAccent(
-    Canvas canvas,
-    Offset center,
-    double size,
-    Color color,
-  ) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size * 0.28
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // Draw a simple "N"
-    final h = size * 1.2;
-    final w = size * 0.8;
-    final cx = center.dx;
-    final cy = center.dy;
-
-    canvas.drawLine(
-      Offset(cx - w / 2, cy - h / 2),
-      Offset(cx - w / 2, cy + h / 2),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(cx - w / 2, cy - h / 2),
-      Offset(cx + w / 2, cy + h / 2),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(cx + w / 2, cy - h / 2),
-      Offset(cx + w / 2, cy + h / 2),
-      paint,
-    );
-  }
-
   @override
   bool shouldRepaint(covariant NuvoCharacterPainter old) =>
       old.pose != pose ||
       old.bodyColor != bodyColor ||
       old.accentColor != accentColor ||
+      old.style != style ||
       old.outlineColor != outlineColor ||
       old.outlineWidth != outlineWidth;
 }

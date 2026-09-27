@@ -6,11 +6,8 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart' show ApiException;
 import '../../auth/data/secure_token_store.dart';
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 
 class NotificationPref {
   const NotificationPref({
@@ -32,14 +29,16 @@ class NotificationPref {
   /// Human label + which group a category belongs to.
   ({String label, String group}) get display => switch (category) {
         'race_invite' => (label: 'Race invites', group: 'Races'),
-        'race_joined' => (label: 'Someone joins your race', group: 'Races'),
-        'race_starting' => (label: 'A race is about to start', group: 'Races'),
-        'race_completed' => (label: 'A race finishes', group: 'Races'),
-        'passed_on_leaderboard' => (label: 'Someone passes you', group: 'Races'),
-        'proof_accepted' => (label: 'Your proof is accepted', group: 'Proof'),
-        'proof_rejected' => (label: 'Your proof needs another try', group: 'Proof'),
+        'race_joined' => (label: 'New racer joins', group: 'Races'),
+        'race_starting' => (label: 'Race starting', group: 'Races'),
+        'race_completed' => (label: 'Race finished', group: 'Races'),
+        'passed_on_leaderboard' => (label: 'Passed on leaderboard', group: 'Races'),
+        'proof_accepted' => (label: 'Proof accepted', group: 'Proof'),
+        'proof_rejected' => (label: 'Proof needs another try', group: 'Proof'),
         'crew_request' => (label: 'Crew requests', group: 'Crew'),
-        'crew_request_accepted' => (label: 'A request is accepted', group: 'Crew'),
+        'crew_request_accepted' => (label: 'Request accepted', group: 'Crew'),
+        'crew_connected' => (label: 'New crew member', group: 'Crew'),
+        'reaction' => (label: 'Reactions', group: 'Crew'),
         _ => (label: category, group: 'Other'),
       };
 }
@@ -61,7 +60,7 @@ class NotificationPrefsApi {
   Future<List<NotificationPref>> list() async {
     final res = await _client
         .get(
-          Uri.parse('$_kApiBase/notifications/preferences'),
+          Uri.parse('$kNuvoApiBase/notifications/preferences'),
           headers: {'Authorization': 'Bearer ${await _token()}'},
         )
         .timeout(const Duration(seconds: 15));
@@ -78,7 +77,7 @@ class NotificationPrefsApi {
     try {
       await _client
           .patch(
-            Uri.parse('$_kApiBase/notifications/preferences'),
+            Uri.parse('$kNuvoApiBase/notifications/preferences'),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer ${await _token()}',

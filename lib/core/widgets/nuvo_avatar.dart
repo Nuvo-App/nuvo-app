@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import 'nuvo_motion.dart';
 
 abstract final class NuvoAvatarSizes {
   static const double xs = 24;
@@ -103,7 +104,12 @@ class NuvoAvatar extends StatelessWidget {
     }
 
     if (onTap != null) {
-      return GestureDetector(onTap: onTap, child: child);
+      return NuvoPressable(
+        onTap: onTap,
+        scale: 0.94,
+        haptic: false,
+        child: child,
+      );
     }
     return child;
   }

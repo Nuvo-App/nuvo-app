@@ -17,8 +17,16 @@ import 'package:nuvo/features/races/domain/race_draft.dart';
 /// below — the registration cannot silently diverge across layers. See also
 /// `test/preset_registration_contract_test.dart` and
 /// `docs/agents/PRESET_MOTION_CREATION.md`.
+///
+/// Entries with a custom `engineType` (e.g. basketball_shot's
+/// `object_composition_v1`) use a different runtime than the standard
+/// preset-pose verifier this suite covers, and are intentionally excluded
+/// from the backend's public RACE_ACTIVITY_CATALOG for the same reason —
+/// see `server/worker/src/domain/raceActivities.ts` and the backend test
+/// "basketball shot resolves internally without entering the public catalog".
 final _presetCases = <(String, MotionActivityType, AiMotionActivity)>[
   for (final def in motionActivityDefinitions)
+    if (def.engineType == null)
     (
       def.type.backendValue,
       def.type,
@@ -200,7 +208,11 @@ void main() {
     ];
 
     test('Flutter catalog has exactly the same preset IDs as backend', () {
+      // basketball_shot (engineType: object_composition_v1) is a separate
+      // runtime, intentionally excluded from the backend's public catalog —
+      // see the _presetCases doc comment above.
       final flutterIds = motionActivityDefinitions
+          .where((d) => d.engineType == null)
           .map((d) => d.type.backendValue)
           .toSet();
       final backendIds = backendCatalog.map((e) => e.$1).toSet();

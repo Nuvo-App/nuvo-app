@@ -23,10 +23,16 @@ usersRouter.get('/search', async (c) => {
 
   const like = `%${q}%`;
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
+    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id,
+            cc.status AS conn_status, cc.requested_by AS conn_requested_by
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
+     -- The join covers both directions so a legacy asymmetric row still
+     -- reports a status; requested_by is viewer-agnostic.
+     LEFT JOIN crew_connections cc
+       ON (cc.user_id = ? AND cc.crew_user_id = u.id)
+        OR (cc.user_id = u.id AND cc.crew_user_id = ?)
      WHERE u.id != ?
        AND u.status = 'active'
        AND (
@@ -45,7 +51,7 @@ usersRouter.get('/search', async (c) => {
        p.full_name COLLATE NOCASE ASC
      LIMIT 10`,
   )
-    .bind(userId, like, like, like, like, userId, q, q)
+    .bind(userId, userId, userId, like, like, like, like, userId, q, q)
     .all<{
       id: string;
       primary_email: string | null;
@@ -54,12 +60,34 @@ usersRouter.get('/search', async (c) => {
       avatar_url: string | null;
       private_profile: number;
       member_id: string | null;
+      conn_status: string | null;
+      conn_requested_by: string | null;
     }>();
 
   const users = await Promise.all(
     rows.results.map(async (row) => {
       const isBlockedBy = await isBlocked(c.env.DB, row.id, userId);
       const visible = isBlockedBy ? false : await canViewFullProfile(c.env.DB, userId, row.id);
+      // Mutual crew — the "why is this person suggested" context. One small
+      // aggregate per row; the result set is already capped at 10.
+      const mutual = await c.env.DB
+        .prepare(
+          `SELECT COUNT(*) AS n FROM crew_connections mine
+           JOIN crew_connections theirs ON theirs.crew_user_id = mine.crew_user_id
+           WHERE mine.user_id = ? AND theirs.user_id = ?
+             AND mine.status = 'active' AND theirs.status = 'active'`,
+        )
+        .bind(userId, row.id)
+        .first<{ n: number }>();
+      const mutualCount = mutual?.n ?? 0;
+      // Additive field — older clients ignore it and fall back to 'none'.
+      const connectionStatus = crewConnectionStatus(
+        userId,
+        row.id,
+        row.conn_status == null
+          ? null
+          : { status: row.conn_status, requested_by: row.conn_requested_by },
+      );
       if (visible) {
         return {
           id: row.id,
@@ -69,6 +97,8 @@ usersRouter.get('/search', async (c) => {
           initials: initialsFor(row.full_name, row.username, row.primary_email),
           profilePhotoUrl: row.avatar_url,
           isPrivate: Boolean(row.private_profile),
+          connectionStatus,
+          mutualCount,
         };
       }
       // Minimal card for a private profile with no shared context: their
@@ -82,6 +112,8 @@ usersRouter.get('/search', async (c) => {
         initials: initialsFor(row.username, row.username, null),
         profilePhotoUrl: null,
         isPrivate: true,
+        connectionStatus,
+        mutualCount,
       };
     }),
   );
@@ -95,7 +127,7 @@ usersRouter.get('/:id', async (c) => {
   const targetId = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
+    `SELECT u.id, u.primary_email, u.last_active_at, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
@@ -105,6 +137,7 @@ usersRouter.get('/:id', async (c) => {
     .first<{
       id: string;
       primary_email: string | null;
+      last_active_at: string | null;
       full_name: string | null;
       username: string | null;
       avatar_url: string | null;
@@ -153,6 +186,10 @@ usersRouter.get('/:id', async (c) => {
       profilePhotoUrl: canSee ? row.avatar_url : null,
       isPrivate: Boolean(row.private_profile),
       connectionStatus,
+      // Presence is a crew signal — the client only renders it for connected
+      // people, matching the crew-list rule (strangers don't get a readout).
+      lastActiveAt:
+        connectionStatus === 'connected' ? row.last_active_at : null,
     },
   });
 });

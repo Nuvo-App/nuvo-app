@@ -11,6 +11,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/widgets/bottom_nav.dart';
+import '../core/widgets/nuvo_motion.dart';
+
 import '../features/arena/presentation/arena_screen.dart';
 import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
@@ -23,7 +26,6 @@ import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
-import '../features/proof/presentation/proof_screen.dart';
 import '../features/move/presentation/move_screen.dart';
 import '../features/race_detail/presentation/race_detail_screen.dart';
 import '../features/races/presentation/create_race_screen.dart';
@@ -35,12 +37,15 @@ import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
 import '../features/races/presentation/board_moved_screen.dart';
 import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
+import '../features/races/presentation/movement_preview/rive_calibration_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
 import '../features/shell/presentation/main_shell.dart';
 import '../features/crew/presentation/public_profile_screen.dart';
 import '../features/notifications/presentation/notification_prefs_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/social/presentation/add_crew_screen.dart';
 import '../features/social/presentation/invite_screen.dart';
+import '../features/social/presentation/my_nuvo_screen.dart';
 import '../features/social/presentation/qr_scan_screen.dart';
 import '../features/splash/presentation/splash_screen.dart';
 
@@ -57,14 +62,31 @@ Page<void> _cameraPage(GoRouterState state, Widget child) =>
 Page<void> _detailPage(GoRouterState state, Widget child) =>
     CupertinoPage<void>(key: state.pageKey, child: child);
 
-/// Bottom-nav tab switch: instant, no transition. Each tab is a full
-/// screen rebuild (this ShellRoute doesn't preserve branch state across
-/// switches — pre-existing architecture, not introduced by this redesign),
-/// so animating the switch just exposes that rebuild cost as visible jank.
-/// Native iOS tab bars don't crossfade content either; matching that instead
-/// of fighting it is the actually-seamless choice here.
+/// Bottom-nav tab pages: no route-level transition. The directional
+/// slide+fade between destinations is owned by NuvoTabStack (the shell's
+/// branch container), which keeps every branch mounted — the page itself
+/// just swaps instantly and the shell animates around it.
 Page<void> _tabPage(GoRouterState state, Widget child) =>
     NoTransitionPage<void>(key: state.pageKey, child: child);
+
+/// The screen behind each shell destination — keyed by the canonical
+/// destination path so route → screen is declared exactly once.
+Widget _tabScreenFor(String path) {
+  final screen = switch (path) {
+    '/compete' => const CompeteScreen(),
+    '/move' => const MoveScreen(),
+    '/pass' => const PassScreen(),
+    '/profile' => const ProfileScreen(),
+    _ => const ArenaScreen(),
+  };
+  // Debug-only trace: pairs with the [NuvoNav] tap print in MainShell so a
+  // wrong-page report shows index → path → screen in the console.
+  assert(() {
+    debugPrint('[NuvoNav] route $path → ${screen.runtimeType}');
+    return true;
+  }());
+  return screen;
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
@@ -84,11 +106,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/welcome/intro',
-        pageBuilder: (_, state) => _authPage(state, const WelcomeRaceBuilderScreen()),
+        pageBuilder: (_, state) =>
+            _authPage(state, const WelcomeRaceBuilderScreen()),
       ),
       GoRoute(
         path: '/welcome',
-        pageBuilder: (_, state) => _authPage(state, const WelcomeAuthScreen()),
+        pageBuilder: (_, state) => _authPage(
+          state,
+          WelcomeAuthScreen(
+            initialLogin: state.uri.queryParameters['mode'] == 'login',
+          ),
+        ),
       ),
 
       // ── Invite / universal-link landing ───────────────────────────────────
@@ -113,8 +141,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/crew/add',
+        pageBuilder: (_, state) => _authPage(state, const AddCrewScreen()),
+      ),
+      GoRoute(
+        path: '/my-nuvo',
+        pageBuilder: (_, state) => _authPage(state, const MyNuvoScreen()),
+      ),
+      GoRoute(
         path: '/notifications',
-        pageBuilder: (_, state) => _detailPage(state, const NotificationsScreen()),
+        pageBuilder: (_, state) =>
+            _detailPage(state, const NotificationsScreen()),
       ),
       GoRoute(
         path: '/settings/notifications',
@@ -147,29 +184,35 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // ── Main shell (bottom nav) ────────────────────────────────────────────
-      ShellRoute(
-        builder: (context, _, child) => MainShell(child: child),
-        routes: [
-          GoRoute(
-            path: '/arena',
-            pageBuilder: (_, state) => _tabPage(state, const ArenaScreen()),
-          ),
-          GoRoute(
-            path: '/pass',
-            pageBuilder: (_, state) => _tabPage(state, const PassScreen()),
-          ),
-          GoRoute(
-            path: '/compete',
-            pageBuilder: (_, state) => _tabPage(state, const CompeteScreen()),
-          ),
-          GoRoute(
-            path: '/move',
-            pageBuilder: (_, state) => _tabPage(state, const MoveScreen()),
-          ),
-          GoRoute(
-            path: '/profile',
-            pageBuilder: (_, state) => _tabPage(state, const ProfileScreen()),
-          ),
+      // StatefulShellRoute gives each of the five destinations its own
+      // branch Navigator, so tab switches preserve each screen's mounted
+      // state (scroll position, selections, ephemeral UI) instead of
+      // rebuilding it. NuvoTabStack is the branch container — it keeps all
+      // branches in the tree and animates the directional slide/fade.
+      //
+      // Branch order IS nav order: the branches are generated from
+      // nuvoDestinations (the canonical table in bottom_nav.dart), so
+      // nav index == branch index == route — never reorder one without
+      // the other.
+      StatefulShellRoute(
+        navigatorContainerBuilder: (context, navigationShell, children) =>
+            NuvoTabStack(
+          index: navigationShell.currentIndex,
+          children: children,
+        ),
+        builder: (context, _, navigationShell) =>
+            MainShell(child: navigationShell),
+        branches: [
+          for (final d in nuvoDestinations)
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: d.path,
+                  pageBuilder: (_, state) =>
+                      _tabPage(state, _tabScreenFor(d.path)),
+                ),
+              ],
+            ),
         ],
       ),
 
@@ -207,7 +250,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Legacy alias — keep old links / bookmarks working.
       GoRoute(
         path: '/internal/teach-movement',
-        redirect: (_, state) => '/races/teach${state.uri.hasQuery ? '?${state.uri.query}' : ''}',
+        redirect: (_, state) =>
+            '/races/teach${state.uri.hasQuery ? '?${state.uri.query}' : ''}',
       ),
       GoRoute(
         path: '/race/:id',
@@ -278,15 +322,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/proof/:id',
-        pageBuilder: (_, state) => NoTransitionPage(
-          key: state.pageKey,
-          child: ProofScreen(id: state.pathParameters['id']!),
-        ),
+        redirect: (_, state) => '/race/${state.pathParameters['id']}/proof',
       ),
       GoRoute(
         path: '/profile/edit',
         pageBuilder: (_, state) => _authPage(state, const EditProfileScreen()),
       ),
+      if (kDebugMode)
+        GoRoute(
+          path: '/dev/rive-calibration',
+          pageBuilder: (_, state) =>
+              _authPage(state, const RiveCalibrationScreen()),
+        ),
     ],
   );
   ref.onDispose(router.dispose);

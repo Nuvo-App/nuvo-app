@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
+import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
@@ -47,6 +48,7 @@ import '../domain/race_display.dart';
 import 'board_moved_screen.dart';
 
 import 'custom_pose/pose_skeleton_overlay.dart';
+import 'motion_catalog_provider.dart';
 import 'race_controller.dart';
 
 class AiMotionProofScreen extends ConsumerStatefulWidget {
@@ -65,7 +67,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   final _runtimeResolver = const VerifierRuntimeResolver();
   VerifierRuntime _runtime = PresetPoseVerifierRuntime.defaultRuntime();
 
-  AiMotionActivity _activity = AiMotionActivity.pushUps;
+  // The server-owned activity identity — for remote motions this is the raw
+  // stable ID from the release spec (e.g. an id this build has no enum for).
+  // Proof payloads and display must use this, never an enum fallback.
+  String _activityId = AiMotionActivity.pushUps.backendValue;
+  String _activityLabel = AiMotionActivity.pushUps.label;
   String _metric = 'reps';
   int _raceTotalBefore = 0;
   int? _raceTargetValue;
@@ -99,6 +105,16 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   BasketballShotCoordinator? _basketballShot;
   ObjectCompositionSpec? _objectCompositionSpec;
   ObjectCompositionUpdate? _objectUpdate;
+  bool _basketballPreflightFailed = false;
+  bool _isProcessingVerificationFrame = false;
+  DateTime? _lastObjectInferenceAt;
+  static const _objectInferenceInterval = Duration(milliseconds: 140);
+  NuvoPoseFrame? _lastObjectPose;
+  DateTime? _lastObjectPoseAt;
+  // Pose inference is the expensive part of the basketball pipeline. Keep
+  // the wrist context fresh enough for the composition runtime, while letting
+  // the object model inspect more camera frames during a fast shot.
+  static const _objectPoseRefreshInterval = Duration(milliseconds: 320);
   int _objectCount = 0;
   double _objectConfidence = 0;
   bool _disposed = false;
@@ -108,6 +124,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool _autoSubmitScheduled = false;
 
   bool get _isObjectComposition => _objectCompositionSpec != null;
+
+  bool _isLocalPresentationRace(Race race) {
+    final user = ref.read(authControllerProvider).user;
+    return isPresentationDemoUser(user) &&
+        (isPresentationDemoRace(race.id) ||
+            isPresentationDemoCreatedRace(race.id));
+  }
 
   // ── Live pose skeleton ──────────────────────────────────────────────────────
   static const _skeletonHoldMs = 900;
@@ -150,7 +173,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   bool get _usesRepFlash {
     if (_isDistanceRace) return _distancePolicy.usesMilestoneBursts;
     return _isCustom ||
-        motionActivityForBackendValue(_activity.backendValue)?.isHold != true;
+        (motionActivityForBackendValue(_activityId)?.isHold ??
+                _measure == MotionMeasurementType.duration) !=
+            true;
   }
 
   /// True when the athlete has hit 2+ reps inside the streak window.
@@ -205,7 +230,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
       if (!mounted) return;
-      final eligibility = resolveCameraVerification(race);
+      final eligibility = resolveCameraVerification(
+        race,
+        remoteDefinitions: availableMotionActivities(
+          ref.read(motionCatalogProvider).valueOrNull,
+          ref.read(motionCapabilitiesProvider),
+        ),
+      );
       final userId = ref.read(authControllerProvider).user?.id;
       final myPart = userId == null ? null : race.participantFor(userId);
       debugLogCameraVerificationDecision(
@@ -299,7 +330,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _result = null;
         _customResult = null;
         if (!isCustom) {
-          _activity = runtime.movement.activity;
+          _activityId = runtime.movement.effectiveActivityId;
+          _activityLabel = runtime.movement.title;
         }
         _metric = race.metric ?? 'reps';
         _raceTotalBefore = myPart?.progressValue ?? 0;
@@ -324,6 +356,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     required int alreadyDone,
   }) async {
     final spec = eligibility.objectCompositionSpec!;
+    _basketballPreflightFailed = false;
     try {
       final artifact = await ref
           .read(raceControllerProvider.notifier)
@@ -342,40 +375,48 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         vetted,
         inputSize: spec.model.inputSize,
       );
-      final handshake = await ref
-          .read(raceControllerProvider.notifier)
-          .createVerificationSession(
-            race.id,
-            appVersion: 'local',
-            appBuild: MotionCapabilities.appBuild,
-            runtimeCapabilities: MotionCapabilities.current(
-              objectDotProducer: producer,
-            ),
-          );
-      final rawSpec = handshake.verifier['spec'];
-      if (rawSpec is! Map) {
-        producer.dispose();
-        throw const FormatException('Basketball verifier spec is missing.');
-      }
-      final negotiated = ObjectCompositionSpec.fromJson(
-        Map<String, dynamic>.from(rawSpec),
-      );
-      if (negotiated.releaseId != handshake.session.releaseId ||
-          negotiated.model.modelVersion != spec.model.modelVersion ||
-          negotiated.model.artifactSha256 != spec.model.artifactSha256) {
-        producer.dispose();
-        throw const FormatException('Basketball release identity changed.');
-      }
+      final localPresentationRace = _isLocalPresentationRace(race);
+      final negotiated = spec;
       _objectDotProducer = producer;
+      _basketballPreflightFailed = false;
       _basketballShot = BasketballShotCoordinator(
         runtime: BasketballShotRuntime(spec: negotiated),
       );
-      _verificationSessionId = handshake.session.id;
-      _verificationReleaseId = handshake.session.releaseId;
-      _verificationReleaseChecksum = handshake.session.releaseChecksum;
+      if (!localPresentationRace) {
+        final handshake = await ref
+            .read(raceControllerProvider.notifier)
+            .createVerificationSession(
+              race.id,
+              appVersion: 'local',
+              appBuild: MotionCapabilities.appBuild,
+              runtimeCapabilities: MotionCapabilities.current(
+                objectDotProducer: producer,
+              ),
+            );
+        final rawSpec = handshake.verifier['spec'];
+        if (rawSpec is! Map) {
+          producer.dispose();
+          throw const FormatException('Basketball verifier spec is missing.');
+        }
+        final remoteSpec = ObjectCompositionSpec.fromJson(
+          Map<String, dynamic>.from(rawSpec),
+        );
+        if (remoteSpec.releaseId != handshake.session.releaseId ||
+            remoteSpec.model.modelVersion != spec.model.modelVersion ||
+            remoteSpec.model.artifactSha256 != spec.model.artifactSha256) {
+          producer.dispose();
+          throw const FormatException('Basketball release identity changed.');
+        }
+        _verificationSessionId = handshake.session.id;
+        _verificationReleaseId = handshake.session.releaseId;
+        _verificationReleaseChecksum = handshake.session.releaseChecksum;
+        _objectCompositionSpec = remoteSpec;
+      } else {
+        _objectCompositionSpec = negotiated;
+      }
       if (!mounted) return;
       setState(() {
-        _objectCompositionSpec = negotiated;
+        _objectCompositionSpec = _objectCompositionSpec ?? negotiated;
         _objectUpdate = null;
         _objectCount = 0;
         _objectConfidence = 0;
@@ -394,11 +435,30 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _debugLog('basketballReleaseUnavailable error=$error');
       if (!mounted) return;
       setState(() {
-        _status = AiMotionProofStatus.unsupportedMovement;
-        _message =
-            'Basketball verification is not available on this build yet.';
+        _basketballPreflightFailed = true;
+        _status = AiMotionProofStatus.cameraError;
+        _message = _basketballPreflightMessage(error);
       });
     }
+  }
+
+  String _basketballPreflightMessage(Object error) {
+    if (error is ApiException) {
+      if (error.statusCode == 401) {
+        return 'Your session expired. Sign in again, then retry verification.';
+      }
+      if (error.statusCode == 409 || error.statusCode == 503) {
+        return 'The basketball verifier is not ready for this race yet. Retry in a moment.';
+      }
+      return 'The verifier could not be prepared (${error.statusCode}). Retry.';
+    }
+    if (error is MotionModelArtifactIntegrityException) {
+      return 'The verifier model failed its integrity check. Retry to download it again.';
+    }
+    if (error is FormatException) {
+      return 'The verifier model could not be loaded. Retry the download.';
+    }
+    return 'Basketball verification could not start. Check your connection and retry.';
   }
 
   @override
@@ -460,7 +520,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       await _cameraController?.dispose();
       final controller = CameraController(
         selected,
-        ResolutionPreset.high,
+        // Basketball adds a native 800x800 ONNX pass after pose detection.
+        // Medium capture keeps source frames bounded and prevents native
+        // inference from being overwhelmed on phones.
+        _isObjectComposition ? ResolutionPreset.medium : ResolutionPreset.high,
         enableAudio: false,
         imageFormatGroup: Platform.isIOS
             ? ImageFormatGroup.bgra8888
@@ -536,6 +599,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _elapsed = Duration.zero;
     _debugFrameCount = 0;
     _capturedFrames.clear();
+    _lastObjectPose = null;
+    _lastObjectPoseAt = null;
+    _lastObjectInferenceAt = null;
     _serverAnalysis = null;
     _sessionFinalized = false;
     _session = MotionSessionRecorder(
@@ -544,9 +610,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           ? (_customMovementName ?? 'custom')
           : _isObjectComposition
           ? (_objectCompositionSpec?.activityId ?? 'basketball_shot')
-          : _activity.backendValue,
+          : _activityId,
       activityTitle: _raceTitle.isEmpty
-          ? (_customMovementName ?? _activity.backendValue)
+          ? (_customMovementName ?? _activityId)
           : _raceTitle,
       measurementType: _measurementType,
       raceId: widget.raceId,
@@ -610,17 +676,47 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     DeviceOrientation orientation,
   ) async {
     if (_disposed || _status != AiMotionProofStatus.recording) return;
+    if (_isProcessingVerificationFrame) return;
+    if (_isObjectComposition) {
+      final now = DateTime.now();
+      final last = _lastObjectInferenceAt;
+      if (last != null && now.difference(last) < _objectInferenceInterval) {
+        return;
+      }
+      _lastObjectInferenceAt = now;
+    }
+    _isProcessingVerificationFrame = true;
     try {
-      final frame = await _poseDetector.processCameraImage(
-        image: image,
-        camera: camera,
-        deviceOrientation: orientation,
-      );
+      final now = DateTime.now();
+      NuvoPoseFrame? frame;
+      var refreshedPose = true;
+      if (_isObjectComposition &&
+          _lastObjectPose != null &&
+          _lastObjectPoseAt != null &&
+          now.difference(_lastObjectPoseAt!) < _objectPoseRefreshInterval) {
+        // Reusing a very recent wrist pose avoids serialising every object
+        // inference behind ML Kit. This never runs concurrently with pose or
+        // ONNX inference, so it preserves the crash fix in this pipeline.
+        frame = _lastObjectPose;
+        refreshedPose = false;
+      } else {
+        frame = await _poseDetector.processCameraImage(
+          image: image,
+          camera: camera,
+          deviceOrientation: orientation,
+        );
+        if (frame != null && _isObjectComposition) {
+          _lastObjectPose = frame;
+          _lastObjectPoseAt = now;
+        }
+      }
       if (_disposed || _status != AiMotionProofStatus.recording) return;
       if (frame == null) return;
       // Keep a bounded landmark-only trace for server analysis and future
       // consented training. Camera pixels never leave the device.
-      if (_capturedFrames.length < 900) _capturedFrames.add(frame);
+      if (refreshedPose && _capturedFrames.length < 900) {
+        _capturedFrames.add(frame);
+      }
       if (_isObjectComposition) {
         final producer = _objectDotProducer;
         final coordinator = _basketballShot;
@@ -630,7 +726,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           camera: camera,
           deviceOrientation: orientation,
           pose: frame,
-          createdAt: frame.createdAt,
+          createdAt: now.toUtc(),
         );
         if (objectFrame == null ||
             _disposed ||
@@ -741,6 +837,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _message = 'Detection failed. Try again.';
       });
       await _stopImageStream();
+    } finally {
+      _isProcessingVerificationFrame = false;
     }
   }
 
@@ -912,7 +1010,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             MotionAnalysisRequest(
               motionId: _isCustom
                   ? (_customMovementName ?? 'custom')
-                  : _activity.backendValue,
+                  : _activityId,
               frames: List<NuvoPoseFrame>.unmodifiable(_capturedFrames),
               targetReps: _targetValue > 0 ? _targetValue : null,
               durationMs: _elapsed.inMilliseconds,
@@ -1227,6 +1325,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _result = null;
       _serverAnalysis = null;
       _capturedFrames.clear();
+      _lastObjectPose = null;
+      _lastObjectPoseAt = null;
+      _lastObjectInferenceAt = null;
       _customResult = null;
       _customUpdate = null;
       _objectUpdate = null;
@@ -1320,7 +1421,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   String get _displayUnit => _isObjectComposition
       ? 'shots'
-      : motionActivityForBackendValue(_activity.backendValue)?.unit ?? _metric;
+      : motionActivityForBackendValue(_activityId)?.unit ?? _metric;
 
   /// "12 / 25 reps" · "0:45 / 2:00" · "0.12 / 0.25 mi".
   String _progressText(int current, int target) => _isCustom
@@ -1358,9 +1459,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String get _targetLabel {
     if (_isObjectComposition) return '$_raceTarget made shots';
     if (_isCustom) return '$_raceTarget reps';
-    final definition = motionActivityForBackendValue(_activity.backendValue);
+    final definition = motionActivityForBackendValue(_activityId);
     return definition?.targetLabel(_raceTarget) ??
-        '$_raceTarget ${_activity.label}';
+        '$_raceTarget $_activityLabel';
   }
 
   /// The primary readout during a session: **race progress**, continuing from
@@ -1374,8 +1475,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ? 'Basketball shot'
       : _isCustom
       ? (_customMovementName ?? 'Custom movement')
-      : motionActivityForBackendValue(_activity.backendValue)?.title ??
-            _activity.label;
+      : motionActivityForBackendValue(_activityId)?.title ??
+            _activityLabel;
 
   /// True while a live preview is on screen. In that case the camera takes the
   /// whole screen instead of sitting in an inset card.
@@ -1429,7 +1530,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                           _isObjectComposition
                               ? 'Camera will confirm $_targetLabel.'
                               : motionActivityForBackendValue(
-                                      _activity.backendValue,
+                                      _activityId,
                                     )?.isHold ==
                                     true
                               ? 'Hold until the timer finishes.'
@@ -2255,10 +2356,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       AiMotionProofStatus.permissionDenied ||
       AiMotionProofStatus.cameraError => [
         NuvoPrimaryButton(
-          label: 'Record again',
+          label: _basketballPreflightFailed ? 'Retry verification' : 'Record again',
           icon: Icons.replay_rounded,
           expand: true,
-          onPressed: _recordAgain,
+          onPressed: _basketballPreflightFailed ? _loadRace : _recordAgain,
         ),
       ],
       _ => [
@@ -2345,10 +2446,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return '$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}';
     }
     final value = result?.detectedReps ?? _targetValue;
-    final definition = motionActivityForBackendValue(_activity.backendValue);
+    final definition = motionActivityForBackendValue(_activityId);
     if (_isDistanceRace) return formatMotionTarget(_measure, value, 'mi');
     if (definition?.isHold == true) return '$value seconds';
-    final unit = definition?.unit ?? _activity.label;
+    final unit = definition?.unit ?? _activityLabel;
     return '$value $unit';
   }
 

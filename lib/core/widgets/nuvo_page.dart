@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_shadows.dart';
 import '../theme/app_text_styles.dart';
+import 'nuvo_motion.dart';
 
 // ── NuvoPage ──────────────────────────────────────────────────────────────────
 
@@ -168,8 +169,9 @@ class NuvoSectionHeader extends StatelessWidget {
         Text(title, style: AppTextStyles.titleMedium),
         const Spacer(),
         if (onSeeAll != null)
-          GestureDetector(
+          NuvoPressable(
             onTap: onSeeAll,
+            haptic: false,
             child: Text(
               'See all',
               style: AppTextStyles.labelMedium.copyWith(color: NuvoColors.blue),

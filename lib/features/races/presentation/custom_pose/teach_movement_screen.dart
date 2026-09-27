@@ -17,6 +17,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_geometry.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
+import '../../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
@@ -172,7 +173,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
-  bool get _showDiagnostics => kDebugMode || kNuvoDiagnosticsEnabled;
+  // Diagnostics are an explicit opt-in tool, never part of the normal custom
+  // movement experience and never available in a release build.
+  bool get _showDiagnostics => kNuvoDiagnosticsEnabled && !kReleaseMode;
 
   @override
   void initState() {
@@ -566,8 +569,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final runtime = MotionV2NativeRuntime();
     try {
       final spec = await runtime.learn(
-        movementName:
-            _flow.movementName.isEmpty ? 'Custom movement' : _flow.movementName,
+        movementName: _flow.movementName.isEmpty
+            ? 'Custom movement'
+            : _flow.movementName,
         demos: _rawDemos.map((d) => List<NuvoPoseFrame>.of(d)).toList(),
       );
       await _v2?.dispose();
@@ -585,7 +589,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       await runtime.dispose();
       if (!mounted) return;
       setState(() {
-        _v2Error = "Let's record that again — the three examples were too "
+        _v2Error =
+            "Let's record that again — the three examples were too "
             'different for Nuvo to learn from.';
         _v2Learning = false;
       });
@@ -661,10 +666,13 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   // ── Diagnostic session recording (behind NUVO_DIAGNOSTICS) ─────────────────
 
-  int _sessionMs(DateTime t) =>
-      t.difference(_sessionStart ?? t).inMilliseconds;
+  int _sessionMs(DateTime t) => t.difference(_sessionStart ?? t).inMilliseconds;
 
-  void _recordDiagFrame(DateTime now, NuvoPoseFrame raw, NuvoPoseFrame smoothed) {
+  void _recordDiagFrame(
+    DateTime now,
+    NuvoPoseFrame raw,
+    NuvoPoseFrame smoothed,
+  ) {
     if (!kNuvoDiagnosticsEnabled) return;
     if (_testingVerifier) {
       if (_liveTestFrames.length > 900) return;
@@ -692,21 +700,23 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       traj.add((p['traj'] as num?)?.toDouble() ?? -1);
       votes.add(p['matches'] == true);
     }
-    _matchTrace.add(MotionDiagMatchWindow(
-      tMs: _sessionMs(now),
-      bufferFrames: r.bufferFrames,
-      protoDist: proto,
-      trajDist: traj,
-      votesList: votes,
-      separation: r.separation,
-      motionProgress: r.motionProgress,
-      decision: r.decision,
-      confidence: r.confidence,
-      state: r.state.name,
-      newRep: r.newRep,
-      count: r.count,
-      inferenceMs: r.inferenceLatency.inMilliseconds,
-    ).toJson());
+    _matchTrace.add(
+      MotionDiagMatchWindow(
+        tMs: _sessionMs(now),
+        bufferFrames: r.bufferFrames,
+        protoDist: proto,
+        trajDist: traj,
+        votesList: votes,
+        separation: r.separation,
+        motionProgress: r.motionProgress,
+        decision: r.decision,
+        confidence: r.confidence,
+        state: r.state.name,
+        newRep: r.newRep,
+        count: r.count,
+        inferenceMs: r.inferenceLatency.inMilliseconds,
+      ).toJson(),
+    );
     if (_matchTrace.length > 600) _matchTrace.removeAt(0);
   }
 
@@ -776,16 +786,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
                 raw: {
                   for (final e
                       in ((d['rawFrames'] as List)[i]['points'] as Map).entries)
-                    e.key as String:
-                        [for (final x in e.value as List) (x as num).toDouble()],
+                    e.key as String: [
+                      for (final x in e.value as List) (x as num).toDouble(),
+                    ],
                 },
                 smoothed: i < (d['smoothedFrames'] as List).length
                     ? {
-                        for (final e in ((d['smoothedFrames'] as List)[i]
-                                ['points'] as Map)
-                            .entries)
+                        for (final e
+                            in ((d['smoothedFrames'] as List)[i]['points']
+                                    as Map)
+                                .entries)
                           e.key as String: [
-                            for (final x in e.value as List) (x as num).toDouble()
+                            for (final x in e.value as List)
+                              (x as num).toDouble(),
                           ],
                       }
                     : null,
@@ -811,8 +824,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             MotionDiagMatchWindow(
               tMs: m['t'] as int,
               bufferFrames: m['buffer'] as int,
-              protoDist: [for (final x in m['proto'] as List) (x as num).toDouble()],
-              trajDist: [for (final x in m['traj'] as List) (x as num).toDouble()],
+              protoDist: [
+                for (final x in m['proto'] as List) (x as num).toDouble(),
+              ],
+              trajDist: [
+                for (final x in m['traj'] as List) (x as num).toDouble(),
+              ],
               votesList: [for (final x in m['voteList'] as List) x as bool],
               separation: (m['separation'] as num?)?.toDouble(),
               motionProgress: (m['progress'] as num).toDouble(),
@@ -830,13 +847,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
               tMs: f['t'] as int,
               raw: {
                 for (final e in (f['raw'] as Map).entries)
-                  e.key as String:
-                      [for (final x in e.value as List) (x as num).toDouble()],
+                  e.key as String: [
+                    for (final x in e.value as List) (x as num).toDouble(),
+                  ],
               },
               smoothed: {
                 for (final e in (f['smoothed'] as Map).entries)
-                  e.key as String:
-                      [for (final x in e.value as List) (x as num).toDouble()],
+                  e.key as String: [
+                    for (final x in e.value as List) (x as num).toDouble(),
+                  ],
               },
               readiness: f['readiness'] as String?,
               articulationEnergy: (f['energy'] as num?)?.toDouble(),
@@ -849,17 +868,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       sessionId: id,
       timestamp: now,
       meta: {
-        'appVersion': const String.fromEnvironment('NUVO_APP_VERSION',
-            defaultValue: 'dev'),
-        'gitCommit': const String.fromEnvironment('NUVO_GIT_COMMIT',
-            defaultValue: 'unknown'),
+        'appVersion': const String.fromEnvironment(
+          'NUVO_APP_VERSION',
+          defaultValue: 'dev',
+        ),
+        'gitCommit': const String.fromEnvironment(
+          'NUVO_GIT_COMMIT',
+          defaultValue: 'unknown',
+        ),
         'platform': Platform.operatingSystem,
         'osVersion': Platform.operatingSystemVersion,
         'buildMode': kReleaseMode
             ? 'release'
             : kProfileMode
-                ? 'profile'
-                : 'debug',
+            ? 'profile'
+            : 'debug',
         'motionV2Schema': _v2Spec?.json['schema'],
         'encoder': _v2?.encoderId ?? 'release_action',
         'onnxAsset': 'assets/models/motion_v2_encoder.onnx',
@@ -886,9 +909,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final text = _buildDiagnosticSession().toLogText();
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Motion V2 log copied.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Motion V2 log copied.')));
     }
   }
 
@@ -907,14 +930,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'application/gzip')],
         subject: 'Nuvo Motion V2 session ${session.sessionId}',
-        text: 'Motion V2 diagnostic session ${session.sessionId} '
+        text:
+            'Motion V2 diagnostic session ${session.sessionId} '
             '(${(bytes.length / 1024).toStringAsFixed(0)} KB gz)',
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     }
   }
@@ -1179,30 +1203,31 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     // The camera is the product. Capture + live-test run full-screen, matching
     // the verification camera (`ai_motion_proof_screen_io`). Naming and the
     // learned/summary screens stay on the light sheet.
-    final immersive = !_debugReadyFixture &&
+    final immersive =
+        !_debugReadyFixture &&
         (_testingVerifier ||
             (_flow.stage != TeachMovementStage.name && !_isSummaryStage));
     return immersive ? _immersiveScaffold() : _sheetScaffold();
   }
 
   Widget _teachScrim({required bool top}) => IgnorePointer(
-        child: Align(
-          alignment: top ? Alignment.topCenter : Alignment.bottomCenter,
-          child: Container(
-            height: top ? 160 : 300,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: top ? Alignment.topCenter : Alignment.bottomCenter,
-                end: top ? Alignment.bottomCenter : Alignment.topCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.55),
-                  Colors.black.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
+    child: Align(
+      alignment: top ? Alignment.topCenter : Alignment.bottomCenter,
+      child: Container(
+        height: top ? 160 : 300,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: top ? Alignment.topCenter : Alignment.bottomCenter,
+            end: top ? Alignment.bottomCenter : Alignment.topCenter,
+            colors: [
+              Colors.black.withValues(alpha: 0.55),
+              Colors.black.withValues(alpha: 0.0),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _sheetScaffold() {
     return Scaffold(
@@ -1216,7 +1241,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             Text('Teach Nuvo', style: AppTextStyles.headlineLarge),
             const SizedBox(height: 6),
             Text(
-              'Teach Nuvo the movement, test it, then create a race.',
+              'Record three examples so Nuvo can recognize your movement.',
               style: AppTextStyles.bodyMedium.copyWith(color: NuvoColors.muted),
             ),
             const SizedBox(height: 20),
@@ -1248,7 +1273,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             Center(
               child: Text(
                 _flow.message.isNotEmpty ? _flow.message : 'Starting camera…',
-                style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.white),
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: NuvoColors.white,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -1466,7 +1493,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _motionV2DebugPanel() {
     final r = _v2Result;
-    Text row(String s) => Text(s, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white));
+    Text row(String s) => Text(
+      s,
+      style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.white),
+    );
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1476,35 +1506,68 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('MOTION V2', style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.blue)),
-          row('runtime: native (onnxruntime)   encoder: ${_v2?.encoderLoaded == true ? 'loaded' : 'not loaded'}'),
-          row('model: ${_v2?.encoderId ?? 'release_action'}   spec: ${_v2Spec?.encoder ?? '-'} v${_v2Spec?.version ?? '-'}'),
-          row('frames buffered: ${r.bufferFrames}   last inference: ${r.inferenceLatency.inMilliseconds}ms'),
-          row('last protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}   last trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   last match: ${r.matched}'),
-          row('matcher: ${r.votes}/3 references agreed   separation: ${r.separation?.toStringAsFixed(2) ?? '-'}   -> ${r.decision}'),
+          Text(
+            'MOTION V2',
+            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.blue),
+          ),
+          row(
+            'runtime: native (onnxruntime)   encoder: ${_v2?.encoderLoaded == true ? 'loaded' : 'not loaded'}',
+          ),
+          row(
+            'model: ${_v2?.encoderId ?? 'release_action'}   spec: ${_v2Spec?.encoder ?? '-'} v${_v2Spec?.version ?? '-'}',
+          ),
+          row(
+            'frames buffered: ${r.bufferFrames}   last inference: ${r.inferenceLatency.inMilliseconds}ms',
+          ),
+          row(
+            'last protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}   last trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   last match: ${r.matched}',
+          ),
+          row(
+            'matcher: ${r.votes}/3 references agreed   separation: ${r.separation?.toStringAsFixed(2) ?? '-'}   -> ${r.decision}',
+          ),
           for (var i = 0; i < r.perReference.length; i++)
-            row('  ref $i: proto ${r.perReference[i]['proto']}  traj ${r.perReference[i]['traj']}  ${r.perReference[i]['matches'] == true ? 'MATCH' : 'no'}'),
-          row('state: ${r.state.name}   count: ${r.count}   newRep: ${r.newRep}'),
-          row('confidence: ${r.confidence.toStringAsFixed(2)}   progress: ${r.motionProgress.toStringAsFixed(2)}'),
-          row('protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}  margin: ${r.protoMargin?.toStringAsFixed(2) ?? '-'}'),
-          row('trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   buffer: ${r.bufferFrames}f'),
-          row('camera drift: ${r.rootDrift?.toStringAsFixed(3) ?? '-'}   scale spread: ${r.scaleSpread?.toStringAsFixed(3) ?? '-'} (removed before recognition)'),
-          row('pose: ${r.poseReadiness}${r.poseGuidance.isEmpty ? '' : ' — ${r.poseGuidance}'}'),
-          row('attempt: ${r.attempt.outcome.name}  maxProgress: ${r.attempt.maxProgress.toStringAsFixed(2)}'
-              '${r.attempt.failureCategory == MotionFailureCategory.none ? '' : '  → ${r.attempt.failureCategory.name}'}'),
+            row(
+              '  ref $i: proto ${r.perReference[i]['proto']}  traj ${r.perReference[i]['traj']}  ${r.perReference[i]['matches'] == true ? 'MATCH' : 'no'}',
+            ),
+          row(
+            'state: ${r.state.name}   count: ${r.count}   newRep: ${r.newRep}',
+          ),
+          row(
+            'confidence: ${r.confidence.toStringAsFixed(2)}   progress: ${r.motionProgress.toStringAsFixed(2)}',
+          ),
+          row(
+            'protoDist: ${r.protoDist?.toStringAsFixed(3) ?? '-'}  margin: ${r.protoMargin?.toStringAsFixed(2) ?? '-'}',
+          ),
+          row(
+            'trajSim: ${r.trajSim?.toStringAsFixed(3) ?? '-'}   buffer: ${r.bufferFrames}f',
+          ),
+          row(
+            'camera drift: ${r.rootDrift?.toStringAsFixed(3) ?? '-'}   scale spread: ${r.scaleSpread?.toStringAsFixed(3) ?? '-'} (removed before recognition)',
+          ),
+          row(
+            'pose: ${r.poseReadiness}${r.poseGuidance.isEmpty ? '' : ' — ${r.poseGuidance}'}',
+          ),
+          row(
+            'attempt: ${r.attempt.outcome.name}  maxProgress: ${r.attempt.maxProgress.toStringAsFixed(2)}'
+            '${r.attempt.failureCategory == MotionFailureCategory.none ? '' : '  → ${r.attempt.failureCategory.name}'}',
+          ),
           if (r.attempt.userFeedback.isNotEmpty)
             row('feedback: "${r.attempt.userFeedback}"'),
           if (r.attempt.primaryMismatchRegion != null)
             row('primary mismatch: ${r.attempt.primaryMismatchRegion}'),
           if (_selfValidation != null)
-            row('self-validation: ${_selfValidation!.passed ? 'passed' : 'FAILED'} '
-                'demo=${_selfValidation!.perDemo} loo=${_selfValidation!.leaveOneOut}'),
+            row(
+              'self-validation: ${_selfValidation!.passed ? 'passed' : 'FAILED'} '
+              'demo=${_selfValidation!.perDemo} loo=${_selfValidation!.leaveOneOut}',
+            ),
           if (_v2?.lastLearnProfile != null)
-            row('learn: ${_v2!.lastLearnProfile!.totalMs}ms '
-                '(${_v2!.lastLearnProfile!.encoderPasses} encodes '
-                '${_v2!.lastLearnProfile!.totalEncodeMs}ms, sv '
-                '${_v2!.lastLearnProfile!.selfValidateMs}ms, loo '
-                '${_v2!.lastLearnProfile!.looMs}ms)'),
+            row(
+              'learn: ${_v2!.lastLearnProfile!.totalMs}ms '
+              '(${_v2!.lastLearnProfile!.encoderPasses} encodes '
+              '${_v2!.lastLearnProfile!.totalEncodeMs}ms, sv '
+              '${_v2!.lastLearnProfile!.selfValidateMs}ms, loo '
+              '${_v2!.lastLearnProfile!.looMs}ms)',
+            ),
           row('encoder latency: ${r.inferenceLatency.inMilliseconds}ms'),
           if (_v2Error != null) row('error: $_v2Error'),
           if (_savedSessionId != null) ...[
@@ -1532,10 +1595,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             expand: true,
             onPressed: _copyMotionV2Debug,
           ),
-          if (kNuvoDiagnosticsEnabled && _lastFailedAttemptFrames.isNotEmpty) ...[
+          if (kNuvoDiagnosticsEnabled &&
+              _lastFailedAttemptFrames.isNotEmpty) ...[
             const SizedBox(height: 8),
             NuvoOutlineButton(
-              label: 'Copy failed-attempt fixture (${_lastFailedAttemptFrames.length}f)',
+              label:
+                  'Copy failed-attempt fixture (${_lastFailedAttemptFrames.length}f)',
               expand: true,
               onPressed: _copyFailedAttemptFixture,
             ),
@@ -1552,7 +1617,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final period = _firstPoseAt == null || _poseFrameCount < 2
         ? null
         : DateTime.now().difference(_firstPoseAt!).inMilliseconds /
-            math.max(1, _poseFrameCount - 1);
+              math.max(1, _poseFrameCount - 1);
     return {
       'captureQuality': {
         'poseFrameCount': _poseFrameCount,
@@ -1566,10 +1631,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         'scaleChangeFraction': r.scaleSpread,
       },
       'tracking': _track.toDiagnosticsJson()
-        ..addAll({
-          'preparing': _preparing,
-          'preRollFrames': _preRoll.length,
-        }),
+        ..addAll({'preparing': _preparing, 'preRollFrames': _preRoll.length}),
       'teaching': {
         'demoCount': _rawDemos.length,
         'demoFrameCounts': [for (final d in _rawDemos) d.length],
@@ -1611,38 +1673,41 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       if (kNuvoDiagnosticsEnabled && _lastFailedAttemptFrames.isNotEmpty)
         'failedAttemptFixture': _failedAttemptFixture(),
     };
-    await Clipboard.setData(ClipboardData(
-      text: const JsonEncoder.withIndent('  ').convert(bundle),
-    ));
+    await Clipboard.setData(
+      ClipboardData(text: const JsonEncoder.withIndent('  ').convert(bundle)),
+    );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Motion V2 debug copied.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Motion V2 debug copied.')));
     }
   }
 
   /// Everything needed to replay a failed attempt offline: raw pose frames,
   /// the taught spec, the attempt boundaries + outcome, runtime diagnostics.
   Map<String, dynamic> _failedAttemptFixture() => {
-        'schema': 'motion_v2_failed_attempt/1',
-        'movementName': _flow.movementName,
-        'expectedOutcome': 'match',
-        'spec': _v2Spec?.toJson(),
-        'attempt': _v2Result.attempt.toJson(),
-        'diagnostics': _motionV2DebugReport(),
-        'rawFrames': [
-          for (final f in _lastFailedAttemptFrames) _serializeRawFrame(f),
-        ],
-        'demos': [
-          for (final d in _rawDemos)
-            [for (final f in d) _serializeRawFrame(f)],
-        ],
-      };
+    'schema': 'motion_v2_failed_attempt/1',
+    'movementName': _flow.movementName,
+    'expectedOutcome': 'match',
+    'spec': _v2Spec?.toJson(),
+    'attempt': _v2Result.attempt.toJson(),
+    'diagnostics': _motionV2DebugReport(),
+    'rawFrames': [
+      for (final f in _lastFailedAttemptFrames) _serializeRawFrame(f),
+    ],
+    'demos': [
+      for (final d in _rawDemos) [for (final f in d) _serializeRawFrame(f)],
+    ],
+  };
 
   Future<void> _copyFailedAttemptFixture() async {
-    await Clipboard.setData(ClipboardData(
-      text: const JsonEncoder.withIndent('  ').convert(_failedAttemptFixture()),
-    ));
+    await Clipboard.setData(
+      ClipboardData(
+        text: const JsonEncoder.withIndent(
+          '  ',
+        ).convert(_failedAttemptFixture()),
+      ),
+    );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed-attempt fixture copied.')),
@@ -1721,7 +1786,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   Widget _smallButton(String label, VoidCallback onPressed) {
     return NuvoTertiaryButton(label: label, small: true, onPressed: onPressed);
   }
-
 
   Widget _cameraPreview(CameraController controller) {
     final previewSize = controller.value.previewSize;
@@ -1838,8 +1902,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             const SizedBox(height: 6),
             Text(
               sub,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: NuvoColors.white.withValues(alpha: 0.75)),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: NuvoColors.white.withValues(alpha: 0.75),
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -2086,11 +2151,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Widget _v2SummaryStep() {
     final learned = _v2Spec != null;
-    final building = _flow.stage == TeachMovementStage.building ||
+    final building =
+        _flow.stage == TeachMovementStage.building ||
         _v2Learning ||
-        (_learnRequested && !learned && _v2Error == null &&
+        (_learnRequested &&
+            !learned &&
+            _v2Error == null &&
             _flow.stage != TeachMovementStage.failed);
-    final failed = _flow.stage == TeachMovementStage.failed && !learned && !building;
+    final failed =
+        _flow.stage == TeachMovementStage.failed && !learned && !building;
     final testResult = _customTestResult;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2106,8 +2175,12 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
               const SizedBox(width: 10),
-              Text('Learning your movement…',
-                  style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.muted)),
+              Text(
+                'Learning your movement…',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: NuvoColors.muted,
+                ),
+              ),
             ],
           ),
         ] else if (_v2Error != null || failed) ...[
@@ -2116,12 +2189,22 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.danger),
           ),
           const SizedBox(height: 14),
-          NuvoPrimaryButton(label: 'Retry teaching', expand: true, onPressed: _restart),
+          NuvoPrimaryButton(
+            label: 'Retry teaching',
+            expand: true,
+            onPressed: _restart,
+          ),
           const SizedBox(height: 12),
-          NuvoOutlineButton(label: 'Change name', expand: true, onPressed: _changeName),
+          NuvoOutlineButton(
+            label: 'Change name',
+            expand: true,
+            onPressed: _changeName,
+          ),
         ] else if (learned) ...[
-          Text('Movement learned',
-              style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.success)),
+          Text(
+            'Movement learned',
+            style: AppTextStyles.bodyLarge.copyWith(color: NuvoColors.success),
+          ),
           const SizedBox(height: 6),
           Text(
             'Nuvo watched your 3 examples and learned the shared motion. '
@@ -2142,7 +2225,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           NuvoOutlineButton(
             label: 'Use this movement',
             expand: true,
-            onPressed: _navigating ? null : _goToRaceCreation,
+            onPressed: _navigating ? null : _confirmUseMovement,
           ),
           const SizedBox(height: 20),
           Row(
@@ -2154,7 +2237,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             ],
           ),
         ],
-        if (_showDiagnostics) ...[const SizedBox(height: 12), _motionV2DebugPanel()],
+        if (_showDiagnostics) ...[
+          const SizedBox(height: 12),
+          _motionV2DebugPanel(),
+        ],
       ],
     );
   }
@@ -2218,7 +2304,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
             NuvoOutlineButton(
               label: 'Use this movement',
               expand: true,
-              onPressed: _navigating ? null : _goToRaceCreation,
+              onPressed: _navigating ? null : _confirmUseMovement,
             ),
           ],
           const SizedBox(height: 24),
@@ -2292,6 +2378,20 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     } finally {
       if (mounted) setState(() => _navigating = false);
     }
+  }
+
+  Future<void> _confirmUseMovement() async {
+    if (_effectiveSpec == null || _navigating) return;
+    final confirmed = await showNuvoConfirmDialog(
+      context,
+      title: 'Use this movement?',
+      message:
+          'Nuvo will use the movement you taught to verify this race on your device.',
+      cancelLabel: 'Keep teaching',
+      confirmLabel: 'Use movement',
+      destructive: false,
+    );
+    if (confirmed == true && mounted) await _goToRaceCreation();
   }
 
   String _nuvoTestStatus({

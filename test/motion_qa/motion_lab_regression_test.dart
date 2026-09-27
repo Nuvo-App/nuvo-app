@@ -373,13 +373,19 @@ void main() {
       lab.load();
       lab.updateStatus();
 
-      final status = File('$labDir/STATUS.md').readAsStringSync();
+      // STATUS.md is written into the run-scoped artifact directory
+      // (labDir/runs/<timestamp>), not labDir itself — see MotionLab.runDir.
+      // The report is now structured Markdown tables (Phase 10 rich status),
+      // not plain "Label: value" lines — assert on the current section/field
+      // markers rather than the old flat text labels.
+      final status = File('${lab.runDir}/STATUS.md').readAsStringSync();
       expect(status, contains('NUVO MOTION LAB'));
       expect(status, contains('STATUS:'));
-      expect(status, contains('Experiments completed:'));
-      expect(status, contains('Champion:'));
-      expect(status, contains('F1:'));
-      expect(status, contains('Plateau:'));
+      expect(status, contains('## Experiment Counts'));
+      expect(status, contains('| Completed |'));
+      expect(status, contains('## Champion'));
+      expect(status, contains('| F1 |'));
+      expect(status, contains('Plateaued'));
     });
   });
 

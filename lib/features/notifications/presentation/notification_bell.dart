@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/nuvo_ripple_surface.dart';
 import '../application/notification_controller.dart';
 
 /// The app-bar bell with an unread badge. Tapping it opens `/notifications`
@@ -20,12 +21,11 @@ class NotificationBell extends ConsumerWidget {
     return Semantics(
       button: true,
       label: unread > 0 ? '$unread unread notifications' : 'Notifications',
-      child: GestureDetector(
+      child: NuvoRippleSurface(
         onTap: () {
           ref.read(notificationControllerProvider.notifier).markStale();
           context.push('/notifications');
         },
-        behavior: HitTestBehavior.opaque,
         child: SizedBox(
           width: 44,
           height: 44,

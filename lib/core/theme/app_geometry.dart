@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_shadows.dart';
 
 abstract final class NuvoRadii {
   static const double xs = 12;
@@ -32,6 +33,68 @@ abstract final class NuvoSpacing {
 
   /// Standard horizontal page padding used by Compete and sibling screens.
   static const double pageHorizontal = 22;
+
+  // ── Page rhythm contract ──────────────────────────────────────────────────
+  // Shared vertical cadence for root screens: header → first content →
+  // sections → dock clearance. Screens keep their own layouts; these constants
+  // keep the rhythm consistent without forcing identical compositions.
+  /// Gap below a page header / tab strip before the first content block.
+  static const double headerToContent = 12;
+
+  /// Gap between sibling sections inside a page body.
+  static const double section = 24;
+
+  // ── First-viewport contract ────────────────────────────────────────────
+  // See docs/ui/MAIN_SCREEN_LAYOUT_CONTRACT.md.
+  /// Intentional breathing zone between the last visible first-viewport
+  /// component and the floating dock — on top of the dock's own clearance
+  /// (NuvoBottomNav.bottomPadding). Small by design: content should end
+  /// confidently, not float in a void.
+  static const double dockBreathing = 14;
+}
+
+/// Shared surface hierarchy. Not every piece of content is a card — pick the
+/// lightest level that carries the information:
+///
+///   level 0 — no surface at all (feed rows, metadata, lightweight lists)
+///   level 1 — quiet boundary (secondary groups, utility surfaces)
+///   level 2 — strong Nuvo surface (hero cards, primary race moments, CTAs)
+///   level 3 — filled / high-energy (live state, major selected moments)
+abstract final class NuvoSurfaces {
+  /// Level 1 — thin navy boundary, white fill, no shadow.
+  static BoxDecoration quiet({double radius = NuvoRadii.card, Color? fill}) =>
+      BoxDecoration(
+        color: fill ?? NuvoColors.white,
+        borderRadius: BorderRadius.circular(radius),
+        border: NuvoBorders.quiet,
+      );
+
+  /// Level 2 — navy outline + hard offset shadow. Reserved for surfaces that
+  /// deserve weight; do not default every container to this.
+  static BoxDecoration strong({double radius = NuvoRadii.card, Color? fill}) =>
+      BoxDecoration(
+        color: fill ?? NuvoColors.white,
+        borderRadius: BorderRadius.circular(radius),
+        border: NuvoBorders.hero,
+        boxShadow: AppShadows.hardSmall,
+      );
+
+  /// Level 3 — filled navy surface for live/critical moments.
+  static BoxDecoration live({double radius = NuvoRadii.card}) => BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(radius),
+        border: NuvoBorders.hero,
+        boxShadow: AppShadows.hardSmall,
+      );
+
+  /// Level 3 variant — filled action blue for major selected/active moments.
+  static BoxDecoration active({double radius = NuvoRadii.card}) =>
+      BoxDecoration(
+        color: NuvoColors.actionBlue,
+        borderRadius: BorderRadius.circular(radius),
+        border: NuvoBorders.hero,
+        boxShadow: AppShadows.hardSmall,
+      );
 }
 
 abstract final class NuvoBorders {

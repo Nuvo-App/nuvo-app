@@ -89,6 +89,7 @@ class _Screen extends StatelessWidget {
       GoRoute(path: '/splash', builder: (c, s) => const _Screen('splash')),
       GoRoute(path: '/welcome', builder: (c, s) => const _Screen('welcome')),
       GoRoute(path: '/arena', builder: (c, s) => const _Screen('arena')),
+      GoRoute(path: '/compete', builder: (c, s) => const _Screen('compete')),
       GoRoute(path: '/profile', builder: (c, s) => const _Screen('profile')),
     ],
   );
@@ -178,13 +179,27 @@ void main() {
     );
 
     testWidgets(
+      'offline: /profile stays reachable — it hosts Sign out, the only way '
+      'off a session that can never re-authenticate on this network',
+      (tester) async {
+        final router = await _pumpRouter(
+          tester,
+          restoreResult: const RestoreUnreachable(),
+          initialLocation: '/profile',
+        );
+        expect(_currentPath(router), '/profile');
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'offline: any OTHER protected destination bounces back to /arena, '
       'not left stranded on whatever was loading',
       (tester) async {
         final router = await _pumpRouter(
           tester,
           restoreResult: const RestoreUnreachable(),
-          initialLocation: '/profile',
+          initialLocation: '/compete',
         );
         expect(_currentPath(router), '/arena');
         expect(tester.takeException(), isNull);

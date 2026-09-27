@@ -84,7 +84,7 @@ String raceScoreLabel(Race race, int value) => formatMotionTarget(
     );
 
 String raceProgressLabel(Race race, RaceParticipant? participant) {
-  if (participant == null) return '0';
+  if (participant == null) return 'Submit your first proof';
   final target = race.targetValue;
   if (target != null && target > 0) {
     return formatMotionProgress(
@@ -108,12 +108,20 @@ String raceTargetLabel(Race race) {
 }
 
 List<RaceParticipant> serverRankedParticipants(Race race) {
+  final lowerIsBetter = race.scoreDirection == 'lower';
   final participants = [...race.participants];
   participants.sort((a, b) {
     final rankA = a.rank ?? 1 << 20;
     final rankB = b.rank ?? 1 << 20;
     if (rankA != rankB) return rankA.compareTo(rankB);
     if (b.progressValue != a.progressValue) {
+      // Fastest-time races: lowest nonzero wins; zero means "no attempt
+      // yet" and ranks last.
+      if (lowerIsBetter) {
+        final av = a.progressValue <= 0 ? 1 << 30 : a.progressValue;
+        final bv = b.progressValue <= 0 ? 1 << 30 : b.progressValue;
+        return av.compareTo(bv);
+      }
       return b.progressValue.compareTo(a.progressValue);
     }
     return a.joinedAt.compareTo(b.joinedAt);

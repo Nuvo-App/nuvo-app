@@ -10,11 +10,8 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart';
 import 'arena_models.dart';
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 
 class ArenaApi {
   ArenaApi({http.Client? client}) : _client = client ?? http.Client();
@@ -33,7 +30,7 @@ class ArenaApi {
     final http.Response res;
     try {
       res = await _client
-          .get(Uri.parse('$_kApiBase/arena'), headers: _headers(token))
+          .get(Uri.parse('$kNuvoApiBase/arena'), headers: _headers(token))
           .timeout(_requestTimeout);
     } on TimeoutException {
       throw const ApiException(

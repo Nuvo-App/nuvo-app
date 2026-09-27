@@ -14,6 +14,7 @@ const INTERNAL_KEY = 'internal-test-key';
 // ── Minimal fakes for D1 + R2 ─────────────────────────────────────────────────
 function makeEnv({ withInternalKey = true, model = null, artifact = null } = {}) {
   const sessions = [];
+  const accountKeys = new Map();
   const objects = new Map();
   if (artifact) objects.set(artifact.key, Buffer.from(artifact.body));
 
@@ -24,6 +25,9 @@ function makeEnv({ withInternalKey = true, model = null, artifact = null } = {})
       return {
         bind(...a) { args = a; return this; },
         async run() {
+          if (q.startsWith('INSERT INTO motion_account_keys')) {
+            accountKeys.set(args[0], { wrapped_key: args[1] });
+          }
           if (q.startsWith('INSERT INTO motion_sessions')) {
             const [, session_id, user_id, race_id, activity_id, kind, outcome,
               detected_value, goal_value, confidence, failed_rule_reason,
@@ -46,6 +50,7 @@ function makeEnv({ withInternalKey = true, model = null, artifact = null } = {})
         },
         async first() {
           let rows = sessions.slice().reverse();
+          if (q.includes('FROM motion_account_keys')) return accountKeys.get(args[0]) ?? null;
           if (q.includes('FROM motion_model_releases')) return model;
           if (q.includes('FROM users')) {
             return { id: args[0], primary_email: 'a@b.com', status: 'active', full_name: 'A', username: 'aaa' };
@@ -83,9 +88,12 @@ function makeEnv({ withInternalKey = true, model = null, artifact = null } = {})
     DB,
     PROFILE_PHOTOS,
     JWT_SECRET,
+    MOTION_DATA_MASTER_KEY: 'test-motion-master-key',
     INTERNAL_API_KEY: withInternalKey ? INTERNAL_KEY : undefined,
     GOOGLE_IOS_CLIENT_ID: '', APPLE_BUNDLE_ID: '', RESEND_API_KEY: '',
     RESEND_FROM_EMAIL: '', API_BASE_URL: '',
+    __objects: objects,
+    __sessions: sessions,
   };
 }
 
@@ -189,6 +197,10 @@ test('round-trip: upload a session, then fetch the full artifact internally', as
   }, env);
   assert.equal(up.status, 200);
   assert.equal((await up.json()).sessionId, 'ms_deadbeef');
+  const storedObjectKey = [...env.__objects.keys()].find((key) => key.startsWith('motion-sessions/'));
+  assert.ok(storedObjectKey);
+  assert.equal(storedObjectKey.includes('user-42'), false);
+  assert.notEqual(env.__sessions[0].user_id, 'user-42');
 
   const byId = await app.request('/internal/motion-sessions/ms_deadbeef', {
     headers: { 'X-Internal-Key': INTERNAL_KEY },

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,9 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_motion.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
+import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
@@ -130,6 +134,13 @@ class RaceComposerScreen extends ConsumerStatefulWidget {
 class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   late final PageController _pageController;
   _Step _step = _Step.name;
+
+  /// Pages whose input action the user has already performed (name typed,
+  /// movement picked, goal set, racer mode chosen). The coach uses this —
+  /// plus draft state — to retarget from the input control to the page's
+  /// real continue CTA.
+  final Set<_Step> _inputDone = {};
+
   bool _loading = false;
   String? _error;
   String? _lastApiError;
@@ -147,7 +158,12 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final prefill = widget.prefill;
       if (prefill != null) {
-        final parsed = draftFromIdea(prefill.idea);
+        var parsed = draftFromIdea(prefill.idea);
+        // Race Together ("Race {name}") — the person joins on create, so the
+        // race must be crew-joinable from the start.
+        if (parsed != null && prefill.withUser != null) {
+          parsed = parsed.copyWith(visibility: 'invite_code');
+        }
         if (parsed != null) {
           ref.read(_composerDraftProvider.notifier).state = parsed;
         }
@@ -280,12 +296,58 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final v = _visibleSteps;
     final i = v.indexOf(_step);
     if (i > 0) {
+      // Back inside the composer: the coach re-derives the right substep from
+      // the page + draft — no provider rewind needed.
       _goToStep(v[i - 1], reason: 'back button');
     } else {
       _dismissKeyboard();
+      // Backing all the way out to Compete re-arms the guide's first step so
+      // the Start button is the next obvious action.
+      final guide = ref.read(firstRaceGuideProvider);
+      if (guide != FirstRaceGuideStep.idle &&
+          guide != FirstRaceGuideStep.complete) {
+        ref.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.competeStart;
+      }
       safePopOrGo(context, '/compete');
     }
   }
+
+  /// Whether the user has already satisfied [step]'s input — drives the
+  /// coach's input → continue-CTA retarget. Draft-derived fallbacks keep this
+  /// correct across back navigation and prefills.
+  bool _inputReady(_Step step, RaceDraft draft) => switch (step) {
+    _Step.name =>
+      // A valid name isn't "done" while the keyboard is still up — the coach
+      // stays on the field until the user dismisses/commits it.
+      (_inputDone.contains(step) || draft.hasCustomName) && !_nameFocused,
+    _Step.activity =>
+      _inputDone.contains(step) ||
+          draft.isCustom ||
+          (draft.isManual &&
+              (draft.manualGoalName ?? '').trim().isNotEmpty),
+    _Step.goal ||
+    _Step.racers =>
+      _inputDone.contains(step),
+    _Step.train || _Step.review => false,
+  };
+
+  ComposerGuidePage _guidePage(_Step step) => switch (step) {
+    _Step.name => ComposerGuidePage.name,
+    _Step.activity => ComposerGuidePage.activity,
+    _Step.train => ComposerGuidePage.train,
+    _Step.goal => ComposerGuidePage.goal,
+    _Step.racers => ComposerGuidePage.racers,
+    _Step.review => ComposerGuidePage.review,
+  };
+
+  void _markInput(_Step step) {
+    if (_inputDone.add(step)) setState(() {});
+  }
+
+  /// Whether the name field currently has the keyboard — while it does, the
+  /// coach must not retarget the continue CTA even if the name is valid.
+  bool _nameFocused = false;
 
   Future<void> _startRace() async {
     if (_loading) return; // guard against double-tap
@@ -350,6 +412,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           FirstRaceGuideStep.composerReview) {
         ref.read(firstRaceGuideProvider.notifier).state =
             FirstRaceGuideStep.raceDetail;
+      }
+      final withUser = widget.prefill?.withUser;
+      if (withUser != null) {
+        // Race Together — pull the person into the race we just created.
+        // Best-effort: on failure land on the invite screen where the same
+        // action is one tap away rather than losing them silently.
+        try {
+          await controller.addRaceParticipant(race.id, withUser.id);
+          if (!mounted) return;
+          context.go('/race/${race.id}');
+        } catch (_) {
+          if (!mounted) return;
+          context.go('/race/${race.id}/invite');
+        }
+        return;
       }
       // Replace the composer stack — the race now exists, so back should not
       // return to the (stale) draft flow. Matches create_race_screen.
@@ -475,12 +552,27 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
+                    onInput: () => _markInput(_Step.name),
+                    onFocusChange: (f) {
+                      // Focus only suppresses the CTA while editing an
+                      // UNSATISFIED name. The field autofocuses when you come
+                      // back to a completed Name page — that must not drag
+                      // the coach off the continue button.
+                      final satisfied =
+                          _inputDone.contains(_Step.name) ||
+                          ref.read(_composerDraftProvider).hasCustomName;
+                      final editing = f && !satisfied;
+                      if (editing != _nameFocused) {
+                        setState(() => _nameFocused = editing);
+                      }
+                    },
                   ),
                   _ActivityPage(
                     draft: draft,
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
+                    onInput: () => _markInput(_Step.activity),
                   ),
                   _TrainPage(
                     draft: draft,
@@ -494,12 +586,15 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
+                    onInput: () => _markInput(_Step.goal),
                   ),
                   _RacersPage(
                     draft: draft,
+                    withUser: widget.prefill?.withUser,
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
+                    onInput: () => _markInput(_Step.racers),
                   ),
                   _ReviewPage(
                     draft: draft,
@@ -521,47 +616,36 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     );
 
     final guide = ref.watch(firstRaceGuideProvider);
-    final coach = switch (guide) {
-      FirstRaceGuideStep.composerName => FirstRaceGuideCoach(
-        step: guide,
-        targetKey: FirstRaceGuideKeys.composerName,
-        eyebrow: 'NAME THE RACE',
-        title: 'Give the board a finish line.',
-        body: 'Type a short name your crew will understand, then continue.',
-      ),
-      FirstRaceGuideStep.composerActivity => FirstRaceGuideCoach(
-        step: guide,
-        targetKey: FirstRaceGuideKeys.composerActivity,
-        eyebrow: 'CHOOSE PROOF',
-        title: 'Pick what moves the board.',
-        body:
-            'Choose a supported movement. Nuvo will use it to verify progress.',
-      ),
-      FirstRaceGuideStep.composerGoal => FirstRaceGuideCoach(
-        step: guide,
-        targetKey: FirstRaceGuideKeys.composerGoal,
-        eyebrow: 'SET THE FINISH LINE',
-        title: 'Choose the number to beat.',
-        body: 'This is the target everyone races toward.',
-      ),
-      FirstRaceGuideStep.composerReview => FirstRaceGuideCoach(
-        step: guide,
-        targetKey: FirstRaceGuideKeys.composerReview,
-        eyebrow: 'PUT IT ON THE BOARD',
-        title: 'Review it, then start the race.',
-        body: 'Tap Start race to create the real leaderboard.',
-      ),
-      FirstRaceGuideStep.composerRacers => FirstRaceGuideCoach(
-        step: guide,
-        targetKey: FirstRaceGuideKeys.composerRacers,
-        eyebrow: 'BRING YOUR CREW',
-        title: 'Choose who starts with you.',
-        body:
-            'Pick Start solo for now. You can invite your crew from the race room.',
-      ),
-      _ => null,
+    const guidedSteps = {
+      FirstRaceGuideStep.composerName,
+      FirstRaceGuideStep.composerActivity,
+      FirstRaceGuideStep.composerGoal,
+      FirstRaceGuideStep.composerRacers,
+      FirstRaceGuideStep.composerReview,
     };
-    return coach == null ? screen : Stack(children: [screen, coach]);
+    // The coach follows the page ACTUALLY on screen, not just the furthest
+    // guide step — back navigation re-derives the right target from the live
+    // draft instead of pointing at a page the user already left.
+    final spec = guidedSteps.contains(guide)
+        ? composerCoachSpec(
+            _guidePage(_step),
+            inputReady: _inputReady(_step, draft),
+            teachMode: draft.isCustom,
+          )
+        : null;
+    if (spec == null) return screen;
+    return Stack(
+      children: [
+        screen,
+        FirstRaceGuideCoach(
+          step: guide,
+          targetKey: spec.targetKey,
+          eyebrow: spec.eyebrow,
+          title: spec.title,
+          body: spec.body,
+        ),
+      ],
+    );
   }
 }
 
@@ -654,6 +738,7 @@ class _PageShell extends StatelessWidget {
     required this.ctaLabel,
     required this.onCta,
     this.ctaEnabled = true,
+    this.ctaKey,
   });
 
   final String question;
@@ -663,13 +748,18 @@ class _PageShell extends StatelessWidget {
   final VoidCallback onCta;
   final bool ctaEnabled;
 
+  /// Spotlight key for the real continue button — the coach retargets here
+  /// once the page's input is satisfied.
+  final GlobalKey? ctaKey;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: SingleChildScrollView(
+          child: NuvoFadeScroll(
+            child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
             child: Column(
@@ -694,8 +784,10 @@ class _PageShell extends StatelessWidget {
               ],
             ),
           ),
+          ),
         ),
         Padding(
+          key: ctaKey,
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
           child: NuvoPrimaryButton(
             label: ctaLabel,
@@ -715,10 +807,20 @@ class _NamePage extends StatefulWidget {
     required this.draft,
     required this.onDraftChanged,
     required this.onNext,
+    this.onInput,
+    this.onFocusChange,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// Fires once the user has entered a name — lets the coach retarget the
+  /// page's continue CTA.
+  final VoidCallback? onInput;
+
+  /// Reports the name field's focus so the coach can keep pointing at the
+  /// field while the keyboard is up.
+  final ValueChanged<bool>? onFocusChange;
 
   @override
   State<_NamePage> createState() => _NamePageState();
@@ -735,7 +837,15 @@ class _NamePageState extends State<_NamePage> {
     super.initState();
     _hasCustomName = widget.draft.hasCustomName;
     _ctrl = TextEditingController(text: widget.draft.resolvedTitle);
-    _focusNode = FocusNode();
+    _focusNode = FocusNode()
+      // The coach only retargets the continue CTA once the user is DONE with
+      // the keyboard — a single keystroke or delete must not flip it.
+      ..addListener(() {
+        widget.onFocusChange?.call(_focusNode.hasFocus);
+        if (!_focusNode.hasFocus && _ctrl.text.trim().isNotEmpty) {
+          widget.onInput?.call();
+        }
+      });
   }
 
   @override
@@ -787,6 +897,7 @@ class _NamePageState extends State<_NamePage> {
       ctaLabel: 'Choose activity',
       onCta: _commit,
       ctaEnabled: _ctrl.text.trim().isNotEmpty,
+      ctaKey: FirstRaceGuideKeys.composerNameCta,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -902,10 +1013,15 @@ class _ActivityPage extends ConsumerStatefulWidget {
     required this.draft,
     required this.onDraftChanged,
     required this.onNext,
+    this.onInput,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// Fires once the user has picked/named a movement — lets the coach
+  /// retarget the page's continue CTA.
+  final VoidCallback? onInput;
 
   @override
   ConsumerState<_ActivityPage> createState() => _ActivityPageState();
@@ -951,6 +1067,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   }
 
   void _syncCustomMovement() {
+    if (_moveNameController.text.trim().isNotEmpty) widget.onInput?.call();
     widget.onDraftChanged(
       widget.draft.copyWith(
         goalKind: RaceGoalKind.movement,
@@ -963,6 +1080,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   }
 
   void _syncManual() {
+    if (_manualNameController.text.trim().isNotEmpty) widget.onInput?.call();
     widget.onDraftChanged(
       widget.draft.copyWith(
         goalKind: RaceGoalKind.manual,
@@ -984,6 +1102,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       ),
     );
     setState(() => _teachMode = false);
+    widget.onInput?.call();
     // Record selection in recent movements
     ref
         .read(recentMovementIdsProvider.notifier)
@@ -1022,6 +1141,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
             'Nuvo.',
         ctaLabel: 'Continue to training',
         ctaEnabled: canContinue,
+        ctaKey: FirstRaceGuideKeys.composerActivityCta,
         onCta: () {
           _syncCustomMovement();
           widget.onNext();
@@ -1070,6 +1190,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
           ? 'Name the goal and how it is measured.'
           : 'Pick a movement for your crew.',
       ctaLabel: 'Set the finish line',
+      ctaKey: FirstRaceGuideKeys.composerActivityCta,
       onCta: () {
         if (isManual) _syncManual();
         widget.onNext();
@@ -1320,9 +1441,9 @@ class _GoalKindToggle extends StatelessWidget {
     Widget seg(RaceGoalKind k, IconData icon, String label) {
       final selected = kind == k;
       return Expanded(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        child: NuvoPressable(
           onTap: () => onChanged(k),
+          scale: 0.96,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1503,8 +1624,9 @@ class _CategoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return NuvoPressable(
       onTap: onTap,
+      scale: 0.96,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -1815,10 +1937,15 @@ class _GoalPage extends StatefulWidget {
     required this.draft,
     required this.onDraftChanged,
     required this.onNext,
+    this.onInput,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// Fires once the user has set a goal — lets the coach retarget the page's
+  /// continue CTA.
+  final VoidCallback? onInput;
 
   @override
   State<_GoalPage> createState() => _GoalPageState();
@@ -1827,8 +1954,10 @@ class _GoalPage extends StatefulWidget {
 class _GoalPageState extends State<_GoalPage> {
   late int _target;
   bool _editing = false;
+  int _floorHits = 0;
   late final TextEditingController _editCtrl;
   late final FocusNode _editFocus;
+  Timer? _holdTimer;
 
   @override
   void initState() {
@@ -1854,6 +1983,7 @@ class _GoalPageState extends State<_GoalPage> {
 
   @override
   void dispose() {
+    _holdTimer?.cancel();
     _editCtrl.dispose();
     _editFocus.dispose();
     super.dispose();
@@ -1861,8 +1991,27 @@ class _GoalPageState extends State<_GoalPage> {
 
   void _setTarget(int value) {
     final clamped = value.clamp(1, 99999);
+    if (clamped == _target) return;
+    HapticFeedback.selectionClick();
     setState(() => _target = clamped);
     widget.onDraftChanged(widget.draft.copyWith(targetValue: clamped));
+    widget.onInput?.call();
+  }
+
+  /// Press-and-hold repeat: the first step fires when the hold lands, then
+  /// repeats until release. [_setTarget] clamps, so bounds hold themselves.
+  void _startHold(VoidCallback step) {
+    _stopHold();
+    step();
+    _holdTimer = Timer.periodic(
+      const Duration(milliseconds: 90),
+      (_) => step(),
+    );
+  }
+
+  void _stopHold() {
+    _holdTimer?.cancel();
+    _holdTimer = null;
   }
 
   void _startEdit() {
@@ -1901,7 +2050,15 @@ class _GoalPageState extends State<_GoalPage> {
   }
 
   void _increment() => _setTarget(_target + _stepSize);
-  void _decrement() => _setTarget((_target - _stepSize).clamp(1, 99999));
+  void _decrement() {
+    // At the floor the stepper refuses — the button nudges "nope" instead
+    // of silently doing nothing (NuvoShake, not a state change).
+    if (_target <= 1) {
+      setState(() => _floorHits++);
+      return;
+    }
+    _setTarget((_target - _stepSize).clamp(1, 99999));
+  }
 
   /// Measurement model for the selected preset (reps unless it's a distance /
   /// duration activity like Treadmill Running / Plank).
@@ -1932,16 +2089,116 @@ class _GoalPageState extends State<_GoalPage> {
               ? _secondsDisplay(_target)
               : '$_target $_unitWord')
         : widget.draft.activity.targetLabel(_target);
-    return 'First to $valueLabel of verified $activityName wins.';
+    return switch (widget.draft.format) {
+      RaceFormat.mostInWindow =>
+        'Most verified $activityName before the finish line wins.',
+      RaceFormat.bestAttempt =>
+        'Best single $valueLabel wins — every verified attempt counts.',
+      RaceFormat.timedAttempt =>
+        'Most $activityName in '
+            '${formatDurationShort(widget.draft.attemptDurationSeconds ?? 60)} '
+            'wins.',
+      _ => 'First to $valueLabel of verified $activityName wins.',
+    };
   }
 
-  String get _displayTarget {
-    if (_isShortDistance) return '$_target';
-    if (_isDistance) return formatMiles(_target);
-    if (widget.draft.metric == RaceMetric.seconds) {
-      return _secondsDisplay(_target);
-    }
-    return '$_target';
+  // ── Race mode ───────────────────────────────────────────────────────────
+
+  /// Modes this draft can express — preset activities declare their formats
+  /// in the catalog; custom/manual goals support the full set.
+  List<RaceFormat> get _availableFormats =>
+      widget.draft.isCustom || widget.draft.isManual
+      ? const [
+          RaceFormat.firstToGoal,
+          RaceFormat.mostInWindow,
+          RaceFormat.bestAttempt,
+          RaceFormat.timedAttempt,
+        ]
+      : widget.draft.activity.supportedFormats;
+
+  String _modeLabel(RaceFormat f) => switch (f) {
+    RaceFormat.firstToGoal => 'First to the goal',
+    RaceFormat.mostInWindow => 'Most before time runs out',
+    RaceFormat.bestAttempt => 'Best attempt',
+    RaceFormat.timedAttempt => 'Timed battle',
+  };
+
+  void _setFormat(RaceFormat f) {
+    if (widget.draft.format == f) return;
+    HapticFeedback.selectionClick();
+    final now = DateTime.now().toUtc();
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        format: f,
+        // Deadline modes need a finish line; timed battles need a duration.
+        // Sensible defaults are set here and editable via the chips below.
+        finishLineAt: switch (f) {
+          RaceFormat.mostInWindow || RaceFormat.bestAttempt =>
+            widget.draft.finishLineAt ??
+                now.add(const Duration(days: 7)).toIso8601String(),
+          RaceFormat.timedAttempt =>
+            widget.draft.finishLineAt ??
+                now.add(const Duration(hours: 24)).toIso8601String(),
+          _ => widget.draft.finishLineAt,
+        },
+        attemptDurationSeconds: f == RaceFormat.timedAttempt
+            ? widget.draft.attemptDurationSeconds ?? 60
+            : widget.draft.attemptDurationSeconds,
+      ),
+    );
+    widget.onInput?.call();
+  }
+
+  static const _deadlineOptions = <(String, Duration)>[
+    ('1 hour', Duration(hours: 1)),
+    ('24 hours', Duration(hours: 24)),
+    ('3 days', Duration(days: 3)),
+    ('1 week', Duration(days: 7)),
+  ];
+
+  static const _attemptDurations = <(String, int)>[
+    ('30s', 30),
+    ('60s', 60),
+    ('2 min', 120),
+    ('5 min', 300),
+  ];
+
+  void _setDeadline(Duration d) {
+    HapticFeedback.selectionClick();
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        finishLineAt: DateTime.now().toUtc().add(d).toIso8601String(),
+      ),
+    );
+    widget.onInput?.call();
+  }
+
+  bool _deadlineSelected(Duration d) {
+    final raw = widget.draft.finishLineAt;
+    if (raw == null) return false;
+    final at = DateTime.tryParse(raw);
+    if (at == null) return false;
+    return (at.difference(DateTime.now().toUtc()).inSeconds - d.inSeconds)
+            .abs() <=
+        300;
+  }
+
+  void _setAttemptDuration(int seconds) {
+    HapticFeedback.selectionClick();
+    widget.onDraftChanged(
+      widget.draft.copyWith(attemptDurationSeconds: seconds),
+    );
+    widget.onInput?.call();
+  }
+
+  /// Display string for an arbitrary target — passed to [NuvoNumberFlow] so
+  /// the wheel animates whatever text each value formats to ("25", "0.25",
+  /// "1 min 20 sec").
+  String _displayFor(int v) {
+    if (_isDistance && v < kMetresMilesCrossover) return '$v';
+    if (_isDistance) return formatMiles(v);
+    if (widget.draft.metric == RaceMetric.seconds) return _secondsDisplay(v);
+    return '$v';
   }
 
   List<int> get _suggestedTargets =>
@@ -1979,13 +2236,37 @@ class _GoalPageState extends State<_GoalPage> {
       support: 'First racer to reach it wins.',
       ctaLabel: 'Invite racers',
       onCta: widget.onNext,
+      ctaKey: FirstRaceGuideKeys.composerGoalCta,
       body: KeyedSubtree(
         key: FirstRaceGuideKeys.composerGoal,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Race mode ─────────────────────────────────────────────────
+            if (_availableFormats.length > 1) ...[
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final f in _availableFormats)
+                    _SuggestedTarget(
+                      value: _modeLabel(f),
+                      selected: widget.draft.format == f,
+                      onTap: () {
+                        _dismissKeyboard();
+                        setState(() => _editing = false);
+                        _setFormat(f);
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+
             // ── Big tappable number ──────────────────────────────────────────
             _GoalDisplay(
-              displayValue: _displayTarget,
+              value: _target,
+              format: _displayFor,
               allowDecimal: _isDistance,
               unitLabel: isSeconds
                   ? widget.draft.displayActivityName.toUpperCase()
@@ -1997,6 +2278,9 @@ class _GoalPageState extends State<_GoalPage> {
               onCommitEdit: _commitEdit,
               onIncrement: _increment,
               onDecrement: _decrement,
+              onHoldStart: _startHold,
+              onHoldEnd: _stopHold,
+              decrementNudges: _floorHits,
             ),
             const SizedBox(height: 24),
 
@@ -2021,6 +2305,57 @@ class _GoalPageState extends State<_GoalPage> {
                   ),
               ],
             ),
+
+            // ── Finish line (deadline modes) ────────────────────────────────
+            if (widget.draft.format != RaceFormat.firstToGoal) ...[
+              const SizedBox(height: 24),
+              Text(
+                'FINISH LINE',
+                style: AppTextStyles.labelUppercase(
+                  12,
+                  color: NuvoColors.muted,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final (label, duration) in _deadlineOptions)
+                    _SuggestedTarget(
+                      value: label,
+                      selected: _deadlineSelected(duration),
+                      onTap: () => _setDeadline(duration),
+                    ),
+                ],
+              ),
+            ],
+
+            // ── Attempt length (timed battles) ──────────────────────────────
+            if (widget.draft.format == RaceFormat.timedAttempt) ...[
+              const SizedBox(height: 24),
+              Text(
+                'ATTEMPT LENGTH',
+                style: AppTextStyles.labelUppercase(
+                  12,
+                  color: NuvoColors.muted,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final (label, seconds) in _attemptDurations)
+                    _SuggestedTarget(
+                      value: label,
+                      selected:
+                          widget.draft.attemptDurationSeconds == seconds,
+                      onTap: () => _setAttemptDuration(seconds),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 24),
 
             // ── Win statement ────────────────────────────────────────────────
@@ -2048,7 +2383,8 @@ class _GoalPageState extends State<_GoalPage> {
 
 class _GoalDisplay extends StatelessWidget {
   const _GoalDisplay({
-    required this.displayValue,
+    required this.value,
+    required this.format,
     required this.unitLabel,
     required this.editing,
     required this.editCtrl,
@@ -2057,9 +2393,13 @@ class _GoalDisplay extends StatelessWidget {
     required this.onCommitEdit,
     required this.onIncrement,
     required this.onDecrement,
+    this.onHoldStart,
+    this.onHoldEnd,
     this.allowDecimal = false,
+    this.decrementNudges = 0,
   });
-  final String displayValue;
+  final int value;
+  final String Function(int) format;
   final String unitLabel;
   final bool allowDecimal;
   final bool editing;
@@ -2069,6 +2409,15 @@ class _GoalDisplay extends StatelessWidget {
   final VoidCallback onCommitEdit;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
+
+  /// Press-and-hold repeat on the steppers: [onHoldStart] receives the step
+  /// to repeat, [onHoldEnd] stops it.
+  final void Function(VoidCallback step)? onHoldStart;
+  final VoidCallback? onHoldEnd;
+
+  /// Bump counter for decrement refusals — each increment shakes the
+  /// minus button ("can't go lower").
+  final int decrementNudges;
 
   @override
   Widget build(BuildContext context) {
@@ -2091,9 +2440,18 @@ class _GoalDisplay extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _StepButton(icon: Icons.remove_rounded, onTap: onDecrement),
-          GestureDetector(
+          NuvoShake(
+            trigger: decrementNudges,
+            child: _StepButton(
+              icon: Icons.remove_rounded,
+              onTap: onDecrement,
+              onHoldStart: () => onHoldStart?.call(onDecrement),
+              onHoldEnd: onHoldEnd,
+            ),
+          ),
+          NuvoPressable(
             onTap: onTapNumber,
+            haptic: false,
             child: Column(
               children: [
                 if (editing)
@@ -2124,12 +2482,15 @@ class _GoalDisplay extends StatelessWidget {
                     ),
                   )
                 else
-                  Text(
-                    displayValue,
+                  NuvoNumberFlow(
+                    value: value,
+                    format: format,
                     style: AppTextStyles.displaySmall.copyWith(
                       color: NuvoColors.navy,
                       letterSpacing: -2,
                     ),
+                    semanticsLabel:
+                        '${format(value)} ${unitLabel.toLowerCase()}',
                   ),
                 const SizedBox(height: 4),
                 Text(
@@ -2142,7 +2503,12 @@ class _GoalDisplay extends StatelessWidget {
               ],
             ),
           ),
-          _StepButton(icon: Icons.add_rounded, onTap: onIncrement),
+          _StepButton(
+            icon: Icons.add_rounded,
+            onTap: onIncrement,
+            onHoldStart: () => onHoldStart?.call(onIncrement),
+            onHoldEnd: onHoldEnd,
+          ),
         ],
       ),
     );
@@ -2150,24 +2516,37 @@ class _GoalDisplay extends StatelessWidget {
 }
 
 class _StepButton extends StatelessWidget {
-  const _StepButton({required this.icon, required this.onTap});
+  const _StepButton({
+    required this.icon,
+    required this.onTap,
+    this.onHoldStart,
+    this.onHoldEnd,
+  });
   final IconData icon;
   final VoidCallback onTap;
+  final VoidCallback? onHoldStart;
+  final VoidCallback? onHoldEnd;
 
   @override
   Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: NuvoColors.panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: NuvoColors.navy, width: 2),
+    return GestureDetector(
+      onLongPressStart:
+          onHoldStart == null ? null : (_) => onHoldStart!(),
+      onLongPressEnd: onHoldEnd == null ? null : (_) => onHoldEnd!(),
+      onLongPressCancel: onHoldEnd,
+      child: PressableScale(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: NuvoColors.panel,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: NuvoColors.navy, width: 2),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: NuvoColors.navy, size: 22),
         ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: NuvoColors.navy, size: 22),
       ),
     );
   }
@@ -2217,10 +2596,21 @@ class _RacersPage extends StatefulWidget {
     required this.draft,
     required this.onDraftChanged,
     required this.onNext,
+    this.onInput,
+    this.withUser,
   });
   final RaceDraft draft;
+
+  /// Race Together person context — the crew member this race was started
+  /// for. They join when the race is created; the racers step explains that
+  /// instead of offering a solo/crew toggle.
+  final PublicUser? withUser;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// Fires once the user has chosen solo/crew — lets the coach retarget the
+  /// page's continue CTA.
+  final VoidCallback? onInput;
 
   @override
   State<_RacersPage> createState() => _RacersPageState();
@@ -2244,6 +2634,7 @@ class _RacersPageState extends State<_RacersPage> {
 
   void _setInvite(bool value) {
     setState(() => _inviteCrew = value);
+    widget.onInput?.call();
     widget.onDraftChanged(
       widget.draft.copyWith(visibility: value ? 'invite_code' : 'private'),
     );
@@ -2256,27 +2647,36 @@ class _RacersPageState extends State<_RacersPage> {
       support: 'Race solo or with crew.',
       ctaLabel: 'Review race',
       onCta: widget.onNext,
+      ctaKey: FirstRaceGuideKeys.composerRacersCta,
       body: KeyedSubtree(
         key: FirstRaceGuideKeys.composerRacers,
-        child: Column(
-          children: [
-            _RacerOption(
-              title: 'Pull in your crew',
-              subtitle: 'Invite link opens right after race starts.',
-              icon: Icons.group_add_rounded,
-              selected: _inviteCrew,
-              onTap: () => _setInvite(true),
-            ),
-            const SizedBox(height: 12),
-            _RacerOption(
-              title: 'Start solo',
-              subtitle: 'Race yourself first. Invite anytime.',
-              icon: Icons.person_rounded,
-              selected: !_inviteCrew,
-              onTap: () => _setInvite(false),
-            ),
-          ],
-        ),
+        child: widget.withUser != null
+            ? _RacerOption(
+                title: 'Racing ${widget.withUser!.displayName}',
+                subtitle: 'They join when the race starts.',
+                icon: Icons.flag_rounded,
+                selected: true,
+                onTap: () {},
+              )
+            : Column(
+                children: [
+                  _RacerOption(
+                    title: 'Pull in your crew',
+                    subtitle: 'Invite link opens right after race starts.',
+                    icon: Icons.group_add_rounded,
+                    selected: _inviteCrew,
+                    onTap: () => _setInvite(true),
+                  ),
+                  const SizedBox(height: 12),
+                  _RacerOption(
+                    title: 'Start solo',
+                    subtitle: 'Race yourself first. Invite anytime.',
+                    icon: Icons.person_rounded,
+                    selected: !_inviteCrew,
+                    onTap: () => _setInvite(false),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -2424,8 +2824,9 @@ class _ReviewPage extends StatelessWidget {
                   ).copyWith(color: NuvoColors.blue),
                 ).animate().fadeIn(duration: 180.ms),
                 const SizedBox(height: 8),
-                GestureDetector(
+                NuvoPressable(
                   onTap: () => onEditStep(_Step.name),
+                  haptic: false,
                   child: Text(
                     draft.resolvedTitle,
                     style: AppTextStyles.headlineLarge.copyWith(
@@ -2768,7 +3169,10 @@ class _ReviewDetailRow extends StatelessWidget {
 
     return Column(
       children: [
-        if (onTap == null) row else InkWell(onTap: onTap, child: row),
+        if (onTap == null)
+          row
+        else
+          NuvoPressable(onTap: onTap, haptic: false, child: row),
         if (!isLast)
           const Divider(
             height: 1,

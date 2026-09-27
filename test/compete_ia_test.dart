@@ -256,7 +256,7 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
 
-      expect(find.text('Start race'), findsOneWidget);
+      expect(find.text('Start'), findsOneWidget);
       expect(find.text('Join'), findsOneWidget);
     });
 

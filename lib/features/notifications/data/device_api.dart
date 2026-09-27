@@ -5,11 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../auth/data/secure_token_store.dart';
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 
 /// Register / unregister an FCM device token with the Worker. Auth-injected;
 /// best-effort (a failed registration must never block sign-in or a race join).
@@ -27,7 +24,7 @@ class DeviceApi {
     try {
       await _client
           .post(
-            Uri.parse('$_kApiBase/devices'),
+            Uri.parse('$kNuvoApiBase/devices'),
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $auth',
@@ -54,7 +51,7 @@ class DeviceApi {
     try {
       await _client
           .delete(
-            Uri.parse('$_kApiBase/devices/$pushToken'),
+            Uri.parse('$kNuvoApiBase/devices/$pushToken'),
             headers: {'Authorization': 'Bearer $auth'},
           )
           .timeout(const Duration(seconds: 15));

@@ -4,6 +4,12 @@ import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { analyzeMotion, motionAnalysisSchemaVersion, motionModelVersion, motionValidatorVersion, validateMotionRequest } from '../domain/motionAnalysis';
 import { recordFeedback, recordReleaseMetric } from '../domain/motionTelemetry';
+import {
+  encryptMotionBytes,
+  encryptMotionText,
+  getOrCreateMotionDataKey,
+  motionAccountRef,
+} from '../lib/motion_privacy';
 
 export const motionRouter = new Hono<AppEnv>();
 motionRouter.use('*', requireAuth);
@@ -131,10 +137,22 @@ motionSessionsRouter.post('/', async (c) => {
   if (body.byteLength === 0) return c.json({ ok: false, error: 'Empty artifact body.' }, 400);
   if (body.byteLength > 8 * 1024 * 1024) return c.json({ ok: false, error: 'Artifact too large.' }, 413);
 
-  const objectKey = `motion-sessions/${userId}/${sessionId}.json.gz`;
-  await c.env.PROFILE_PHOTOS.put(objectKey, body, {
-    httpMetadata: { contentType: 'application/gzip' },
+  let accountKey: Uint8Array;
+  let accountRef: string;
+  try {
+    accountKey = await getOrCreateMotionDataKey(c.env.DB, c.env.MOTION_DATA_MASTER_KEY, userId);
+    accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+  } catch (error) {
+    console.error('[motion-privacy] key unavailable:', error instanceof Error ? error.message : String(error));
+    return c.json({ ok: false, error: 'Motion privacy storage is not configured.' }, 503);
+  }
+
+  const encryptedBody = await encryptMotionBytes(accountKey, new Uint8Array(body));
+  const objectKey = `motion-sessions/${generateId()}.bin`;
+  await c.env.PROFILE_PHOTOS.put(objectKey, encryptedBody, {
+    httpMetadata: { contentType: 'application/octet-stream' },
   });
+  const encryptedMetadata = await encryptMotionText(accountKey, JSON.stringify(meta));
 
   await c.env.DB.prepare(
     `INSERT INTO motion_sessions (
@@ -158,7 +176,7 @@ motionSessionsRouter.post('/', async (c) => {
     .bind(
       generateId(),
       sessionId,
-      userId,
+      accountRef,
       meta.raceId == null ? null : String(meta.raceId),
       str(meta.activityId, 'unknown'),
       str(meta.kind, 'preset'),
@@ -177,12 +195,12 @@ motionSessionsRouter.post('/', async (c) => {
       str(meta.verifierVersion, 'unknown'),
       str(meta.modelVersion, 'unknown'),
       objectKey,
-      JSON.stringify(meta),
+      encryptedMetadata,
     )
     .run();
 
-  // Index release-linked health asynchronously in the request lifecycle. This
-  // is only an aggregate counter; the raw artifact remains in R2 for replay.
+  // Index release-linked health asynchronously in the request lifecycle. The
+  // raw artifact remains encrypted in R2 for replay.
   // Missing release metadata is allowed for older clients and is backfilled
   // when a linked verification session completes.
   await recordReleaseMetric(c.env.DB, {
@@ -200,9 +218,15 @@ motionSessionsRouter.post('/', async (c) => {
 motionSessionsRouter.post('/:sessionId/feedback', async (c) => {
   const sessionId = c.req.param('sessionId');
   const userId = c.get('userId');
+  let accountRef: string;
+  try {
+    accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+  } catch {
+    return c.json({ ok: false, error: 'Motion privacy storage is not configured.' }, 503);
+  }
   const session = await c.env.DB.prepare(
-    'SELECT session_id FROM motion_sessions WHERE session_id = ? AND user_id = ? LIMIT 1',
-  ).bind(sessionId, userId).first<{ session_id: string }>();
+    'SELECT session_id FROM motion_sessions WHERE session_id = ? AND user_id IN (?, ?) LIMIT 1',
+  ).bind(sessionId, userId, accountRef).first<{ session_id: string }>();
   if (!session) return c.json({ ok: false, error: 'Motion session not found.' }, 404);
   let body: unknown;
   try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
@@ -213,7 +237,7 @@ motionSessionsRouter.post('/:sessionId/feedback', async (c) => {
   }
   await recordFeedback(c.env.DB, {
     motionSessionId: sessionId,
-    userId,
+    userId: accountRef,
     label,
     note: typeof value.note === 'string' ? value.note : null,
   });
@@ -228,17 +252,32 @@ motionRouter.post('/training/examples', async (c) => {
   if (typeof value.motionId !== 'string' || !Array.isArray(value.frames)) return c.json({ ok: false, error: 'motionId and frames are required.' }, 400);
   const request = validateMotionRequest({ schemaVersion: motionAnalysisSchemaVersion, motionId: value.motionId, frames: value.frames, durationMs: value.durationMs });
   const id = generateId();
-  const objectKey = `motion-training/${c.get('userId')}/${id}.json`;
-  await c.env.PROFILE_PHOTOS.put(objectKey, JSON.stringify({
+  const userId = c.get('userId');
+  let accountKey: Uint8Array;
+  let accountRef: string;
+  try {
+    accountKey = await getOrCreateMotionDataKey(c.env.DB, c.env.MOTION_DATA_MASTER_KEY, userId);
+    accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+  } catch (error) {
+    console.error('[motion-privacy] training key unavailable:', error instanceof Error ? error.message : String(error));
+    return c.json({ ok: false, error: 'Motion privacy storage is not configured.' }, 503);
+  }
+  const trainingPayload = JSON.stringify({
     schemaVersion: motionAnalysisSchemaVersion,
     motionId: request.motionId,
     frames: request.frames,
     durationMs: request.durationMs ?? null,
     label: typeof value.label === 'string' ? value.label : null,
-  }), { httpMetadata: { contentType: 'application/json' } });
+  });
+  const objectKey = `motion-training/${generateId()}.bin`;
+  await c.env.PROFILE_PHOTOS.put(
+    objectKey,
+    await encryptMotionBytes(accountKey, new TextEncoder().encode(trainingPayload)),
+    { httpMetadata: { contentType: 'application/octet-stream' } },
+  );
   await c.env.DB.prepare(
     `INSERT INTO motion_training_examples (id, user_id, motion_id, object_key, label, review_status, consent_version, schema_version, metadata_json)
      VALUES (?, ?, ?, ?, ?, 'unreviewed', ?, ?, ?)`,
-  ).bind(id, c.get('userId'), request.motionId, objectKey, typeof value.label === 'string' ? value.label : null, 'motion-training-v1', motionAnalysisSchemaVersion, JSON.stringify({ frameCount: request.frames.length })).run();
+  ).bind(id, accountRef, request.motionId, objectKey, typeof value.label === 'string' ? value.label : null, 'motion-training-v1', motionAnalysisSchemaVersion, JSON.stringify({ frameCount: request.frames.length })).run();
   return c.json({ ok: true, exampleId: id, stored: true });
 });

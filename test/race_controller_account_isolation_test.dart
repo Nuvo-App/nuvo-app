@@ -42,35 +42,32 @@ Race _race(String id, String creatorId) => Race(
 
 void main() {
   group('RaceController account isolation', () {
-    test(
-      'a fetch in flight across sign-out does not resurrect the previous '
-      'account\'s races after clearRaces()',
-      () async {
-        final repo = _PendingRaceRepo();
-        final controller = RaceController(repo);
+    test('a fetch in flight across sign-out does not resurrect the previous '
+        'account\'s races after clearRaces()', () async {
+      final repo = _PendingRaceRepo();
+      final controller = RaceController(repo);
 
-        // User A's session starts a load...
-        final load = controller.loadRaces(force: false);
-        expect(controller.state.loading, isTrue);
-        expect(controller.state.races, isEmpty);
+      // User A's session starts a load...
+      final load = controller.loadRaces(force: false);
+      expect(controller.state.loading, isTrue);
+      expect(controller.state.races, isEmpty);
 
-        // ...then signs out before the response arrives. This must fully
-        // reset state for whoever signs in next.
-        controller.clearRaces();
-        expect(controller.state.races, isEmpty);
-        expect(controller.state.loading, isFalse);
+      // ...then signs out before the response arrives. This must fully
+      // reset state for whoever signs in next.
+      controller.clearRaces();
+      expect(controller.state.races, isEmpty);
+      expect(controller.state.loading, isFalse);
 
-        // User A's stale request finally resolves with User A's races.
-        repo.completer.complete([_race('race-a', 'user-a')]);
-        await load;
-        // Let the .then continuation (which applies the result) run.
-        await Future<void>.delayed(Duration.zero);
+      // User A's stale request finally resolves with User A's races.
+      repo.completer.complete([_race('race-a', 'user-a')]);
+      await load;
+      // Let the .then continuation (which applies the result) run.
+      await Future<void>.delayed(Duration.zero);
 
-        // The cleared state must NOT have been overwritten by the late,
-        // now-irrelevant response.
-        expect(controller.state.races, isEmpty);
-      },
-    );
+      // The cleared state must NOT have been overwritten by the late,
+      // now-irrelevant response.
+      expect(controller.state.races, isEmpty);
+    });
 
     test(
       'a fetch that completes before any sign-out still applies normally',
@@ -88,29 +85,44 @@ void main() {
     );
 
     test(
-      'after clearRaces(), a fresh load for the next account populates '
-      'normally',
+      'a successful list refresh notifies derived surfaces such as Arena',
       () async {
         final repo = _PendingRaceRepo();
-        final controller = RaceController(repo);
+        var refreshNotifications = 0;
+        final controller = RaceController(
+          repo,
+          onMutated: () => refreshNotifications++,
+        );
 
-        final firstLoad = controller.loadRaces(force: false);
-        controller.clearRaces();
+        final load = controller.loadRaces(force: false);
         repo.completer.complete([_race('race-a', 'user-a')]);
-        await firstLoad;
-        await Future<void>.delayed(Duration.zero);
-        expect(controller.state.races, isEmpty);
+        await load;
 
-        // User B signs in and loads fresh — this request must apply.
-        final secondRepo = _PendingRaceRepo();
-        final secondController = RaceController(secondRepo);
-        final secondLoad = secondController.loadRaces(force: false);
-        secondRepo.completer.complete([_race('race-b', 'user-b')]);
-        await secondLoad;
-
-        expect(secondController.state.races, hasLength(1));
-        expect(secondController.state.races.single.id, 'race-b');
+        expect(refreshNotifications, 1);
       },
     );
+
+    test('after clearRaces(), a fresh load for the next account populates '
+        'normally', () async {
+      final repo = _PendingRaceRepo();
+      final controller = RaceController(repo);
+
+      final firstLoad = controller.loadRaces(force: false);
+      controller.clearRaces();
+      repo.completer.complete([_race('race-a', 'user-a')]);
+      await firstLoad;
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.state.races, isEmpty);
+
+      // User B signs in and loads fresh — this request must apply.
+      final secondRepo = _PendingRaceRepo();
+      final secondController = RaceController(secondRepo);
+      final secondLoad = secondController.loadRaces(force: false);
+      secondRepo.completer.complete([_race('race-b', 'user-b')]);
+      await secondLoad;
+
+      expect(secondController.state.races, hasLength(1));
+      expect(secondController.state.races.single.id, 'race-b');
+    });
   });
 }

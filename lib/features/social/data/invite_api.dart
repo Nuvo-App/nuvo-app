@@ -9,11 +9,8 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart' show ApiException;
 import 'invite_models.dart';
+import '../../../core/network/api_base.dart';
 
-const _kApiBase = String.fromEnvironment(
-  'NUVO_API_BASE_URL',
-  defaultValue: 'https://nuvo-api.getnuvoapp.workers.dev',
-);
 
 const _timeout = Duration(seconds: 20);
 
@@ -49,7 +46,7 @@ class InviteApi {
   Future<InvitePreview> preview(String token, {String? authToken}) async {
     final res = await _guard(
       () => _client.get(
-        Uri.parse('$_kApiBase/invites/$token'),
+        Uri.parse('$kNuvoApiBase/invites/$token'),
         headers: _headers(authToken),
       ),
     );
@@ -63,7 +60,7 @@ class InviteApi {
   Future<InviteAcceptResult> accept(String token, String authToken) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/invites/$token/accept'),
+        Uri.parse('$kNuvoApiBase/invites/$token/accept'),
         headers: _headers(authToken),
       ),
     );
@@ -88,7 +85,7 @@ class InviteApi {
   }) async {
     final res = await _guard(
       () => _client.post(
-        Uri.parse('$_kApiBase/invites'),
+        Uri.parse('$kNuvoApiBase/invites'),
         headers: _headers(authToken),
         body: jsonEncode(<String, dynamic>{
           'kind': kind,
@@ -108,7 +105,7 @@ class InviteApi {
   Future<void> revoke(String token, String authToken) async {
     final res = await _guard(
       () => _client.delete(
-        Uri.parse('$_kApiBase/invites/$token'),
+        Uri.parse('$kNuvoApiBase/invites/$token'),
         headers: _headers(authToken),
       ),
     );

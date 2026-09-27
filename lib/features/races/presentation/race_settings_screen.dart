@@ -7,14 +7,18 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
+import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
+import '../domain/motion_activity.dart';
+import 'motion_catalog_provider.dart';
 import 'race_controller.dart';
 
 class RaceSettingsScreen extends ConsumerStatefulWidget {
@@ -35,6 +39,14 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
   final _rulesController = TextEditingController();
   final _startLineController = TextEditingController();
   final _finishLineController = TextEditingController();
+
+  /// Control-plane definitions for resolving remote-only race activities
+  /// (motions this build has no compiled enum for).
+  List<MotionActivityDefinition> get _remoteDefinitions =>
+      availableMotionActivities(
+        ref.read(motionCatalogProvider).valueOrNull,
+        ref.read(motionCapabilitiesProvider),
+      );
 
   Race? _race;
   bool _loading = true;
@@ -84,7 +96,11 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
       _startLineController.text = race.startLineAt ?? '';
       _finishLineController.text = race.finishLineAt ?? '';
       _goalType = race.goalType;
-      _proofRequirement = resolveCameraVerification(race).isCameraVerifiable
+      _proofRequirement =
+          resolveCameraVerification(
+            race,
+            remoteDefinitions: _remoteDefinitions,
+          ).isCameraVerifiable
           ? 'ai_check'
           : race.proofRequirement;
       _proofReviewMode = race.proofReviewMode;
@@ -101,6 +117,7 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
   }
 
   Future<void> _save() async {
+    FocusScope.of(context).unfocus();
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       setState(() => _error = 'Race title is required.');
@@ -117,7 +134,10 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
       final existingRace = _race;
       final eligibility = existingRace == null
           ? null
-          : resolveCameraVerification(existingRace);
+          : resolveCameraVerification(
+              existingRace,
+              remoteDefinitions: _remoteDefinitions,
+            );
       final race = await ref
           .read(raceControllerProvider.notifier)
           .updateRace(
@@ -204,7 +224,10 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     final isOwner = _race?.creatorId == user?.id;
     final eligibility = _race == null
         ? null
-        : resolveCameraVerification(_race!);
+        : resolveCameraVerification(
+            _race!,
+            remoteDefinitions: _remoteDefinitions,
+          );
     final isCameraRace = eligibility?.isCameraVerifiable == true;
 
     if (_loading) {
@@ -241,7 +264,8 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
     return Scaffold(
       backgroundColor: NuvoColors.page,
       body: SafeArea(
-        child: ListView(
+        child: NuvoFadeScroll(
+          child: ListView(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 32),
           children: [
             Align(
@@ -381,61 +405,66 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
             ),
             const SizedBox(height: 26),
             _Section(
-              title: 'Race status',
+              title: 'Race actions',
               children: [
-                NuvoGhostButton(
-                  label: 'Archive race',
-                  icon: Icons.archive_rounded,
-                  expand: true,
-                  onPressed: _saving
-                      ? null
-                      : () => _runLifecycleAction(
-                          title: 'Archive race?',
-                          message:
-                              'Archived races leave active competition but remain in your race history.',
-                          confirmLabel: 'Archive',
-                          action: () => ref
-                              .read(raceControllerProvider.notifier)
-                              .archiveRace(widget.raceId),
-                        ),
-                ),
-                NuvoGhostButton(
-                  label: 'Cancel race',
-                  icon: Icons.cancel_rounded,
-                  expand: true,
-                  onPressed: _saving
-                      ? null
-                      : () => _runLifecycleAction(
-                          title: 'Cancel race?',
-                          message:
-                              'Cancel this race only if the start line or rules no longer apply.',
-                          confirmLabel: 'Cancel race',
-                          action: () => ref
-                              .read(raceControllerProvider.notifier)
-                              .cancelRace(widget.raceId),
-                        ),
-                ),
-                NuvoDangerButton(
-                  label: 'Delete race',
-                  icon: Icons.delete_outline_rounded,
-                  expand: true,
-                  loading: _saving,
-                  onPressed: _saving
-                      ? null
-                      : () => _runLifecycleAction(
-                          title: 'Delete race?',
-                          message:
-                              'This removes the race from your arena. Race history is preserved.',
-                          confirmLabel: 'Delete',
-                          returnToArena: true,
-                          action: () => ref
-                              .read(raceControllerProvider.notifier)
-                              .deleteRace(widget.raceId),
-                        ),
+                _SettingsActionGroup(
+                  actions: [
+                    _SettingsAction(
+                      icon: Icons.archive_rounded,
+                      title: 'Archive race',
+                      subtitle: 'Move it out of active races',
+                      onPressed: _saving
+                          ? null
+                          : () => _runLifecycleAction(
+                              title: 'Archive race?',
+                              message:
+                                  'This race will leave active competition but stay in your race history.',
+                              confirmLabel: 'Archive',
+                              action: () => ref
+                                  .read(raceControllerProvider.notifier)
+                                  .archiveRace(widget.raceId),
+                            ),
+                    ),
+                    _SettingsAction(
+                      icon: Icons.cancel_outlined,
+                      title: 'Cancel race',
+                      subtitle: 'Stop this race before the finish line',
+                      onPressed: _saving
+                          ? null
+                          : () => _runLifecycleAction(
+                              title: 'Cancel race?',
+                              message:
+                                  'Cancel this race only if the start line or rules no longer apply.',
+                              confirmLabel: 'Cancel race',
+                              action: () => ref
+                                  .read(raceControllerProvider.notifier)
+                                  .cancelRace(widget.raceId),
+                            ),
+                    ),
+                    _SettingsAction(
+                      icon: Icons.delete_outline_rounded,
+                      title: 'Delete race',
+                      subtitle: 'Remove it from Arena and race history',
+                      destructive: true,
+                      onPressed: _saving
+                          ? null
+                          : () => _runLifecycleAction(
+                              title: 'Delete race?',
+                              message:
+                                  'This permanently removes the race. This action cannot be undone.',
+                              confirmLabel: 'Delete',
+                              returnToArena: true,
+                              action: () => ref
+                                  .read(raceControllerProvider.notifier)
+                                  .deleteRace(widget.raceId),
+                            ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ],
+        ),
         ),
       ),
     );
@@ -459,6 +488,112 @@ class _Section extends StatelessWidget {
           const SizedBox(height: 12),
           ...children.expand((child) => [child, const SizedBox(height: 12)]),
         ],
+      ),
+    );
+  }
+}
+
+class _SettingsActionGroup extends StatelessWidget {
+  const _SettingsActionGroup({required this.actions});
+
+  final List<_SettingsAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(NuvoRadii.lg),
+      child: Container(
+        decoration: BoxDecoration(
+          color: NuvoColors.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          border: Border.all(color: NuvoColors.border, width: 1.25),
+        ),
+        child: Column(
+          children: [
+            for (var i = 0; i < actions.length; i++) ...[
+              actions[i],
+              if (i < actions.length - 1)
+                const Divider(height: 1, indent: 66, color: NuvoColors.border),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsAction extends StatelessWidget {
+  const _SettingsAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onPressed,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onPressed;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleColor = destructive ? NuvoColors.danger : NuvoColors.navy;
+    final iconColor = destructive ? NuvoColors.danger : NuvoColors.navy;
+    final iconBackground = destructive
+        ? NuvoColors.dangerSurface
+        : NuvoColors.panelLight;
+    return Semantics(
+      button: true,
+      enabled: onPressed != null,
+      label: title,
+      child: NuvoPressable(
+        onTap: onPressed,
+        haptic: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconBackground,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: iconColor, size: 19),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: titleColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: NuvoColors.paleSlate,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -571,12 +706,12 @@ class _MovementSummary extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            movement?.title ?? 'Unsupported movement',
+            movement?.title ?? 'Movement unavailable',
             style: AppTextStyles.titleMedium,
           ),
           const SizedBox(height: 2),
           Text(
-            'Target uses $unit.',
+            'Target is measured in $unit.',
             style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
           ),
         ],

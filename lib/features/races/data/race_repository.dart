@@ -336,4 +336,20 @@ class RaceRepository {
       summary: summary,
     ),
   );
+
+  Future<RaceAttemptResult> startAttempt(
+    String raceId, {
+    String? clientAttemptId,
+  }) => _withRefresh(
+    (token) =>
+        _api.startAttempt(token, raceId, clientAttemptId: clientAttemptId),
+  );
+
+  Future<Race> rematchRace(String raceId) =>
+      _withRefresh((token) => _api.rematchRace(token, raceId));
+
+  Future<RaceLiveState> getRaceLiveState(String raceId, {int? version}) =>
+      _withRefresh(
+        (token) => _api.getRaceLiveState(token, raceId, version: version),
+      );
 }

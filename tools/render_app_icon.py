@@ -3,7 +3,7 @@
 Render the Nuvo app icon from the Icon Composer source project into the three
 PNG appearances flutter_launcher_icons expands into AppIcon.appiconset.
 
-Source: "Scam Call v3/nuvo/App icons/working v2/Untitled.icon"
+Source: "Scam Call v3/nuvo/App icons/working v2/elite.icon"
   icon.json: automatic-gradient fill extended-srgb(0.0, 0.53333, 1.0)
              one layer "main.png" (actually an SVG "M" mark).
 
@@ -41,7 +41,10 @@ def main(src_dir: str) -> None:
     bg = row.resize((CANVAS, CANVAS)).convert("RGBA")
 
     svg_w, svg_h = 1189, 1138
-    tw = round(CANVAS * 0.60)
+    # The platform launcher applies its own safe-area inset. A 72% source
+    # layer keeps the mark comfortably inside that mask without reading
+    # undersized on the home screen.
+    tw = round(CANVAS * 0.72)
     th = round(tw * svg_h / svg_w)
     png = cairosvg.svg2png(url=str(svg), output_width=tw, output_height=th)
     layer = Image.open(io.BytesIO(png)).convert("RGBA")

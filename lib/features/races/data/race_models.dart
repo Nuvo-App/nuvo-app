@@ -48,6 +48,9 @@ class Race {
     this.recentProofs = const [],
     this.finalStandings = const [],
     this.submissionResult,
+    this.scoreDirection = 'higher',
+    this.serverTime,
+    this.viewerContext,
   });
 
   final String id;
@@ -98,6 +101,17 @@ class Race {
   final List<RaceProof> recentProofs;
   final List<RaceFinalStanding> finalStandings;
   final RaceSubmissionResult? submissionResult;
+
+  /// 'higher' or 'lower' — whether a bigger score wins the leaderboard.
+  final String scoreDirection;
+
+  /// Authoritative server clock from the response — the only clock that
+  /// decides starts, deadlines, and eligibility. Device time is display only.
+  final String? serverTime;
+
+  /// Structured competitive context for the signed-in viewer, when the race
+  /// payload includes one (single-race reads).
+  final RaceViewerContext? viewerContext;
 
   factory Race.fromJson(Map<String, dynamic> json) {
     final verifierType = json['verifierType'] as String? ?? 'preset_pose';
@@ -173,6 +187,13 @@ class Race {
               json['submissionResult'] as Map<String, dynamic>,
             )
           : null,
+      scoreDirection: json['scoreDirection'] as String? ?? 'higher',
+      serverTime: json['serverTime'] as String?,
+      viewerContext: json['viewerContext'] is Map<String, dynamic>
+          ? RaceViewerContext.fromJson(
+              json['viewerContext'] as Map<String, dynamic>,
+            )
+          : null,
     );
   }
 
@@ -188,12 +209,22 @@ class Race {
 
   bool get isSupportedAiMotionRace {
     if (isCustomVerifierRace) return false;
+    if (!isAiMotionRace) return false;
+    // A pinned remote release makes the race camera-verifiable even when the
+    // activity has no compiled enum in this build — the resolver performs the
+    // authoritative spec/engine checks before a camera session starts.
+    if (_hasRemoteVerifierSpec) return true;
     final activity = activityId ?? aiActivityType;
     if (activity == null) return false;
     final type = MotionActivityType.fromBackendValue(activity);
-    return isAiMotionRace &&
-        type != null &&
-        supportedMotionActivityTypes.contains(type);
+    return type != null && supportedMotionActivityTypes.contains(type);
+  }
+
+  /// Whether this race carries a non-native remote verifier release.
+  /// Presence is enough here — spec validity is checked at resolve time.
+  bool get _hasRemoteVerifierSpec {
+    final engine = verifierSpec?['engineType'];
+    return engine is String && engine.isNotEmpty && engine != 'native_v1';
   }
 
   String get effectiveAiActivityType {
@@ -269,6 +300,7 @@ class PublicUser {
     required this.initials,
     this.addedAt,
     this.profilePhotoUrl,
+    this.lastActiveAt,
   });
 
   final String id;
@@ -279,6 +311,10 @@ class PublicUser {
   final String? addedAt;
   final String? profilePhotoUrl;
 
+  /// Real, server-recorded presence — touched on session restore. Null means
+  /// never recorded (older account) or unknown; never fabricated client-side.
+  final DateTime? lastActiveAt;
+
   factory PublicUser.fromJson(Map<String, dynamic> json) => PublicUser(
     id: json['id'] as String,
     displayName: json['displayName'] as String? ?? 'Nuvo member',
@@ -287,6 +323,9 @@ class PublicUser {
     initials: json['initials'] as String? ?? 'N',
     addedAt: json['addedAt'] as String?,
     profilePhotoUrl: json['profilePhotoUrl'] as String?,
+    lastActiveAt: DateTime.tryParse(
+      json['lastActiveAt'] as String? ?? '',
+    )?.toUtc(),
   );
 
   String get handleLine {
@@ -311,6 +350,7 @@ class RaceParticipant {
     this.rank,
     required this.joinedAt,
     this.profilePhotoUrl,
+    this.finishedAt,
   });
 
   final String id;
@@ -322,6 +362,10 @@ class RaceParticipant {
   final String joinedAt;
   final String? profilePhotoUrl;
 
+  /// Server timestamp of the submission that reached the finish line
+  /// (first-to-goal only) — the canonical tiebreak order.
+  final String? finishedAt;
+
   factory RaceParticipant.fromJson(Map<String, dynamic> json) =>
       RaceParticipant(
         id: json['id'] as String? ?? '',
@@ -332,6 +376,7 @@ class RaceParticipant {
         rank: json['rank'] as int?,
         joinedAt: json['joinedAt'] as String? ?? '',
         profilePhotoUrl: json['profilePhotoUrl'] as String?,
+        finishedAt: json['finishedAt'] as String?,
       );
 }
 
@@ -360,6 +405,185 @@ class RaceFinalStanding {
         rank: json['rank'] as int? ?? 0,
         scoreValue: json['scoreValue'] as int? ?? 0,
         completedAt: json['completedAt'] as String?,
+      );
+}
+
+/// Structured competitive context for the signed-in viewer — the canonical
+/// race-engine read the UI renders (rank, gaps, goal/time remaining) instead
+/// of recomputing standings locally.
+class RaceViewerContext {
+  const RaceViewerContext({
+    required this.raceId,
+    required this.status,
+    this.rank,
+    this.previousRank,
+    this.leaderUserId,
+    this.leaderScore,
+    this.viewerScore,
+    this.gapToLeader,
+    this.gapToNextRank,
+    this.goalRemaining,
+    this.timeRemainingSeconds,
+    this.startsInSeconds,
+    this.isLeading = false,
+    this.isTied = false,
+    this.isFinished = false,
+    this.isMember = false,
+    this.isSpectator = false,
+    this.attemptsUsed = 0,
+    this.attemptsRemaining,
+    this.openAttemptId,
+  });
+
+  final String raceId;
+  final String status;
+  final int? rank;
+  final int? previousRank;
+  final String? leaderUserId;
+  final int? leaderScore;
+  final int? viewerScore;
+  final int? gapToLeader;
+  final int? gapToNextRank;
+  final int? goalRemaining;
+  final int? timeRemainingSeconds;
+  final int? startsInSeconds;
+  final bool isLeading;
+  final bool isTied;
+  final bool isFinished;
+  final bool isMember;
+  final bool isSpectator;
+  final int attemptsUsed;
+  final int? attemptsRemaining;
+  final String? openAttemptId;
+
+  factory RaceViewerContext.fromJson(Map<String, dynamic> json) =>
+      RaceViewerContext(
+        raceId: json['raceId'] as String? ?? '',
+        status: json['status'] as String? ?? 'active',
+        rank: (json['rank'] as num?)?.toInt(),
+        previousRank: (json['previousRank'] as num?)?.toInt(),
+        leaderUserId: json['leaderUserId'] as String?,
+        leaderScore: (json['leaderScore'] as num?)?.toInt(),
+        viewerScore: (json['viewerScore'] as num?)?.toInt(),
+        gapToLeader: (json['gapToLeader'] as num?)?.toInt(),
+        gapToNextRank: (json['gapToNextRank'] as num?)?.toInt(),
+        goalRemaining: (json['goalRemaining'] as num?)?.toInt(),
+        timeRemainingSeconds:
+            (json['timeRemainingSeconds'] as num?)?.toInt(),
+        startsInSeconds: (json['startsInSeconds'] as num?)?.toInt(),
+        isLeading: json['isLeading'] as bool? ?? false,
+        isTied: json['isTied'] as bool? ?? false,
+        isFinished: json['isFinished'] as bool? ?? false,
+        isMember: json['isMember'] as bool? ?? false,
+        isSpectator: json['isSpectator'] as bool? ?? false,
+        attemptsUsed: (json['attemptsUsed'] as num?)?.toInt() ?? 0,
+        attemptsRemaining: (json['attemptsRemaining'] as num?)?.toInt(),
+        openAttemptId: json['openAttemptId'] as String?,
+      );
+}
+
+/// Server response when an attempt is opened for a best-attempt / timed race.
+/// `startedAt`/`deadlineAt` are server timestamps — device clocks never decide
+/// whether an attempt is still open.
+class RaceAttemptResult {
+  const RaceAttemptResult({
+    required this.attemptId,
+    required this.attemptIndex,
+    required this.status,
+    this.startedAt,
+    this.deadlineAt,
+    required this.attemptsUsed,
+    this.attemptsRemaining,
+    this.serverTime,
+  });
+
+  final String attemptId;
+  final int attemptIndex;
+  final String status;
+  final String? startedAt;
+  final String? deadlineAt;
+  final int attemptsUsed;
+  final int? attemptsRemaining;
+  final String? serverTime;
+
+  factory RaceAttemptResult.fromJson(Map<String, dynamic> json) {
+    final a = (json['attempt'] as Map<String, dynamic>?) ?? const {};
+    return RaceAttemptResult(
+      attemptId: a['id'] as String? ?? '',
+      attemptIndex: (a['attemptIndex'] as num?)?.toInt() ?? 0,
+      status: a['status'] as String? ?? 'open',
+      startedAt: a['startedAt'] as String?,
+      deadlineAt: a['deadlineAt'] as String?,
+      attemptsUsed: (json['attemptsUsed'] as num?)?.toInt() ?? 0,
+      attemptsRemaining: (json['attemptsRemaining'] as num?)?.toInt(),
+      serverTime: json['serverTime'] as String?,
+    );
+  }
+}
+
+/// Compact live poll payload (`GET /races/:id/live`). `unchanged` means the
+/// version the client sent still matches — nothing moved, skip re-render.
+class RaceLiveState {
+  const RaceLiveState({
+    required this.raceId,
+    required this.version,
+    required this.status,
+    required this.unchanged,
+    this.serverTime,
+    this.winnerUserId,
+    this.participants = const [],
+    this.viewer,
+  });
+
+  final String raceId;
+  final int version;
+  final String status;
+  final bool unchanged;
+  final String? serverTime;
+  final String? winnerUserId;
+  final List<RaceLiveParticipant> participants;
+  final RaceViewerContext? viewer;
+
+  factory RaceLiveState.fromJson(Map<String, dynamic> json) => RaceLiveState(
+    raceId: json['raceId'] as String? ?? '',
+    version: (json['version'] as num?)?.toInt() ?? 0,
+    status: json['status'] as String? ?? 'active',
+    unchanged: json['unchanged'] as bool? ?? false,
+    serverTime: json['serverTime'] as String?,
+    winnerUserId: json['winnerUserId'] as String?,
+    participants:
+        (json['participants'] as List<dynamic>?)
+            ?.map(
+              (p) =>
+                  RaceLiveParticipant.fromJson(p as Map<String, dynamic>),
+            )
+            .toList() ??
+        [],
+    viewer: json['viewer'] is Map<String, dynamic>
+        ? RaceViewerContext.fromJson(json['viewer'] as Map<String, dynamic>)
+        : null,
+  );
+}
+
+class RaceLiveParticipant {
+  const RaceLiveParticipant({
+    required this.userId,
+    required this.score,
+    this.rank,
+    this.finishedAt,
+  });
+
+  final String userId;
+  final int score;
+  final int? rank;
+  final String? finishedAt;
+
+  factory RaceLiveParticipant.fromJson(Map<String, dynamic> json) =>
+      RaceLiveParticipant(
+        userId: json['userId'] as String? ?? '',
+        score: (json['score'] as num?)?.toInt() ?? 0,
+        rank: (json['rank'] as num?)?.toInt(),
+        finishedAt: json['finishedAt'] as String?,
       );
 }
 

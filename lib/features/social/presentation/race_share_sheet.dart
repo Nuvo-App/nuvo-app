@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -170,19 +169,7 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
           onPressed: () => Share.share(_shareMessage),
         ),
         const SizedBox(height: 10),
-        NuvoSecondaryButton(
-          label: 'Copy link',
-          icon: Icons.link_rounded,
-          expand: true,
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: invite.url));
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Link copied.')),
-              );
-            }
-          },
-        ),
+        NuvoCopyButton(text: invite.url, expand: true),
       ],
     );
   }
