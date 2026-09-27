@@ -22,6 +22,7 @@ import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_toggle.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../arena/presentation/arena_controller.dart';
+import '../../auth/data/auth_api.dart';
 import '../../auth/data/auth_models.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
@@ -1443,6 +1444,38 @@ class _MotionConsentRowState extends ConsumerState<_MotionConsentRow> {
       await ref
           .read(authControllerProvider.notifier)
           .setMotionConsent(consented: value);
+    } on ApiException catch (e) {
+      // Pre-attestation accounts (signed up before the eligibility step
+      // existed) must confirm minimum age once before opting in. That is
+      // the only 403 this endpoint produces for an attested-anything user.
+      if (value && e.statusCode == 403 && mounted) {
+        setState(() => _saving = false);
+        final attested = await showNuvoConfirmDialog(
+          context,
+          title: 'Before you opt in',
+          message:
+              'Confirm you are at least 13 years old to help improve Nuvo Motion.',
+          confirmLabel: 'I\u2019m at least 13',
+        );
+        if (attested == true && mounted) {
+          try {
+            await ref.read(authControllerProvider.notifier).attestAge();
+            await ref
+                .read(authControllerProvider.notifier)
+                .setMotionConsent(consented: true);
+            if (mounted) setState(() => _enabled = true);
+            return;
+          } catch (_) {
+            /* fall through to generic error */
+          }
+        }
+      }
+      if (mounted) setState(() => _enabled = !value);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update this setting.')),
+        );
+      }
     } catch (_) {
       if (mounted) setState(() => _enabled = !value);
       if (mounted) {
