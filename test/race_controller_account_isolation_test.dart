@@ -194,6 +194,18 @@ void main() {
       expect(repo.submitProofCalls, 0);
     });
 
+    test('a race absent from state (deep link) still declares an attempt', () async {
+      // loadRaces is never called — the controller must fetch the race's
+      // format before deciding whether an attempt is required.
+      final repo = _AttemptRepo(attemptRace('best_attempt'));
+      final controller = RaceController(repo);
+
+      await controller.submitProof('race-attempt', value: 95);
+
+      expect(repo.getRaceDetailCalls, 1);
+      expect(repo.callOrder, ['attempt', 'proof']);
+    });
+
     test('first_to_goal race submits without declaring an attempt', () async {
       final repo = _AttemptRepo(attemptRace('first_to_goal'));
       final controller = RaceController(repo);
@@ -214,10 +226,17 @@ class _AttemptRepo extends RaceRepository {
   final List<String> callOrder = [];
   int startAttemptCalls = 0;
   int submitProofCalls = 0;
+  int getRaceDetailCalls = 0;
   ApiException? startAttemptError;
 
   @override
   Future<List<Race>> getRaces() async => [race];
+
+  @override
+  Future<Race> getRaceDetail(String id) async {
+    getRaceDetailCalls++;
+    return race;
+  }
 
   @override
   Future<RaceAttemptResult> startAttempt(

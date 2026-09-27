@@ -858,12 +858,14 @@ class _NamePageState extends State<_NamePage> {
   void didUpdateWidget(_NamePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     // When draft is changed externally (e.g. activity/goal change updates the
-    // generated title), sync the text field only if the name is not custom.
-    if (!widget.draft.hasCustomName) {
-      final newTitle = widget.draft.resolvedTitle;
+    // generated title, or a prefill applies an interpreted idea), sync the
+    // field unless the user has deviated from the previous draft's title.
+    final newTitle = widget.draft.resolvedTitle;
+    final untouched = _ctrl.text == oldWidget.draft.resolvedTitle;
+    if (!widget.draft.hasCustomName || untouched) {
       if (_ctrl.text != newTitle) {
         _ctrl.text = newTitle;
-        _hasCustomName = false;
+        _hasCustomName = widget.draft.hasCustomName;
       }
     }
   }
