@@ -7,7 +7,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_entrance.dart';
 import '../../../core/theme/nuvo_theme_mode.dart';
@@ -16,7 +15,6 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
-import '../../../core/widgets/nuvo_fold.dart';
 import '../../../core/widgets/nuvo_icons.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
@@ -163,7 +161,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 32, 22, 0),
+                padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -195,10 +193,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             child: SizedBox(
                               width: 44,
                               height: 44,
-                              child: Icon(
-                                Icons.edit_outlined,
-                                color: c.ink,
-                                size: 22,
+                              // The glyph's right edge lands on the page
+                              // gutter — the 44px hit target extends left.
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Icon(
+                                  Icons.edit_outlined,
+                                  color: c.ink,
+                                  size: 22,
+                                ),
                               ),
                             ),
                           ),
@@ -212,7 +215,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // leaderboards; Edit stays in the header so this card is
                     // about who I am, not settings.
                     _IdentityCard(user: user).nuvoEnter(),
-                    const SizedBox(height: NuvoSpacing.md),
+                    const SizedBox(height: NuvoSpacing.lg),
 
                     // Competitive snapshot — three stats that mean something.
                     _StatsStrip(
@@ -226,10 +229,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
 
             // ── Profile body — page-colored background ──────────────────────
-            // Race sections split at the first-viewport fold: Racing now /
-            // Recent results render as many WHOLE rows as fit above the
-            // dock, then the seam pushes the remainder below it — a result
-            // row is never bisected under the nav
+            // Content flows at normal section rhythm — no fold seam. A row
+            // that lands under the dock is hidden by the shell's occlusion
+            // band and scrolls clear, same contract as Compete
             // (docs/ui/MAIN_SCREEN_LAYOUT_CONTRACT.md).
             SliverPadding(
               padding: EdgeInsets.fromLTRB(
@@ -238,21 +240,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 20,
                 NuvoBottomNav.bottomPadding(context),
               ),
-              sliver: SliverFold(
-                reserve: SliverFold.reserveOf(context),
-                builder: (ctx, fold) => SliverToBoxAdapter(
-                  child: Container(
-                    color: c.page,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _profileBody(
-                        raceState,
-                        uid,
-                        context,
-                        fold,
-                        canReplayDemo: canReplayDemo,
-                        canTogglePresentation: canTogglePresentation,
-                      ),
+              sliver: SliverToBoxAdapter(
+                child: Container(
+                  color: c.page,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _profileBody(
+                      raceState,
+                      uid,
+                      context,
+                      canReplayDemo: canReplayDemo,
+                      canTogglePresentation: canTogglePresentation,
                     ),
                   ),
                 ),
@@ -264,22 +262,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  // Fold-split geometry. Two bounds on purpose: the fit decision uses an
-  // UPPER bound on section extents (so placed content always ends inside
-  // the breathing zone), while the seam measures a LOWER bound of what was
-  // placed (so whatever follows always starts at or below the viewport's
-  // bottom edge). _RaceSection's label row tops out ~37px with See all;
-  // race rows run 58px (declared min) to ~96px.
-  static const double _sectionLabelExtent = 40;
-  static const double _raceRowExtent = 100;
-  static const double _sectionLabelMin = 24;
-  static const double _raceRowMin = 58;
-
   List<Widget> _profileBody(
     RaceState raceState,
     String? uid,
-    BuildContext context,
-    NuvoFoldBudget fold, {
+    BuildContext context, {
     required bool canReplayDemo,
     required bool canTogglePresentation,
   }) {
@@ -307,89 +293,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    // Fold split — whole rows only. Two bounds on purpose: the fit
-    // decisions subtract an UPPER bound of what earlier sections consume
-    // (so placed content always ends inside the breathing zone), while the
-    // seam measures a LOWER bound of the same content (so whatever follows
-    // always starts at or below the viewport's bottom edge). Both start at
-    // the body's 18px top inset.
-    var usedMax = 18.0;
-    var usedMin = 18.0;
-    var racingPlaced = false;
-    var resultsPlaced = false;
-    var resultsGap = false;
-    final body = <Widget>[];
-    if (raceState.races.isNotEmpty &&
-        !raceState.loading &&
-        raceState.error == null) {
-      int fitFor(double remaining, int count, int cap) {
-        final fit =
-            ((remaining - _sectionLabelExtent) ~/ _raceRowExtent).clamp(
-          0,
-          count > cap ? cap : count,
-        );
-        return fit;
-      }
-
-      // When results exist, Racing now reserves the results label + one
-      // full row — the first viewport should establish live races AND a
-      // result, not spend its whole budget on one list.
-      final resultsReserve = finishedRaces.isNotEmpty
-          ? _sectionLabelExtent + _raceRowExtent
-          : 0.0;
-      if (activeRaces.isNotEmpty) {
-        final fit = fitFor(
-          fold.fitExtent - usedMax - resultsReserve,
-          activeRaces.length,
-          _racingFeaturedCap,
-        );
-        if (fit >= 1) {
-          body.add(
-            _RaceSection(
-              label: 'Racing now',
-              races: activeRaces,
-              userId: uid,
-              expanded: _racingExpanded,
-              cap: fit,
-              onToggleExpand: () =>
-                  setState(() => _racingExpanded = !_racingExpanded),
-            ),
-          );
-          usedMax += _sectionLabelExtent + fit * _raceRowExtent;
-          usedMin += _sectionLabelMin + fit * _raceRowMin;
-          racingPlaced = true;
-        }
-      }
-      if (finishedRaces.isNotEmpty) {
-        final gap = racingPlaced ? NuvoSpacing.xl : 0.0;
-        final fit = fitFor(
-          fold.fitExtent - usedMax - gap,
-          finishedRaces.length,
-          _sectionCap,
-        );
-        if (fit >= 1) {
-          if (gap > 0) {
-            body.add(const SizedBox(height: NuvoSpacing.xl));
-            resultsGap = true;
-          }
-          body.add(
-            _RaceSection(
-              label: 'Recent results',
-              races: finishedRaces,
-              userId: uid,
-              expanded: _resultsExpanded,
-              cap: fit,
-              onToggleExpand: () =>
-                  setState(() => _resultsExpanded = !_resultsExpanded),
-            ),
-          );
-          usedMax += gap + _sectionLabelExtent + fit * _raceRowExtent;
-          usedMin += gap + _sectionLabelMin + fit * _raceRowMin;
-          resultsPlaced = true;
-        }
-      }
-    }
-    body.add(SizedBox(height: fold.seam(usedMin)));
+    // Race sections in order — Racing now, Recent results, Other — at
+    // normal section rhythm. Content flows naturally; a row that lands
+    // under the dock at rest is hidden by the shell's occlusion band and
+    // scrolls clear, same contract as Compete (docs §15). No fold seam —
+    // short pages are never vertically distributed to fill the viewport.
+    final raceSections = <Widget>[
+      if (activeRaces.isNotEmpty)
+        _RaceSection(
+          label: 'Racing now',
+          races: activeRaces,
+          userId: uid,
+          expanded: _racingExpanded,
+          cap: _racingFeaturedCap,
+          onToggleExpand: () =>
+              setState(() => _racingExpanded = !_racingExpanded),
+        ),
+      if (finishedRaces.isNotEmpty) ...[
+        if (activeRaces.isNotEmpty) const SizedBox(height: NuvoSpacing.xl),
+        _RaceSection(
+          label: 'Recent results',
+          races: finishedRaces,
+          userId: uid,
+          expanded: _resultsExpanded,
+          cap: _sectionCap,
+          onToggleExpand: () =>
+              setState(() => _resultsExpanded = !_resultsExpanded),
+        ),
+      ],
+      if (otherRaces.isNotEmpty) ...[
+        if (activeRaces.isNotEmpty || finishedRaces.isNotEmpty)
+          const SizedBox(height: NuvoSpacing.xl),
+        _RaceSection(
+          label: 'Other',
+          races: otherRaces,
+          userId: uid,
+          expanded: _otherExpanded,
+          cap: _sectionCap,
+          onToggleExpand: () =>
+              setState(() => _otherExpanded = !_otherExpanded),
+        ),
+      ],
+    ];
 
     return [
       // Racing now / recent results / history
@@ -419,45 +364,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           compact: true,
         )
       else
-        ...body,
-      // Below the seam — sections the fold couldn't place whole, plus
-      // everything that was always below the first viewport.
-      if (!racingPlaced && activeRaces.isNotEmpty)
-        _RaceSection(
-          label: 'Racing now',
-          races: activeRaces,
-          userId: uid,
-          expanded: _racingExpanded,
-          cap: _sectionCap,
-          onToggleExpand: () =>
-              setState(() => _racingExpanded = !_racingExpanded),
-        ),
-      if (!resultsPlaced && finishedRaces.isNotEmpty) ...[
-        if (!racingPlaced || resultsGap)
-          const SizedBox(height: NuvoSpacing.xl),
-        _RaceSection(
-          label: 'Recent results',
-          races: finishedRaces,
-          userId: uid,
-          expanded: _resultsExpanded,
-          cap: _sectionCap,
-          onToggleExpand: () =>
-              setState(() => _resultsExpanded = !_resultsExpanded),
-        ),
-      ],
-      if (otherRaces.isNotEmpty) ...[
-        if (activeRaces.isNotEmpty || finishedRaces.isNotEmpty)
-          const SizedBox(height: NuvoSpacing.xl),
-        _RaceSection(
-          label: 'Other',
-          races: otherRaces,
-          userId: uid,
-          expanded: _otherExpanded,
-          cap: _sectionCap,
-          onToggleExpand: () =>
-              setState(() => _otherExpanded = !_otherExpanded),
-        ),
-      ],
+        ...raceSections,
 
       // One earned personal mark — best placement across finished races,
       // read straight from canonical standings. Hidden when nothing has
@@ -476,7 +383,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
       const SizedBox(height: NuvoSpacing.xxl),
 
-      // Your Nuvo — the things that are mine.
+      // Your Nuvo — the things that are mine and how the app feels.
       const _SectionLabel(label: 'Your Nuvo'),
       const SizedBox(height: NuvoSpacing.md),
       _ProfileActionGroup(
@@ -484,50 +391,64 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _AccountRow(
             icon: Icons.qr_code_2_rounded,
             label: 'My Nuvo',
+            subtitle: 'Your code and pass link',
             onTap: () => context.push('/my-nuvo'),
           ),
           _AccountRow(
             icon: Icons.badge_rounded,
             label: 'Member pass',
+            subtitle: 'The card other racers see',
             onTap: () => context.go('/pass'),
           ),
           _AccountRow(
             icon: Icons.notifications_outlined,
             label: 'Notifications',
+            subtitle: 'Race and crew updates',
             onTap: () => context.push('/settings/notifications'),
           ),
-        ],
-      ),
-      const SizedBox(height: NuvoSpacing.xl),
-
-      // App — real toggles/tools only; nothing decorative.
-      const _SectionLabel(label: 'App'),
-      const SizedBox(height: NuvoSpacing.md),
-      _ProfileActionGroup(
-        children: [
           const _AppearanceRow(),
-          if (canReplayDemo)
-            _AccountRow(
-              icon: Icons.replay_rounded,
-              label: 'Replay the guide',
-              onTap: _replayDemo,
-            ),
-          if (canTogglePresentation)
-            _PresentationModeRow(
-              enabled: presentationModeToggleEnabled,
-              onChanged: _setPresentationMode,
-            ),
-          if (kDebugMode)
-            _AccountRow(
-              icon: Icons.tune_rounded,
-              label: 'Rive Calibration',
-              onTap: () => context.push('/dev/rive-calibration'),
-            ),
         ],
       ),
       const SizedBox(height: NuvoSpacing.xl),
 
-      // Account — utilities, kept quiet and last.
+      // Gated tools only — this group doesn't exist for normal accounts.
+      // Presentation/demo controls stay behind the existing account gates.
+      if (canReplayDemo || canTogglePresentation || kDebugMode) ...[
+        const _SectionLabel(label: 'App'),
+        const SizedBox(height: NuvoSpacing.md),
+        _ProfileActionGroup(
+          children: [
+            if (canReplayDemo)
+              _AccountRow(
+                icon: Icons.replay_rounded,
+                label: 'Replay the guide',
+                onTap: _replayDemo,
+              ),
+            if (canTogglePresentation)
+              _PresentationModeRow(
+                enabled: presentationModeToggleEnabled,
+                onChanged: _setPresentationMode,
+              ),
+            if (kDebugMode)
+              _AccountRow(
+                icon: Icons.tune_rounded,
+                label: 'Rive Calibration',
+                onTap: () => context.push('/dev/rive-calibration'),
+              ),
+          ],
+        ),
+        const SizedBox(height: NuvoSpacing.xl),
+      ],
+
+      // Privacy & Data — the server-backed training-consent control. Same
+      // choice as onboarding; toggling writes through to the account.
+      const _SectionLabel(label: 'Privacy & Data'),
+      const SizedBox(height: NuvoSpacing.md),
+      const _ProfileActionGroup(children: [_MotionConsentRow()]),
+      const SizedBox(height: NuvoSpacing.xl),
+
+      // Account — session actions. Destructive red belongs to Delete alone;
+      // Sign out is a normal action, not a danger.
       const _SectionLabel(label: 'Account'),
       const SizedBox(height: NuvoSpacing.md),
       _ProfileActionGroup(
@@ -535,19 +456,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _AccountRow(
             icon: Icons.person_outline_rounded,
             label: 'Edit profile',
+            subtitle: 'Photo, name, username',
             onTap: () => context.push('/profile/edit'),
           ),
           _AccountRow(
             icon: Icons.logout_rounded,
             label: 'Sign out',
-            isDanger: true,
+            isAction: true,
             onTap: () => ref.read(authControllerProvider.notifier).logout(),
           ),
           _AccountRow(
             icon: Icons.delete_outline_rounded,
             label: 'Delete account',
             isDanger: true,
-            isDestructiveLowEmphasis: true,
             onTap: _confirmDeleteAccount,
           ),
         ],
@@ -575,11 +496,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
-// ── Identity card ─────────────────────────────────────────────────────────────
+// ── Identity ──────────────────────────────────────────────────────────────────
 
 /// Who I am on Nuvo: avatar, name, handle, member status, and the "My Nuvo"
-/// path to share that identity. One subtle surface — the only raised element
-/// in the header zone.
+/// path to share that identity. The user is the hero — this lives directly on
+/// the page, no card around it.
 class _IdentityCard extends StatelessWidget {
   const _IdentityCard({required this.user});
 
@@ -594,84 +515,73 @@ class _IdentityCard extends StatelessWidget {
     final photoUrl = user?.profilePhotoUrl;
     final hasPass = user?.hasMemberPass ?? false;
 
-    return Container(
-      padding: const EdgeInsets.all(NuvoSpacing.lg),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.border, width: 1.5),
-        boxShadow: AppShadows.hardSmall,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Hero(
-                tag: 'profile-avatar',
-                child: NuvoAvatar(
-                  initials: initials,
-                  photoUrl: photoUrl,
-                  size: NuvoAvatarSizes.lg,
-                  bgColor: nuvoAvatarColorFor(user?.id ?? ''),
-                  textColor: NuvoColors.white,
-                  borderColor: c.border,
-                  borderWidth: 2,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Hero(
+              tag: 'profile-avatar',
+              child: NuvoAvatar(
+                initials: initials,
+                photoUrl: photoUrl,
+                size: NuvoAvatarSizes.lg,
+                bgColor: nuvoAvatarColorFor(user?.id ?? ''),
+                textColor: NuvoColors.white,
               ),
-              const SizedBox(width: NuvoSpacing.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            ),
+            const SizedBox(width: NuvoSpacing.lg),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    style: AppTextStyles.headlineMedium.copyWith(
+                      color: c.ink,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (username != null) ...[
+                    const SizedBox(height: 4),
                     Text(
-                      displayName,
-                      style: AppTextStyles.headlineMedium.copyWith(
-                        color: c.ink,
+                      username,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: c.inkSubtle,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (username != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        username,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: c.inkSubtle,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: NuvoSpacing.md),
-          Wrap(
-            spacing: NuvoSpacing.sm,
-            runSpacing: NuvoSpacing.sm,
-            children: [
-              if (hasPass)
-                _IdentityChip(
-                  icon: Icons.check_circle_rounded,
-                  iconColor: NuvoColors.blue,
-                  label: 'Member pass',
-                  onTap: () => context.go('/pass'),
-                ),
+            ),
+          ],
+        ),
+        const SizedBox(height: NuvoSpacing.md),
+        Wrap(
+          spacing: NuvoSpacing.sm,
+          runSpacing: NuvoSpacing.sm,
+          children: [
+            if (hasPass)
               _IdentityChip(
-                icon: Icons.qr_code_2_rounded,
-                iconColor: c.ink,
-                label: 'My Nuvo',
-                trailing: true,
-                onTap: () => context.push('/my-nuvo'),
+                icon: Icons.check_circle_rounded,
+                iconColor: NuvoColors.blue,
+                label: 'Member pass',
+                onTap: () => context.go('/pass'),
               ),
-            ],
-          ),
-        ],
-      ),
+            _IdentityChip(
+              icon: Icons.qr_code_2_rounded,
+              iconColor: c.ink,
+              label: 'My Nuvo',
+              trailing: true,
+              onTap: () => context.push('/my-nuvo'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -702,7 +612,6 @@ class _IdentityChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: c.panelLight,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
-          border: Border.all(color: c.border, width: 1.25),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -748,13 +657,8 @@ class _StatsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.divider),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           _HeaderStat(value: activeCount, label: 'RACING', color: NuvoColors.blue),
@@ -821,7 +725,7 @@ class _HeaderStat extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             label,
-            style: AppTextStyles.labelUppercase(10, color: c.inkSubtle),
+            style: AppTextStyles.labelUppercase(10, color: c.inkSubtle).copyWith(color: context.themeColors.inkSubtle),
           ),
         ],
       ),
@@ -1127,7 +1031,7 @@ class _ActiveRaceTile extends StatelessWidget {
                                     '${participantCount == 1 ? 'racer' : 'racers'}'
                                 : '$movementLabel · $participantCount '
                                     '${participantCount == 1 ? 'racer' : 'racers'}',
-                            style: AppTextStyles.raceRowMeta,
+                            style: AppTextStyles.raceRowMeta.copyWith(color: context.themeColors.inkSubtle),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1178,6 +1082,7 @@ class _ResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final won = rank == 1;
     final meta = scoreLabel != null
         ? '$scoreLabel · $participantCount '
@@ -1213,7 +1118,7 @@ class _ResultTile extends StatelessWidget {
                       style: AppTextStyles.placementLabel(
                         color: won
                             ? NuvoColors.gold
-                            : NuvoColors.textMuted,
+                            : c.inkSubtle,
                         size: won ? 14 : 13,
                       ),
                     ),
@@ -1234,7 +1139,7 @@ class _ResultTile extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       meta,
-                      style: AppTextStyles.raceRowMeta,
+                      style: AppTextStyles.raceRowMeta.copyWith(color: context.themeColors.inkSubtle),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1295,61 +1200,39 @@ class _BestFinishRow extends StatelessWidget {
       child: PressableScale(
         onTap: () => context.push('/race/${race.id}'),
         scale: 0.985,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: NuvoSpacing.md,
-            vertical: 10,
-          ),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(color: c.divider),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Row(
             children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: won
-                      ? NuvoColors.gold.withValues(alpha: 0.14)
-                      : c.panelLight,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  won
-                      ? Icons.emoji_events_rounded
-                      : Icons.military_tech_rounded,
-                  size: 17,
-                  color: won ? NuvoColors.gold : c.inkMuted,
+              Icon(
+                won
+                    ? Icons.emoji_events_rounded
+                    : Icons.military_tech_rounded,
+                size: 17,
+                color: won ? NuvoColors.gold : c.inkMuted,
+              ),
+              const SizedBox(width: NuvoSpacing.sm),
+              Text(
+                'BEST FINISH',
+                style: AppTextStyles.labelUppercase(
+                  10,
+                  color: won ? NuvoColors.gold : c.inkSubtle,
                 ),
               ),
-              const SizedBox(width: NuvoSpacing.md),
+              const SizedBox(width: NuvoSpacing.sm),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'BEST FINISH',
-                      style: AppTextStyles.labelUppercase(
-                        10,
-                        color: won ? NuvoColors.gold : c.inkSubtle,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${_ordinalLabel(rank)} · ${race.displayTitle}',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: c.ink,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                child: Text(
+                  '${_ordinalLabel(rank)} · ${race.displayTitle}',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: c.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (scoreLabel != null)
+              if (scoreLabel != null) ...[
+                const SizedBox(width: NuvoSpacing.sm),
                 Text(
                   scoreLabel!,
                   style: AppTextStyles.labelMedium.copyWith(
@@ -1357,6 +1240,7 @@ class _BestFinishRow extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+              ],
             ],
           ),
         ),
@@ -1521,32 +1405,137 @@ class _AppearanceRow extends ConsumerWidget {
 
 // ── Account row ───────────────────────────────────────────────────────────────
 
+/// Settings → Privacy & Data → "Help improve Nuvo Motion". Reads and writes
+/// the SERVER consent state — onboarding and this toggle are the same truth.
+class _MotionConsentRow extends ConsumerStatefulWidget {
+  const _MotionConsentRow();
+
+  @override
+  ConsumerState<_MotionConsentRow> createState() => _MotionConsentRowState();
+}
+
+class _MotionConsentRowState extends ConsumerState<_MotionConsentRow> {
+  bool? _enabled;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled =
+        ref.read(authControllerProvider).user?.motionTrainingConsent ?? false;
+    // Refresh from the server so cross-device state is accurate.
+    ref
+        .read(authControllerProvider.notifier)
+        .getMotionConsent()
+        .then((v) {
+          if (mounted) setState(() => _enabled = v);
+        })
+        .catchError((_) {});
+  }
+
+  Future<void> _set(bool value) async {
+    if (_saving) return;
+    setState(() {
+      _enabled = value;
+      _saving = true;
+    });
+    try {
+      await ref
+          .read(authControllerProvider.notifier)
+          .setMotionConsent(consented: value);
+    } catch (_) {
+      if (mounted) setState(() => _enabled = !value);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update this setting.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.motion_photos_on_rounded,
+              color: c.ink,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: NuvoSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Help improve Nuvo Motion',
+                  style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
+                ),
+                Text(
+                  'Save motion-point data from AI Motion Proof to improve '
+                  'Nuvo\u2019s motion models. Camera video and audio aren\u2019t '
+                  'uploaded.',
+                  style: AppTextStyles.labelSmall.copyWith(color: c.inkSubtle),
+                ),
+              ],
+            ),
+          ),
+          NuvoToggle(
+            value: _enabled ?? false,
+            onChanged: _enabled == null ? null : _set,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AccountRow extends StatelessWidget {
   const _AccountRow({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.subtitle,
     this.isDanger = false,
-    this.isDestructiveLowEmphasis = false,
+    this.isAction = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
+  /// Quiet context under the label ("Race and crew updates").
+  final String? subtitle;
+
+  /// The one destructive treatment — red, reserved for Delete account.
   final bool isDanger;
-  final bool isDestructiveLowEmphasis;
+
+  /// Actions (Sign out) fire something in place rather than navigating —
+  /// ink, not danger, and no chevron since there's no destination.
+  final bool isAction;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final color = isDestructiveLowEmphasis
-        ? c.inkMuted
-        : (isDanger ? NuvoColors.danger : c.ink);
-    final bg = isDestructiveLowEmphasis
-        ? c.panel
-        : (isDanger
-              ? NuvoColors.danger.withValues(alpha: 0.10)
-              : c.panelLight);
+    final color = isDanger ? NuvoColors.danger : c.ink;
+    final bg = isDanger
+        ? NuvoColors.danger.withValues(alpha: 0.10)
+        : c.panelLight;
+    final navigates = !isDanger && !isAction;
 
     return PressableScale(
       onTap: onTap,
@@ -1563,12 +1552,30 @@ class _AccountRow extends StatelessWidget {
             ),
             const SizedBox(width: NuvoSpacing.md),
             Expanded(
-              child: Text(
-                label,
-                style: AppTextStyles.bodyMedium.copyWith(color: color),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: AppTextStyles.bodyMedium.copyWith(color: color),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: isDanger
+                            ? NuvoColors.danger.withValues(alpha: 0.65)
+                            : c.inkSubtle,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
               ),
             ),
-            if (!isDanger && !isDestructiveLowEmphasis)
+            if (navigates)
               NuvoIcon(
                 NuvoIconType.arrow,
                 color: c.inkMuted,

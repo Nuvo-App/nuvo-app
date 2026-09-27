@@ -57,10 +57,22 @@ export async function ensureMember(
   role = 'racer',
 ): Promise<{ created: boolean }> {
   const existing = await db
-    .prepare('SELECT id FROM race_members WHERE race_id = ? AND user_id = ?')
+    .prepare('SELECT id, status FROM race_members WHERE race_id = ? AND user_id = ?')
     .bind(raceId, userId)
-    .first<{ id: string }>();
-  if (existing) return { created: false };
+    .first<{ id: string; status: string }>();
+  if (existing) {
+    // A stale 'left'/'removed' row must not lock the user out — rejoining
+    // reactivates the same membership rather than inserting a duplicate.
+    if (existing.status !== 'active') {
+      await db
+        .prepare(
+          "UPDATE race_members SET status = 'active', role = ?, joined_at = CURRENT_TIMESTAMP WHERE id = ?",
+        )
+        .bind(role, existing.id)
+        .run();
+    }
+    return { created: false };
+  }
   const displayName = await getProfileName(db, userId);
   const personId = await ensurePersonId(db, userId);
   await db

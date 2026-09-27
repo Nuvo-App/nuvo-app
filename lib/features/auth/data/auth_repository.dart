@@ -199,6 +199,16 @@ class AuthRepository {
 
   Future<void> acceptTerms() => _withRefresh(_api.acceptTerms);
 
+  Future<void> attestAge() => _withRefresh(_api.attestAge);
+
+  Future<Map<String, dynamic>> getMotionConsent() =>
+      _withRefresh(_api.getMotionConsent);
+
+  Future<Map<String, dynamic>> setMotionConsent({required bool consented}) =>
+      _withRefresh(
+        (token) => _api.setMotionConsent(token, consented: consented),
+      );
+
   // ── Profile ───────────────────────────────────────────────────────────────
 
   Future<void> saveProfile({

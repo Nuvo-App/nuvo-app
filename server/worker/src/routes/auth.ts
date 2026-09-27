@@ -14,6 +14,7 @@ import { verifyAppleIdToken } from '../lib/apple';
 import { sendVerificationCode } from '../lib/resend';
 import { normalizeEmail, isValidEmail } from '../lib/validation';
 import { deleteUserMotionData } from '../lib/motion_privacy';
+import { CURRENT_TERMS_VERSION } from '../lib/terms';
 
 const MAX_OTP_ATTEMPTS = 5;
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -158,6 +159,8 @@ async function resetTestDemoAccount(
        SET demo_world_enabled = 1,
            demo_world_seed = ?,
            demo_world_variant = 'summer_v1',
+           terms_accepted_at = COALESCE(terms_accepted_at, CURRENT_TIMESTAMP),
+           age_attested_at = COALESCE(age_attested_at, CURRENT_TIMESTAMP),
            last_login_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
@@ -204,6 +207,10 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
     .prepare('SELECT id FROM member_passes WHERE user_id = ?')
     .bind(userId)
     .first<{ id: string }>();
+  const user = await db
+    .prepare('SELECT terms_accepted_at, age_attested_at, motion_training_consent FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ terms_accepted_at: string | null; age_attested_at: string | null; motion_training_consent: number | null }>();
 
   return {
     id: userId,
@@ -214,7 +221,9 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
     profilePhotoUrl: profile?.avatar_url ?? null,
     onboardingComplete: Boolean(profile?.onboarding_complete),
     hasMemberPass: Boolean(pass),
-    termsAccepted: true, // Dev override until the onboarding redo wires terms acceptance
+    termsAccepted: Boolean(user?.terms_accepted_at),
+    ageAttested: Boolean(user?.age_attested_at),
+    motionTrainingConsent: Boolean(user?.motion_training_consent),
   };
 }
 
@@ -264,6 +273,31 @@ async function hardDeleteAccount(
       await db.prepare('DELETE FROM move_logs WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_invites WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_events WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_attempts WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM verification_sessions WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM proofs WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_participants WHERE race_id = ?').bind(race.id).run();
+      await db.prepare("DELETE FROM activity_reactions WHERE entity_type = 'race' AND entity_id = ?").bind(race.id).run();
+      await db.prepare("DELETE FROM notification_jobs WHERE entity_type = 'race' AND entity_id = ?").bind(race.id).run();
+      const raceInvites = await db
+        .prepare("SELECT id FROM invites WHERE target_type = 'race' AND target_id = ?")
+        .bind(race.id)
+        .all<{ id: string }>();
+      for (const inv of raceInvites.results) {
+        await db.prepare('DELETE FROM invite_uses WHERE invite_id = ?').bind(inv.id).run();
+      }
+      await db.prepare("DELETE FROM invites WHERE target_type = 'race' AND target_id = ?").bind(race.id).run();
+      // Proof evidence uploaded under this race's key prefix — including
+      // objects owned by former members — must not orphan in R2.
+      const raceMedia = await db
+        .prepare("SELECT object_key FROM media_objects WHERE object_key LIKE ?")
+        .bind(`proof-evidence/${race.id}/%`)
+        .all<{ object_key: string }>();
+      for (const obj of raceMedia.results) {
+        try { await r2.delete(obj.object_key); } catch { /* idempotent */ }
+      }
+      await db.prepare('DELETE FROM media_objects WHERE object_key LIKE ?').bind(`proof-evidence/${race.id}/%`).run();
     }
   }
 
@@ -277,6 +311,41 @@ async function hardDeleteAccount(
   await db.prepare('DELETE FROM member_passes WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId).run();
   await db.prepare('DELETE FROM blocked_users WHERE user_id = ? OR blocked_user_id = ?').bind(userId, userId).run();
+
+  // Push/device layer — tokens, inbox, preferences, and any pending sends.
+  await db.prepare('DELETE FROM device_tokens WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId).run();
+  // Other users' feeds keep their rows but lose the deleted actor identity.
+  await db.prepare('UPDATE notifications SET actor_user_id = NULL WHERE actor_user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM notification_preferences WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM notification_jobs WHERE user_id = ?').bind(userId).run();
+
+  // Activity residue — reactions, personal bests, attempts, verification
+  // sessions, and legacy proof/participant rows.
+  await db.prepare('DELETE FROM activity_reactions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM personal_bests WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM race_attempts WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM verification_sessions WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM proofs WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM race_participants WHERE user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM people WHERE user_id = ?').bind(userId).run();
+
+  // Invites the user minted die with them; uses they made of others' invites
+  // are unlinked too.
+  const mintedInvites = await db
+    .prepare('SELECT id FROM invites WHERE actor_user_id = ?')
+    .bind(userId)
+    .all<{ id: string }>();
+  for (const inv of mintedInvites.results) {
+    await db.prepare('DELETE FROM invite_uses WHERE invite_id = ?').bind(inv.id).run();
+  }
+  await db.prepare('DELETE FROM invites WHERE actor_user_id = ?').bind(userId).run();
+  await db.prepare('DELETE FROM invite_uses WHERE user_id = ?').bind(userId).run();
+
+  // Race history keeps the event log meaningful for remaining racers but loses
+  // the deleted identity from actor/subject positions.
+  await db.prepare('UPDATE race_events SET actor_user_id = NULL WHERE actor_user_id = ?').bind(userId).run();
+  await db.prepare('UPDATE race_events SET subject_user_id = NULL WHERE subject_user_id = ?').bind(userId).run();
 
   // Finally, mark the account deleted and remove the email identifier.
   await db.prepare(
@@ -738,7 +807,22 @@ authRouter.get('/me', requireAuth, async (c) => {
 authRouter.post('/terms', requireAuth, async (c) => {
   const userId = c.get('userId');
   await c.env.DB.prepare(
-    'UPDATE users SET terms_accepted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    'UPDATE users SET terms_accepted_at = CURRENT_TIMESTAMP, terms_version = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+  ).bind(CURRENT_TERMS_VERSION, userId).run();
+  return c.json({ ok: true, termsVersion: CURRENT_TERMS_VERSION });
+});
+
+// POST /auth/age-attestation  (requires auth) — eligibility confirmation, not
+// a birthday. Records that the user affirmed they meet the minimum age.
+authRouter.post('/age-attestation', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  let body: { meetsMinimumAge?: unknown } = {};
+  try { body = await c.req.json(); } catch { /* empty body = affirmative */ }
+  if (body.meetsMinimumAge === false) {
+    return c.json({ ok: false, error: 'Nuvo requires members to be at least 13' }, 403);
+  }
+  await c.env.DB.prepare(
+    'UPDATE users SET age_attested_at = COALESCE(age_attested_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
   ).bind(userId).run();
   return c.json({ ok: true });
 });

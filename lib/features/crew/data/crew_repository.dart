@@ -25,6 +25,17 @@ class CrewRepository {
       _withRefresh((t) => _api.declineRequest(t, userId));
   Future<void> remove(String userId) => _withRefresh((t) => _api.remove(t, userId));
 
+  Future<void> reportUser(String userId, {String? reason}) =>
+      _withRefresh((t) => _api.reportUser(t, userId, reason: reason));
+  Future<void> reportRace(String raceId, {String? reason}) =>
+      _withRefresh((t) => _api.reportRace(t, raceId, reason: reason));
+  Future<void> reportContent(String contentId, {String? reason}) =>
+      _withRefresh((t) => _api.reportContent(t, contentId, reason: reason));
+  Future<void> blockUser(String userId) =>
+      _withRefresh((t) => _api.blockUser(t, userId));
+  Future<void> unblockUser(String userId) =>
+      _withRefresh((t) => _api.unblockUser(t, userId));
+
   Future<T> _withRefresh<T>(Future<T> Function(String token) call) async {
     final token = await _store.getAccessToken();
     if (token == null) throw const ApiException(401, 'Not authenticated');

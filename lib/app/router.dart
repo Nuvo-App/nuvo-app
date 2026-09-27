@@ -22,13 +22,14 @@ import '../features/auth/presentation/welcome_auth_screen.dart';
 import '../features/auth/presentation/welcome_race_builder_screen.dart';
 import '../features/compete/presentation/compete_screen_fixed.dart';
 import '../features/onboarding/presentation/member_pass_screen.dart';
+import '../features/onboarding/presentation/motion_contribution_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/edit_profile_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/move/presentation/move_screen.dart';
 import '../features/race_detail/presentation/race_detail_screen.dart';
-import '../features/races/presentation/create_race_screen.dart';
+import '../features/races/data/race_models.dart' show RaceCreatePrefill;
 import '../features/races/presentation/race_composer_screen.dart';
 import '../features/races/presentation/ai_motion_proof_screen.dart';
 import '../features/races/presentation/invite_crew_screen.dart';
@@ -176,6 +177,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding/profile',
         pageBuilder: (_, state) => _authPage(state, const OnboardingScreen()),
+      ),
+      GoRoute(
+        path: '/onboarding/motion-consent',
+        pageBuilder: (_, state) =>
+            _authPage(state, const MotionContributionScreen()),
       ),
       GoRoute(
         path: '/onboarding/member-pass',

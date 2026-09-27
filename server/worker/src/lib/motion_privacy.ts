@@ -182,23 +182,31 @@ export async function deleteUserMotionData(
   masterSecret: string | undefined,
   userId: string,
 ): Promise<void> {
-  if (!masterSecret) throw new Error('MOTION_DATA_MASTER_KEY is not configured.');
-  const accountRef = await motionAccountRef(masterSecret, userId);
+  // Account deletion must never depend on the motion pipeline being enabled.
+  // The account ref (needed to locate ref-keyed rows + revoke the wrapped data
+  // key) is only derivable when the master secret is configured — but the
+  // plaintext object_key in each row is enough to delete the R2 artifacts, so
+  // cleanup still runs against every row keyed by the raw user id either way.
+  const accountRef = masterSecret?.trim()
+    ? await motionAccountRef(masterSecret, userId)
+    : null;
   const sessions = await db.prepare(
     'SELECT session_id, object_key FROM motion_sessions WHERE user_id IN (?, ?)',
-  ).bind(userId, accountRef).all<{ session_id: string; object_key: string }>();
+  ).bind(userId, accountRef ?? userId).all<{ session_id: string; object_key: string }>();
   const trainingExamples = await db.prepare(
     'SELECT id, object_key FROM motion_training_examples WHERE user_id IN (?, ?)',
-  ).bind(userId, accountRef).all<{ id: string; object_key: string | null }>();
+  ).bind(userId, accountRef ?? userId).all<{ id: string; object_key: string | null }>();
 
   for (const row of [...sessions.results, ...trainingExamples.results]) {
     if (row.object_key) {
       try { await r2.delete(row.object_key); } catch { /* account deletion is idempotent */ }
     }
   }
-  await db.prepare('DELETE FROM motion_feedback_labels WHERE user_id IN (?, ?)').bind(userId, accountRef).run();
-  await db.prepare('DELETE FROM motion_sessions WHERE user_id IN (?, ?)').bind(userId, accountRef).run();
-  await db.prepare('DELETE FROM motion_training_examples WHERE user_id IN (?, ?)').bind(userId, accountRef).run();
+  await db.prepare('DELETE FROM motion_feedback_labels WHERE user_id IN (?, ?)').bind(userId, accountRef ?? userId).run();
+  await db.prepare('DELETE FROM motion_sessions WHERE user_id IN (?, ?)').bind(userId, accountRef ?? userId).run();
+  await db.prepare('DELETE FROM motion_training_examples WHERE user_id IN (?, ?)').bind(userId, accountRef ?? userId).run();
   await db.prepare('DELETE FROM motion_analysis_jobs WHERE user_id = ?').bind(userId).run();
-  await revokeMotionDataKey(db, masterSecret, userId);
+  if (accountRef) {
+    await db.prepare('DELETE FROM motion_account_keys WHERE account_ref = ?').bind(accountRef).run();
+  }
 }

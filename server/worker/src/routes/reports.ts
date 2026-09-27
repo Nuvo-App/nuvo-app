@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { AppEnv, ReportRow } from '../types';
+import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 
@@ -40,6 +40,8 @@ reportsRouter.post('/users/:id', async (c) => {
   const reason = typeof body.reason === 'string' ? body.reason.trim() : null;
 
   if (reporterUserId === targetId) return c.json({ ok: false, error: 'Cannot report yourself' }, 400);
+  const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'").bind(targetId).first();
+  if (!target) return c.json({ ok: false, error: 'User not found' }, 404);
 
   await c.env.DB.prepare(
     `INSERT INTO reports (id, reporter_user_id, target_type, target_id, reason, status, created_at, updated_at)
@@ -56,6 +58,8 @@ reportsRouter.post('/races/:id', async (c) => {
   let body: { reason?: unknown };
   try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body' }, 400); }
   const reason = typeof body.reason === 'string' ? body.reason.trim() : null;
+  const race = await c.env.DB.prepare('SELECT id FROM races WHERE id = ? AND deleted_at IS NULL').bind(targetId).first();
+  if (!race) return c.json({ ok: false, error: 'Race not found' }, 404);
 
   await c.env.DB.prepare(
     `INSERT INTO reports (id, reporter_user_id, target_type, target_id, reason, status, created_at, updated_at)
@@ -86,6 +90,8 @@ reportsRouter.post('/blocks/:id', async (c) => {
   const userId = c.get('userId');
   const blockedUserId = c.req.param('id');
   if (userId === blockedUserId) return c.json({ ok: false, error: 'Cannot block yourself' }, 400);
+  const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'").bind(blockedUserId).first();
+  if (!target) return c.json({ ok: false, error: 'User not found' }, 404);
 
   await c.env.DB.prepare(
     `INSERT INTO blocked_users (id, user_id, blocked_user_id, created_at)
@@ -123,50 +129,4 @@ reportsRouter.get('/blocks', async (c) => {
   return c.json({ ok: true, blocked: rows.results.map(serializeBlockedUser) });
 });
 
-// GET /admin/reports  (internal moderation review; role-based auth should be added in production)
-reportsRouter.get('/admin/reports', async (c) => {
-  const rows = await c.env.DB.prepare(
-    `SELECT r.*, reporter.full_name as reporter_name, reporter.username as reporter_username
-     FROM reports r
-     LEFT JOIN profiles reporter ON reporter.user_id = r.reporter_user_id
-     ORDER BY
-       CASE r.status WHEN 'pending' THEN 0 ELSE 1 END,
-       r.created_at DESC
-     LIMIT 100`,
-  ).all<ReportRow & { reporter_name: string | null; reporter_username: string | null }>();
 
-  return c.json({
-    ok: true,
-    reports: rows.results.map((row) => ({
-      id: row.id,
-      reporterUserId: row.reporter_user_id,
-      reporterDisplayName: row.reporter_name ?? row.reporter_username ?? 'Nuvo member',
-      targetType: row.target_type,
-      targetId: row.target_id,
-      reason: row.reason,
-      status: row.status,
-      reviewedBy: row.reviewed_by,
-      notes: row.notes,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  });
-});
-
-// POST /admin/reports/:id
-reportsRouter.post('/admin/reports/:id', async (c) => {
-  const userId = c.get('userId');
-  const reportId = c.req.param('id');
-  let body: { status?: unknown; notes?: unknown };
-  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body' }, 400); }
-
-  const status = typeof body.status === 'string' ? body.status : null;
-  const notes = typeof body.notes === 'string' ? body.notes.trim() : null;
-  if (!status) return c.json({ ok: false, error: 'status is required' }, 400);
-
-  await c.env.DB.prepare(
-    `UPDATE reports SET status = ?, notes = ?, reviewed_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-  ).bind(status, notes, userId, reportId).run();
-
-  return c.json({ ok: true });
-});

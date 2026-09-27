@@ -64,6 +64,17 @@ class _FakeCrewRepo implements CrewRepository {
   Future<void> remove(String userId) async {
     removeCalls++;
   }
+
+  @override
+  Future<void> reportUser(String userId, {String? reason}) async {}
+  @override
+  Future<void> reportRace(String raceId, {String? reason}) async {}
+  @override
+  Future<void> reportContent(String contentId, {String? reason}) async {}
+  @override
+  Future<void> blockUser(String userId) async {}
+  @override
+  Future<void> unblockUser(String userId) async {}
 }
 
 const _sam = PublicUser(

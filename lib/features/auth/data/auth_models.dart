@@ -7,6 +7,8 @@ class AuthUser {
   final bool onboardingComplete;
   final bool hasMemberPass;
   final bool termsAccepted;
+  final bool ageAttested;
+  final bool motionTrainingConsent;
   final String? profilePhotoUrl;
 
   const AuthUser({
@@ -18,6 +20,8 @@ class AuthUser {
     required this.onboardingComplete,
     required this.hasMemberPass,
     required this.termsAccepted,
+    this.ageAttested = false,
+    this.motionTrainingConsent = false,
     this.profilePhotoUrl,
   });
 
@@ -30,6 +34,8 @@ class AuthUser {
     onboardingComplete: json['onboardingComplete'] as bool? ?? false,
     hasMemberPass: json['hasMemberPass'] as bool? ?? false,
     termsAccepted: json['termsAccepted'] as bool? ?? false,
+    ageAttested: json['ageAttested'] as bool? ?? false,
+    motionTrainingConsent: json['motionTrainingConsent'] as bool? ?? false,
     profilePhotoUrl:
         (json['profilePhotoUrl'] ??
                 json['profile_photo_url'] ??
@@ -44,6 +50,8 @@ class AuthUser {
     bool? onboardingComplete,
     bool? hasMemberPass,
     bool? termsAccepted,
+    bool? ageAttested,
+    bool? motionTrainingConsent,
     String? profilePhotoUrl,
     bool clearPhoto = false,
   }) => AuthUser(
@@ -55,6 +63,8 @@ class AuthUser {
     onboardingComplete: onboardingComplete ?? this.onboardingComplete,
     hasMemberPass: hasMemberPass ?? this.hasMemberPass,
     termsAccepted: termsAccepted ?? this.termsAccepted,
+    ageAttested: ageAttested ?? this.ageAttested,
+    motionTrainingConsent: motionTrainingConsent ?? this.motionTrainingConsent,
     profilePhotoUrl: clearPhoto
         ? null
         : (profilePhotoUrl ?? this.profilePhotoUrl),
@@ -83,6 +93,7 @@ AuthUser offlineDemoUser() => const AuthUser(
   onboardingComplete: true,
   hasMemberPass: true,
   termsAccepted: true,
+  ageAttested: true,
 );
 
 /// Internal/demo eligibility — the ONE decision point for whether an account

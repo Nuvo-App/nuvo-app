@@ -186,6 +186,21 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> attestAge() => _repo.attestAge();
+
+  Future<bool> getMotionConsent() async {
+    final consent = await _repo.getMotionConsent();
+    return consent['consented'] == true;
+  }
+
+  Future<void> setMotionConsent({required bool consented}) async {
+    await _repo.setMotionConsent(consented: consented);
+    final user = await _repo.getMe();
+    if (mounted) {
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    }
+  }
+
   Future<void> completeOnboarding() async {
     await _repo.completeOnboarding();
     final user = await _repo.getMe();

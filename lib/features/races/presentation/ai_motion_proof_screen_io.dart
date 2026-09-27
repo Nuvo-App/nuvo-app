@@ -1120,12 +1120,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             },
     );
     _lastArtifact = artifact;
-    // Fire-and-forget: staging + upload happen off the UI path.
-    unawaited(ref.read(motionSessionUploadQueueProvider).enqueue(artifact));
-    _debugLog(
-      'motionSessionQueued id=${artifact.sessionId} '
-      'outcome=${outcome.wire} frames=${artifact.frames.length}',
-    );
+    // Consent gate — the motion-points dataset is opt-in. A non-consenting
+    // account never stages an artifact for upload; the server refuses too,
+    // so this also protects against a stale local flag.
+    final consented =
+        ref.read(authControllerProvider).user?.motionTrainingConsent == true;
+    if (consented) {
+      // Fire-and-forget: staging + upload happen off the UI path.
+      unawaited(ref.read(motionSessionUploadQueueProvider).enqueue(artifact));
+      _debugLog(
+        'motionSessionQueued id=${artifact.sessionId} '
+        'outcome=${outcome.wire} frames=${artifact.frames.length}',
+      );
+    } else {
+      _debugLog(
+        'motionSessionSkipped id=${artifact.sessionId} — motion contribution off',
+      );
+    }
     return artifact;
   }
 
