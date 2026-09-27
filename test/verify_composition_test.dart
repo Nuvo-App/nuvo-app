@@ -177,9 +177,11 @@ void main() {
       ])));
       await tester.pumpAndSettle();
 
-      // Canonical competitive context — the adjacent rival and the gap
-      // to catch them ("Take 1st — 20 reps to catch Racer").
-      expect(find.textContaining('to catch Racer'), findsOneWidget);
+      // Canonical competitive context — rank 2 against a leader reads as
+      // a gap to the top ("20 reps to take 1st"), and the rivalry block
+      // names the actual person.
+      expect(find.textContaining('to take 1st'), findsOneWidget);
+      expect(find.textContaining('Racer'), findsWidgets);
     });
 
     testWidgets('solo race keeps canonical pace-setting copy', (
