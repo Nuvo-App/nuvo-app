@@ -17,7 +17,7 @@ class NotificationBell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(unreadCountProvider);
-    final tint = color ?? NuvoColors.navy;
+    final tint = color ?? context.themeColors.ink;
     return Semantics(
       button: true,
       label: unread > 0 ? '$unread unread notifications' : 'Notifications',
@@ -43,7 +43,10 @@ class NotificationBell extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: NuvoColors.danger,
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: NuvoColors.page, width: 1.5),
+                      border: Border.all(
+                        color: context.themeColors.page,
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
                       unread > 9 ? '9+' : '$unread',
