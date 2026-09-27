@@ -139,7 +139,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byType(NuvoErrorState), findsNothing);
-      expect(find.text('Nothing to prove yet'), findsOneWidget);
+      expect(find.text('Nothing to prove yet.'), findsOneWidget);
     });
 
     testWidgets(
@@ -149,7 +149,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         // Error state must be shown, NOT the empty state.
         expect(find.byType(NuvoErrorState), findsOneWidget);
-        expect(find.text('Nothing to prove yet'), findsNothing);
+        expect(find.text('Nothing to prove yet.'), findsNothing);
         // Raw backend error must NOT be visible.
         expect(find.text('Internal Server Error'), findsNothing);
         // Friendly copy should be visible.

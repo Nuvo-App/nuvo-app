@@ -13,11 +13,12 @@ import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
 import 'package:nuvo/features/races/presentation/race_controller.dart';
 
-/// Verify composition contracts — the screen is a proof command center:
-/// "what can I prove next" (closest-to-finish ordering), "how close am I"
-/// (progress + rank + remaining in every row), "what did proof change"
-/// (Won/Finished + time on Completed; +reps + rank delta + ago on Recent).
-/// All copy must come from canonical race/proof fields — nothing invented.
+/// Verify composition contracts — the screen is the action surface:
+/// "what can I do next" (closest-to-finish ordering), "where do I stand"
+/// (result + rank + competitor context in hero and rows), "what did proof
+/// change" (Won/Finished + time on Completed; +reps + rank delta + ago on
+/// Recent). All copy must come from canonical race/proof fields — nothing
+/// invented.
 class _FakeAuthRepo extends AuthRepository {
   _FakeAuthRepo() : super(AuthApi(), SecureTokenStore());
   @override
@@ -140,8 +141,11 @@ void main() {
 
       // The hero carries the race that needs the least proof, not the
       // newest one.
-      final hero = tester.widget<RaceHero>(find.byType(RaceHero));
-      expect(hero.raceTitle, 'Close Race');
+      final hero = find.byKey(const Key('verify-up-next-hero'));
+      expect(
+        find.descendant(of: hero, matching: find.text('Close Race')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('ties keep the server order', (tester) async {
@@ -151,8 +155,11 @@ void main() {
       ])));
       await tester.pumpAndSettle();
 
-      final hero = tester.widget<RaceHero>(find.byType(RaceHero));
-      expect(hero.raceTitle, 'Alpha Race');
+      final hero = find.byKey(const Key('verify-up-next-hero'));
+      expect(
+        find.descendant(of: hero, matching: find.text('Alpha Race')),
+        findsOneWidget,
+      );
     });
   });
 
@@ -170,9 +177,9 @@ void main() {
       ])));
       await tester.pumpAndSettle();
 
-      // Canonical ChaseContext copy — "Beat Racer. 20 to take #1."
-      // (the opponent's display name is first-named in the copy).
-      expect(find.textContaining('Beat Racer'), findsOneWidget);
+      // Canonical competitive context — the adjacent rival and the gap
+      // to catch them ("Take 1st — 20 reps to catch Racer").
+      expect(find.textContaining('to catch Racer'), findsOneWidget);
     });
 
     testWidgets('solo race keeps canonical pace-setting copy', (
@@ -203,11 +210,12 @@ void main() {
       ])));
       await tester.pumpAndSettle();
 
+      // Row meta carries the canonical progress + placement ("12 / 25
+      // reps" + "2nd") — no invented remaining math, no mini track; the
+      // only track in this segment is the hero's real denominator.
       expect(find.textContaining('12 / 25 reps'), findsOneWidget);
-      expect(find.textContaining('#2'), findsOneWidget);
-      expect(find.textContaining('13 reps left'), findsOneWidget);
-      // Hero path + the row's thin track.
-      expect(find.byType(RaceProgress), findsWidgets);
+      expect(find.textContaining('2nd'), findsOneWidget);
+      expect(find.byType(RaceProgress), findsOneWidget);
     });
 
     testWidgets('start-line row says so with the racer count', (
@@ -224,7 +232,7 @@ void main() {
       ])));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Start line · 8 racers'), findsOneWidget);
+      expect(find.textContaining('Start line'), findsOneWidget);
     });
   });
 

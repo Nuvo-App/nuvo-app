@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,6 +10,7 @@ import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
+import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -16,26 +18,36 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../notifications/domain/notification_display.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
-import '../../races/domain/chase_context.dart';
+import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 
-/// Verify — universal proof surface.
+/// Verify — the action surface.
 ///
-/// Screen question: "What can I make progress on right now?"
+/// Arena is what's happening, Compete is the race shelf, Crew is people,
+/// Profile is identity. Verify is where you GO DO SOMETHING: the most
+/// action-oriented destination in the nav.
+///
+/// Screen question: "What can I do right now to move my races forward?"
 ///
 /// A race is NOT assumed to be movement + reps + camera: FlexiRace goals can
-/// be reps, books, grades, golf scores, durations — anything. This screen
-/// renders each race's canonical proof capability ([_ProofAction] resolved
-/// from verifier/proof fields — never the title) and its canonical score
-/// presentation ([raceProgressLabel] / [raceScoreLabel] / [raceTargetLabel]).
+/// be reps, books, grades, golf scores, durations — anything. Each race's
+/// canonical proof capability ([_ProofAction] — resolved from verifier/
+/// proof fields, never the title) and its canonical score semantics
+/// (target / no-denominator, higher/lower-wins, timed) drive both the CTA
+/// and the hero layout.
 ///
 /// Structure:
-/// 1. Compact Verify header ("Verify" + "N races ready for proof")
-/// 2. Ready / Completed / Recent segmented state
-/// 3. ONE loud "Up next" card whose CTA names the real proof action
-/// 4. "Also ready" compact rows (capped, inline See all)
-/// 5. Completed/Recent shown through the segmented state
+/// 1. Header — "Verify" + "Make your move." + ready count + history
+/// 2. Light Ready / Completed / Recent tabs (sliding underline)
+/// 3. Compositional "Up next" hero — the result is the anchor, the proof
+///    method and action sit in a blue band, no bordered dashboard card
+/// 4. "Ready next" tactile rows with competitor context, hairline rhythm
+/// 5. Completed = history index, Recent = proof timeline — bare rows
+///
+/// State change creates motion: NuvoNumberFlow on the hero result, a
+/// lead-take flash, NuvoStateMorph when the hero advances to the next
+/// race. Idle stays calm.
 class MoveScreen extends ConsumerStatefulWidget {
   const MoveScreen({super.key});
 
@@ -205,9 +217,12 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
             NuvoBottomNav.bottomPadding(context),
           ),
           children: [
-            // ── Compact header ────────────────────────────────────────
-            _CompactVerifyHeader(readyCount: readyRaces.length),
-            const SizedBox(height: NuvoSpacing.xl),
+            // ── Action header ─────────────────────────────────────────
+            _VerifyHeader(
+              readyCount: readyRaces.length,
+              onHistory: () => _setSegment(_VerifySegment.recent),
+            ),
+            const SizedBox(height: NuvoSpacing.lg),
 
             // ── Loading / error / empty ───────────────────────────────
             if (raceState.loading &&
@@ -231,7 +246,7 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
               _EmptyState(onStart: () => context.push('/races/new'))
             // ── Segmented control + segment content ───────────────────
             else ...[
-              _SegmentedControl(
+              _VerifyTabs(
                 segment: _segment,
                 readyCount: readyRaces.length,
                 completedCount: completedRaces.length,
@@ -273,7 +288,7 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
                         onToggleExpand: () =>
                             setState(() => _readyExpanded = !_readyExpanded),
                         onVerify: openVerification,
-                        onStartRace: () => context.push('/races/new'),
+                        onStartRace: () => context.go('/compete'),
                       ),
                       _VerifySegment.completed => _CompletedSegment(
                         races: completedRaces,
@@ -321,43 +336,53 @@ int _remainingToGoal(Race race, String? userId) {
   return 1 << 20;
 }
 
-/// "11 reps left" / "45s left" — the canonical score label for the gap to
-/// the goal, or null when the race has no measurable finish.
-String? _goalRemainingLabel(Race race, String? userId) {
-  final vc = race.viewerContext;
-  final remaining = vc?.goalRemaining ??
-      (() {
-        final myPart =
-            userId != null ? race.participantFor(userId) : null;
-        final target = race.targetValue;
-        if (target != null && target > 0 && myPart != null) {
-          return (target - myPart.progressValue).clamp(0, target);
-        }
-        return null;
-      })();
-  if (remaining == null || remaining <= 0) return null;
-  return '${raceScoreLabel(race, remaining)} left';
-}
+// ── Action header ─────────────────────────────────────────────────────────────
 
-// ── Compact header ────────────────────────────────────────────────────────────
+/// "Verify / Make your move. / N races ready" + a history affordance that
+/// jumps to the Recent segment (a real destination — the proof timeline).
+class _VerifyHeader extends StatelessWidget {
+  const _VerifyHeader({required this.readyCount, required this.onHistory});
 
-class _CompactVerifyHeader extends StatelessWidget {
-  const _CompactVerifyHeader({required this.readyCount});
   final int readyCount;
+  final VoidCallback onHistory;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Verify', style: AppTextStyles.screenTitle),
+        Row(
+          children: [
+            Text(
+              'VERIFY',
+              style: AppTextStyles.labelUppercase(12.5).copyWith(
+                color: c.inkMuted,
+              ),
+            ),
+            const Spacer(),
+            NuvoPressable(
+              onTap: onHistory,
+              haptic: false,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.history_rounded,
+                  size: 21,
+                  color: c.inkMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+        Text('Make your move.', style: AppTextStyles.screenTitle),
         const SizedBox(height: NuvoSpacing.xs),
         Text(
           readyCount > 0
-              ? '$readyCount ${readyCount == 1 ? 'race' : 'races'} ready for proof'
-              : 'No races waiting on proof',
+              ? '$readyCount ${readyCount == 1 ? 'race' : 'races'} ready'
+              : 'Nothing waiting on you',
           style: AppTextStyles.bodySmall.copyWith(
-            color: context.themeColors.inkMuted,
+            color: c.inkMuted,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -366,10 +391,13 @@ class _CompactVerifyHeader extends StatelessWidget {
   }
 }
 
-// ── Segmented control ─────────────────────────────────────────────────────────
+// ── Tabs ─────────────────────────────────────────────────────────────────────
 
-class _SegmentedControl extends StatelessWidget {
-  const _SegmentedControl({
+/// Light tab strip — selected label + a blue underline that SLIDES between
+/// slots. No pill tray, no container: the tabs read as a filter, and the
+/// compact footprint keeps the hero above the fold.
+class _VerifyTabs extends StatelessWidget {
+  const _VerifyTabs({
     required this.segment,
     required this.readyCount,
     required this.completedCount,
@@ -385,43 +413,32 @@ class _SegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A FILTER, not three stacked buttons: label + count share one line, so
-    // the whole control reads as a compact segmented switcher (~48–56px
-    // total) rather than a tall three-button module. The selection is a
-    // single pill that SLIDES between slots — the state moves, instead of a
-    // new widget appearing per tab.
+    final c = context.themeColors;
     final selectedIndex = _VerifySegment.values.indexOf(segment);
-    final selectedColor = switch (segment) {
-      _VerifySegment.ready => NuvoColors.blue,
-      _VerifySegment.completed => NuvoColors.success,
-      _VerifySegment.recent => NuvoColors.accent,
-    };
 
-    return Container(
-      decoration: BoxDecoration(
-        // A filter tray, not a card: quiet ice fill, no navy frame —
-        // the sliding colored pill carries all the state weight.
-        color: context.themeColors.panelLight,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-      ),
-      padding: const EdgeInsets.all(3),
+    return SizedBox(
+      height: 42,
       child: Stack(
         children: [
+          // The selection indicator is one sliding element, not a per-tab
+          // color swap — the state moves.
           Positioned.fill(
             child: AnimatedAlign(
               // -1 / 0 / +1 across the three equal slots.
-              alignment: Alignment(selectedIndex - 1.0, 0),
+              alignment: Alignment(selectedIndex - 1.0, 1),
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
               child: FractionallySizedBox(
                 widthFactor: 1 / 3,
-                heightFactor: 1,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  decoration: BoxDecoration(
-                    color: selectedColor,
-                    borderRadius: BorderRadius.circular(NuvoRadii.xs),
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    height: 3,
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: NuvoColors.blue,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
               ),
@@ -429,35 +446,32 @@ class _SegmentedControl extends StatelessWidget {
           ),
           Row(
             children: [
-              _SegmentTab(
+              _VerifyTab(
                 label: 'Ready',
                 count: readyCount,
-                icon: Icons.pending_actions_rounded,
                 selected: segment == _VerifySegment.ready,
-                // The sliding pill carries the accent color; the tab only
-                // needs the on-pill foreground when selected.
-                onPill: NuvoColors.white,
                 onTap: () => onChanged(_VerifySegment.ready),
               ),
-              _SegmentTab(
+              _VerifyTab(
                 label: 'Completed',
                 count: completedCount,
-                icon: Icons.check_circle_outline_rounded,
                 selected: segment == _VerifySegment.completed,
-                onPill: NuvoColors.white,
                 onTap: () => onChanged(_VerifySegment.completed),
               ),
-              _SegmentTab(
+              _VerifyTab(
                 label: 'Recent',
                 count: recentCount,
-                icon: Icons.history_rounded,
                 selected: segment == _VerifySegment.recent,
-                // Recent is history, not a warning: the restrained tan
-                // accent pill takes navy text instead of white.
-                onPill: context.themeColors.ink,
                 onTap: () => onChanged(_VerifySegment.recent),
               ),
             ],
+          ),
+          // Grounding hairline under the whole strip.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(height: 1, color: c.divider),
           ),
         ],
       ),
@@ -465,53 +479,40 @@ class _SegmentedControl extends StatelessWidget {
   }
 }
 
-class _SegmentTab extends StatelessWidget {
-  const _SegmentTab({
+class _VerifyTab extends StatelessWidget {
+  const _VerifyTab({
     required this.label,
     required this.count,
-    required this.icon,
     required this.selected,
-    required this.onPill,
     required this.onTap,
   });
 
   final String label;
   final int count;
-  final IconData icon;
   final bool selected;
-
-  /// Foreground color when the sliding pill is underneath this tab.
-  final Color onPill;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    // Label + count share one line — a compact filter tab, not a stacked
-    // two-line button. The count reads as secondary (smaller, dimmer) but
-    // never disappears into its own row. The pill behind carries the state
-    // color; this tab is transparent hit surface + foreground only.
-    final fg = selected ? onPill : context.themeColors.inkSubtle;
+    final c = context.themeColors;
+    final fg = selected ? c.ink : c.inkSubtle;
     return Expanded(
       child: NuvoPressable(
         onTap: onTap,
         haptic: false,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          height: double.infinity,
+          alignment: Alignment.center,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 3),
               Flexible(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.labelMedium.copyWith(
-                    fontSize: 13,
+                    fontSize: 13.5,
                     color: fg,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                   ),
@@ -523,9 +524,7 @@ class _SegmentTab extends StatelessWidget {
                 maxLines: 1,
                 style: AppTextStyles.labelSmall.copyWith(
                   fontSize: 11,
-                  color: selected
-                      ? fg.withValues(alpha: 0.75)
-                      : context.themeColors.inkDim,
+                  color: selected ? NuvoColors.blue : c.inkDim,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -563,10 +562,10 @@ class _ReadySegment extends StatelessWidget {
     if (races.isEmpty) {
       return _SegmentEmptyState(
         icon: Icons.emoji_events_outlined,
-        title: 'Nothing waiting on proof.',
+        title: 'Nothing to prove yet.',
         subtitle:
-            'Start or join a race — anything you can make progress on lands here.',
-        actionLabel: 'Start a race',
+            'Join a race or start one, then your next move shows up here.',
+        actionLabel: 'Find a race',
         onAction: onStartRace,
         // "Ready to verify" is an actionable state, not a problem — brand
         // blue, not the semantic warning color reserved for actual issues.
@@ -584,19 +583,27 @@ class _ReadySegment extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Up next (ONE loud surface) ────────────────────────────────────────
-        Text('Up next', style: AppTextStyles.sectionTitle),
-        const SizedBox(height: 10),
-        _UpNextCard(
-          race: upNext,
-          userId: userId,
-          onVerify: () => onVerify(upNext),
+        // ── Up next — the action surface. When a race finishes and the
+        // next one steps up, the hero morphs to the new race (state change
+        // → motion), rather than silently swapping content.
+        NuvoStateMorph(
+          stateKey: upNext.id,
+          child: _UpNextHero(
+            race: upNext,
+            userId: userId,
+            onVerify: () => onVerify(upNext),
+          ),
         ),
         if (alsoReady.isNotEmpty) ...[
-          const SizedBox(height: NuvoSpacing.xl),
+          const SizedBox(height: NuvoSpacing.xxl),
           Row(
             children: [
-              Text('Also ready', style: AppTextStyles.sectionTitle),
+              Text(
+                'READY NEXT',
+                style: AppTextStyles.labelUppercase(12).copyWith(
+                  color: context.themeColors.inkMuted,
+                ),
+              ),
               const Spacer(),
               if (hasMore)
                 NuvoPressable(
@@ -618,12 +625,11 @@ class _ReadySegment extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 6),
-          // Level-0 rows directly on the page — this is a pick-list of
-          // movements to perform, not a list of records. The movement glyph
-          // carries the "what", the meta line carries the finish line.
+          const SizedBox(height: 4),
+          // Level-0 tactile rows directly on the page — hairline rhythm, no
+          // card-per-row. The hero above is the one loud surface.
           for (var i = 0; i < visibleAlsoReady.length; i++) ...[
-            _ReadyMovementRow(
+            _ReadyRow(
               race: visibleAlsoReady[i],
               userId: userId,
               onTap: () => onVerify(visibleAlsoReady[i]),
@@ -642,91 +648,571 @@ class _ReadySegment extends StatelessWidget {
   }
 }
 
-// ── Up next card (ONE loud surface) ───────────────────────────────────────────
+// ── Up next hero — the compositional action surface ──────────────────────────
 
-class _UpNextCard extends StatelessWidget {
-  const _UpNextCard({required this.race, required this.onVerify, this.userId});
+/// Not a bordered dashboard card: a composition of kicker → title → goal →
+/// giant result → competitor context → blue action band. The RESULT is the
+/// visual anchor — "72" with a real track to 100 when a denominator exists,
+/// or the bare "94%" / "78" / "1:42" when the race is a best-attempt or
+/// lower-wins race with no finish line (no fake track, no fake denominator).
+///
+/// Scoring semantics change the personality:
+///   first_to_goal / cumulative+target → "72" + "/100" + thin track
+///   best_attempt higher-wins          → "94%" YOUR BEST
+///   best_attempt lower-wins           → "78" STROKES CURRENT BEST
+///   timed_attempt                     → "1:42" BEST
+///
+/// State change creates motion: NuvoNumberFlow rolls the result, taking
+/// the lead fires a short "YOU TOOK THE LEAD" flash + haptic, and a new
+/// hero race morphs in via NuvoStateMorph.
+class _UpNextHero extends StatefulWidget {
+  const _UpNextHero({
+    required this.race,
+    required this.onVerify,
+    this.userId,
+  });
 
   final Race race;
   final String? userId;
   final VoidCallback onVerify;
 
   @override
+  State<_UpNextHero> createState() => _UpNextHeroState();
+}
+
+class _UpNextHeroState extends State<_UpNextHero> {
+  bool _leadFlash = false;
+
+  int? _rank() => rankForUser(widget.race, widget.userId);
+
+  @override
+  void didUpdateWidget(_UpNextHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Same race, rank moved to 1st while visible → the proof just changed
+    // the competition. A single flash + haptic marks the takeover; nothing
+    // loops or confetti-spams.
+    if (widget.race.id == oldWidget.race.id) {
+      final was = rankForUser(oldWidget.race, oldWidget.userId);
+      final now = _rank();
+      if (now == 1 && was != null && was > 1 && !_leadFlash) {
+        setState(() => _leadFlash = true);
+        HapticFeedback.mediumImpact();
+        Future.delayed(const Duration(milliseconds: 2600), () {
+          if (mounted) setState(() => _leadFlash = false);
+        });
+      }
+    }
+  }
+
+  /// The huge number's formatter — timed races read as clocks ("1:42"),
+  /// percent-unit races carry their glyph ("94%"), everything else is a
+  /// bare figure whose unit label sits beside it.
+  String Function(int) get _anchorFormat {
+    if (raceMetric(widget.race) == RaceMetric.seconds) {
+      return formatClock;
+    }
+    if (raceDisplayUnit(widget.race) == 'percent') {
+      return (v) => '$v%';
+    }
+    return (v) => '$v';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final myPart = userId != null ? race.participantFor(userId!) : null;
-    // No denominator (best-attempt / lowest-wins / open-ended cumulative):
-    // the hero's percent has no finish line to measure — what matters is
-    // whether the user HAS a result, so it shows ("78 strokes", "94
-    // percent") instead of collapsing to "Start line".
+    final c = context.themeColors;
+    final race = widget.race;
+    final myPart = widget.userId != null
+        ? race.participantFor(widget.userId!)
+        : null;
     final hasDenominator = (race.targetValue ?? 0) > 0;
-    final hasResult = (myPart?.progressValue ?? 0) > 0;
-    final pct = hasDenominator
-        ? raceProgressPercent(race, myPart)
-        : (hasResult ? 1 : 0);
-    final activity = raceActivityTitle(race);
-    final target = hasDenominator ? raceTargetLabel(race) : '';
-    final progressLabel = raceProgressLabel(race, myPart);
-    final rank = rankForUser(race, userId);
+    final myValue = myPart?.progressValue ?? 0;
+    final hasResult = myValue > 0;
+    final pct = hasDenominator ? raceProgressPercent(race, myPart) : 0;
+    final rank = _rank();
+    final proofIcon = _proofIconFor(race);
+    final proofLabel = _proofMethodLabel(race);
+    final ctaIcon = _proofCta(race).icon;
 
-    // "What will this proof change?" — the canonical stakes line the race
-    // detail screen already speaks (ChaseContext: "Beat Noah. 14 to take
-    // #2", "Defend your lead…"); fallback is the plain distance to finish.
-    // Composed from server truth only — never invented context.
-    final chase = userId != null ? ChaseContext.compute(race, userId!) : null;
-    final contextNote =
-        chase?.chaseCopy ?? _goalRemainingLabel(race, userId);
-
-    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
-      final name = p.displayName.trim();
-      final initials = name.isEmpty
-          ? '?'
-          : name
-                .split(RegExp(r'\s+'))
-                .where((w) => w.isNotEmpty)
-                .take(2)
-                .map((w) => w[0].toUpperCase())
-                .join();
-      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
-    }).toList();
-
-    // Motion-preview seam (another agent owns the runtime): a future
-    // "preview movement" surface slots into RaceHero's `headerAction` —
-    // a quiet ~28×28 affordance pinned to the title row's trailing edge.
-    // Its activity identity is `raceActivityDefinition(race)`
-    // (MotionActivityDefinition.type / .title / .preferredCameraView),
-    // already computed above; race.id seeds any per-race preview cache.
-    final cta = _proofCta(race);
-    return RaceHero(
-      raceId: race.id,
-      activityLabel: activity,
-      targetLabel: target,
-      raceTitle: race.displayTitle,
-      progressPercent: pct,
-      progressLabel: progressLabel,
-      racerStack: RacePeople(
-        avatars: avatars,
-        total: race.participantCount,
-        size: 28,
-        max: 4,
-      ),
-      rank: rank,
-      contextNote: contextNote,
-      onOpen: onVerify,
-      actionLabel: cta.label,
-      ctaIcon: cta.icon,
+    return Stack(
+      children: [
+        Container(
+          key: const Key('verify-up-next-hero'),
+          decoration: BoxDecoration(
+            // Composition, not a bordered card: white working surface on
+            // the page, hard offset shadow for lift, and a solid blue
+            // action band along the bottom carries the "go do it" weight.
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.card),
+            boxShadow: [
+              BoxShadow(
+                color: c.inkShadow,
+                offset: const Offset(0, 3),
+                blurRadius: 0,
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Kicker + proof-method identity (top-right).
+                    Row(
+                      children: [
+                        Text(
+                          'UP NEXT',
+                          style: AppTextStyles.labelUppercase(11.5).copyWith(
+                            color: NuvoColors.blue,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: c.panelLight,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            proofIcon,
+                            size: 16,
+                            color: NuvoColors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      race.displayTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.screenTitle.copyWith(
+                        fontSize: 22,
+                        letterSpacing: -0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _goalSentence(race),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: c.inkMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // The result is the anchor — never a fake track.
+                    _HeroAnchor(
+                      race: race,
+                      value: myValue,
+                      hasDenominator: hasDenominator,
+                      hasResult: hasResult,
+                      progressPercent: pct,
+                      format: _anchorFormat,
+                    ),
+                    const SizedBox(height: 10),
+                    // Competitive context — the people, not just the number.
+                    _HeroContext(race: race, userId: widget.userId, rank: rank),
+                  ],
+                ),
+              ),
+              // Action band — one strong blue strip, not a floating button.
+              NuvoPressable(
+                onTap: widget.onVerify,
+                child: Container(
+                  color: NuvoColors.blue,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(ctaIcon, size: 16, color: NuvoColors.white),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          proofLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            fontSize: 13,
+                            color: NuvoColors.white.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _heroCtaLabel(race),
+                        style: AppTextStyles.labelMedium.copyWith(
+                          fontSize: 14,
+                          color: NuvoColors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 17,
+                        color: NuvoColors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Lead-takeover flash — state change creates motion; idle stays calm.
+        Positioned(
+          top: 14,
+          left: 18,
+          right: 18,
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _leadFlash ? 1 : 0,
+              duration: const Duration(milliseconds: 260),
+              child: AnimatedSlide(
+                offset: _leadFlash ? Offset.zero : const Offset(0, -0.4),
+                duration: const Duration(milliseconds: 300),
+                curve: NuvoMotion.spring,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: NuvoColors.success,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: c.inkShadow,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'YOU TOOK THE LEAD',
+                      style: AppTextStyles.labelUppercase(11).copyWith(
+                        color: NuvoColors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-// ── Ready movement row — pick a movement, go move ────────────────────────────
+/// The anchor region: giant result + (only when real) thin track, or the
+/// bare best-result with its unit/label. NuvoNumberFlow rolls the figure
+/// whenever canonical progress lands while the hero is visible.
+class _HeroAnchor extends StatelessWidget {
+  const _HeroAnchor({
+    required this.race,
+    required this.value,
+    required this.hasDenominator,
+    required this.hasResult,
+    required this.progressPercent,
+    required this.format,
+  });
 
-/// A lean action row for "Also ready": capability glyph, race name, a meta
-/// line that carries real state (start line / progress + rank or distance
-/// to finish), a progress track ONLY when the race has a real denominator,
-/// arrow. No card — the loud "Up next" hero above carries the race
-/// identity; this row answers "what else can I prove, and how close is it?"
-class _ReadyMovementRow extends StatelessWidget {
-  const _ReadyMovementRow({
+  final Race race;
+  final int value;
+  final bool hasDenominator;
+  final bool hasResult;
+  final int progressPercent;
+  final String Function(int) format;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final style = AppTextStyles.statLarge(42, color: c.ink);
+
+    if (hasDenominator) {
+      // First-to-goal / cumulative-with-target: "72" + "/ 100" + real track.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              NuvoNumberFlow(value: value, format: format, style: style),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '/ ${_heroTargetLabel(race)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontSize: 16,
+                    color: c.inkSubtle,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          RaceProgress(
+            progressPercent: progressPercent,
+            trackHeight: 4,
+            dotDiameter: 9,
+          ),
+        ],
+      );
+    }
+
+    // No denominator — the result itself is the hero. No track.
+    final unit = raceDisplayUnit(race);
+    final showUnit =
+        hasResult && unit.isNotEmpty && unit != 'percent' &&
+        raceMetric(race) != RaceMetric.seconds;
+    final resultLabel = hasResult
+        ? (race.scoreDirection == 'lower' ? 'CURRENT BEST' : 'YOUR BEST')
+        : 'NO SCORE YET';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        NuvoNumberFlow(value: value, format: format, style: style),
+        const SizedBox(width: 10),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showUnit)
+                Text(
+                  unit.toUpperCase(),
+                  style: AppTextStyles.labelUppercase(10.5).copyWith(
+                    color: c.inkMuted,
+                  ),
+                ),
+              Text(
+                resultLabel,
+                style: AppTextStyles.labelUppercase(10.5).copyWith(
+                  color: hasResult ? NuvoColors.blue : c.inkDim,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One honest competitive line under the anchor. Canonical-only: rank,
+/// gap, and the actual person ahead/behind — never invented. Solo or
+/// zero-score states fall back to "Set the pace" / "Make your first move".
+class _HeroContext extends StatelessWidget {
+  const _HeroContext({
+    required this.race,
+    required this.userId,
+    required this.rank,
+  });
+
+  final Race race;
+  final String? userId;
+  final int? rank;
+
+  String _firstName(String displayName) {
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    return parts.isEmpty ? 'Racer' : parts.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final vc = race.viewerContext;
+    final lower = race.scoreDirection == 'lower';
+
+    // Competitors in standing order — canonical participant rank when the
+    // server sends it, else score ordering by race direction.
+    final others = race.participants
+        .where((p) => p.userId != userId)
+        .toList()
+      ..sort((a, b) {
+        final ar = a.rank;
+        final br = b.rank;
+        if (ar != null && br != null) return ar.compareTo(br);
+        if (ar != null) return -1;
+        if (br != null) return 1;
+        return lower
+            ? a.progressValue.compareTo(b.progressValue)
+            : b.progressValue.compareTo(a.progressValue);
+      });
+
+    final myPart =
+        userId != null ? race.participantFor(userId!) : null;
+    final myValue = myPart?.progressValue ?? 0;
+
+    // The person directly above the viewer — adjacent competition, which
+    // is what makes the next proof matter.
+    final viewerRank = rank;
+    RaceParticipant? ahead;
+    if (viewerRank != null && viewerRank > 1) {
+      for (final p in others) {
+        if (p.rank == viewerRank - 1) {
+          ahead = p;
+          break;
+        }
+      }
+      ahead ??= others.isNotEmpty ? others.first : null;
+    }
+    final leader = others.isNotEmpty ? others.first : null;
+
+    // A rank means something only once the viewer has a result — a solo
+    // race or an unscored entry must not claim "1ST".
+    final earnedRank = myValue > 0 ? rank : null;
+
+    // Gap text stays metric-honest: percent races read "3%", not
+    // "3 percent" — same grammar the score label uses elsewhere.
+    String gapLabel(int gap) => _scoreText(race, gap);
+
+    String line;
+    if (race.participantCount <= 1 || others.isEmpty) {
+      line = 'Set the pace';
+    } else if (rank == null || myValue <= 0) {
+      line = leader != null && leader.progressValue > 0
+          ? 'Make your first move — ${_firstName(leader.displayName)} has ${raceScoreLabel(race, leader.progressValue)}'
+          : 'Make your first move';
+    } else if (rank == 1) {
+      if (leader == null || leader.progressValue <= 0) {
+        line = "You're in the lead";
+      } else {
+        final gap = (myValue - leader.progressValue).abs();
+        line = gap == 0 || vc?.isTied == true
+            ? 'Tied with ${_firstName(leader.displayName)} — next proof wins it'
+            : "You're ${gapLabel(gap)} ahead of ${_firstName(leader.displayName)}";
+      }
+    } else {
+      final rival = ahead ?? leader;
+      final gap = rival != null
+          ? (rival.progressValue - myValue).abs()
+          : (vc?.gapToNextRank ?? vc?.gapToLeader);
+      line = rival != null && gap != null && gap > 0
+          ? '${rank == 2 ? 'Take 1st — ' : ''}${gapLabel(gap)} to catch ${_firstName(rival.displayName)}'
+          : rival != null
+              ? 'Catch ${_firstName(rival.displayName)}'
+              : 'Make your first move';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (earnedRank != null)
+          Text(
+            _ordinalLabel(earnedRank),
+            style: AppTextStyles.placementLabel(
+              size: 13,
+              color: _placementTint(earnedRank) ?? c.inkSubtle,
+            ),
+          ),
+        if (earnedRank != null) const SizedBox(height: 2),
+        Text(
+          line,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelMedium.copyWith(
+            fontSize: 13.5,
+            color: c.ink,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _ordinalLabel(int n) {
+  if (n > 99) return '99+';
+  if (n >= 11 && n <= 13) return '${n}TH';
+  return switch (n % 10) {
+    1 => '${n}ST',
+    2 => '${n}ND',
+    3 => '${n}RD',
+    _ => '${n}TH',
+  };
+}
+
+Color? _placementTint(int? rank) => switch (rank) {
+  1 => NuvoColors.position1,
+  2 => NuvoColors.position2,
+  3 => NuvoColors.position3,
+  _ => null,
+};
+
+/// Compact target text for the hero — timed races read "2:00", not
+/// "2 minutes"; everything else uses the canonical target label.
+String _heroTargetLabel(Race race) {
+  final target = race.targetValue ?? 0;
+  return raceMetric(race) == RaceMetric.seconds
+      ? formatClock(target)
+      : raceTargetLabel(race);
+}
+
+/// One-line scoring explanation — how this race is won, canonical.
+String _goalSentence(Race race) {
+  final target = race.targetValue;
+  final hasTarget = target != null && target > 0;
+  if (race.format == 'first_to_goal' || race.format == 'most_in_window') {
+    return hasTarget
+        ? 'First to ${_heroTargetLabel(race)}'
+        : 'Most ${raceDisplayUnit(race)} wins';
+  }
+  if (race.format == 'timed_attempt') {
+    return hasTarget ? 'Beat ${_heroTargetLabel(race)}' : 'Best time wins';
+  }
+  return race.scoreDirection == 'lower'
+      ? 'Lowest score wins'
+      : 'Highest score wins';
+}
+
+/// The proof-method cue on the action band — names what tapping does.
+/// Generic proof is already the action verb ("SUBMIT PROOF"), so its cue
+/// is empty rather than repeating the same words on the left.
+String _proofMethodLabel(Race race) => switch (_proofActionFor(race)) {
+  _ProofAction.motion => 'AI Motion Proof',
+  _ProofAction.manual => 'Manual result',
+  _ProofAction.generic => '',
+};
+
+/// The action-band verb — short so "method + action" fits one line at 320.
+String _heroCtaLabel(Race race) => switch (_proofActionFor(race)) {
+  _ProofAction.motion => 'START',
+  _ProofAction.manual =>
+    _isAccumulating(race) ? 'LOG PROGRESS' : 'ADD RESULT',
+  _ProofAction.generic => 'SUBMIT PROOF',
+};
+
+/// Compact score text — percent races carry their glyph ("94%"); every
+/// other unit uses the canonical label ("78 strokes", "1:42").
+String _scoreText(Race race, int value) =>
+    raceDisplayUnit(race) == 'percent' ? '$value%' : raceScoreLabel(race, value);
+
+// ── Ready row — tactile list row, no card ────────────────────────────────────
+
+/// A "Ready next" row: proof-capability glyph, race name, canonical
+/// result/progress + rank on the meta line, and the proof action named on
+/// its own line ("Log progress", "Add result", "Start") with a chevron.
+/// Hairline-separated, direct on the page — the hero is the only loud
+/// surface; rows are rhythm + information.
+class _ReadyRow extends StatelessWidget {
+  const _ReadyRow({
     required this.race,
     required this.onTap,
     this.userId,
@@ -738,45 +1224,38 @@ class _ReadyMovementRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final myPart = userId != null ? race.participantFor(userId!) : null;
-    final activity = raceActivityTitle(race);
-    final progressLabel = raceProgressLabel(race, myPart);
-    final pct = raceProgressPercent(race, myPart);
+    final hasDenominator = (race.targetValue ?? 0) > 0;
+    final myValue = myPart?.progressValue ?? 0;
     final icon = _proofIconFor(race);
+    // Row cue is the short verb — the hero's action band carries the full
+    // proof-method name ("AI Motion Proof").
+    final ctaLabel = _proofActionFor(race) == _ProofAction.motion
+        ? 'Start'
+        : _proofCta(race).label;
+    final rank = race.participantCount > 1
+        ? rankForUser(race, userId)
+        : null;
 
-    // Meta line — canonical state only:
-    //   start line:  "Pushups · Start line · 8 racers"
-    //   in progress: "Squats · 12 / 25 reps · #4"            (multi-racer)
-    //                "12 / 25 reps · 13 reps left"          (solo)
-    final String meta;
-    if (pct <= 0) {
-      final count = race.participantCount;
-      meta = count > 1
-          ? '$activity · Start line · $count racers'
-          : '$activity · Start line';
-    } else {
-      final rank = race.participantCount > 1
-          ? rankForUser(race, userId)
-          : null;
-      final rankLabel = rank != null ? '#$rank' : null;
-      final remaining = _goalRemainingLabel(race, userId);
-      meta = [activity, progressLabel, ?rankLabel, ?remaining].join(' · ');
-    }
+    // Canonical meta: "4 / 10 books" · "Best · 78 strokes" · "Start line".
+    final String meta = myValue <= 0
+        ? 'Start line'
+        : hasDenominator
+            ? raceProgressLabel(race, myPart)
+            : 'Best · ${_scoreText(race, myValue)}';
 
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 11),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
             Container(
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                // Actionable = blue. These rows invite a move right now,
-                // so the glyph well carries Nuvo's action color at a quiet
-                // tint — same semantic as the Ready segment pill.
                 color: NuvoColors.blue.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -795,34 +1274,49 @@ class _ReadyMovementRow extends StatelessWidget {
                     style: AppTextStyles.raceRowTitle.copyWith(fontSize: 15),
                   ),
                   const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.raceRowMeta.copyWith(
+                            fontSize: 12,
+                            color: c.inkSubtle,
+                          ),
+                        ),
+                      ),
+                      if (rank != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          _ordinalLabel(rank).toLowerCase(),
+                          style: AppTextStyles.placementLabel(
+                            size: 12,
+                            color: _placementTint(rank) ?? c.inkMuted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
                   Text(
-                    meta,
+                    ctaLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.raceRowMeta.copyWith(
-                      fontSize: 12,
-                      color: context.themeColors.inkSubtle,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontSize: 12.5,
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  // The race's lane in miniature — but ONLY when the race
-                  // has a real denominator. A highest-wins / best-attempt
-                  // race has no finish line to inch toward; its meta line
-                  // already carries the current result.
-                  if ((race.targetValue ?? 0) > 0) ...[
-                    const SizedBox(height: 7),
-                    RaceProgress(
-                      progressPercent: pct,
-                      trackHeight: 3,
-                      dotDiameter: 7,
-                    ),
-                  ],
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Icon(
               Icons.arrow_forward_rounded,
-              color: context.themeColors.inkDim,
+              color: c.inkDim,
               size: 17,
             ),
           ],
@@ -891,37 +1385,32 @@ class _CompletedSegment extends StatelessWidget {
               ),
             ),
           ),
-        Container(
-          decoration: BoxDecoration(
-            color: context.themeColors.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: Border.all(color: context.themeColors.border, width: 1.25),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              for (var i = 0; i < visible.length; i++) ...[
-                _CompletedRaceRow(
-                  race: visible[i],
-                  userId: userId,
-                  onTap: () => onOpen(visible[i]),
+        // Bare history rows — a completed index, not a stack of cards.
+        Column(
+          children: [
+            for (var i = 0; i < visible.length; i++) ...[
+              _CompletedRaceRow(
+                race: visible[i],
+                userId: userId,
+                onTap: () => onOpen(visible[i]),
+              ),
+              if (i < visible.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 50,
+                  color: context.themeColors.divider,
                 ),
-                if (i < visible.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 54,
-                    color: context.themeColors.divider,
-                  ),
-              ],
             ],
-          ),
+          ],
         ),
       ],
     );
   }
 }
 
+/// A completed race reads as a record: name, "1st · 100 reps", when it
+/// landed. Bare row + hairline — tapping goes to Race Detail.
 class _CompletedRaceRow extends StatelessWidget {
   const _CompletedRaceRow({
     required this.race,
@@ -935,12 +1424,17 @@ class _CompletedRaceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final rank = rankForUser(race, userId);
-    final activity = raceActivityTitle(race);
+    final myPart =
+        userId != null ? race.participantFor(userId!) : null;
+    final score = (myPart?.progressValue ?? 0) > 0
+        ? _scoreText(race, myPart!.progressValue)
+        : null;
 
-    // Consequence, not queue: what the race became — a win, a finish, or
-    // a hit goal — plus when it happened. All canonical fields
-    // (`winnerUserId`, `raceIsCompleted`, `completedAt`).
+    // Consequence, not queue: a win, a finish, or a hit goal — plus when
+    // it happened. All canonical fields (`winnerUserId`, `raceIsCompleted`,
+    // `completedAt`).
     final won = race.winnerUserId != null && race.winnerUserId == userId;
     final outcome = won
         ? 'Won'
@@ -950,27 +1444,83 @@ class _CompletedRaceRow extends StatelessWidget {
     final completed = DateTime.tryParse(race.completedAt ?? '')?.toUtc();
     final ago =
         completed != null ? notificationRelativeTime(completed) : null;
+    final when = ago != null ? '$outcome $ago' : outcome;
 
-    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
-      final name = p.displayName.trim();
-      final initials = name.isEmpty
-          ? '?'
-          : name
-                .split(RegExp(r'\s+'))
-                .where((w) => w.isNotEmpty)
-                .take(2)
-                .map((w) => w[0].toUpperCase())
-                .join();
-      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
-    }).toList();
-
-    return RaceResultRow(
-      raceTitle: race.displayTitle,
-      movementLabel: ago != null ? '$activity · $outcome $ago' : '$activity · $outcome',
-      rank: rank,
-      participantCount: race.participantCount,
-      avatars: avatars,
+    return PressableScale(
       onTap: onTap,
+      scale: 0.98,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                // History, not action — quiet ink well, gold only on a win.
+                color: won
+                    ? NuvoColors.gold.withValues(alpha: 0.14)
+                    : c.panelLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                won
+                    ? Icons.emoji_events_rounded
+                    : Icons.flag_outlined,
+                color: won ? NuvoColors.gold : c.inkMuted,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    race.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.raceRowTitle.copyWith(fontSize: 15),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (rank != null) _ordinalLabel(rank).toLowerCase(),
+                      ?score,
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.raceRowMeta.copyWith(
+                      fontSize: 12.5,
+                      color: rank != null
+                          ? (_placementTint(rank) ?? c.inkSubtle)
+                          : c.inkSubtle,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    when,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.raceRowMeta.copyWith(
+                      fontSize: 12,
+                      color: c.inkMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_rounded,
+              color: c.inkDim,
+              size: 17,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1034,36 +1584,64 @@ class _RecentSegment extends StatelessWidget {
               ),
             ),
           ),
-        Container(
-          decoration: BoxDecoration(
-            color: context.themeColors.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.card),
-            border: Border.all(color: context.themeColors.border, width: 1.25),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              for (var i = 0; i < visible.length; i++) ...[
-                _RecentProofRow(
-                  proof: visible[i].proof,
-                  race: visible[i].race,
-                  userId: userId,
-                  onTap: () => onOpen(visible[i].race),
-                ),
-                if (i < visible.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 54,
-                    color: context.themeColors.divider,
+        // The proof timeline — bare rows with day eyebrows, no cards.
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < visible.length; i++) ...[
+              if (_dayBucket(visible[i].proof) !=
+                  (i > 0 ? _dayBucket(visible[i - 1].proof) : null)) ...[
+                if (i > 0) const SizedBox(height: NuvoSpacing.md),
+                Text(
+                  _dayBucket(visible[i].proof),
+                  style: AppTextStyles.labelUppercase(11).copyWith(
+                    color: context.themeColors.inkDim,
                   ),
+                ),
+                const SizedBox(height: 4),
               ],
+              _RecentProofRow(
+                proof: visible[i].proof,
+                race: visible[i].race,
+                userId: userId,
+                onTap: () => onOpen(visible[i].race),
+              ),
+              if (i < visible.length - 1 &&
+                  _dayBucket(visible[i + 1].proof) ==
+                      _dayBucket(visible[i].proof))
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 0,
+                  color: context.themeColors.divider,
+                ),
             ],
-          ),
+          ],
         ),
       ],
     );
   }
+}
+
+/// Day grouping for the timeline — "TODAY", "YESTERDAY", weekday within a
+/// week, "EARLIER" beyond. Canonical proof timestamps only.
+String _dayBucket(RaceProof proof) {
+  final occurred = DateTime.tryParse(proof.createdAt)?.toLocal();
+  if (occurred == null) return 'EARLIER';
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(occurred.year, occurred.month, occurred.day);
+  final diff = today.difference(day).inDays;
+  if (diff <= 0) return 'TODAY';
+  if (diff == 1) return 'YESTERDAY';
+  if (diff < 7) {
+    const weekdays = [
+      'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
+      'FRIDAY', 'SATURDAY', 'SUNDAY',
+    ];
+    return weekdays[day.weekday - 1];
+  }
+  return 'EARLIER';
 }
 
 class _RecentProofRow extends StatelessWidget {
@@ -1128,36 +1706,105 @@ class _RecentProofRow extends StatelessWidget {
     final valueLabel = value == null
         ? null
         : _isAccumulating(race)
-            ? '+${raceScoreLabel(race, value)}'
-            : raceScoreLabel(race, value);
-    final valueStr = [
-      ?valueLabel,
-      ?ago,
-    ].join(' · ');
-    final meta = valueStr.isEmpty ? null : valueStr;
+            ? '+${_scoreText(race, value)}'
+            : _scoreText(race, value);
 
-    final initial = proof.displayName.isNotEmpty
-        ? proof.displayName[0].toUpperCase()
-        : '?';
-    // The avatar already says who — the meta line only needs "You" for the
-    // viewer's own proofs, which is most of a personal history.
     final actorName =
         proof.userId == userId ? 'You' : proof.displayName;
 
-    final activity = raceActivityTitle(race);
+    // "What changed because I proved it" — accepted amount, the rank move
+    // it caused when the server recorded one, verification state.
+    final metaParts = [
+      statusLabel,
+      ?rankDelta,
+    ];
 
-    return RaceActivityRow(
-      raceTitle: race.displayTitle,
-      movementLabel: activity,
-      actorName: actorName,
-      actorInitial: initial,
-      actorPhotoUrl: proof.profilePhotoUrl,
-      actorId: proof.userId,
-      valueStr: meta,
-      statusLabel: statusLabel,
-      statusColor: statusColor,
-      statusNote: rankDelta,
+    return PressableScale(
       onTap: onTap,
+      scale: 0.98,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                if (valueLabel != null)
+                  Flexible(
+                    child: Text(
+                      valueLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.raceRowTitle.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: Text(
+                      statusLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.raceRowTitle.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                if (ago != null)
+                  Text(
+                    ago,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontSize: 11.5,
+                      color: context.themeColors.inkDim,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$actorName · ${race.displayTitle}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.raceRowMeta.copyWith(
+                fontSize: 12.5,
+                color: context.themeColors.inkSubtle,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    metaParts.join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontSize: 11.5,
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1205,10 +1852,9 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return NuvoEmptyState(
       icon: Icons.emoji_events_outlined,
-      title: 'Nothing to prove yet',
+      title: 'Nothing to prove yet.',
       body:
-          'Create or join a race — the results you can submit will land here '
-          'and move the leaderboard.',
+          'Join a race or start one, then your next move shows up here.',
       ctaLabel: 'Create a race',
       onCta: onStart,
     );

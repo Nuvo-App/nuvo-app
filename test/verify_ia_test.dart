@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/core/widgets/nuvo_error_state.dart';
-import 'package:nuvo/core/widgets/nuvo_race_components.dart';
 import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
@@ -179,12 +178,13 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_readyRace()])));
       await tester.pumpAndSettle();
 
-      // "Up next" label should be visible.
-      expect(find.text('Up next'), findsOneWidget);
-      // Race title should be visible in the Up next card.
+      // "UP NEXT" kicker should be visible inside the hero.
+      expect(find.text('UP NEXT'), findsOneWidget);
+      // Race title should be visible in the Up next hero.
       expect(find.text('Squat Race'), findsOneWidget);
-      // "Start AI Motion Proof" button should be present.
-      expect(find.text('Start AI Motion Proof'), findsOneWidget);
+      // The action band carries the proof method + strong CTA.
+      expect(find.text('AI Motion Proof'), findsWidgets);
+      expect(find.text('START'), findsOneWidget);
     });
 
     testWidgets('no repeated full-width Verify buttons on ready rows', (
@@ -194,9 +194,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // The old design had "Verify" pill buttons on every ready row.
-      // The new design should have exactly ONE "Start AI Motion Proof" button
-      // (on the Up next card) and NO "Verify" text buttons on rows.
-      expect(find.text('Start AI Motion Proof'), findsOneWidget);
+      // The new design has exactly ONE action band (on the Up next hero)
+      // and NO "Verify" text buttons on rows.
+      expect(find.text('START'), findsOneWidget);
       // "Verify" as standalone button text should not appear on rows.
       // (The header title "Verify" is separate from button text.)
       expect(find.byType(VerifyButtonFinder), findsNothing);
@@ -256,17 +256,17 @@ void main() {
           tester.widget<AnimatedAlign>(find.byType(AnimatedAlign));
 
       // Ready is selected by default — the pill sits in the left slot.
-      expect(pill().alignment, const Alignment(-1, 0));
+      expect(pill().alignment, const Alignment(-1, 1));
 
       await tester.tap(find.text('Completed'));
       await tester.pumpAndSettle();
       // Same pill widget moved to the middle slot rather than a new
       // selected widget appearing.
-      expect(pill().alignment, const Alignment(0, 0));
+      expect(pill().alignment, const Alignment(0, 1));
 
       await tester.tap(find.text('Recent'));
       await tester.pumpAndSettle();
-      expect(pill().alignment, const Alignment(1, 0));
+      expect(pill().alignment, const Alignment(1, 1));
     });
 
     testWidgets('40 ready races: Also ready capped at 8, not artificially at 3', (
@@ -332,7 +332,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Should show Ready empty state.
-      expect(find.text('Nothing waiting on proof.'), findsOneWidget);
+      expect(find.text('Nothing to prove yet.'), findsOneWidget);
     });
 
     testWidgets('Completed empty state', (tester) async {
@@ -376,7 +376,7 @@ void main() {
     testWidgets('all-empty state shows the create-a-race prompt', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
-      expect(find.text('Nothing to prove yet'), findsOneWidget);
+      expect(find.text('Nothing to prove yet.'), findsOneWidget);
     });
 
     testWidgets('small viewport (375x667) does not overflow', (tester) async {
@@ -413,8 +413,9 @@ void main() {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateReadyRaces(3))));
       await tester.pumpAndSettle();
 
-      expect(find.text('Verify'), findsOneWidget);
-      expect(find.textContaining('ready for proof'), findsOneWidget);
+      expect(find.text('VERIFY'), findsOneWidget);
+      expect(find.text('Make your move.'), findsOneWidget);
+      expect(find.textContaining('races ready'), findsOneWidget);
     });
 
     testWidgets('segmented control stays a compact filter, not three CTAs', (
@@ -461,16 +462,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
-      // The actionable hero shares RaceHero — a medium surface, not a
-      // poster. Bound it well under the Arena hero's budget.
-      final hero = find.byType(RaceHero);
+      // The actionable hero is a compositional surface — medium, not a
+      // poster. It intentionally carries more anatomy than the old shared
+      // RaceHero (goal sentence, competitor context, proof cue, blue
+      // action band), so the bound is ~35% of a 390×844 viewport.
+      final hero = find.byKey(const Key('verify-up-next-hero'));
       expect(hero, findsOneWidget);
       final heroHeight = tester.getSize(hero).height;
       expect(
         heroHeight,
-        lessThan(280),
+        lessThan(300),
         reason:
-            'Up next should be a compact actionable card '
+            'Up next should be a compact actionable surface '
             '(measured: $heroHeight)',
       );
       expect(heroHeight, greaterThan(120));
@@ -485,7 +488,8 @@ void main() {
         _buildApp(_StubRaceRepo([_readyRace(title: 'Squat Race')])),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Start AI Motion Proof'), findsOneWidget);
+      expect(find.text('AI Motion Proof'), findsWidgets);
+      expect(find.text('START'), findsOneWidget);
       expect(find.byIcon(Icons.camera_alt_rounded), findsWidgets);
     });
 
@@ -508,8 +512,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Log progress'), findsOneWidget);
-      expect(find.text('Start AI Motion Proof'), findsNothing);
+      expect(find.text('LOG PROGRESS'), findsOneWidget);
+      expect(find.text('START'), findsNothing);
     });
 
     testWidgets('best-attempt manual race → Add result CTA', (tester) async {
@@ -531,8 +535,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Add result'), findsOneWidget);
-      expect(find.text('Start AI Motion Proof'), findsNothing);
+      expect(find.text('ADD RESULT'), findsOneWidget);
+      expect(find.text('START'), findsNothing);
     });
 
     testWidgets('unresolvable race → generic Submit proof CTA, never camera',
@@ -549,8 +553,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Submit proof'), findsOneWidget);
-      expect(find.text('Start AI Motion Proof'), findsNothing);
+      expect(find.text('SUBMIT PROOF'), findsOneWidget);
+      expect(find.text('START'), findsNothing);
     });
 
     testWidgets('best-attempt race shows result, not a fake denominator', (
