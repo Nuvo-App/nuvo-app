@@ -32,7 +32,6 @@ import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../application/progression_controller.dart';
 import '../data/progression_models.dart';
-import 'widgets/level_up_dialog.dart';
 import 'widgets/nuvo_badges.dart';
 
 const _kPrivacyUrl = 'https://getnuvo.net/privacy';
@@ -123,23 +122,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     ref.watch(presentationModeEnabledProvider);
-    // The level-up moment fires once per newly-crossed level — the server
-    // keeps last_seen_level so it cannot replay across restarts/devices.
-    ref.listen(progressionControllerProvider, (_, next) {
-      final p = next.valueOrNull;
-      if (p == null || !p.hasUnseenLevelUp || !mounted) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await showLevelUpMoment(
-          context,
-          level: p.level,
-          badge: p.levelUnlock,
-        );
-        if (mounted) {
-          ref.read(progressionControllerProvider.notifier).markLevelSeen();
-        }
-      });
-    });
+    // The level-up moment lives on MainShell — it fires wherever a race
+    // action revalidates progression across a threshold.
     final progressionAsync = ref.watch(progressionControllerProvider);
     final progression = progressionAsync.valueOrNull;
     // Retry a failed first read once per visit — a transient progression
@@ -274,9 +258,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const SizedBox(height: NuvoSpacing.lg),
 
-                    // What they've earned — featured badges, or the next one
-                    // in reach when nothing is featured yet.
-                    _BadgesRow(progression: progression),
+                    // The collection is part of identity — featured
+                    // achievements with names, or the next target in reach
+                    // when nothing is featured yet. Never an empty section.
+                    _AchievementsSection(progression: progression),
+                    const SizedBox(height: NuvoSpacing.lg),
+
+                    // One goal in reach — the reason to race again.
+                    _NextUpCard(progression: progression),
                   ],
                 ),
               ),
@@ -898,13 +887,14 @@ class _ProgressionUnavailable extends StatelessWidget {
   }
 }
 
-// ── Badges row ──────────────────────────────────────────────────────────────
+// ── Achievements section ────────────────────────────────────────────────────
 
-/// What the racer has earned — featured badges as objects, or the next one
-/// in reach when nothing is featured yet. Never an empty section: the
-/// locked target is the point.
-class _BadgesRow extends StatelessWidget {
-  const _BadgesRow({required this.progression});
+/// The collection is part of identity: featured achievements as named
+/// objects under an earned/total count, or the locked target in reach when
+/// nothing is featured yet. Never an empty section — the next goal is the
+/// point.
+class _AchievementsSection extends StatelessWidget {
+  const _AchievementsSection({required this.progression});
 
   final NuvoProgression? progression;
 
@@ -915,80 +905,86 @@ class _BadgesRow extends StatelessWidget {
     if (p == null) return const SizedBox.shrink();
 
     final featured = p.featuredBadges;
-    final next = p.nextUnlock?.type == 'badge' ? p.nextUnlock : null;
-    if (featured.isEmpty && next == null) return const SizedBox.shrink();
+    final next = p.nextAchievement;
+    if (featured.isEmpty && next == null && p.achievementsTotal == 0) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(
-              'Badges',
-              style: AppTextStyles.sectionTitle.copyWith(
-                color: c.ink,
-                fontWeight: FontWeight.w800,
+        NuvoPressable(
+          onTap: () => context.push('/profile/badges'),
+          scale: 0.98,
+          haptic: false,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                'Achievements',
+                style: AppTextStyles.sectionTitle.copyWith(
+                  color: c.ink,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const Spacer(),
-            NuvoPressable(
-              onTap: () => context.push('/profile/badges'),
-              scale: 0.96,
-              haptic: false,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'View all',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: NuvoColors.blue,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  const NuvoIcon(
-                    NuvoIconType.arrow,
-                    color: NuvoColors.blue,
-                    size: 12,
-                  ),
-                ],
+              const Spacer(),
+              Text(
+                '${p.achievementsEarned} / ${p.achievementsTotal}',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: c.inkSubtle,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 4),
+              const NuvoIcon(
+                NuvoIconType.arrow,
+                color: NuvoColors.blue,
+                size: 12,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: NuvoSpacing.sm + 2),
         if (featured.isNotEmpty)
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (var i = 0; i < featured.length; i++) ...[
-                NuvoBadgeDisc(badge: featured[i], size: 44),
+                Expanded(
+                  child: Column(
+                    children: [
+                      NuvoAchievementBadge(badge: featured[i], size: 52),
+                      const SizedBox(height: 6),
+                      Text(
+                        featured[i].name,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: c.inkSubtle,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
                 if (i < featured.length - 1)
                   const SizedBox(width: NuvoSpacing.sm),
               ],
+              // Fill unused slot columns so names align across layouts.
+              for (var i = featured.length; i < p.featuredSlots; i++)
+                const Expanded(child: SizedBox.shrink()),
             ],
           )
         else if (next != null)
           Row(
             children: [
-              NuvoBadgeDisc(
-                badge: NuvoBadge(
-                  unlockId: next.unlockId,
-                  type: next.type,
-                  key: next.key,
-                  name: next.name,
-                  requiredLevel: next.level,
-                  metadata: next.metadata,
-                  unlocked: false,
-                  featured: false,
-                ),
-                size: 44,
-              ),
+              NuvoAchievementBadge(badge: next, size: 52),
               const SizedBox(width: NuvoSpacing.sm),
               Expanded(
                 child: Text(
-                  '${next.name} unlocks at Level ${next.level}',
+                  '${next.name} — ${next.description ?? 'keep racing'}',
                   style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -996,6 +992,105 @@ class _BadgesRow extends StatelessWidget {
               ),
             ],
           ),
+      ],
+    );
+  }
+}
+
+// ── Next up ───────────────────────────────────────────────────────────────────
+
+/// The one goal in reach — a locked achievement with live canonical
+/// progress. This is what makes the next race feel like it advances the
+/// person, not just the leaderboard.
+class _NextUpCard extends StatelessWidget {
+  const _NextUpCard({required this.progression});
+
+  final NuvoProgression? progression;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final next = progression?.nextAchievement;
+    if (next == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'NEXT UP',
+          style: AppTextStyles.labelUppercase(
+            10,
+            color: c.inkSubtle,
+          ).copyWith(color: c.inkSubtle),
+        ),
+        const SizedBox(height: NuvoSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(NuvoSpacing.md),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: Border.all(color: c.border, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: c.inkShadow,
+                offset: const Offset(3, 3),
+                blurRadius: 0,
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              NuvoAchievementBadge(badge: next, size: 44),
+              const SizedBox(width: NuvoSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      next.name,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: c.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (next.description != null)
+                      Text(
+                        next.description!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: c.inkMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: NuvoProgressBar(
+                            value: next.goalProgress,
+                            height: 6,
+                            color: NuvoColors.blue,
+                            trackColor: c.track,
+                          ),
+                        ),
+                        const SizedBox(width: NuvoSpacing.sm),
+                        Text(
+                          '${next.progressValue} / ${next.threshold}',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: c.inkSubtle,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

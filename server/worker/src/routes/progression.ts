@@ -5,6 +5,7 @@ import {
   markLevelSeen,
   readBadgeCollection,
   readProgression,
+  readRaceXp,
   setFeaturedBadges,
 } from '../domain/progression';
 
@@ -46,6 +47,14 @@ progressionRouter.put('/featured', async (c) => {
   if (!result.ok) return c.json({ ok: false, error: result.error }, 400);
   const badges = await readBadgeCollection(c.env.DB, userId);
   return c.json({ ok: true, badges });
+});
+
+// GET /progression/race/:raceId — the XP one race paid out, for the finish
+// screen's reward breakdown. Same self-healing reconcile first.
+progressionRouter.get('/race/:raceId', async (c) => {
+  const userId = c.get('userId');
+  const breakdown = await readRaceXp(c.env.DB, userId, c.req.param('raceId'));
+  return c.json({ ok: true, xp: breakdown });
 });
 
 // POST /progression/level-seen — acknowledge the level-up moment so it

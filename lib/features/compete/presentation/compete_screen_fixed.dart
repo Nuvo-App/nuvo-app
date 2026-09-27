@@ -19,6 +19,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../profile/presentation/widgets/xp_reward.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
 /// Compete — Phase 1 design language.
@@ -500,6 +501,8 @@ class _CappedRaceList extends StatelessWidget {
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
+      // Finishing pays +25 — deterministic from the server award table.
+      rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
       onTap: () => onOpen(race),
     );
   }
@@ -588,6 +591,7 @@ class _SummaryExpansionList extends StatelessWidget {
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
+      rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
       onTap: () => onOpen(race),
     );
   }

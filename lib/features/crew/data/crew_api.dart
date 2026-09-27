@@ -53,6 +53,8 @@ class PublicProfileCard {
     this.isPrivate = false,
     this.lastActiveAt,
     this.level,
+    this.achievementsEarned,
+    this.featured = const [],
   });
 
   final String id;
@@ -71,6 +73,12 @@ class PublicProfileCard {
   /// full profile.
   final int? level;
 
+  /// Earned-achievement count — same visibility rule as level.
+  final int? achievementsEarned;
+
+  /// Featured achievements (icon + name) — compact social identity.
+  final List<PublicFeaturedBadge> featured;
+
   factory PublicProfileCard.fromJson(Map<String, dynamic> j) => PublicProfileCard(
         id: j['id'] as String,
         displayName: j['displayName'] as String? ?? 'Nuvo member',
@@ -82,6 +90,34 @@ class PublicProfileCard {
         isPrivate: j['isPrivate'] as bool? ?? false,
         lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
         level: j['level'] as int?,
+        achievementsEarned: j['achievementsEarned'] as int?,
+        featured: (j['featuredAchievements'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(PublicFeaturedBadge.fromJson)
+            .toList(),
+      );
+}
+
+/// Compact featured achievement on another member's public surfaces.
+class PublicFeaturedBadge {
+  const PublicFeaturedBadge({
+    required this.unlockId,
+    required this.key,
+    required this.name,
+    this.iconKey,
+  });
+
+  final String unlockId;
+  final String key;
+  final String name;
+  final String? iconKey;
+
+  factory PublicFeaturedBadge.fromJson(Map<String, dynamic> j) =>
+      PublicFeaturedBadge(
+        unlockId: j['unlockId'] as String,
+        key: j['key'] as String? ?? '',
+        name: j['name'] as String? ?? '',
+        iconKey: j['iconKey'] as String?,
       );
 }
 

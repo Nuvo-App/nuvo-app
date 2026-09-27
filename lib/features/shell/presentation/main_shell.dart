@@ -13,6 +13,8 @@ import '../../crew/application/crew_controller.dart';
 import '../../notifications/application/notification_controller.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../races/presentation/motion_catalog_provider.dart';
+import '../../profile/application/progression_controller.dart';
+import '../../profile/presentation/widgets/level_up_dialog.dart';
 
 /// Bottom-nav host. Also the app-wide **freshness trigger point**: on app
 /// resume and on switching to a data tab it asks the canonical controllers to
@@ -55,6 +57,15 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell>
     with WidgetsBindingObserver {
+  /// Reentrancy guard for the level-up moment — the server flag makes it
+  /// once-per-level across devices; this makes it once-per-dialog in-flight.
+  bool _levelUpShowing = false;
+
+  /// Achievement grants already presented this session — the server emits
+  /// `newlyEarned` once per grant, but state rebuilds carry the value
+  /// forward, so this set is the local once-per-moment guard.
+  final Set<String> _shownAchievementIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -173,6 +184,40 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   Widget build(BuildContext context) {
+    // The level-up moment lives on the shell, not on Profile — a finish that
+    // crosses a threshold rolls the number the moment the canonical
+    // progression revalidates, wherever the user is standing. The server's
+    // last_seen_level keeps it once-per-level across restarts and devices.
+    ref.listen(progressionControllerProvider, (_, next) {
+      final p = next.valueOrNull;
+      if (p == null || _levelUpShowing || !mounted) return;
+      final fresh = p.newlyEarned
+          .where((b) => !_shownAchievementIds.contains(b.unlockId))
+          .toList();
+      if (!p.hasUnseenLevelUp && fresh.isEmpty) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted || _levelUpShowing) return;
+        _levelUpShowing = true;
+        if (p.hasUnseenLevelUp) {
+          await showLevelUpMoment(
+            context,
+            level: p.level,
+            badge: p.levelUnlock,
+          );
+          if (mounted) {
+            ref.read(progressionControllerProvider.notifier).markLevelSeen();
+          }
+        }
+        for (final badge in fresh.take(3)) {
+          if (!mounted) break;
+          _shownAchievementIds.add(badge.unlockId);
+          final ctx = context;
+          if (!ctx.mounted) break;
+          await showAchievementMoment(ctx, badge: badge);
+        }
+        _levelUpShowing = false;
+      });
+    });
     final currentIndex = widget.child is StatefulNavigationShell
         ? (widget.child as StatefulNavigationShell).currentIndex
         : _indexFor(GoRouterState.of(context).uri.path);

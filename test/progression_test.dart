@@ -106,10 +106,11 @@ void main() {
         type: 'badge',
         key: 'k',
         name: 'Test Badge',
-        requiredLevel: 5,
-        metadata: {'icon': 'flame', 'rarity': milestone ? 'milestone' : 'standard'},
+        requiredLevel: 0,
+        metadata: {'rarity': milestone ? 'milestone' : 'standard'},
         unlocked: unlocked,
         featured: false,
+        iconKey: 'flag',
       );
 
   group('NuvoBadgeDisc', () {
@@ -132,10 +133,7 @@ void main() {
           ),
         ),
       );
-      expect(
-        find.byIcon(Icons.local_fire_department_rounded),
-        findsOneWidget,
-      );
+      expect(find.byIcon(Icons.flag_rounded), findsOneWidget);
     });
   });
 
@@ -143,8 +141,8 @@ void main() {
 
   group('BadgesScreen', () {
     testWidgets(
-        'renders locked badges with their level and features an owned badge',
-        (tester) async {
+        'locked badges show progress; earned badges feature via the detail '
+        'sheet', (tester) async {
       final api = _FakeProgressionApi();
       await tester.pumpWidget(
         ProviderScope(
@@ -158,18 +156,24 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Locked badge shows its requirement.
-      expect(find.text('Lv 10'), findsOneWidget);
-      // Unlocked badge shows its earned level.
-      expect(find.text('Level 2'), findsOneWidget);
+      // Earned/locked counts sit in the header.
+      expect(find.text('1 / 2 earned · 0 / 1 featured'), findsOneWidget);
 
-      // Tapping a locked badge does nothing.
+      // A locked badge's detail sheet shows live progress and no
+      // feature affordance.
       await tester.tap(find.text('Double Digits'));
       await tester.pumpAndSettle();
+      expect(find.text('8 / 10'), findsOneWidget);
+      expect(find.text('Feature on Profile'), findsNothing);
       expect(api.featuredCalls, isEmpty);
+      Navigator.of(tester.element(find.text('Double Digits').last))
+          .maybePop();
+      await tester.pumpAndSettle();
 
-      // Tapping an owned badge features it.
+      // An earned badge's detail sheet offers the feature action.
       await tester.tap(find.text('Off the Line'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Feature on Profile'));
       await tester.pumpAndSettle();
       expect(api.featuredCalls, [
         ['bdg-off-the-line'],
@@ -193,23 +197,33 @@ class _FakeProgressionApi extends ProgressionApi {
   final badges = <NuvoBadge>[
     const NuvoBadge(
       unlockId: 'bdg-off-the-line',
-      type: 'badge',
+      type: 'achievement',
       key: 'off_the_line',
       name: 'Off the Line',
-      requiredLevel: 2,
-      metadata: {'icon': 'flag', 'rarity': 'standard'},
+      requiredLevel: 0,
+      metadata: {'rarity': 'standard'},
       unlocked: true,
       featured: false,
+      category: 'racing',
+      iconKey: 'flag',
+      statKey: 'races_finished',
+      threshold: 1,
+      progressValue: 1,
     ),
     const NuvoBadge(
       unlockId: 'bdg-double-digits',
-      type: 'badge',
+      type: 'achievement',
       key: 'double_digits',
       name: 'Double Digits',
-      requiredLevel: 10,
-      metadata: {'icon': 'medal', 'rarity': 'milestone'},
+      requiredLevel: 0,
+      metadata: {'rarity': 'milestone'},
       unlocked: false,
       featured: false,
+      category: 'racing',
+      iconKey: 'num_10',
+      statKey: 'races_finished',
+      threshold: 10,
+      progressValue: 8,
     ),
   ];
 
