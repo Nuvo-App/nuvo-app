@@ -248,6 +248,57 @@ test('PUT /motion/consent: attested user can grant and revoke', async () => {
   assert.equal(revoke.status, 200);
 });
 
+test('legacy member: consent defaults off, attestation required before opt-in, revocation stops uploads', async () => {
+  // 0038 state: terms grandfathered as 'legacy', NO attestation stamp,
+  // motion_training_consent = 0.
+  const env = recordingEnv({
+    usersRow: {
+      terms_version: 'legacy',
+      terms_accepted_at: '2025-01-01',
+      age_attested_at: null,
+      motion_training_consent: 0,
+    },
+  });
+  const token = await tokenFor('legacy-user');
+  const authed = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const state = await app.request('/motion/consent', { headers: authed }, env);
+  const s = await state.json();
+  assert.equal(s.consent.consented, false);
+  assert.equal(s.consent.ageAttested, false);
+
+  // Opt-in refused until the member attests — ordinary features unaffected.
+  const blocked = await app.request('/motion/consent', {
+    method: 'PUT', headers: authed, body: JSON.stringify({ consented: true }),
+  }, env);
+  assert.equal(blocked.status, 403);
+
+  // Attest, then opt in — now uploads may store.
+  const attest = await app.request('/auth/age-attestation', {
+    method: 'POST', headers: authed, body: '{}',
+  }, env);
+  assert.equal(attest.status, 200);
+  // The fake does not model age_attested_at mutation; simulate post-attest.
+  const env2 = recordingEnv({
+    usersRow: {
+      terms_version: 'legacy', terms_accepted_at: '2025-01-01',
+      age_attested_at: '2026-09-27', motion_training_consent: 0,
+    },
+  });
+  const grant = await app.request('/motion/consent', {
+    method: 'PUT', headers: authed, body: JSON.stringify({ consented: true }),
+  }, env2);
+  assert.equal(grant.status, 200);
+  assert.equal((await grant.json()).consent.consented, true);
+
+  // Revocation flips the row back — subsequent uploads store nothing.
+  const revoke = await app.request('/motion/consent', {
+    method: 'PUT', headers: authed, body: JSON.stringify({ consented: false }),
+  }, env2);
+  assert.equal(revoke.status, 200);
+  assert.equal((await revoke.json()).consent.consented, false);
+});
+
 // ── Account deletion coverage ─────────────────────────────────────────────────
 
 test('DELETE /auth/account succeeds without MOTION_DATA_MASTER_KEY and covers every user-linked table', async () => {
