@@ -127,8 +127,35 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         8 + 64 + 20 + 20 + 10;
     final allowance =
         usableViewport - fixedElsewhere - leaderboardReserve;
-    final heroHeight =
+    // Content floor: the shared PageView slot must fit the WORST board in
+    // the carousel — a two-line title is ~32px taller than a one-liner and
+    // the slot can't grow per page. Measured with TextPainter at the
+    // card's real text width so long race names never clip. When this
+    // exceeds the standings allowance the hero wins — below-fold
+    // standings scroll (occluded behind the dock, not painted through).
+    // The measurement uses whichever composition (compact <300 / tall)
+    // the resulting slot will actually render — two passes settle the
+    // mode flip when compact content pushes the slot past 300.
+    final cardTextWidth =
+        media.size.width - NuvoSpacing.pageHorizontal * 2 - 12 - 40;
+    var heroHeight =
         allowance >= 324 ? math.min(heroBase, allowance) : 296.0;
+    for (var pass = 0; pass < 2; pass++) {
+      var need = 0.0;
+      for (final board in boards) {
+        need = math.max(
+          need,
+          _heroContentHeight(
+            board,
+            cardTextWidth,
+            media.textScaler,
+            tall: heroHeight >= 300,
+          ),
+        );
+      }
+      if (need <= heroHeight) break;
+      heroHeight = need;
+    }
     // The seam uses LOWER-bound extents (a deliberately under-counted
     // header/labels/standings total) so the gap can only overshoot — the
     // next section always starts at or below the dock's top edge, never
@@ -250,7 +277,6 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             index: index,
                             board: boards[index],
                             heroHeight: heroHeight,
-                            isLast: index == boards.length - 1,
                             onOpen: () => _openBoard(context, boards[index]),
                           ),
                         ),
@@ -433,7 +459,6 @@ class _BoardCarouselItem extends StatelessWidget {
     required this.index,
     required this.board,
     required this.heroHeight,
-    required this.isLast,
     required this.onOpen,
   });
 
@@ -441,7 +466,6 @@ class _BoardCarouselItem extends StatelessWidget {
   final int index;
   final ArenaBoard board;
   final double heroHeight;
-  final bool isLast;
   final VoidCallback onOpen;
 
   @override
@@ -461,10 +485,11 @@ class _BoardCarouselItem extends StatelessWidget {
           child: Transform.scale(
             scale: 1 - distance * 0.045,
             child: Padding(
-              padding: EdgeInsets.only(
-                right: isLast ? 0 : 12,
-                bottom: 10,
-              ),
+              // Uniform on every page: the 12px gap separates cards mid-
+              // swipe AND covers the hard shadow's 7px right offset —
+              // the last page used to drop it, so its shadow was sliced
+              // by the PageView's hardEdge clip at the screen edge.
+              padding: const EdgeInsets.only(right: 12, bottom: 10),
               child: child,
             ),
           ),
@@ -1239,6 +1264,64 @@ String _progressSuffix(String label) {
   final match = RegExp(r'^\d+\s*(.*)$').firstMatch(label);
   final suffix = match?.group(1)?.trim() ?? '';
   return suffix.isEmpty ? '%' : suffix;
+}
+
+/// Worst-case rendered height of [_NextMoveHero] for [board] at
+/// [textWidth] (the card's inner text width), in the composition the card
+/// will actually render: [tall] matches the card's own
+/// `heroHeight >= 300` switch.
+double _heroContentHeight(
+  ArenaBoard board,
+  double textWidth,
+  TextScaler scaler, {
+  required bool tall,
+}) {
+  double measure(String text, TextStyle style, {int maxLines = 1}) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: maxLines,
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout(maxWidth: textWidth);
+    return painter.height;
+  }
+
+  final pct = (board.progressPercent ?? 0).clamp(0, 100);
+  final title = measure(
+    board.title,
+    AppTextStyles.headlineMedium.copyWith(
+      fontSize: tall ? 30 : 28,
+      height: 1.05,
+    ),
+    maxLines: 2,
+  );
+  final progress = measure(
+    _progressValue(board.progressLabel, pct),
+    AppTextStyles.displayMedium.copyWith(
+      fontSize: tall ? 66 : 56,
+      height: .85,
+    ),
+  );
+  final suffix = measure(
+    _progressSuffix(board.progressLabel),
+    AppTextStyles.headlineMedium.copyWith(fontSize: 24),
+  );
+  // Mirror of the card's column: pads (top, title gap, progress gap,
+  // racer-row pad, bottom pad) + track + racer row + footer + the
+  // carousel's 10px shadow pad + 4px card border inset (2px each side —
+  // the border lays out inside the child's bounds).
+  return (tall ? 18.0 : 12.0) +
+      title +
+      (tall ? 10.0 : 8.0) +
+      math.max(progress, suffix) +
+      (tall ? 14.0 : 6.0) +
+      42 +
+      (tall ? 8.0 : 10.0) +
+      26 +
+      (tall ? 14.0 : 4.0) +
+      (tall ? 58.0 : 52.0) +
+      10 +
+      4;
 }
 
 String _initials(String name) {

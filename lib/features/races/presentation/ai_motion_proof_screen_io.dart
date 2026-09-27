@@ -39,6 +39,7 @@ import '../ai/verifier_runtime.dart';
 import '../data/ai_motion_models.dart';
 import '../data/motion_analysis_contract.dart';
 import '../data/motion_capabilities.dart';
+import '../data/motion_package_installer.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
@@ -101,6 +102,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String? _verificationSessionId;
   String? _verificationReleaseId;
   String? _verificationReleaseChecksum;
+
+  /// Release whose package is pin-protected for the active session — the
+  /// installer must never evict the bytes a live verifier depends on.
+  String? _pinnedVerifierReleaseId;
+  MotionPackageInstaller? _packageInstaller;
   CloudBasketballObjectDotProducer? _objectDotProducer;
   BasketballShotCoordinator? _basketballShot;
   ObjectCompositionSpec? _objectCompositionSpec;
@@ -304,6 +310,31 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             Map<String, dynamic>.from(rawSpec),
           );
         }
+        // The session pins release id + checksum server-side; the package for
+        // exactly that release must be verified on disk before the camera
+        // starts. A package that fails integrity/missing-asset gates the
+        // session — the race never runs against an unverifiable release.
+        if (sessionRemoteSpec != null) {
+          final installer = ref.read(motionPackageInstallerProvider);
+          final install = await installer.ensureInstalled(
+            sessionRemoteSpec,
+            releaseChecksum: _verificationReleaseChecksum,
+          );
+          if (!install.runnable) {
+            setState(() {
+              _status = AiMotionProofStatus.unsupportedMovement;
+              _message = install.status ==
+                          MotionPackageStatus.missingRequiredAsset ||
+                      install.status == MotionPackageStatus.installPending
+                  ? 'This verifier needs a download that could not finish yet.'
+                  : 'This verifier package could not be verified on device.';
+            });
+            return;
+          }
+          installer.pin(sessionRemoteSpec.releaseId);
+          _pinnedVerifierReleaseId = sessionRemoteSpec.releaseId;
+          _packageInstaller = installer;
+        }
       }
       final VerifierRuntime runtime;
       if (isCustom) {
@@ -484,6 +515,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _stopCamera();
     _objectDotProducer?.dispose();
     _poseDetector.dispose();
+    final pinned = _pinnedVerifierReleaseId;
+    if (pinned != null) _packageInstaller?.unpin(pinned);
     super.dispose();
   }
 

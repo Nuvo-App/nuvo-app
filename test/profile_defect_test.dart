@@ -5,6 +5,7 @@ import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
+import 'package:nuvo/core/widgets/nuvo_toggle.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
@@ -69,7 +70,8 @@ Race _activeRace(String id, String title,
       ],
     );
 
-Race _finishedRace(String id, String title) => Race(
+Race _finishedRace(String id, String title,
+        {int myProgress = 100, int? opponentProgress}) => Race(
   id: id,
   creatorId: 'user-1',
   title: title,
@@ -83,14 +85,23 @@ Race _finishedRace(String id, String title) => Race(
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   participants: [
-    const RaceParticipant(
+    RaceParticipant(
       id: 'part-1',
       userId: 'user-1',
       displayName: 'Test User',
-      progressValue: 100,
-      progressPercent: 100,
+      progressValue: myProgress,
+      progressPercent: myProgress,
       joinedAt: '2026-01-01T00:00:00Z',
     ),
+    if (opponentProgress != null)
+      RaceParticipant(
+        id: 'part-2',
+        userId: 'user-2',
+        displayName: 'Jules Carter',
+        progressValue: opponentProgress,
+        progressPercent: opponentProgress,
+        joinedAt: '2026-01-01T00:00:00Z',
+      ),
   ],
 );
 
@@ -220,7 +231,8 @@ void main() {
       expect(tester.takeException(), isNull);
 
       expect(find.text('1ST'), findsOneWidget);
-      expect(find.byIcon(Icons.emoji_events_rounded), findsOneWidget);
+      // Result row trophy + Best-finish trophy — both earned, both gold.
+      expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
     });
 
     testWidgets('win rate shows an em-dash with no finished races',
@@ -232,6 +244,134 @@ void main() {
       // The strip never invents a 0% stat.
       expect(find.text('—'), findsWidgets);
       expect(find.textContaining('%'), findsNothing);
+    });
+
+    testWidgets('Racing now features one race; the rest sit behind See all',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([
+        _activeRace('r1', 'First To 50 Pushups'),
+        _activeRace('r2', 'First To 25 Squats',
+            myProgress: 5, opponentProgress: 10, target: 25),
+      ])));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // One featured race — the one closest to its finish line (18/50
+      // beats 5/25). The second race stays collapsed behind See all.
+      expect(find.text('First To 50 Pushups'), findsOneWidget);
+      expect(find.text('First To 25 Squats'), findsNothing);
+      expect(find.text('See all'), findsOneWidget);
+
+      await tester.tap(find.text('See all'));
+      await tester.pumpAndSettle();
+      expect(find.text('First To 25 Squats'), findsOneWidget);
+    });
+
+    testWidgets('featured race carries remaining-to-finish context',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([
+        _activeRace('r1', 'First To 50 Pushups'),
+      ])));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      // 18/50 → "32 reps to finish" through the canonical score formatter.
+      expect(find.textContaining('to finish'), findsOneWidget);
+      expect(find.textContaining('32 reps'), findsOneWidget);
+    });
+
+    testWidgets('a non-win result stays neutral — plain placement, no trophy',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([
+        _finishedRace('r1', 'First To 20 Burpees',
+            myProgress: 19, opponentProgress: 20),
+      ])));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      expect(find.text('2ND'), findsWidgets);
+      // The result row's trophy is reserved for wins.
+      expect(find.byIcon(Icons.emoji_events_rounded), findsNothing);
+    });
+
+    testWidgets('best finish surfaces the strongest canonical placement',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([
+        _finishedRace('r1', 'First To 100 Pushups'),
+        _finishedRace('r2', 'First To 20 Burpees',
+            myProgress: 19, opponentProgress: 20),
+      ])));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.scrollUntilVisible(
+        find.text('BEST FINISH'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.textContaining('1ST · First To 100 Pushups'),
+          findsOneWidget);
+    });
+
+    testWidgets('best finish hides when nothing has been earned',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo([
+        _activeRace('r1', 'First To 50 Pushups'),
+      ])));
+      await tester.pumpAndSettle();
+      expect(find.text('BEST FINISH'), findsNothing);
+    });
+
+    testWidgets('controls are organized — Your Nuvo, App, Account, Legal',
+        (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      for (final label in ['Your Nuvo', 'App', 'Account', 'Legal']) {
+        await tester.scrollUntilVisible(
+          find.text(label),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text(label), findsOneWidget);
+      }
+      // Real destinations only — My Nuvo, Appearance (real theme store),
+      // Edit profile, sign out, legal links. 'My Nuvo'/'Member Pass' also
+      // appear as identity chips, so scroll on the last match.
+      for (final row in [
+        'My Nuvo',
+        'Member pass',
+        'Notifications',
+        'Appearance',
+        'Edit profile',
+        'Sign out',
+        'Privacy Policy',
+        'Terms of Service',
+      ]) {
+        await tester.scrollUntilVisible(
+          find.text(row).last,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text(row), findsWidgets);
+      }
+    });
+
+    testWidgets('Appearance toggles the real theme store', (tester) async {
+      await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Appearance'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      // Light by default; the whole app re-themes on toggle.
+      expect(find.text('Light'), findsOneWidget);
+      await tester.tap(find.byType(NuvoToggle).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Dark'), findsOneWidget);
     });
 
     testWidgets('Edit action is icon-only with a minimum tap target',

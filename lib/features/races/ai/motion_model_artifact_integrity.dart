@@ -236,6 +236,11 @@ int _bigSigma0(int value) =>
 int _bigSigma1(int value) =>
     _rotateRight(value, 6) ^ _rotateRight(value, 11) ^ _rotateRight(value, 25);
 
+/// Shared SHA-256 hex digest for remote-artifact integrity checks — the
+/// package installer hashes downloaded assets with the same implementation
+/// the model-artifact verifier uses.
+String sha256Hex(Uint8List input) => _sha256Hex(input);
+
 int _choose(int x, int y, int z) => (x & y) ^ (~x & z);
 
 int _majority(int x, int y, int z) => (x & y) ^ (x & z) ^ (y & z);

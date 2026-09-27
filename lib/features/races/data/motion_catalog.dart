@@ -154,6 +154,7 @@ class MotionCatalogActivity {
         'state_machine_v1',
         'alternating_rep_v1',
         'hold_v1',
+        'sequence_match_v1',
         'object_composition_v1',
       }.contains(engineType) &&
       releaseId != null &&

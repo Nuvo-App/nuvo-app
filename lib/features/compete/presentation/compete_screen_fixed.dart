@@ -12,7 +12,6 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_flip_card.dart';
-import '../../../core/widgets/nuvo_fold.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/pressable_scale.dart';
@@ -186,10 +185,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                 ]),
               ),
             ),
-            // Quick starts split at the first-viewport fold: tile rows that
-            // can't fully render before the dock continue below it — a tile
-            // is either entirely visible or below the fold, never bisected
-            // under the nav (docs/ui/MAIN_SCREEN_LAYOUT_CONTRACT.md).
+            // Quick starts flow as one continuous grid — the shell's dock
+            // occlusion covers whatever crosses the fold, so a seam split
+            // would only manufacture a dead zone between the last fitting
+            // row and the tiles below it.
             if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
@@ -198,14 +197,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                   NuvoSpacing.pageHorizontal,
                   NuvoBottomNav.bottomPadding(context),
                 ),
-                sliver: SliverFold(
-                  reserve: SliverFold.reserveOf(context),
-                  builder: (context, fold) => SliverToBoxAdapter(
-                    child: _QuickStarts(
-                      fold: fold,
-                      onStart: (prefill) =>
-                          context.push('/races/new', extra: prefill),
-                    ),
+                sliver: SliverToBoxAdapter(
+                  child: _QuickStarts(
+                    onStart: (prefill) =>
+                        context.push('/races/new', extra: prefill),
                   ),
                 ),
               )
@@ -667,16 +662,10 @@ class _FinishedExpansionList extends StatelessWidget {
 // ── Quick Starts (playable race presets) ──────────────────────────────────────
 
 class _QuickStarts extends StatelessWidget {
-  const _QuickStarts({required this.fold, required this.onStart});
-  final NuvoFoldBudget fold;
+  const _QuickStarts({required this.onStart});
   final ValueChanged<RaceCreatePrefill> onStart;
 
-  // Measured geometry of one tile row for the fold split — the tile height
-  // plus the wrap's run gap. Changing the tile design means updating this.
   static const double _tileHeight = 96;
-  static const double _rowExtent = _tileHeight + NuvoSpacing.sm;
-  // 'Quick starts' section title (~20px line) + its gap.
-  static const double _labelExtent = 22 + NuvoSpacing.sm;
 
   static const _items = [
     (
@@ -713,41 +702,16 @@ class _QuickStarts extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fold split — whole tile rows only. The section gap and label lead; as
-    // many complete rows as fit render above the seam, the rest continue
-    // below it (reachable on scroll, never clipped by the dock).
-    //
-    // Two bounds on purpose: the fit decision uses an UPPER bound on row
-    // extents (so placed content always ends inside the breathing zone),
-    // while the seam measures a LOWER bound of what was placed (so whatever
-    // follows always starts at or below the viewport's bottom edge —
-    // estimating the seam from rendered content too generously lets the
-    // next tile peek above the fold).
-    const lead = NuvoSpacing.lg;
-    final labelFits = fold.fitExtent >= lead + _labelExtent;
-    final rowCount = (_items.length + 1) ~/ 2;
-    final fitRows = labelFits
-        ? ((fold.fitExtent - lead - _labelExtent) ~/ _rowExtent)
-            .clamp(0, rowCount)
-        : 0;
-    // Lower bound of the placed column: lead + label line (16.8) + gap (8)
-    // + fit rows of exactly _tileHeight with (fit-1) run gaps.
-    final used = lead +
-        (labelFits
-            ? 24.0 +
-                fitRows * _tileHeight +
-                (fitRows > 0 ? fitRows - 1 : 0) * NuvoSpacing.sm
-            : 0.0);
-    final fitTiles = fitRows == rowCount ? _items.length : fitRows * 2;
-
+    // One continuous grid — the dock's occlusion mask hides whatever
+    // crosses the fold, and scroll reveals it. Rows flow at the wrap's
+    // run spacing; a lone last item spans the row instead of sitting as
+    // a broken half-tile.
     return LayoutBuilder(
       builder: (context, constraints) {
         final itemWidth = (constraints.maxWidth - NuvoSpacing.sm) / 2;
         Widget tile(int i) {
           final item = _items[i];
           return SizedBox(
-            // A lone last item is deliberate: it spans the row instead of
-            // sitting as a broken half-tile.
             width: i == _items.length - 1 && _items.length.isOdd
                 ? constraints.maxWidth
                 : itemWidth,
@@ -764,34 +728,14 @@ class _QuickStarts extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: lead),
-            if (labelFits) ...[
-              Text('Quick starts', style: AppTextStyles.sectionTitle),
-              const SizedBox(height: NuvoSpacing.sm),
-              Wrap(
-                spacing: NuvoSpacing.sm,
-                runSpacing: NuvoSpacing.sm,
-                children: [for (var i = 0; i < fitTiles; i++) tile(i)],
-              ),
-            ],
-            SizedBox(height: fold.seam(used)),
-            if (fitTiles < _items.length)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (!labelFits) ...[
-                    Text('Quick starts', style: AppTextStyles.sectionTitle),
-                    const SizedBox(height: NuvoSpacing.sm),
-                  ],
-                  Wrap(
-                    spacing: NuvoSpacing.sm,
-                    runSpacing: NuvoSpacing.sm,
-                    children: [
-                      for (var i = fitTiles; i < _items.length; i++) tile(i),
-                    ],
-                  ),
-                ],
-              ),
+            const SizedBox(height: NuvoSpacing.lg),
+            Text('Quick starts', style: AppTextStyles.sectionTitle),
+            const SizedBox(height: NuvoSpacing.sm),
+            Wrap(
+              spacing: NuvoSpacing.sm,
+              runSpacing: NuvoSpacing.sm,
+              children: [for (var i = 0; i < _items.length; i++) tile(i)],
+            ),
           ],
         );
       },

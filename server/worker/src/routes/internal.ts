@@ -2,8 +2,9 @@ import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../types';
 import { readMotionCatalog, readMotionRelease } from '../domain/motionRegistry';
 import { validateMotionVerifierSpec } from '../domain/motionSpec';
+import { declaredPackageAssets, packageAssetKey } from '../domain/motionAssets';
 import { adaptationRecommendation, decideEvaluation, parseEvaluationReport } from '../domain/motionEvaluation';
-import { generateId, hashValue } from '../lib/crypto';
+import { generateId, hashBytes, hashValue } from '../lib/crypto';
 import {
   decryptMotionBytes,
   decryptMotionText,
@@ -155,6 +156,42 @@ internalRouter.post('/motion/releases/drafts', async (c) => {
     details: { parentReleaseId, changeClass, checksum },
   });
   return c.json({ ok: true, release: { id: releaseId, activityId, checksum, status: 'draft' } }, 201);
+});
+
+// Package asset upload — raw bytes in the request body. The bytes are hashed
+// and byte-counted against the asset the release manifest declares before
+// anything lands in R2: a release can never carry an asset whose content
+// differs from its immutable spec. Stored under the content-bound key with
+// the declared checksum as custom metadata so the public GET can refuse
+// drifted objects.
+internalRouter.post('/motion/releases/:releaseId/assets/:assetId', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  const assetId = c.req.param('assetId');
+  const release = await readMotionRelease(c.env.DB, releaseId);
+  if (!release) return c.json({ ok: false, error: 'Verifier release not found.' }, 404);
+  if (release.status === 'stable' || release.status === 'disabled') {
+    return c.json({ ok: false, error: 'Assets are immutable once a release is stable.' }, 409);
+  }
+  const declared = declaredPackageAssets(release).find((a) => a.id === assetId);
+  if (!declared) {
+    return c.json({ ok: false, error: 'Asset is not declared by this release manifest.' }, 400);
+  }
+  const body = await c.req.arrayBuffer();
+  if (body.byteLength !== declared.bytes) {
+    return c.json({ ok: false, error: `Asset byte length ${body.byteLength} does not match declared ${declared.bytes}.` }, 400);
+  }
+  const sha = await hashBytes(body);
+  if (sha !== declared.sha256) {
+    return c.json({ ok: false, error: 'Asset checksum does not match the release manifest.' }, 400);
+  }
+  await c.env.PROFILE_PHOTOS.put(packageAssetKey(releaseId, assetId), body, {
+    customMetadata: { sha256: declared.sha256, type: declared.type },
+  });
+  await audit(c.env.DB, {
+    actorId: 'internal', action: 'package_asset_uploaded', activityId: release.activityId,
+    releaseId, details: { assetId, type: declared.type, bytes: declared.bytes },
+  });
+  return c.json({ ok: true, releaseId, assetId, sha256: sha }, 201);
 });
 
 // Evaluation reports come from the deterministic replay runner. A report that

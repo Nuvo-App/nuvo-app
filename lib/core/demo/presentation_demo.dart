@@ -743,10 +743,15 @@ abstract final class PresentationDemoData {
       title: 'First To 20 Burpees',
       activityId: 'burpees',
       targetValue: 20,
-      meValue: 20,
+      // A loss — 19 to Jules' 20 — so Recent results shows a neutral
+      // placement next to the wins, and Best finish stays earned.
+      meValue: 19,
       opponentName: 'Jules Carter',
       opponentId: 'presentation-demo-crew-jules',
-      opponentValue: 17,
+      opponentValue: 20,
+      // A 1v1 battle — the padded roster would out-score me anyway and
+      // bury the placement; keeping it head-to-head reads cleaner.
+      rosterSize: 1,
       status: 'completed',
       completedAt: '2026-09-14T17:05:00.000Z',
     ),
@@ -859,6 +864,7 @@ abstract final class PresentationDemoData {
     String? createdAt,
     String? startLineAt,
     String? finishLineAt,
+    int rosterSize = 7,
   }) {
     final opponentRoster = <_DemoRacer>[
       if (opponentName != null && opponentId != null)
@@ -869,9 +875,9 @@ abstract final class PresentationDemoData {
           photoUrl: _photoFor(opponentId),
         ),
       ..._roster.where((racer) => racer.id != opponentId),
-    ];
+    ].take(rosterSize).toList();
     final opponentValues = [
-      for (var i = 0; i < 7; i++)
+      for (var i = 0; i < opponentRoster.length; i++)
         opponentRoster[i].id == opponentId
             ? opponentValue.clamp(0, targetValue)
             : _rosterValue(meValue, targetValue, i),
@@ -889,7 +895,7 @@ abstract final class PresentationDemoData {
         'joinedAt': _createdAt,
       },
     ];
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < opponentRoster.length; i++) {
       final racer = opponentRoster[i];
       final value = opponentValues[i];
       participants.add({

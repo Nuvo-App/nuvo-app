@@ -46,6 +46,31 @@ Nuvo's current UI is a bright, physical-feeling race interface:
   controls. The current Arena hero is a white outlined card with a blue action
   footer, not a full-screen gradient hero.
 
+### Large navy surface rule
+
+On Nuvo's white/near-white main screens, do **not** use large solid navy
+blocks as generic content cards.
+
+Navy's roles: text/ink, outlines, offset shadows/depth, navigation, icons,
+and the occasional high-emphasis moment surface.
+
+Bright blue's roles: primary actions, selected state, progress, active
+accents.
+
+Ice/light-blue's roles: secondary surfaces, icon wells, subtle grouping,
+inactive status treatment.
+
+Gold: rank/win/accomplishment. Green: successful/completed status where
+already part of the system. Red: live/urgent/destructive indicator, used
+sparingly.
+
+A full navy content surface is allowed only when it is a single exceptional
+focus object, the contrast has semantic purpose, the surrounding page stays
+quiet, and it is not repeated multiple times vertically. Two consecutive
+giant navy cards (the old Crew live cards) violate this — a live card reads
+as live through the red pulse, real scores, clock, and reactions, not
+through surface mass.
+
 The product language and information ownership remain defined by
 [`docs/NUVO_PRODUCT_MODEL.md`](NUVO_PRODUCT_MODEL.md). In particular, the
 leaderboard is the emotional center of a race, Verify owns proof entry, Crew

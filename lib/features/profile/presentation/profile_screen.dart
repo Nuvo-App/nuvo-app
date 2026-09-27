@@ -10,6 +10,7 @@ import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_entrance.dart';
+import '../../../core/theme/nuvo_theme_mode.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
@@ -55,10 +56,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // Sections summarize; a capped list expands inline instead of growing the
   // main profile linearly with the user's history.
   static const _sectionCap = 3;
-  // Racing now may spend more of the first viewport — it's the live
-  // section — but the results reserve below still guarantees a full
-  // result row when results exist.
-  static const _racingViewportCap = 5;
+  // Racing now is a personal status module, not a list — the first viewport
+  // carries ONE featured race (closest to the finish line) plus See all;
+  // the rest live behind the inline expansion.
+  static const _racingFeaturedCap = 1;
   bool _racingExpanded = false;
   bool _resultsExpanded = false;
   bool _otherExpanded = false;
@@ -282,11 +283,29 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     required bool canReplayDemo,
     required bool canTogglePresentation,
   }) {
-    final activeRaces = raceState.races.where(raceIsActive).toList();
+    final activeRaces = raceState.races.where(raceIsActive).toList()
+      // The race nearest its finish line is the one that matters right now.
+      ..sort((a, b) {
+        final ap = raceProgressPercent(a, uid == null ? null : a.participantFor(uid));
+        final bp = raceProgressPercent(b, uid == null ? null : b.participantFor(uid));
+        return bp.compareTo(ap);
+      });
     final finishedRaces = raceState.races.where(raceIsCompleted).toList();
     final otherRaces = raceState.races
         .where((race) => !raceIsActive(race) && !raceIsCompleted(race))
         .toList();
+
+    // Best finish — the lowest placement across completed races, read from
+    // canonical standings/participants. Null when there's nothing earned.
+    Race? bestFinish;
+    var bestFinishRank = 0;
+    for (final race in finishedRaces) {
+      final rank = rankForUser(race, uid);
+      if (rank != null && (bestFinish == null || rank < bestFinishRank)) {
+        bestFinish = race;
+        bestFinishRank = rank;
+      }
+    }
 
     // Fold split — whole rows only. Two bounds on purpose: the fit
     // decisions subtract an UPPER bound of what earlier sections consume
@@ -322,7 +341,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         final fit = fitFor(
           fold.fitExtent - usedMax - resultsReserve,
           activeRaces.length,
-          _racingViewportCap,
+          _racingFeaturedCap,
         );
         if (fit >= 1) {
           body.add(
@@ -440,27 +459,57 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ],
 
+      // One earned personal mark — best placement across finished races,
+      // read straight from canonical standings. Hidden when nothing has
+      // been earned yet; never invented.
+      if (bestFinish != null) ...[
+        const SizedBox(height: NuvoSpacing.xxl),
+        _BestFinishRow(
+          race: bestFinish,
+          rank: bestFinishRank,
+          scoreLabel: bestFinish.finalStandings
+              .where((s) => s.userId == uid)
+              .map((s) => raceScoreLabel(bestFinish!, s.scoreValue))
+              .firstOrNull,
+        ),
+      ],
+
       const SizedBox(height: NuvoSpacing.xxl),
 
-      // Account — utilities, kept quiet and last.
-      const _SectionLabel(label: 'Account'),
+      // Your Nuvo — the things that are mine.
+      const _SectionLabel(label: 'Your Nuvo'),
       const SizedBox(height: NuvoSpacing.md),
       _ProfileActionGroup(
         children: [
           _AccountRow(
-            icon: Icons.notifications_outlined,
-            label: 'Notifications',
-            onTap: () => context.push('/settings/notifications'),
+            icon: Icons.qr_code_2_rounded,
+            label: 'My Nuvo',
+            onTap: () => context.push('/my-nuvo'),
           ),
           _AccountRow(
             icon: Icons.badge_rounded,
             label: 'Member pass',
             onTap: () => context.go('/pass'),
           ),
+          _AccountRow(
+            icon: Icons.notifications_outlined,
+            label: 'Notifications',
+            onTap: () => context.push('/settings/notifications'),
+          ),
+        ],
+      ),
+      const SizedBox(height: NuvoSpacing.xl),
+
+      // App — real toggles/tools only; nothing decorative.
+      const _SectionLabel(label: 'App'),
+      const SizedBox(height: NuvoSpacing.md),
+      _ProfileActionGroup(
+        children: [
+          const _AppearanceRow(),
           if (canReplayDemo)
             _AccountRow(
               icon: Icons.replay_rounded,
-              label: 'Demo replay',
+              label: 'Replay the guide',
               onTap: _replayDemo,
             ),
           if (canTogglePresentation)
@@ -474,6 +523,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               label: 'Rive Calibration',
               onTap: () => context.push('/dev/rive-calibration'),
             ),
+        ],
+      ),
+      const SizedBox(height: NuvoSpacing.xl),
+
+      // Account — utilities, kept quiet and last.
+      const _SectionLabel(label: 'Account'),
+      const SizedBox(height: NuvoSpacing.md),
+      _ProfileActionGroup(
+        children: [
+          _AccountRow(
+            icon: Icons.person_outline_rounded,
+            label: 'Edit profile',
+            onTap: () => context.push('/profile/edit'),
+          ),
           _AccountRow(
             icon: Icons.logout_rounded,
             label: 'Sign out',
@@ -910,6 +973,17 @@ class _ProfileRaceGroup extends StatelessWidget {
       );
     }
 
+    // Derived context for an in-flight race: how far I still have to go,
+    // formatted through the canonical metric formatter ("11 reps", "0:45").
+    // Falls back to the activity name when the goal isn't a fixed target
+    // or I'm already at the line.
+    final target = race.targetValue;
+    final remaining = target != null &&
+            myPart != null &&
+            target > myPart.progressValue
+        ? raceScoreLabel(race, target - myPart.progressValue)
+        : null;
+
     return _ActiveRaceTile(
       raceTitle: race.displayTitle,
       movementLabel: activity,
@@ -917,6 +991,7 @@ class _ProfileRaceGroup extends StatelessWidget {
           Icons.fitness_center_rounded,
       progressLabel: progressLabel,
       progressPercent: pct,
+      remainingLabel: remaining,
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
@@ -941,6 +1016,7 @@ class _ActiveRaceTile extends StatelessWidget {
     required this.participantCount,
     required this.avatars,
     required this.onTap,
+    this.remainingLabel,
   });
 
   final String raceTitle;
@@ -952,6 +1028,10 @@ class _ActiveRaceTile extends StatelessWidget {
   final int participantCount;
   final List<({String initials, String? photoUrl, String id})> avatars;
   final VoidCallback onTap;
+
+  /// "11 reps" remaining to the finish line — derived from the canonical
+  /// target, shown instead of the activity label when it exists.
+  final String? remainingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1041,8 +1121,12 @@ class _ActiveRaceTile extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            '$movementLabel · $participantCount '
-                            '${participantCount == 1 ? 'racer' : 'racers'}',
+                            remainingLabel != null
+                                ? '$remainingLabel to finish · '
+                                    '$participantCount '
+                                    '${participantCount == 1 ? 'racer' : 'racers'}'
+                                : '$movementLabel · $participantCount '
+                                    '${participantCount == 1 ? 'racer' : 'racers'}',
                             style: AppTextStyles.raceRowMeta,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -1184,6 +1268,103 @@ String _ordinalLabel(int n) {
   };
 }
 
+// ── Best finish — one earned mark, compact ────────────────────────────────────
+
+/// The strongest placement I've ever reached — gold when it's a win,
+/// neutral otherwise. A slim module, not a card competing with the result
+/// rows above it. Only renders when canonical standings say something.
+class _BestFinishRow extends StatelessWidget {
+  const _BestFinishRow({
+    required this.race,
+    required this.rank,
+    this.scoreLabel,
+  });
+
+  final Race race;
+  final int rank;
+  final String? scoreLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final won = rank == 1;
+
+    return Semantics(
+      button: true,
+      label: 'Best finish — ${_ordinalLabel(rank)} in ${race.displayTitle}',
+      child: PressableScale(
+        onTap: () => context.push('/race/${race.id}'),
+        scale: 0.985,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: NuvoSpacing.md,
+            vertical: 10,
+          ),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.lg),
+            border: Border.all(color: c.divider),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: won
+                      ? NuvoColors.gold.withValues(alpha: 0.14)
+                      : c.panelLight,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  won
+                      ? Icons.emoji_events_rounded
+                      : Icons.military_tech_rounded,
+                  size: 17,
+                  color: won ? NuvoColors.gold : c.inkMuted,
+                ),
+              ),
+              const SizedBox(width: NuvoSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'BEST FINISH',
+                      style: AppTextStyles.labelUppercase(
+                        10,
+                        color: won ? NuvoColors.gold : c.inkSubtle,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_ordinalLabel(rank)} · ${race.displayTitle}',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: c.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (scoreLabel != null)
+                Text(
+                  scoreLabel!,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: c.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileActionGroup extends StatelessWidget {
   const _ProfileActionGroup({required this.children});
 
@@ -1192,27 +1373,22 @@ class _ProfileActionGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.divider),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            children[i],
-            if (i < children.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 62,
-                color: c.divider,
-              ),
-          ],
+    // Page-level rows under a section label — same contract as the race
+    // groups above: no enclosing sheet, just a hairline aligned to the text
+    // column (past the 32px icon well + its leading padding).
+    return Column(
+      children: [
+        for (var i = 0; i < children.length; i++) ...[
+          children[i],
+          if (i < children.length - 1)
+            Divider(
+              height: 1,
+              thickness: 1,
+              indent: 58,
+              color: c.divider,
+            ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -1274,6 +1450,69 @@ class _PresentationModeRow extends StatelessWidget {
             ),
           ),
           NuvoToggle(value: enabled, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Appearance row ────────────────────────────────────────────────────────────
+//
+// The persisted light/dark store exists (`nuvoThemeModeProvider`); this row
+// is the only place it surfaces. The whole app re-themes on toggle — that
+// repaint IS the feedback, so the row itself stays quiet.
+
+class _AppearanceRow extends ConsumerWidget {
+  const _AppearanceRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = context.themeColors;
+    final isDark =
+        ref.watch(nuvoThemeModeProvider) == ThemeMode.dark;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+              color: c.ink,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: NuvoSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Appearance',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: c.ink,
+                  ),
+                ),
+                Text(
+                  isDark ? 'Dark' : 'Light',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: c.inkSubtle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          NuvoToggle(
+            value: isDark,
+            onChanged: (_) =>
+                ref.read(nuvoThemeModeProvider.notifier).toggle(),
+          ),
         ],
       ),
     );

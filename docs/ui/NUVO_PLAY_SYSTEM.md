@@ -241,7 +241,8 @@ wide blue pill, inactives stay small navy-outline circles, on
   constants. **Low.**
 
 ### Crew
-- `_CrewHeroCard`, `_LiveRaceCard`, feed cards: `NuvoPressable`. **High.**
+- `_CrewHeroCard`, `_LiveRaceCard` (adapter over `NuvoLiveRaceCard`,
+  §13.6), feed cards: `NuvoPressable`. **High.**
 - `_ReactionChip`: add NuvoPop on `mine` flip + keep morph. **Medium.**
 - `_RaceCrewChips` / people strip avatars: micro press. **Medium.**
 - Request Accept/Decline → "Connected" morph (`NuvoMorph`). **Medium.**
@@ -607,6 +608,37 @@ position; reduced motion: dots swap without width animation.
 
 ---
 
+### 13.6 Live surfaces — IMPLEMENTED as `NuvoLiveRaceCard`
+
+**The principle** — *Live is communicated by state, motion, and accent —
+not by flooding the card with a dark color.* The card is content; the
+action is the accent. Never swap one giant dark block for a giant
+bright-blue one either.
+
+**Shipped** — `nuvo_live_race_card.dart`, consumed by Crew's
+`_LiveRaceCard` adapter (feed + Races tab):
+
+- Surface: white/light face, navy type, quiet navy outline, `hardSmall`
+  offset depth — the same content-surface language as the rest of Crew.
+- Live state: red dot with a breathing halo (the only continuously
+  animating element — never the whole card), `LIVE` kicker, canonical
+  countdown (`35m left` / `Ending` in danger).
+- Scores ride `NuvoNumberFlow` so a live update rolls instead of jumping.
+- `primary` shows the head-to-head split for two-racer payloads
+  (name/score columns + a proportional share bar + a canonical gap line);
+  3+ racers fall back to the ranked matchup line. `compact` keeps two
+  rows for secondary live races — Races tab stacks one primary + one
+  compact.
+- Reactions stay canonical: Crew injects `_ReactionBar` (light mode) into
+  the card's `trailing` slot; the card never owns reaction data.
+- Reduced motion: the halo freezes; everything else is static layout.
+
+**Canonical-only rule** — gap text ("Noah leads by 2", "You lead",
+"Level") is pure rank/score arithmetic on the payload. If a fact isn't in
+`live`, it isn't on the card.
+
+---
+
 ## 14. Primitive set — re-ranked after the reference audit
 
 | Rank | Primitive | Status / rationale |
@@ -616,6 +648,7 @@ position; reduced motion: dots swap without width animation.
 | | `NuvoCopyButton` | **Shipped** — all 5 copy→SnackBar sites now self-confirm |
 | | `NuvoAlertDialog` | **Shipped** as `showNuvoConfirmDialog` interior — navy chrome + spring entrance, all six sites inherit |
 | | `NuvoPagePill` | **Shipped as primitive** — Arena `_PageDots` swap is Agent-1's (~5 lines, same API) |
+| | `NuvoLiveRaceCard` | **Shipped** — light-surface live family (primary/compact); Crew's `_LiveRaceCard` adapter feeds it canonical `race_live` payloads (§13.6) |
 | **High impact / medium risk** | `NuvoRippleSurface` | **Shipped** — scoped to icon-only residue: Crew header Search/QR + notification bell |
 | | `NuvoReaction` (NuvoPop on chips) | Delightful but content-reactive; needs audit of feed density first |
 | | `NuvoCountFlow` (= `NuvoNumberFlow` adoption) | Exists; remaining swaps are `_HeaderStat` + Arena numerals — low risk but low visibility |

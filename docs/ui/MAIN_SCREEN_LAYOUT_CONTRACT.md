@@ -15,10 +15,22 @@ below and the nav covered it."
 
 ## 2. Bottom Dock Exclusion Zone
 
-Content cannot disappear underneath the persistent dock. The exclusion zone
-is `NuvoBottomNav.bottomPadding(context)` — dock height + device safe-area
-inset + Verify's raised edge + clearance gap. This is the ONLY source of
-dock geometry; never hardcode a dock height in a screen.
+Content cannot disappear underneath the persistent dock — **visibly**. The
+shell paints an opaque page-colored occlusion band over the dock zone
+(`_DockOcclusion` in `main_shell.dart`, dock top minus Verify's raise
+through the bottom inset), so scrolled-behind content is hidden rather
+than showing through the dock's transparent margins.
+
+Layout clearance is separate from occlusion and still required: scrollable
+screens reserve `NuvoBottomNav.bottomPadding(context)` — dock height +
+device safe-area inset + Verify's raised edge + clearance gap — so the last
+row scrolls fully above the dock. This is the ONLY source of dock geometry;
+never hardcode a dock height in a screen.
+
+Because occlusion exists, a component may geometrically straddle the dock
+edge — it simply disappears behind the band. Prefer whole-unit endings for
+the *first viewport composition*, but do not manufacture large seam spacers
+to force "below the fold": flowing content + occlusion beats a dead zone.
 
 ## 3. Breathing Zone
 
@@ -114,8 +126,122 @@ when text moves 2px.
 
 | Screen  | Fold point                                                        |
 |---------|-------------------------------------------------------------------|
-| Arena   | `SliverFillRemaining` pins the Leaderboard label at a section gap, reserves the dock zone, centers the standing in what remains |
-| Compete | `_QuickStarts` tile rows split inside `SliverFold` — whole rows only |
-| Verify  | Already composed; no split needed                                  |
+| Arena   | Budgeted composition — hero height measured against real content plus the standings reserve; computed seam keeps "Recent activity" at/below the dock edge |
+| Compete | `_QuickStarts` flows as one continuous grid — a straddling row is occluded, not seam-pushed (the seam produced a dead zone before the odd last tile) |
+| Verify  | Header → segments → Up next hero → Also ready rows flow continuously; rows scroll under the dock mask naturally |
 | Crew    | Tabs own their scroll; fold handled per-tab                        |
 | Profile | `Racing now` / `Recent results` row caps computed inside `SliverFold`; sections that can't place a single whole row render below the seam |
+
+## 13. First View Answers Three Questions
+
+Every main tab's initial viewport answers all three, in this order of
+visual weight:
+
+1. **Who/where am I?** — the header + identity layer.
+2. **What matters right now?** — the dominant object (hero race, live
+   state, next proof).
+3. **What can I do next?** — the primary action surface.
+
+| Tab     | Who/where        | What matters now        | What I can do      |
+|---------|------------------|-------------------------|--------------------|
+| Arena   | Arena + greeting | next-move board, standings | Submit proof / New / Join |
+| Compete | Compete + status | featured race, my races | Start / Join / Quick starts |
+| Verify  | Verify           | next proof, ready queue | Begin verification |
+| Crew    | Crew + people    | live/social state       | Race someone, react |
+| Profile | Profile + card   | featured race, latest result | See all / race rows |
+
+Do not solve composition by reducing content — redistribute it.
+
+## 15. Profile = Me + Performance + Settings
+
+Profile answers five questions, in this strength order:
+
+1. **Who am I?** — identity card (avatar, name, handle, Member pass,
+   My Nuvo). Supportive stats strip: Racing / Wins / Win rate — never more.
+2. **What am I doing right now?** — `Racing now`, a personal status module.
+3. **What did I accomplish recently?** — `Recent results` + one earned mark.
+4. **What else have I raced?** — `Other` history, below the seam.
+5. **How do I control it?** — quiet settings groups: `Your Nuvo` → `App` →
+   `Account` → `Legal`.
+
+**One-current-race rule** — `Racing now` features exactly one active race in
+the first viewport: the one closest to its finish line (viewer
+`progressPercent` desc). The rest collapse behind an inline `See all` —
+Profile is not a second Arena; it shows where *I* stand, not the whole
+board.
+
+**Featured-race meta** — title, placement (`#8`), canonical progress
+(`39 / 50 reps`), progress track, participant avatars, and one derived
+context: `N reps to finish · M racers` via `targetValue − progressValue`
+formatted by `raceScoreLabel`. Races without a fixed target fall back to
+`movement · M racers`; a race at the start line stays quiet (no empty bar).
+
+**Recent-result rule** — placement is earned truth: `finalStandings`
+first, positional rank as fallback. `1ST` is gold with a trophy; every
+other placement is neutral. Never paint a non-win gold.
+
+**No-fake-personal-metric rule** — the only extra personal module is
+**Best finish**: the lowest `rankForUser` across completed races (gold
+trophy on a win, neutral medal otherwise, canonical score on the right).
+It hides entirely with zero results. Do not add streaks, XP, levels,
+personal bests per activity, or head-to-head records unless a canonical
+field/helper exists — comparable placements are all we have today.
+
+**Settings hierarchy** — page-level rows under section labels, hairline
+dividers aligned to the text column; no card sheets. `Your Nuvo`: My Nuvo,
+Member pass, Notifications. `App`: Appearance (the real persisted
+`nuvoThemeModeProvider` toggle — not decorative), Replay the guide
+(demo-gated), Presentation mode (eligibility-gated), Rive Calibration
+(`kDebugMode` only). `Account`: Edit profile, Sign out, Delete account.
+`Legal`: Privacy, Terms. Only real routes/actions ship — no placeholder
+destinations.
+
+**Edit-control contract** — the header's edit affordance is a compact
+icon-only `NuvoPressable` in the standard right gutter, ~44px hit target.
+No "Edit" text pill; Edit profile also lives as an Account row.
+
+**Dock/scroll behavior** — unchanged: `SliverFold` splits whole units
+across the fold, the seam spacer keeps the dock edge intentional, and
+content reserves `NuvoBottomNav.bottomPadding(context)` — scroll-behind +
+occlusion, never giant spacers.
+
+## 14. Verify Is a Proof Command Center
+
+Verify's product question is **"what can I prove right now, and what will
+that proof change?"** — not "here are some races."
+
+**Ready ordering** — closest to the finish line leads. The queue sorts by
+canonical distance to goal (`viewerContext.goalRemaining`, else
+`target − progress`), stable on the server's order for ties. The race that
+needs the least proof is always "Up next" — never a hidden ranking.
+
+**Up next hero** — shared `RaceHero` + one `contextNote` line under the
+meta: canonical stakes copy from `ChaseContext` ("Beat Noah. 14 to take
+#2" / "Defend your lead. Priya is 3 behind" / "Set the pace…"), falling
+back to "N reps left". Blue text — forward action. If a fact isn't in
+`viewerContext`/participants, it isn't on the card.
+
+**Also ready rows** — flat level-0 rows, no cards. Meta carries real
+state, not decoration:
+
+- `0` progress → `Pushups · Start line · 8 racers`
+- in progress, multi-racer → `Squats · 12 / 25 reps · #4 · 13 reps left`
+- solo → same shape minus the rank
+
+A thin `RaceProgress` track under the meta ties the queue to the race
+language used by the hero and Compete rows.
+
+**Completed** — consequence, not queue. Row meta is
+`movement · Won|Finished|Goal reached · {ago}` (canonical `winnerUserId`,
+`raceIsCompleted`, `completedAt`); the ordinal still shows final rank.
+
+**Recent** — proof history, not just a log. Meta is
+`who · movement · +N reps · {ago}` (the viewer's own moves read "You");
+the right side stacks the verdict (`Verified` / `Not counted` /
+`Under review`) over the canonical rank move (`#9 → #8`) when the server
+recorded one.
+
+**Color semantics on Verify** — blue = ready/action/progress;
+green = verified/completed; gold = rank/win only; red = rejected/destructive
+verdicts; the sliding segment pill already follows this (blue / success /
+neutral-tan for Recent).
