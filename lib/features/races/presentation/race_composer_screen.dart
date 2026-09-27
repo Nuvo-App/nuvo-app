@@ -1231,9 +1231,12 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
 
     return _PageShell(
       question: 'What are you competing in?',
-      support: isManual
-          ? 'Name the goal and how it is measured.'
-          : 'Pick a movement for your crew.',
+      // A clarification from the title interpretation is the support copy —
+      // answering it IS filling in the fields below.
+      support: widget.draft.clarification ??
+          (isManual
+              ? 'Name the goal and how it is measured.'
+              : 'Pick a movement for your crew.'),
       ctaLabel: 'Set the finish line',
       ctaKey: FirstRaceGuideKeys.composerActivityCta,
       onCta: () {

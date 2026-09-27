@@ -347,7 +347,14 @@ class _NuvoFlipTextState extends State<NuvoFlipText>
           globalIndex += char.length;
         }
         wordWidgets.add(
-          Row(mainAxisSize: MainAxisSize.min, children: cells),
+          // Words stay unbreakable, but a single word wider than the line
+          // (small phone + large text scaling) must shrink rather than
+          // overflow the Wrap. FittedBox is tight-sized, so fitting words
+          // pay nothing.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(mainAxisSize: MainAxisSize.min, children: cells),
+          ),
         );
         if (wi < words.length - 1) globalIndex += 1; // the space separator
       }

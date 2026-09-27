@@ -50,6 +50,7 @@ class RaceDraft {
     this.manualGoalName,
     this.manualUnit,
     this.finishLineAt,
+    this.clarification,
     this.attemptDurationSeconds,
     this.attemptLimit,
     this.scoreDirection = 'higher',
@@ -90,6 +91,10 @@ class RaceDraft {
   /// and any attempt race that should close on a deadline; the server is the
   /// authority on what "before the finish line" means.
   final String? finishLineAt;
+
+  /// One unresolved question from interpreting the title ("What activity are
+  /// you doing?"). Composer-facing only — never part of the create payload.
+  final String? clarification;
 
   /// For [RaceFormat.timedAttempt]: how long each attempt runs, in seconds.
   final int? attemptDurationSeconds;
@@ -163,11 +168,13 @@ class RaceDraft {
     String? manualGoalName,
     String? manualUnit,
     String? finishLineAt,
+    String? clarification,
     int? attemptDurationSeconds,
     int? attemptLimit,
     String? scoreDirection,
     bool clearTiming = false,
     bool clearCustom = false,
+    bool clearClarification = false,
     Set<RaceField>? markEdited,
   }) {
     final nextActivity = activity ?? this.activity;
@@ -192,6 +199,9 @@ class RaceDraft {
       manualGoalName: manualGoalName ?? this.manualGoalName,
       manualUnit: manualUnit ?? this.manualUnit,
       finishLineAt: clearTiming ? null : finishLineAt ?? this.finishLineAt,
+      clarification: clearClarification
+          ? null
+          : clarification ?? this.clarification,
       attemptDurationSeconds: clearTiming
           ? null
           : attemptDurationSeconds ?? this.attemptDurationSeconds,
@@ -223,6 +233,7 @@ class RaceDraft {
       // Timing survives an activity switch — a timed battle stays a timed
       // battle when the user swaps push-ups for squats.
       finishLineAt: finishLineAt,
+      clarification: clarification,
       attemptDurationSeconds: attemptDurationSeconds,
       attemptLimit: attemptLimit,
       scoreDirection: scoreDirection,
@@ -310,6 +321,8 @@ RaceDraft? draftFromIdea(String idea) {
       goalKind: RaceGoalKind.manual,
       manualGoalName: i.manualGoalName,
       manualUnit: i.manualUnit,
+      finishLineAt: _deadlineToIso(i.deadline),
+      clarification: i.question,
       attemptDurationSeconds: i.attemptDurationSeconds,
       scoreDirection: i.scoreDirection,
     );
@@ -325,10 +338,15 @@ RaceDraft? draftFromIdea(String idea) {
     format: i.format,
     targetValue: i.targetValue,
     recurrence: i.recurrence,
+    finishLineAt: _deadlineToIso(i.deadline),
+    clarification: i.question,
     attemptDurationSeconds: i.attemptDurationSeconds,
     scoreDirection: i.scoreDirection,
   );
 }
+
+String? _deadlineToIso(String? phrase) =>
+    deadlineUtcFromPhrase(phrase)?.toIso8601String();
 
 RaceDraft draftForActivity(MotionActivityDefinition activity) => RaceDraft(
   title: generatedTitle(activity, activity.defaultTarget),
