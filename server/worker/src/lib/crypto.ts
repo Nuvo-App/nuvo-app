@@ -19,6 +19,13 @@ export async function hashValue(value: string): Promise<string> {
     .join('');
 }
 
+export async function hashBytes(bytes: ArrayBuffer | Uint8Array): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export function generateRefreshToken(): string {
   const buf = new Uint8Array(48);
   crypto.getRandomValues(buf);

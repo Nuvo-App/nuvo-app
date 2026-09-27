@@ -431,6 +431,7 @@ class RaceHero extends StatelessWidget {
     this.showRank = true,
     this.raceId,
     this.headerAction,
+    this.contextNote,
   });
 
   final String activityLabel;
@@ -456,6 +457,12 @@ class RaceHero extends StatelessWidget {
   /// featured card's "Updates ↻" flip affordance). Kept small — the title
   /// stays dominant and the CTA strip keeps its single action.
   final Widget? headerAction;
+
+  /// Optional canonical stakes line rendered under the "movement · target"
+  /// meta ("Beat Noah. 14 to take #2" / "11 reps to the finish line").
+  /// Callers compose it from canonical race state (ChaseContext /
+  /// viewerContext); the hero only renders the string. Null = unchanged.
+  final String? contextNote;
 
   @override
   Widget build(BuildContext context) {
@@ -522,6 +529,21 @@ class RaceHero extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    // Stakes — why this proof matters. Blue (forward action),
+                    // one line, canonical copy only.
+                    if (contextNote != null &&
+                        contextNote!.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        contextNote!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelMedium.copyWith(
+                          color: NuvoColors.actionBlue,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: NuvoSpacing.md),
                     // Race lane — prominent track on white. A unique-per-race
                     // curved path when we have a stable race identity to
@@ -901,6 +923,7 @@ class RaceActivityRow extends StatelessWidget {
     required this.statusLabel,
     required this.statusColor,
     required this.onTap,
+    this.statusNote,
   });
 
   final String raceTitle;
@@ -913,6 +936,11 @@ class RaceActivityRow extends StatelessWidget {
   final String statusLabel;
   final Color statusColor;
   final VoidCallback onTap;
+
+  /// Optional consequence line under the verdict ("#9 → #8") — what the
+  /// proof changed. Kept out of the meta line so it can't get ellipsized
+  /// away by a long title.
+  final String? statusNote;
 
   @override
   Widget build(BuildContext context) {
@@ -962,14 +990,33 @@ class RaceActivityRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: NuvoSpacing.sm),
-              // Status — quiet text, no pill container
-              Text(
-                statusLabel,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: statusColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
-                ),
+              // Status — quiet text, no pill container; the rank move it
+              // caused sits right under the verdict.
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    statusLabel,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                  if (statusNote != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        statusNote!,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.navy,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),

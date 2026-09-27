@@ -2,7 +2,18 @@ import '../data/ai_motion_models.dart';
 import '../data/motion_package.dart';
 import 'remote_pose_features.dart';
 
-enum RemoteEngineType { stateMachineV1, alternatingRepV1, holdV1, sequenceMatchV1 }
+enum RemoteEngineType {
+  stateMachineV1('state_machine_v1'),
+  alternatingRepV1('alternating_rep_v1'),
+  holdV1('hold_v1'),
+  sequenceMatchV1('sequence_match_v1');
+
+  const RemoteEngineType(this.backendValue);
+
+  /// The wire identifier written into `engineType` fields — what the Worker
+  /// allowlist and catalog advertise.
+  final String backendValue;
+}
 
 enum RemoteAxis { x, y }
 

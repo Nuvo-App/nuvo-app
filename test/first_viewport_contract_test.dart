@@ -179,8 +179,8 @@ void main() {
 
   for (final (name, width, height) in _sizes) {
     group('First-viewport contract — $name', () {
-      testWidgets('Compete: every Quick Start tile is whole above the dock '
-          'or below the fold', (tester) async {
+      testWidgets('Compete: Quick Start rows flow contiguously — no seam '
+          'void — and every tile stays reachable', (tester) async {
         await pumpInShell(
           tester,
           Size(width, height),
@@ -189,13 +189,34 @@ void main() {
         );
         expect(tester.takeException(), isNull);
 
-        final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        // On short viewports the section may start past the cache extent —
-        // that's the fold working, not a failure. Check whatever mounted.
-        expectFoldRespected(tester, quickStartTiles, height, foldY, name);
+        // The grid flows at Wrap run spacing from the first row to the
+        // last. The old SliverFold split inserted a viewport-sized seam
+        // before leftover rows — the dead zone this guards against.
+        // Tiles under the dock are occluded by the shell mask, not
+        // removed, so below-fold rects exist whenever the section mounts.
+        final rects = quickStartTiles
+            .evaluate()
+            .map((e) => tester.getRect(find.byWidget(e.widget)))
+            .toList()
+          ..sort((a, b) {
+            final row = a.top.compareTo(b.top);
+            return row != 0 ? row : a.left.compareTo(b.left);
+          });
+        final rowTops = <double>{};
+        for (final r in rects) {
+          rowTops.add((r.top / 4).round() * 4.0);
+        }
+        final rows = rowTops.toList()..sort();
+        for (var i = 1; i < rows.length; i++) {
+          expect(
+            rows[i] - rows[i - 1],
+            lessThan(120),
+            reason: '$name: Quick Start rows jumped ${rows[i] - rows[i - 1]}'
+                'px — a seam void reopened inside the grid',
+          );
+        }
 
-        // Every tile remains reachable — the fold moves content below the
-        // viewport, it never removes it. Scroll to the end and confirm.
+        // Every tile remains reachable — scroll to the end and confirm.
         await tester.drag(
           find.byType(CustomScrollView),
           Offset(0, -height),
@@ -204,8 +225,8 @@ void main() {
         expect(find.text('Plank'), findsWidgets);
       });
 
-      testWidgets('Compete: the last above-fold tile keeps breathing room '
-          'above the dock', (tester) async {
+      testWidgets('Compete: a tile under the dock is occluded and scrolls '
+          'clear of it', (tester) async {
         await pumpInShell(
           tester,
           Size(width, height),
@@ -213,18 +234,30 @@ void main() {
           const CompeteScreen(),
         );
         final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        for (final element in quickStartTiles.evaluate()) {
-          final rect = tester.getRect(find.byWidget(element.widget));
-          if (rect.top < height - 0.5) {
-            expect(
-              rect.bottom,
-              lessThanOrEqualTo(foldY - 4),
-              reason:
-                  '$name: a visible Quick Start ends inside the breathing '
-                  'zone — no intentional gap above the dock',
-            );
-          }
-        }
+        final dockMask = find.byKey(const ValueKey('nuvo-dock-occlusion'));
+        expect(dockMask, findsOneWidget);
+        // The occluder covers the dock zone — anything straddling the
+        // dock's top edge is painted behind a page-colored foreground,
+        // never visible through transparent margins.
+        expect(
+          tester.getRect(dockMask).top,
+          lessThanOrEqualTo(foldY),
+        );
+
+        // Whatever sits under the dock travels fully above it on scroll.
+        final plank = find.text('Plank');
+        if (plank.evaluate().isEmpty) return; // section offscreen entirely
+        await tester.scrollUntilVisible(
+          plank,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getRect(plank).bottom,
+          lessThanOrEqualTo(foldY + 0.5),
+          reason: '$name: scrolled tile must end above the dock',
+        );
       });
 
       testWidgets('Profile: every race section is whole above the dock or '

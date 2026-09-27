@@ -11,6 +11,7 @@ import { passRouter } from './routes/pass';
 import { racesRouter } from './routes/races';
 import { RACE_ACTIVITY_CATALOG } from './domain/raceActivities';
 import { readMotionCatalog, readMotionRelease } from './domain/motionRegistry';
+import { declaredPackageAssets, packageAssetContentType, packageAssetKey } from './domain/motionAssets';
 import { arenaRouter } from './routes/arena';
 import { motionRouter, motionSessionsRouter } from './routes/motion';
 import { verificationSessionsRouter } from './routes/verificationSessions';
@@ -246,6 +247,42 @@ app.get('/motion/releases/:releaseId', async (c) => {
       minimumAppBuild: release.minimumAppBuild,
     },
   });
+});
+
+// Package asset download — public like the release itself (bytes are
+// checksum-verified by the client against the immutable manifest, so there
+// is nothing to hide), but scoped hard: the URL's assetId only ever selects
+// among assets the release's spec actually declares. No path traversal, no
+// arbitrary R2 keys — `packageAssetKey` is the single key shape.
+app.get('/motion/releases/:releaseId/assets/:assetId', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  const assetId = c.req.param('assetId');
+  const release = await readMotionRelease(c.env.DB, releaseId);
+  if (!release) return c.json({ ok: false, error: 'Verifier release not found.' }, 404);
+  const declared = declaredPackageAssets(release).find((a) => a.id === assetId);
+  if (!declared) {
+    return c.json({ ok: false, error: 'Asset not declared by this release.' }, 404);
+  }
+  const object = await c.env.PROFILE_PHOTOS.get(packageAssetKey(releaseId, assetId));
+  if (!object) return c.json({ ok: false, error: 'Package asset is unavailable.' }, 503);
+  // The stored object must still be the bytes the manifest promises — a
+  // bucket object that drifted from its declared checksum is never served.
+  const storedSha = object.customMetadata?.sha256;
+  if (storedSha !== declared.sha256) {
+    return c.json({ ok: false, error: 'Package asset failed integrity.' }, 503);
+  }
+  const etag = `"${declared.sha256}"`;
+  c.header('ETag', etag);
+  c.header('X-Asset-SHA256', declared.sha256);
+  c.header('Cache-Control', 'public, max-age=31536000, immutable');
+  if (c.req.header('If-None-Match') === etag) return c.body(null, 304);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('Content-Type', packageAssetContentType(declared.type));
+  headers.set('ETag', etag);
+  headers.set('X-Asset-SHA256', declared.sha256);
+  headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  return new Response(object.body, { headers });
 });
 
 // ── Auth routes ───────────────────────────────────────────────────────────────

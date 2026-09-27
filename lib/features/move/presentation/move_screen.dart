@@ -13,8 +13,10 @@ import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../notifications/domain/notification_display.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/domain/chase_context.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 
@@ -87,10 +89,23 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
     // opening the camera.
     final cameraRaces = raceState.races;
 
-    final readyRaces = cameraRaces.where((race) {
+    // Ready order = distance to the finish line — the race that needs the
+    // least proof leads ("what can I prove next" = "what finishes soonest").
+    // Decorated index sort keeps the server's order on ties (Dart's sort
+    // isn't stable).
+    final readyUnsorted = cameraRaces.where((race) {
       final myPart = uid != null ? race.participantFor(uid) : null;
       return race.status == 'active' && (myPart?.progressPercent ?? 0) < 100;
     }).toList();
+    final readyRaces = [
+      for (final e in readyUnsorted.indexed.toList()
+        ..sort((a, b) {
+          final pa = _remainingToGoal(a.$2, uid);
+          final pb = _remainingToGoal(b.$2, uid);
+          return pa != pb ? pa.compareTo(pb) : a.$1.compareTo(b.$1);
+        }))
+        e.$2,
+    ];
 
     final completedRaces = cameraRaces.where((race) {
       final myPart = uid != null ? race.participantFor(uid) : null;
@@ -217,6 +232,7 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
                       ),
                       _VerifySegment.recent => _RecentSegment(
                         entries: recentMoves,
+                        userId: uid,
                         expanded: _recentExpanded,
                         cap: _recentCap,
                         onToggleExpand: () =>
@@ -233,6 +249,39 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
       ),
     );
   }
+}
+
+/// Distance to the finish line for Ready ordering — the canonical
+/// `viewerContext.goalRemaining` when the server sends it, else
+/// `target − progress` on the participant. Races without a measurable goal
+/// sort last, keeping their original (server) order among themselves.
+int _remainingToGoal(Race race, String? userId) {
+  final vc = race.viewerContext;
+  if (vc?.goalRemaining != null) return vc!.goalRemaining!;
+  final myPart = userId != null ? race.participantFor(userId) : null;
+  final target = race.targetValue;
+  if (target != null && target > 0 && myPart != null) {
+    return (target - myPart.progressValue).clamp(0, target);
+  }
+  return 1 << 20;
+}
+
+/// "11 reps left" / "45s left" — the canonical score label for the gap to
+/// the goal, or null when the race has no measurable finish.
+String? _goalRemainingLabel(Race race, String? userId) {
+  final vc = race.viewerContext;
+  final remaining = vc?.goalRemaining ??
+      (() {
+        final myPart =
+            userId != null ? race.participantFor(userId) : null;
+        final target = race.targetValue;
+        if (target != null && target > 0 && myPart != null) {
+          return (target - myPart.progressValue).clamp(0, target);
+        }
+        return null;
+      })();
+  if (remaining == null || remaining <= 0) return null;
+  return '${raceScoreLabel(race, remaining)} left';
 }
 
 // ── Compact header ────────────────────────────────────────────────────────────
@@ -555,6 +604,14 @@ class _UpNextCard extends StatelessWidget {
     final progressLabel = raceProgressLabel(race, myPart);
     final rank = rankForUser(race, userId);
 
+    // "What will this proof change?" — the canonical stakes line the race
+    // detail screen already speaks (ChaseContext: "Beat Noah. 14 to take
+    // #2", "Defend your lead…"); fallback is the plain distance to finish.
+    // Composed from server truth only — never invented context.
+    final chase = userId != null ? ChaseContext.compute(race, userId!) : null;
+    final contextNote =
+        chase?.chaseCopy ?? _goalRemainingLabel(race, userId);
+
     final avatars = race.participants.where((p) => p.userId != userId).map((p) {
       final name = p.displayName.trim();
       final initials = name.isEmpty
@@ -568,6 +625,12 @@ class _UpNextCard extends StatelessWidget {
       return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
     }).toList();
 
+    // Motion-preview seam (another agent owns the runtime): a future
+    // "preview movement" surface slots into RaceHero's `headerAction` —
+    // a quiet ~28×28 affordance pinned to the title row's trailing edge.
+    // Its activity identity is `raceActivityDefinition(race)`
+    // (MotionActivityDefinition.type / .title / .preferredCameraView),
+    // already computed above; race.id seeds any per-race preview cache.
     return RaceHero(
       raceId: race.id,
       activityLabel: activity,
@@ -582,6 +645,7 @@ class _UpNextCard extends StatelessWidget {
         max: 4,
       ),
       rank: rank,
+      contextNote: contextNote,
       onOpen: onVerify,
       actionLabel: 'Start verification',
       ctaIcon: Icons.camera_alt_rounded,
@@ -591,10 +655,11 @@ class _UpNextCard extends StatelessWidget {
 
 // ── Ready movement row — pick a movement, go move ────────────────────────────
 
-/// A lean action row for "Also ready": movement glyph, race name, the
-/// movement + progress meta, arrow. No card, no progress track — the loud
-/// "Up next" hero above already carries the race identity; this row's only
-/// job is "do this movement next."
+/// A lean action row for "Also ready": movement glyph, race name, a meta
+/// line that carries real state (start line / progress + rank or distance
+/// to finish), a thin progress track, arrow. No card — the loud "Up next"
+/// hero above carries the race identity; this row answers "what else can
+/// I prove, and how close is it?"
 class _ReadyMovementRow extends StatelessWidget {
   const _ReadyMovementRow({
     required this.race,
@@ -611,8 +676,28 @@ class _ReadyMovementRow extends StatelessWidget {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final activity = raceActivityTitle(race);
     final progressLabel = raceProgressLabel(race, myPart);
+    final pct = raceProgressPercent(race, myPart);
     final icon =
         raceActivityDefinition(race)?.icon ?? Icons.fitness_center_rounded;
+
+    // Meta line — canonical state only:
+    //   start line:  "Pushups · Start line · 8 racers"
+    //   in progress: "Squats · 12 / 25 reps · #4"            (multi-racer)
+    //                "12 / 25 reps · 13 reps left"          (solo)
+    final String meta;
+    if (pct <= 0) {
+      final count = race.participantCount;
+      meta = count > 1
+          ? '$activity · Start line · $count racers'
+          : '$activity · Start line';
+    } else {
+      final rank = race.participantCount > 1
+          ? rankForUser(race, userId)
+          : null;
+      final rankLabel = rank != null ? '#$rank' : null;
+      final remaining = _goalRemainingLabel(race, userId);
+      meta = [activity, progressLabel, ?rankLabel, ?remaining].join(' · ');
+    }
 
     return PressableScale(
       onTap: onTap,
@@ -647,13 +732,22 @@ class _ReadyMovementRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '$activity · $progressLabel',
+                    meta,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.raceRowMeta.copyWith(
                       fontSize: 12,
                       color: NuvoColors.textMuted,
                     ),
+                  ),
+                  const SizedBox(height: 7),
+                  // The race's lane in miniature — same track language as
+                  // the hero and Compete rows, so "how far along" reads at
+                  // a glance without leaving the queue.
+                  RaceProgress(
+                    progressPercent: pct,
+                    trackHeight: 3,
+                    dotDiameter: 7,
                   ),
                 ],
               ),
@@ -776,6 +870,20 @@ class _CompletedRaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final rank = rankForUser(race, userId);
     final activity = raceActivityTitle(race);
+
+    // Consequence, not queue: what the race became — a win, a finish, or
+    // a hit goal — plus when it happened. All canonical fields
+    // (`winnerUserId`, `raceIsCompleted`, `completedAt`).
+    final won = race.winnerUserId != null && race.winnerUserId == userId;
+    final outcome = won
+        ? 'Won'
+        : raceIsCompleted(race)
+            ? 'Finished'
+            : 'Goal reached';
+    final completed = DateTime.tryParse(race.completedAt ?? '')?.toUtc();
+    final ago =
+        completed != null ? notificationRelativeTime(completed) : null;
+
     final avatars = race.participants.where((p) => p.userId != userId).map((p) {
       final name = p.displayName.trim();
       final initials = name.isEmpty
@@ -791,7 +899,7 @@ class _CompletedRaceRow extends StatelessWidget {
 
     return RaceResultRow(
       raceTitle: race.displayTitle,
-      movementLabel: activity,
+      movementLabel: ago != null ? '$activity · $outcome $ago' : '$activity · $outcome',
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
@@ -809,6 +917,7 @@ class _RecentSegment extends StatelessWidget {
     required this.cap,
     required this.onToggleExpand,
     required this.onOpen,
+    this.userId,
   });
 
   final List<({Race race, RaceProof proof})> entries;
@@ -816,6 +925,7 @@ class _RecentSegment extends StatelessWidget {
   final int cap;
   final VoidCallback onToggleExpand;
   final ValueChanged<Race> onOpen;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
@@ -870,6 +980,7 @@ class _RecentSegment extends StatelessWidget {
                 _RecentProofRow(
                   proof: visible[i].proof,
                   race: visible[i].race,
+                  userId: userId,
                   onTap: () => onOpen(visible[i].race),
                 ),
                 if (i < visible.length - 1)
@@ -893,11 +1004,13 @@ class _RecentProofRow extends StatelessWidget {
     required this.proof,
     required this.race,
     required this.onTap,
+    this.userId,
   });
 
   final RaceProof proof;
   final Race race;
   final VoidCallback onTap;
+  final String? userId;
 
   @override
   Widget build(BuildContext context) {
@@ -929,26 +1042,45 @@ class _RecentProofRow extends StatelessWidget {
         ? NuvoColors.warning
         : NuvoColors.muted;
 
-    final valueStr = proof.value != null
-        ? '+${proof.value} ${race.unit ?? 'reps'}'
+    // "What changed because I proved it": accepted amount, the rank move it
+    // caused when the server recorded one, and when — all canonical fields
+    // on the move log (value, rankBefore→rankAfter, createdAt).
+    final rankDelta =
+        proof.rankBefore != null &&
+            proof.rankAfter != null &&
+            proof.rankBefore != proof.rankAfter
+        ? '#${proof.rankBefore} → #${proof.rankAfter}'
         : null;
+    final occurred = DateTime.tryParse(proof.createdAt)?.toUtc();
+    final ago = occurred != null ? notificationRelativeTime(occurred) : null;
+
+    final valueStr = [
+      if (proof.value != null) '+${proof.value} ${race.unit ?? 'reps'}',
+      ?ago,
+    ].join(' · ');
+    final meta = valueStr.isEmpty ? null : valueStr;
 
     final initial = proof.displayName.isNotEmpty
         ? proof.displayName[0].toUpperCase()
         : '?';
+    // The avatar already says who — the meta line only needs "You" for the
+    // viewer's own proofs, which is most of a personal history.
+    final actorName =
+        proof.userId == userId ? 'You' : proof.displayName;
 
     final activity = raceActivityTitle(race);
 
     return RaceActivityRow(
       raceTitle: race.displayTitle,
       movementLabel: activity,
-      actorName: proof.displayName,
+      actorName: actorName,
       actorInitial: initial,
       actorPhotoUrl: proof.profilePhotoUrl,
       actorId: proof.userId,
-      valueStr: valueStr,
+      valueStr: meta,
       statusLabel: statusLabel,
       statusColor: statusColor,
+      statusNote: rankDelta,
       onTap: onTap,
     );
   }

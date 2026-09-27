@@ -131,14 +131,16 @@ Race _raceWithProof({String id = 'r-1', String title = 'Proof Race'}) =>
 
 List<Race> _generateReadyRaces(int count) {
   // Cycle through supported activity keywords so every race is
-  // camera-verifiable via title inference.
+  // camera-verifiable via title inference. Uniform progress keeps the
+  // Ready queue's closest-to-finish ordering neutral — the cap/expand
+  // tests assert positions in the server's original order.
   const activities = ['Pushup', 'Squat', 'Lunge', 'Plank', 'Jumping Jack'];
   return [
     for (var i = 0; i < count; i++)
       _readyRace(
         id: 'race-$i',
         title: '${activities[i % activities.length]} Ready ${i + 1}',
-        progressPercent: 20 + (i % 50),
+        progressPercent: 20,
       ),
   ];
 }
@@ -216,9 +218,9 @@ void main() {
       await tester.tap(find.text('Recent'));
       await tester.pumpAndSettle();
 
-      // Recent proof entry should show the user name (rendered inline in the
-      // row's "who · what · how much" meta line).
-      expect(find.textContaining('Test User'), findsWidgets);
+      // Recent proof entry should show the viewer's own moves as "You"
+      // (rendered inline in the row's "who · what · how much" meta line).
+      expect(find.textContaining('You · '), findsWidgets);
       // Completed race should NOT be visible.
       expect(find.textContaining('Pushup Completed'), findsNothing);
     });

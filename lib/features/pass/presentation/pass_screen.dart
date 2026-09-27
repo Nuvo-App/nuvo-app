@@ -14,6 +14,7 @@ import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_flip_card.dart';
+import '../../../core/widgets/nuvo_live_race_card.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_ripple_surface.dart';
@@ -2495,17 +2496,21 @@ class _RacesTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── LIVE — the strongest state on this tab: navy surface, red
-        // indicator, real scores, Watch. Same card as the feed's live post.
+        // ── LIVE — the strongest state on this tab: red pulse + label,
+        // real scores, Watch. One primary moment; a second live race goes
+        // compact so two cards don't stack into another heavyweight block.
         if (liveItems.isNotEmpty) ...[
           const _LiveSectionLabel(),
           const SizedBox(height: 8),
-          for (final item in liveItems.take(2))
+          for (final (i, item) in liveItems.take(2).indexed)
             _LiveRaceCard(
               item: item,
               busy: reactingIds.contains(item.id),
               onTap: () => onOpenLive(item),
               onReact: (emoji) => onReact(item, emoji),
+              variant: i == 0
+                  ? NuvoLiveRaceCardVariant.primary
+                  : NuvoLiveRaceCardVariant.compact,
             ),
         ],
 
@@ -2987,15 +2992,11 @@ class _ReactionBar extends StatelessWidget {
     required this.item,
     required this.busy,
     required this.onReact,
-    this.onDark = false,
   });
 
   final CrewActivityItem item;
   final bool busy;
   final ValueChanged<String> onReact;
-
-  /// Rendered on the navy live surface — chip chrome flips to on-dark.
-  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
@@ -3010,7 +3011,6 @@ class _ReactionBar extends StatelessWidget {
               count: item.reactions[code] ?? 0,
               mine: item.myReaction == code,
               enabled: !busy,
-              onDark: onDark,
               onTap: () => onReact(code),
             ),
           ),
@@ -3025,7 +3025,6 @@ class _ReactionChip extends StatelessWidget {
     required this.count,
     required this.mine,
     required this.enabled,
-    required this.onDark,
     required this.onTap,
   });
 
@@ -3033,7 +3032,6 @@ class _ReactionChip extends StatelessWidget {
   final int count;
   final bool mine;
   final bool enabled;
-  final bool onDark;
   final VoidCallback onTap;
 
   @override
@@ -3053,18 +3051,10 @@ class _ReactionChip extends StatelessWidget {
         decoration: bare
             ? null
             : BoxDecoration(
-                color: mine
-                    ? (onDark ? NuvoColors.blue : NuvoColors.blueSurface)
-                    : (onDark
-                        ? NuvoColors.white.withValues(alpha: 0.12)
-                        : NuvoColors.surface),
+                color: mine ? NuvoColors.blueSurface : NuvoColors.surface,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: mine
-                      ? (onDark ? NuvoColors.blueLight : NuvoColors.blue)
-                      : (onDark
-                          ? NuvoColors.white.withValues(alpha: 0.35)
-                          : NuvoColors.divider),
+                  color: mine ? NuvoColors.blue : NuvoColors.divider,
                   width: mine ? 1.3 : 1,
                 ),
               ),
@@ -3084,11 +3074,7 @@ class _ReactionChip extends StatelessWidget {
                 value: count,
                 duration: const Duration(milliseconds: 220),
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: mine
-                      ? (onDark ? NuvoColors.white : NuvoColors.blue)
-                      : (onDark
-                          ? NuvoColors.white.withValues(alpha: 0.85)
-                          : NuvoColors.muted),
+                  color: mine ? NuvoColors.blue : NuvoColors.muted,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -3103,136 +3089,46 @@ class _ReactionChip extends StatelessWidget {
 /// The canonical live-race presentation contract — "LIVE NOW · Riley vs
 /// Maya · scores · time left · Watch". Crew renders whatever the race
 /// system's `race_live` payload carries; it never computes live truth.
+/// Crew's adapter over `NuvoLiveRaceCard`: maps the canonical `race_live`
+/// payload into core standings and injects the reaction bar. All live truth
+/// stays server-composed — the card renders `live`, never computes it.
 class _LiveRaceCard extends StatelessWidget {
   const _LiveRaceCard({
     required this.item,
     required this.busy,
     required this.onTap,
     required this.onReact,
+    this.variant = NuvoLiveRaceCardVariant.primary,
   });
 
   final CrewActivityItem item;
   final bool busy;
   final VoidCallback onTap;
   final ValueChanged<String> onReact;
-
-  String? get _timeLeft {
-    final ends = item.live?.endsAt;
-    if (ends == null) return null;
-    final s = ends.difference(DateTime.now()).inSeconds;
-    if (s <= 0) return 'ENDING';
-    if (s < 60) return '${s}s LEFT';
-    return '${(s / 60).ceil()}m LEFT';
-  }
-
-  /// One compact matchup line — "Noah 41 · You 39". Rank order from the
-  /// live payload; capped at three so a crowded race stays one row.
-  String _matchupLine() {
-    final racers = [...item.live!.participants]
-      ..sort((a, b) => (a.rank ?? 1 << 30).compareTo(b.rank ?? 1 << 30));
-    return racers
-        .take(3)
-        .map((p) => '${p.name} ${p.score}')
-        .join('  ·  ');
-  }
+  final NuvoLiveRaceCardVariant variant;
 
   @override
   Widget build(BuildContext context) {
     final live = item.live!;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: PressableScale(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            color: NuvoColors.navy,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppShadows.hardSmall,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: NuvoColors.danger,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    'LIVE',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.white,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      live.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: NuvoColors.white.withValues(alpha: 0.9),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  if (_timeLeft != null)
-                    Text(
-                      _timeLeft!,
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: NuvoColors.white.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _matchupLine(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: NuvoColors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    'Watch',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.blueLight,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.arrow_forward_rounded,
-                    color: NuvoColors.blueLight,
-                    size: 15,
-                  ),
-                  const Spacer(),
-                  if (item.isReactionable)
-                    _ReactionBar(
-                      item: item,
-                      busy: busy,
-                      onReact: onReact,
-                      onDark: true,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      child: NuvoLiveRaceCard(
+        variant: variant,
+        title: live.title,
+        endsAt: live.endsAt,
+        standings: [
+          for (final p in live.participants)
+            NuvoLiveStanding(
+              name: p.name,
+              score: p.score,
+              rank: p.rank,
+              isMe: p.isMe,
+            ),
+        ],
+        onWatch: onTap,
+        trailing: item.isReactionable
+            ? _ReactionBar(item: item, busy: busy, onReact: onReact)
+            : null,
       ),
     );
   }
