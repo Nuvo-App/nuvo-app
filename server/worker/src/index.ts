@@ -178,11 +178,16 @@ app.get('/races/activities', async (c) => {
       availability: entry.availability,
       featured: entry.featured,
       sortPriority: entry.sortPriority,
-      currentReleaseId: entry.releaseId,
-      currentReleaseChecksum: entry.releaseChecksum,
-      engineType: entry.engineType,
-      requiredCapabilities: entry.requiredCapabilities,
-      minimumAppBuild: entry.minimumAppBuild,
+      // A pointed-but-non-stable release (draft/validated/disabled/etc.) is
+      // advertised as nothing: session creation refuses it, so presenting it
+      // here would make the catalog claim support the verifier can't honor.
+      // The channel pointer itself is unchanged — operators still see the
+      // full pointer+status on the internal catalog route.
+      currentReleaseId: entry.releaseStatus === 'stable' ? entry.releaseId : null,
+      currentReleaseChecksum: entry.releaseStatus === 'stable' ? entry.releaseChecksum : null,
+      engineType: entry.releaseStatus === 'stable' ? entry.engineType : null,
+      requiredCapabilities: entry.releaseStatus === 'stable' ? entry.requiredCapabilities : [],
+      minimumAppBuild: entry.releaseStatus === 'stable' ? entry.minimumAppBuild : null,
       // Decorative pre-verify preview animation only — never consumed by the
       // camera verifier. Absent/invalid on the client falls back to the
       // bundled compiled sequence, so this is safe to leave unset.

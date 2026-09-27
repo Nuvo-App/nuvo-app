@@ -24,6 +24,7 @@ type RegistryActivityRow = {
   engine_type: string | null;
   required_capabilities_json: string | null;
   minimum_app_build: string | null;
+  release_status: string | null;
 };
 
 type RegistryReleaseRow = {
@@ -63,6 +64,11 @@ export type RegistryActivity = {
   engineType: string | null;
   requiredCapabilities: string[];
   minimumAppBuild: string | null;
+  /// Status of the pointed release ('draft' | 'validated' | 'internal' |
+  /// 'beta' | 'stable' | 'disabled'). Null when no channel pointer exists.
+  /// A non-stable release on the stable channel must NOT be advertised to
+  /// clients as resolvable — session creation refuses it.
+  releaseStatus: string | null;
   legacy: RaceActivityDefinition | null;
   metadata: Record<string, unknown>;
 };
@@ -123,6 +129,7 @@ function mapActivity(row: RegistryActivityRow): RegistryActivity {
     engineType: row.engine_type,
     requiredCapabilities: jsonValue<string[]>(row.required_capabilities_json, []),
     minimumAppBuild: row.minimum_app_build,
+    releaseStatus: row.release_status,
     legacy: legacyDefinition(row),
     metadata: jsonValue<Record<string, unknown>>(row.metadata_json, {}),
   };
@@ -158,7 +165,7 @@ export async function readMotionCatalog(
     'a.metric, a.suggested_targets_json, a.supported_formats_json, a.icon_key, ' +
     'a.sort_priority, a.featured, a.availability, a.metadata_json, ' +
     'cr.release_id, vr.checksum AS release_checksum, vr.engine_type, ' +
-    'vr.required_capabilities_json, vr.minimum_app_build ' +
+    'vr.required_capabilities_json, vr.minimum_app_build, vr.status AS release_status ' +
     'FROM motion_activities a ' +
     'LEFT JOIN activity_channel_releases cr ON cr.activity_id = a.id AND cr.channel = ? ' +
     'LEFT JOIN verifier_releases vr ON vr.id = cr.release_id ' +
@@ -192,7 +199,7 @@ export async function readRegistryActivity(
     'a.metric, a.suggested_targets_json, a.supported_formats_json, a.icon_key, ' +
     'a.sort_priority, a.featured, a.availability, a.metadata_json, ' +
     'cr.release_id, vr.checksum AS release_checksum, vr.engine_type, ' +
-    'vr.required_capabilities_json, vr.minimum_app_build ' +
+    'vr.required_capabilities_json, vr.minimum_app_build, vr.status AS release_status ' +
     'FROM motion_activities a ' +
     'LEFT JOIN activity_channel_releases cr ON cr.activity_id = a.id AND cr.channel = ? ' +
     'LEFT JOIN verifier_releases vr ON vr.id = cr.release_id ' +
