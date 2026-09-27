@@ -81,12 +81,12 @@ class AuthUser {
   }
 }
 
-/// Debug-build identity used when the dedicated store-testing account signs
-/// in with no connectivity (e.g. a network that blocks workers.dev). Never
-/// produced by a real server response — see AuthRepository.signInOfflineDemo.
+/// Fixture identity used when the store-review credential signs in with no
+/// connectivity (e.g. a network that blocks workers.dev). Never produced by
+/// a real server response — see AuthRepository.signInOfflineDemo.
 AuthUser offlineDemoUser() => const AuthUser(
   id: 'offline-demo-user',
-  email: 'testing@getnuvo.net',
+  email: 'team@getnuvo.net',
   isDemo: true,
   fullName: 'Nuvo Review',
   username: 'nuvoreview',

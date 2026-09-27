@@ -1,5 +1,8 @@
 import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../types';
+import { hardDeleteAccount } from './auth';
+import { appleServiceConfig } from '../lib/apple';
+import { normalizeEmail } from '../lib/validation';
 import { readMotionCatalog, readMotionRelease } from '../domain/motionRegistry';
 import { validateMotionVerifierSpec } from '../domain/motionSpec';
 import { declaredPackageAssets, packageAssetKey } from '../domain/motionAssets';
@@ -32,6 +35,9 @@ import {
 // sessions. Never mount this behind the public app surface without the guard.
 
 export const internalRouter = new Hono<AppEnv>();
+
+// The only identity the QA reset endpoint will ever touch.
+const QA_RESET_EMAIL = 'testing@getnuvo.net';
 
 internalRouter.use('*', async (c, next) => {
   const expected = c.env.INTERNAL_API_KEY;
@@ -897,4 +903,30 @@ internalRouter.get('/activities/:activityId/motion-sessions/latest', async (c) =
   ).bind(c.req.param('activityId')).first<SessionRow>();
   if (!row) return c.json({ ok: false, error: 'No sessions for this activity.' }, 404);
   return c.json(await fullSession(c, row));
+});
+
+// QA blank-slate reset — founder-only tooling for repeatable first-user
+// testing. Restricted to the dedicated QA identity; refuses anything else so
+// this can never touch a real (or demo) account. Uses the canonical
+// account-deletion path — the tombstoned row keeps no PII and the next sign-in
+// lands on a brand-new user row, exactly like first install.
+internalRouter.post('/qa/reset', async (c) => {
+  let body: { email?: unknown };
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const email = normalizeEmail(typeof body.email === 'string' ? body.email : '');
+  if (email !== QA_RESET_EMAIL) {
+    return c.json({ ok: false, error: 'Not a QA resettable identity.' }, 403);
+  }
+  const user = await c.env.DB.prepare(
+    "SELECT id FROM users WHERE primary_email = ? AND status != 'deleted' LIMIT 1",
+  ).bind(email).first<{ id: string }>();
+  if (!user) return c.json({ ok: true, reset: false });
+  await hardDeleteAccount(
+    c.env.DB,
+    c.env.PROFILE_PHOTOS,
+    c.env.MOTION_DATA_MASTER_KEY,
+    user.id,
+    appleServiceConfig(c.env),
+  );
+  return c.json({ ok: true, reset: true, previousUserId: user.id });
 });

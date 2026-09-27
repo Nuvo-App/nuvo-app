@@ -158,7 +158,7 @@ CoachSpec? composerCoachSpec(
 
 /// Whether the first-race coach may arm for [user] right now.
 ///
-/// testing@getnuvo.net always re-arms — it is the dedicated QA identity whose
+/// The store-review credential always re-arms — it is the demo identity whose
 /// whole purpose is replaying the first-use flow. Every other eligible
 /// (demo-flagged) identity is suppressed once its guide completion has been
 /// persisted for that account.

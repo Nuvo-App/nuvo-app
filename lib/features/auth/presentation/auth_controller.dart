@@ -20,8 +20,11 @@ enum AuthStatus {
   offline,
 }
 
+/// The shared store-review credential — the one identity that always renders
+/// the polished demo world. `testing@getnuvo.net` is deliberately NOT here:
+/// it is a real QA account that behaves like a brand-new user.
 bool isNuvoStoreDemoEmail(String email) =>
-    email.trim().toLowerCase() == 'testing@getnuvo.net';
+    email.trim().toLowerCase() == 'team@getnuvo.net';
 
 /// True when [e] is a transport-level failure — unreachable (ApiException 0),
 /// timed out (408 / TimeoutException), or a raw socket/TLS error that escaped
@@ -41,8 +44,8 @@ class AuthState {
   final String? error;
 
   /// Eligibility for the post-auth first-race coach guide. This is a property
-  /// of the resolved ACCOUNT — the dedicated store-testing identity
-  /// (testing@getnuvo.net) or any backend-flagged demo account — computed
+  /// of the resolved ACCOUNT — the dedicated store-review credential
+  /// (team@getnuvo.net) or any backend-flagged demo account — computed
   /// identically for restore and every sign-in channel. Whether the guide
   /// actually arms is decided at the routing layer (see
   /// firstRaceGuideAllowed), which additionally consults the persisted
@@ -133,13 +136,13 @@ class AuthController extends StateNotifier<AuthState> {
   /// Whether a failed reviewer sign-in may fall back to a fully local demo
   /// session. Debug builds allow it for any reviewer credential so QA works
   /// on networks that block workers.dev. Release builds allow it ONLY for the
-  /// dedicated store-testing identity — that session is local-only fixture
+  /// dedicated store-review credential — that session is local-only fixture
   /// data with sentinel tokens that can never authenticate a real request, so
   /// the demo works in airplane mode without exposing a passwordless path into
   /// a real account.
   bool _offlineDemoAllowed(String email) {
     final e = email.trim().toLowerCase();
-    return kDebugMode || e == 'testing@getnuvo.net' || e == 'testing@getnuvo';
+    return kDebugMode || e == 'team@getnuvo.net';
   }
 
   Future<void> signInReviewer(String email, String password) async {

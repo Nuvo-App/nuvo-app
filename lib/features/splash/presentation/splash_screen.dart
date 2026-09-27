@@ -171,10 +171,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (user != null &&
         isNuvoStoreDemoEmail(user.email) &&
         user.id != 'offline-demo-user') {
-      // testing@getnuvo.net must always start fresh from the splash screen
-      // and walk through the full first-launch flow. Flag the replay before
-      // logout — sign-out clears the demo flags, and the unauthenticated
-      // launch that follows must still land on the cinematic, not /welcome.
+      // The store-review identity must always start fresh from the splash
+      // screen and walk through the full first-launch flow. Flag the replay
+      // before logout — sign-out clears the demo flags, and the
+      // unauthenticated launch that follows must still land on the cinematic,
+      // not /welcome.
       // A local-only offline demo session (sentinel tokens, fixture data)
       // is exempt: it can never reach the API, so force-logging it out would
       // strand a venue demo behind a sign-in that needs connectivity.
@@ -188,8 +189,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // The intro replay is a first-use experience: an eligible account walks
       // it ONCE. Once this account's guide completion is persisted, later
       // signed-in launches go straight to the app — the coach must never
-      // re-appear on every sign-in. testing@getnuvo.net never reaches this
-      // branch (it logged out above), so its always-replay contract holds.
+      // re-appear on every sign-in. The store-review identity never reaches
+      // this branch (it logged out above), so its always-replay contract
+      // holds.
       final guideDone = ref
           .read(firstUseStoreProvider)
           .isGuideDone(user.email);

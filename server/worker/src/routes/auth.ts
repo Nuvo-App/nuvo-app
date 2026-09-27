@@ -26,20 +26,6 @@ const MAX_OTP_ATTEMPTS = 5;
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const ACCESS_TOKEN_TTL_S = 15 * 60; // 15 minutes
 const REFRESH_TOKEN_TTL_S = 30 * 24 * 60 * 60; // 30 days
-const TEST_DEMO_EMAIL = 'testing@getnuvo.net';
-const TEST_DEMO_RACES = [
-  ['First to 25 Pushups', 'pushups', 25, 'reps'],
-  ['Squat Sunday', 'squats', 75, 'reps'],
-  ['Jumping Jack Sprint', 'jumping_jacks', 60, 'reps'],
-  ['Lunge Ladder', 'lunges', 40, 'reps'],
-  ['Plank Hold Wars', 'plank', 180, 'seconds'],
-  ['Morning Mobility', 'custom', 15, 'minutes'],
-  ['Crew Conditioning', 'pushups', 100, 'reps'],
-  ['Weekend Finish Line', 'squats', 100, 'reps'],
-  ['Core Control', 'plank', 120, 'seconds'],
-  ['Final Rep Race', 'jumping_jacks', 100, 'reps'],
-] as const;
-
 export const authRouter = new Hono<AppEnv>();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,116 +56,6 @@ async function ensureProfileAndPass(db: D1Database, userId: string): Promise<voi
       .bind(generateId(), userId, memberId, passSlug)
       .run();
   }
-}
-
-async function ensureDemoPerson(db: D1Database, userId: string): Promise<string> {
-  const existing = await db.prepare('SELECT id FROM people WHERE user_id = ?').bind(userId).first<{ id: string }>();
-  if (existing) return existing.id;
-  const profile = await db.prepare('SELECT full_name, username FROM profiles WHERE user_id = ?').bind(userId).first<{ full_name: string | null; username: string | null }>();
-  const personId = generateId();
-  await db.prepare(
-    `INSERT INTO people (id, person_key, user_id, display_name, created_at, updated_at)
-     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-  ).bind(personId, `user-${userId}`, userId, profile?.full_name ?? profile?.username ?? 'Racer').run();
-  return personId;
-}
-
-async function seedTestDemoRaces(db: D1Database, userId: string): Promise<void> {
-  const otherUsers = await db.prepare(`SELECT id FROM users WHERE id != ? AND status = 'active' ORDER BY created_at ASC LIMIT 3`).bind(userId).all<{ id: string }>();
-  const racerIds = [userId, ...otherUsers.results.map((row) => row.id)];
-  const personIds = new Map<string, string>();
-  for (const racerId of racerIds) personIds.set(racerId, await ensureDemoPerson(db, racerId));
-
-  const statements: D1PreparedStatement[] = [];
-  for (const [index, [title, movementType, targetValue, targetUnit]] of TEST_DEMO_RACES.entries()) {
-    const raceId = generateId();
-    const activityId = movementType === 'custom' ? null : movementType;
-    const metric = targetUnit === 'seconds' ? 'seconds' : targetUnit === 'minutes' ? 'minutes' : 'reps';
-    statements.push(db.prepare(
-      `INSERT INTO races (
-         id, creator_id, title, description, race_type, movement_type, verification_type,
-         target_value, target_unit, activity_id, metric, format, scoring_rule,
-         verification_method, timezone, recurrence, status, visibility, start_at, end_at,
-         created_at, updated_at
-       ) VALUES (?, ?, ?, ?, 'first_to_target', ?, 'movecheck', ?, ?, ?, ?, 'first_to_goal',
-         'cumulative_sum', 'camera_pose', 'America/New_York', 'none', 'active', 'public_demo',
-         NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    ).bind(raceId, userId, title, 'A Nuvo race for your crew. First to the finish line wins.', movementType === 'custom' ? null : movementType, targetValue, targetUnit, activityId, metric));
-
-    for (const [racerIndex, racerId] of racerIds.entries()) {
-      statements.push(db.prepare(
-        `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at)
-         VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
-      ).bind(generateId(), raceId, racerId, personIds.get(racerId), racerIndex === 0 ? 'creator' : 'racer'));
-      statements.push(db.prepare(
-        `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, rank_cache, updated_at)
-         VALUES (?, ?, ?, ?, 0, ?, CURRENT_TIMESTAMP)`,
-      ).bind(generateId(), raceId, racerId, racerIndex === 0 ? (index % 3) * 5 : ((index + racerIndex) % 4) * 3, racerIndex + 1));
-    }
-  }
-  await db.batch(statements);
-}
-
-/**
- * Reset the isolated App Store / Google review account at sign-in time.
- * This is deliberately email-gated and never runs for normal users.
- */
-async function resetTestDemoAccount(
-  db: D1Database,
-  userId: string,
-  email: string,
-): Promise<void> {
-  if (email !== TEST_DEMO_EMAIL) return;
-
-  const ownedRaces = await db
-    .prepare('SELECT id FROM races WHERE creator_id = ?')
-    .bind(userId)
-    .all<{ id: string }>();
-
-  for (const race of ownedRaces.results) {
-    await db.batch([
-      db.prepare('DELETE FROM race_invites WHERE race_id = ?').bind(race.id),
-      db.prepare('DELETE FROM move_logs WHERE race_id = ?').bind(race.id),
-      db.prepare('DELETE FROM race_progress WHERE race_id = ?').bind(race.id),
-      db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id),
-      db.prepare('DELETE FROM race_members WHERE race_id = ?').bind(race.id),
-      db.prepare('DELETE FROM race_events WHERE race_id = ?').bind(race.id),
-      db.prepare('DELETE FROM races WHERE id = ?').bind(race.id),
-    ]);
-  }
-
-  await db.batch([
-    db.prepare('DELETE FROM move_logs WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM race_progress WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM race_members WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM race_invites WHERE created_by = ?').bind(userId),
-    db.prepare('DELETE FROM crew_connections WHERE user_id = ? OR crew_user_id = ?').bind(userId, userId),
-    db.prepare('DELETE FROM xp_events WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM user_progression WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM user_unlocks WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM user_featured_badges WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM race_events WHERE actor_user_id = ? OR subject_user_id = ?').bind(userId, userId),
-    db.prepare(
-      `UPDATE profiles
-       SET full_name = NULL, username = NULL, avatar_url = NULL,
-           avatar_object_key = NULL, onboarding_complete = 0, is_demo = 1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = ?`,
-    ).bind(userId),
-    db.prepare(
-      `UPDATE users
-       SET demo_world_enabled = 1,
-           demo_world_seed = ?,
-           demo_world_variant = 'summer_v1',
-           terms_accepted_at = COALESCE(terms_accepted_at, CURRENT_TIMESTAMP),
-           age_attested_at = COALESCE(age_attested_at, CURRENT_TIMESTAMP),
-           last_login_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-    ).bind(TEST_DEMO_EMAIL, userId),
-  ]);
-
-  await seedTestDemoRaces(db, userId);
 }
 
 async function createSession(
@@ -227,7 +103,7 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
   return {
     id: userId,
     email,
-    isDemo: email.trim().toLowerCase() === TEST_DEMO_EMAIL || profile?.is_demo === 1,
+    isDemo: profile?.is_demo === 1,
     fullName: profile?.full_name ?? null,
     username: profile?.username ?? null,
     profilePhotoUrl: profile?.avatar_url ?? null,
@@ -239,7 +115,7 @@ async function buildUserObject(db: D1Database, userId: string, email: string) {
   };
 }
 
-async function hardDeleteAccount(
+export async function hardDeleteAccount(
   db: D1Database,
   r2: R2Bucket,
   motionMasterKey: string | undefined,
@@ -528,7 +404,6 @@ authRouter.post('/email/verify', async (c) => {
     .run();
 
   const user = await findOrCreateUser(c.env.DB, email);
-  await resetTestDemoAccount(c.env.DB, user.id, email);
 
   // Ensure email identity row exists
   const existingIdentity = await c.env.DB.prepare(
@@ -578,7 +453,6 @@ authRouter.post('/google', async (c) => {
 
   const email = normalizeEmail(googleInfo.email);
   const user = await findOrCreateUser(c.env.DB, email);
-  await resetTestDemoAccount(c.env.DB, user.id, email);
 
   // Upsert Google identity
   const existingIdentity = await c.env.DB.prepare(
@@ -668,7 +542,6 @@ authRouter.post('/apple', async (c) => {
 
   const email = normalizeEmail(appleInfo.email);
   const user = await findOrCreateUser(c.env.DB, email);
-  await resetTestDemoAccount(c.env.DB, user.id, email);
 
   // Upsert Apple identity
   const existingIdentity = await c.env.DB.prepare(
@@ -729,11 +602,7 @@ authRouter.post('/reviewer', async (c) => {
     return c.json({ ok: false, error: 'Invalid request body' }, 400);
   }
 
-  const requestedEmail = normalizeEmail(typeof body.email === 'string' ? body.email : '');
-  const email =
-    requestedEmail === 'testing@getnuvo' || requestedEmail === 'testing@getnuvo.net'
-      ? 'team@getnuvo.net'
-      : requestedEmail;
+  const email = normalizeEmail(typeof body.email === 'string' ? body.email : '');
   const password = typeof body.password === 'string' ? body.password : '';
   const expectedHash = c.env.REVIEWER_PASSWORD_HASH;
   const INVALID = { ok: false, error: 'Invalid review credentials' } as const;
@@ -864,9 +733,6 @@ authRouter.get('/me', requireAuth, async (c) => {
     .first<UserRow>();
   if (!user || user.status === 'deleted') {
     return c.json({ ok: false, error: 'User not found' }, 404);
-  }
-  if (c.req.query('resetDemo') === '1') {
-    await resetTestDemoAccount(c.env.DB, userId, user.primary_email ?? '');
   }
   // Crew presence signal — every session restore / re-check is a real "this
   // person was just active" event. Best-effort; never blocks the response.
