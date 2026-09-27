@@ -21,6 +21,7 @@ import '../../races/data/race_models.dart'
 import '../../races/domain/race_display.dart'
     show raceProgressLabel, serverRankedParticipants;
 import '../../races/presentation/race_controller.dart';
+import '../../profile/presentation/widgets/nuvo_badges.dart';
 import '../application/crew_controller.dart';
 import '../data/crew_api.dart';
 import '../domain/crew_presence.dart';
@@ -383,8 +384,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
                       style: AppTextStyles.bodySmall
                           .copyWith(color: NuvoColors.textMuted)),
                 ],
-                // Nuvo Level — competitive identity, same visibility rule as
-                // the name/photo (server returns null when hidden).
+                // Nuvo Level + featured achievements — competitive identity,
+                // same visibility rule as the name/photo (server returns
+                // null when hidden).
                 if (card.level != null) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -397,12 +399,31 @@ class _State extends ConsumerState<PublicProfileScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      'Lv. ${card.level}',
+                      'Lv. ${card.level}'
+                      '${card.achievementsEarned != null && card.achievementsEarned! > 0 ? '  ·  ${card.achievementsEarned} achievements' : ''}',
                       style: AppTextStyles.labelSmall.copyWith(
                         color: NuvoColors.blue,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                  ),
+                ],
+                if (card.featured.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < card.featured.length; i++) ...[
+                        Tooltip(
+                          message: card.featured[i].name,
+                          child: NuvoMiniBadge(
+                            iconKey: card.featured[i].iconKey,
+                          ),
+                        ),
+                        if (i < card.featured.length - 1)
+                          const SizedBox(width: 6),
+                      ],
+                    ],
                   ),
                 ],
                 // Real presence, crew only — same rule as the crew list.

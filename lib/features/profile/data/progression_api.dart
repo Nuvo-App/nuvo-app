@@ -128,4 +128,12 @@ class ProgressionApi {
       (json['progression'] as Map<String, dynamic>?) ?? const {},
     );
   }
+
+  /// What one race paid out — the finish screen's XP breakdown.
+  Future<NuvoRaceXp> getRaceXp(String token, String raceId) async {
+    final json = await _get('/progression/race/$raceId', token);
+    return NuvoRaceXp.fromJson(
+      (json['xp'] as Map<String, dynamic>?) ?? const {},
+    );
+  }
 }

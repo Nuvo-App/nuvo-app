@@ -705,6 +705,7 @@ class RaceRow extends StatelessWidget {
     required this.participantCount,
     required this.avatars,
     required this.onTap,
+    this.rewardLabel,
   });
 
   final String raceTitle;
@@ -715,6 +716,10 @@ class RaceRow extends StatelessWidget {
   final int participantCount;
   final List<({String initials, String? photoUrl, String id})> avatars;
   final VoidCallback onTap;
+
+  /// Deterministic progression hint ("Finish · +25 XP") — server-declared
+  /// constants only, shown when finishing would pay out.
+  final String? rewardLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -770,6 +775,18 @@ class RaceRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (rewardLabel != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        rewardLabel!,
+                        style: AppTextStyles.raceRowMeta.copyWith(
+                          color: NuvoColors.actionBlue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                     if (hasProof) ...[
                       const SizedBox(height: 6),
                       RaceProgress(

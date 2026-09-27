@@ -33,6 +33,7 @@ import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
+import '../../profile/presentation/widgets/xp_reward.dart';
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -1199,6 +1200,12 @@ class _RaceSummaryCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
+          ],
+          // What this race paid out — the XP breakdown comes from the
+          // canonical ledger, never computed client-side.
+          if (isComplete && isParticipant) ...[
+            const SizedBox(height: 16),
+            NuvoXpEarnedBlock(raceId: race.id),
           ],
           const SizedBox(height: 18),
           NuvoPrimaryButton(
