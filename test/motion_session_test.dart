@@ -88,6 +88,69 @@ void main() {
     expect(m['sessionId'], startsWith('ms_'));
   });
 
+  test('artifact schema contains no identity fields and no media', () {
+    final r = recorder()..start();
+    r.recordFrame(_frame(),
+        validatorState: 'active', count: 1, confidence: 0.9, failedRuleReason: '');
+    r.finish(outcome: MotionSessionOutcome.verified, detectedValue: 1);
+    final a = r.build();
+    final json = a.toJson();
+
+    // Identity/media keys must never appear anywhere in the payload — the
+    // training artifact is pose landmarks + session metadata only.
+    const banned = {
+      'email', 'fullName', 'full_name', 'username', 'userId', 'user_id',
+      'avatar', 'profilePhoto', 'photo', 'image', 'jpeg', 'jpg', 'png',
+      'video', 'audio', 'mp4', 'token', 'accessToken', 'refreshToken',
+      'password', 'authToken', 'dateOfBirth', 'dob', 'name',
+    };
+    void scan(Object? node) {
+      if (node is Map) {
+        for (final e in node.entries) {
+          expect(banned.contains(e.key), isFalse,
+              reason: 'artifact contains banned key ${e.key}');
+          scan(e.value);
+        }
+      } else if (node is List) {
+        for (final v in node) {
+          scan(v);
+        }
+      }
+    }
+    scan(json);
+    scan(a.metadata());
+
+    // Frames serialize to landmarks only — normalized points + confidence.
+    final frames = (json['frames'] as List).cast<Map<String, dynamic>>();
+    expect(frames, isNotEmpty);
+    for (final f in frames) {
+      expect(f.keys.toSet(), {'timestampMs', 'quality', 'landmarks'});
+      for (final lm in (f['landmarks'] as Map).values) {
+        expect((lm as Map).keys.toSet(), {'x', 'y', 'z', 'confidence'});
+      }
+    }
+  });
+
+  test('upload queue discards a staged artifact when the server reports stored:false', () async {
+    final dir = await Directory.systemTemp.createTemp('ms_queue_revoke');
+    addTearDown(() => dir.delete(recursive: true));
+
+    // Server returns 200 {stored:false} on revocation — upload() resolves
+    // without throwing, which drains the staged file without storing.
+    final q = MotionSessionUploadQueue(
+      stagingDir: dir,
+      upload: ({required metadata, required gzipBytes}) async {},
+    );
+    final r = recorder()..start();
+    r.finish(outcome: MotionSessionOutcome.verified, detectedValue: 1);
+    await q.enqueue(r.build());
+    await q.flush();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await q.flush();
+    expect(dir.listSync().whereType<File>(), isEmpty,
+        reason: 'staged artifact must drain once the server refuses storage');
+  });
+
   test('upload queue retries a failed upload and clears it on success', () async {
     final dir = await Directory.systemTemp.createTemp('ms_queue_test');
     addTearDown(() => dir.delete(recursive: true));
