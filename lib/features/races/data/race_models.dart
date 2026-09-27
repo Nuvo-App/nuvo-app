@@ -358,6 +358,7 @@ class RaceParticipant {
     required this.joinedAt,
     this.profilePhotoUrl,
     this.finishedAt,
+    this.level,
   });
 
   final String id;
@@ -373,6 +374,10 @@ class RaceParticipant {
   /// (first-to-goal only) — the canonical tiebreak order.
   final String? finishedAt;
 
+  /// Nuvo Level — part of this racer's public identity on the board. Null
+  /// when the server masks their identity.
+  final int? level;
+
   factory RaceParticipant.fromJson(Map<String, dynamic> json) =>
       RaceParticipant(
         id: json['id'] as String? ?? '',
@@ -384,6 +389,7 @@ class RaceParticipant {
         joinedAt: json['joinedAt'] as String? ?? '',
         profilePhotoUrl: json['profilePhotoUrl'] as String?,
         finishedAt: json['finishedAt'] as String?,
+        level: json['level'] as int?,
       );
 }
 
@@ -395,6 +401,7 @@ class RaceFinalStanding {
     required this.rank,
     required this.scoreValue,
     this.completedAt,
+    this.level,
   });
 
   final String userId;
@@ -404,6 +411,9 @@ class RaceFinalStanding {
   final int scoreValue;
   final String? completedAt;
 
+  /// Nuvo Level — same public-identity rule as participants.
+  final int? level;
+
   factory RaceFinalStanding.fromJson(Map<String, dynamic> json) =>
       RaceFinalStanding(
         userId: json['userId'] as String? ?? '',
@@ -412,6 +422,7 @@ class RaceFinalStanding {
         rank: json['rank'] as int? ?? 0,
         scoreValue: json['scoreValue'] as int? ?? 0,
         completedAt: json['completedAt'] as String?,
+        level: json['level'] as int?,
       );
 }
 

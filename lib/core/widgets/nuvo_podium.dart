@@ -16,6 +16,8 @@ class NuvoPodiumEntry {
     this.photoUrl,
     this.avatarSeedId,
     this.isCurrentUser = false,
+    this.level,
+    this.onTap,
   });
 
   final int rank;
@@ -27,6 +29,13 @@ class NuvoPodiumEntry {
   final String? photoUrl;
   final String? avatarSeedId;
   final bool isCurrentUser;
+
+  /// Nuvo Level — compact identity on the board, shown under the name.
+  final int? level;
+
+  /// Tapping a racer opens their public profile — social identity starts
+  /// at the leaderboard.
+  final VoidCallback? onTap;
 }
 
 /// Top-3 standings, flat. Three avatars with a small placement badge, name and
@@ -101,7 +110,7 @@ class _Place extends StatelessWidget {
     final avatarSize = (raised ? 76.0 : 60.0) * s;
     final me = e.isCurrentUser;
 
-    return Column(
+    Widget column = Column(
       children: [
         SizedBox(
           width: avatarSize,
@@ -180,10 +189,31 @@ class _Place extends StatelessWidget {
             fontSize: 12 * s,
           ),
         ),
+        // Compact social identity — a quiet Lv under the score, never a
+        // second stat column competing with the race number.
+        if (e.level != null) ...[
+          SizedBox(height: 2 * s),
+          Text(
+            'Lv. ${e.level}',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: context.themeColors.inkDim,
+              fontWeight: FontWeight.w800,
+              fontSize: 10 * s,
+            ),
+          ),
+        ],
         // A touch of breathing room under the rep count itself — the podium
         // stays visually prominent without feeling clipped right at the number.
         SizedBox(height: 4 * s),
       ],
+    );
+    final onTap = e.onTap;
+    if (onTap == null) return column;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: column,
     );
   }
 }

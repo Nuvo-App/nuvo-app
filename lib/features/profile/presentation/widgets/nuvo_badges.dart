@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_geometry.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/nuvo_entrance.dart';
+import '../../../../core/widgets/nuvo_motion.dart';
+import '../../../../core/widgets/nuvo_progress_bar.dart';
+import '../../../../core/widgets/pressable_scale.dart';
 import '../../data/progression_models.dart';
 
 /// Server `icon_key` → glyph. The server stores a stable identifier; the
@@ -246,5 +251,260 @@ class NuvoMiniBadge extends StatelessWidget {
               ),
       ),
     );
+  }
+}
+
+/// Achievement tab taxonomy shared by the self collection and public
+/// earned-only collections.
+const nuvoAchievementTabs = <String, String>{
+  'All': '',
+  'Racing': 'racing',
+  'Winning': 'winning',
+  'Creating': 'creation',
+  'Performance': 'performance',
+  'Social': 'social',
+  'Variety': 'variety',
+  'Motion': 'motion',
+  'Special': 'special',
+};
+
+const nuvoSpecialCategories = {'proof', 'category', 'level'};
+
+/// The achievement grid — earned and locked tiles in the shared silhouette.
+/// Used by the self collection (with locked progress) and public
+/// collections (earned-only).
+class NuvoBadgeGrid extends StatelessWidget {
+  const NuvoBadgeGrid({super.key, required this.badges, this.onTap});
+
+  final List<NuvoBadge> badges;
+  final void Function(NuvoBadge badge)? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: NuvoSpacing.lg,
+        crossAxisSpacing: NuvoSpacing.sm,
+        childAspectRatio: 0.72,
+      ),
+      itemCount: badges.length,
+      itemBuilder: (context, i) {
+        final badge = badges[i];
+        return PressableScale(
+          onTap: onTap == null ? null : () => onTap!(badge),
+          scale: 0.95,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Opacity(
+                    opacity: badge.unlocked ? 1 : 0.6,
+                    child: NuvoAchievementBadge(badge: badge, size: 60),
+                  ),
+                  if (badge.featured)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: NuvoColors.blue,
+                          border: Border.all(color: c.page, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: NuvoColors.white,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                badge.name,
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: badge.unlocked ? c.ink : c.inkDim,
+                  fontWeight: FontWeight.w800,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 3),
+              if (!badge.unlocked && badge.goalProgress > 0)
+                SizedBox(
+                  width: 52,
+                  child: NuvoProgressBar(
+                    value: badge.goalProgress,
+                    height: 4,
+                    color: NuvoColors.blue,
+                    trackColor: c.track,
+                  ),
+                )
+              else
+                Text(
+                  badge.unlocked ? 'Earned' : 'Locked',
+                  style: AppTextStyles.labelUppercase(
+                    9,
+                    color: badge.unlocked ? c.inkSubtle : c.inkDim,
+                  ).copyWith(
+                    color: badge.unlocked ? c.inkSubtle : c.inkDim,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// One achievement, large — what it is, what it asked for, where the viewer
+/// stands. Read-only for public collections (no feature action, no locked
+/// progress — the server never sends it for other people).
+class NuvoAchievementDetailSheet extends StatelessWidget {
+  const NuvoAchievementDetailSheet({
+    super.key,
+    required this.badge,
+    this.onFeature,
+  });
+
+  final NuvoBadge badge;
+  final VoidCallback? onFeature;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        border: Border.all(color: c.inkShadow, width: 2.5),
+        boxShadow: [
+          BoxShadow(
+            color: c.inkShadow,
+            offset: const Offset(4, 4),
+            blurRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: c.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: NuvoSpacing.lg),
+          NuvoAchievementBadge(badge: badge, size: 72),
+          const SizedBox(height: NuvoSpacing.md),
+          Text(
+            badge.name,
+            style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
+            textAlign: TextAlign.center,
+          ),
+          if (badge.description != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              badge.description!,
+              style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          const SizedBox(height: NuvoSpacing.lg),
+          if (badge.unlocked)
+            Text(
+              badge.unlockedAt != null && badge.unlockedAt != 'demo'
+                  ? 'Earned ${badge.unlockedAt!.split('T').first}'
+                  : 'Earned',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.blue,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          else if (badge.threshold != null && badge.threshold! > 0)
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: NuvoProgressBar(
+                        value: badge.goalProgress,
+                        height: 8,
+                        color: NuvoColors.blue,
+                        trackColor: c.track,
+                      ),
+                    ),
+                    const SizedBox(width: NuvoSpacing.sm),
+                    Text(
+                      '${badge.progressValue} / ${badge.threshold}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: c.inkSubtle,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                if (badge.threshold! - badge.progressValue == 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'One to go.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: NuvoColors.blue,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          if (onFeature != null) ...[
+            const SizedBox(height: NuvoSpacing.lg),
+            NuvoPressable(
+              onTap: onFeature,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                decoration: BoxDecoration(
+                  color: badge.featured ? c.panelLight : NuvoColors.blue,
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  border: Border.all(color: c.inkShadow, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.inkShadow,
+                      offset: const Offset(3, 3),
+                      blurRadius: 0,
+                    ),
+                  ],
+                ),
+                child: Text(
+                  badge.featured ? 'Unfeature' : 'Feature on Profile',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: badge.featured ? c.ink : NuvoColors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    ).nuvoEnter();
   }
 }

@@ -367,6 +367,15 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     }
   }
 
+  /// A racer's public profile — one person surface behind every name on the
+  /// board. Self rows don't navigate (the self profile is a tab away).
+  VoidCallback? _personTap(String? userId) {
+    final id = userId;
+    final me = ref.read(authControllerProvider).user?.id;
+    if (id == null || id.isEmpty || id == me) return null;
+    return () => context.push('/u/$id');
+  }
+
   Future<bool> _confirm({
     required String title,
     required String message,
@@ -575,6 +584,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                           photoUrl: sorted[i].profilePhotoUrl,
                           avatarSeedId: sorted[i].userId,
                           isCurrentUser: sorted[i].userId == user?.id,
+                          level: sorted[i].level,
+                          onTap: _personTap(sorted[i].userId),
                         ),
                     ],
                     rest: sorted.length > 3
@@ -1378,7 +1389,7 @@ class _LeaderboardCompactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final row = Container(
       color: isCurrentUser ? context.semanticColors.neutral.surface : null,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
@@ -1416,6 +1427,18 @@ class _LeaderboardCompactRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          // Compact social identity — the level sits between the name and
+          // the race number, quiet enough to never compete with standings.
+          if (participant.level != null) ...[
+            Text(
+              'Lv. ${participant.level}',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: context.themeColors.inkDim,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           const SizedBox(width: 10),
           Text(
             raceProgressLabel(race, participant),
@@ -1426,6 +1449,14 @@ class _LeaderboardCompactRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+    // Every name on the board opens that racer's public profile — level and
+    // achievements are social identity, reachable from the leaderboard.
+    if (isCurrentUser || participant.userId.isEmpty) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push('/u/${participant.userId}'),
+      child: row,
     );
   }
 }
@@ -1455,6 +1486,10 @@ class _FinalStandingsGroup extends StatelessWidget {
             photoUrl: standing.profilePhotoUrl,
             avatarSeedId: standing.userId,
             isCurrentUser: standing.userId == userId,
+            level: standing.level,
+            onTap: standing.userId != userId && standing.userId.isNotEmpty
+                ? () => context.push('/u/${standing.userId}')
+                : null,
           ),
       ],
       rest: standings.length > 3
@@ -1948,7 +1983,7 @@ class _FinalStandingRow extends StatelessWidget {
         : isCurrentUser
         ? NuvoColors.actionBlue
         : null;
-    return Container(
+    final row = Container(
       margin: const EdgeInsets.symmetric(vertical: 1),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
@@ -1984,8 +2019,19 @@ class _FinalStandingRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 8),
-          if (standing.scoreValue > 0)
+          if (standing.level != null) ...[
+            Text(
+              'Lv. ${standing.level}',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: selectedFill != null
+                    ? NuvoColors.white
+                    : context.themeColors.inkDim,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          if (standing.scoreValue > 0) ...[
+            const SizedBox(width: 8),
             Text(
               raceScoreLabel(race, standing.scoreValue),
               style: AppTextStyles.labelMedium.copyWith(
@@ -1993,8 +2039,15 @@ class _FinalStandingRow extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+          ],
         ],
       ),
+    );
+    if (isCurrentUser || standing.userId.isEmpty) return row;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push('/u/${standing.userId}'),
+      child: row,
     );
   }
 }

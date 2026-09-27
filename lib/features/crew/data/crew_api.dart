@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../auth/data/auth_api.dart' show ApiException;
 import '../../races/data/race_models.dart' show PublicUser;
+import '../../profile/data/progression_models.dart' show NuvoBadge;
 import '../../../core/network/api_base.dart';
 
 const _timeout = Duration(seconds: 20);
@@ -53,8 +54,14 @@ class PublicProfileCard {
     this.isPrivate = false,
     this.lastActiveAt,
     this.level,
+    this.levelProgress,
     this.achievementsEarned,
+    this.achievementsTotal,
     this.featured = const [],
+    this.earned = const [],
+    this.racesFinished,
+    this.racesWon,
+    this.racesWithYou,
   });
 
   final String id;
@@ -73,11 +80,29 @@ class PublicProfileCard {
   /// full profile.
   final int? level;
 
+  /// 0..1 fill inside the current level — public viewers get the fraction,
+  /// never absolute XP. Null when hidden.
+  final double? levelProgress;
+
   /// Earned-achievement count — same visibility rule as level.
   final int? achievementsEarned;
 
+  /// Total achievement definitions — for the "earned / total" line.
+  final int? achievementsTotal;
+
   /// Featured achievements (icon + name) — compact social identity.
   final List<PublicFeaturedBadge> featured;
+
+  /// Earned achievements — the public collection. Progress on locked
+  /// achievements is self-only, so this list is earned-only by contract.
+  final List<NuvoBadge> earned;
+
+  /// Canonical racing stats — finished races and wins.
+  final int? racesFinished;
+  final int? racesWon;
+
+  /// Head-to-head racing context between the viewer and this member.
+  final PublicRacesWithYou? racesWithYou;
 
   factory PublicProfileCard.fromJson(Map<String, dynamic> j) => PublicProfileCard(
         id: j['id'] as String,
@@ -90,11 +115,70 @@ class PublicProfileCard {
         isPrivate: j['isPrivate'] as bool? ?? false,
         lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
         level: j['level'] as int?,
+        levelProgress: (j['levelProgress'] as num?)?.toDouble(),
         achievementsEarned: j['achievementsEarned'] as int?,
+        achievementsTotal: j['achievementsTotal'] as int?,
         featured: (j['featuredAchievements'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(PublicFeaturedBadge.fromJson)
             .toList(),
+        earned: (j['earnedAchievements'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(NuvoBadge.fromJson)
+            .toList(),
+        racesFinished:
+            (j['raceStats'] as Map<String, dynamic>?)?['races'] as int?,
+        racesWon: (j['raceStats'] as Map<String, dynamic>?)?['wins'] as int?,
+        racesWithYou: j['racesWithYou'] is Map<String, dynamic>
+            ? PublicRacesWithYou.fromJson(
+                j['racesWithYou'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
+/// Shared finished races between the viewer and this member, derived from
+/// canonical roster + winner history on the server.
+class PublicRacesWithYou {
+  const PublicRacesWithYou({
+    required this.total,
+    required this.viewerWins,
+    required this.targetWins,
+    this.recent = const [],
+  });
+
+  final int total;
+  final int viewerWins;
+  final int targetWins;
+  final List<PublicSharedRace> recent;
+
+  factory PublicRacesWithYou.fromJson(Map<String, dynamic> j) =>
+      PublicRacesWithYou(
+        total: j['total'] as int? ?? 0,
+        viewerWins: j['viewerWins'] as int? ?? 0,
+        targetWins: j['targetWins'] as int? ?? 0,
+        recent: (j['recent'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(PublicSharedRace.fromJson)
+            .toList(),
+      );
+}
+
+class PublicSharedRace {
+  const PublicSharedRace({
+    required this.raceId,
+    required this.title,
+    this.winnerUserId,
+  });
+
+  final String raceId;
+  final String title;
+  final String? winnerUserId;
+
+  factory PublicSharedRace.fromJson(Map<String, dynamic> j) =>
+      PublicSharedRace(
+        raceId: j['raceId'] as String? ?? '',
+        title: j['title'] as String? ?? 'Race',
+        winnerUserId: j['winnerUserId'] as String?,
       );
 }
 

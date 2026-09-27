@@ -3,7 +3,7 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { canViewFullProfile, isBlocked } from '../lib/privacy';
 import { canSeeIdentity, crewConnectionStatus } from '../domain/crewLifecycle';
-import { publicIdentityFor } from '../domain/progression';
+import { publicProfileProgressionFor } from '../domain/progression';
 
 export const usersRouter = new Hono<AppEnv>();
 
@@ -168,9 +168,13 @@ usersRouter.get('/:id', async (c) => {
     connectionStatus,
   );
 
-  // Nuvo Level + featured achievements are part of a member's competitive
-  // identity — they follow the same visibility rule as the name/photo.
-  const identity = canSee ? await publicIdentityFor(c.env.DB, targetId) : null;
+  // Nuvo Level + achievements + racing context are part of a member's
+  // competitive identity — they follow the same visibility rule as the
+  // name/photo. The bundle is read-only: viewing a profile never reconciles
+  // the target's progression.
+  const identity = canSee
+    ? await publicProfileProgressionFor(c.env.DB, viewerId, targetId)
+    : null;
 
   return c.json({
     ok: true,
@@ -192,8 +196,13 @@ usersRouter.get('/:id', async (c) => {
       isPrivate: Boolean(row.private_profile),
       connectionStatus,
       level: identity?.level ?? null,
+      levelProgress: identity?.levelProgress ?? null,
       achievementsEarned: identity?.achievementsEarned ?? null,
+      achievementsTotal: identity?.achievementsTotal ?? null,
       featuredAchievements: identity?.featured ?? null,
+      earnedAchievements: identity?.earned ?? null,
+      raceStats: identity?.stats ?? null,
+      racesWithYou: identity?.racesWithYou ?? null,
       // Presence is a crew signal — the client only renders it for connected
       // people, matching the crew-list rule (strangers don't get a readout).
       lastActiveAt:
