@@ -138,6 +138,19 @@ do not delete or rename. Presentation demo account:
 
 ## 7. Known issues
 
+- **Fresh clone quirk**: the Podfile requires
+  `ios/.symlinks/plugins/google_mlkit_commons/ios/scripts/apple_silicon_simulator`
+  at pod-parse time, but the current Flutter tool doesn't regenerate
+  `.symlinks` before `pod install` on a brand-new checkout. If `pod install`
+  fails with `cannot load such file -- ...apple_silicon_simulator`, run one
+  `flutter build ios --release --no-codesign` from a tree that already has
+  `.symlinks`, or symlink it manually:
+  `mkdir -p ios/.symlinks/plugins && ln -s ~/.pub-cache/hosted/pub.dev/google_mlkit_commons-<ver> ios/.symlinks/plugins/google_mlkit_commons`.
+  Pre-existing quirk, not new.
+- `test/welcome_opening_cinematic_test.dart` is **intentionally untracked**:
+  it was written for a composed-cinematic redesign that never landed (it
+  expects text inside `WelcomeOpeningCinematic`, a pure path-painter). Do not
+  commit it until the source it tests exists.
 - Remote activities with no `previewSequence` render a neutral/first-frame
   pose rather than an animation — expected; the fix is data, not code.
 - `submit_proof_screen.dart` remote-preview fetch happens inside the widget
