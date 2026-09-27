@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../data/ai_motion_models.dart';
+import '../motion_model_release.dart';
 import 'engine/motion_v2_background.dart';
 import 'engine/motion_v2_math.dart';
 import 'engine/motion_v2_onnx_encoder.dart';
@@ -149,8 +150,13 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
     }
 
     final sw = Stopwatch()..start();
+    // Provenance: the spec records which model release produced its reference
+    // embeddings so a later incompatible model can't silently mix spaces.
+    final encoderId = enc is MotionV2OnnxEncoder
+        ? MotionV2OnnxEncoder.activeEncoderId
+        : 'release_action';
     final motion = TaughtMotionV2.learnFromEncoded(
-      name: movementName, encoderId: 'release_action', encoded: encoded);
+      name: movementName, encoderId: encoderId, encoded: encoded);
     p.buildRefsMs = sw.elapsedMilliseconds;
 
     // Self-validation + leave-one-out — pure matcher math on the cached
@@ -175,6 +181,12 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
         'movementName': movementName,
         'selfValidation': report.toJson(),
         'learnProfile': p.toJson(),
+        'model': {
+          'release': MotionV2OnnxEncoder.activeModelVersion,
+          'checksum': MotionV2OnnxEncoder.activeModelChecksum,
+          'source': MotionV2OnnxEncoder.activeModelSource,
+          'embeddingSchema': kMotionV2EncoderEmbeddingSchema,
+        },
       };
     return TaughtMotionV2Spec.fromJson(json);
   }
@@ -224,6 +236,17 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
 
   @override
   Future<void> load(TaughtMotionV2Spec spec) async {
+    // Embedding-space safety: a spec learned under a newer embedding schema
+    // than this build ships must refuse to run rather than silently match
+    // stale reference embeddings against a different model's live vectors.
+    final meta = spec.json['metadata'];
+    final model = meta is Map ? meta['model'] : null;
+    final embSchema = model is Map ? model['embeddingSchema'] : null;
+    if (embSchema is int && embSchema > kMotionV2EncoderEmbeddingSchema) {
+      throw const MotionV2Exception(
+        'This movement was learned with a newer motion model — update the app.',
+      );
+    }
     final enc = await _enc();
     final bg = await _bg();
     _motion = TaughtMotionV2.fromJson(spec.json);

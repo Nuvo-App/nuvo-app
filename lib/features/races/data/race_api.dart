@@ -184,6 +184,36 @@ class RaceApi {
     );
   }
 
+  /// Resolves the current remote model release for a family and channel.
+  /// Returns null when no release is published — callers fall back to their
+  /// last-known-good cache, then to the bundled artifact.
+  Future<Map<String, dynamic>?> getCurrentMotionModel(
+    String token, {
+    required String family,
+    String channel = 'stable',
+  }) async {
+    final res = await _guard(
+      () => _client.get(
+        Uri.parse('$kNuvoApiBase/motion/models/current?family=$family&channel=$channel'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ),
+    );
+    if (res.statusCode >= 400) _decode(res);
+    final decoded = jsonDecode(res.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw const ApiException(502, 'Model resolution response was incomplete.');
+    }
+    final model = decoded['model'];
+    if (model == null) return null;
+    if (model is! Map<String, dynamic>) {
+      throw const ApiException(502, 'Model resolution response was malformed.');
+    }
+    return model;
+  }
+
   Future<VerificationSessionHandshake> createVerificationSession(
     String token,
     String raceId, {
@@ -244,7 +274,7 @@ class RaceApi {
       'confidence': confidence,
       if (failureReason != null && failureReason.isNotEmpty)
         'failureReason': failureReason,
-      if (motionSessionId != null) 'motionSessionId': motionSessionId,
+      'motionSessionId': ?motionSessionId,
     };
     final json = await _post(
       '/verification-sessions/$sessionId/complete',

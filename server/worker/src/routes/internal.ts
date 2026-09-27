@@ -6,6 +6,19 @@ import { declaredPackageAssets, packageAssetKey } from '../domain/motionAssets';
 import { adaptationRecommendation, decideEvaluation, parseEvaluationReport } from '../domain/motionEvaluation';
 import { generateId, hashBytes, hashValue } from '../lib/crypto';
 import {
+  MODEL_CHANNELS,
+  disableModelRelease,
+  insertModelRelease,
+  parseModelEvaluationReport,
+  parseModelReleaseDraft,
+  promoteModelRelease,
+  publicModelRelease,
+  recordModelEvaluation,
+  rollbackModelChannel,
+  type ModelChannel,
+  type ModelReleaseRow,
+} from '../domain/motionModels';
+import {
   decryptMotionBytes,
   decryptMotionText,
   getMotionDataKeyByRef,
@@ -411,6 +424,33 @@ internalRouter.post('/motion/releases/:releaseId/disable', async (c) => {
   return c.json({ ok: true, releaseId, status: 'disabled' });
 });
 
+// Catalog membership. The public catalog only serves rows with
+// availability = 'supported'; flipping it removes/restores the motion for
+// every installed app on its next catalog fetch. Existing races referencing a
+// hidden activity keep their pinned release — hiding stops NEW adoption.
+internalRouter.put('/motion/activities/:activityId/availability', async (c) => {
+  const activityId = c.req.param('activityId');
+  const activity = await c.env.DB.prepare(
+    'SELECT id, availability FROM motion_activities WHERE id = ? LIMIT 1',
+  ).bind(activityId).first<{ id: string; availability: string }>();
+  if (!activity) return c.json({ ok: false, error: 'Activity not found.' }, 404);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const value = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  const availability = value.availability;
+  if (!['supported', 'hidden'].includes(availability as string)) {
+    return c.json({ ok: false, error: 'availability must be "supported" or "hidden".' }, 400);
+  }
+  await c.env.DB.prepare(
+    'UPDATE motion_activities SET availability = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+  ).bind(availability, activityId).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'activity_availability', activityId,
+    details: { from: activity.availability, to: availability },
+  });
+  return c.json({ ok: true, activityId, availability });
+});
+
 // Inline preview update. previewSequence lives on the activity (metadata_json)
 // and is read by the public catalog, so writing it ships a new decorative
 // animation to every installed app on its next catalog fetch. It is
@@ -460,6 +500,186 @@ internalRouter.put('/motion/activities/:activityId/preview', async (c) => {
     details: { cleared: preview === null },
   });
   return c.json({ ok: true, activityId, previewCleared: preview === null });
+});
+
+// ── System B: model releases ───────────────────────────────────────────────
+// The general motion-intelligence model is managed independently of verifier
+// releases: immutable artifact + declared runtime contract → evaluation →
+// channel pointer (internal/beta/stable, optional rollout %) → rollback or
+// kill switch. Artifact bytes are verified against the registered checksum
+// before a release can be promoted; the client verifies again after download.
+
+function modelChannel(value: string | undefined): ModelChannel | null {
+  return MODEL_CHANNELS.includes(value as ModelChannel) ? (value as ModelChannel) : null;
+}
+
+internalRouter.get('/motion/models', async (c) => {
+  const family = c.req.query('family');
+  const releases = await c.env.DB.prepare(
+    `SELECT * FROM motion_model_releases
+     ${family ? 'WHERE model_family = ?' : ''} ORDER BY created_at DESC`,
+  ).bind(...(family ? [family] : [])).all<ModelReleaseRow>();
+  const channels = await c.env.DB.prepare(
+    `SELECT model_family, channel, release_id, previous_release_id, rollout_percent, updated_at
+     FROM motion_model_channels ORDER BY model_family, channel`,
+  ).all<Record<string, unknown>>();
+  return c.json({
+    ok: true,
+    releases: releases.results.map((r) => ({ ...publicModelRelease(r), disabledAt: r.disabled_at })),
+    channels: channels.results.map((p) => ({
+      modelFamily: p.model_family, channel: p.channel, releaseId: p.release_id,
+      previousReleaseId: p.previous_release_id, rolloutPercent: p.rollout_percent, updatedAt: p.updated_at,
+    })),
+  });
+});
+
+// Register an immutable draft release. The artifact is uploaded separately;
+// registration is rejected if the model version already exists.
+internalRouter.post('/motion/models', async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  try {
+    const draft = parseModelReleaseDraft(body);
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM motion_model_releases WHERE model_version = ? LIMIT 1',
+    ).bind(draft.modelVersion).first<{ id: string }>();
+    if (existing) return c.json({ ok: false, error: 'model_version_already_exists' }, 409);
+    const { id } = await insertModelRelease(c.env.DB, draft);
+    await audit(c.env.DB, {
+      actorId: bodyActor(body as Record<string, unknown>), action: 'model_release_draft',
+      releaseId: id,
+      details: { modelVersion: draft.modelVersion, modelFamily: draft.modelFamily, runtimeFamily: draft.runtimeFamily },
+    });
+    const row = await c.env.DB.prepare('SELECT * FROM motion_model_releases WHERE id = ?').bind(id).first<ModelReleaseRow>();
+    return c.json({ ok: true, release: row ? publicModelRelease(row) : null });
+  } catch (error) {
+    return c.json({ ok: false, error: error instanceof Error ? error.message : 'Invalid model release.' }, 400);
+  }
+});
+
+// Upload the artifact bytes for a registered release. The release checksum is
+// law: bytes that don't hash to artifact_sha256 are rejected and removed.
+internalRouter.post('/motion/models/:releaseId/artifact', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  const release = await c.env.DB.prepare(
+    'SELECT id, artifact_key, artifact_sha256, artifact_size_bytes FROM motion_model_releases WHERE id = ?',
+  ).bind(releaseId).first<ModelReleaseRow>();
+  if (!release) return c.json({ ok: false, error: 'Model release not found.' }, 404);
+  if (!release.artifact_sha256) return c.json({ ok: false, error: 'release_has_no_declared_checksum' }, 400);
+
+  const bytes = new Uint8Array(await c.req.arrayBuffer());
+  if (bytes.byteLength === 0) return c.json({ ok: false, error: 'Empty artifact body.' }, 400);
+  if (bytes.byteLength > 400 * 1024 * 1024) {
+    return c.json({ ok: false, error: 'Artifact too large.' }, 413);
+  }
+  const actual = await hashBytes(bytes);
+  if (actual !== release.artifact_sha256.toLowerCase()) {
+    return c.json({ ok: false, error: 'artifact_checksum_mismatch', expected: release.artifact_sha256, actual }, 422);
+  }
+  if (release.artifact_size_bytes != null && release.artifact_size_bytes !== bytes.byteLength) {
+    return c.json({ ok: false, error: 'artifact_size_mismatch', expected: release.artifact_size_bytes, actual: bytes.byteLength }, 422);
+  }
+  const key = release.artifact_key ?? `motion-models/${release.id}.onnx`;
+  await c.env.PROFILE_PHOTOS.put(key, bytes, { httpMetadata: { contentType: 'application/octet-stream' } });
+  await c.env.DB.prepare(
+    `UPDATE motion_model_releases
+     SET artifact_key = ?, artifact_size_bytes = ?,
+         status = CASE WHEN status = 'draft' THEN 'candidate' ELSE status END
+     WHERE id = ?`,
+  ).bind(key, bytes.byteLength, releaseId).run();
+  await audit(c.env.DB, {
+    actorId: 'internal-operator', action: 'model_artifact_uploaded', releaseId,
+    details: { artifactKey: key, sizeBytes: bytes.byteLength, sha256: actual },
+  });
+  return c.json({ ok: true, releaseId, artifactKey: key, artifactSizeBytes: bytes.byteLength, sha256: actual });
+});
+
+// Record an evaluation run. `hardGatesPassed` must be true — the replay tool
+// decides quality; this route only accepts/denies the report shape.
+internalRouter.post('/motion/models/:releaseId/evaluations', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  const release = await c.env.DB.prepare('SELECT id FROM motion_model_releases WHERE id = ?')
+    .bind(releaseId).first<{ id: string }>();
+  if (!release) return c.json({ ok: false, error: 'Model release not found.' }, 404);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  try {
+    const report = parseModelEvaluationReport(body);
+    const { evaluationId } = await recordModelEvaluation(
+      c.env.DB, releaseId, report, bodyActor(body as Record<string, unknown>),
+    );
+    await audit(c.env.DB, {
+      actorId: bodyActor(body as Record<string, unknown>), action: 'model_evaluated', releaseId,
+      details: { evaluationId, corpusId: report.corpusId, sampleCount: report.sampleCount },
+    });
+    return c.json({ ok: true, releaseId, evaluationId });
+  } catch (error) {
+    return c.json({ ok: false, error: error instanceof Error ? error.message : 'Invalid evaluation.' }, 400);
+  }
+});
+
+internalRouter.post('/motion/models/:releaseId/promote', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  let body: unknown;
+  try { body = await c.req.json(); } catch { body = {}; }
+  const value = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  const channel = modelChannel(typeof value.channel === 'string' ? value.channel : 'stable');
+  if (!channel) return c.json({ ok: false, error: 'Unsupported model channel.' }, 400);
+  const rollout = typeof value.rolloutPercent === 'number' ? value.rolloutPercent : 100;
+  try {
+    const { previousReleaseId } = await promoteModelRelease(c.env.DB, releaseId, channel, rollout);
+    await audit(c.env.DB, {
+      actorId: bodyActor(value), action: 'model_promoted', releaseId, previousReleaseId,
+      details: { channel, rolloutPercent: rollout },
+    });
+    return c.json({ ok: true, releaseId, channel, rolloutPercent: rollout, previousReleaseId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Promotion failed.';
+    const status = message === 'model_release_not_found' ? 404 : 409;
+    return c.json({ ok: false, error: message }, status);
+  }
+});
+
+internalRouter.post('/motion/models/channels/:family/:channel/rollback', async (c) => {
+  const family = c.req.param('family');
+  const channel = modelChannel(c.req.param('channel'));
+  if (!channel) return c.json({ ok: false, error: 'Unsupported model channel.' }, 400);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const releaseId = (body as Record<string, unknown>).releaseId;
+  if (typeof releaseId !== 'string' || !releaseId) {
+    return c.json({ ok: false, error: 'releaseId is required.' }, 400);
+  }
+  try {
+    const { previousReleaseId } = await rollbackModelChannel(c.env.DB, family, channel, releaseId);
+    await audit(c.env.DB, {
+      actorId: bodyActor(body as Record<string, unknown>), action: 'model_channel_rollback',
+      releaseId, previousReleaseId, details: { modelFamily: family, channel },
+    });
+    return c.json({ ok: true, modelFamily: family, channel, releaseId, previousReleaseId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Rollback failed.';
+    return c.json({ ok: false, error: message }, message === 'model_channel_not_found' ? 404 : 409);
+  }
+});
+
+// Kill switch. Disabling repoints every channel to its previous release (or
+// clears the pointer so clients resolve to last-known-good/bundled).
+internalRouter.post('/motion/models/:releaseId/disable', async (c) => {
+  const releaseId = c.req.param('releaseId');
+  let body: unknown;
+  try { body = await c.req.json(); } catch { body = {}; }
+  try {
+    const result = await disableModelRelease(c.env.DB, releaseId);
+    await audit(c.env.DB, {
+      actorId: bodyActor(body as Record<string, unknown>), action: 'model_disabled', releaseId,
+      details: result,
+    });
+    return c.json({ ok: true, releaseId, ...result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Disable failed.';
+    return c.json({ ok: false, error: message }, message === 'model_release_not_found' ? 404 : 409);
+  }
 });
 
 // Audit trail — every control-plane mutation lands here via the shared

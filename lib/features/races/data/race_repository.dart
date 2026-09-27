@@ -26,6 +26,13 @@ class RaceRepository {
     (token) => _api.getMotionModelArtifact(token, modelVersion, etag: etag),
   );
 
+  Future<Map<String, dynamic>?> getCurrentMotionModel({
+    required String family,
+    String channel = 'stable',
+  }) => _withRefresh(
+    (token) => _api.getCurrentMotionModel(token, family: family, channel: channel),
+  );
+
   Future<VerificationSessionHandshake> createVerificationSession(
     String raceId, {
     required String appVersion,
