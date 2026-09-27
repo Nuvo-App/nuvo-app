@@ -21,6 +21,7 @@ interface CrewUserRow {
   last_active_at: string | null;
   requested_by?: string | null;
   connection_id?: string;
+  level?: number | null;
 }
 
 function initialsFor(displayName: string | null, username: string | null, email: string | null): string {
@@ -40,16 +41,18 @@ function serializeCrewUser(row: CrewUserRow) {
     profilePhotoUrl: row.avatar_url,
     addedAt: row.created_at,
     lastActiveAt: row.last_active_at,
+    level: row.level ?? null,
   };
 }
 
 const CREW_USER_SELECT = `
   SELECT u.id, u.primary_email, u.last_active_at, p.full_name, p.username, p.avatar_url, mp.member_id, cc.created_at,
-         cc.requested_by, cc.id as connection_id
+         cc.requested_by, cc.id as connection_id, COALESCE(up.level, 1) as level
   FROM crew_connections cc
   JOIN users u ON u.id = cc.crew_user_id
   LEFT JOIN profiles p ON p.user_id = u.id
   LEFT JOIN member_passes mp ON mp.user_id = u.id
+  LEFT JOIN user_progression up ON up.user_id = u.id
 `;
 
 async function getCrewUser(db: D1Database, userId: string, crewUserId: string) {
