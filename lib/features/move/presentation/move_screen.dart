@@ -7,6 +7,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
+import '../../../core/widgets/nuvo_avatar.dart';
+import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
@@ -354,13 +356,10 @@ class _VerifyHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(
-              'VERIFY',
-              style: AppTextStyles.labelUppercase(12.5).copyWith(
-                color: c.inkMuted,
-              ),
+            Expanded(
+              child: Text('Make your move.',
+                  style: AppTextStyles.screenTitle),
             ),
-            const Spacer(),
             NuvoPressable(
               onTap: onHistory,
               haptic: false,
@@ -375,7 +374,6 @@ class _VerifyHeader extends StatelessWidget {
             ),
           ],
         ),
-        Text('Make your move.', style: AppTextStyles.screenTitle),
         const SizedBox(height: NuvoSpacing.xs),
         Text(
           readyCount > 0
@@ -599,9 +597,11 @@ class _ReadySegment extends StatelessWidget {
           Row(
             children: [
               Text(
-                'READY NEXT',
-                style: AppTextStyles.labelUppercase(12).copyWith(
-                  color: context.themeColors.inkMuted,
+                'Ready next',
+                style: AppTextStyles.labelMedium.copyWith(
+                  fontSize: 14.5,
+                  color: context.themeColors.ink,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
               const Spacer(),
@@ -638,7 +638,6 @@ class _ReadySegment extends StatelessWidget {
               Divider(
                 height: 1,
                 thickness: 1,
-                indent: 50,
                 color: context.themeColors.divider,
               ),
           ],
@@ -717,6 +716,53 @@ class _UpNextHeroState extends State<_UpNextHero> {
     return (v) => '$v';
   }
 
+  /// The adjacent competitor — the person directly above the viewer when
+  /// chasing, the runner-up when leading. Null for solo races: no invented
+  /// rivalry.
+  RaceParticipant? _rival(List<RaceParticipant> others, int? rank) {
+    if (others.isEmpty) return null;
+    if (rank != null && rank > 1) {
+      for (final p in others) {
+        if (p.rank == rank - 1) return p;
+      }
+    }
+    return others.first;
+  }
+
+  /// One human competitive line — "1 rep to pass Noah", "You lead Maya by
+  /// 3", "Set the pace". Canonical values only; passing is claimed only as
+  /// far as the adjacent rank actually moves.
+  String _contextLine(
+    int? rank,
+    int myValue,
+    RaceParticipant? rival,
+    RaceParticipant? leader,
+  ) {
+    final race = widget.race;
+    if (race.participantCount <= 1 || rival == null) return 'Set the pace';
+    if (rank == null || myValue <= 0) {
+      return leader != null && leader.progressValue > 0
+          ? 'Make your first move — ${_firstName(leader.displayName)} has '
+              '${_scoreText(race, leader.progressValue)}'
+          : 'Make your first move';
+    }
+    if (rank == 1) {
+      final runnerUp = rival;
+      if (runnerUp.progressValue <= 0) return "You're in the lead";
+      final gap = (myValue - runnerUp.progressValue).abs();
+      return gap == 0 || widget.race.viewerContext?.isTied == true
+          ? 'Tied with ${_firstName(runnerUp.displayName)} — next proof wins it'
+          : 'You lead ${_firstName(runnerUp.displayName)} by ${_scoreText(race, gap)}';
+    }
+    final gap = rival.progressValue - myValue;
+    if (gap <= 0) {
+      return 'Catch ${_firstName(rival.displayName)}';
+    }
+    return rank == 2
+        ? '${_scoreText(race, gap)} to take 1st'
+        : '${_scoreText(race, gap)} to pass ${_firstName(rival.displayName)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
@@ -727,146 +773,166 @@ class _UpNextHeroState extends State<_UpNextHero> {
     final hasDenominator = (race.targetValue ?? 0) > 0;
     final myValue = myPart?.progressValue ?? 0;
     final hasResult = myValue > 0;
-    final pct = hasDenominator ? raceProgressPercent(race, myPart) : 0;
     final rank = _rank();
+    // A rank only means something once there's a result — a solo race or an
+    // unscored entry must not claim "1st".
+    final earnedRank = hasResult ? rank : null;
     final proofIcon = _proofIconFor(race);
     final proofLabel = _proofMethodLabel(race);
-    final ctaIcon = _proofCta(race).icon;
+    final lower = race.scoreDirection == 'lower';
+
+    // Competitors in standing order — canonical rank when the server sends
+    // it, else score ordering by race direction.
+    final others = race.participants
+        .where((p) => p.userId != widget.userId)
+        .toList()
+      ..sort((a, b) {
+        final ar = a.rank;
+        final br = b.rank;
+        if (ar != null && br != null) return ar.compareTo(br);
+        if (ar != null) return -1;
+        if (br != null) return 1;
+        return lower
+            ? a.progressValue.compareTo(b.progressValue)
+            : b.progressValue.compareTo(a.progressValue);
+      });
+    final rival = _rival(others, rank);
+    final leader = others.isNotEmpty ? others.first : null;
+    final showRivalry =
+        hasResult || (rival != null && rival.progressValue > 0);
 
     return Stack(
       children: [
-        Container(
+        Column(
           key: const Key('verify-up-next-hero'),
-          decoration: BoxDecoration(
-            // Composition, not a bordered card: white working surface on
-            // the page, hard offset shadow for lift, and a solid blue
-            // action band along the bottom carries the "go do it" weight.
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.card),
-            boxShadow: [
-              BoxShadow(
-                color: c.inkShadow,
-                offset: const Offset(0, 3),
-                blurRadius: 0,
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Kicker + proof-method identity (top-right).
-                    Row(
-                      children: [
-                        Text(
-                          'UP NEXT',
-                          style: AppTextStyles.labelUppercase(11.5).copyWith(
-                            color: NuvoColors.blue,
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: c.panelLight,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            proofIcon,
-                            size: 16,
-                            color: NuvoColors.blue,
-                          ),
-                        ),
-                      ],
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Race name + earned rank — no kicker, the hero is the headline.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    race.displayTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.screenTitle.copyWith(
+                      fontSize: 23,
+                      letterSpacing: -0.4,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      race.displayTitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.screenTitle.copyWith(
-                        fontSize: 22,
-                        letterSpacing: -0.4,
+                  ),
+                ),
+                if (earnedRank != null) ...[
+                  const SizedBox(width: 10),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 5),
+                    child: Text(
+                      _ordinalLabel(earnedRank).toLowerCase(),
+                      style: AppTextStyles.placementLabel(
+                        size: 14,
+                        color: _placementTint(earnedRank) ?? c.inkSubtle,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _goalSentence(race),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _goalSentence(race),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: c.inkMuted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            // The result is the anchor — never a fake track.
+            _HeroAnchor(
+              race: race,
+              value: myValue,
+              hasDenominator: hasDenominator,
+              hasResult: hasResult,
+              format: _anchorFormat,
+            ),
+            if (hasDenominator) ...[
+              const SizedBox(height: 14),
+              // The track reads as a race: viewer dot, rival dot, goal ring.
+              _RaceTrack(
+                race: race,
+                you: myValue,
+                rival:
+                    rival != null && rival.progressValue > 0 ? rival : null,
+                target: race.targetValue!,
+              ),
+            ],
+            const SizedBox(height: 16),
+            // Rivalry — people, not abstractions.
+            if (showRivalry) ...[
+              if (rival != null && rival.progressValue > 0) ...[
+                _RivalryRow(
+                  name: _firstName(rival.displayName),
+                  userId: rival.userId,
+                  photoUrl: rival.profilePhotoUrl,
+                  score: rival.progressValue,
+                  format: _anchorFormat,
+                  isViewer: false,
+                ),
+                const SizedBox(height: 7),
+              ],
+              _RivalryRow(
+                name: 'You',
+                userId: widget.userId ?? 'you',
+                photoUrl: myPart?.profilePhotoUrl,
+                score: myValue,
+                format: _anchorFormat,
+                isViewer: true,
+              ),
+              const SizedBox(height: 9),
+            ],
+            Text(
+              _contextLine(rank, myValue, rival, leader),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.labelMedium.copyWith(
+                fontSize: 13.5,
+                color: c.ink,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Proof method is supporting copy; the button is the action.
+            if (proofLabel.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(proofIcon, size: 15, color: NuvoColors.blue),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      proofLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall.copyWith(
+                      style: AppTextStyles.labelSmall.copyWith(
+                        fontSize: 12.5,
                         color: c.inkMuted,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    // The result is the anchor — never a fake track.
-                    _HeroAnchor(
-                      race: race,
-                      value: myValue,
-                      hasDenominator: hasDenominator,
-                      hasResult: hasResult,
-                      progressPercent: pct,
-                      format: _anchorFormat,
-                    ),
-                    const SizedBox(height: 10),
-                    // Competitive context — the people, not just the number.
-                    _HeroContext(race: race, userId: widget.userId, rank: rank),
-                  ],
-                ),
-              ),
-              // Action band — one strong blue strip, not a floating button.
-              NuvoPressable(
-                onTap: widget.onVerify,
-                child: Container(
-                  color: NuvoColors.blue,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
                   ),
-                  child: Row(
-                    children: [
-                      Icon(ctaIcon, size: 16, color: NuvoColors.white),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Text(
-                          proofLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.labelMedium.copyWith(
-                            fontSize: 13,
-                            color: NuvoColors.white.withValues(alpha: 0.85),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        _heroCtaLabel(race),
-                        style: AppTextStyles.labelMedium.copyWith(
-                          fontSize: 14,
-                          color: NuvoColors.white,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 17,
-                        color: NuvoColors.white,
-                      ),
-                    ],
-                  ),
-                ),
+                ],
               ),
+              const SizedBox(height: 10),
             ],
-          ),
+            NuvoPrimaryButton(
+              key: const Key('verify-hero-cta'),
+              label: _heroCtaLabel(race),
+              onPressed: widget.onVerify,
+              icon: _proofCta(race).icon,
+              expand: true,
+              height: 48,
+            ),
+          ],
         ),
         // Lead-takeover flash — state change creates motion; idle stays calm.
         Positioned(
@@ -923,7 +989,6 @@ class _HeroAnchor extends StatelessWidget {
     required this.value,
     required this.hasDenominator,
     required this.hasResult,
-    required this.progressPercent,
     required this.format,
   });
 
@@ -931,7 +996,6 @@ class _HeroAnchor extends StatelessWidget {
   final int value;
   final bool hasDenominator;
   final bool hasResult;
-  final int progressPercent;
   final String Function(int) format;
 
   @override
@@ -963,12 +1027,6 @@ class _HeroAnchor extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 9),
-          RaceProgress(
-            progressPercent: progressPercent,
-            trackHeight: 4,
-            dotDiameter: 9,
           ),
         ],
       );
@@ -1015,122 +1073,222 @@ class _HeroAnchor extends StatelessWidget {
   }
 }
 
-/// One honest competitive line under the anchor. Canonical-only: rank,
-/// gap, and the actual person ahead/behind — never invented. Solo or
-/// zero-score states fall back to "Set the pace" / "Make your first move".
-class _HeroContext extends StatelessWidget {
-  const _HeroContext({
+String _firstName(String displayName) {
+  final parts = displayName.trim().split(RegExp(r'\s+'));
+  return parts.isEmpty ? 'Racer' : parts.first;
+}
+
+String _initialsOf(String displayName) {
+  final parts = displayName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return 'YO';
+  if (parts.length == 1) {
+    final p = parts.first;
+    return (p.length == 1 ? p : p.substring(0, 2)).toUpperCase();
+  }
+  return (parts.first[0] + parts.last[0]).toUpperCase();
+}
+
+/// The race track — a thin line with real anchors, not decoration. The
+/// viewer is a blue dot, the adjacent competitor a navy dot, the goal a
+/// hollow ring; each carries its label above its own position. Only
+/// rendered for races with a real denominator; rival positions are shown
+/// only when that competitor has actually scored.
+class _RaceTrack extends StatelessWidget {
+  const _RaceTrack({
     required this.race,
-    required this.userId,
-    required this.rank,
+    required this.you,
+    required this.target,
+    this.rival,
   });
 
   final Race race;
-  final String? userId;
-  final int? rank;
+  final int you;
+  final int target;
+  final RaceParticipant? rival;
 
-  String _firstName(String displayName) {
-    final parts = displayName.trim().split(RegExp(r'\s+'));
-    return parts.isEmpty ? 'Racer' : parts.first;
-  }
+  String _fmt(int v) =>
+      raceMetric(race) == RaceMetric.seconds ? formatClock(v) : '$v';
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final vc = race.viewerContext;
-    final lower = race.scoreDirection == 'lower';
+    return LayoutBuilder(
+      builder: (context, cons) {
+        final w = cons.maxWidth;
+        double xOf(int v) => (v / target).clamp(0.0, 1.0) * w;
+        final youX = xOf(you);
+        final hasRival = rival != null && rival!.progressValue > 0;
+        final rivalX = hasRival ? xOf(rival!.progressValue) : 0.0;
 
-    // Competitors in standing order — canonical participant rank when the
-    // server sends it, else score ordering by race direction.
-    final others = race.participants
-        .where((p) => p.userId != userId)
-        .toList()
-      ..sort((a, b) {
-        final ar = a.rank;
-        final br = b.rank;
-        if (ar != null && br != null) return ar.compareTo(br);
-        if (ar != null) return -1;
-        if (br != null) return 1;
-        return lower
-            ? a.progressValue.compareTo(b.progressValue)
-            : b.progressValue.compareTo(a.progressValue);
-      });
-
-    final myPart =
-        userId != null ? race.participantFor(userId!) : null;
-    final myValue = myPart?.progressValue ?? 0;
-
-    // The person directly above the viewer — adjacent competition, which
-    // is what makes the next proof matter.
-    final viewerRank = rank;
-    RaceParticipant? ahead;
-    if (viewerRank != null && viewerRank > 1) {
-      for (final p in others) {
-        if (p.rank == viewerRank - 1) {
-          ahead = p;
-          break;
+        // Label slots centered on each anchor — placed right-to-left so
+        // close standings never overlap: each label slides left until it
+        // clears the label on its right.
+        const lw = 64.0;
+        final labelSpots = <(double x, String text, Color color)>[
+          (w - 4, 'Goal ${_fmt(target)}', c.inkMuted),
+          (youX, 'You ${_fmt(you)}', NuvoColors.blue),
+          if (hasRival)
+            (
+              rivalX,
+              '${_firstName(rival!.displayName)} ${_fmt(rival!.progressValue)}',
+              c.inkMuted,
+            ),
+        ]..sort((a, b) => b.$1.compareTo(a.$1));
+        var nextRight = w;
+        final resolved = <({double left, String text, Color color})>[];
+        for (final spot in labelSpots) {
+          var left = (spot.$1 - lw / 2).clamp(0.0, (w - lw).clamp(0.0, w));
+          if (left + lw > nextRight) {
+            left = (nextRight - lw - 2).clamp(0.0, (w - lw).clamp(0.0, w));
+          }
+          nextRight = left;
+          resolved.add((left: left, text: spot.$2, color: spot.$3));
         }
-      }
-      ahead ??= others.isNotEmpty ? others.first : null;
-    }
-    final leader = others.isNotEmpty ? others.first : null;
 
-    // A rank means something only once the viewer has a result — a solo
-    // race or an unscored entry must not claim "1ST".
-    final earnedRank = myValue > 0 ? rank : null;
+        return SizedBox(
+          height: 40,
+          child: Stack(
+            children: [
+              for (final r in resolved)
+                Positioned(
+                  top: 0,
+                  left: r.left,
+                  width: lw,
+                  child: Text(
+                    r.text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.labelUppercase(10.5).copyWith(
+                      color: r.color,
+                    ),
+                  ),
+                ),
+              // Track + viewer fill.
+              Positioned(
+                top: 26,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: c.track,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 26,
+                left: 0,
+                width: youX,
+                child: Container(
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: NuvoColors.blue,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Goal ring at the finish.
+              Positioned(
+                top: 22,
+                left: w - 11,
+                child: Container(
+                  width: 11,
+                  height: 11,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: c.page,
+                    border: Border.all(color: NuvoColors.blue, width: 2),
+                  ),
+                ),
+              ),
+              if (hasRival)
+                Positioned(
+                  top: 24.5,
+                  left: (rivalX - 4).clamp(0.0, w - 8),
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: c.ink,
+                    ),
+                  ),
+                ),
+              Positioned(
+                top: 24,
+                left: (youX - 4.5).clamp(0.0, w - 9),
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: NuvoColors.blue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 
-    // Gap text stays metric-honest: percent races read "3%", not
-    // "3 percent" — same grammar the score label uses elsewhere.
-    String gapLabel(int gap) => _scoreText(race, gap);
+/// One standing line in the hero — avatar + name + score. The viewer row
+/// is always blue; a competitor carries their deterministic avatar color.
+class _RivalryRow extends StatelessWidget {
+  const _RivalryRow({
+    required this.name,
+    required this.userId,
+    required this.score,
+    required this.format,
+    required this.isViewer,
+    this.photoUrl,
+  });
 
-    String line;
-    if (race.participantCount <= 1 || others.isEmpty) {
-      line = 'Set the pace';
-    } else if (rank == null || myValue <= 0) {
-      line = leader != null && leader.progressValue > 0
-          ? 'Make your first move — ${_firstName(leader.displayName)} has ${raceScoreLabel(race, leader.progressValue)}'
-          : 'Make your first move';
-    } else if (rank == 1) {
-      if (leader == null || leader.progressValue <= 0) {
-        line = "You're in the lead";
-      } else {
-        final gap = (myValue - leader.progressValue).abs();
-        line = gap == 0 || vc?.isTied == true
-            ? 'Tied with ${_firstName(leader.displayName)} — next proof wins it'
-            : "You're ${gapLabel(gap)} ahead of ${_firstName(leader.displayName)}";
-      }
-    } else {
-      final rival = ahead ?? leader;
-      final gap = rival != null
-          ? (rival.progressValue - myValue).abs()
-          : (vc?.gapToNextRank ?? vc?.gapToLeader);
-      line = rival != null && gap != null && gap > 0
-          ? '${rank == 2 ? 'Take 1st — ' : ''}${gapLabel(gap)} to catch ${_firstName(rival.displayName)}'
-          : rival != null
-              ? 'Catch ${_firstName(rival.displayName)}'
-              : 'Make your first move';
-    }
+  final String name;
+  final String userId;
+  final String? photoUrl;
+  final int score;
+  final String Function(int) format;
+  final bool isViewer;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Row(
       children: [
-        if (earnedRank != null)
-          Text(
-            _ordinalLabel(earnedRank),
-            style: AppTextStyles.placementLabel(
-              size: 13,
-              color: _placementTint(earnedRank) ?? c.inkSubtle,
+        NuvoAvatar(
+          initials: _initialsOf(name),
+          size: 22,
+          photoUrl: photoUrl,
+          bgColor: isViewer ? NuvoColors.blue : nuvoAvatarColorFor(userId),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.labelMedium.copyWith(
+              fontSize: 13.5,
+              color: c.ink,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        if (earnedRank != null) const SizedBox(height: 2),
+        ),
+        const SizedBox(width: 8),
         Text(
-          line,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.labelMedium.copyWith(
-            fontSize: 13.5,
-            color: c.ink,
-            fontWeight: FontWeight.w700,
+          format(score),
+          style: AppTextStyles.statLarge(
+            15,
+            color: isViewer ? c.ink : c.inkSubtle,
           ),
         ),
       ],
@@ -1191,26 +1349,33 @@ String _proofMethodLabel(Race race) => switch (_proofActionFor(race)) {
   _ProofAction.generic => '',
 };
 
-/// The action-band verb — short so "method + action" fits one line at 320.
+/// The hero button verb — sentence case on a compact pill; the proof method
+/// ("AI Motion Proof") is the supporting line above, not repeated here.
 String _heroCtaLabel(Race race) => switch (_proofActionFor(race)) {
-  _ProofAction.motion => 'START',
+  _ProofAction.motion => 'Start verification',
   _ProofAction.manual =>
-    _isAccumulating(race) ? 'LOG PROGRESS' : 'ADD RESULT',
-  _ProofAction.generic => 'SUBMIT PROOF',
+    _isAccumulating(race) ? 'Log progress' : 'Add result',
+  _ProofAction.generic => 'Submit proof',
 };
 
 /// Compact score text — percent races carry their glyph ("94%"); every
-/// other unit uses the canonical label ("78 strokes", "1:42").
-String _scoreText(Race race, int value) =>
-    raceDisplayUnit(race) == 'percent' ? '$value%' : raceScoreLabel(race, value);
+/// other unit uses the canonical label ("78 strokes", "1:42"). A value of
+/// 1 strips the plural so the screen never reads "1 reps".
+String _scoreText(Race race, int value) {
+  if (raceDisplayUnit(race) == 'percent') return '$value%';
+  final label = raceScoreLabel(race, value);
+  if (value == 1 && label.endsWith('s')) {
+    return label.substring(0, label.length - 1);
+  }
+  return label;
+}
 
-// ── Ready row — tactile list row, no card ────────────────────────────────────
+// ── Ready row — dense competitive row, no card ───────────────────────────────
 
-/// A "Ready next" row: proof-capability glyph, race name, canonical
-/// result/progress + rank on the meta line, and the proof action named on
-/// its own line ("Log progress", "Add result", "Start") with a chevron.
-/// Hairline-separated, direct on the page — the hero is the only loud
-/// surface; rows are rhythm + information.
+/// A "Ready next" row: title + earned rank, canonical result/progress, a
+/// thin track when a denominator exists, and one context line — what's
+/// left, who to pass, or the start line. The whole row is the tap target;
+/// no repeated blue verb, the chevron carries the affordance.
 class _ReadyRow extends StatelessWidget {
   const _ReadyRow({
     required this.race,
@@ -1228,96 +1393,130 @@ class _ReadyRow extends StatelessWidget {
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final hasDenominator = (race.targetValue ?? 0) > 0;
     final myValue = myPart?.progressValue ?? 0;
-    final icon = _proofIconFor(race);
-    // Row cue is the short verb — the hero's action band carries the full
-    // proof-method name ("AI Motion Proof").
-    final ctaLabel = _proofActionFor(race) == _ProofAction.motion
-        ? 'Start'
-        : _proofCta(race).label;
-    final rank = race.participantCount > 1
-        ? rankForUser(race, userId)
-        : null;
+    final hasResult = myValue > 0;
+    final lower = race.scoreDirection == 'lower';
+    final earnedRank = hasResult ? rankForUser(race, userId) : null;
 
-    // Canonical meta: "4 / 10 books" · "Best · 78 strokes" · "Start line".
-    final String meta = myValue <= 0
-        ? 'Start line'
+    // Canonical meta: "39 / 50 reps" · "Best · 78 strokes" · "Start line".
+    final String meta = !hasResult
+        ? race.participantCount > 1
+            ? 'Start line · ${race.participantCount} racers'
+            : 'Start line'
         : hasDenominator
             ? raceProgressLabel(race, myPart)
             : 'Best · ${_scoreText(race, myValue)}';
+
+    // One context line — what's left or who to pass. No invented rivalry.
+    String? contextLine;
+    if (hasResult && hasDenominator) {
+      final remaining = race.targetValue! - myValue;
+      if (remaining > 0) {
+        contextLine = '${_scoreText(race, remaining)} left';
+      }
+    } else if (hasResult && race.participantCount > 1) {
+      final others = race.participants
+          .where((p) => p.userId != userId)
+          .toList()
+        ..sort((a, b) {
+          final ar = a.rank;
+          final br = b.rank;
+          if (ar != null && br != null) return ar.compareTo(br);
+          if (ar != null) return -1;
+          if (br != null) return 1;
+          return lower
+              ? a.progressValue.compareTo(b.progressValue)
+              : b.progressValue.compareTo(a.progressValue);
+        });
+      final rank = rankForUser(race, userId);
+      RaceParticipant? rival;
+      if (others.isNotEmpty) {
+        rival = others.first;
+        if (rank != null && rank > 1) {
+          rival = others.firstWhere((p) => p.rank == rank - 1,
+              orElse: () => others.first);
+        }
+      }
+      if (rival != null && rival.progressValue > 0) {
+        final gap = (rival.progressValue - myValue).abs();
+        if (gap > 0) {
+          contextLine = rank == 1
+              ? 'You lead ${_firstName(rival.displayName)} '
+                  'by ${_scoreText(race, gap)}'
+              : '${_scoreText(race, gap)} to pass '
+                  '${_firstName(rival.displayName)}';
+        }
+      }
+    }
 
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: NuvoColors.blue.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: NuvoColors.blue, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
                     race.displayTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.raceRowTitle.copyWith(fontSize: 15),
                   ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          meta,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.raceRowMeta.copyWith(
-                            fontSize: 12,
-                            color: c.inkSubtle,
-                          ),
-                        ),
-                      ),
-                      if (rank != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _ordinalLabel(rank).toLowerCase(),
-                          style: AppTextStyles.placementLabel(
-                            size: 12,
-                            color: _placementTint(rank) ?? c.inkMuted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 3),
+                ),
+                if (earnedRank != null) ...[
+                  const SizedBox(width: 8),
                   Text(
-                    ctaLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontSize: 12.5,
-                      color: NuvoColors.blue,
-                      fontWeight: FontWeight.w700,
+                    _ordinalLabel(earnedRank).toLowerCase(),
+                    style: AppTextStyles.placementLabel(
+                      size: 12.5,
+                      color: _placementTint(earnedRank) ?? c.inkSubtle,
                     ),
                   ),
                 ],
+              ],
+            ),
+            const SizedBox(height: 3),
+            Text(
+              meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.raceRowMeta.copyWith(
+                fontSize: 12.5,
+                color: c.inkSubtle,
               ),
             ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.arrow_forward_rounded,
-              color: c.inkDim,
-              size: 17,
+            if (hasDenominator && hasResult) ...[
+              const SizedBox(height: 7),
+              RaceProgress(
+                progressPercent: raceProgressPercent(race, myPart),
+                trackHeight: 3,
+                dotDiameter: 6,
+              ),
+            ],
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    contextLine ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontSize: 12,
+                      color: c.inkSubtle,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: c.inkDim,
+                  size: 16,
+                ),
+              ],
             ),
           ],
         ),
