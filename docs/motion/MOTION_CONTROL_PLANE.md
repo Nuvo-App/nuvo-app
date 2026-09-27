@@ -204,21 +204,16 @@ server model `nuvo-motion-baseline-v1`,
 server validator `nuvo-motion-server-rules-v1`,
 client pose label `mlkit-pose-base`, `specSchemaVersion 1`.
 
-## 12. Production data audit (2026-09-27)
+## 12. Production data audit (2026-09-27, cleanup completed)
 
-`nuvo_db` (prod) currently contains **27 users**: 8 `demo+*@nuvo.internal`
-seeded accounts, ~6 `@getnuvo.net` internal/review accounts, ~11 external
-beta identities (gmail/outlook/icloud/Apple private-relay), 2 deleted.
-`nuvo_db_dev` contains only disposable test accounts.
-
-Per the launch decision (public App Store release = clean start, no beta
-migration): these beta identities currently live **in** production D1 —
-they are not a separate beta environment. Before launch, decide and execute
-deliberately: either provision a fresh production database/worker pair for
-the public app, or run a scoped beta-identity purge. Do not delete blind —
-this table is the complete inventory to decide from. `@getnuvo.net` and
-`demo+` accounts may be intentionally retained; external beta identities
-are the carry-over population the launch decision excludes.
+`nuvo_db` (prod) was reset for the clean-start launch: all 8 external beta
+identities were deleted through the canonical `DELETE /auth/account` path
+(verified: zero carry-over on same-email re-signup). Remaining active users:
+8 `demo+*@nuvo.internal` seeded accounts, 5 `@getnuvo.net` internal/review
+accounts, and 4 flagged accounts with founder/teammate signals (preserved
+for a founder decision — they are not external beta users). `nuvo_db_dev`
+contains only disposable test accounts. Full audit trail is in the session
+transcript; the pre-cleanup D1 export lives outside git in `/tmp`.
 
 ## 13. Apple boundary
 
@@ -255,3 +250,181 @@ bounded declarative JSON validated on both Worker and client.
 
 Never edit `verifier_releases.spec_json` in place — releases are
 immutable; the catalog checksum would desync.
+
+---
+
+# System B — Nuvo Motion Intelligence (general model control)
+
+Everything above is **System A**: movement-specific verifier releases
+(pushups, squats, remote-defined motions). This section covers the
+independent second system: the **general motion intelligence model** — the
+MotionBERT-derived ONNX encoder behind Teach Nuvo, few-shot learning,
+embeddings, and arbitrary-motion matching. The two planes share channels,
+rollout, rollback, and kill-switch mechanics but have separate tables,
+separate releases, and separate acceptance gates.
+
+## B1. The current general model
+
+| Field | Value |
+| --- | --- |
+| Artifact | `assets/models/motion_v2_encoder.onnx` (bundled, ~85 MB) |
+| Model | MotionBERT action-finetuned encoder, fp16 export |
+| SHA-256 | `8d43b34084111ad9e358f65724c1f017a3ad501221ce0ead3d2200584232a188` |
+| modelFamily | `motion_v2_encoder` |
+| runtimeFamily | `motionbert_rep_v1` |
+| Embedding | 256-dim rep vector (`MotionV2OnnxEncoder.dimRep`) |
+
+## B2. Compatibility contract (the boundary)
+
+A remote model release may replace the bundled artifact **without an App
+Store update** only when every field matches the runtime shipped in the
+reviewed binary. Declared on every `MotionModelRelease` and checked
+client-side before any download:
+
+- `runtimeFamily` — must be `motionbert_rep_v1` (the only runtime shipped)
+- `inputSchemaVersion` — 243-float windowed pose tensor (81 landmarks × 3)
+- `outputSchemaVersion` — 256-dim rep embedding
+- `preprocessingVersion` — ML Kit pose → normalized sequence pipeline
+- `normalizationVersion` — joint-centering/scale normalization
+- `embeddingSchemaVersion` — embedding semantics for learned-spec matching
+- `minimumAppBuild` — oldest app build the artifact supports
+- `artifactSha256` + `artifactSizeBytes` — integrity contract
+
+Any mismatch → the model **requires an App Store update** and the app
+never downloads it. The runtime is generic; the artifact is data.
+
+## B3. Server control plane
+
+Migration `0041_motion_model_control.sql` adds:
+
+- `motion_model_releases` — immutable release metadata (all contract fields
+  above + `status`, `evaluation_id`, `artifact_key`, `metadata_json`)
+- `motion_model_channel_releases` — per-`modelFamily` channel pointers
+  (`internal`/`beta`/`stable`, `previous_release_id`, `rollout_percent`)
+- `motion_model_evaluations` — evaluation evidence attached to releases
+
+Domain logic: `src/domain/motionModels.ts`. Internal routes under
+`/internal/motion/models/*` (all `X-Internal-Key` guarded, all audited).
+Public routes in `src/routes/motion.ts`:
+
+- `GET /motion/models/current?modelFamily=…&channel=…` — authenticated;
+  resolves the channel pointer, applies deterministic rollout bucketing
+  (`sha256(userId:releaseId) % 100`, out-of-bucket users fall back to
+  `previous_release_id`), returns release metadata. Omitting
+  `modelFamily` keeps the **legacy `basketball_yolox` contract** —
+  general-encoder releases can never leak into the old endpoint.
+- `GET /motion/models/:modelVersion/artifact` — streams the R2 object with
+  `x-model-version` / `x-model-sha256` headers; 404 unless the release is
+  published to a channel and enabled.
+
+## B4. Client delivery chain
+
+`MotionV2OnnxEncoder.load()` resolves through
+`MotionV2ModelSource` → `MotionModelResolver`
+(`lib/features/races/ai/motion_model_*.dart`):
+
+1. `GET /motion/models/current?modelFamily=motion_v2_encoder` — resolves
+   the remote release for this user/channel.
+2. Compatibility check against §B2 — incompatible releases are refused
+   before any download (fail closed).
+3. Cache hit (verified release, matching SHA-256 + size) → use cached file.
+4. Otherwise `GET /motion/models/:modelVersion/artifact`; the response's
+   `x-model-version` must equal the requested release and the body's
+   SHA-256 must equal `artifactSha256` (`MotionModelArtifactIntegrity`).
+5. Atomic install: bytes written to `<tmp>` then renamed — a crash
+   mid-write can never leave a partial model file.
+6. On **any** failure → last-known-good cache → bundled launch model.
+   Network outage, Cloudflare down, corrupt R2 object, or a disabled
+   release can never break Motion.
+
+## B5. Session pinning & Teach Nuvo provenance
+
+- `MotionV2ModelSource.load()` pins a `MotionV2ModelSession` — an
+  `OrtSession` plus the resolved release identity — for the lifetime of a
+  Teach Nuvo/general-motion session. A channel move mid-session changes
+  only NEW sessions; the pinned session finishes on its model.
+- Learned specs (`TaughtMotionV2Spec`) record **provenance**:
+  `modelReleaseId` + `encoderId` + `dimRep`. `MotionV2NativeRuntime.load`
+  refuses a spec whose encoder/embedding contract doesn't match the loaded
+  model — an A-generated reference can never be silently compared under an
+  incompatible B embedding space. (The fp16→fp32 swap keeps the same
+  embedding schema, so A-learned specs remain valid under B; a future
+  schema change fails closed instead of corrupting matches.)
+- `MotionDiagnosticSession` lines include model version + checksum +
+  source (`remote`/`cache`/`bundled`) — every diagnostic answers both
+  "which verifier?" and "which general model?".
+
+## B6. Release flow & gates
+
+```
+DRAFT → artifact uploaded to R2 (checksum-enforced)
+      → evaluation recorded (baseline-vs-candidate metrics)
+      → promote internal   (no eval gate — operator/testing channel)
+      → promote beta/stable (eval REQUIRED: 409 model_evaluation_required)
+      → disable / rollback (kill switch / pointer restore)
+```
+
+- Upload computes SHA-256 server-side; a declared-vs-actual mismatch is
+  `422 artifact_checksum_mismatch`.
+- Promotion validates `runtimeFamily` is known (`409
+  model_runtime_family_unknown`) and the artifact exists (`409
+  model_artifact_required`).
+- Re-promoting the pointed release never self-references
+  `previous_release_id`; rollback to the current release is a `409`.
+
+## B7. Operator commands
+
+```bash
+# inspect
+node scripts/nuvo-motion.mjs models --env dev
+node scripts/nuvo-motion.mjs model-status --env dev
+
+# release a candidate (release.json carries the full §B2 contract)
+node scripts/nuvo-motion.mjs model-register release.json --env dev
+node scripts/nuvo-motion.mjs model-upload \
+  --release-id <id> --file model.onnx --env dev
+node scripts/nuvo-motion.mjs model-evaluate \
+  --release-id <id> --file report.json --env dev
+
+# adoption control
+node scripts/nuvo-motion.mjs model-promote \
+  --release-id <id> --channel stable --rollout 50 --env dev
+
+# EMERGENCY — bad model live
+node scripts/nuvo-motion.mjs model-disable --release-id <id> --env dev
+node scripts/nuvo-motion.mjs model-rollback \
+  --family motion_v2_encoder --channel stable --release-id <last-good> --env dev
+```
+
+## B8. Disaster recovery (deterministic answers)
+
+| Scenario | Answer |
+| --- | --- |
+| Model B is terrible | `model-rollback --family motion_v2_encoder --channel stable --release-id <A>` — pointer returns to the named last-good release; apps pick up A on next session start |
+| Model B crashes devices | `model-disable --release-id <B>` — artifact endpoint goes 404, channel repoints to previous release, next sessions fall back |
+| Cloudflare is down | Last-known-good cached model, else bundled launch model |
+| R2 download fails/corrupt | Checksum verify fails → LKG cache → bundled |
+| New model incompatible with old build | `minimumAppBuild` + contract check → old build never downloads it; keeps A/bundled |
+
+## B9. Apple boundary (models)
+
+App Store Review Guideline 2.5.2: the reviewed binary ships a **generic
+ONNX runtime** (`onnxruntime` Flutter plugin) and a fixed preprocessing/
+matching pipeline. A compatible `.onnx` artifact is **model data consumed
+by that reviewed runtime** — the same category as shipping weights for an
+already-reviewed ML feature — not executable code. The control plane can
+never deliver Dart, Swift, JS, native modules, or scripts: artifacts are
+hash-addressed binary blobs validated before install. A model that needs a
+new runtime family, input/output schema, preprocessing, normalization, or
+embedding contract is rejected by the client and requires an App Store
+update that ships the new runtime.
+
+## B10. Launch model baseline
+
+The launch baseline is the bundled fp16 encoder (§B1). Registered on dev
+as `motion_v2_encoder_fp16_2026.10.0` (release `47153fd6-…`) and pointed
+by the dev `stable` channel after testing. **Production is intentionally
+not migrated** — migration `0041` has been applied to dev only; prod keeps
+serving the legacy `basketball_yolox` endpoint and the bundled model until
+an explicit decision registers the launch release on prod. No experimental
+model is stable anywhere.

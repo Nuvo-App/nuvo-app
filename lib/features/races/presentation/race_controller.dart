@@ -95,6 +95,11 @@ class RaceController extends StateNotifier<RaceState> {
     String? etag,
   }) => _repo.getMotionModelArtifact(modelVersion, etag: etag);
 
+  Future<Map<String, dynamic>?> getCurrentMotionModel({
+    required String family,
+    String channel = 'stable',
+  }) => _repo.getCurrentMotionModel(family: family, channel: channel);
+
   Future<VerificationSessionHandshake> createVerificationSession(
     String raceId, {
     required String appVersion,

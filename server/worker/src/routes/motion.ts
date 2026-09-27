@@ -3,6 +3,7 @@ import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
 import { generateId } from '../lib/crypto';
 import { analyzeMotion, motionAnalysisSchemaVersion, motionModelVersion, motionValidatorVersion, validateMotionRequest } from '../domain/motionAnalysis';
+import { MODEL_CHANNELS, publicModelRelease, resolveModelForUser, type ModelChannel } from '../domain/motionModels';
 import { recordFeedback, recordReleaseMetric } from '../domain/motionTelemetry';
 import {
   encryptMotionBytes,
@@ -121,12 +122,31 @@ motionRouter.get('/jobs/:id', async (c) => {
   });
 });
 
+// Current model for a family+channel. With no `family` this keeps the legacy
+// shape (latest production row); with `family` it resolves the channel pointer
+// for this user, applying the deterministic rollout bucket.
 motionRouter.get('/models/current', async (c) => {
-  const model = await c.env.DB.prepare(
-    `SELECT model_version, input_schema_version, artifact_key, artifact_sha256, supported_motion_ids_json
-     FROM motion_model_releases WHERE status = 'production' ORDER BY promoted_at DESC LIMIT 1`,
-  ).first();
-  return c.json({ ok: true, model: model ?? { model_version: motionModelVersion, input_schema_version: motionAnalysisSchemaVersion, artifactKey: null, artifactSha256: null, supportedMotionIds: [] } });
+  const family = c.req.query('family')?.trim();
+  if (!family) {
+    // Legacy callers (pre-family clients) only ever saw the basketball object
+    // model — keep that contract pinned so encoder promotions can't leak in.
+    const model = await c.env.DB.prepare(
+      `SELECT model_version, input_schema_version, artifact_key, artifact_sha256, supported_motion_ids_json
+       FROM motion_model_releases
+       WHERE status = 'production' AND disabled_at IS NULL AND model_family = 'basketball_yolox'
+       ORDER BY promoted_at DESC LIMIT 1`,
+    ).first();
+    return c.json({ ok: true, model: model ?? { model_version: motionModelVersion, input_schema_version: motionAnalysisSchemaVersion, artifactKey: null, artifactSha256: null, supportedMotionIds: [] } });
+  }
+  if (family.length > 64) return c.json({ ok: false, error: 'family is invalid.' }, 400);
+  const channelParam = c.req.query('channel') ?? 'stable';
+  if (!MODEL_CHANNELS.includes(channelParam as ModelChannel)) {
+    return c.json({ ok: false, error: 'Unsupported model channel.' }, 400);
+  }
+  const row = await resolveModelForUser(
+    c.env.DB, family, channelParam as ModelChannel, c.get('userId'),
+  );
+  return c.json({ ok: true, model: row ? publicModelRelease(row) : null });
 });
 
 // Model bytes are served only for an explicitly promoted release. The client
@@ -139,9 +159,11 @@ motionRouter.get('/models/:modelVersion/artifact', async (c) => {
   }
 
   const model = await c.env.DB.prepare(
-    `SELECT model_version, artifact_key, artifact_sha256
-       FROM motion_model_releases
-      WHERE model_version = ? AND status = 'production'
+    `SELECT r.model_version, r.artifact_key, r.artifact_sha256
+       FROM motion_model_releases r
+      WHERE r.model_version = ? AND r.disabled_at IS NULL
+        AND (r.status = 'production'
+             OR EXISTS (SELECT 1 FROM motion_model_channels mc WHERE mc.release_id = r.id))
       LIMIT 1`,
   ).bind(modelVersion).first<{
     model_version: string;
@@ -149,7 +171,7 @@ motionRouter.get('/models/:modelVersion/artifact', async (c) => {
     artifact_sha256: string | null;
   }>();
   if (!model || !model.artifact_key || !model.artifact_sha256) {
-    return c.json({ ok: false, error: 'Production model artifact not found.' }, 404);
+    return c.json({ ok: false, error: 'Published model artifact not found.' }, 404);
   }
 
   const object = await c.env.PROFILE_PHOTOS.get(model.artifact_key);

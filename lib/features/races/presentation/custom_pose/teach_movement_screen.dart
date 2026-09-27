@@ -21,7 +21,9 @@ import '../../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
 import '../../ai/camera_image_converter.dart';
+import '../../ai/motion_model_resolver.dart';
 import '../../ai/motion_v2/diagnostics/motion_diagnostic_session.dart';
+import '../../ai/motion_v2/engine/motion_v2_onnx_encoder.dart';
 import '../../ai/motion_v2/motion_v2_models.dart';
 import '../../ai/motion_v2/motion_v2_native_runtime.dart';
 import '../../ai/motion_v2/pose_quality.dart';
@@ -32,6 +34,7 @@ import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
 import '../../ai/custom_pose/pose_calibration_flow.dart';
 import '../../ai/custom_pose/pose_stream_controller.dart';
+import '../race_controller.dart';
 import 'learned_custom_movement_provider.dart';
 import 'learned_movement_preview.dart';
 import 'pose_skeleton_overlay.dart';
@@ -566,6 +569,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _v2Learning = true;
       _v2Error = null;
     });
+    // System B: give the encoder the remote-model delivery path for this
+    // session. Unset it falls back to last-known-good / bundled.
+    final controller = ref.read(raceControllerProvider.notifier);
+    MotionV2OnnxEncoder.configureModelSource(
+      MotionV2ModelSource(
+        resolveModel: (family) =>
+            controller.getCurrentMotionModel(family: family),
+        fetchArtifact: (v) => controller.getMotionModelArtifact(v),
+      ),
+    );
     final runtime = MotionV2NativeRuntime();
     try {
       final spec = await runtime.learn(
@@ -886,6 +899,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         'motionV2Schema': _v2Spec?.json['schema'],
         'encoder': _v2?.encoderId ?? 'release_action',
         'onnxAsset': 'assets/models/motion_v2_encoder.onnx',
+        'modelRelease': MotionV2OnnxEncoder.activeModelVersion,
+        'modelChecksum': MotionV2OnnxEncoder.activeModelChecksum,
+        'modelSource': MotionV2OnnxEncoder.activeModelSource,
         'matcher': 'multi_reference/schema4',
         'normalization': 'root_scale_normalize',
         'diagSchema': kMotionDiagSchema,

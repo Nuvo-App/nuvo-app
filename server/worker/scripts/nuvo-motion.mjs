@@ -20,6 +20,17 @@
 //   upload-asset --release-id R --asset-id A --file F
 //   audit [--activity-id A] [--release-id R] [--action X] [--limit N]
 //   signals [--activity-id A] [--release-id R]
+//
+// System B — model releases (Nuvo Motion Intelligence, independent of
+// verifier releases):
+//   models [--family F]
+//   model-register <release.json>
+//   model-upload --release-id R --file model.onnx
+//   model-evaluate --release-id R --file report.json
+//   model-promote --release-id R --channel internal|beta|stable [--rollout N]
+//   model-rollback --family F --channel C --release-id R
+//   model-disable --release-id R
+//   model-status [--family F]
 
 const BASES = {
   prod: 'https://nuvo-api.getnuvoapp.workers.dev',
@@ -198,8 +209,93 @@ switch (command) {
     print(await call('GET', `/motion/adaptation/signals?${qs}`));
     break;
   }
+  case 'activity-visibility': {
+    const activityId = firstPositional();
+    const availability = flag('set', null);
+    if (!activityId || !['supported', 'hidden'].includes(availability)) {
+      console.error('usage: activity-visibility <activityId> --set supported|hidden');
+      process.exit(2);
+    }
+    const res = await fetch(`${base}/internal/motion/activities/${activityId}/availability`, {
+      method: 'PUT',
+      headers: { 'X-Internal-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ availability }),
+    });
+    const text = await res.text();
+    let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    print({ status: res.status, json });
+    break;
+  }
+  // ── System B: model releases ────────────────────────────────────────────
+  case 'models': {
+    const qs = flag('family', null) ? `?family=${flag('family', null)}` : '';
+    print(await call('GET', `/motion/models${qs}`));
+    break;
+  }
+  case 'model-register': {
+    const file = firstPositional();
+    if (!file) { console.error('usage: model-register <release.json>'); process.exit(2); }
+    print(await call('POST', '/motion/models', JSON.parse(fs.readFileSync(file, 'utf8'))));
+    break;
+  }
+  case 'model-upload': {
+    const releaseId = flag('release-id', null);
+    const file = flag('file', null);
+    if (!releaseId || !file) { console.error('usage: model-upload --release-id R --file model.onnx'); process.exit(2); }
+    const bytes = fs.readFileSync(file);
+    const res = await fetch(`${base}/internal/motion/models/${releaseId}/artifact`, {
+      method: 'POST',
+      headers: { 'X-Internal-Key': key },
+      body: bytes,
+    });
+    const text = await res.text();
+    let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    print({ status: res.status, json });
+    break;
+  }
+  case 'model-evaluate': {
+    const releaseId = flag('release-id', null);
+    const file = flag('file', null);
+    if (!releaseId || !file) { console.error('usage: model-evaluate --release-id R --file report.json'); process.exit(2); }
+    const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+    print(await call('POST', `/motion/models/${releaseId}/evaluations`, report));
+    break;
+  }
+  case 'model-promote': {
+    const releaseId = flag('release-id', null);
+    const channel = flag('channel', null);
+    if (!releaseId || !channel) { console.error('usage: model-promote --release-id R --channel internal|beta|stable [--rollout N]'); process.exit(2); }
+    const rollout = flag('rollout', null);
+    print(await call('POST', `/motion/models/${releaseId}/promote`, {
+      channel,
+      ...(rollout != null ? { rolloutPercent: Number(rollout) } : {}),
+    }));
+    break;
+  }
+  case 'model-rollback': {
+    const family = flag('family', null);
+    const channel = flag('channel', null);
+    const releaseId = flag('release-id', null);
+    if (!family || !channel || !releaseId) {
+      console.error('usage: model-rollback --family F --channel C --release-id R');
+      process.exit(2);
+    }
+    print(await call('POST', `/motion/models/channels/${family}/${channel}/rollback`, { releaseId }));
+    break;
+  }
+  case 'model-disable': {
+    const releaseId = flag('release-id', null);
+    if (!releaseId) { console.error('usage: model-disable --release-id R'); process.exit(2); }
+    print(await call('POST', `/motion/models/${releaseId}/disable`, {}));
+    break;
+  }
+  case 'model-status': {
+    const qs = flag('family', null) ? `?family=${flag('family', null)}` : '';
+    print(await call('GET', `/motion/models${qs}`));
+    break;
+  }
   default:
     console.error(`Unknown command: ${command ?? '(none)'}\n`);
-    console.error('Commands: list | releases | draft | evaluate | promote | rollback | disable | preview | upload-asset | audit | signals');
+    console.error('Commands: list | releases | draft | evaluate | promote | rollback | disable | preview | upload-asset | audit | signals | models | model-register | model-upload | model-evaluate | model-promote | model-rollback | model-disable | model-status');
     process.exit(2);
 }
