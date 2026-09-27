@@ -131,5 +131,6 @@ Promotion rules (new checks, same endpoints):
 
 Session artifact already carries releaseId. V1 adds `packageSchemaVersion`
 and per-asset fetch results (duration, bytes, verified) to the session
-artifact metadata — no pose data leaves the phone (privacy preserved;
-pose never uploads, only diagnostics).
+artifact metadata — diagnostics only. (Pose-landmark upload is a separate,
+consent-gated training pipeline: off by default, opt-in via "Help improve
+Nuvo", encrypted, purged ~90d — see docs/compliance/DATA_FLOW_MAP.md.)

@@ -18,12 +18,11 @@
 		<string>applinks:nuvo-api.getnuvoapp.workers.dev</string>
 	</array>
 	<!--
-	  Push notifications (phase F). Needs the "Push Notifications" capability
-	  enabled for App ID net.getnuvo.app in the Apple Developer portal + an
-	  APNs auth key uploaded to Firebase before a signed build delivers push.
-	  PushService stays dormant until GoogleService-Info.plist is added.
+	  Push notifications: no aps-environment key is declared here on purpose.
+	  The provisioning profile supplies 'development' for dev-signed builds
+	  and 'production' for App Store builds; hardcoding a value would force
+	  sandbox APNs into release builds. Requires the Push Notifications
+	  capability on App ID net.getnuvo.app in the Developer portal.
 	-->
-	<key>aps-environment</key>
-	<string>development</string>
 </dict>
 </plist>
