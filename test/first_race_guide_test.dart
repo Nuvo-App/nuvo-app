@@ -84,6 +84,7 @@ class _ScriptedAuthRepo extends AuthRepository {
   Future<AuthUser> signInWithApple(
     String idToken, {
     String? fullName,
+    String? authorizationCode,
   }) async =>
       user;
 

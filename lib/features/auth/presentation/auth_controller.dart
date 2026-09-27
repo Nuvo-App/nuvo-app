@@ -115,8 +115,16 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> signInWithApple(String idToken, {String? fullName}) async {
-    final user = await _repo.signInWithApple(idToken, fullName: fullName);
+  Future<void> signInWithApple(
+    String idToken, {
+    String? fullName,
+    String? authorizationCode,
+  }) async {
+    final user = await _repo.signInWithApple(
+      idToken,
+      fullName: fullName,
+      authorizationCode: authorizationCode,
+    );
     if (mounted) {
       state = AuthState(status: AuthStatus.authenticated, user: user);
     }

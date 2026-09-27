@@ -126,6 +126,12 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
         throw Exception('Apple did not return an identity token');
       }
 
+      // The authorization code is exchanged server-side for an Apple
+      // refresh token so account deletion can revoke the grant — Apple
+      // requires this when an app offers in-app account deletion. It may be
+      // absent on some re-auth paths; the server tolerates that.
+      final authorizationCode = credential.authorizationCode;
+
       final fullName = _formatAppleFullName(
         credential.givenName,
         credential.familyName,
@@ -133,7 +139,11 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
 
       await ref
           .read(authControllerProvider.notifier)
-          .signInWithApple(idToken, fullName: fullName);
+          .signInWithApple(
+            idToken,
+            fullName: fullName,
+            authorizationCode: authorizationCode,
+          );
     } catch (e) {
       debugPrint('[AppleSignIn] error: $e');
       if (mounted) {

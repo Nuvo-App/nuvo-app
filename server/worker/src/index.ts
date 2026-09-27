@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppEnv, ProfileRow } from './types';
 import { purgeExpiredMotionData } from './lib/motion_privacy';
+import { appleServiceConfig, retryPendingAppleRevocations } from './lib/apple';
 import { purgeExpiredAuthData } from './lib/dataRetention';
 import { sweepRaceLifecycle } from './domain/raceFinalize';
 import { notifyLifecycleTransitions, runNotificationJob } from './domain/notificationPolicy';
@@ -397,6 +398,17 @@ const worker = Object.assign(app, {
           }
         } catch (err) {
           console.error('[cron] notification jobs failed:', (err as Error).message);
+        }
+        // Apple revocation retries: a grant that couldn't be revoked during
+        // account deletion keeps an anonymized credential row; finish it here
+        // so the Apple authorization doesn't outlive the Nuvo account.
+        const appleConfig = appleServiceConfig(env);
+        if (appleConfig) {
+          try {
+            await retryPendingAppleRevocations(env.DB, appleConfig);
+          } catch (err) {
+            console.error('[cron] apple revocation retry failed:', (err as Error).message);
+          }
         }
       })(),
     );
