@@ -4,6 +4,14 @@
 # top-level `flutter analyze` signal stays about production issues.
 include: ../../analysis_options.yaml
 
+analyzer:
+  exclude:
+    # Lab harnesses import test/motion_qa/lab/, which is intentionally
+    # gitignored (local research tooling + generated run artifacts). They
+    # cannot analyze on a clean checkout, so they are excluded rather than
+    # shipped half-defined.
+    - motion_lab_*.dart
+
 linter:
   rules:
     avoid_print: false
