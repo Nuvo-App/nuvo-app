@@ -72,13 +72,17 @@ void main() {
     expect(races.where(raceIsCompleted), hasLength(3));
     expect(boardIds, containsAll(races.take(4).map((race) => race.id)));
     expect(races.every((race) => race.participantFor(user.id) != null), isTrue);
+    // Full leaderboards everywhere except the one deliberate 1v1 battle
+    // (burpees vs Jules — head-to-head reads cleaner in Recent results).
+    expect(
+      races.where((race) => race.participants.length < 8),
+      hasLength(1),
+    );
     expect(
       races.every(
-        (race) =>
-            race.participants.length >= 8 &&
-            race.participants.every(
-              (participant) => participant.profilePhotoUrl?.isNotEmpty == true,
-            ),
+        (race) => race.participants.every(
+          (participant) => participant.profilePhotoUrl?.isNotEmpty == true,
+        ),
       ),
       isTrue,
     );

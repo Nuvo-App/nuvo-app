@@ -1008,9 +1008,14 @@ void main() {
         container.read(firstRaceGuideProvider),
         FirstRaceGuideStep.composerActivity,
       );
-      expect(find.text('PICK THE MOVE'), findsOneWidget);
+      // 'Morning Mile' resolved to a running race — the activity step is
+      // already satisfied, so the coach points at the continue CTA.
+      expect(find.text('Tap Set the finish line.'), findsOneWidget);
 
-      // Pick a real movement — coach moves to the continue CTA.
+      // The title preselected the custom-goal tab — switch to Movement to
+      // pick a real movement.
+      await tester.tap(find.text('Movement'));
+      await settle(tester);
       await tester.ensureVisible(find.text('Pushups').first);
       await tester.pump();
       await tester.tap(find.text('Pushups').first);
@@ -1076,6 +1081,8 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Morning Mile');
       await settle(tester);
       await tester.tap(find.text('Choose activity'));
+      await settle(tester);
+      await tester.tap(find.text('Movement'));
       await settle(tester);
       await tester.ensureVisible(find.text('Pushups').first);
       await tester.pump();

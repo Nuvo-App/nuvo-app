@@ -76,9 +76,9 @@ void main() {
       expect(i.goalKind, RaceGoalKind.manual);
       expect(i.metric, RaceMetric.seconds);
       expect(i.format, RaceFormat.bestAttempt);
-      expect(i.manualGoalName, 'Mile');
+      expect(i.manualGoalName, 'Running');
       expect(i.manualUnit, 'seconds');
-      expect(i.proofNeed, ProofNeed.timeResult);
+      expect(i.proofNeed, ProofNeed.gpsActivity);
       // Fastest = lowest time wins — a real scoring primitive, not a flag.
       expect(i.scoreDirection, 'lower');
     });
@@ -90,7 +90,7 @@ void main() {
       expect(i.manualGoalName, 'Math Test Grade');
       expect(i.manualUnit, 'percent');
       expect(i.format, RaceFormat.bestAttempt);
-      expect(i.proofNeed, ProofNeed.numeric);
+      expect(i.proofNeed, ProofNeed.photo);
       expect(i.confidence, InterpretationConfidence.assumed);
     });
 
@@ -135,8 +135,8 @@ void main() {
       expect(i.format, RaceFormat.mostInWindow);
       expect(i.manualUnit, 'pages');
       expect(i.manualGoalName, isNot(contains('Friday')));
-      // Never invent a deadline — surfaced as an assumption instead.
-      expect(i.assumptions.join(' '), contains('Finish line'));
+      // The "by Friday" deadline is parsed, not invented.
+      expect(i.deadline, contains('friday'));
     });
 
     test('"First to read 5 books"', () {
@@ -144,7 +144,7 @@ void main() {
       expect(i.format, RaceFormat.firstToGoal);
       expect(i.targetValue, 5);
       expect(i.goalKind, RaceGoalKind.manual);
-      expect(i.manualUnit, 'pages');
+      expect(i.manualUnit, 'books');
     });
 
     test('"Most steps today"', () {
@@ -157,7 +157,7 @@ void main() {
     test('"Highest bench press"', () {
       final i = interpretRaceName('Highest bench press');
       expect(i.goalKind, RaceGoalKind.manual);
-      expect(i.manualUnit, 'lbs');
+      expect(i.manualUnit, 'lb');
     });
 
     test('"Longest wall sit"', () {
@@ -178,14 +178,12 @@ void main() {
   group('interpretRaceName — ambiguity and number words', () {
     test('"running challenge" does not invent configuration', () {
       final i = interpretRaceName('running challenge');
-      // The subject is understood (running is a catalog alias); nothing else
-      // is invented — the default target is flagged, one question is asked.
-      expect(i.activity?.type, MotionActivityType.runningInPlace);
-      expect(i.format, RaceFormat.firstToGoal);
-      expect(i.attemptDurationSeconds, isNull);
-      expect(i.assumptions, isNotEmpty);
-      expect(i.question, isNotNull);
-      expect(i.confidence, InterpretationConfidence.assumed);
+      // The subject resolves to the running domain; nothing is invented —
+      // no motion preset, low confidence.
+      expect(i.activity, isNull);
+      expect(i.goalKind, RaceGoalKind.manual);
+      expect(i.manualGoalName, 'Running');
+      expect(i.confidence, InterpretationConfidence.low);
     });
 
     test('"First to twenty pushups" reads number words', () {
@@ -274,13 +272,71 @@ void main() {
     test('"Who can do the most pushups" still resolves the activity', () {
       final i = interpretRaceName('Who can do the most pushups');
       expect(i.activity?.type, MotionActivityType.pushUps);
-      expect(i.format, RaceFormat.mostInWindow);
+      expect(i.format, RaceFormat.bestAttempt);
     });
 
     test('"let\'s see who can do 50 pushups" falls back to subject+target', () {
       final i = interpretRaceName("let's see who can do 50 pushups");
       expect(i.activity?.type, MotionActivityType.pushUps);
       expect(i.targetValue, 50);
+    });
+  });
+
+  group('location / GPS capability', () {
+    test('"Fastest mile" — time over a stated distance, GPS-proven', () {
+      final i = interpretRaceName('Fastest mile');
+      expect(i.manualGoalName, 'Running');
+      expect(i.manualUnit, 'seconds');
+      expect(i.format, RaceFormat.bestAttempt);
+      expect(i.scoreDirection, 'lower');
+      expect(i.proofNeed, ProofNeed.gpsActivity);
+      expect(i.requiredDistanceValue, 1);
+      expect(i.requiredDistanceUnit, 'miles');
+    });
+
+    test('"Fastest 5K" carries a 5 km distance requirement', () {
+      final i = interpretRaceName('Fastest 5K');
+      expect(i.proofNeed, ProofNeed.gpsActivity);
+      expect(i.requiredDistanceValue, 5);
+      expect(i.requiredDistanceUnit, 'km');
+    });
+
+    test('"First to run 5 miles" — cumulative distance, not a clock', () {
+      final i = interpretRaceName('First to run 5 miles');
+      expect(i.manualUnit, 'miles');
+      expect(i.format, RaceFormat.firstToGoal);
+      expect(i.targetValue, 5);
+      expect(i.requiredDistanceValue, isNull);
+      expect(i.proofNeed, ProofNeed.gpsActivity);
+    });
+
+    test('"Farthest run in 30 minutes" — timed attempt, maximum distance', () {
+      final i = interpretRaceName('Farthest run in 30 minutes');
+      expect(i.format, RaceFormat.timedAttempt);
+      expect(i.attemptDurationSeconds, 1800);
+      expect(i.manualUnit, 'miles');
+      expect(i.proofNeed, ProofNeed.gpsActivity);
+    });
+
+    test('"Most miles biked this week" — cycling, deadline, cumulative', () {
+      final i = interpretRaceName('Most miles biked this week');
+      expect(i.manualGoalName, 'Cycling');
+      expect(i.format, RaceFormat.mostInWindow);
+      expect(i.deadline, 'this week');
+      expect(i.proofNeed, ProofNeed.gpsActivity);
+    });
+
+    test('"Who can go the farthest" asks instead of assuming running', () {
+      final i = interpretRaceName('Who can go the farthest');
+      expect(i.question, isNotNull);
+      expect(i.manualGoalName, isNot('Running'));
+    });
+
+    test('pool and treadmill races are not GPS races', () {
+      expect(interpretRaceName('Fastest 500m swim').proofNeed,
+          isNot(ProofNeed.gpsActivity));
+      expect(interpretRaceName('Fastest treadmill 1 mile').proofNeed,
+          isNot(ProofNeed.gpsActivity));
     });
   });
 }

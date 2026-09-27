@@ -87,7 +87,15 @@ class PushService {
   }
 
   Future<void> onSignedOut() async {
-    final token = _lastToken;
+    // _lastToken is in-memory only — after an app restart between token sync
+    // and sign-out it's null, so ask the SDK for the live token to make sure
+    // this device's backend row is really detached.
+    var token = _lastToken;
+    if (token == null && _available) {
+      try {
+        token = await FirebaseMessaging.instance.getToken();
+      } catch (_) {}
+    }
     if (token != null) await _deviceApi.unregister(token);
     _lastToken = null;
   }

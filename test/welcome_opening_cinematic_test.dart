@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:nuvo/app/router.dart';
+import 'package:nuvo/core/widgets/nuvo_flip_text.dart';
 import 'package:nuvo/features/auth/presentation/welcome_auth_screen.dart';
 import 'package:nuvo/features/auth/presentation/email_start_screen.dart';
 import 'package:nuvo/features/auth/presentation/welcome_onboarding_state.dart';
@@ -122,6 +123,38 @@ Future<void> _captureOnboarding(WidgetTester tester, String name) async {
       image.dispose();
     }
   });
+}
+
+
+/// 'Welcome to Nuvo.' and friends render through NuvoFlipText (per-character
+/// cells) — find.text can't see them. Match the NuvoFlipText widget itself;
+/// it stays in the tree in reduced-motion mode too (its build() just swaps
+/// the cells for a plain Text child).
+Finder findNuvoText(String t) =>
+    find.byWidgetPredicate((w) => w is NuvoFlipText && w.text == t);
+
+/// Each page's footer waits for that page's own settle-then-hold before the
+/// CTA exists; fixed pump budgets rot whenever entrance timing changes.
+/// Pump in small ticks until the finder matches (bounded, so a genuinely
+/// missing CTA still fails fast).
+Future<void> pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 100),
+  int maxTicks = 60,
+}) async {
+  for (var i = 0; i < maxTicks && finder.evaluate().isEmpty; i++) {
+    await tester.pump(step);
+  }
+  expect(finder, findsOneWidget);
+}
+
+/// The CTA exists inside a growing AnimatedSize the moment it's found —
+/// let the reveal finish so the tap lands on a settled button.
+Future<void> tapWhenFound(WidgetTester tester, Finder finder) async {
+  await pumpUntilFound(tester, finder);
+  await tester.pump(const Duration(milliseconds: 500));
+  await tester.tap(finder);
 }
 
 void main() {
@@ -344,11 +377,17 @@ void main() {
     }
   });
 
-  double opacityOf(WidgetTester tester, Finder textFinder) => tester
-      .widget<Opacity>(
-        find.ancestor(of: textFinder, matching: find.byType(Opacity)).first,
-      )
-      .opacity;
+  /// For NuvoFlipText the per-character Opacity cells are inside the widget —
+  /// descend to the first rendered Text so its ancestor Opacity is the cell's.
+  double opacityOf(WidgetTester tester, Finder textFinder) {
+    final inner = find.descendant(of: textFinder, matching: find.byType(Text));
+    final target = inner.evaluate().isNotEmpty ? inner.first : textFinder;
+    return tester
+        .widget<Opacity>(
+          find.ancestor(of: target, matching: find.byType(Opacity)).first,
+        )
+        .opacity;
+  }
 
   bool wordmarkVisible(WidgetTester tester) => tester
       .widgetList<Image>(find.byType(Image))
@@ -387,8 +426,8 @@ void main() {
       expect(find.byType(WelcomeOpeningCinematic), findsOneWidget);
       expect(find.byType(PageView), findsOneWidget);
       expect(find.text('See how it works'), findsNothing);
-      expect(find.text('Welcome to Nuvo.'), findsOneWidget);
-      expect(opacityOf(tester, find.text('Welcome to Nuvo.')), 0);
+      expect(findNuvoText('Welcome to Nuvo.'), findsOneWidget);
+      expect(opacityOf(tester, findNuvoText('Welcome to Nuvo.')), 0);
       expect(wordmarkVisible(tester), isFalse);
 
       // Run the cinematic out to completion (4800ms; AnimationController
@@ -403,17 +442,17 @@ void main() {
       // removed, and the first-screen text is on that same page.
       expect(find.byType(WelcomeOpeningCinematic), findsOneWidget);
       expect(find.byTooltip('Back'), findsNothing);
-      expect(find.text('Welcome to Nuvo.'), findsOneWidget);
+      expect(findNuvoText('Welcome to Nuvo.'), findsOneWidget);
       // Its own short text entrance has only just started, not already
       // resolved — the root cause of the old "skip" bug.
       expect(find.text('See how it works'), findsNothing);
-      expect(opacityOf(tester, find.text('Welcome to Nuvo.')), lessThan(1));
+      expect(opacityOf(tester, findNuvoText('Welcome to Nuvo.')), lessThan(1));
 
       // Text settles (~1.1s) but the CTA must NOT appear yet — every page
       // holds its finished state for a deliberate beat first.
       await tester.pump(const Duration(milliseconds: 1100));
       await tester.pump(const Duration(microseconds: 1));
-      expect(opacityOf(tester, find.text('Welcome to Nuvo.')), 1);
+      expect(opacityOf(tester, findNuvoText('Welcome to Nuvo.')), 1);
       expect(
         find.text('See how it works'),
         findsNothing,
@@ -422,11 +461,11 @@ void main() {
             'instant the text finishes.',
       );
 
-      // Only after the ~1.5s hold does the CTA slide up.
-      await tester.pump(const Duration(milliseconds: 1500));
-      await tester.pump(const Duration(milliseconds: 50));
+      // Only after the post-settle hold does the CTA slide up — the support
+      // line reports settling first, so this is longer than the headline's
+      // own entrance. Pump until it exists rather than betting on a budget.
+      await pumpUntilFound(tester, find.text('See how it works'));
       expect(find.byType(WelcomeOpeningCinematic), findsOneWidget);
-      expect(find.text('See how it works'), findsOneWidget);
 
       // (4) Waiting well past 10s never changes the page on its own.
       await tester.pump(const Duration(seconds: 10));
@@ -436,7 +475,7 @@ void main() {
       expect(router.routeInformationProvider.value.uri.path, '/welcome/intro');
 
       // (5) Only an explicit tap advances the page.
-      await tester.tap(find.text('See how it works'));
+      await tapWhenFound(tester, find.text('See how it works'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byTooltip('Back'), findsOneWidget);
@@ -455,10 +494,10 @@ void main() {
       await tester.tap(find.byTooltip('Back'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Welcome to Nuvo.'), findsOneWidget);
+      expect(findNuvoText('Welcome to Nuvo.'), findsOneWidget);
       expect(find.byType(WelcomeOpeningCinematic), findsOneWidget);
       expect(find.text('See how it works'), findsOneWidget);
-      expect(opacityOf(tester, find.text('Welcome to Nuvo.')), 1);
+      expect(opacityOf(tester, findNuvoText('Welcome to Nuvo.')), 1);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -486,18 +525,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump(const Duration(microseconds: 1));
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.pump(const Duration(milliseconds: 50));
+      await pumpUntilFound(tester, find.text('See how it works'));
 
       expect(find.byType(WelcomeOpeningCinematic), findsOneWidget);
-      expect(find.text('Welcome to Nuvo.'), findsOneWidget);
-      expect(find.text('See how it works'), findsOneWidget);
+      expect(findNuvoText('Welcome to Nuvo.'), findsOneWidget);
       expect(find.byTooltip('Back'), findsNothing);
       expect(router.routeInformationProvider.value.uri.path, '/welcome/intro');
 
       // Still page 0 after waiting — the cinematic completing never counts
       // as a page advance, reduced motion or not.
       await tester.pump(const Duration(seconds: 5));
-      expect(find.text('Welcome to Nuvo.'), findsOneWidget);
+      expect(findNuvoText('Welcome to Nuvo.'), findsOneWidget);
       expect(find.text('Keep going'), findsNothing);
       expect(find.byTooltip('Back'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -519,8 +557,7 @@ void main() {
       // whatever setState happened inside the jump above — gets a real
       // subsequent tick to finish growing, rather than being sampled at
       // its own animation's t=0.
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('See how it works'));
+      await tapWhenFound(tester, find.text('See how it works'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
     }
@@ -575,12 +612,11 @@ void main() {
 
       final settledYouY = youY();
       await tester.pump(const Duration(milliseconds: 1550));
-      await tester.pump(const Duration(milliseconds: 100));
+      await pumpUntilFound(tester, find.text('Keep going'));
       // Stable: the hold never reshuffles the board.
       expect(youY(), settledYouY);
       expect(youY(), lessThan(mayaY()));
       expect(mayaY(), lessThan(priyaY()));
-      expect(find.text('Keep going'), findsOneWidget);
 
       // Further waiting never navigates on its own.
       await tester.pump(const Duration(seconds: 5));
@@ -648,16 +684,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1100));
       await tester.pump(const Duration(microseconds: 1));
       await tester.pump(const Duration(milliseconds: 1550));
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('See how it works'));
+      await tapWhenFound(tester, find.text('See how it works'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       // Leaderboard: run the overtake + hold, then advance.
       await tester.pump(const Duration(milliseconds: 3150));
       await tester.pump(const Duration(microseconds: 1));
       await tester.pump(const Duration(milliseconds: 1550));
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('Keep going'));
+      await tapWhenFound(tester, find.text('Keep going'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
     }
@@ -670,7 +704,7 @@ void main() {
         addTearDown(router.dispose);
         await pumpToMovementPage(tester, router);
 
-        expect(find.text('Just do the activity.'), findsOneWidget);
+        expect(findNuvoText('Just do the activity.'), findsOneWidget);
         expect(find.byType(RiveJumpingJackPreview), findsOneWidget);
         expect(find.text('AI MOTION PROOF'), findsNothing);
         expect(find.text('EXAMPLE PROOF'), findsNothing);
@@ -695,8 +729,7 @@ void main() {
         // CTA must not appear the instant it's verified — it holds first.
         expect(find.text('Choose my direction'), findsNothing);
         await tester.pump(const Duration(milliseconds: 1400));
-        await tester.pump(const Duration(milliseconds: 50));
-        expect(find.text('Choose my direction'), findsOneWidget);
+        await pumpUntilFound(tester, find.text('Choose my direction'));
 
         await tester.pump(const Duration(seconds: 5));
         expect(find.text('Choose my direction'), findsOneWidget);
@@ -736,8 +769,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1100));
     await tester.pump(const Duration(microseconds: 1));
     await tester.pump(const Duration(milliseconds: 1550));
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.tap(find.text('See how it works'));
+    await tapWhenFound(tester, find.text('See how it works'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -745,8 +777,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 3150));
     await tester.pump(const Duration(microseconds: 1));
     await tester.pump(const Duration(milliseconds: 1550));
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.tap(find.text('Keep going'));
+    await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
   }
@@ -761,21 +792,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 4100));
     await tester.pump(const Duration(microseconds: 1));
     await tester.pump(const Duration(milliseconds: 1400));
-    await tester.pump(const Duration(milliseconds: 600));
+    await pumpUntilFound(tester, find.text('Choose my direction'));
     expect(tester.takeException(), isNull, reason: 'Earlier pages fit.');
-    await tester.tap(find.text('Choose my direction'));
+    await tapWhenFound(tester, find.text('Choose my direction'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(tester.takeException(), isNull, reason: 'Activity entrance fits.');
     // Activity's own short settle before its CTA is allowed to exist.
     if (!waitForReady) return;
     await tester.pump(const Duration(milliseconds: 900));
-    await tester.pump(const Duration(milliseconds: 600));
+    await pumpUntilFound(tester, find.text('Continue'));
   }
 
   Future<void> pumpToAuthPage(WidgetTester tester, GoRouter router) async {
     await pumpToActivityPage(tester, router);
-    await tester.tap(find.text('Continue'));
+    await tapWhenFound(tester, find.text('Continue'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
   }
@@ -810,13 +841,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 4100));
       await tester.pump(const Duration(microseconds: 1));
       await tester.pump(const Duration(milliseconds: 1400));
-      await tester.pump(const Duration(milliseconds: 600));
+      await pumpUntilFound(tester, find.text('Choose my direction'));
       expect(find.text('Proof turns\neffort into\nprogress.'), findsNothing);
-      await tester.tap(find.text('Choose my direction'));
+      await tapWhenFound(tester, find.text('Choose my direction'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.text('What do you want\nto race on?'), findsOneWidget);
+      expect(findNuvoText('What do you want\nto race on?'), findsOneWidget);
       for (final copy in legacyPracticeCopy) {
         expect(find.text(copy), findsNothing);
       }
@@ -824,14 +855,13 @@ void main() {
       // Activity (3) -> Auth (4): the legacy Practice page is unreachable —
       // there is no sixth page, and no page ever shows its copy.
       await tester.pump(const Duration(milliseconds: 900));
-      await tester.pump(const Duration(milliseconds: 600));
-      await tester.tap(find.text('Continue'));
+      await tapWhenFound(tester, find.text('Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       for (final copy in legacyPracticeCopy) {
         expect(find.text(copy), findsNothing);
       }
-      expect(find.text('Ready to start\nyour first race?'), findsOneWidget);
+      expect(findNuvoText('Ready to start\nyour first race?'), findsOneWidget);
       expect(
         find.text(
           'Create an account to save your races, invite your crew, and keep your progress.',
@@ -861,14 +891,22 @@ void main() {
       addTearDown(router.dispose);
       await pumpToActivityPage(tester, router, waitForReady: false);
       expect(find.text('Continue'), findsNothing);
-      await tester.pump(const Duration(milliseconds: 900));
-      await tester.pump(const Duration(milliseconds: 120));
-      final opacity = opacityOf(tester, find.text('Continue'));
-      expect(opacity, greaterThan(0));
-      expect(opacity, lessThan(1));
+      // Catch the CTA as it appears, then sample mid-reveal and settled —
+      // the first frame exists at opacity 0 while the reveal ramps up.
+      await pumpUntilFound(
+        tester,
+        find.text('Continue'),
+        step: const Duration(milliseconds: 20),
+      );
+      expect(opacityOf(tester, find.text('Continue')), 0);
+      await tester.pump(const Duration(milliseconds: 160));
+      expect(
+        opacityOf(tester, find.text('Continue')),
+        greaterThan(0),
+      );
       await tester.pump(const Duration(milliseconds: 400));
       expect(opacityOf(tester, find.text('Continue')), 1);
-      expect(find.text('Ready to start\nyour first race?'), findsNothing);
+      expect(findNuvoText('Ready to start\nyour first race?'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -881,7 +919,7 @@ void main() {
         addTearDown(router.dispose);
         await pumpToActivityPage(tester, router);
 
-        expect(find.text('50 Jumping Jacks'), findsOneWidget);
+        expect(findNuvoText('50 Jumping Jacks'), findsOneWidget);
         for (var i = 0; i < 5; i++) {
           expect(
             tester
@@ -921,12 +959,12 @@ void main() {
       var networkCalls = 0;
       await HttpOverrides.runZoned(
         () async {
-          expect(find.text('50 Jumping Jacks'), findsOneWidget);
+          expect(findNuvoText('50 Jumping Jacks'), findsOneWidget);
 
           await tester.tap(find.text('Pushups'));
           await tester.pump();
-          expect(find.text('50 Pushups'), findsOneWidget);
-          expect(find.text('50 Jumping Jacks'), findsNothing);
+          expect(findNuvoText('50 Pushups'), findsOneWidget);
+          expect(findNuvoText('50 Jumping Jacks'), findsNothing);
           // Purely local selection — no route change, no async gap.
           expect(
             router.routeInformationProvider.value.uri.path,
@@ -936,15 +974,16 @@ void main() {
 
           await tester.tap(find.text('Plank'));
           await tester.pump();
-          expect(find.text('Plank: 20 seconds'), findsOneWidget);
+          expect(findNuvoText('Plank: 20 seconds'), findsOneWidget);
 
           await tester.tap(find.text('Running in Place'));
           await tester.pump();
-          expect(find.text('Running in Place: 50 steps'), findsOneWidget);
+          expect(findNuvoText('Running in Place: 50 steps'), findsOneWidget);
 
+          await tester.ensureVisible(find.text('Teach Nuvo'));
           await tester.tap(find.text('Teach Nuvo'));
           await tester.pump();
-          expect(find.text('Your Own Movement'), findsOneWidget);
+          expect(findNuvoText('Your Own Movement'), findsOneWidget);
           // Selecting it must never enter the real Teach Nuvo camera flow.
           expect(
             router.routeInformationProvider.value.uri.path,
@@ -987,12 +1026,12 @@ void main() {
       // Waiting does not advance on its own.
       await tester.pump(const Duration(seconds: 5));
       expect(find.text('Continue'), findsOneWidget);
-      expect(find.text('Ready to start\nyour first race?'), findsNothing);
+      expect(findNuvoText('Ready to start\nyour first race?'), findsNothing);
 
-      await tester.tap(find.text('Continue'));
+      await tapWhenFound(tester, find.text('Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Ready to start\nyour first race?'), findsOneWidget);
+      expect(findNuvoText('Ready to start\nyour first race?'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -1082,7 +1121,7 @@ void main() {
           router.routeInformationProvider.value.uri.toString(),
           '/welcome/intro',
         );
-        expect(find.text('Welcome back.'), findsOneWidget);
+        expect(findNuvoText('Welcome back.'), findsOneWidget);
         expect(find.byType(EmailStartScreen), findsOneWidget);
         expect(find.text("Don't have an account? Sign up"), findsOneWidget);
         expect(find.byType(WelcomeAuthScreen), findsOneWidget);
@@ -1100,17 +1139,17 @@ void main() {
       await pumpToActivityPage(tester, router);
       await tester.tap(find.text('Pushups'));
       await tester.pump();
-      await tester.tap(find.text('Continue'));
+      await tapWhenFound(tester, find.text('Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
       await tester.tap(find.byTooltip('Back'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('What do you want\nto race on?'), findsOneWidget);
+      expect(findNuvoText('What do you want\nto race on?'), findsOneWidget);
       // Already-ready pages don't replay their entrance/hold on return.
       expect(find.text('Continue'), findsOneWidget);
-      expect(find.text('50 Pushups'), findsOneWidget);
+      expect(findNuvoText('50 Pushups'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -1145,7 +1184,7 @@ void main() {
         expect(tester.takeException(), isNull);
       }
 
-      await tester.tap(find.text('Continue'));
+      await tapWhenFound(tester, find.text('Continue'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       expect(tester.takeException(), isNull);
@@ -1159,7 +1198,7 @@ void main() {
       await tester.tap(modeToggle);
       await tester.pump();
       await _captureOnboarding(tester, 'login-${size.width.toInt()}');
-      expect(find.text('Welcome back.'), findsOneWidget);
+      expect(findNuvoText('Welcome back.'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
       await tester.ensureVisible(find.text('Log in'));
       expect(find.text('Log in').hitTestable(), findsOneWidget);
@@ -1224,8 +1263,8 @@ void main() {
     expect(find.byType(Image), findsNothing);
     // Page 0's text already exists structurally (it's the same continuous
     // composition as the cinematic), just not visible yet.
-    expect(find.text('Welcome to Nuvo.'), findsOneWidget);
-    expect(opacityOf(tester, find.text('Welcome to Nuvo.')), 0);
+    expect(findNuvoText('Welcome to Nuvo.'), findsOneWidget);
+    expect(opacityOf(tester, findNuvoText('Welcome to Nuvo.')), 0);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 4));

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/domain/race_name_interpreter.dart';
 
 void main() {
   group('Race System V2 draft parsing', () {
@@ -30,8 +31,11 @@ void main() {
       expect(plank?.metric.backendValue, 'seconds');
     });
 
-    test('does not silently fall back for unsupported activities', () {
-      expect(draftFromIdea('First to 10 cartwheels'), isNull);
+    test('unsupported activities become a custom race, never a preset', () {
+      final d = draftFromIdea('First to 10 cartwheels');
+      expect(d, isNotNull);
+      expect(d!.goalKind, RaceGoalKind.manual);
+      expect(d.manualGoalName, isNotEmpty);
     });
 
     test('templates emit one shared structured create payload', () {
@@ -210,4 +214,31 @@ void main() {
       );
     });
   });
+    test('interpreted deadline fills the finish line; questions surface', () {
+      var d = RaceDraft(
+        title: 'x',
+        activity: motionActivityDefinitions.first,
+        metric: RaceMetric.reps,
+        format: RaceFormat.firstToGoal,
+        targetValue: 1,
+      );
+      d = mergeRaceNameInterpretation(
+          d, interpretRaceName('Most books by Friday'));
+      expect(d.finishLineAt, isNotNull);
+
+      d = mergeRaceNameInterpretation(
+          d, interpretRaceName('Who can go the farthest'));
+      expect(d.clarification, isNotNull);
+
+      // A clean title clears the stale question.
+      d = mergeRaceNameInterpretation(
+          d, interpretRaceName('First to 100 pushups'));
+      expect(d.clarification, isNull);
+
+      // A timed attempt clears the stale inferred finish line.
+      d = mergeRaceNameInterpretation(
+          d, interpretRaceName('Most jumping jacks in 30 seconds'));
+      expect(d.attemptDurationSeconds, 30);
+      expect(d.finishLineAt, isNull);
+    });
 }
