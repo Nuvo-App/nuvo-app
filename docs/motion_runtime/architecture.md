@@ -4,7 +4,7 @@ Status: Phase A/B recon + design doc. Sections below describe the
 pre-implementation state — read them as "what we found", then see the
 implementation ledger for what actually shipped. Companion docs:
 
-## Implementation status (updated at D1 landing)
+## Implementation status (updated at D2 landing)
 
 SHIPPED:
 
@@ -22,12 +22,23 @@ SHIPPED:
   `landmark_axis` / `angle` / `axis_delta` / `segment_ratio`), dwell +
   hysteresis + lost-pose + rep-timeout semantics, mirrored Worker validation,
   capability `sequence_match_v1` advertised.
+- Package installer + content-addressed store —
+  `lib/features/races/data/motion_package_installer.dart` +
+  `motion_package_store{,_io,_web}.dart`: staged download → byte cap →
+  SHA-256 → per-type sanity → atomic `rename` promote. Required-asset failure
+  gates the camera session; optional assets (previews/test vectors) degrade
+  without blocking. Pin protection keeps an active session's package from
+  pruning; launch-time sweep removes abandoned staging dirs.
+- Worker package asset delivery — `POST/GET
+  /motion/releases/:releaseId/assets/:assetId` (upload is internal-keyed,
+  checksum-verified against the immutable manifest before it lands in R2;
+  download is public, declares-only, drift-checked on serve).
+- Capability API — `MotionCapabilityService` answers
+  supported/installed/installPending/engine/release/reason per activityId
+  without exposing package internals.
 
 NOT YET SHIPPED (design only):
 
-- Package asset installer (staged download → checksum → atomic promote) —
-  the `package` block parses but asset fetch/install is not wired; releases
-  with required assets resolve `package_install_pending`-style ineligible.
 - `taught_motion_v1` adapter over the Motion V2 encoder.
 - Release-pinned preview assets (`preview_v1`), feature-config block in the
   catalog, `nuvo-motion` authoring CLI, session-observability columns.
