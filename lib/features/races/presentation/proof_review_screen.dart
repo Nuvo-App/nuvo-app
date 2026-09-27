@@ -16,6 +16,7 @@ import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../crew/application/crew_controller.dart';
 import '../data/race_models.dart';
 import 'race_controller.dart';
 
@@ -125,14 +126,77 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     }
   }
 
+  Future<void> _reportProof(RaceProof proof) async {
+    final controller = TextEditingController();
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.themeColors.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          24,
+          20,
+          24,
+          24 + MediaQuery.of(ctx).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Report this move?', style: AppTextStyles.titleMedium),
+            const SizedBox(height: 6),
+            Text(
+              'What\u2019s wrong? This goes to the Nuvo review team.',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: context.themeColors.inkMuted),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(hintText: 'Optional details'),
+            ),
+            const SizedBox(height: 8),
+            NuvoPrimaryButton(
+              label: 'Send report',
+              icon: Icons.flag_outlined,
+              expand: true,
+              onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || reason == null) return;
+    try {
+      await ref
+          .read(crewRepositoryProvider)
+          .reportContent(proof.id, reason: reason);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thanks — our team will take a look.')),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).user;
 
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: NuvoColors.page,
-        body: Center(child: NuvoLoadingIndicator()),
+      return Scaffold(
+        backgroundColor: context.themeColors.page,
+        body: const Center(child: NuvoLoadingIndicator()),
       );
     }
 
@@ -158,7 +222,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     final proof = _proof;
     if (race == null || proof == null) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: context.themeColors.page,
         body: SafeArea(
           child: NuvoErrorState(
             message: _error ?? 'Move not found.',
@@ -174,7 +238,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     final isParticipant = user != null && race.isParticipant(user.id);
     if (!isOwner && !isParticipant) {
       return Scaffold(
-        backgroundColor: NuvoColors.page,
+        backgroundColor: context.themeColors.page,
         body: SafeArea(
           child: NuvoErrorState(
             message: 'Move not found.',
@@ -185,7 +249,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     }
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: context.themeColors.page,
       body: SafeArea(
         child:
             ListView(
@@ -207,9 +271,21 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       Text(
                         _viewerStatus(proof),
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: NuvoColors.muted,
+                          color: context.themeColors.inkMuted,
                         ),
                         textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: TextButton(
+                          onPressed: () => _reportProof(proof),
+                          child: Text(
+                            'Report this move',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: context.themeColors.inkMuted,
+                            ),
+                          ),
+                        ),
                       ),
                     ] else ...[
                     NuvoTextInput(
@@ -223,14 +299,14 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: NuvoColors.dangerSurface,
+                          color: context.semanticColors.danger.surface,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: NuvoColors.dangerBorder),
                         ),
                         child: Text(
                           _error!,
                           style: AppTextStyles.bodySmall.copyWith(
-                            color: NuvoColors.dangerOn,
+                            color: context.semanticColors.danger.on,
                           ),
                         ),
                       ),
@@ -256,7 +332,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     Text(
                       'The racer can submit another proof after reading your note.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -271,7 +347,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                     Text(
                       'This declines the proof and keeps it out of the leaderboard.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -301,10 +377,10 @@ class _MoveSummaryCard extends StatelessWidget {
   /// Authed evidence image — null when no media or the viewer can't fetch it.
   final ImageProvider? evidenceImage;
 
-  Color get _statusColor => switch (proof.verificationStatus) {
+  Color _statusColor(BuildContext context) => switch (proof.verificationStatus) {
     'accepted' || 'verified' => NuvoColors.success,
     'rejected' => NuvoColors.danger,
-    'needs_review' => NuvoColors.muted,
+    'needs_review' => context.themeColors.inkMuted,
     _ => NuvoColors.blue,
   };
 
@@ -324,9 +400,9 @@ class _MoveSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: NuvoColors.white,
+        color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: NuvoColors.navy, width: 2),
+        border: Border.all(color: context.themeColors.border, width: 2),
         boxShadow: AppShadows.hardSmall,
       ),
       child: Column(
@@ -334,19 +410,19 @@ class _MoveSummaryCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              NuvoPill(label: _statusLabel, color: _statusColor),
+              NuvoPill(label: _statusLabel, color: _statusColor(context)),
               const SizedBox(width: 6),
               NuvoPill(
                 label: proof.proofType == 'ai_motion' ? 'Verified' : 'Manual',
                 color: proof.proofType == 'ai_motion'
                     ? NuvoColors.blue
-                    : NuvoColors.muted,
+                    : context.themeColors.inkMuted,
               ),
               const Spacer(),
               Text(
                 proof.displayName,
                 style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.navy,
+                  color: context.themeColors.ink,
                 ),
               ),
             ],
@@ -354,7 +430,7 @@ class _MoveSummaryCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             race.title,
-            style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.muted),
+            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
           ),
           const SizedBox(height: 3),
           if (valueLabel != null) ...[
@@ -383,12 +459,12 @@ class _MoveSummaryCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: NuvoColors.icyBlue,
+                color: context.semanticColors.neutral.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.sm),
               ),
               child: Text(
                 proof.note!,
-                style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.navy),
+                style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.ink),
               ),
             ),
           ],
