@@ -17,6 +17,9 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
+import 'package:nuvo/features/profile/application/progression_controller.dart';
+import 'package:nuvo/features/profile/data/progression_api.dart';
+import 'package:nuvo/features/profile/data/progression_models.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
@@ -45,6 +48,49 @@ class _StubRaceRepo extends RaceRepository {
   final List<Race> races;
   @override
   Future<List<Race>> getRaces() => Future.value(races);
+}
+
+/// The steady-state progression payload the contract measures — level,
+/// progress, next unlock, and a featured badge all present, same as a real
+/// mid-level account.
+class _FakeStore extends SecureTokenStore {
+  @override
+  Future<String?> getAccessToken() async => 'qa-token';
+}
+
+class _StubProgressionApi extends ProgressionApi {
+  @override
+  Future<NuvoProgression> getProgression(String token) async =>
+      NuvoProgression.fromJson(const {
+        'level': 8,
+        'totalXp': 1240,
+        'currentLevelXp': 40,
+        'nextLevelXp': 180,
+        'progress': 0.22,
+        'xpToNext': 140,
+        'lastSeenLevel': 8,
+        'nextUnlock': {
+          'unlockId': 'bdg-double-digits',
+          'level': 10,
+          'type': 'badge',
+          'key': 'double_digits',
+          'name': 'Double Digits',
+          'metadata': {'icon': 'medal', 'rarity': 'milestone'},
+        },
+        'featuredBadges': [
+          {
+            'unlockId': 'bdg-five-deep',
+            'type': 'badge',
+            'key': 'five_deep',
+            'name': 'Five Deep',
+            'requiredLevel': 5,
+            'metadata': {'icon': 'flame', 'rarity': 'milestone'},
+            'unlocked': true,
+            'featured': true,
+            'position': 0,
+          },
+        ],
+      });
 }
 
 Race _race({
@@ -163,6 +209,8 @@ void main() {
           authControllerProvider.overrideWith(
             (ref) => AuthController(_FakeAuthRepo()),
           ),
+          progressionApiProvider.overrideWithValue(_StubProgressionApi()),
+          secureTokenStoreProvider.overrideWithValue(_FakeStore()),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -277,6 +325,14 @@ void main() {
         // occlusion band at rest, but the same scroll must bring it fully
         // clear above the dock.
         final scrollable = find.byType(Scrollable).first;
+        // Sections below the first viewport build lazily — the identity
+        // block can fill a small screen entirely, so scroll until the race
+        // sections exist before checking each one clears the dock.
+        var buildGuard = 0;
+        while (raceSections.evaluate().length < 2 && buildGuard++ < 12) {
+          await tester.drag(scrollable, const Offset(0, -300));
+          await tester.pumpAndSettle();
+        }
         for (final element in raceSections.evaluate().toList()) {
           var rect = tester.getRect(find.byWidget(element.widget));
           var guard = 0;
