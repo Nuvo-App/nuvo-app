@@ -242,6 +242,12 @@ internalRouter.post('/motion/releases/:releaseId/promote', async (c) => {
   ).bind(releaseId).first<{ id: string; activity_id: string; status: string }>();
   if (!release) return c.json({ ok: false, error: 'Release not found.' }, 404);
   if (!['validated', 'internal', 'beta', 'stable'].includes(release.status)) return c.json({ ok: false, error: 'Release must pass evaluation before promotion.' }, 409);
+  // A release already serving stable must not be demoted by a promotion
+  // call — status drives resolution, so flipping stable→internal would kill
+  // the activity until rollback. Pointer moves go through rollback/disable.
+  if (release.status === 'stable' && channel !== 'stable') {
+    return c.json({ ok: false, error: 'Cannot demote a stable release; use channel rollback or disable.' }, 409);
+  }
   if (channel === 'stable') {
     const evaluation = await c.env.DB.prepare(
       "SELECT id FROM verifier_evaluation_runs WHERE release_id = ? AND status = 'passed' ORDER BY completed_at DESC LIMIT 1",
@@ -293,6 +299,150 @@ internalRouter.post('/motion/channels/:activityId/:channel/rollback', async (c) 
     details: { channel },
   });
   return c.json({ ok: true, channel, releaseId, previousReleaseId: previous?.release_id ?? null });
+});
+
+// Every release + channel pointer for one activity — the ops "what exists"
+// view that precedes promote/rollback decisions.
+internalRouter.get('/motion/activities/:activityId/releases', async (c) => {
+  const activityId = c.req.param('activityId');
+  const activity = await c.env.DB.prepare(
+    'SELECT id, display_name, availability FROM motion_activities WHERE id = ? LIMIT 1',
+  ).bind(activityId).first<{ id: string; display_name: string; availability: string }>();
+  if (!activity) return c.json({ ok: false, error: 'Activity not found.' }, 404);
+  const releases = await c.env.DB.prepare(
+    `SELECT id, semver, change_class, engine_type, checksum, status,
+            minimum_app_build, compatibility_group, parent_release_id,
+            published_at, created_at, updated_at
+       FROM verifier_releases WHERE activity_id = ?
+       ORDER BY created_at DESC`,
+  ).bind(activityId).all<Record<string, unknown>>();
+  const channels = await c.env.DB.prepare(
+    `SELECT channel, release_id, rollout_percent, updated_at
+       FROM activity_channel_releases WHERE activity_id = ? ORDER BY channel`,
+  ).bind(activityId).all<Record<string, unknown>>();
+  return c.json({
+    ok: true,
+    activity: {
+      id: activity.id,
+      displayName: activity.display_name,
+      availability: activity.availability,
+    },
+    releases: releases.results,
+    channels: channels.results,
+  });
+});
+
+// Kill switch. `status = 'disabled'` fails closed everywhere a release is
+// resolved: stableReleaseForActivity requires 'stable', and session creation
+// re-checks the assigned release's status, so a disabled release cannot start
+// a new race or a new session. Existing sessions keep their pin — completion
+// still validates against it, so a kill never bricks in-flight proofs.
+// Channel pointers are left in place so rollback stays a pointer move.
+internalRouter.post('/motion/releases/:releaseId/disable', async (c) => {
+  let body: unknown;
+  try { body = await c.req.json(); } catch { body = {}; }
+  const value = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  const releaseId = c.req.param('releaseId');
+  const release = await c.env.DB.prepare(
+    'SELECT id, activity_id, status FROM verifier_releases WHERE id = ? LIMIT 1',
+  ).bind(releaseId).first<{ id: string; activity_id: string; status: string }>();
+  if (!release) return c.json({ ok: false, error: 'Release not found.' }, 404);
+  if (release.status === 'disabled') {
+    return c.json({ ok: true, releaseId, status: 'disabled', alreadyDisabled: true });
+  }
+  await c.env.DB.prepare(
+    "UPDATE verifier_releases SET status = 'disabled', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  ).bind(releaseId).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'release_disabled', activityId: release.activity_id,
+    releaseId, details: { previousStatus: release.status },
+  });
+  return c.json({ ok: true, releaseId, status: 'disabled' });
+});
+
+// Inline preview update. previewSequence lives on the activity (metadata_json)
+// and is read by the public catalog, so writing it ships a new decorative
+// animation to every installed app on its next catalog fetch. It is
+// activity-level data, not part of the immutable release spec — verification
+// never reads it, and the client parser falls back to the bundled animation
+// on any malformed shape. Validated here to that parser's contract anyway so
+// the control plane only ever stores previews that will render.
+internalRouter.put('/motion/activities/:activityId/preview', async (c) => {
+  const activityId = c.req.param('activityId');
+  const activity = await c.env.DB.prepare(
+    'SELECT id, metadata_json FROM motion_activities WHERE id = ? LIMIT 1',
+  ).bind(activityId).first<{ id: string; metadata_json: string | null }>();
+  if (!activity) return c.json({ ok: false, error: 'Activity not found.' }, 404);
+  let body: unknown;
+  try { body = await c.req.json(); } catch { return c.json({ ok: false, error: 'Invalid JSON body.' }, 400); }
+  const value = body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : {};
+  const preview = value.preview;
+  // `preview: null` clears the remote override (client falls back to bundled).
+  if (preview !== null) {
+    if (!preview || typeof preview !== 'object' || Array.isArray(preview)) {
+      return c.json({ ok: false, error: 'preview object or null is required.' }, 400);
+    }
+    const p = preview as Record<string, unknown>;
+    const rig = p.rig;
+    const durationMs = p.durationMs;
+    const keyframes = p.keyframes;
+    if (rig !== 'front' && rig !== 'side') {
+      return c.json({ ok: false, error: 'preview.rig must be "front" or "side".' }, 400);
+    }
+    if (typeof durationMs !== 'number' || !Number.isInteger(durationMs) || durationMs <= 0 || durationMs > 60000) {
+      return c.json({ ok: false, error: 'preview.durationMs must be an integer between 1 and 60000.' }, 400);
+    }
+    if (!Array.isArray(keyframes) || keyframes.length < 2 || keyframes.length > 64
+        || keyframes.some((k) => !k || typeof k !== 'object' || Array.isArray(k))) {
+      return c.json({ ok: false, error: 'preview.keyframes must be 2-64 objects.' }, 400);
+    }
+  }
+  let metadata: Record<string, unknown> = {};
+  try { metadata = activity.metadata_json ? JSON.parse(activity.metadata_json) : {}; } catch { metadata = {}; }
+  if (preview === null) delete metadata.previewSequence;
+  else metadata.previewSequence = preview;
+  await c.env.DB.prepare(
+    'UPDATE motion_activities SET metadata_json = ? WHERE id = ?',
+  ).bind(JSON.stringify(metadata), activityId).run();
+  await audit(c.env.DB, {
+    actorId: bodyActor(value), action: 'activity_preview_updated', activityId,
+    details: { cleared: preview === null },
+  });
+  return c.json({ ok: true, activityId, previewCleared: preview === null });
+});
+
+// Audit trail — every control-plane mutation lands here via the shared
+// `audit()` helper. Filter by activity/release/action for incident review.
+internalRouter.get('/motion/audit', async (c) => {
+  const clauses = ['1 = 1'];
+  const binds: string[] = [];
+  const activityId = c.req.query('activityId');
+  const releaseId = c.req.query('releaseId');
+  const action = c.req.query('action');
+  if (activityId) { clauses.push('activity_id = ?'); binds.push(activityId); }
+  if (releaseId) { clauses.push('release_id = ?'); binds.push(releaseId); }
+  if (action) { clauses.push('action = ?'); binds.push(action); }
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 50), 1), 200);
+  const rows = await c.env.DB.prepare(
+    `SELECT id, actor_id, action, activity_id, release_id, previous_release_id,
+            details_json, created_at
+       FROM verifier_audit_log WHERE ${clauses.join(' AND ')}
+       ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+  ).bind(...binds, limit).all<Record<string, unknown>>();
+  return c.json({
+    ok: true,
+    count: rows.results.length,
+    entries: rows.results.map((row) => ({
+      id: row.id,
+      actorId: row.actor_id,
+      action: row.action,
+      activityId: row.activity_id,
+      releaseId: row.release_id,
+      previousReleaseId: row.previous_release_id,
+      details: (() => { try { return JSON.parse(String(row.details_json)); } catch { return {}; } })(),
+      createdAt: row.created_at,
+    })),
+  });
 });
 
 type SessionRow = Record<string, unknown>;
