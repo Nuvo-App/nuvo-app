@@ -1,5 +1,14 @@
 # PRODUCT TRUTH AUDIT — Pre-Launch Legal / Privacy / Store Compliance
 
+> **STATUS UPDATE (post-remediation):** This audit predates the compliance
+> remediation (commits `f906460`, `40e74bf`, `b53d6ec`, `6259b26`) and the
+> legal rewrite. All P0 items were resolved; founder facts are now locked
+> (Get Nuvo LLC, 312 Leyton Lane, Cary NC). Google Play is out of scope for
+> the iOS launch. Current-state docs: `APP_STORE_PRIVACY_MAP.md`,
+> `DATA_RETENTION_MAP.md`, `DATA_FLOW_MAP.md`, `DATA_PROCESSOR_INVENTORY.md`,
+> `PERMISSION_AUDIT.md`, `ATTORNEY_REVIEW.md` in this directory. Rows below
+> describe the product as found at audit time — keep for history.
+
 Audit date: 2026-09-27. Audited against `main` @ `fb26c42`, deployed Worker
 `nuvo-api` version `6897f5c5` + `nuvo-api-dev` `0420703a`, deployed site
 getnuvo.net (bundle `index-BPUDfM7V.js`), prod D1 `nuvo_db` + R2 `nuvor2`.

@@ -52,11 +52,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Nuvo uses your camera to record moves and take profile photos.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Nuvo saves edited profile photos to your library.</string>
+	<string>Nuvo uses the camera so AI Motion Proof can verify your movement live and to take proof and profile photos. Camera video is not uploaded.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Nuvo uses your photo library so you can set a profile photo.</string>
+	<string>Nuvo uses your photo library so you can set a profile photo and attach proof photos to races.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
