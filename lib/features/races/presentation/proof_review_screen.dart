@@ -15,7 +15,6 @@ import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
-import '../../auth/data/secure_token_store.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../data/race_models.dart';
 import 'race_controller.dart';
@@ -74,7 +73,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
           .getRaceDetail(widget.raceId);
       // Evidence media is participant-gated — fetched with the Bearer header,
       // not as a public URL.
-      final token = await SecureTokenStore().getAccessToken();
+      final token = await ref.read(secureTokenStoreProvider).getAccessToken();
       if (mounted) {
         setState(() {
           _race = race;

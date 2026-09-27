@@ -454,7 +454,11 @@ class RaceController extends StateNotifier<RaceState> {
     final existing = state.races
         .where((race) => race.id == raceId)
         .firstOrNull;
-    if (existing != null && raceFormatUsesAttempts(existing.format)) {
+    // The list isn't always loaded (deep link → race detail → verify), so a
+    // miss means fetch the format — never skip attempt binding.
+    final format = existing?.format ??
+        (await _repo.getRaceDetail(raceId)).format;
+    if (raceFormatUsesAttempts(format)) {
       // Attempt races reject proofs with no open attempt ("Start an attempt
       // first"). Declare one; an already-open attempt binds this submission,
       // so a 409 is success, not failure.
