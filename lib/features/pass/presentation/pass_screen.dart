@@ -4226,9 +4226,31 @@ class _PersonSheetState extends State<_PersonSheet> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: NuvoColors.muted,
+                        color: context.themeColors.inkMuted,
                       ),
                     ),
+                    // Nuvo Level — competitive identity, quiet chip beside
+                    // the handle, same visibility rules as the profile card.
+                    if (member.level != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.themeColors.panelLight,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Lv. ${member.level}',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: NuvoColors.blue,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
                     if (widget.racingIn != null) ...[
                       const SizedBox(height: 10),
                       PressableScale(
