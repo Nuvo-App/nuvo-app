@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
@@ -17,6 +18,7 @@ import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
+import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../profile/presentation/widgets/xp_reward.dart';
@@ -255,6 +257,45 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
       setState(() => _featuredFlipped = !_featuredFlipped);
     }
 
+    // The featured race reads as a standing, not metadata: the viewer's
+    // score is the anchor, the lane names the marks (You / rival / Goal),
+    // and the stakes line says what the next proof changes. Rival and gap
+    // data come only from canonical server state — never invented.
+    final c = context.themeColors;
+    final myValue = myPart?.progressValue ?? 0;
+    final targetValue = race.targetValue;
+    final isSeconds = raceMetric(race) == RaceMetric.seconds;
+    String fmt(int v) => isSeconds ? formatClock(v) : '$v';
+
+    List<RaceTrackMarker>? markers;
+    String? anchorValue;
+    String? anchorSuffix;
+    String? goalLabel;
+    if (targetValue != null && targetValue > 0) {
+      anchorValue = fmt(myValue);
+      anchorSuffix = '/ ${raceScoreLabel(race, targetValue)}';
+      goalLabel = 'Goal ${fmt(targetValue)}';
+      final ranked = serverRankedParticipants(race);
+      final rival = ranked
+          .where((p) => p.userId != uid && p.progressValue > 0)
+          .firstOrNull;
+      markers = [
+        RaceTrackMarker(
+          fraction: myValue / targetValue,
+          label: 'You ${fmt(myValue)}',
+          color: NuvoColors.actionBlue,
+          isViewer: true,
+        ),
+        if (rival != null)
+          RaceTrackMarker(
+            fraction: rival.progressValue / targetValue,
+            label:
+                '${_firstName(rival.displayName)} ${fmt(rival.progressValue)}',
+            color: c.ink,
+          ),
+      ];
+    }
+
     // Two semantic faces (docs/ui/NUVO_PLAY_SYSTEM.md §13.4): front = "what
     // race is this and what can I do?", back = "what's happening inside it?"
     // The card flips; page geometry around it never does. Card taps still
@@ -274,6 +315,11 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
         actionLabel: hasProof ? 'View leaderboard' : 'Open race',
         ctaIcon: null,
         headerAction: _FlipAffordance(label: 'Updates ↻', onTap: flip),
+        anchorValue: anchorValue,
+        anchorSuffix: anchorSuffix,
+        trackMarkers: markers,
+        goalLabel: goalLabel,
+        contextNote: _stakesLine(race, uid),
         // Always open the race board (the leaderboard). Logging progress /
         // verifying happens from the pinned action on that screen — every
         // "open a race" tap in the app lands in the same place.
@@ -286,6 +332,35 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
         onOpen: open,
       ),
     );
+  }
+
+  /// The stakes under the hero lane — what the next proof changes. Order:
+  /// the server's viewerContext verdict (lead / tied / gap) first, then the
+  /// honest "distance left" fallback when no verdict exists.
+  String? _stakesLine(Race race, String? uid) {
+    final vc = race.viewerContext;
+    if (vc != null) {
+      if (vc.isLeading) {
+        final gap = vc.gapToNextRank;
+        return gap != null && gap > 0
+            ? 'You lead by ${raceScoreLabel(race, gap)}'
+            : 'You lead';
+      }
+      if (vc.isTied && vc.rank == 1) return 'Tied at the front';
+      final gap = vc.gapToLeader;
+      if (gap != null && gap > 0) {
+        return '${raceScoreLabel(race, gap)} to take 1st';
+      }
+    }
+    final myPart = uid != null ? race.participantFor(uid) : null;
+    final target = race.targetValue;
+    if (target != null &&
+        target > 0 &&
+        myPart != null &&
+        target > myPart.progressValue) {
+      return '${raceScoreLabel(race, target - myPart.progressValue)} left';
+    }
+    return null;
   }
 
   int _wonCount(List<Race> races, String? uid) {
@@ -354,6 +429,28 @@ class _CompactHeader extends StatelessWidget {
         ? '$activeCount active · $finishedCount finished'
         : '$activeCount ${activeCount == 1 ? 'race' : 'races'} active';
 
+    // On narrow phones the title would have to truncate to fit beside the
+    // actions — drop the buttons to their own row instead so the title
+    // stays whole and Start still reads as the primary move.
+    final compact = context.isCompactWidth;
+    final start = NuvoPrimaryButton(
+      key: FirstRaceGuideKeys.competeStart,
+      label: 'Start',
+      onPressed: onStart,
+      small: true,
+      expand: compact,
+      // Tighter padding than a full-width button so the title +
+      // both actions fit at the 1.3 text-scale clamp.
+      horizontalPadding: 16,
+    );
+    final join = NuvoOutlineButton(
+      label: 'Join',
+      onPressed: onJoin,
+      small: true,
+      expand: compact,
+      horizontalPadding: 14,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         NuvoSpacing.pageHorizontal,
@@ -361,39 +458,52 @@ class _CompactHeader extends StatelessWidget {
         NuvoSpacing.pageHorizontal,
         0,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Compete',
+                      style: AppTextStyles.screenTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: NuvoSpacing.xs),
+                    Text(
+                      summary,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeColors.inkMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!compact) ...[
+                start,
+                const SizedBox(width: NuvoSpacing.sm),
+                join,
+              ],
+            ],
+          ),
+          if (compact) ...[
+            const SizedBox(height: NuvoSpacing.md),
+            Row(
               children: [
-                Text(
-                  'Compete',
-                  style: AppTextStyles.screenTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: NuvoSpacing.xs),
-                Text(
-                  summary,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.themeColors.inkMuted,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                // Primary takes the bigger share; Join stays secondary.
+                Expanded(flex: 3, child: start),
+                const SizedBox(width: NuvoSpacing.sm),
+                Expanded(flex: 2, child: join),
               ],
             ),
-          ),
-          NuvoPrimaryButton(
-            key: FirstRaceGuideKeys.competeStart,
-            label: 'Start',
-            onPressed: onStart,
-            small: true,
-          ),
-          const SizedBox(width: NuvoSpacing.sm),
-          NuvoOutlineButton(label: 'Join', onPressed: onJoin, small: true),
+          ],
         ],
       ),
     );
@@ -459,27 +569,22 @@ class _CappedRaceList extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NuvoSpacing.sm),
-        Container(
-          decoration: BoxDecoration(
-            color: context.themeColors.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: Border.all(color: context.themeColors.divider),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              for (var i = 0; i < visible.length; i++) ...[
-                _buildRow(visible[i], i + 1),
-                if (i < visible.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 54,
-                    color: context.themeColors.divider,
-                  ),
-              ],
+        // Flat race rows on the page — a hairline between standings, not a
+        // card around the list. Dashboard chrome is the old language.
+        Column(
+          children: [
+            for (var i = 0; i < visible.length; i++) ...[
+              _buildRow(visible[i], i + 1),
+              if (i < visible.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 26,
+                  endIndent: 12,
+                  color: context.themeColors.divider,
+                ),
             ],
-          ),
+          ],
         ),
       ],
     );
@@ -492,6 +597,18 @@ class _CappedRaceList extends StatelessWidget {
     final avatars = _rowAvatars(race, userId);
     final activity = raceActivityTitle(race);
     final progressLabel = raceProgressLabel(race, myPart);
+    // Distance to the finish line, when the race has a numeric target
+    // still ahead of the viewer ("22 left" / "1:18 left").
+    final targetValue = race.targetValue;
+    final left = targetValue != null &&
+            targetValue > 0 &&
+            myPart != null &&
+            targetValue > myPart.progressValue
+        ? targetValue - myPart.progressValue
+        : null;
+    final remaining = left == null
+        ? null
+        : '${raceMetric(race) == RaceMetric.seconds ? formatClock(left) : left} left';
 
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
@@ -501,6 +618,7 @@ class _CappedRaceList extends StatelessWidget {
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
+      remainingLabel: remaining,
       // Finishing pays +25 — deterministic from the server award table.
       rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
       onTap: () => onOpen(race),
@@ -540,27 +658,20 @@ class _SummaryExpansionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: context.themeColors.divider),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < races.length; i++) ...[
-            _buildRow(races[i], i + 1),
-            if (i < races.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 54,
-                color: context.themeColors.divider,
-              ),
-          ],
+    return Column(
+      children: [
+        for (var i = 0; i < races.length; i++) ...[
+          _buildRow(races[i], i + 1),
+          if (i < races.length - 1)
+            Divider(
+              height: 1,
+              thickness: 1,
+              indent: 26,
+              endIndent: 12,
+              color: context.themeColors.divider,
+            ),
         ],
-      ),
+      ],
     );
   }
 
@@ -611,27 +722,20 @@ class _FinishedExpansionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.md),
-        border: Border.all(color: context.themeColors.divider),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var i = 0; i < races.length; i++) ...[
-            _buildRow(races[i]),
-            if (i < races.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                indent: 54,
-                color: context.themeColors.divider,
-              ),
-          ],
+    return Column(
+      children: [
+        for (var i = 0; i < races.length; i++) ...[
+          _buildRow(races[i]),
+          if (i < races.length - 1)
+            Divider(
+              height: 1,
+              thickness: 1,
+              indent: 26,
+              endIndent: 12,
+              color: context.themeColors.divider,
+            ),
         ],
-      ),
+      ],
     );
   }
 
@@ -896,6 +1000,13 @@ class _EmptyState extends StatelessWidget {
       compact: true,
     );
   }
+}
+
+/// First name for lane/rivalry labels — rivals are people, and first names
+/// are how a crew actually reads them.
+String _firstName(String displayName) {
+  final first = displayName.trim().split(RegExp(r'\s+')).firstOrNull ?? '';
+  return first.isEmpty ? 'Crew' : first;
 }
 
 // ── Featured card faces ─────────────────────────────────────────────────────
