@@ -151,7 +151,7 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
             ),
             const SizedBox(height: NuvoSpacing.lg),
             SizedBox(
-              height: 34,
+              height: 34 * MediaQuery.textScalerOf(context).scale(1),
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
