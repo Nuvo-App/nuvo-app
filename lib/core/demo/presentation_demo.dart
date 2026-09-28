@@ -1212,7 +1212,7 @@ abstract final class PresentationDemoData {
       'verificationMethod': 'camera_pose',
       'proofRequirement': 'ai_check',
       'proofReviewMode': 'auto_accept',
-      'visibility': 'private',
+      'visibility': 'crew_only',
       'status': status,
       'completedAt': completedAt,
       'startLineAt': startLineAt,

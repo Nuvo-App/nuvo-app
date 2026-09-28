@@ -17,12 +17,13 @@ Legend for **Q**: `what is this? / am I winning? / what do I tap?`
 | Route | Screen | File | Primary action |
 |---|---|---|---|
 | `/splash` | Splash | `splash/presentation/splash_screen.dart` | none (restores session → routes); offline → retry |
-| `/welcome/intro` | Pre-auth race builder | `auth/.../welcome_race_builder_screen.dart` | "Build a race" (demo) |
+
 | `/welcome` | Sign in | `auth/.../welcome_auth_screen.dart` | "Continue with Email" |
 | `/auth/email` | Email entry | `auth/.../email_start_screen.dart` | "Send code" |
 | `/auth/verify` | Code entry | `auth/.../email_verify_screen.dart` | "Verify" |
 | `/onboarding/profile` | Name + username | `onboarding/.../onboarding_screen.dart` | "Continue" |
-| `/onboarding/member-pass` | Pass intro | `onboarding/.../member_pass_screen.dart` | "Continue" |
+| `/onboarding/motion-consent` | Motion contribution choice | `onboarding/.../motion_contribution_screen.dart` | "Help improve Nuvo" / "Not now" |
+| `/onboarding/nuvo` | First-use story | `onboarding/.../nuvo_onboarding_screen.dart` | "Start your first race" |
 | `/arena` | Arena (home tab) | `arena/.../arena_screen_fixed.dart` | "Submit proof" on the next-move board |
 | `/pass` | Crew (tab) | `pass/.../pass_screen.dart` | "Share pass" / add crew |
 | `/compete` | Compete (tab) | `compete/.../compete_screen_fixed.dart` | featured race card CTA (or "Create a race" when empty) |

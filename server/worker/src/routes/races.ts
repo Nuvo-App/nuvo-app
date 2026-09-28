@@ -5,6 +5,7 @@ import { requireAuth } from '../lib/jwt';
 import {
   checkRaceJoinEligibility,
   isBlockedEitherWay,
+  RACE_LAUNCH_VISIBILITY,
   resolveRaceAccess,
 } from '../lib/raceAccess';
 import { evaluateRaceSafety } from '../domain/raceSafety';
@@ -93,7 +94,10 @@ racesRouter.use('*', requireAuth);
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 const RACE_STATUSES = new Set(['draft', 'scheduled', 'active', 'completed', 'archived', 'cancelled']);
-const VISIBILITIES = new Set(['private', 'crew_only', 'invite_code', 'public_demo']);
+// races.visibility keeps its legacy values ('private', 'invite_code',
+// 'crew_only', 'public_demo') as stored compatibility state — the access
+// resolver in lib/raceAccess.ts still reads them. New races are always
+// written 'crew_only' at creation; the field is no longer client-writable.
 const MOVE_SOURCES = new Set(['movecheck', 'manual', 'demo', 'import']);
 const MOVE_STATUSES = new Set(['pending', 'verified', 'rejected', 'removed']);
 const REVIEW_STATUSES = new Set(['accepted', 'rejected', 'ai_verified']);
@@ -1220,7 +1224,13 @@ racesRouter.post('/', async (c) => {
   // is always 'reps'.
   const targetUnit = custom?.metric ?? manual?.unit ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
   const movementType = custom || manual ? null : config?.activityId ?? stringOrNull(body.aiActivityType) ?? null;
-  const visibility = typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility) ? body.visibility : 'private';
+  // Canonical launch semantics: every race is crew-scoped. The creator's
+  // crew can see and join it; everyone else needs an invite code; blocks
+  // still deny everything. `body.visibility` is accepted-but-ignored for
+  // backward compatibility with older clients — the private/public product
+  // concept was removed; the column remains compatibility state for races
+  // created before the change.
+  const visibility = RACE_LAUNCH_VISIBILITY;
   const startAt = custom?.startsAt ?? manual?.startsAt ?? config?.startsAt ?? stringOrNull(body.startLineAt) ?? null;
   const endAt = custom?.endsAt ?? manual?.endsAt ?? config?.endsAt ?? stringOrNull(body.finishLineAt) ?? null;
 
@@ -1473,7 +1483,9 @@ racesRouter.patch('/:id', async (c) => {
   const targetValue = positiveIntOrNull(body.targetValue);
   if (targetValue !== undefined) { updates.push('target_value = ?'); values.push(targetValue); }
   if (typeof body.status === 'string' && RACE_STATUSES.has(body.status)) { updates.push('status = ?'); values.push(body.status); }
-  if (typeof body.visibility === 'string' && VISIBILITIES.has(body.visibility)) { updates.push('visibility = ?'); values.push(body.visibility); }
+  // `visibility` is deliberately NOT writable — it is launch-compatibility
+  // state set at creation, not a user choice. Legacy private/invite_code
+  // races keep their stored value; existing reads/joins are unaffected.
 
   if (updates.length === 0) return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 

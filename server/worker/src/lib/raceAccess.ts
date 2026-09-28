@@ -18,6 +18,17 @@ import type { D1Database } from '@cloudflare/workers-types';
 
 export type RaceAccessLevel = 'owner' | 'member' | 'crew' | 'public' | 'denied';
 
+/**
+ * Canonical launch visibility — every race created by the client is
+ * crew-scoped: the creator's crew can see and join it, everyone else needs
+ * an invite code, and blocks still deny everything. The column keeps its
+ * legacy values ('private', 'invite_code', 'crew_only', 'public_demo') as
+ * stored compatibility state for races created before the private/public
+ * product concept was removed; the field is written once at creation and is
+ * never user-editable.
+ */
+export const RACE_LAUNCH_VISIBILITY = 'crew_only';
+
 export interface RaceAccess {
   level: RaceAccessLevel;
   /** owner + member + crew + public — the race body may be returned. */

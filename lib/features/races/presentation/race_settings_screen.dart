@@ -55,7 +55,6 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
   String _goalType = 'manual';
   String _proofRequirement = 'manual';
   String _proofReviewMode = 'auto_accept';
-  String _visibility = 'private';
 
   @override
   void initState() {
@@ -104,7 +103,6 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
           ? 'ai_check'
           : race.proofRequirement;
       _proofReviewMode = race.proofReviewMode;
-      _visibility = race.visibility;
       setState(() => _loading = false);
     } catch (_) {
       if (mounted) {
@@ -157,7 +155,6 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                 ? 'ai_check'
                 : _proofRequirement,
             proofReviewMode: _proofReviewMode,
-            visibility: _visibility,
           );
       if (mounted) context.go('/race/${race.id}');
     } on ApiException catch (e) {
@@ -361,21 +358,6 @@ class _RaceSettingsScreenState extends ConsumerState<RaceSettingsScreen> {
                   label: 'Race rules',
                   hint: 'How the winner is decided.',
                   maxLines: 5,
-                ),
-              ],
-            ),
-            _Section(
-              title: 'Visibility',
-              children: [
-                _Menu(
-                  label: 'Who can join',
-                  value: _visibility,
-                  values: const {
-                    'private': 'private',
-                    'crew_only': 'crew only',
-                    'invite_code': 'invite code',
-                  },
-                  onChanged: (value) => setState(() => _visibility = value),
                 ),
               ],
             ),
@@ -622,59 +604,6 @@ class _Input extends StatelessWidget {
       hint: hint,
       maxLines: maxLines,
       keyboardType: keyboardType,
-    );
-  }
-}
-
-class _Menu extends StatelessWidget {
-  const _Menu({
-    required this.label,
-    required this.value,
-    required this.values,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String value;
-  final Map<String, String> values;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      initialValue: values.containsKey(value) ? value : values.keys.first,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: AppTextStyles.labelMedium.copyWith(color: context.themeColors.ink),
-        hintStyle: AppTextStyles.bodyMedium.copyWith(
-          color: context.themeColors.inkSubtle,
-        ),
-        filled: true,
-        fillColor: context.themeColors.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: BorderSide(color: context.themeColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: BorderSide(color: context.themeColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          borderSide: const BorderSide(color: NuvoColors.blue, width: 1.6),
-        ),
-      ),
-      items: [
-        for (final entry in values.entries)
-          DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-      ],
-      onChanged: (value) {
-        if (value != null) onChanged(value);
-      },
     );
   }
 }

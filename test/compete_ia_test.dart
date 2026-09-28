@@ -230,7 +230,7 @@ void main() {
     testWidgets('empty state preserved', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
-      expect(find.text('No races yet'), findsOneWidget);
+      expect(find.text('Your races will live here.'), findsOneWidget);
     });
 
     testWidgets('error state preserved with friendly copy', (tester) async {

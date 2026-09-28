@@ -131,7 +131,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.byType(NuvoErrorState), findsNothing);
-      expect(find.text('No races yet'), findsOneWidget);
+      expect(find.text('Your races will live here.'), findsOneWidget);
     });
 
     testWidgets('shows NuvoErrorState (not raw text) on load failure', (

@@ -204,7 +204,7 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: NuvoBackButton(
-                      onPressed: () => safePopOrGo(context, '/welcome/intro'),
+                      onPressed: () => safePopOrGo(context, '/welcome'),
                     ),
                   ),
                   const SizedBox(height: 20),

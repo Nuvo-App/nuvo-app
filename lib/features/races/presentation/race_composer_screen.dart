@@ -62,7 +62,6 @@ typedef ComposerPresetRaceCreator =
       String? unit,
       String? proofRequirement,
       String? proofReviewMode,
-      String? visibility,
       String? aiActivityType,
       String? activityId,
       String? metric,
@@ -97,7 +96,6 @@ Future<Race> createRaceForComposerDraft({
     unit: payload['unit'] as String,
     proofRequirement: payload['proofRequirement'] as String,
     proofReviewMode: payload['proofReviewMode'] as String,
-    visibility: payload['visibility'] as String,
     // Absent for manual goals — no camera activity is involved.
     aiActivityType: payload['aiActivityType'] as String?,
     activityId: payload['activityId'] as String?,
@@ -169,7 +167,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         // Race Together ("Race {name}") — the person joins on create, so the
         // race must be crew-joinable from the start.
         if (parsed != null && prefill.withUser != null) {
-          parsed = parsed.copyWith(visibility: 'invite_code');
+          parsed = parsed.copyWith(inviteCrew: true);
         }
         if (parsed != null) {
           ref.read(_composerDraftProvider.notifier).state = parsed;
@@ -408,13 +406,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     });
     try {
       final controller = ref.read(raceControllerProvider.notifier);
+      // Captured before create — this is the first-race payoff, not an
+      // every-create toast. When the guide is coaching it owns the moment.
+      final isFirstRace = ref.read(raceControllerProvider).races.isEmpty &&
+          ref.read(firstRaceGuideProvider) != FirstRaceGuideStep.composerReview;
       final race = await createRaceForComposerDraft(
         draft: draft,
         createCustomRace: controller.createCustomRace,
         createRace: controller.createRace,
       );
       if (!mounted) return;
-      final wantsInvite = draft.visibility == 'invite_code';
+      final wantsInvite = draft.inviteCrew;
+      if (isFirstRace) {
+        await _showRaceLiveMoment(race);
+        if (!mounted) return;
+      }
       if (ref.read(firstRaceGuideProvider) ==
           FirstRaceGuideStep.composerReview) {
         ref.read(firstRaceGuideProvider.notifier).state =
@@ -465,6 +471,33 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     }
   }
 
+  /// The first-create payoff — one physical beat ("Race is live.") before the
+  /// race board lands. Tap or ~1.4s auto-advance; never blocks the navigation.
+  Future<void> _showRaceLiveMoment(Race race) async {
+    NuvoHaptics.confirm();
+    var dismissed = false;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: context.themeColors.page.withValues(alpha: 0.94),
+      builder: (dialogContext) {
+        void close() {
+          if (dismissed) return;
+          dismissed = true;
+          Navigator.of(dialogContext).pop();
+        }
+
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 1400), close),
+        );
+        return GestureDetector(
+          onTap: close,
+          child: _RaceLiveMoment(raceTitle: race.displayTitle),
+        );
+      },
+    );
+  }
+
   String? _draftValidationError(RaceDraft draft) {
     if (draft.resolvedTitle.trim().isEmpty) return 'missing_title';
     if (draft.targetValue <= 0) return 'invalid_target';
@@ -507,7 +540,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         'resolvedTitle': draft.resolvedTitle,
         'targetValue': draft.targetValue,
         'metric': draft.metric.name,
-        'visibility': draft.visibility,
+        'inviteCrew': draft.inviteCrew,
       },
       'validationError': _draftValidationError(draft),
       'screenError': _error,
@@ -2927,19 +2960,19 @@ class _RacersPage extends StatefulWidget {
 }
 
 class _RacersPageState extends State<_RacersPage> {
-  // Initialise from draft visibility so back/forward preserves the choice
+  // Initialise from the draft's invite intent so back/forward preserves it.
   late bool _inviteCrew;
 
   @override
   void initState() {
     super.initState();
-    _inviteCrew = widget.draft.visibility == 'invite_code';
+    _inviteCrew = widget.draft.inviteCrew;
   }
 
   @override
   void didUpdateWidget(_RacersPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _inviteCrew = widget.draft.visibility == 'invite_code';
+    _inviteCrew = widget.draft.inviteCrew;
   }
 
   void _setInvite(bool value) {
@@ -2947,8 +2980,8 @@ class _RacersPageState extends State<_RacersPage> {
     widget.onInput?.call();
     widget.onDraftChanged(
       widget.draft.copyWith(
-        visibility: value ? 'invite_code' : 'private',
-        markEdited: {RaceField.visibility},
+        inviteCrew: value,
+        markEdited: {RaceField.inviteCrew},
       ),
     );
   }
@@ -3119,7 +3152,7 @@ class _ReviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isInvite = draft.visibility == 'invite_code';
+    final isInvite = draft.inviteCrew;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3530,4 +3563,74 @@ class _RaceLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// The "Race is live." beat — a flag, the verdict, the race name. Rendered
+/// over a scrim by [_showRaceLiveMoment]; tap or auto-advance dismisses.
+class _RaceLiveMoment extends StatelessWidget {
+  const _RaceLiveMoment({required this.raceTitle});
+
+  final String raceTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Material(
+      color: Colors.transparent,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: NuvoColors.blue,
+                border: Border.all(color: c.ink, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.inkShadow,
+                    offset: const Offset(4, 4),
+                    blurRadius: 0,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.flag_rounded,
+                color: NuvoColors.white,
+                size: 40,
+              ),
+            )
+                .animate()
+                .fadeIn(duration: 200.ms)
+                .scale(
+                  begin: const Offset(0.6, 0.6),
+                  duration: 420.ms,
+                  curve: Curves.easeOutBack,
+                ),
+            const SizedBox(height: 26),
+            Text(
+              'Race is live.',
+              style: AppTextStyles.headlineLarge.copyWith(color: c.ink),
+            ).animate(delay: 120.ms).fadeIn(duration: 260.ms),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                raceTitle,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: c.inkMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ).animate(delay: 220.ms).fadeIn(duration: 260.ms),
+          ],
+        ),
+      ),
+    );
+  }
 }

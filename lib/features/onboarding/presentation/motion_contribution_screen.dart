@@ -32,11 +32,11 @@ class _MotionContributionScreenState
       await ref
           .read(authControllerProvider.notifier)
           .setMotionConsent(consented: consented);
-      if (mounted) context.go('/onboarding/member-pass');
+      if (mounted) context.go('/onboarding/nuvo');
     } catch (_) {
       // A consent write failing must not trap onboarding — the choice can be
       // changed later in Settings → Privacy & Data.
-      if (mounted) context.go('/onboarding/member-pass');
+      if (mounted) context.go('/onboarding/nuvo');
     }
   }
 
@@ -67,25 +67,27 @@ class _MotionContributionScreenState
                 ],
               ),
               const Spacer(),
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: NuvoColors.panel,
-                  border: Border.all(color: NuvoColors.navy, width: 2),
-                ),
-                child: const Icon(
-                  Icons.motion_photos_on_rounded,
-                  color: NuvoColors.blue,
-                  size: 34,
-                ),
-              ).animate().fadeIn(duration: 320.ms).scale(
-                    begin: const Offset(0.85, 0.85),
-                    duration: 420.ms,
-                    curve: Curves.easeOutBack,
+              Center(
+                child: Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: NuvoColors.panel,
+                    border: Border.all(color: NuvoColors.navy, width: 2),
                   ),
-              const SizedBox(height: 28),
+                  child: const Icon(
+                    Icons.motion_photos_on_rounded,
+                    color: NuvoColors.blue,
+                    size: 34,
+                  ),
+                ).animate().fadeIn(duration: 320.ms).scale(
+                      begin: const Offset(0.85, 0.85),
+                      duration: 420.ms,
+                      curve: Curves.easeOutBack,
+                    ),
+              ),
+              const SizedBox(height: 30),
               NuvoFlipText(
                 'Help make Nuvo better',
                 style: AppTextStyles.headlineLarge.copyWith(
@@ -96,26 +98,34 @@ class _MotionContributionScreenState
                 delay: const Duration(milliseconds: 150),
                 duration: const Duration(milliseconds: 1300),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
-                'When you use AI Motion Proof, Nuvo can securely save the '
-                'motion points created from your movements to help improve '
-                'and train Nuvo\u2019s motion models.',
+                'Help Nuvo learn from movement.',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: NuvoColors.navy,
+                  height: 1.4,
+                ),
+              ).animate(delay: 400.ms).fadeIn(duration: 280.ms),
+              const SizedBox(height: 12),
+              Text(
+                'When you use AI Motion Proof, Nuvo can save the motion '
+                'points created from your movement to improve its '
+                'motion models.',
                 style: AppTextStyles.bodyLarge.copyWith(
                   color: NuvoColors.muted,
                   height: 1.45,
                 ),
-              ),
-              const SizedBox(height: 12),
+              ).animate(delay: 480.ms).fadeIn(duration: 280.ms),
+              const SizedBox(height: 14),
               Text(
-                'Camera video and audio are not uploaded. You can change '
+                'Camera video and audio are never uploaded. You can change '
                 'this anytime in Settings.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: NuvoColors.muted,
                   height: 1.45,
                 ),
-              ),
-              const Spacer(),
+              ).animate(delay: 560.ms).fadeIn(duration: 280.ms),
+              const Spacer(flex: 2),
               NuvoPrimaryButton(
                 label: 'Help improve Nuvo',
                 icon: Icons.auto_awesome_rounded,

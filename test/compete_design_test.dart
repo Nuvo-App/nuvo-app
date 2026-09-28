@@ -359,7 +359,7 @@ void main() {
     testWidgets('0 races: empty state preserved', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(const [])));
       await tester.pumpAndSettle();
-      expect(find.text('No races yet'), findsOneWidget);
+      expect(find.text('Your races will live here.'), findsOneWidget);
       expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
     });
 
