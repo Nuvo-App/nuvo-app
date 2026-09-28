@@ -937,16 +937,23 @@ class _YourProgressCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(
-                formatMotionProgress(
-                  measurementType,
-                  progressValue,
-                  targetValue,
-                  unit,
+              Expanded(
+                child: Text(
+                  formatMotionProgress(
+                    measurementType,
+                    progressValue,
+                    targetValue,
+                    unit,
+                  ),
+                  style: AppTextStyles.statLarge(
+                    context.rs(30),
+                    color: accent,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                style: AppTextStyles.statLarge(context.rs(30), color: accent),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
               Text(
                 rankLabel,
                 style: AppTextStyles.statLarge(

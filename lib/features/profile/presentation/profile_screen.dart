@@ -921,11 +921,15 @@ class _AchievementsSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(
-                'Achievements',
-                style: AppTextStyles.sectionTitle.copyWith(
-                  color: c.ink,
-                  fontWeight: FontWeight.w800,
+              Flexible(
+                child: Text(
+                  'Achievements',
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: c.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const Spacer(),
@@ -935,6 +939,7 @@ class _AchievementsSection extends StatelessWidget {
                   color: c.inkSubtle,
                   fontWeight: FontWeight.w800,
                 ),
+                maxLines: 1,
               ),
               const SizedBox(width: 4),
               const NuvoIcon(

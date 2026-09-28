@@ -247,61 +247,72 @@ class _RacePreview extends StatelessWidget {
         ? '${c.targetValue}${c.targetUnit != null ? ' ${c.targetUnit}' : ''}'
         : null;
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 12),
-                Text('You’re invited to a race',
-                    style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)
-                        .copyWith(color: NuvoColors.blue)),
-                const SizedBox(height: 8),
-                Text(c.title, style: AppTextStyles.displaySmall),
-                const SizedBox(height: 16),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  if (target != null)
-                    _Pill(icon: Icons.flag_rounded, text: 'Goal $target'),
-                  if (c.activityId != null)
-                    _Pill(icon: Icons.bolt_rounded, text: _pretty(c.activityId!)),
-                  _Pill(
-                    icon: Icons.group_rounded,
-                    text: '${c.participantCount} racing',
-                  ),
-                ]),
-                const SizedBox(height: 20),
-                if (c.creatorName != null)
-                  Row(children: [
-                    NuvoAvatar(
-                      photoUrl: c.creatorPhotoUrl,
-                      initials: _initials(c.creatorName!),
-                      size: 32,
-                    ),
-                    const SizedBox(width: 10),
-                    Text('Created by ${c.creatorName}',
-                        style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)),
-                  ]),
-              ],
-            ).nuvoEnter(),
-            const Spacer(),
-            if (error != null) ...[
-              Text(error!, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
-              const SizedBox(height: 12),
-            ],
-            NuvoPrimaryButton(
-              label: c.alreadyJoined
-                  ? 'Go to race'
-                  : authed
-                      ? 'Join race'
-                      : 'Sign in to join',
-              loading: accepting,
-              expand: true,
-              onPressed: accepting ? null : onAccept,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 36,
             ),
-          ],
+            child: IntrinsicHeight(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 12),
+                      Text('You’re invited to a race',
+                          style: AppTextStyles.labelSmall.copyWith(color: context.themeColors.inkSubtle)
+                              .copyWith(color: NuvoColors.blue)),
+                      const SizedBox(height: 8),
+                      Text(c.title, style: AppTextStyles.displaySmall),
+                      const SizedBox(height: 16),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        if (target != null)
+                          _Pill(icon: Icons.flag_rounded, text: 'Goal $target'),
+                        if (c.activityId != null)
+                          _Pill(icon: Icons.bolt_rounded, text: _pretty(c.activityId!)),
+                        _Pill(
+                          icon: Icons.group_rounded,
+                          text: '${c.participantCount} racing',
+                        ),
+                      ]),
+                      const SizedBox(height: 20),
+                      if (c.creatorName != null)
+                        Row(children: [
+                          NuvoAvatar(
+                            photoUrl: c.creatorPhotoUrl,
+                            initials: _initials(c.creatorName!),
+                            size: 32,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text('Created by ${c.creatorName}',
+                                style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)),
+                          ),
+                        ]),
+                    ],
+                  ).nuvoEnter(),
+                  const Spacer(),
+                  if (error != null) ...[
+                    Text(error!, style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
+                    const SizedBox(height: 12),
+                  ],
+                  NuvoPrimaryButton(
+                    label: c.alreadyJoined
+                        ? 'Go to race'
+                        : authed
+                            ? 'Join race'
+                            : 'Sign in to join',
+                    loading: accepting,
+                    expand: true,
+                    onPressed: accepting ? null : onAccept,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -331,60 +342,69 @@ class _PersonPreview extends StatelessWidget {
     final c = card;
     if (c == null) return const Center(child: Text('Profile not found'));
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Spacer(),
-            Column(
-              children: [
-                Center(
-                  child: NuvoAvatar(
-                    photoUrl: c.profilePhotoUrl,
-                    initials: _initials(c.displayName),
-                    size: 88,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(c.displayName,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.displaySmall),
-                if (c.username != null) ...[
-                  const SizedBox(height: 4),
-                  Text('@${c.username}',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)
-                          .copyWith(color: context.themeColors.inkSubtle)),
-                ],
-                const SizedBox(height: 10),
-                Text(
-                  c.isPrivate
-                      ? 'Send a connect request to add them to your crew.'
-                      : 'Add them to your crew to race together.',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
-                ),
-              ],
-            ).nuvoEnter(),
-            const Spacer(),
-            if (error != null) ...[
-              Text(error!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
-              const SizedBox(height: 12),
-            ],
-            NuvoPrimaryButton(
-              label: !authed
-                  ? 'Sign in to connect'
-                  : c.isPrivate
-                      ? 'Send request'
-                      : 'Add to crew',
-              loading: accepting,
-              expand: true,
-              onPressed: accepting ? null : onAccept,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 36,
             ),
-          ],
+            child: IntrinsicHeight(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Spacer(),
+                  Column(
+                    children: [
+                      Center(
+                        child: NuvoAvatar(
+                          photoUrl: c.profilePhotoUrl,
+                          initials: _initials(c.displayName),
+                          size: 88,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(c.displayName,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.displaySmall),
+                      if (c.username != null) ...[
+                        const SizedBox(height: 4),
+                        Text('@${c.username}',
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink)
+                                .copyWith(color: context.themeColors.inkSubtle)),
+                      ],
+                      const SizedBox(height: 10),
+                      Text(
+                        c.isPrivate
+                            ? 'Send a connect request to add them to your crew.'
+                            : 'Add them to your crew to race together.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
+                      ),
+                    ],
+                  ).nuvoEnter(),
+                  const Spacer(),
+                  if (error != null) ...[
+                    Text(error!,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodySmall.copyWith(color: NuvoColors.danger)),
+                    const SizedBox(height: 12),
+                  ],
+                  NuvoPrimaryButton(
+                    label: !authed
+                        ? 'Sign in to connect'
+                        : c.isPrivate
+                            ? 'Send request'
+                            : 'Add to crew',
+                    loading: accepting,
+                    expand: true,
+                    onPressed: accepting ? null : onAccept,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

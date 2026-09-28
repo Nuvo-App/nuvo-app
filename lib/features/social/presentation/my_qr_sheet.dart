@@ -82,7 +82,7 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 14, 24, 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
