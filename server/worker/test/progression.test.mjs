@@ -105,6 +105,8 @@ function fakeDb() {
         custom_activity_name: opts.customName ?? null,
         verification_type: opts.verification ?? 'camera_pose',
         format: opts.format ?? 'first_to_goal',
+        move_log_id: opts.moveLogId ?? null,
+        voided_at: opts.voided ? new Date().toISOString() : null,
       });
     },
     addMembers(raceId, userIds) {
@@ -210,7 +212,12 @@ function fakeDb() {
           const [user, ...types] = stmt._a;
           return {
             results: raceEvents
-              .filter((e) => e.subject_user_id === user && types.includes(e.event_type))
+              .filter(
+                (e) =>
+                  e.subject_user_id === user &&
+                  types.includes(e.event_type) &&
+                  (!sql.includes('voided_at IS NULL') || e.voided_at == null),
+              )
               .map((e) => ({ id: e.id, event_type: e.event_type, race_id: e.race_id, created_at: e.created_at, activity_id: e.activity_id, custom_activity_name: e.custom_activity_name })),
           };
         }
@@ -219,7 +226,9 @@ function fakeDb() {
           const user = stmt._a[0];
           return {
             results: raceEvents.filter(
-              (e) => e.subject_user_id === user || e.actor_user_id === user,
+              (e) =>
+                (e.subject_user_id === user || e.actor_user_id === user) &&
+                (!sql.includes('voided_at IS NULL') || e.voided_at == null),
             ),
           };
         }
@@ -227,7 +236,9 @@ function fakeDb() {
         if (sql.includes('FROM race_events') && sql.includes("event_type = 'lead_changed'")) {
           const ids = stmt._a;
           return {
-            results: leadEvents.filter((e) => ids.includes(e.race_id)),
+            results: leadEvents.filter(
+              (e) => ids.includes(e.race_id) && (!sql.includes('voided_at IS NULL') || e.voided_at == null),
+            ),
           };
         }
         if (sql.includes('FROM race_members')) {
@@ -310,6 +321,30 @@ function fakeDb() {
         return { results: [] };
       };
       stmt.run = async () => {
+        // reconcile voided-source sweep — xp rows whose source race_event was
+        // voided lose their ledger entry.
+        if (sql.includes('DELETE FROM xp_events') && sql.includes('voided_at IS NOT NULL')) {
+          const user = stmt._a[0];
+          const voidedIds = new Set(raceEvents.filter((e) => e.voided_at != null).map((e) => e.id));
+          for (const [k, r] of [...xpEvents.entries()]) {
+            if (r.user_id === user && voidedIds.has(r.source_id)) xpEvents.delete(k);
+          }
+          return { meta: { changes: 1 } };
+        }
+        // reconcile revocation — owned unlocks on active defs that are no
+        // longer provable (binds after the user are the still-grantable ids).
+        if (sql.includes('DELETE FROM user_unlocks')) {
+          const user = stmt._a[0];
+          const keep = new Set(stmt._a.slice(1));
+          for (const k of [...unlocks.keys()]) {
+            if (!k.startsWith(`${user}|`)) continue;
+            const unlockId = k.slice(user.length + 1);
+            const def = defs.find((d) => d.id === unlockId);
+            if (!def || def.active === 0) continue;
+            if (!keep.has(unlockId)) unlocks.delete(k);
+          }
+          return { meta: { changes: 1 } };
+        }
         if (sql.includes('INSERT OR IGNORE INTO xp_events')) {
           const [id, user, type, sourceId, raceId, amount] = stmt._a;
           const key = `${user}|${type}|${sourceId}`;
@@ -342,7 +377,18 @@ function fakeDb() {
           return { meta: { changes: 1 } };
         }
         if (sql.includes('DELETE FROM user_featured_badges')) {
-          for (const k of [...featured.keys()]) if (k.startsWith(`${stmt._a[0]}|`)) featured.delete(k);
+          const user = stmt._a[0];
+          if (sql.includes('NOT IN')) {
+            // reconcile orphan cleanup — drop featured rows whose unlock was
+            // revoked; keep rows for unlocks the user still owns.
+            for (const [k, unlockId] of [...featured.entries()]) {
+              if (k.startsWith(`${user}|`) && !unlocks.has(unlockKey(user, unlockId))) {
+                featured.delete(k);
+              }
+            }
+          } else {
+            for (const k of [...featured.keys()]) if (k.startsWith(`${user}|`)) featured.delete(k);
+          }
           return { meta: { changes: 1 } };
         }
         if (sql.includes('INSERT INTO user_featured_badges')) {
@@ -840,4 +886,72 @@ test('public bundle marks featured achievements on the earned list', async () =>
   assert.equal(pub.featured[0].key, 'on_the_board');
   const firstMove = pub.earned.find((a) => a.key === 'on_the_board');
   assert.equal(firstMove.featured, true);
+});
+
+// ── Invalidation reversal (proof veto / review reject) ──────────────────────
+// Voided race events stop being race truth: their XP rows are swept, stats
+// re-derive from valid history, and unlocks no longer provable are revoked.
+
+test('voided proof reverses XP and revokes the achievement it earned', async () => {
+  const db = fakeDb();
+  db.addEvent('progress_accepted', 'u1', 'r1');
+  db.addEvent('winner_determined', 'u1', 'r1');
+  const before = await reconcileProgression(db, 'u1');
+  assert.equal(before.totalXp, 10 + 15 + 5); // progress + win + discovery bonus
+  assert.ok([...db.unlocks.keys()].some((k) => k.endsWith('|ach-first-move')));
+
+  // The win's source proof gets vetoed — events void, not deleted.
+  for (const e of db.raceEvents) e.voided_at = new Date().toISOString();
+
+  const after = await reconcileProgression(db, 'u1');
+  assert.equal(after.totalXp, 0);
+  assert.equal(after.level, 1);
+  assert.equal(
+    [...db.xpEvents.values()].filter((r) => r.user_id === 'u1').length,
+    0,
+    'xp rows derived from voided events must be swept',
+  );
+  assert.equal(
+    [...db.unlocks.keys()].filter((k) => k.startsWith('u1|')).length,
+    0,
+    'unprovable unlocks must be revoked',
+  );
+});
+
+test('partial veto keeps XP from still-valid proofs', async () => {
+  const db = fakeDb();
+  db.addEvent('progress_accepted', 'u1', 'r1', { moveLogId: 'm1' });
+  db.addEvent('progress_accepted', 'u1', 'r2', { moveLogId: 'm2' });
+  const before = await reconcileProgression(db, 'u1');
+  assert.equal(before.totalXp, 10 + 10 + 5); // two accepts + discovery (same category, once)
+
+  // Veto the first move's event only.
+  db.raceEvents[0].voided_at = new Date().toISOString();
+
+  const after = await reconcileProgression(db, 'u1');
+  assert.equal(after.totalXp, 15, 'remaining proof + its discovery stays');
+});
+
+test('voided winner_determined reverses the win stat', async () => {
+  const db = fakeDb();
+  db.addEvent('participant_finished', 'u1', 'r1');
+  db.addEvent('winner_determined', 'u1', 'r1');
+  await reconcileProgression(db, 'u1');
+  assert.equal(db.statsOf('u1').racesWon, 1);
+  assert.ok([...db.unlocks.keys()].some((k) => k.endsWith('|ach-first-w')));
+
+  db.raceEvents.find((e) => e.event_type === 'winner_determined').voided_at =
+    new Date().toISOString();
+
+  await reconcileProgression(db, 'u1');
+  assert.equal(db.statsOf('u1').racesWon, 0);
+  assert.equal(
+    [...db.unlocks.keys()].some((k) => k.endsWith('|ach-first-w')),
+    false,
+    'first-w unlock must be revoked when the win stops being true',
+  );
+  assert.ok(
+    [...db.unlocks.keys()].some((k) => k.endsWith('|ach-on-the-board')),
+    'the finish-based unlock survives — the finish itself is still valid',
+  );
 });

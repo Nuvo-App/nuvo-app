@@ -45,7 +45,8 @@ import {
   formatUsesAttempts,
   openAttempt,
 } from '../domain/raceAttempts';
-import { recordPersonalBestIfImproved } from '../domain/raceBests';
+import { recordPersonalBestIfImproved, reconcilePersonalBest } from '../domain/raceBests';
+import { castProofVote, VETO_REASON_SET, type VetoReason } from '../domain/proofVeto';
 import { reconcileProgression } from '../domain/progression';
 import { resolveRaceMemberVisibility } from '../lib/privacy';
 import { assignmentInsert, stableReleaseForActivity } from '../domain/motionAssignments';
@@ -456,7 +457,93 @@ async function recomputeRaceProgressForUser(
   await recomputeRanks(db, race.id, scoreDirectionFor(race));
 }
 
-async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number): Promise<ScoredSubmission> {
+interface InvalidationRepair {
+  reopened: boolean;
+  winnerBefore: string | null;
+  winnerAfter: string | null;
+}
+
+/**
+ * Undo one invalidated proof's contribution to race truth. The proof's
+ * canonical events are voided in place (audit survives via voided_at — rows
+ * are never deleted), the submitter's score re-folds from remaining verified
+ * moves, and a completed race's result is re-derived: early finishes reopen
+ * when no remaining participant has finished and the window is still open;
+ * ended races re-rank and correct winner + final standings.
+ */
+async function repairRaceAfterProofInvalidation(
+  db: D1Database,
+  race: RaceRow,
+  move: MoveLogRow,
+): Promise<InvalidationRepair> {
+  await db
+    .prepare('UPDATE race_events SET voided_at = CURRENT_TIMESTAMP WHERE move_log_id = ? AND voided_at IS NULL')
+    .bind(move.id)
+    .run();
+  await recomputeRaceProgressForUser(db, race, move.user_id);
+  await reconcilePersonalBest(db, race, move.user_id);
+
+  const winnerBefore = race.winner_user_id ?? null;
+  let winnerAfter = winnerBefore;
+  let reopened = false;
+  if (race.status === 'completed') {
+    const ranked = await rankedScores(db, race.id, scoreDirectionFor(race));
+    const windowOpen = !race.end_at || new Date(race.end_at).getTime() > Date.now();
+    const anyoneFinished = ranked.some((r) => r.completed_at != null);
+    if (windowOpen && !anyoneFinished) {
+      // The finish came only from the invalidated proof — the race reopens.
+      reopened = true;
+      winnerAfter = null;
+      await db
+        .prepare(
+          `UPDATE races SET status = 'active', winner_user_id = NULL, completed_at = NULL,
+             version = COALESCE(version, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        )
+        .bind(race.id)
+        .run();
+      await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
+    } else {
+      // The window ended or someone else still finished — the result stands,
+      // but the winner may change. Re-derive from corrected standings.
+      const leaders = ranked.filter((r) => r.rank === 1);
+      winnerAfter = leaders.length === 1 && leaders[0].progress_value > 0 ? leaders[0].user_id : null;
+      if (winnerAfter !== winnerBefore) {
+        await db
+          .prepare('UPDATE races SET winner_user_id = ?, version = COALESCE(version, 0) + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .bind(winnerAfter, race.id)
+          .run();
+        // Retire every prior winner award for this race (they're all stale
+        // — only one winner can stand), then record the corrected result.
+        await db
+          .prepare(
+            `UPDATE race_events SET voided_at = CURRENT_TIMESTAMP
+             WHERE race_id = ? AND event_type = 'winner_determined' AND voided_at IS NULL`,
+          )
+          .bind(race.id)
+          .run();
+        if (winnerAfter) {
+          await recordRaceEvents(db, race.id, [
+            {
+              type: 'winner_determined',
+              subjectUserId: winnerAfter,
+              payload: {
+                score: leaders[0].progress_value,
+                rank: 1,
+                tied: false,
+                correctedByProof: move.id,
+                previousWinner: winnerBefore,
+              },
+            },
+          ]);
+        }
+      }
+      await snapshotFinalStandings(db, race.id);
+    }
+  }
+  return { reopened, winnerBefore, winnerAfter };
+}
+
+async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, value: number, moveLogId?: string): Promise<ScoredSubmission> {
   const scoring = raceScoringConfigFromRow(race);
   if (!scoring) throw new Error('Race is missing activity configuration');
   const increment = Math.max(0, Math.floor(value));
@@ -521,6 +608,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
       type: 'progress_accepted',
       actorUserId: userId,
       subjectUserId: userId,
+      moveLogId: moveLogId ?? null,
       payload: {
         value: increment,
         previousScore: current,
@@ -548,6 +636,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
       type: 'rank_changed',
       actorUserId: userId,
       subjectUserId: userId,
+      moveLogId: moveLogId ?? null,
       payload: { previousRank, newRank, overtakenUserIds },
     });
   }
@@ -558,6 +647,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
       type: 'lead_changed',
       actorUserId: leaderAfter,
       subjectUserId: leaderBefore,
+      moveLogId: moveLogId ?? null,
       payload: { newLeaderUserId: leaderAfter, displacedUserId: leaderBefore },
     });
   }
@@ -567,6 +657,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
       type: 'participant_finished',
       actorUserId: userId,
       subjectUserId: userId,
+      moveLogId: moveLogId ?? null,
       payload: { score: scored.newScore, finishedAt: completedAt },
     });
   }
@@ -574,6 +665,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
     events.push(
       {
         type: 'race_finished',
+        moveLogId: moveLogId ?? null,
         payload: {
           title: race.title,
           format: scoring.format,
@@ -585,6 +677,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
       {
         type: 'winner_determined',
         subjectUserId: winnerUserId,
+        moveLogId: moveLogId ?? null,
         payload: { score: scored.newScore, rank: 1, tied: false },
       },
     );
@@ -1713,6 +1806,22 @@ racesRouter.post('/:id/move-log', async (c) => {
     ? JSON.stringify(body.metadata)
     : null;
 
+  // Evidence contract: self-reported ('manual') moves carry photo evidence —
+  // same rule as /proof. 'movecheck' is verified by the pose pipeline;
+  // 'demo'/'import' are tooling sources with no real-world claim.
+  const mediaObjectKey = stringOrNull(body.mediaObjectKey) ?? stringOrNull(body.media_object_key) ?? null;
+  if (mediaObjectKey) {
+    const media = await c.env.DB.prepare(
+      "SELECT id FROM media_objects WHERE object_key = ? AND owner_user_id = ? AND purpose = 'proof_evidence' AND status = 'active'",
+    ).bind(mediaObjectKey, userId).first<{ id: string }>();
+    if (!media || !mediaObjectKey.startsWith(proofMediaKeyPrefix(race.id))) {
+      return c.json(badRequest('Evidence was not uploaded for this race'), 400);
+    }
+  }
+  if (source === 'manual' && !mediaObjectKey) {
+    return c.json(badRequest('Photo evidence is required for this race'), 400);
+  }
+
   if (source === 'movecheck' && race.verification_type !== 'movecheck') {
     return c.json(badRequest('Race does not support MoveCheck verification'), 400);
   }
@@ -1731,11 +1840,11 @@ racesRouter.post('/:id/move-log', async (c) => {
   const moveId = generateId();
   await c.env.DB.prepare(
     `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, value, unit, status, summary,
-      validator_version, duration_ms, metadata_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-  ).bind(moveId, race.id, userId, source, movementType, value, unit, status, summary, validatorVersion, durationMs, metadataJson).run();
+      media_object_key, validator_version, duration_ms, metadata_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).bind(moveId, race.id, userId, source, movementType, value, unit, status, summary, mediaObjectKey, validatorVersion, durationMs, metadataJson).run();
 
-  if (status === 'verified') await applyMoveProgress(c.env.DB, race, userId, value);
+  if (status === 'verified') await applyMoveProgress(c.env.DB, race, userId, value, moveId);
 
   const updated = await getRace(c.env.DB, race.id);
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
@@ -1841,11 +1950,17 @@ racesRouter.post('/:id/proof', async (c) => {
   const mediaObjectKey = stringOrNull(body.mediaObjectKey) ?? stringOrNull(body.media_object_key) ?? null;
   if (mediaObjectKey) {
     const media = await c.env.DB.prepare(
-      "SELECT id FROM media_objects WHERE object_key = ? AND owner_user_id = ? AND purpose = 'proof_evidence'",
+      "SELECT id FROM media_objects WHERE object_key = ? AND owner_user_id = ? AND purpose = 'proof_evidence' AND status = 'active'",
     ).bind(mediaObjectKey, userId).first<{ id: string }>();
     if (!media || !mediaObjectKey.startsWith(proofMediaKeyPrefix(race.id))) {
       return c.json(badRequest('Evidence was not uploaded for this race'), 400);
     }
+  }
+  // Proof contract: Nuvo is evidence-based. Automated verification (AI Motion
+  // Proof) IS the evidence; every self-reported submission carries a photo.
+  // No evidence → no canonical progress — reject before anything is written.
+  if (!isAiMotion && !mediaObjectKey) {
+    return c.json(badRequest('Photo evidence is required for this race'), 400);
   }
 
   const clientSubmissionId = stringOrNull(body.clientSubmissionId) ?? stringOrNull(body.client_submission_id) ?? null;
@@ -2010,7 +2125,7 @@ racesRouter.post('/:id/proof', async (c) => {
       return c.json(badRequest('Start an attempt before submitting a score for this race.'), 400);
     }
     try {
-      result = await applyMoveProgress(c.env.DB, race, userId, increment);
+      result = await applyMoveProgress(c.env.DB, race, userId, increment, moveId);
       await c.env.DB.prepare(
         `UPDATE move_logs SET previous_score = ?, new_score = ?, previous_rank = ?, new_rank = ?, race_completed = ?
          WHERE id = ?`
@@ -2044,6 +2159,7 @@ racesRouter.post('/:id/proof', async (c) => {
             type: 'personal_best',
             actorUserId: userId,
             subjectUserId: userId,
+            moveLogId: moveId,
             payload: { previousBest: pb.previousBest, newBest: pb.newBest, metric: race.metric ?? 'reps' },
           });
         }
@@ -2178,6 +2294,15 @@ racesRouter.get('/:id/proofs', async (c) => {
      ORDER BY ml.created_at DESC`
   ).bind(race.id).all<MoveLogRow & { display_name: string }>();
 
+  const vetoCounts = await c.env.DB.prepare(
+    'SELECT move_log_id, COUNT(*) AS n FROM proof_votes WHERE race_id = ? GROUP BY move_log_id',
+  ).bind(race.id).all<{ move_log_id: string; n: number }>();
+  const vetoCountByMove = new Map(vetoCounts.results.map((r) => [r.move_log_id, r.n]));
+  const viewerVotes = await c.env.DB.prepare(
+    'SELECT move_log_id, reason FROM proof_votes WHERE race_id = ? AND voter_user_id = ?',
+  ).bind(race.id, c.get('userId')).all<{ move_log_id: string; reason: string }>();
+  const viewerVoteByMove = new Map(viewerVotes.results.map((r) => [r.move_log_id, r.reason]));
+
   return c.json({
     ok: true,
     proofs: logs.results.map((m) => {
@@ -2187,6 +2312,7 @@ racesRouter.get('/:id/proofs', async (c) => {
       if (m.status === 'verified') status = isMovecheck ? 'ai_verified' : 'accepted';
       else if (m.status === 'rejected') status = 'rejected';
       else status = isMovecheck ? 'needs_review' : 'submitted';
+      const vetoCount = vetoCountByMove.get(m.id) ?? 0;
       return {
         id: m.id,
         userId: m.user_id,
@@ -2207,6 +2333,10 @@ racesRouter.get('/:id/proofs', async (c) => {
         durationMs: m.duration_ms,
         verificationStatus: status,
         verificationSummary: m.summary,
+        vetoedAt: m.vetoed_at ?? null,
+        vetoCount,
+        vetoState: m.vetoed_at ? 'vetoed' : vetoCount > 0 ? 'disputed' : 'none',
+        viewerVoted: viewerVoteByMove.has(m.id),
         reviewedBy: null,
         reviewedAt: null,
         createdAt: m.created_at,
@@ -2261,14 +2391,20 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
   ).bind(newStatus, stringOrNull(body.verificationSummary) ?? move.summary, move.id, race.id).run();
 
   if (newStatus === 'verified' && move.status !== 'verified') {
-    await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0);
+    await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
     if (boundAttempt) {
       await closeAttempt(c.env.DB, boundAttempt.id, move.value ?? 0, move.id);
     }
   } else if (move.status === 'verified' && newStatus !== 'verified') {
-    // A reject on a scored proof invalidates its progress — recompute from
-    // the submitter's remaining verified moves.
-    await recomputeRaceProgressForUser(c.env.DB, race, move.user_id);
+    // A reject on a scored proof invalidates its progress — void the events
+    // it produced and recompute race truth from remaining verified moves.
+    const repair = await repairRaceAfterProofInvalidation(c.env.DB, race, move);
+    const affected = new Set([move.user_id, repair.winnerBefore, repair.winnerAfter].filter(Boolean) as string[]);
+    for (const uid of affected) {
+      c.executionCtx.waitUntil(
+        reconcileProgression(c.env.DB, uid).catch((err) => console.error('[progression] reconcile failed:', err)),
+      );
+    }
   }
 
   // Notify the submitter of the review outcome (skip self-review).
@@ -2288,6 +2424,104 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
 
   const updated = await getRace(c.env.DB, race.id);
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
+});
+
+// POST /races/:id/proofs/:proofId/veto — a participant disputes that this
+// proof should count in this race. Consensus = majority of the OTHER active
+// racers (see domain/proofVeto). On consensus the proof is vetoed: it stays
+// in history but stops counting — progress, ranks, winner, XP all recompute
+// from remaining valid evidence.
+racesRouter.post('/:id/proofs/:proofId/veto', async (c) => {
+  const userId = c.get('userId');
+  const race = await getRace(c.env.DB, c.req.param('id'));
+  if (!race) return c.json(badRequest('Race not found'), 404);
+
+  // Only active participants can veto — left/removed/non-members and blocked
+  // relationships never reach this point (proof access is member-gated).
+  const member = await isRaceMember(c.env.DB, race.id, userId);
+  if (!member) return c.json(badRequest('Only race participants can veto proof'), 403);
+
+  let body: Record<string, unknown>;
+  try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
+  const reasonRaw = stringOrNull(body.reason);
+  const reason = reasonRaw && VETO_REASON_SET.has(reasonRaw) ? (reasonRaw as VetoReason) : null;
+  if (!reason) return c.json(badRequest('A veto reason is required'), 400);
+
+  const move = await c.env.DB.prepare('SELECT * FROM move_logs WHERE id = ? AND race_id = ?')
+    .bind(c.req.param('proofId'), race.id).first<MoveLogRow>();
+  if (!move || move.status === 'removed') return c.json(badRequest('Proof not found'), 404);
+  if (move.user_id === userId) return c.json(badRequest('You cannot veto your own proof'), 403);
+
+  const outcome = await castProofVote(c.env.DB, {
+    raceId: race.id,
+    moveId: move.id,
+    submitterId: move.user_id,
+    voterId: userId,
+    reason,
+    alreadyVetoed: move.vetoed_at != null,
+  });
+
+  if (outcome.justVetoed) {
+    await c.env.DB.prepare(
+      "UPDATE move_logs SET status = 'rejected', vetoed_at = CURRENT_TIMESTAMP WHERE id = ?",
+    ).bind(move.id).run();
+    const repair = await repairRaceAfterProofInvalidation(c.env.DB, race, move);
+    await recordRaceEvents(c.env.DB, race.id, [
+      {
+        type: 'proof_vetoed',
+        actorUserId: userId,
+        subjectUserId: move.user_id,
+        moveLogId: move.id,
+        payload: {
+          vetoCount: outcome.voteCount,
+          eligibleVoters: outcome.eligibleVoters,
+          threshold: outcome.threshold,
+          winnerBefore: repair.winnerBefore,
+          winnerAfter: repair.winnerAfter,
+          raceReopened: repair.reopened,
+        },
+      },
+    ]);
+    // Progression is a projection — reconcile everyone whose race truth moved
+    // (submitter, any winner change) so XP/stats/unlocks match valid history.
+    const affected = new Set(
+      [move.user_id, repair.winnerBefore, repair.winnerAfter].filter(Boolean) as string[],
+    );
+    for (const uid of affected) {
+      c.executionCtx.waitUntil(
+        reconcileProgression(c.env.DB, uid).catch((err) =>
+          console.error('[progression] reconcile failed:', err),
+        ),
+      );
+    }
+    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+      type: 'proof_vetoed',
+      userId: move.user_id,
+      raceId: race.id,
+      raceTitle: race.title,
+      moveId: move.id,
+    });
+  } else if (outcome.firstVote && !outcome.alreadyVoted) {
+    // Dispute opened — one inbox signal to the submitter, never one per vote.
+    await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
+      type: 'proof_disputed',
+      userId: move.user_id,
+      actorUserId: userId,
+      raceId: race.id,
+      raceTitle: race.title,
+      moveId: move.id,
+    });
+  }
+
+  return c.json({
+    ok: true,
+    proofId: move.id,
+    state: outcome.state,
+    vetoCount: outcome.voteCount,
+    eligibleVoters: outcome.eligibleVoters,
+    threshold: outcome.threshold,
+    alreadyVoted: outcome.alreadyVoted,
+  });
 });
 
 // ── Attempts ─────────────────────────────────────────────────────────────────

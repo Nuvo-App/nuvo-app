@@ -20,6 +20,7 @@ export const NOTIFICATION_CATEGORIES = [
   'passed_on_leaderboard',
   'proof_accepted',
   'proof_rejected',
+  'proof_disputed',
   'crew_request',
   'crew_request_accepted',
   'crew_connected',
@@ -39,6 +40,9 @@ export const CATEGORY_DEFAULTS: Record<
   passed_on_leaderboard: { inApp: true, push: true },
   proof_accepted: { inApp: true, push: true },
   proof_rejected: { inApp: true, push: true },
+  // A single inbox row when a dispute opens on your proof — veto consensus
+  // itself lands as proof_rejected. Never pushes: one tap per vote would spam.
+  proof_disputed: { inApp: true, push: false },
   crew_request: { inApp: true, push: true },
   crew_request_accepted: { inApp: true, push: false }, // nice-to-know, not urgent
   crew_connected: { inApp: true, push: false }, // appears in the inbox + activity

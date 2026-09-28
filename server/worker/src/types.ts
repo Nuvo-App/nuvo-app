@@ -205,6 +205,9 @@ export interface MoveLogRow {
   previous_rank?: number | null;
   new_rank?: number | null;
   race_completed?: number | null;
+  /** Set when community consensus vetoed the proof — the row (photo, value,
+   *  votes) stays for audit; it just stops counting toward race truth. */
+  vetoed_at?: string | null;
   created_at: string;
 }
 

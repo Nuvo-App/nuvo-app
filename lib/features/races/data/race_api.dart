@@ -735,6 +735,20 @@ class RaceApi {
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }
 
+  /// Community veto — dispute whether this proof should count in this race.
+  /// Server-authoritative: returns the consensus outcome it computed.
+  Future<ProofVetoResult> vetoProof(
+    String token,
+    String raceId,
+    String proofId, {
+    required String reason,
+  }) async {
+    final json = await _post('/races/$raceId/proofs/$proofId/veto', token, {
+      'reason': reason,
+    });
+    return ProofVetoResult.fromJson(json);
+  }
+
   /// Open a server-timestamped attempt for a best-attempt / timed race.
   /// The attempt binds to the next verified proof submission. Pass a stable
   /// [clientAttemptId] to make retries idempotent.

@@ -199,9 +199,14 @@ test('proof route: non-participant rejection is present', () => {
 
 test('proof route: final standings snapshot is triggered on completion', () => {
   const source = readFileSync(new URL('../src/routes/races.ts', import.meta.url), 'utf8');
-  const completionWriteIdx = source.indexOf("SET status = 'completed'");
+  // Scope to applyMoveProgress — the veto/reject repair helper legitimately
+  // snapshots standings for completed races elsewhere in the file.
+  const fnIdx = source.indexOf('async function applyMoveProgress');
+  assert.notEqual(fnIdx, -1, 'applyMoveProgress must exist');
+  const scoped = source.slice(fnIdx);
+  const completionWriteIdx = scoped.indexOf("SET status = 'completed'");
   assert.notEqual(completionWriteIdx, -1, 'completion UPDATE must exist');
-  const snapshotCallIdx = source.indexOf('await snapshotFinalStandings(');
+  const snapshotCallIdx = scoped.indexOf('await snapshotFinalStandings(');
   assert.notEqual(snapshotCallIdx, -1, 'await snapshotFinalStandings call must exist');
   assert.ok(snapshotCallIdx > completionWriteIdx, 'snapshot must be called after the completion write');
 });

@@ -666,6 +666,10 @@ class RaceProof {
     this.rankBefore,
     this.rankAfter,
     this.peoplePassed,
+    this.vetoedAt,
+    this.vetoCount = 0,
+    this.vetoState = 'none',
+    this.viewerVoted = false,
   });
 
   final String id;
@@ -697,6 +701,13 @@ class RaceProof {
   final int? rankAfter;
   final int? peoplePassed;
 
+  /// Community veto — 'none' | 'disputed' | 'vetoed'. A vetoed proof stays
+  /// visible for audit but no longer counts toward the leaderboard.
+  final String? vetoedAt;
+  final int vetoCount;
+  final String vetoState;
+  final bool viewerVoted;
+
   factory RaceProof.fromJson(Map<String, dynamic> json) => RaceProof(
     id: json['id'] as String? ?? '',
     userId: json['userId'] as String? ?? '',
@@ -725,7 +736,45 @@ class RaceProof {
     rankBefore: (json['rankBefore'] as num?)?.toInt(),
     rankAfter: (json['rankAfter'] as num?)?.toInt(),
     peoplePassed: (json['peoplePassed'] as num?)?.toInt(),
+    vetoedAt: json['vetoedAt'] as String?,
+    vetoCount: (json['vetoCount'] as num?)?.toInt() ?? 0,
+    vetoState: json['vetoState'] as String? ?? 'none',
+    viewerVoted: json['viewerVoted'] as bool? ?? false,
   );
+}
+
+/// Server outcome of a proof veto — the server owns consensus; the client
+/// only renders what it returns.
+class ProofVetoResult {
+  const ProofVetoResult({
+    required this.proofId,
+    required this.state,
+    required this.vetoCount,
+    required this.eligibleVoters,
+    required this.threshold,
+    required this.alreadyVoted,
+  });
+
+  final String proofId;
+
+  /// 'none' | 'disputed' | 'vetoed'.
+  final String state;
+  final int vetoCount;
+  final int eligibleVoters;
+  final int threshold;
+  final bool alreadyVoted;
+
+  bool get vetoed => state == 'vetoed';
+
+  factory ProofVetoResult.fromJson(Map<String, dynamic> json) =>
+      ProofVetoResult(
+        proofId: json['proofId'] as String? ?? '',
+        state: json['state'] as String? ?? 'none',
+        vetoCount: (json['vetoCount'] as num?)?.toInt() ?? 0,
+        eligibleVoters: (json['eligibleVoters'] as num?)?.toInt() ?? 0,
+        threshold: (json['threshold'] as num?)?.toInt() ?? 0,
+        alreadyVoted: json['alreadyVoted'] as bool? ?? false,
+      );
 }
 
 // ── Race creation prefill ─────────────────────────────────────────────────────

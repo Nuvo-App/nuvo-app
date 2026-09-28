@@ -529,6 +529,21 @@ export type NuvoDomainEvent =
       entityId: string;
       raceId?: string | null; // deep-link target when the entity has one
       context?: string | null; // display context, e.g. the race title
+    }
+  | {
+      type: 'proof_vetoed';
+      userId: string; // the proof submitter whose result stopped counting
+      raceId: string;
+      raceTitle: string;
+      moveId: string;
+    }
+  | {
+      type: 'proof_disputed';
+      userId: string; // the proof submitter
+      actorUserId: string; // the first veto voter
+      raceId: string;
+      raceTitle: string;
+      moveId: string;
     };
 
 export async function notifyEvent(
@@ -600,6 +615,44 @@ export async function notifyEvent(
           entityType: 'move_log',
           entityId: event.moveId,
           dedupeKey: `proof_review:${event.moveId}:${event.outcome}`,
+        }),
+      ];
+    }
+
+    case 'proof_vetoed': {
+      // Consensus reached — the proof no longer counts. Uses the
+      // proof_rejected category so push prefs for review outcomes apply.
+      return [
+        await deliver(env, waitUntil, {
+          userId: event.userId,
+          category: 'proof_rejected',
+          priority: 'high',
+          title: 'Your proof was vetoed',
+          body: `Racers in ${event.raceTitle} disputed it — it no longer counts. Submit new proof.`,
+          dest: { type: 'race', id: event.raceId },
+          entityType: 'move_log',
+          entityId: event.moveId,
+          dedupeKey: `proof_vetoed:${event.moveId}`,
+        }),
+      ];
+    }
+
+    case 'proof_disputed': {
+      // First veto opens the dispute — one inbox row, deduped per proof so
+      // later votes never re-notify.
+      return [
+        await deliver(env, waitUntil, {
+          userId: event.userId,
+          category: 'proof_disputed',
+          priority: 'medium',
+          title: 'Your proof was challenged',
+          body: `A racer in ${event.raceTitle} disputes your proof. If enough agree, it stops counting.`,
+          actorUserId: event.actorUserId,
+          dest: { type: 'race', id: event.raceId },
+          entityType: 'move_log',
+          entityId: event.moveId,
+          push: false,
+          dedupeKey: `proof_disputed:${event.moveId}`,
         }),
       ];
     }

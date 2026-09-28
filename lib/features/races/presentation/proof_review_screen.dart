@@ -126,6 +126,89 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
     }
   }
 
+  /// Veto reasons mirror the server's VETO_REASONS — a veto disputes whether
+  /// this proof should count in THIS race (distinct from Report, which goes
+  /// to the Nuvo team and doesn't affect the leaderboard).
+  static const _vetoReasons = [
+    ('not_shown', "Doesn't show the result"),
+    ('wrong_result', 'Wrong result'),
+    ('stale_proof', 'Old or unrelated proof'),
+    ('other', 'Other'),
+  ];
+
+  Future<void> _vetoProof(RaceProof proof) async {
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: context.themeColors.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Veto this proof?', style: AppTextStyles.titleMedium),
+              const SizedBox(height: 6),
+              Text(
+                'If enough racers agree, it stops counting on the leaderboard.',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: context.themeColors.inkMuted),
+              ),
+              const SizedBox(height: 16),
+              for (final (value, label) in _vetoReasons)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: NuvoOutlineButton(
+                    label: label,
+                    expand: true,
+                    onPressed: () => Navigator.of(ctx).pop(value),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || reason == null) return;
+    setState(() => _saving = true);
+    try {
+      final result = await ref
+          .read(raceControllerProvider.notifier)
+          .vetoProof(widget.raceId, widget.proofId, reason: reason);
+      // Refresh so vetoed/disputed state and any leaderboard change show up.
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.vetoed
+                  ? 'Proof vetoed — it no longer counts.'
+                  : result.alreadyVoted
+                  ? 'You already vetoed this proof.'
+                  : 'Veto counted — ${result.vetoCount} of ${result.threshold} needed.',
+            ),
+          ),
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not veto proof. Try again.')),
+        );
+      }
+    }
+  }
+
   Future<void> _reportProof(RaceProof proof) async {
     final controller = TextEditingController();
     final reason = await showModalBottomSheet<String>(
@@ -212,11 +295,20 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
       );
     }
 
-    String _viewerStatus(RaceProof proof) => switch (proof.verificationStatus) {
-      'accepted' || 'verified' || 'ai_verified' => 'Accepted — counts on the leaderboard.',
-      'rejected' => 'Rejected — does not count on the leaderboard.',
-      _ => 'Waiting on the race creator\'s review.',
-    };
+    String _viewerStatus(RaceProof proof) {
+      if (proof.vetoState == 'vetoed') {
+        return 'Proof vetoed — does not count on the leaderboard.';
+      }
+      if (proof.vetoState == 'disputed') {
+        return 'Proof disputed — ${proof.vetoCount} veto${proof.vetoCount == 1 ? '' : 's'} so far.';
+      }
+      return switch (proof.verificationStatus) {
+        'accepted' || 'verified' || 'ai_verified' =>
+          'Accepted — counts on the leaderboard.',
+        'rejected' => 'Rejected — does not count on the leaderboard.',
+        _ => 'Waiting on the race creator\'s review.',
+      };
+    }
 
     final race = _race;
     final proof = _proof;
@@ -275,7 +367,36 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
+                      // Race-truth action: other racers can dispute whether
+                      // this proof should count. Own vetoed proofs get the
+                      // replacement path — the old record stays for audit.
+                      if (proof.userId != user?.id &&
+                          proof.vetoState != 'vetoed') ...[
+                        NuvoOutlineButton(
+                          label: proof.viewerVoted
+                              ? 'You vetoed this proof'
+                              : 'Veto proof',
+                          icon: Icons.gavel_rounded,
+                          expand: true,
+                          onPressed: _saving || proof.viewerVoted
+                              ? null
+                              : () => _vetoProof(proof),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      if (proof.userId == user?.id &&
+                          proof.vetoState == 'vetoed') ...[
+                        NuvoPrimaryButton(
+                          label: 'Submit new proof',
+                          icon: Icons.add_a_photo_outlined,
+                          expand: true,
+                          onPressed: () => context.push(
+                            '/race/${widget.raceId}/proof',
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       Center(
                         child: TextButton(
                           onPressed: () => _reportProof(proof),
