@@ -673,10 +673,101 @@ class RaceController extends StateNotifier<RaceState> {
 
   Future<void> removeCrewUser(String userId) => _repo.removeCrewUser(userId);
 
-  Future<Race> addRaceParticipant(String raceId, String userId) async {
+  Future<Race> addRaceParticipant(
+    String raceId,
+    String userId, {
+    PublicUser? user,
+  }) async {
+    // Presentation-created races exist only in local state — the server has
+    // no row, so the real endpoint would 404 and the invite surface
+    // dead-ends for the demo identity. Fold the member into the cached copy.
+    if (_isPresentationLocalRace(raceId)) {
+      return _applyPresentationParticipantAdd(raceId, userId, user: user);
+    }
     final race = await _repo.addRaceParticipant(raceId, userId);
     _upsertRace(race);
     return race;
+  }
+
+  /// Local equivalent of POST /races/:id/participants for presentation-local
+  /// races. Resolves the member from the caller's already-loaded card or the
+  /// real crew list — never fabricates a name.
+  Future<Race> _applyPresentationParticipantAdd(
+    String raceId,
+    String userId, {
+    PublicUser? user,
+  }) async {
+    final existing = state.races.where((r) => r.id == raceId).firstOrNull;
+    if (existing == null) {
+      throw const ApiException(404, 'This race could not be found.');
+    }
+    if (existing.participants.any((p) => p.userId == userId)) {
+      return existing;
+    }
+    final member =
+        user ?? (await getCrew()).where((u) => u.id == userId).firstOrNull;
+    if (member == null) {
+      throw const ApiException(404, 'User not found');
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    final updated = Race(
+      id: existing.id,
+      creatorId: existing.creatorId,
+      title: existing.title,
+      description: existing.description,
+      category: existing.category,
+      goalType: existing.goalType,
+      targetValue: existing.targetValue,
+      unit: existing.unit,
+      aiActivityType: existing.aiActivityType,
+      targetUnit: existing.targetUnit,
+      proofMode: existing.proofMode,
+      activityId: existing.activityId,
+      metric: existing.metric,
+      format: existing.format,
+      scoringRule: existing.scoringRule,
+      attemptDurationSeconds: existing.attemptDurationSeconds,
+      attemptLimit: existing.attemptLimit,
+      verificationMethod: existing.verificationMethod,
+      verifierType: existing.verifierType,
+      verifierVersion: existing.verifierVersion,
+      customVerifierSpec: existing.customVerifierSpec,
+      customActivityName: existing.customActivityName,
+      verifierInvalidReason: existing.verifierInvalidReason,
+      timezone: existing.timezone,
+      recurrence: existing.recurrence,
+      status: existing.status,
+      storedStatus: existing.storedStatus,
+      winnerUserId: existing.winnerUserId,
+      completedAt: existing.completedAt,
+      startLineAt: existing.startLineAt,
+      finishLineAt: existing.finishLineAt,
+      rules: existing.rules,
+      proofRequirement: existing.proofRequirement,
+      proofReviewMode: existing.proofReviewMode,
+      visibility: existing.visibility,
+      inviteCode: existing.inviteCode,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+      participants: [
+        ...existing.participants,
+        RaceParticipant(
+          id: 'presentation-demo-participant-${member.id}',
+          userId: member.id,
+          displayName: member.displayName,
+          progressValue: 0,
+          progressPercent: 0,
+          rank: existing.participants.length + 1,
+          joinedAt: now,
+          profilePhotoUrl: member.profilePhotoUrl,
+          level: member.level,
+        ),
+      ],
+      recentProofs: existing.recentProofs,
+      finalStandings: existing.finalStandings,
+    );
+    _upsertRace(updated);
+    return updated;
   }
 
   Future<String> createInviteCode(String id) => _repo.createInviteCode(id);

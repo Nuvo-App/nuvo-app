@@ -432,7 +432,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         // Best-effort: on failure land on the invite screen where the same
         // action is one tap away rather than losing them silently.
         try {
-          await controller.addRaceParticipant(race.id, withUser.id);
+          await controller.addRaceParticipant(race.id, withUser.id, user: withUser);
           if (!mounted) return;
           context.go('/race/${race.id}');
         } catch (_) {
