@@ -364,13 +364,6 @@ class _State extends ConsumerState<PublicProfileScreen> {
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         children: [
           _hero(card).nuvoEnter(),
-          // Nuvo Level — social identity. Other racers see the level and
-          // the fill, never absolute XP (the public contract only carries
-          // the 0..1 fraction).
-          if (card.level != null) ...[
-            const SizedBox(height: 20),
-            _LevelBlock(card: card),
-          ],
           // Canonical racing stats — races, wins, win rate.
           if (card.racesFinished != null) ...[
             const SizedBox(height: 24),
@@ -393,33 +386,81 @@ class _State extends ConsumerState<PublicProfileScreen> {
     );
   }
 
+  /// Same identity composition as the self profile — avatar with physical
+  /// edge, name, @handle, and the Nuvo Level in the block. The level climb
+  /// bar belongs to the identity, not a separate dashboard block; the
+  /// public contract only carries the 0..1 fraction, never absolute XP.
   Widget _hero(PublicProfileCard card) {
+    final c = context.themeColors;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Center(
-          child: NuvoAvatar(
-            photoUrl: card.profilePhotoUrl,
-            initials: card.initials,
-            size: 96,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: c.inkShadow, width: 2.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.inkShadow,
+                    offset: const Offset(2.5, 2.5),
+                    blurRadius: 0,
+                  ),
+                ],
+              ),
+              child: NuvoAvatar(
+                photoUrl: card.profilePhotoUrl,
+                initials: card.initials,
+                size: NuvoAvatarSizes.lg,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    card.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
+                  ),
+                  if (card.username != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '@${card.username}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: c.inkSubtle,
+                      ),
+                    ),
+                  ],
+                  if (card.level != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'LEVEL ${card.level}',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.blue,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                      maxLines: 1,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        Text(card.displayName,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.displaySmall),
-        if (card.username != null) ...[
-          const SizedBox(height: 4),
-          Text('@${card.username}',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium
-                  .copyWith(color: context.themeColors.inkMuted)),
-        ],
         if (card.memberId != null) ...[
-          const SizedBox(height: 2),
-          Text(card.memberId!,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: context.themeColors.inkMuted)),
+          const SizedBox(height: 6),
+          Text(
+            card.memberId!,
+            style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+          ),
         ],
         // Real presence, crew only — same rule as the crew list.
         if (card.connectionStatus == CrewConnectionStatus.connected &&
@@ -451,6 +492,15 @@ class _State extends ConsumerState<PublicProfileScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+        if (card.level != null) ...[
+          const SizedBox(height: 16),
+          NuvoProgressBar(
+            value: card.levelProgress ?? 0,
+            height: 12,
+            color: NuvoColors.blue,
+            trackColor: c.track,
           ),
         ],
       ],
@@ -720,42 +770,9 @@ class _Badge extends StatelessWidget {
   }
 }
 
-/// Their Nuvo Level — prominent on the person profile, fraction-only fill.
-/// Exact XP numbers stay on the self profile.
-class _LevelBlock extends StatelessWidget {
-  const _LevelBlock({required this.card});
-
-  final PublicProfileCard card;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Column(
-      children: [
-        Text(
-          'LEVEL ${card.level}',
-          style: AppTextStyles.titleMedium.copyWith(
-            color: NuvoColors.blue,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.6,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: NuvoProgressBar(
-            value: card.levelProgress ?? 0,
-            height: 8,
-            color: NuvoColors.blue,
-            trackColor: c.panelLight,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// Canonical racing stats — how much they race and how often they win.
+/// Page-level like the self profile: color carries meaning (blue = live,
+/// gold = wins, navy = record), hairlines separate, no card.
 class _PubStatsStrip extends StatelessWidget {
   const _PubStatsStrip({required this.card});
 
@@ -767,29 +784,38 @@ class _PubStatsStrip extends StatelessWidget {
     final races = card.racesFinished ?? 0;
     final wins = card.racesWon ?? 0;
     final rate = races > 0 ? ((wins / races) * 100).round() : 0;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          _PubStat(value: '$races', label: 'RACES'),
-          _PubStat(value: '$wins', label: 'WINS'),
-          _PubStat(value: '$rate%', label: 'WIN RATE'),
+          _PubStat(value: '$races', label: 'RACING', color: NuvoColors.blue),
+          _divider(c),
+          _PubStat(value: '$wins', label: 'WINS', color: NuvoColors.gold),
+          _divider(c),
+          _PubStat(value: '$rate%', label: 'WIN RATE', color: c.ink),
         ],
       ),
     );
   }
+
+  Widget _divider(NuvoThemeColors c) => Container(
+        width: 1,
+        height: 32,
+        color: c.ink.withValues(alpha: 0.12),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+      );
 }
 
 class _PubStat extends StatelessWidget {
-  const _PubStat({required this.value, required this.label});
+  const _PubStat({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   final String value;
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -799,15 +825,17 @@ class _PubStat extends StatelessWidget {
         children: [
           Text(
             value,
-            style: AppTextStyles.titleLarge.copyWith(color: c.ink),
+            style: AppTextStyles.number(
+              24,
+              color: color,
+              weight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 3),
           Text(
             label,
-            style: AppTextStyles.labelSmall.copyWith(
+            style: AppTextStyles.labelUppercase(10).copyWith(
               color: c.inkSubtle,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
             ),
           ),
         ],
@@ -841,29 +869,33 @@ class _PublicAchievements extends ConsumerWidget {
           onTap: () => context.push('/u/${card.id}/badges', extra: card),
           haptic: false,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
               Expanded(
                 child: Text(
-                  'ACHIEVEMENTS',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: c.inkSubtle,
+                  'Achievements',
+                  style: AppTextStyles.sectionTitle.copyWith(
+                    color: c.ink,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Text(
                 '${card.achievementsEarned} / ${card.achievementsTotal ?? '?'}',
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: NuvoColors.blue,
+                  color: c.inkSubtle,
                   fontWeight: FontWeight.w800,
                 ),
+                maxLines: 1,
               ),
-              const SizedBox(width: 2),
-              Icon(
+              const SizedBox(width: 4),
+              const Icon(
                 Icons.chevron_right_rounded,
-                size: 18,
-                color: c.inkSubtle,
+                size: 16,
+                color: NuvoColors.blue,
               ),
             ],
           ),
@@ -889,7 +921,7 @@ class _PublicAchievements extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.labelSmall.copyWith(
-                          color: c.inkSubtle,
+                          color: nuvoBadgeAccent(shown[i]),
                           fontWeight: FontWeight.w700,
                         ),
                       ),

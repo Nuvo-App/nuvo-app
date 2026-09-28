@@ -182,9 +182,8 @@ void main() {
       expect(find.text('UP NEXT'), findsNothing);
       // Race title should be visible as the hero headline.
       expect(find.text('Squat Race'), findsOneWidget);
-      // The proof method is the supporting line; the button is the action.
-      expect(find.text('AI Motion Proof'), findsWidgets);
-      expect(find.text('Start verification'), findsOneWidget);
+      // Proof method + action are merged — one primary CTA names both.
+      expect(find.text('Start AI Motion Proof'), findsOneWidget);
     });
 
     testWidgets('no repeated full-width Verify buttons on ready rows', (
@@ -196,7 +195,7 @@ void main() {
       // The old design had "Verify" pill buttons on every ready row.
       // The new design has exactly ONE primary CTA (the hero pill) and
       // NO "Verify" text buttons on rows.
-      expect(find.text('Start verification'), findsOneWidget);
+      expect(find.text('Start AI Motion Proof'), findsOneWidget);
       // "Verify" as standalone button text should not appear on rows.
       // (The header title "Verify" is separate from button text.)
       expect(find.byType(VerifyButtonFinder), findsNothing);
@@ -489,8 +488,7 @@ void main() {
         _buildApp(_StubRaceRepo([_readyRace(title: 'Squat Race')])),
       );
       await tester.pumpAndSettle();
-      expect(find.text('AI Motion Proof'), findsWidgets);
-      expect(find.text('Start verification'), findsOneWidget);
+      expect(find.text('Start AI Motion Proof'), findsOneWidget);
       expect(find.byIcon(Icons.camera_alt_rounded), findsWidgets);
     });
 
@@ -514,7 +512,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Log progress'), findsOneWidget);
-      expect(find.text('Start verification'), findsNothing);
+      expect(find.text('Start AI Motion Proof'), findsNothing);
     });
 
     testWidgets('best-attempt manual race → Add result CTA', (tester) async {
@@ -537,7 +535,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Add result'), findsOneWidget);
-      expect(find.text('Start verification'), findsNothing);
+      expect(find.text('Start AI Motion Proof'), findsNothing);
     });
 
     testWidgets('unresolvable race → generic Submit proof CTA, never camera',
@@ -555,7 +553,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Submit proof'), findsOneWidget);
-      expect(find.text('Start verification'), findsNothing);
+      expect(find.text('Start AI Motion Proof'), findsNothing);
     });
 
     testWidgets('best-attempt race shows result, not a fake denominator', (
