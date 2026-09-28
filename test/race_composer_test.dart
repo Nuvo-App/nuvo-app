@@ -184,7 +184,7 @@ void main() {
       expect(payload['title'], 'Akshay vs Akaash');
     });
 
-    test('manual goal produces a non-camera payload', () {
+    test('manual goal produces an evidence-required payload', () {
       final draft = draftForActivity(_jacks).copyWith(
         goalKind: RaceGoalKind.manual,
         manualGoalName: 'Read',
@@ -194,8 +194,10 @@ void main() {
       expect(draft.isManual, isTrue);
       expect(draft.isValidToCreate, isTrue);
       final payload = draft.toCreatePayload();
-      expect(payload['proofRequirement'], 'manual');
-      expect(payload['proofMode'], 'manual');
+      // Non-automated contracts carry photo proof on every submission —
+      // no evidence, no canonical progress.
+      expect(payload['proofRequirement'], 'photo_video');
+      expect(payload['proofMode'], 'photo');
       expect(payload['unit'], 'pages');
       expect(payload['targetValue'], 300);
       expect(payload.containsKey('activityId'), isFalse);
