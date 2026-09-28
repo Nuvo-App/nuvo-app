@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/demo/presentation_demo.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
@@ -64,7 +65,9 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       final race = await controller.getRaceDetail(widget.raceId);
       final crew = await controller.getCrew();
       String? code = race.inviteCode;
-      if (code == null) {
+      // Presentation-created races are local-only — no server row exists for
+      // an invite code, so requesting one would 404 and flash a snackbar.
+      if (code == null && !isPresentationDemoCreatedRace(widget.raceId)) {
         try {
           code = await controller.createInviteCode(widget.raceId);
         } catch (_) {
@@ -142,7 +145,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
     try {
       final race = await ref
           .read(raceControllerProvider.notifier)
-          .addRaceParticipant(widget.raceId, user.id);
+          .addRaceParticipant(widget.raceId, user.id, user: user);
       if (mounted) {
         setState(() {
           _race = race;
@@ -301,25 +304,29 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                         raceTitle: _race?.title ?? 'Nuvo race',
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    const _SectionLabel(label: 'Or a typable code'),
-                    const SizedBox(height: 10),
-                    _InviteCodeCard(code: _inviteCode),
-                    const SizedBox(height: 14),
-                    if (_inviteCode == null)
-                      NuvoOutlineButton(
-                        label: _generating ? 'Creating…' : 'Create invite code',
-                        icon: Icons.key_rounded,
-                        expand: true,
-                        onPressed: _generating ? null : _createCode,
-                      )
-                    else
-                      NuvoCopyButton(
-                        text: _inviteCode!,
-                        label: 'Copy code',
-                        icon: Icons.copy_rounded,
-                        expand: true,
-                      ),
+                    if (!isPresentationDemoCreatedRace(widget.raceId)) ...[
+                      const SizedBox(height: 20),
+                      const _SectionLabel(label: 'Or a typable code'),
+                      const SizedBox(height: 10),
+                      _InviteCodeCard(code: _inviteCode),
+                      const SizedBox(height: 14),
+                      if (_inviteCode == null)
+                        NuvoOutlineButton(
+                          label: _generating
+                              ? 'Creating…'
+                              : 'Create invite code',
+                          icon: Icons.key_rounded,
+                          expand: true,
+                          onPressed: _generating ? null : _createCode,
+                        )
+                      else
+                        NuvoCopyButton(
+                          text: _inviteCode!,
+                          label: 'Copy code',
+                          icon: Icons.copy_rounded,
+                          expand: true,
+                        ),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 12),
                       Text(
