@@ -65,6 +65,12 @@ class AuthController extends StateNotifier<AuthState> {
 
   final AuthRepository _repo;
 
+  /// Runs at the top of [logout], while the stored tokens are still valid —
+  /// this is the only moment device-token unregister can authenticate against
+  /// the backend. Wired by the app shell to PushService.onSignedOut. Best
+  /// effort: failures must never block sign-out.
+  Future<void> Function()? beforeSignOut;
+
   Future<void> _init() async {
     debugPrint('[AuthController] restoring session');
     // Only the cold start owns `loading` (the constructor sets it). A
@@ -250,6 +256,15 @@ class AuthController extends StateNotifier<AuthState> {
   Future<PassInfo> getMemberPass() => _repo.getMemberPass();
 
   Future<void> logout() async {
+    // Unregister this device's push token BEFORE the token store clears —
+    // DeviceApi.unregister needs a still-valid access token to reach the
+    // backend. Doing it post-clear silently leaves the row attached to the
+    // signed-out account (the next account on this device then inherits it).
+    try {
+      await beforeSignOut?.call();
+    } catch (_) {
+      /* best effort — sign-out is never blocked */
+    }
     await _repo.logout();
     if (mounted) {
       state = const AuthState(status: AuthStatus.unauthenticated);

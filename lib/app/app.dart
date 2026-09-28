@@ -34,6 +34,11 @@ class _NuvoAppState extends ConsumerState<NuvoApp> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(deepLinkControllerProvider).start(router);
         ref.read(pushServiceProvider).start(router); // dormant until Firebase configured
+        // Push unregister must run while the access token is still valid —
+        // the auth listener fires only after the store clears, which is too
+        // late, so the controller invokes this hook before clearing.
+        ref.read(authControllerProvider.notifier).beforeSignOut = () =>
+            ref.read(pushServiceProvider).onSignedOut();
       });
     }
 
