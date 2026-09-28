@@ -207,7 +207,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // same deterministic palette color other racers see on
                     // leaderboards; Edit stays in the header so this card is
                     // about who I am, not settings.
-                    _IdentityCard(user: user).nuvoEnter(),
+                    _IdentityCard(user: user, level: progression?.level)
+                        .nuvoEnter(),
                     const SizedBox(height: NuvoSpacing.lg),
 
                     // Level — the progression that belongs to the person,
@@ -513,9 +514,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 /// path to share that identity. The user is the hero — this lives directly on
 /// the page, no card around it.
 class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({required this.user});
+  const _IdentityCard({required this.user, this.level});
 
   final AuthUser? user;
+
+  /// The person's Nuvo level — identity metadata, shown as a quiet blue
+  /// line under the handle. Null while progression is still loading; the
+  /// line simply isn't claimed until the server answers.
+  final int? level;
 
   @override
   Widget build(BuildContext context) {
@@ -580,6 +586,20 @@ class _IdentityCard extends StatelessWidget {
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  if (level != null) ...[
+                    const SizedBox(height: 4),
+                    // The level is part of who this is — it answers "where
+                    // are they in Nuvo" before the stats even start.
+                    Text(
+                      'LEVEL $level',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: NuvoColors.blue,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                      maxLines: 1,
                     ),
                   ],
                 ],
@@ -839,10 +859,12 @@ class _ProgressionSection extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      'Level ${next.level}',
+                      'Unlocks at Level ${next.level}',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: c.inkMuted,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
