@@ -26,7 +26,12 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/auth/presentation/welcome_opening_cinematic.dart';
+import 'package:nuvo/core/theme/app_theme.dart';
 import 'package:nuvo/features/onboarding/presentation/nuvo_onboarding_screen.dart';
+import 'package:nuvo/features/profile/application/progression_controller.dart';
+import 'package:nuvo/features/profile/data/progression_api.dart';
+import 'package:nuvo/features/profile/data/progression_models.dart';
+import 'package:nuvo/features/profile/presentation/widgets/nuvo_badges.dart';
 import 'package:nuvo/features/races/presentation/widgets/rive_movement_preview.dart';
 
 void _usePhone(WidgetTester tester, [Size size = const Size(390, 844)]) {
@@ -83,6 +88,60 @@ class _ScriptedAuthRepo extends AuthRepository {
   Future<AuthUser> getMe() async => user.copyWith(onboardingComplete: true);
 }
 
+/// A controller pre-seeded with a server payload, so the payoff page's
+/// loaded path ('0 / 60 XP', live nextAchievement) is exercised without an
+/// API. Only `state` is touched — presentation reads it like production.
+class _SeededProgression extends ProgressionController {
+  _SeededProgression(NuvoProgression progression)
+    : super(
+        ProgressionApi(),
+        SecureTokenStore(),
+        isPresentationDemo: () => false,
+      ) {
+    state = AsyncValue.data(progression);
+  }
+}
+
+/// The canonical Level-2 capability and the fresh account's first goal —
+/// mirrors the shipped definitions the payoff renders.
+const _firstMoveBadge = NuvoBadge(
+  unlockId: 'ach-first-move',
+  type: 'achievement',
+  key: 'first_move',
+  name: 'First Move',
+  description: 'Submit your first accepted progress.',
+  requiredLevel: 0,
+  unlocked: false,
+  featured: false,
+  category: 'racing',
+  iconKey: 'arrow_forward',
+  statKey: 'progresses_accepted',
+  threshold: 1,
+  progressValue: 0,
+);
+
+const _freshProgression = NuvoProgression(
+  level: 1,
+  totalXp: 0,
+  currentLevelXp: 0,
+  nextLevelXp: 60,
+  progress: 0,
+  xpToNext: 60,
+  lastSeenLevel: 1,
+  featuredSlots: 1,
+  achievementsEarned: 0,
+  achievementsTotal: 44,
+  nextUnlock: NuvoUnlockRef(
+    unlockId: 'cap-badge-slot-2',
+    level: 2,
+    type: 'capability',
+    key: 'featured_slot',
+    name: 'Second badge slot',
+    description: 'Feature a second achievement on your profile.',
+  ),
+  nextAchievement: _firstMoveBadge,
+);
+
 /// Headlines render through NuvoFlipText (per-character cells) — find.text
 /// can't see them. Match the widget itself; it stays in the tree in
 /// reduced-motion mode too (its build() swaps cells for a plain Text child).
@@ -97,12 +156,23 @@ Future<void> pumpUntilFound(
   WidgetTester tester,
   Finder finder, {
   Duration step = const Duration(milliseconds: 100),
-  int maxTicks = 80,
+  int maxTicks = 180,
 }) async {
   for (var i = 0; i < maxTicks && finder.evaluate().isEmpty; i++) {
     await tester.pump(step);
   }
   expect(finder, findsOneWidget);
+}
+
+/// Waits until the current page's 'Keep going' is present AND persists —
+/// during a page transition the outgoing page's footer label can still be in
+/// the tree, so a bare find can latch a ghost.
+Future<void> _waitForOwnCta(WidgetTester tester) async {
+  for (var i = 0; i < 12; i++) {
+    await pumpUntilFound(tester, find.text('Keep going'));
+    await tester.pump(const Duration(milliseconds: 900));
+    if (find.text('Keep going').evaluate().isNotEmpty) return;
+  }
 }
 
 /// The CTA exists inside a growing AnimatedSize the moment it's found —
@@ -123,11 +193,16 @@ Future<void> tapWhenFound(WidgetTester tester, Finder finder) async {
 }
 
 ({GoRouter router, ProviderContainer container}) _buildApp(
-  AuthRepository repo,
-) {
+  AuthRepository repo, {
+  NuvoProgression? progression,
+}) {
   final container = ProviderContainer(
     overrides: [
       authControllerProvider.overrideWith((ref) => AuthController(repo)),
+      if (progression != null)
+        progressionControllerProvider.overrideWith(
+          (ref) => _SeededProgression(progression),
+        ),
     ],
   );
   final router = GoRouter(
@@ -154,8 +229,10 @@ Future<({GoRouter router, ProviderContainer container})> _pumpOnboarding(
   WidgetTester tester, {
   required AuthRepository repo,
   bool disableAnimations = false,
+  bool dark = false,
+  NuvoProgression? progression,
 }) async {
-  final built = _buildApp(repo);
+  final built = _buildApp(repo, progression: progression);
   addTearDown(built.container.dispose);
   addTearDown(built.router.dispose);
   await tester.pumpWidget(
@@ -163,6 +240,12 @@ Future<({GoRouter router, ProviderContainer container})> _pumpOnboarding(
       container: built.container,
       child: MaterialApp.router(
         routerConfig: built.router,
+        // Real theme pair so themeColors resolve like production — the
+        // onboarding chrome is intentionally light-pinned, and this is how
+        // we verify the badge surfaces stay consistent with it in dark mode.
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: dark ? ThemeMode.dark : ThemeMode.light,
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
@@ -180,7 +263,7 @@ String _path(GoRouter router) =>
     router.routerDelegate.currentConfiguration.uri.path;
 
 /// Snapshots the screen's RepaintBoundary('onboarding-capture') to
-/// tmp/onboarding-<name>.png. No-ops unless NUVO_ONBOARDING_CAPTURE is set —
+/// `tmp/onboarding-NAME.png`. No-ops unless NUVO_ONBOARDING_CAPTURE is set —
 /// capture passes need real font rasterization, which the font-loading
 /// setUp below provides only in capture mode.
 Future<void> captureOnboarding(WidgetTester tester, String name) async {
@@ -290,14 +373,19 @@ void main() {
   ) async {
     _usePhone(tester);
     final repo = _ScriptedAuthRepo(_namedUser);
-    final built = await _pumpOnboarding(tester, repo: repo);
+    final built = await _pumpOnboarding(
+      tester,
+      repo: repo,
+      progression: _freshProgression,
+    );
 
     // Page 1 — Race anything (FlexiRace): real example titles cycle as text.
     await tapWhenFound(tester, find.text('Show me'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(tester, findNuvoText('Race anything.'));
     expect(find.text('FLEXIRACE'), findsOneWidget);
-    expect(find.text('First to 100 pushups'), findsOneWidget);
+    // Examples cycle — wait a cycle for this one rather than sampling blind.
+    await pumpUntilFound(tester, find.text('First to 100 pushups'));
     expect(find.text('Skip'), findsOneWidget);
 
     // Page 2 — Make your move: the real jumping-jack Rive preview plus the
@@ -314,35 +402,66 @@ void main() {
     expect(find.text('Noah'), findsOneWidget);
     expect(find.text('Maya'), findsOneWidget);
 
-    // Page 4 — Level up: XP counting and the level badge build.
+    // Page 4 — Level up: the canonical XP economy (+10 proof, then the
+    // finish/win/PB line) rolls 50/60 into Level 2 and reveals the real
+    // level-2 capability (Second badge slot — cap-badge-slot-2).
     await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(tester, findNuvoText('Every race builds\nyour Nuvo.'));
+    // Wait the storyboard out — the level roll + unlock card are the settle
+    // state, not the entrance.
+    await pumpUntilFound(tester, find.text('Second badge slot'));
+    expect(find.text('Level up'), findsOneWidget);
+    expect(find.text('AT LEVEL 2'), findsOneWidget);
 
-    // Page 5 — Identity: real achievement names from the badge system.
+    // Page 5 — Identity: real achievement definitions (featured set, the
+    // First Move earn beat, Hat Trick as an in-progress goal).
     await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(
       tester,
       findNuvoText('Make your name\nmean something.'),
     );
+    await pumpUntilFound(tester, find.text('EARNED'));
     expect(find.text('First W'), findsOneWidget);
+    expect(find.text('Five Deep'), findsOneWidget);
     expect(find.text('Personal Best'), findsOneWidget);
+    expect(find.text('FIRST MOVE'), findsOneWidget);
+    expect(find.text('Submit your first accepted progress.'), findsOneWidget);
+    expect(find.text('EARNED'), findsOneWidget);
+    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('HAT TRICK'), findsOneWidget);
+    expect(find.text('Win 3 races. One more win.'), findsOneWidget);
+    expect(find.text('2 / 3'), findsOneWidget);
 
-    // Page 6 — Crew: social levels against real names.
+    // Page 6 — Crew: social levels + one featured badge glyph each.
     await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(tester, findNuvoText('Better with\ncompetition.'));
     expect(find.text('Shresh'), findsOneWidget);
+    expect(find.text('Lv. 14'), findsOneWidget);
+    expect(find.text('Lv. 1'), findsOneWidget);
+    // 3 crew glyphs + the keep-alive identity page's badge set.
+    expect(find.byType(NuvoAchievementBadge), findsWidgets);
 
     // Page 7 — payoff: real account state (fresh user → Level 1, 0 XP),
-    // personalized, and the only server write in the whole flow.
+    // the canonical first goal, personalized, and the only server write in
+    // the whole flow.
     await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(tester, findNuvoText('Akshay, you\'re ready.'));
     expect(find.text('LEVEL'), findsOneWidget);
     expect(find.text('1'), findsWidgets);
-    expect(find.text('0 XP'), findsOneWidget);
+    // Loaded payload path — canonical threshold renders, no hardcoded 60.
+    expect(find.text('0 / 60 XP'), findsOneWidget);
+    // The canonical first goal is live on the payoff page — First Move is
+    // also mounted (keep-alive) on the identity page, so ≥1, not exactly 1.
+    expect(find.text('FIRST MOVE'), findsWidgets);
+    expect(find.text('0 / 1'), findsWidgets);
+    // Let the CTA reveal settle so the capture carries the real first step.
+    await pumpUntilFound(tester, find.text('Start your first race'));
+    await tester.pump(const Duration(milliseconds: 700));
+    await captureOnboarding(tester, 'payoff-real-390');
 
     expect(repo.completionCalls, 0);
     await tapWhenFound(tester, find.text('Start your first race'));
@@ -411,16 +530,35 @@ void main() {
       await captureOnboarding(tester, 'p0-${size.width.toInt()}');
       expect(tester.takeException(), isNull);
 
-      // Walk every mid page — each pumps until its own CTA exists so the
-      // assertions are entrance-timing independent.
+      // Walk every mid page — each settles on ITS OWN CTA (the footer label
+      // can ghost from the outgoing page, so require persistence) and on its
+      // headline so captures land after the page's storyboard, not mid-it.
+      const headlines = [
+        'Race anything.',
+        'Make your move.',
+        'Climb the board.',
+        'Every race builds\nyour Nuvo.',
+        'Make your name\nmean something.',
+        'Better with\ncompetition.',
+      ];
       for (var page = 1; page <= 6; page++) {
         await tapWhenFound(
           tester,
           find.text(page == 1 ? 'Show me' : 'Keep going'),
         );
         await tester.pump(const Duration(milliseconds: 600));
-        await pumpUntilFound(tester, find.text('Keep going'));
-        await tester.pump(const Duration(milliseconds: 400));
+        await pumpUntilFound(tester, findNuvoText(headlines[page - 1]));
+        if (page == 4) {
+          // XP page — first beat: transition done (~480ms), storyboard still
+          // in its settle window (<670ms) → LEVEL 1 · 0/60 XP.
+          await tester.pump(const Duration(milliseconds: 550));
+          await captureOnboarding(
+            tester,
+            'xp-initial-${size.width.toInt()}',
+          );
+        }
+        await _waitForOwnCta(tester);
+        await tester.pump(const Duration(milliseconds: 1200));
         await captureOnboarding(tester, 'p$page-${size.width.toInt()}');
         expect(
           tester.takeException(),
@@ -445,4 +583,92 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  // The XP/achievement lesson, captured mid-beat — the frames reviewers need
+  // to see (award → economy line → level roll → unlock → earn → goals).
+  // Under NUVO_ONBOARDING_CAPTURE this writes PNGs; without it the walk still
+  // asserts the canonical strings exist at each beat.
+  for (final size in const [Size(320, 568), Size(390, 844)]) {
+    testWidgets(
+      'progression beats at ${size.width.toInt()} — xp, level-up, unlock, earn',
+      (tester) async {
+        _usePhone(tester, size);
+        await _pumpOnboarding(tester, repo: _ScriptedAuthRepo(_namedUser));
+        final w = size.width.toInt();
+
+        // Walk to page 4 (the level page).
+        await tapWhenFound(tester, find.text('Show me'));
+        for (var i = 0; i < 3; i++) {
+          await tapWhenFound(tester, find.text('Keep going'));
+          await tester.pump(const Duration(milliseconds: 600));
+        }
+        await pumpUntilFound(
+          tester,
+          findNuvoText('Every race builds\nyour Nuvo.'),
+          step: const Duration(milliseconds: 100),
+        );
+
+        // Wait for the level roll + unlock card — the settled beats.
+        await pumpUntilFound(tester, find.text('Second badge slot'));
+        await tester.pump(
+          const Duration(milliseconds: 700),
+        ); // let the card fade fully in
+        await captureOnboarding(tester, 'xp-unlock-$w');
+        expect(find.text('Level up'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        // Page 5 — after full settle: earned First Move + Hat Trick goal.
+        await tapWhenFound(tester, find.text('Keep going'));
+        await tester.pump(const Duration(milliseconds: 600));
+        await pumpUntilFound(
+          tester,
+          findNuvoText('Make your name\nmean something.'),
+        );
+        // Rows sit at Opacity 0 in the tree, so text-finds can't gate on
+        // visibility — pump past the full 4.2s storyboard instead.
+        await tester.pump(const Duration(milliseconds: 5000));
+        expect(find.text('HAT TRICK'), findsOneWidget);
+        expect(find.text('EARNED'), findsOneWidget);
+        await captureOnboarding(tester, 'achievements-earned-$w');
+        expect(find.text('HAT TRICK'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+  }
+
+  testWidgets(
+    'dark mode — light-chrome onboarding stays coherent, no overflow',
+    (tester) async {
+      _usePhone(tester, const Size(390, 844));
+      await _pumpOnboarding(
+        tester,
+        repo: _ScriptedAuthRepo(_namedUser),
+        dark: true,
+      );
+      await tapWhenFound(tester, find.text('Show me'));
+      await pumpUntilFound(tester, findNuvoText('Race anything.'));
+      // Walk page-by-page, gating on each headline so ghost CTAs can't
+      // short-circuit the count.
+      for (final headline in [
+        'Make your move.',
+        'Climb the board.',
+        'Every race builds\nyour Nuvo.',
+        'Make your name\nmean something.',
+      ]) {
+        await tapWhenFound(tester, find.text('Keep going'));
+        await tester.pump(const Duration(milliseconds: 600));
+        await pumpUntilFound(tester, findNuvoText(headline));
+      }
+      // Identity page settled under dark theme — badge surfaces pinned to
+      // the page's light chrome via the Theme override, no dark-on-light
+      // panels, no overflow.
+      await tester.pump(const Duration(milliseconds: 5000));
+      expect(find.text('HAT TRICK'), findsOneWidget);
+      expect(find.byType(NuvoAchievementBadge), findsWidgets);
+      await captureOnboarding(tester, 'achievements-dark-390');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
