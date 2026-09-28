@@ -1258,9 +1258,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       'plank_hold',
     ];
     final picks = <MotionActivityDefinition>[];
+    final seen = <String>{};
     for (final id in preferred) {
       for (final a in available) {
-        if (a.activityId == id && !picks.contains(a)) {
+        if (a.activityId == id && seen.add(a.activityId)) {
           picks.add(a);
           break;
         }
@@ -1268,7 +1269,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     }
     for (final a in available) {
       if (picks.length >= 4) break;
-      if (!picks.contains(a)) picks.add(a);
+      if (seen.add(a.activityId)) picks.add(a);
     }
     return picks;
   }
@@ -1363,14 +1364,32 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     // The primary slots belong to the user's real recent movements when any
     // exist — padded from the canonical starters under their own label so a
     // fallback never reads as history. No recents → simple "Quick picks".
-    final recentPicks = recentActivities
-        .where((a) => sorted.any((s) => s.activityId == a.activityId))
-        .take(4)
-        .toList();
+    // Deterministic at every count: recents keep provider order (newest
+    // first), dedupe by canonical ID, cap at 4, and every section renders
+    // complete rows — an odd trailing pick spans full width instead of
+    // leaving a dead half-row.
+    final sortedIds = {for (final a in sorted) a.activityId};
+    final seenPickIds = <String>{};
+    final recentPicks = [
+      for (final a in recentActivities)
+        if (sortedIds.contains(a.activityId) && seenPickIds.add(a.activityId))
+          a,
+    ].take(4).toList();
     final starterPads = _primaryPicks(sorted)
-        .where((a) => !recentPicks.any((r) => r.activityId == a.activityId))
+        .where((a) => seenPickIds.add(a.activityId))
         .take(4 - recentPicks.length)
         .toList();
+    // A selected movement is never allowed to fall off the primary surface —
+    // async catalog/recents refreshes must not hide the user's intent.
+    if (selectedActivityId.isNotEmpty &&
+        !seenPickIds.contains(selectedActivityId)) {
+      for (final a in sorted) {
+        if (a.activityId == selectedActivityId) {
+          starterPads.add(a);
+          break;
+        }
+      }
+    }
 
     return _PageShell(
       question: 'What are you competing in?',
@@ -1378,10 +1397,14 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       // answering it IS filling in the fields below.
       support: widget.draft.clarification ??
           (isManual ? 'Name the goal and how it is measured.' : 'Pick a movement.'),
+      // Long movement names fall back to "Continue" — the selected tile
+      // carries the name; a FittedBox-shrunk 48-char label is unreadable.
       ctaLabel: isManual
           ? 'Set the finish line'
           : hasActivity
-              ? 'Continue with ${widget.draft.activity.title}'
+              ? (widget.draft.activity.title.length <= 18
+                  ? 'Continue with ${widget.draft.activity.title}'
+                  : 'Continue')
               : 'Pick a movement',
       ctaEnabled: isManual || hasActivity,
       ctaKey: FirstRaceGuideKeys.composerActivityCta,
@@ -1457,30 +1480,52 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                       key: const ValueKey('primary'),
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (recentPicks.isNotEmpty) ...[
-                          const _PickLabel('Recent activities'),
-                          _MovementGrid(
-                            activities: recentPicks,
-                            selectedActivityId: selectedActivityId,
-                            onSelect: _select,
-                          ),
-                          if (starterPads.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            const _PickLabel('Suggested'),
-                            _MovementGrid(
-                              activities: starterPads,
-                              selectedActivityId: selectedActivityId,
-                              onSelect: _select,
+                        // Recents resolve async — when they land, the
+                        // starter set crossfades into the personalized
+                        // groups instead of snapping under the user's
+                        // finger. A user's selection always survives the
+                        // swap (injected into the picks above).
+                        AnimatedSwitcher(
+                          duration: MediaQuery.disableAnimationsOf(context)
+                              ? Duration.zero
+                              : const Duration(milliseconds: 220),
+                          child: Column(
+                            key: ValueKey(
+                              recentPicks.isEmpty
+                                  ? 'starters'
+                                  : 'recent-${recentPicks.length}',
                             ),
-                          ],
-                        ] else ...[
-                          const _PickLabel('Quick picks'),
-                          _MovementGrid(
-                            activities: starterPads,
-                            selectedActivityId: selectedActivityId,
-                            onSelect: _select,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (recentPicks.isNotEmpty) ...[
+                                _PickLabel(recentPicks.length == 1
+                                    ? 'Recent activity'
+                                    : 'Recent activities'),
+                                _PickRows(
+                                  activities: recentPicks,
+                                  selectedActivityId: selectedActivityId,
+                                  onSelect: _select,
+                                ),
+                                if (starterPads.isNotEmpty) ...[
+                                  const SizedBox(height: 14),
+                                  const _PickLabel('Suggested'),
+                                  _PickRows(
+                                    activities: starterPads,
+                                    selectedActivityId: selectedActivityId,
+                                    onSelect: _select,
+                                  ),
+                                ],
+                              ] else ...[
+                                const _PickLabel('Quick picks'),
+                                _PickRows(
+                                  activities: starterPads,
+                                  selectedActivityId: selectedActivityId,
+                                  onSelect: _select,
+                                ),
+                              ],
+                            ],
                           ),
-                        ],
+                        ),
                         const SizedBox(height: 10),
                         Center(
                           child: _TextPath(
@@ -1531,6 +1576,63 @@ class _PickLabel extends StatelessWidget {
   }
 }
 
+/// The primary pick layout — pairs of tiles plus a full-width trailing tile
+/// when the group is odd. Always balanced: no half-empty rows, no dead
+/// second column, and the same tile component at every count.
+class _PickRows extends StatelessWidget {
+  const _PickRows({
+    required this.activities,
+    required this.selectedActivityId,
+    required this.onSelect,
+  });
+
+  final List<MotionActivityDefinition> activities;
+  final String selectedActivityId;
+  final ValueChanged<MotionActivityDefinition> onSelect;
+
+  /// Same tile height as the catalog grid so primary and browse read as the
+  /// same component. Scales with the user's text size — a 2-line name +
+  /// metric must fit at accessibility scales.
+  static double tileHeight(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(116);
+  static const double gap = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < activities.length; i += 2) {
+      final pair = activities.sublist(i, (i + 2).clamp(0, activities.length));
+      rows.add(
+        SizedBox(
+          height: tileHeight(context),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final a in pair) ...[
+                Expanded(
+                  child: _MovementTile(
+                    activity: a,
+                    selected: a.activityId == selectedActivityId,
+                    onTap: () => onSelect(a),
+                  ),
+                ),
+                if (a != pair.last) const SizedBox(width: gap),
+              ],
+            ],
+          ),
+        ),
+      );
+      if (i + 2 < activities.length) {
+        rows.add(const SizedBox(height: gap));
+      }
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: rows,
+    );
+  }
+}
+
 /// Small tappable text path (with trailing arrow) — the secondary routes out
 /// of the primary picker: full browser, custom goal. Quiet by default so the
 /// tiles and CTA stay dominant.
@@ -1552,25 +1654,37 @@ class _TextPath extends StatelessWidget {
     final color = quiet
         ? context.themeColors.inkMuted
         : NuvoColors.actionBlue;
-    return NuvoPressable(
-      onTap: onTap,
-      scale: 0.96,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelMedium.copyWith(color: color),
-              ),
+    return Semantics(
+      button: true,
+      label: label,
+      child: NuvoPressable(
+        onTap: onTap,
+        scale: 0.96,
+        // 44px minimum target — a text path must still be a real tap surface.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: color,
+                      fontWeight:
+                          quiet ? FontWeight.w600 : FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(icon, size: 15, color: color),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(icon, size: 15, color: color),
-          ],
+          ),
         ),
       ),
     );
@@ -2092,7 +2206,6 @@ class _RecentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final accent = _movementAccent(activity.category);
     return NuvoPressable(
       onTap: onTap,
       scale: 0.94,
@@ -2101,11 +2214,11 @@ class _RecentChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: selected
-              ? accent.withValues(alpha: 0.14)
+              ? NuvoColors.actionBlue.withValues(alpha: 0.14)
               : c.panelLight,
           borderRadius: BorderRadius.circular(NuvoRadii.pill),
           border: Border.all(
-            color: selected ? accent : Colors.transparent,
+            color: selected ? NuvoColors.actionBlue : Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -2115,14 +2228,14 @@ class _RecentChip extends StatelessWidget {
             Icon(
               activity.icon,
               size: 14,
-              color: selected ? accent : c.inkMuted,
+              color: selected ? NuvoColors.actionBlue : c.inkMuted,
             ),
             const SizedBox(width: 6),
             Text(
               activity.title,
               style: AppTextStyles.labelMedium.copyWith(
                 fontSize: 12.5,
-                color: selected ? accent : c.ink,
+                color: selected ? NuvoColors.actionBlue : c.ink,
               ),
             ),
           ],
@@ -2150,8 +2263,10 @@ class _MovementGrid extends StatelessWidget {
       builder: (context, constraints) {
         const gap = 10.0;
         final tileWidth = (constraints.maxWidth - gap) / 2;
-        // Enough room for icon well + 2-line name + unit, compact at 320.
-        final ratio = tileWidth / 116;
+        // Enough room for icon well + 2-line name + unit, compact at 320 —
+        // the height follows text scale so accessibility sizes still fit.
+        final ratio =
+            tileWidth / MediaQuery.textScalerOf(context).scale(116);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -2191,36 +2306,30 @@ class _MovementTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final accent = _movementAccent(activity.category);
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Selection is brand, not category: every picked tile gets the same Nuvo
+    // blue surface so the state is unambiguous regardless of accent.
+    // Geometry never changes — same padding, same border width, and the
+    // check slot is always reserved so name/metric don't shift.
     return Semantics(
       button: true,
       selected: selected,
       label: '${activity.title}, ${activity.unit}',
       child: PressableScale(
         onTap: onTap,
-        // Selection springs: slight overshoot on the lift, not a color swap.
-        child: AnimatedScale(
-          scale: selected ? 1.03 : 1.0,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
+        child: _SelectionPulse(
+          selected: selected,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             padding: const EdgeInsets.all(11),
             decoration: BoxDecoration(
-              color: selected
-                  ? accent.withValues(alpha: dark ? 0.22 : 0.12)
-                  : c.surface,
+              color: selected ? NuvoColors.actionBlue : c.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.lg),
-              border: Border.all(
-                color: selected ? accent : c.ink,
-                width: selected ? 2 : 1.5,
+              border: Border.all(color: c.ink, width: 1.5),
+              boxShadow: AppShadows.hardOffset(
+                c.inkShadow,
+                offset: selected ? const Offset(4, 4) : const Offset(3, 3),
               ),
-              // Nuvo's hard offset plate: quiet navy for all tiles, the
-              // activity accent takes over when the tile is picked.
-              boxShadow: selected
-                  ? AppShadows.hardOffset(accent, offset: const Offset(4, 4))
-                  : AppShadows.hardOffset(c.inkShadow),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2231,28 +2340,35 @@ class _MovementTile extends StatelessWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: accent.withValues(
-                          alpha: selected ? (dark ? 0.34 : 0.20) : 0.12,
-                        ),
+                        color: selected
+                            ? NuvoColors.white.withValues(alpha: 0.22)
+                            : accent.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(NuvoRadii.md),
                       ),
-                      child: Icon(activity.icon, size: 19, color: accent),
+                      child: Icon(
+                        activity.icon,
+                        size: 19,
+                        color: selected ? NuvoColors.white : accent,
+                      ),
                     ),
                     const Spacer(),
-                    if (selected)
-                      Container(
-                        width: 20,
-                        height: 20,
-                        decoration: const BoxDecoration(
-                          color: NuvoColors.actionBlue,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          size: 13,
-                          color: NuvoColors.white,
-                        ),
-                      ),
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: selected
+                          ? Container(
+                              decoration: const BoxDecoration(
+                                color: NuvoColors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_rounded,
+                                size: 13,
+                                color: NuvoColors.actionBlue,
+                              ),
+                            )
+                          : null,
+                    ),
                   ],
                 ),
                 const Spacer(),
@@ -2261,17 +2377,23 @@ class _MovementTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.labelMedium.copyWith(
-                    color: c.ink,
+                    color: selected ? NuvoColors.white : c.ink,
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                     height: 1.12,
                   ),
                 ),
                 const SizedBox(height: 3),
+                // The canonical unit stays visible in every state — a
+                // selected tile must still tell you what you're logging.
                 Text(
                   activity.unit,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.labelSmall.copyWith(
-                    color: selected ? accent : c.inkSubtle,
+                    color: selected
+                        ? NuvoColors.white.withValues(alpha: 0.82)
+                        : c.inkSubtle,
                     fontSize: 11.5,
                     fontWeight:
                         selected ? FontWeight.w700 : FontWeight.w500,
@@ -2282,6 +2404,62 @@ class _MovementTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One transient lift when a tile becomes selected — a quick 1→1.045→1 pulse
+/// that always settles back to 1 so the picked tile keeps identical grid
+/// geometry. Skipped entirely under reduced motion; selection still reads
+/// from the blue surface and check.
+class _SelectionPulse extends StatefulWidget {
+  const _SelectionPulse({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  State<_SelectionPulse> createState() => _SelectionPulseState();
+}
+
+class _SelectionPulseState extends State<_SelectionPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+  );
+
+  @override
+  void didUpdateWidget(_SelectionPulse old) {
+    super.didUpdateWidget(old);
+    if (widget.selected && !old.selected) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _ctrl.value = 0;
+      } else {
+        _ctrl.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, child) {
+        // Overshoot then settle: 0→0.5 lifts, 0.5→1 lands back at rest.
+        final t = _ctrl.value;
+        final scale = t < 0.45
+            ? 1 + (t / 0.45) * 0.045
+            : 1 + (1 - (t - 0.45) / 0.55) * 0.045;
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: widget.child,
     );
   }
 }
