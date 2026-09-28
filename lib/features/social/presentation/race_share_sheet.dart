@@ -71,7 +71,7 @@ class _RaceShareSheetState extends ConsumerState<_RaceShareSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           24,
           14,
