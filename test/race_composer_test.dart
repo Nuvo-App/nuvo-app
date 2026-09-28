@@ -1,10 +1,20 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:nuvo/core/theme/app_theme.dart';
+import 'package:nuvo/core/widgets/pressable_scale.dart';
 import 'package:nuvo/features/races/ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/presentation/custom_pose/recent_movements_provider.dart';
 import 'package:nuvo/features/races/presentation/race_composer_screen.dart';
 
 import 'fixtures/pose_fixtures.dart';
@@ -78,6 +88,61 @@ Race _race({required String title}) {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
+  // Widget tests pump the composer — runtime font fetching is off and the
+  // packaged Manrope faces are stubbed from tmp/social-qa so the theme
+  // resolves without HttpClient.
+  GoogleFonts.config.allowRuntimeFetching = false;
+
+  setUpAll(() async {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    const fontAssets = {
+      'test/fonts/Manrope-Regular.ttf':
+          'tmp/social-qa/fonts/Manrope_regular.ttf',
+      'test/fonts/Manrope-Medium.ttf':
+          'tmp/social-qa/fonts/Manrope_medium.ttf',
+      'test/fonts/Manrope-SemiBold.ttf':
+          'tmp/social-qa/fonts/Manrope_semiBold.ttf',
+      'test/fonts/Manrope-Bold.ttf': 'tmp/social-qa/fonts/Manrope_bold.ttf',
+      'test/fonts/Manrope-ExtraBold.ttf':
+          'tmp/social-qa/fonts/Manrope_extraBold.ttf',
+    };
+    const families = {
+      'Manrope_regular': 'tmp/social-qa/fonts/Manrope_regular.ttf',
+      'Manrope_500': 'tmp/social-qa/fonts/Manrope_medium.ttf',
+      'Manrope_600': 'tmp/social-qa/fonts/Manrope_semiBold.ttf',
+      'Manrope_700': 'tmp/social-qa/fonts/Manrope_bold.ttf',
+      'Manrope_800': 'tmp/social-qa/fonts/Manrope_extraBold.ttf',
+    };
+    final manifest = const StandardMessageCodec().decodeMessage(
+            await rootBundle.load('AssetManifest.bin'))
+        as Map<Object?, Object?>;
+    for (final key in fontAssets.keys) {
+      manifest[key] = [
+        {'asset': key}
+      ];
+    }
+    final manifestBytes =
+        const StandardMessageCodec().encodeMessage(manifest);
+    final fontBytes = {
+      for (final e in fontAssets.entries)
+        e.key: ByteData.sublistView(await File(e.value).readAsBytes())
+    };
+    final messenger = binding.defaultBinaryMessenger;
+    messenger.setMockMessageHandler('flutter/assets', (message) async {
+      final key = utf8.decode(message!.buffer.asUint8List());
+      if (key == 'AssetManifest.bin') return manifestBytes;
+      return fontBytes[key] ??
+          await messenger.delegate.send('flutter/assets', message);
+    });
+    for (final e in families.entries) {
+      await (FontLoader(e.key)
+            ..addFont(Future.value(
+                ByteData.sublistView(
+                    await File(e.value).readAsBytes()))))
+          .load();
+    }
+  });
+
   // ── 1. Generated title contract ────────────────────────────────────────────
   group('generatedTitle()', () {
     test('produces "First to N ActivityName" format', () {
@@ -643,4 +708,336 @@ void main() {
       },
     );
   });
+
+  // ── Movement picker state hardening ───────────────────────────────────────
+  //
+  // Data count must not break composition: 0..N recents, dedupe, stable
+  // order, identical selected/unselected geometry, canonical units, and a
+  // pinned CTA that never covers content.
+
+  group('Movement picker states', () {
+    setSize(WidgetTester tester, Size size) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding =
+          const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding =
+          const FakeViewPadding(top: 47, bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+    }
+
+    Future<void> pumpPicker(
+      WidgetTester tester, {
+      List<String> recents = const [],
+      Size size = const Size(390, 844),
+      ThemeData? theme,
+      double textScale = 1.0,
+    }) async {
+      setSize(tester, size);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider
+                .overrideWithValue(_PickerStore(recents)),
+          ],
+          child: MaterialApp(
+            theme: theme ?? AppTheme.light(),
+            home: MediaQuery(
+              data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+              child: const RaceComposerScreen(
+                prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      Object? pumpError;
+      while ((pumpError = tester.takeException()) != null) {
+        debugPrint('picker pump exception: $pumpError');
+      }
+      if (pumpError != null) fail('picker threw during pump');
+    }
+
+    // Each movement tile wraps its content in a PressableScale — the CTA
+    // and chips use different shells, so this isolates real tiles.
+    Finder tile(String title) => find.widgetWithText(PressableScale, title);
+
+    int tileCount(WidgetTester tester) => tester
+        .widgetList(find.byWidgetPredicate(
+            (w) => w.runtimeType.toString() == '_MovementTile'))
+        .length;
+
+    testWidgets('0 recents → Quick picks, no Recent heading', (tester) async {
+      await pumpPicker(tester, recents: const []);
+      expect(find.text('Quick picks'), findsOneWidget);
+      expect(find.text('Recent activities'), findsNothing);
+      expect(tileCount(tester), 4);
+      expect(find.text('Pick a movement'), findsOneWidget);
+    });
+
+    testWidgets('1 recent → full-width recent + suggested fills to 4',
+        (tester) async {
+      await pumpPicker(tester, recents: const ['plank_hold']);
+      expect(find.text('Recent activity'), findsOneWidget);
+      expect(find.text('Suggested'), findsOneWidget);
+      expect(tileCount(tester), 4);
+      // The lone recent is a full-width tile, not a half-row orphan.
+      expect(tester.getSize(tile('Plank')).width, greaterThan(300));
+    });
+
+    testWidgets('2 recents → one full row + suggested row', (tester) async {
+      await pumpPicker(tester, recents: const ['plank_hold', 'squats']);
+      expect(find.text('Recent activities'), findsOneWidget);
+      expect(tileCount(tester), 4);
+    });
+
+    testWidgets('3 recents → balanced rows, suggested slot filled',
+        (tester) async {
+      await pumpPicker(
+          tester, recents: const ['plank_hold', 'squats', 'jumping_jacks']);
+      expect(find.text('Recent activities'), findsOneWidget);
+      expect(find.text('Suggested'), findsOneWidget);
+      // 3 recents (2 + 1 wide) + 1 suggested (wide) = 4 options, no holes.
+      expect(tileCount(tester), 4);
+    });
+
+    testWidgets('4+ recents → capped at 4, no suggested padding',
+        (tester) async {
+      await pumpPicker(tester,
+          recents: const [
+            'plank_hold',
+            'squats',
+            'jumping_jacks',
+            'push_ups',
+            'lunges',
+          ]);
+      expect(tileCount(tester), 4);
+      expect(find.text('Suggested'), findsNothing);
+    });
+
+    testWidgets('recents dedupe starters — Pushups renders once',
+        (tester) async {
+      await pumpPicker(tester, recents: const ['push_ups']);
+      expect(find.text('Pushups'), findsOneWidget);
+    });
+
+    testWidgets('recents keep provider order, newest first', (tester) async {
+      await pumpPicker(tester,
+          recents: const ['plank_hold', 'squats', 'push_ups']);
+      // Rows fill in provider order: [Plank, Squats] then [Pushups] wide.
+      final plank = tester.getTopLeft(find.text('Plank'));
+      final squats = tester.getTopLeft(find.text('Squats'));
+      final pushups = tester.getTopLeft(find.text('Pushups'));
+      expect(plank.dx, lessThan(squats.dx)); // same row, Plank left
+      expect(plank.dy, moreOrLessEquals(squats.dy));
+      expect(pushups.dy, greaterThan(plank.dy)); // next row
+    });
+
+    testWidgets('selected tile keeps identical settled geometry',
+        (tester) async {
+      await pumpPicker(tester);
+      final before = tester.getSize(tile('Pushups'));
+      await tester.tap(find.text('Pushups'));
+      await tester.pumpAndSettle();
+      final after = tester.getSize(tile('Pushups'));
+      expect(after, before);
+      // A picked tile stays the same size as its unselected siblings.
+      final squat = tester.getSize(tile('Squats'));
+      expect(after, squat);
+      // Selection is a surface change, not a reskin of layout.
+      expect(find.text('Continue with Pushups'), findsOneWidget);
+    });
+
+    testWidgets('selected tile still shows canonical metric', (tester) async {
+      await pumpPicker(tester, recents: const ['plank_hold']);
+      await tester.tap(find.text('Plank'));
+      await tester.pumpAndSettle();
+      // 'seconds' remains rendered inside the selected tile.
+      expect(find.text('seconds'), findsOneWidget);
+      expect(find.text('Continue with Plank'), findsOneWidget);
+    });
+
+    testWidgets('selected tile does not change position', (tester) async {
+      await pumpPicker(tester, recents: const ['plank_hold', 'squats']);
+      final before = tester.getTopLeft(find.text('Plank'));
+      await tester.tap(find.text('Plank'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('Plank')), before);
+    });
+
+    testWidgets('See all movements is an active blue path', (tester) async {
+      await pumpPicker(tester);
+      await tester.tap(find.text('See all movements'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsWidgets); // search field
+      expect(find.text('Quick picks'), findsOneWidget); // collapse path
+      // Collapse returns to the simple picker.
+      await tester.tap(find.text('Quick picks'));
+      await tester.pumpAndSettle();
+      expect(find.text('Teach Nuvo'), findsOneWidget);
+    });
+
+    testWidgets('back navigation preserves user selection', (tester) async {
+      await pumpPicker(tester);
+      await tester.tap(find.text('Plank'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with Plank'));
+      await tester.pumpAndSettle();
+      // Step 3 reached — go back.
+      await tester.tap(find.byIcon(Icons.arrow_back_rounded).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with Plank'), findsOneWidget);
+      expect(find.text('Pick a movement'), findsNothing);
+    });
+
+    testWidgets('selection survives late-arriving recents', (tester) async {
+      setSize(tester, const Size(390, 844));
+      final gate =
+          _PickerStoreGate(['squats', 'lunges', 'mountain_climbers', 'high_knees']);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider.overrideWithValue(gate),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const RaceComposerScreen(
+              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      // User picks before recents resolve.
+      await tester.tap(find.text('Pushups'));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with Pushups'), findsOneWidget);
+      // Recents land late — selection and its tile must survive.
+      gate.complete();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with Pushups'), findsOneWidget);
+      expect(find.text('Pushups'), findsOneWidget); // tile still present
+      while (tester.takeException() != null) {
+        fail('picker threw on late recents');
+      }
+    });
+
+    testWidgets('320×568 — teach + custom goal stay reachable',
+        (tester) async {
+      await pumpPicker(tester,
+          size: const Size(320, 568),
+          recents: const ['plank_hold', 'squats', 'jumping_jacks']);
+      await tester.scrollUntilVisible(
+        find.text('Teach Nuvo'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Teach Nuvo'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Not a movement? Create a custom goal'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('Not a movement? Create a custom goal'));
+      await tester.pumpAndSettle();
+      expect(find.text('Goal'), findsOneWidget);
+      while (tester.takeException() != null) {
+        fail('picker threw at 320');
+      }
+    });
+
+    testWidgets('long movement name does not overflow tile or CTA',
+        (tester) async {
+      await pumpPicker(tester, recents: const ['mountain_climbers']);
+      await tester.tap(find.text('Mountain Climbers'));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with Mountain Climbers'), findsOneWidget);
+      while (tester.takeException() != null) {
+        fail('long name overflowed');
+      }
+    });
+
+    testWidgets('text scale 1.4 keeps tiles aligned', (tester) async {
+      await pumpPicker(tester, textScale: 1.4);
+      await tester.tap(find.text('Jumping Jacks'));
+      await tester.pumpAndSettle();
+      while (tester.takeException() != null) {
+        fail('text scale 1.4 overflowed');
+      }
+      // Both column tiles still have equal width.
+      final pushups = tester.getSize(tile('Pushups'));
+      final squats = tester.getSize(tile('Squats'));
+      expect(pushups.width, moreOrLessEquals(squats.width));
+    });
+
+    testWidgets('dark mode keeps selection legible', (tester) async {
+      await pumpPicker(tester, theme: AppTheme.dark());
+      await tester.tap(find.text('Pushups'));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with Pushups'), findsOneWidget);
+      expect(find.text('reps'), findsWidgets);
+    });
+  });
+
+  // ── Canonical unit audit ──────────────────────────────────────────────────
+  group('Canonical units', () {
+    test('every catalog movement surfaces its canonical unit', () {
+      for (final a in motionActivityDefinitions) {
+        expect(a.unit, isNotEmpty, reason: a.activityId);
+        // A duration activity must never display a rep unit.
+        if (a.resolvedMeasurementType == MotionMeasurementType.duration) {
+          expect(a.unit, isNot('reps'), reason: a.activityId);
+        }
+      }
+      expect(_plank.unit, 'seconds');
+      expect(_pushups.unit, 'reps');
+      expect(_jacks.unit, 'reps');
+    });
+  });
+}
+
+// ── picker test doubles ───────────────────────────────────────────────────────
+
+class _PickerStore extends RecentMovementsStore {
+  _PickerStore(this.ids);
+  final List<String> ids;
+  @override
+  Future<List<String>> readIds() async => ids;
+  @override
+  Future<List<String>> recordSelection(String movementId) async => ids;
+}
+
+/// Delays recents until [complete] — models the real keychain fetch racing
+/// the user's first tap.
+class _PickerStoreGate extends RecentMovementsStore {
+  _PickerStoreGate(this.ids);
+  final List<String> ids;
+  bool _open = false;
+
+  void complete() => _open = true;
+
+  @override
+  Future<List<String>> readIds() async {
+    while (!_open) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    return ids;
+  }
+
+  @override
+  Future<List<String>> recordSelection(String movementId) async => ids;
 }
