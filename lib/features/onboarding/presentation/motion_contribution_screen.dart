@@ -66,66 +66,146 @@ class _MotionContributionScreenState
                   ],
                 ],
               ),
-              const Spacer(),
-              Center(
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: NuvoColors.panel,
-                    border: Border.all(color: NuvoColors.navy, width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.motion_photos_on_rounded,
-                    color: NuvoColors.blue,
-                    size: 34,
-                  ),
-                ).animate().fadeIn(duration: 320.ms).scale(
-                      begin: const Offset(0.85, 0.85),
-                      duration: 420.ms,
-                      curve: Curves.easeOutBack,
-                    ),
-              ),
-              const SizedBox(height: 30),
-              NuvoFlipText(
-                'Help make Nuvo better',
-                style: AppTextStyles.headlineLarge.copyWith(
-                  fontSize: 32,
-                  letterSpacing: -0.9,
-                  color: NuvoColors.navy,
+              const SizedBox(height: 20),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) =>
+                      SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.stretch,
+                            children: [
+                              NuvoFlipText(
+                                'Help make Nuvo better',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.headlineLarge
+                                    .copyWith(
+                                      fontSize: 32,
+                                      letterSpacing: -0.9,
+                                      color: NuvoColors.navy,
+                                    ),
+                                delay: const Duration(milliseconds: 150),
+                                duration: const Duration(
+                                  milliseconds: 1300,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Nuvo can save the motion points '
+                                'from your movement to improve its '
+                                'motion models.',
+                                textAlign: TextAlign.center,
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  color: NuvoColors.muted,
+                                  height: 1.45,
+                                ),
+                              ).animate(delay: 400.ms).fadeIn(
+                                    duration: 280.ms,
+                                  ),
+                              const SizedBox(height: 24),
+                              // Three tiny visual facts — what consenting
+                              // actually means, scannable at a glance.
+                              Row(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  for (final (i, fact) in const [
+                                    (
+                                      icon: Icons
+                                          .accessibility_new_rounded,
+                                      label:
+                                          'Motion points only',
+                                    ),
+                                    (
+                                      icon: Icons.videocam_off_rounded,
+                                      label: 'No video or audio',
+                                    ),
+                                    (
+                                      icon: Icons.tune_rounded,
+                                      label: 'Your choice',
+                                    ),
+                                  ].indexed) ...[
+                                    if (i > 0)
+                                      const SizedBox(width: 8),
+                                    Expanded(
+                                      child:
+                                          Column(
+                                                children: [
+                                                  Container(
+                                                    width: 46,
+                                                    height: 46,
+                                                    decoration:
+                                                        BoxDecoration(
+                                                          shape: BoxShape
+                                                              .circle,
+                                                          color:
+                                                              NuvoColors
+                                                                  .panel,
+                                                          border:
+                                                              Border.all(
+                                                                color:
+                                                                    NuvoColors
+                                                                        .navy,
+                                                                width: 1.6,
+                                                              ),
+                                                        ),
+                                                    child: Icon(
+                                                      fact.icon,
+                                                      color:
+                                                          NuvoColors
+                                                              .blue,
+                                                      size: 21,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(
+                                                    height: 8,
+                                                  ),
+                                                  Text(
+                                                    fact.label,
+                                                    textAlign:
+                                                        TextAlign.center,
+                                                    style: AppTextStyles
+                                                        .bodySmall
+                                                        .copyWith(
+                                                          color:
+                                                              NuvoColors
+                                                                  .navy,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w700,
+                                                          height: 1.25,
+                                                        ),
+                                                  ),
+                                                ],
+                                              )
+                                              .animate(
+                                                delay: 480.ms +
+                                                    (i * 120).ms,
+                                              )
+                                              .fadeIn(
+                                                duration: 300.ms,
+                                              )
+                                              .slideY(
+                                                begin: .15,
+                                                duration: 300.ms,
+                                              ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ),
                 ),
-                delay: const Duration(milliseconds: 150),
-                duration: const Duration(milliseconds: 1300),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Help Nuvo learn from movement.',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: NuvoColors.navy,
-                  height: 1.4,
-                ),
-              ).animate(delay: 400.ms).fadeIn(duration: 280.ms),
               const SizedBox(height: 12),
-              Text(
-                'When you use AI Motion Proof, Nuvo can save the motion '
-                'points created from your movement to improve its '
-                'motion models.',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: NuvoColors.muted,
-                  height: 1.45,
-                ),
-              ).animate(delay: 480.ms).fadeIn(duration: 280.ms),
-              const SizedBox(height: 14),
-              Text(
-                'Camera video and audio are never uploaded. You can change '
-                'this anytime in Settings.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: NuvoColors.muted,
-                  height: 1.45,
-                ),
-              ).animate(delay: 560.ms).fadeIn(duration: 280.ms),
-              const Spacer(flex: 2),
               NuvoPrimaryButton(
                 label: 'Help improve Nuvo',
                 icon: Icons.auto_awesome_rounded,

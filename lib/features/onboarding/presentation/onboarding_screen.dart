@@ -27,7 +27,6 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _usernameController;
-  bool _privateStats = true;
   bool _termsAccepted = false;
   bool _ageAttested = false;
   bool _loading = false;
@@ -123,7 +122,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       await controller.saveProfile(
         fullName: _nameController.text.trim(),
         username: _usernameController.text.trim().toLowerCase(),
-        privateProfile: _privateStats,
       );
       if (mounted) context.go('/onboarding/motion-consent');
     } catch (e) {
@@ -196,45 +194,161 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             ),
                             const SizedBox(height: 24),
 
-                            // Avatar
-                            Center(
-                              child: Stack(
-                                alignment: Alignment.bottomRight,
+                            // Live identity preview — the profile their crew
+                            // will see, assembling as they type.
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: NuvoColors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: NuvoColors.border,
+                                ),
+                              ),
+                              child: Row(
                                 children: [
-                                  Container(
-                                    width: 80,
-                                    height: 80,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: NuvoColors.navy,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      _initials,
-                                      style: AppTextStyles.headlineMedium
-                                          .copyWith(color: NuvoColors.white),
+                                  Stack(
+                                    alignment: Alignment.bottomRight,
+                                    children: [
+                                      Container(
+                                        width: 64,
+                                        height: 64,
+                                        decoration: const BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: NuvoColors.navy,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 260,
+                                          ),
+                                          transitionBuilder:
+                                              (child, animation) =>
+                                                  FadeTransition(
+                                                    opacity: animation,
+                                                    child: ScaleTransition(
+                                                      scale: Tween<double>(
+                                                        begin: .7,
+                                                        end: 1,
+                                                      ).animate(animation),
+                                                      child: child,
+                                                    ),
+                                                  ),
+                                          child: Text(
+                                            _initials,
+                                            key: ValueKey(_initials),
+                                            style: AppTextStyles.titleLarge
+                                                .copyWith(
+                                                  color: NuvoColors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: NuvoColors.blue,
+                                          border: Border.all(
+                                            color: NuvoColors.page,
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.camera_alt_rounded,
+                                          color: NuvoColors.white,
+                                          size: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          child: Text(
+                                            _nameController.text
+                                                    .trim()
+                                                    .isEmpty
+                                                ? 'Your name'
+                                                : _nameController.text.trim(),
+                                            key: ValueKey(
+                                              _nameController.text.trim(),
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTextStyles.titleMedium
+                                                .copyWith(
+                                                  color:
+                                                      _nameController.text
+                                                          .trim()
+                                                          .isEmpty
+                                                      ? NuvoColors.muted
+                                                      : NuvoColors.navy,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          username.isEmpty
+                                              ? '@handle'
+                                              : '@$username',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppTextStyles.bodyMedium
+                                              .copyWith(
+                                                color: username.isEmpty
+                                                    ? NuvoColors.muted
+                                                    : NuvoColors.blue,
+                                                fontWeight: username.isEmpty
+                                                    ? FontWeight.w500
+                                                    : FontWeight.w700,
+                                              ),
+                                        ),
+                                      ],
                                     ),
                                   ),
+                                  const SizedBox(width: 10),
                                   Container(
-                                    width: 28,
-                                    height: 28,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: NuvoColors.blue,
+                                      color: NuvoColors.blue.withValues(
+                                        alpha: .1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(99),
                                       border: Border.all(
-                                        color: NuvoColors.page,
-                                        width: 2.5,
+                                        color: NuvoColors.blue.withValues(
+                                          alpha: .35,
+                                        ),
                                       ),
                                     ),
-                                    child: const Icon(
-                                      Icons.camera_alt_rounded,
-                                      color: NuvoColors.white,
-                                      size: 14,
+                                    child: Text(
+                                      'LEVEL 1',
+                                      style: AppTextStyles.brandLabel.copyWith(
+                                        color: NuvoColors.blue,
+                                        letterSpacing: 1.4,
+                                        fontSize: 10,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
+                            ).animate().fadeIn(
+                                  delay: const Duration(milliseconds: 350),
+                                  duration: const Duration(milliseconds: 400),
+                                ),
                             const SizedBox(height: 24),
 
                             NuvoTextInput(
@@ -300,53 +414,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             ],
 
                             const SizedBox(height: 20),
-
-                            // Private stats toggle
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: NuvoColors.panel.withValues(alpha: 0.58),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                  color: NuvoColors.navy,
-                                  width: 2,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Private race stats',
-                                          style: AppTextStyles.titleMedium,
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Only your crew can see your race stats.',
-                                          style: AppTextStyles.bodySmall
-                                              .copyWith(
-                                                color: NuvoColors.muted,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Switch.adaptive(
-                                    value: _privateStats,
-                                    activeTrackColor: NuvoColors.blue,
-                                    onChanged: (value) =>
-                                        setState(() => _privateStats = value),
-                                  ),
-                                ],
-                              ),
-                            ),
 
                             if (_error != null) ...[
                               const SizedBox(height: 12),
