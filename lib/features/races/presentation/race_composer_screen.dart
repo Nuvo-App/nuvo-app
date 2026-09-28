@@ -1714,7 +1714,7 @@ class _CategoryTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 36,
+      height: 36 * MediaQuery.textScalerOf(context).scale(1),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.only(right: 24),
