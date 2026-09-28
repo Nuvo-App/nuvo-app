@@ -205,6 +205,32 @@ void main() {
       expect((result as RestoreOk).user.id, 'offline-demo-user');
     });
   });
+
+  group('sign-out ordering', () {
+    test('logout() runs beforeSignOut while credentials are still valid',
+        () async {
+      final log = <String>[];
+      final controller = AuthController(_OrderingRepo(log));
+      await _settle(controller);
+      expect(controller.state.status, AuthStatus.authenticated);
+      controller.beforeSignOut = () async => log.add('beforeSignOut');
+      await controller.logout();
+      expect(log, ['beforeSignOut', 'repo.logout']);
+      expect(controller.state.status, AuthStatus.unauthenticated);
+      controller.dispose();
+    });
+
+    test('logout() still completes when beforeSignOut throws', () async {
+      final log = <String>[];
+      final controller = AuthController(_OrderingRepo(log));
+      await _settle(controller);
+      controller.beforeSignOut = () => Future.error(StateError('push down'));
+      await controller.logout();
+      expect(log, ['repo.logout']);
+      expect(controller.state.status, AuthStatus.unauthenticated);
+      controller.dispose();
+    });
+  });
 }
 
 /// In-memory token store — the platform channel never runs in tests.
@@ -246,6 +272,21 @@ class _UnreachableApi extends AuthApi {
   @override
   Future<String> refreshSession(String refreshToken) =>
       Future.error(const ApiException(0, 'unreachable'));
+}
+
+/// Repo that records the ordering of logout() — lets the test prove the
+/// controller's beforeSignOut hook runs while stored credentials are still
+/// live (i.e. before repo.logout() clears them).
+class _OrderingRepo extends AuthRepository {
+  _OrderingRepo(this.log) : super(AuthApi(), SecureTokenStore());
+
+  final List<String> log;
+
+  @override
+  Future<RestoreResult> restoreSession() async => const RestoreOk(_user);
+
+  @override
+  Future<void> logout() async => log.add('repo.logout');
 }
 
 /// Repo whose reviewer sign-in always fails — transport-shaped or a real 401 —

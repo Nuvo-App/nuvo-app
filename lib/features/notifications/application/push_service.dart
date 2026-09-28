@@ -101,7 +101,13 @@ class PushService {
   }
 
   Future<void> _syncToken(String token) async {
+    final previous = _lastToken;
     _lastToken = token;
+    // Token rotated (T1→T2): detach the old token from this account now
+    // instead of leaving a stale row for FCM to age out via UNREGISTERED.
+    if (previous != null && previous != token) {
+      await _deviceApi.unregister(previous);
+    }
     await _deviceApi.register(
       token,
       platform: Platform.isIOS ? 'ios' : 'android',
