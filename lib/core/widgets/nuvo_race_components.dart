@@ -308,15 +308,20 @@ class RaceMarkerTrack extends StatelessWidget {
           resolved.add((left: left, text: spot.$2, color: spot.$3));
         }
 
+        const slide = Duration(milliseconds: 260);
+        const slideCurve = Curves.easeOutCubic;
+
         return SizedBox(
           height: 40,
           child: Stack(
             children: [
               for (final r in resolved)
-                Positioned(
+                AnimatedPositioned(
                   top: 0,
                   left: r.left,
                   width: lw,
+                  duration: slide,
+                  curve: slideCurve,
                   child: Text(
                     r.text,
                     maxLines: 1,
@@ -341,13 +346,15 @@ class RaceMarkerTrack extends StatelessWidget {
                 ),
               ),
               if (viewerX > 0)
-                Positioned(
+                AnimatedPositioned(
                   top: 26,
                   left: 0,
                   width: viewerX,
+                  duration: slide,
+                  curve: slideCurve,
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
+                    duration: slide,
+                    curve: slideCurve,
                     height: 3,
                     decoration: BoxDecoration(
                       color: fillColor,
@@ -369,15 +376,21 @@ class RaceMarkerTrack extends StatelessWidget {
                   ),
                 ),
               ),
-              for (final m in markers)
-                Positioned(
+              // Rivals draw first, viewer last — an overtake visibly slides
+              // the viewer's mark OVER the rival it just passed.
+              for (final m in [...markers]..sort(
+                  (a, b) => (a.isViewer ? 1 : 0).compareTo(b.isViewer ? 1 : 0),
+                ))
+                AnimatedPositioned(
                   top: m.isViewer ? 24 : 24.5,
                   left: ((m.fraction.clamp(0.0, 1.0) * w) - (m.isViewer ? 4.5 : 4))
                       .clamp(0.0, w - (m.isViewer ? 9 : 8)),
+                  duration: slide,
+                  curve: slideCurve,
                   child: m.isViewer
                       ? AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
+                          duration: slide,
+                          curve: slideCurve,
                           width: 9,
                           height: 9,
                           decoration: BoxDecoration(

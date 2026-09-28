@@ -7,7 +7,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
-import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
@@ -99,15 +98,6 @@ bool _isAccumulating(Race race) =>
     race.scoringRule == 'cumulative_sum' ||
     race.format == 'first_to_goal' ||
     race.format == 'most_in_window';
-
-/// Icon for a race whose activity has no motion glyph — by capability, not
-/// by a universal fitness assumption.
-IconData _proofIconFor(Race race) => switch (_proofActionFor(race)) {
-  _ProofAction.motion =>
-    raceActivityDefinition(race)?.icon ?? Icons.fitness_center_rounded,
-  _ProofAction.manual => Icons.edit_note_rounded,
-  _ProofAction.generic => Icons.emoji_events_outlined,
-};
 
 class _MoveScreenState extends ConsumerState<MoveScreen> {
   _VerifySegment _segment = _VerifySegment.ready;
@@ -777,8 +767,6 @@ class _UpNextHeroState extends State<_UpNextHero> {
     // A rank only means something once there's a result — a solo race or an
     // unscored entry must not claim "1st".
     final earnedRank = hasResult ? rank : null;
-    final proofIcon = _proofIconFor(race);
-    final proofLabel = _proofMethodLabel(race);
     final lower = race.scoreDirection == 'lower';
     final mood = _moodFor(race, widget.userId);
     final accent = _activityAccent(race);
@@ -800,8 +788,6 @@ class _UpNextHeroState extends State<_UpNextHero> {
       });
     final rival = _rival(others, rank);
     final leader = others.isNotEmpty ? others.first : null;
-    final showRivalry =
-        hasResult || (rival != null && rival.progressValue > 0);
 
     return Stack(
       children: [
@@ -832,7 +818,11 @@ class _UpNextHeroState extends State<_UpNextHero> {
                       _ordinalLabel(earnedRank).toLowerCase(),
                       style: AppTextStyles.placementLabel(
                         size: 14,
-                        color: _placementTint(earnedRank) ?? c.inkSubtle,
+                        // A shared first isn't the payoff yet — gold waits
+                        // for the outright lead/win.
+                        color: mood == _VerifyMood.tied
+                            ? c.ink
+                            : (_placementTint(earnedRank) ?? c.inkSubtle),
                       ),
                     ),
                   ),
@@ -862,96 +852,54 @@ class _UpNextHeroState extends State<_UpNextHero> {
             ),
             if (hasDenominator) ...[
               const SizedBox(height: 14),
-              // The track reads as a race: viewer dot, rival dot, goal ring.
-              _RaceTrack(
-                race: race,
-                you: myValue,
-                rival:
-                    rival != null && rival.progressValue > 0 ? rival : null,
-                target: race.targetValue!,
-                markerColor: _moodMarker(mood),
-              ),
-            ],
-            const SizedBox(height: 16),
-            // Rivalry — people, not abstractions — on a soft accent tint so
-            // the competitive context reads as one grouped moment.
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (showRivalry) ...[
-                    if (rival != null && rival.progressValue > 0) ...[
-                      _RivalryRow(
-                        name: _firstName(rival.displayName),
-                        userId: rival.userId,
-                        photoUrl: rival.profilePhotoUrl,
-                        score: rival.progressValue,
-                        format: _anchorFormat,
-                        isViewer: false,
-                      ),
-                      const SizedBox(height: 7),
-                    ],
-                    _RivalryRow(
-                      name: 'You',
-                      userId: widget.userId ?? 'you',
-                      photoUrl: myPart?.profilePhotoUrl,
-                      score: myValue,
-                      format: _anchorFormat,
-                      isViewer: true,
-                      scoreColor: _moodText(mood, c),
+              // The track IS the rivalry: viewer mark, rival mark, goal
+              // ring — named, canonical, animated. No card underneath.
+              RaceMarkerTrack(
+                fillColor: _moodMarker(mood),
+                goalLabel: 'Goal ${_anchorFormat(race.targetValue!)}',
+                markers: [
+                  if (rival != null && rival.progressValue > 0)
+                    RaceTrackMarker(
+                      fraction: rival.progressValue / race.targetValue!,
+                      label:
+                          '${_firstName(rival.displayName)} '
+                          '${_anchorFormat(rival.progressValue)}',
+                      color: c.ink,
                     ),
-                    const SizedBox(height: 9),
-                  ],
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    style: AppTextStyles.labelMedium.copyWith(
-                      fontSize: 13.5,
-                      color: mood == _VerifyMood.startLine
-                          ? c.ink
-                          : _moodText(mood, c),
-                      fontWeight: FontWeight.w700,
-                    ),
-                    child: Text(
-                      _contextLine(rank, myValue, rival, leader),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  RaceTrackMarker(
+                    fraction: myValue / race.targetValue!,
+                    label: 'You ${_anchorFormat(myValue)}',
+                    color: _moodMarker(mood),
+                    isViewer: true,
                   ),
                 ],
+              ),
+            ] else ...[
+              const SizedBox(height: 14),
+            ],
+            // The stakes live on the page, not in a tinted card — one line
+            // under the lane, colored by standing.
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              style: AppTextStyles.labelMedium.copyWith(
+                fontSize: 13.5,
+                color: mood == _VerifyMood.startLine
+                    ? c.ink
+                    : _moodText(mood, c),
+                fontWeight: FontWeight.w700,
+              ),
+              child: Text(
+                _contextLine(rank, myValue, rival, leader),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(height: 16),
-            // Proof method is supporting copy; the button is the action.
-            if (proofLabel.isNotEmpty) ...[
-              Row(
-                children: [
-                  Icon(proofIcon, size: 15, color: accent),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      proofLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        fontSize: 12.5,
-                        color: c.inkMuted,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-            ],
+            // One primary action — the proof method IS the label.
             NuvoPrimaryButton(
               key: const Key('verify-hero-cta'),
-              label: _heroCtaLabel(race),
+              label: _proofCta(race).label,
               onPressed: widget.onVerify,
               icon: _proofCta(race).icon,
               expand: true,
@@ -979,7 +927,9 @@ class _UpNextHeroState extends State<_UpNextHero> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: NuvoColors.success,
+                      // The competitive payoff — gold lives here and
+                      // nowhere else.
+                      color: NuvoColors.gold,
                       borderRadius: BorderRadius.circular(999),
                       boxShadow: [
                         BoxShadow(
@@ -991,7 +941,7 @@ class _UpNextHeroState extends State<_UpNextHero> {
                     child: Text(
                       'YOU TOOK THE LEAD',
                       style: AppTextStyles.labelUppercase(11).copyWith(
-                        color: NuvoColors.white,
+                        color: NuvoColors.navy,
                       ),
                     ),
                   ),
@@ -1126,10 +1076,12 @@ _VerifyMood _moodFor(Race race, String? userId) {
 }
 
 /// Marker/track color — the state is carried by the track and dots.
+/// Palette is state-based only: blue = racing/chasing (a tie is still a
+/// chase), green = leading. Gold is reserved for the win payoff.
 Color _moodMarker(_VerifyMood m) => switch (m) {
   _VerifyMood.startLine => NuvoColors.blue,
   _VerifyMood.chasing => NuvoColors.blue,
-  _VerifyMood.tied => NuvoColors.warning,
+  _VerifyMood.tied => NuvoColors.blue,
   _VerifyMood.leading => NuvoColors.success,
 };
 
@@ -1138,7 +1090,7 @@ Color _moodMarker(_VerifyMood m) => switch (m) {
 Color _moodText(_VerifyMood m, NuvoThemeColors c) => switch (m) {
   _VerifyMood.startLine => c.inkSubtle,
   _VerifyMood.chasing => NuvoColors.blue,
-  _VerifyMood.tied => NuvoColors.warningOn,
+  _VerifyMood.tied => NuvoColors.blue,
   _VerifyMood.leading => NuvoColors.successOn,
 };
 
@@ -1157,235 +1109,6 @@ Color _activityAccent(Race race) {
 String _firstName(String displayName) {
   final parts = displayName.trim().split(RegExp(r'\s+'));
   return parts.isEmpty ? 'Racer' : parts.first;
-}
-
-String _initialsOf(String displayName) {
-  final parts = displayName
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((p) => p.isNotEmpty)
-      .toList();
-  if (parts.isEmpty) return 'YO';
-  if (parts.length == 1) {
-    final p = parts.first;
-    return (p.length == 1 ? p : p.substring(0, 2)).toUpperCase();
-  }
-  return (parts.first[0] + parts.last[0]).toUpperCase();
-}
-
-/// The race track — a thin line with real anchors, not decoration. The
-/// viewer is a blue dot, the adjacent competitor a navy dot, the goal a
-/// hollow ring; each carries its label above its own position. Only
-/// rendered for races with a real denominator; rival positions are shown
-/// only when that competitor has actually scored.
-class _RaceTrack extends StatelessWidget {
-  const _RaceTrack({
-    required this.race,
-    required this.you,
-    required this.target,
-    this.rival,
-    this.markerColor = NuvoColors.blue,
-  });
-
-  final Race race;
-  final int you;
-  final int target;
-  final RaceParticipant? rival;
-
-  /// The mood color — viewer dot, viewer fill, and the goal ring share it
-  /// so the track itself carries the race state.
-  final Color markerColor;
-
-  String _fmt(int v) =>
-      raceMetric(race) == RaceMetric.seconds ? formatClock(v) : '$v';
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return LayoutBuilder(
-      builder: (context, cons) {
-        final w = cons.maxWidth;
-        double xOf(int v) => (v / target).clamp(0.0, 1.0) * w;
-        final youX = xOf(you);
-        final hasRival = rival != null && rival!.progressValue > 0;
-        final rivalX = hasRival ? xOf(rival!.progressValue) : 0.0;
-
-        // Label slots centered on each anchor — placed right-to-left so
-        // close standings never overlap: each label slides left until it
-        // clears the label on its right.
-        const lw = 64.0;
-        final labelSpots = <(double x, String text, Color color)>[
-          (w - 4, 'Goal ${_fmt(target)}', c.inkMuted),
-          (youX, 'You ${_fmt(you)}', NuvoColors.blue),
-          if (hasRival)
-            (
-              rivalX,
-              '${_firstName(rival!.displayName)} ${_fmt(rival!.progressValue)}',
-              c.inkMuted,
-            ),
-        ]..sort((a, b) => b.$1.compareTo(a.$1));
-        var nextRight = w;
-        final resolved = <({double left, String text, Color color})>[];
-        for (final spot in labelSpots) {
-          var left = (spot.$1 - lw / 2).clamp(0.0, (w - lw).clamp(0.0, w));
-          if (left + lw > nextRight) {
-            left = (nextRight - lw - 2).clamp(0.0, (w - lw).clamp(0.0, w));
-          }
-          nextRight = left;
-          resolved.add((left: left, text: spot.$2, color: spot.$3));
-        }
-
-        return SizedBox(
-          height: 40,
-          child: Stack(
-            children: [
-              for (final r in resolved)
-                Positioned(
-                  top: 0,
-                  left: r.left,
-                  width: lw,
-                  child: Text(
-                    r.text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.labelUppercase(10.5).copyWith(
-                      color: r.color,
-                    ),
-                  ),
-                ),
-              // Track + viewer fill.
-              Positioned(
-                top: 26,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: c.track,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 26,
-                left: 0,
-                width: youX,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: markerColor,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              // Goal ring at the finish.
-              Positioned(
-                top: 22,
-                left: w - 11,
-                child: Container(
-                  width: 11,
-                  height: 11,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: c.page,
-                    border: Border.all(color: markerColor, width: 2),
-                  ),
-                ),
-              ),
-              if (hasRival)
-                Positioned(
-                  top: 24.5,
-                  left: (rivalX - 4).clamp(0.0, w - 8),
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: c.ink,
-                    ),
-                  ),
-                ),
-              Positioned(
-                top: 24,
-                left: (youX - 4.5).clamp(0.0, w - 9),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: markerColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// One standing line in the hero — avatar + name + score. The viewer row
-/// is always blue; a competitor carries their deterministic avatar color.
-class _RivalryRow extends StatelessWidget {
-  const _RivalryRow({
-    required this.name,
-    required this.userId,
-    required this.score,
-    required this.format,
-    required this.isViewer,
-    this.photoUrl,
-    this.scoreColor,
-  });
-
-  final String name;
-  final String userId;
-  final String? photoUrl;
-  final int score;
-  final String Function(int) format;
-  final bool isViewer;
-  final Color? scoreColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return Row(
-      children: [
-        NuvoAvatar(
-          initials: _initialsOf(name),
-          size: 22,
-          photoUrl: photoUrl,
-          bgColor: isViewer ? NuvoColors.blue : nuvoAvatarColorFor(userId),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelMedium.copyWith(
-              fontSize: 13.5,
-              color: c.ink,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          format(score),
-          style: AppTextStyles.statLarge(
-            15,
-            color: scoreColor ?? (isViewer ? c.ink : c.inkSubtle),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 String _ordinalLabel(int n) {
@@ -1431,24 +1154,6 @@ String _goalSentence(Race race) {
       ? 'Lowest score wins'
       : 'Highest score wins';
 }
-
-/// The proof-method cue on the action band — names what tapping does.
-/// Generic proof is already the action verb ("SUBMIT PROOF"), so its cue
-/// is empty rather than repeating the same words on the left.
-String _proofMethodLabel(Race race) => switch (_proofActionFor(race)) {
-  _ProofAction.motion => 'AI Motion Proof',
-  _ProofAction.manual => 'Manual result',
-  _ProofAction.generic => '',
-};
-
-/// The hero button verb — sentence case on a compact pill; the proof method
-/// ("AI Motion Proof") is the supporting line above, not repeated here.
-String _heroCtaLabel(Race race) => switch (_proofActionFor(race)) {
-  _ProofAction.motion => 'Start verification',
-  _ProofAction.manual =>
-    _isAccumulating(race) ? 'Log progress' : 'Add result',
-  _ProofAction.generic => 'Submit proof',
-};
 
 /// Compact score text — percent races carry their glyph ("94%"); every
 /// other unit uses the canonical label ("78 strokes", "1:42"). A value of
@@ -1753,17 +1458,17 @@ class _CompletedRaceRow extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                // History, not action — quiet ink well, gold only on a win.
+                // Completed = green; the gold payoff belongs to wins alone.
                 color: won
                     ? NuvoColors.gold.withValues(alpha: 0.14)
-                    : c.panelLight,
+                    : NuvoColors.success.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 won
                     ? Icons.emoji_events_rounded
                     : Icons.flag_outlined,
-                color: won ? NuvoColors.gold : c.inkMuted,
+                color: won ? NuvoColors.gold : NuvoColors.successOn,
                 size: 18,
               ),
             ),
@@ -1802,8 +1507,8 @@ class _CompletedRaceRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.raceRowMeta.copyWith(
                       fontSize: 12,
-                      color: won ? NuvoColors.gold : c.inkMuted,
-                      fontWeight: won ? FontWeight.w700 : FontWeight.w600,
+                      color: won ? NuvoColors.gold : NuvoColors.successOn,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],

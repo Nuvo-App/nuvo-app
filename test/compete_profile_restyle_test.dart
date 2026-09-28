@@ -30,6 +30,11 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/compete/presentation/compete_screen_fixed.dart';
+import 'package:nuvo/features/crew/application/crew_controller.dart';
+import 'package:nuvo/features/crew/data/crew_api.dart';
+import 'package:nuvo/features/crew/data/crew_repository.dart';
+import 'package:nuvo/features/crew/presentation/public_profile_screen.dart';
+import 'package:nuvo/features/move/presentation/move_screen.dart';
 import 'package:nuvo/features/profile/application/progression_controller.dart';
 import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/data/progression_models.dart';
@@ -63,7 +68,13 @@ const _meLong = AuthUser(
   motionTrainingConsent: true,
 );
 
-RaceParticipant _p(String userId, String name, int value, {int? rank}) =>
+RaceParticipant _p(
+  String userId,
+  String name,
+  int value, {
+  int? rank,
+  String joinedAt = '2026-01-01T00:00:00Z',
+}) =>
     RaceParticipant(
       id: 'part-$userId',
       userId: userId,
@@ -71,7 +82,7 @@ RaceParticipant _p(String userId, String name, int value, {int? rank}) =>
       progressValue: value,
       progressPercent: value,
       rank: rank,
-      joinedAt: '2026-01-01T00:00:00Z',
+      joinedAt: joinedAt,
     );
 
 Race _race({
@@ -83,6 +94,7 @@ Race _race({
   String? unit = 'reps',
   List<RaceParticipant>? participants,
   RaceViewerContext? viewerContext,
+  String? aiActivityType,
 }) {
   return Race(
     id: id,
@@ -92,6 +104,7 @@ Race _race({
     targetValue: targetValue,
     unit: unit,
     customActivityName: movement,
+    aiActivityType: aiActivityType,
     proofRequirement: 'photo_video',
     proofMode: 'photo',
     verificationMethod: 'photo_review',
@@ -111,6 +124,7 @@ Race _race({
 
 /// One featured race in mid-flight — viewer chasing, rival ahead.
 final _heroRace = _race(
+  aiActivityType: 'push_ups',
   viewerContext: const RaceViewerContext(
     raceId: 'race-1',
     status: 'active',
@@ -339,6 +353,24 @@ class _SeededRaces extends RaceController {
   }
   @override
   Future<void> loadRaces({bool force = false}) async {}
+
+  /// Server truth landing mid-session — a proof was accepted and the board
+  /// moved. Pushes the new canonical list through the live provider so the
+  /// hero's state-change animations (marker slides, lead flash) fire.
+  void push(List<Race> races) => state = RaceState(races: races);
+}
+
+class _StubCrewRepo extends CrewRepository {
+  _StubCrewRepo(this.card) : super(CrewApi(), SecureTokenStore(), AuthApi());
+  final PublicProfileCard card;
+  @override
+  Future<List<PublicUser>> getCrew() async => const [];
+  @override
+  Future<CrewRequestPage> getRequestPage() async => const CrewRequestPage();
+  @override
+  Future<List<CrewSearchResult>> search(String query) async => const [];
+  @override
+  Future<PublicProfileCard> getUser(String userId) async => card;
 }
 
 class _SeededProgression extends ProgressionController {
@@ -361,6 +393,7 @@ Widget _app({
   AuthUser user = _me,
   List<Race> races = const [],
   NuvoProgression progression = _progression,
+  PublicProfileCard? crewCard,
   required Widget home,
 }) {
   return ProviderScope(
@@ -373,6 +406,8 @@ Widget _app({
       progressionControllerProvider.overrideWith(
         (ref) => _SeededProgression(progression),
       ),
+      if (crewCard != null)
+        crewRepositoryProvider.overrideWithValue(_StubCrewRepo(crewCard)),
     ],
     child: MaterialApp(
       theme: AppTheme.light(),
@@ -433,6 +468,11 @@ Future<void> _capture(WidgetTester tester, String name) async {
     }
   });
 }
+
+_SeededRaces _races(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(MoveScreen)))
+            .read(raceControllerProvider.notifier)
+        as _SeededRaces;
 
 Future<void> _pump(
   WidgetTester tester,
@@ -700,9 +740,16 @@ void main() {
         // Level is the hero — big number beside the LEVEL label.
         expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
-        expect(find.text('140 XP to Level 9'), findsOneWidget);
-        expect(find.text('NEXT UNLOCK'), findsOneWidget);
-        expect(find.text('Clap reaction'), findsOneWidget);
+        // The next unlock is fused to the XP line — "…· Clap reaction at
+        // Level 9" — and sits as the tile at the bar's end.
+        expect(
+          find.textContaining('140 XP to Level 9', findRichText: true),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Clap reaction at Level 9', findRichText: true),
+          findsOneWidget,
+        );
         // Edit anchored to the identity row.
         expect(
           find.bySemanticsLabel('Edit profile'),
@@ -729,7 +776,7 @@ void main() {
       );
       expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
       expect(find.textContaining('LEVEL 27', findRichText: true), findsWidgets);
-      expect(find.text('14 XP to Level 28'), findsOneWidget);
+      expect(find.textContaining('14 XP to Level 28', findRichText: true), findsOneWidget);
     });
 
     testWidgets('level 1 + zero achievements at 390', (tester) async {
@@ -743,7 +790,7 @@ void main() {
         'profile-level1-390',
       );
       expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
-      expect(find.text('60 XP to Level 2'), findsOneWidget);
+      expect(find.textContaining('60 XP to Level 2', findRichText: true), findsOneWidget);
     });
 
     for (final scale in [1.2, 1.4]) {
@@ -772,5 +819,196 @@ void main() {
       );
       expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
     });
+
+    testWidgets('public profile level 14 — same identity system', (
+      tester,
+    ) async {
+      _useViewport(tester, 390, 844);
+      const friend = PublicProfileCard(
+        id: 'u-friend',
+        displayName: 'Noah Reyes',
+        username: 'noahreyes',
+        initials: 'NR',
+        connectionStatus: CrewConnectionStatus.connected,
+        level: 14,
+        levelProgress: 0.62,
+        achievementsEarned: 12,
+        achievementsTotal: 44,
+        featured: [
+          PublicFeaturedBadge(
+            unlockId: 'u-first-w',
+            key: 'first_w',
+            name: 'First W',
+          ),
+        ],
+        earned: [_badgeFirstW],
+        racesFinished: 20,
+        racesWon: 6,
+      );
+      await _pump(
+        tester,
+        _app(
+          crewCard: friend,
+          home: const PublicProfileScreen(userId: 'u-friend'),
+        ),
+        'public-profile-level14-390',
+      );
+      expect(find.textContaining('LEVEL 14', findRichText: true), findsWidgets);
+      expect(find.text('Noah Reyes'), findsWidgets);
+    });
+  });
+
+  group('Verify restyle', () {
+    for (final (name, w, h) in _sizes) {
+      testWidgets('hero chasing $name', (tester) async {
+        _useViewport(tester, w, h);
+        await _pump(
+          tester,
+          _app(races: [_heroRace], home: const MoveScreen()),
+          'verify-chasing-$name',
+        );
+        expect(find.text('Pushup Race'), findsOneWidget);
+        // The race itself is the hero — named marks on the lane.
+        expect(find.text('You 39'), findsOneWidget);
+        expect(find.text('Noah 42'), findsOneWidget);
+        expect(find.text('Goal 50'), findsOneWidget);
+        // Stakes live under the track, not in a tinted card.
+        expect(find.textContaining('take 1st'), findsOneWidget);
+        // One merged primary CTA — proof method + action together.
+        expect(find.text('Start AI Motion Proof'), findsOneWidget);
+      });
+    }
+
+    testWidgets('leading reads green, tied stays blue', (tester) async {
+      _useViewport(tester, 390, 844);
+      final leading = _race(
+        viewerContext: const RaceViewerContext(
+          raceId: 'race-1',
+          status: 'active',
+          rank: 1,
+          leaderUserId: 'user-1',
+          leaderScore: 45,
+          viewerScore: 45,
+          gapToNextRank: 5,
+          isLeading: true,
+          isMember: true,
+        ),
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 45, rank: 1),
+          _p('u-noah', 'Noah Reyes', 40, rank: 2),
+        ],
+      );
+      await _pump(
+        tester,
+        _app(races: [leading], home: const MoveScreen()),
+        'verify-leading-390',
+      );
+      expect(find.textContaining('lead'), findsWidgets);
+
+      final tied = _race(
+        viewerContext: const RaceViewerContext(
+          raceId: 'race-1',
+          status: 'active',
+          rank: 1,
+          viewerScore: 40,
+          leaderScore: 40,
+          isTied: true,
+          isMember: true,
+        ),
+        participants: [
+          _p(
+            'user-1',
+            'Akshay Sanjai',
+            40,
+            rank: 1,
+            joinedAt: '2025-12-30T00:00:00Z',
+          ),
+          _p('u-noah', 'Noah Reyes', 40, rank: 1),
+        ],
+      );
+      // A standings update lands mid-session — the same race id, new
+      // canonical scores. Pushed through the live controller so the hero's
+      // update path (didUpdateWidget → animated marks) is what runs.
+      _races(tester).push([tied]);
+      await _settle(tester);
+      await _capture(tester, 'verify-tied-390');
+      expect(find.textContaining('Tied'), findsWidgets);
+    });
+
+    testWidgets('taking first fires the payoff moment', (tester) async {
+      _useViewport(tester, 390, 844);
+      await _pump(
+        tester,
+        _app(races: [_heroRace], home: const MoveScreen()),
+        'verify-takefirst-before',
+      );
+      final tookFirst = _race(
+        viewerContext: const RaceViewerContext(
+          raceId: 'race-1',
+          status: 'active',
+          rank: 1,
+          leaderUserId: 'user-1',
+          leaderScore: 45,
+          viewerScore: 45,
+          gapToNextRank: 3,
+          isLeading: true,
+          isMember: true,
+        ),
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 45, rank: 1),
+          _p('u-noah', 'Noah Reyes', 42, rank: 2),
+        ],
+      );
+      _races(tester).push([tookFirst]);
+      // Frame 1 rebuilds the hero (didUpdateWidget arms the flash);
+      // frame 2+ runs the opacity in. Capture inside the 2.6s window.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('YOU TOOK THE LEAD'), findsOneWidget);
+      await _capture(tester, 'verify-takefirst-390');
+      // Let the flash timer (2.6s) expire before teardown.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('completed segment — green payoff rows', (tester) async {
+      _useViewport(tester, 390, 844);
+      await _pump(
+        tester,
+        _app(races: _manyRaces, home: const MoveScreen()),
+        'verify-ready-390',
+      );
+      await tester.tap(find.text('Completed'));
+      await _settle(tester);
+      expect(find.text('First To 10 Jumping Jacks'), findsOneWidget);
+      expect(find.text('Weekend Golf'), findsOneWidget);
+      await _capture(tester, 'verify-completed-390');
+    });
+
+    testWidgets('dark mode 390', (tester) async {
+      _useViewport(tester, 390, 844);
+      await _pump(
+        tester,
+        _app(dark: true, races: _manyRaces, home: const MoveScreen()),
+        'verify-dark-390',
+      );
+      expect(find.text('Pushup Race'), findsOneWidget);
+    });
+
+    for (final scale in [1.2, 1.4]) {
+      testWidgets('text scale $scale at 320x568', (tester) async {
+        _useViewport(tester, 320, 568);
+        await _pump(
+          tester,
+          _app(
+            textScale: scale,
+            races: _manyRaces,
+            home: const MoveScreen(),
+          ),
+          'verify-ts${scale.toStringAsFixed(1).replaceAll('.', '')}-320',
+        );
+      });
+    }
   });
 }
