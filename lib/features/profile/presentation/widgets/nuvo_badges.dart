@@ -100,9 +100,23 @@ String? nuvoBadgeNumeralFor(String? iconKey) {
   return iconKey.substring(4);
 }
 
+/// The accent an earned badge carries — the achievement's family, not
+/// decoration: winning & milestones = gold, performance = teal, creation &
+/// motion = violet, everything else = Nuvo blue. Locked badges never take
+/// color — they stay muted regardless of family.
+Color nuvoBadgeAccent(NuvoBadge badge) {
+  if (badge.isMilestone) return NuvoColors.gold;
+  return switch (badge.category) {
+    'winning' => NuvoColors.gold,
+    'performance' => NuvoColors.avatarTeal,
+    'creation' || 'motion' => NuvoColors.avatarPlum,
+    _ => NuvoColors.blue,
+  };
+}
+
 /// One achievement badge, in the Nuvo physical language — a thick-outlined
-/// squircle with a hard offset shadow. Earned badges carry a flat accent
-/// (blue standard, gold milestone); locked badges are muted and quiet.
+/// squircle with a hard offset shadow. Earned badges carry their family
+/// accent (see [nuvoBadgeAccent]); locked badges are muted and quiet.
 /// The same silhouette renders on Profile, the collection, Crew person
 /// sheets, and the unlock moment.
 class NuvoAchievementBadge extends StatelessWidget {
@@ -125,9 +139,7 @@ class NuvoAchievementBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        color: badge.unlocked
-            ? (badge.isMilestone ? NuvoColors.gold : NuvoColors.blue)
-            : c.panelLight,
+        color: badge.unlocked ? nuvoBadgeAccent(badge) : c.panelLight,
         border: Border.all(
           color: badge.unlocked ? c.inkShadow : c.border,
           width: 2.5,
