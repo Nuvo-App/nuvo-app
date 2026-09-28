@@ -190,48 +190,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Top row: label + edit
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Profile',
-                            style: AppTextStyles.screenTitle.copyWith(
-                              color: c.ink,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const Spacer(),
-                        // Icon-only edit — same header-icon contract as
-                        // Crew (NuvoPressable → 44px hit target → 24px navy
-                        // icon), hugging the page gutter, not a floating
-                        // capsule.
-                        Semantics(
-                          button: true,
-                          label: 'Edit profile',
-                          child: NuvoPressable(
-                            onTap: () => context.push('/profile/edit'),
-                            scale: 0.94,
-                            haptic: false,
-                            child: SizedBox(
-                              width: 44,
-                              height: 44,
-                              // The glyph's right edge lands on the page
-                              // gutter — the 44px hit target extends left.
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: Icon(
-                                  Icons.edit_outlined,
-                                  color: c.ink,
-                                  size: 22,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    // Screen label — the edit action lives with the identity
+                    // row below, where it belongs to the person, not the
+                    // word "Profile".
+                    Text(
+                      'Profile',
+                      style: AppTextStyles.screenTitle.copyWith(
+                        color: c.ink,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: NuvoSpacing.lg),
 
@@ -599,6 +567,30 @@ class _IdentityCard extends StatelessWidget {
                     ),
                   ],
                 ],
+              ),
+            ),
+            // Edit is anchored to the identity row — a fixed 44px target at
+            // the row's trailing edge, stable across widths and name lengths
+            // (Expanded above absorbs whatever the name leaves behind).
+            Semantics(
+              button: true,
+              label: 'Edit profile',
+              child: NuvoPressable(
+                onTap: () => context.push('/profile/edit'),
+                scale: 0.94,
+                haptic: false,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Icon(
+                      Icons.edit_outlined,
+                      color: c.ink,
+                      size: 22,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

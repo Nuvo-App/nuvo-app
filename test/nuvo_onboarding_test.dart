@@ -415,7 +415,8 @@ void main() {
     expect(find.text('AT LEVEL 2'), findsOneWidget);
 
     // Page 5 — Identity: real achievement definitions (featured set, the
-    // First Move earn beat, Hat Trick as an in-progress goal).
+    // First Move earn beat, Hat Trick as a 0/3 goal — a fresh user builds
+    // wins, the explanation never implies they have any).
     await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(
@@ -431,8 +432,8 @@ void main() {
     expect(find.text('EARNED'), findsOneWidget);
     expect(find.text('1 / 1'), findsOneWidget);
     expect(find.text('HAT TRICK'), findsOneWidget);
-    expect(find.text('Win 3 races. One more win.'), findsOneWidget);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Win 3 races.'), findsOneWidget);
+    expect(find.text('0 / 3'), findsOneWidget);
 
     // Page 6 — Crew: social levels + one featured badge glyph each.
     await tapWhenFound(tester, find.text('Keep going'));

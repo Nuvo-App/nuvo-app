@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -799,10 +800,11 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
   static String _booksMetric(double t) => '${(t * 5).round()} / 5';
   static String _pushupsMetric(double t) => '${(t * 100).round()} / 100';
   static String _gradeMetric(double t) => '${(82 + t * 13).round()}%';
-  static String _golfMetric(double t) {
-    final score = (4 - t * 6).round();
-    return score > 0 ? '+$score' : '$score';
-  }
+  // Golf races score in strokes, lower-is-better — the number counts down
+  // like a real round coming in. Same unit the race screen shows, never
+  // score-to-par.
+  static String _golfMetric(double t) =>
+      '${(88 - t * 10).round()} strokes';
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -1148,15 +1150,15 @@ class _MovePageState extends State<_MovePage>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(
-                                  Icons.flag_rounded,
-                                  color: NuvoColors.navy,
+                                  Icons.check_circle_rounded,
+                                  color: NuvoColors.success,
                                   size: 18,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  'Finish line',
+                                  'Race finished',
                                   style: AppTextStyles.labelLarge.copyWith(
-                                    color: NuvoColors.navy,
+                                    color: NuvoColors.successOn,
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
@@ -1193,20 +1195,48 @@ class _MovePageState extends State<_MovePage>
                             ),
                     ),
                     const SizedBox(height: 10),
-                    NuvoNumberFlow(
-                      value: score,
-                      format: (v) => '$v / 10',
-                      duration: const Duration(milliseconds: 500),
-                      style: AppTextStyles.displayMedium.copyWith(
-                        color: NuvoColors.navy,
-                        fontSize: widget.compact ? 34 : 42,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -1,
+                    // Completion beat: the score pops once and picks up a
+                    // small green halo when the race finishes.
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 280),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: finished
+                            ? [
+                                BoxShadow(
+                                  color: NuvoColors.success.withValues(
+                                    alpha: .25,
+                                  ),
+                                  blurRadius: 30,
+                                ),
+                              ]
+                            : const [],
+                      ),
+                      child: Transform.scale(
+                        scale: finished
+                            ? .95 +
+                                (.05 *
+                                    Curves.easeOutBack.transform(
+                                      ((t - _payoffAt) / .07)
+                                          .clamp(0.0, 1.0),
+                                    ))
+                            : 1,
+                        child: NuvoNumberFlow(
+                          value: score,
+                          format: (v) => '$v / 10',
+                          duration: const Duration(milliseconds: 500),
+                          style: AppTextStyles.displayMedium.copyWith(
+                            color: NuvoColors.navy,
+                            fontSize: widget.compact ? 34 : 42,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
                     // Race progress filling with the reps — number and bar
-                    // move together.
+                    // move together, and the fill goes green at the finish.
                     SizedBox(
                       width: widget.compact ? 200 : 230,
                       child: ClipRRect(
@@ -1224,8 +1254,11 @@ class _MovePageState extends State<_MovePage>
                               ),
                               FractionallySizedBox(
                                 widthFactor: score / 10,
-                                child: const ColoredBox(
-                                  color: NuvoColors.blue,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 280),
+                                  color: finished
+                                      ? NuvoColors.success
+                                      : NuvoColors.blue,
                                 ),
                               ),
                             ],
@@ -1542,10 +1575,10 @@ class _OvertakeSceneFrame extends StatelessWidget {
                   height: pillHeight,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: NuvoColors.blue.withValues(alpha: .12),
+                    color: NuvoColors.successSurface,
                     borderRadius: BorderRadius.circular(99),
                     border: Border.all(
-                      color: NuvoColors.blue.withValues(alpha: .5),
+                      color: NuvoColors.success.withValues(alpha: .5),
                     ),
                   ),
                   child: Row(
@@ -1553,14 +1586,14 @@ class _OvertakeSceneFrame extends StatelessWidget {
                     children: [
                       const Icon(
                         Icons.check_circle_rounded,
-                        color: NuvoColors.blue,
+                        color: NuvoColors.success,
                         size: 14,
                       ),
                       const SizedBox(width: 5),
                       Text(
                         'PROOF ACCEPTED',
                         style: AppTextStyles.brandLabel.copyWith(
-                          color: NuvoColors.blue,
+                          color: NuvoColors.successOn,
                           letterSpacing: 1.3,
                           fontSize: 9.5,
                         ),
@@ -1858,8 +1891,13 @@ class _LevelPageState extends ConsumerState<_LevelPage>
                               ),
                               FractionallySizedBox(
                                 widthFactor: barFill,
-                                child: const ColoredBox(
-                                  color: NuvoColors.blue,
+                                // Blue for progress — gold once the level
+                                // threshold is crossed.
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 280),
+                                  color: level == 2
+                                      ? NuvoColors.gold
+                                      : NuvoColors.blue,
                                 ),
                               ),
                             ],
@@ -1923,12 +1961,12 @@ class _LevelPageState extends ConsumerState<_LevelPage>
         key: const ValueKey('leveled'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.north_rounded, color: NuvoColors.blue, size: 16),
+          const Icon(Icons.north_rounded, color: NuvoColors.gold, size: 16),
           const SizedBox(width: 4),
           Text(
             'Level up',
             style: AppTextStyles.labelLarge.copyWith(
-              color: NuvoColors.blue,
+              color: NuvoColors.gold,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -2028,18 +2066,20 @@ class _UnlockCard extends StatelessWidget {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: NuvoColors.blue.withValues(alpha: .12),
+              // Gold = the level-up payoff, not progress blue.
+              color: NuvoColors.gold.withValues(alpha: .14),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: NuvoColors.blue, width: 1.4),
+              border: Border.all(color: NuvoColors.gold, width: 1.4),
             ),
             child: const Icon(
               Icons.dashboard_customize_rounded,
-              color: NuvoColors.blue,
+              color: NuvoColors.gold,
               size: 18,
             ),
           ),
@@ -2060,20 +2100,23 @@ class _UnlockCard extends StatelessWidget {
                 const SizedBox(height: 1),
                 Text(
                   name,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.labelLarge.copyWith(
                     color: NuvoColors.navy,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                // The complete thought — wrap to a second line before ever
+                // clipping the capability copy.
                 if (description.isNotEmpty)
                   Text(
                     description,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.bodySmall.copyWith(
                       color: NuvoColors.muted,
+                      height: 1.3,
                     ),
                   ),
               ],
@@ -2361,8 +2404,9 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
                       ),
                     ),
                     SizedBox(height: widget.compact ? 8 : 10),
-                    // And a goal mid-way: achievements are progress you can
-                    // see, not random collectibles.
+                    // And the longer goal: Hat Trick sits at 0 / 3 — the user
+                    // builds wins, the explanation never implies they have
+                    // any yet.
                     Opacity(
                       opacity: hatIn,
                       child: Transform.translate(
@@ -2370,9 +2414,8 @@ class _IdentityPageState extends ConsumerState<_IdentityPage>
                         child: _GoalRow(
                           badge: _demoBadgeState(
                             def('hat_trick'),
-                            progressValue: 2,
+                            progressValue: 0,
                           ),
-                          hint: 'One more win.',
                           compact: widget.compact,
                         ),
                       ),
@@ -2437,7 +2480,6 @@ class _GoalRow extends StatelessWidget {
     required this.compact,
     this.earned = false,
     this.earnPop = 1,
-    this.hint,
   });
 
   final NuvoBadge badge;
@@ -2447,7 +2489,6 @@ class _GoalRow extends StatelessWidget {
   /// the row reads 1 / 1 with an EARNED tag.
   final bool earned;
   final double earnPop;
-  final String? hint;
 
   @override
   Widget build(BuildContext context) {
@@ -2495,13 +2536,15 @@ class _GoalRow extends StatelessWidget {
                           vertical: 1,
                         ),
                         decoration: BoxDecoration(
-                          color: NuvoColors.blue,
+                          // Earned = gold; the tag marks an achievement, not
+                          // an action.
+                          color: NuvoColors.gold,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           'EARNED',
                           style: AppTextStyles.brandLabel.copyWith(
-                            color: NuvoColors.white,
+                            color: NuvoColors.navy,
                             letterSpacing: 1.2,
                             fontSize: 8.5,
                           ),
@@ -2512,9 +2555,7 @@ class _GoalRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  hint != null && badge.description != null
-                      ? '${badge.description} $hint'
-                      : badge.description ?? hint ?? '',
+                  badge.description ?? '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodySmall.copyWith(
@@ -2834,9 +2875,18 @@ class _ReadyPageState extends ConsumerState<_ReadyPage>
     super.build(context);
     // A still-loading or failed read falls back to the canonical fresh-account
     // values — the alternative (a spinner or a blank stat) breaks the payoff.
-    final progression = ref.watch(progressionControllerProvider).valueOrNull;
-    final defs =
-        ref.watch(_onboardingAchievementDefsProvider).valueOrNull ?? const {};
+    // The demo/presentation fixture (Level 8, mid-Hat-Trick) is for Profile
+    // surfaces — onboarding's closing promise is always the user's real
+    // first-run state, so a demo identity reads as the fresh account it is.
+    final isDemo = isPresentationDemoUser(
+      ref.watch(authControllerProvider).user,
+    );
+    final progression =
+        isDemo ? null : ref.watch(progressionControllerProvider).valueOrNull;
+    final defs = isDemo
+        ? const <String, NuvoBadge>{}
+        : ref.watch(_onboardingAchievementDefsProvider).valueOrNull ??
+              const {};
     final level = progression?.level ?? 1;
     final current = progression?.currentLevelXp;
     final goal = progression?.nextLevelXp;
