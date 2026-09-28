@@ -94,13 +94,11 @@ racesRouter.use('*', requireAuth);
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-const RACE_STATUSES = new Set(['draft', 'scheduled', 'active', 'completed', 'archived', 'cancelled']);
+const CREATOR_WRITABLE_STATUSES = new Set(['archived', 'cancelled']);
 // races.visibility keeps its legacy values ('private', 'invite_code',
 // 'crew_only', 'public_demo') as stored compatibility state — the access
 // resolver in lib/raceAccess.ts still reads them. New races are always
 // written 'crew_only' at creation; the field is no longer client-writable.
-const MOVE_SOURCES = new Set(['movecheck', 'manual', 'demo', 'import']);
-const MOVE_STATUSES = new Set(['pending', 'verified', 'rejected', 'removed']);
 const REVIEW_STATUSES = new Set(['accepted', 'rejected', 'ai_verified']);
 
 interface InviteRow {
@@ -139,6 +137,27 @@ function confidenceOrNull(value: unknown): number | null | undefined {
   if (value === null) return null;
   if (typeof value !== 'number' || Number.isNaN(value)) return undefined;
   return Math.max(0, Math.min(1, value));
+}
+
+/** Largest single proof value the server accepts — far above any real rep,
+ *  second, or unit count, and small enough to keep scores exact integers. */
+export const MAX_SUBMISSION_VALUE = 1_000_000;
+
+function isSubmissionValueInRange(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_SUBMISSION_VALUE;
+}
+
+/** AI Motion Proof is only valid on races whose persisted contract is camera
+ *  verification (preset/registry motion or a custom pose verifier). */
+function raceSupportsAiMotion(race: RaceRow): boolean {
+  if (race.verifier_type === MANUAL_VERIFIER_TYPE) return false;
+  if (
+    race.verifier_type === CUSTOM_VERIFIER_TYPE ||
+    race.verifier_type === PRESET_VERIFIER_TYPE ||
+    race.verifier_type === 'remote_release'
+  ) return true;
+  return race.verification_type === 'movecheck';
 }
 
 function generateInviteCode(): string {
@@ -342,8 +361,12 @@ async function recomputeRanks(db: D1Database, raceId: string, direction: 'higher
   return ranked;
 }
 
-async function snapshotFinalStandings(db: D1Database, raceId: string): Promise<void> {
-  const ranked = await rankedScores(db, raceId);
+async function snapshotFinalStandings(
+  db: D1Database,
+  raceId: string,
+  direction: 'higher' | 'lower',
+): Promise<void> {
+  const ranked = await rankedScores(db, raceId, direction);
   if (ranked.length === 0) return;
   const stmts = ranked.map((row) => db.prepare(
     `INSERT OR REPLACE INTO race_final_standings
@@ -537,7 +560,7 @@ async function repairRaceAfterProofInvalidation(
           ]);
         }
       }
-      await snapshotFinalStandings(db, race.id);
+      await snapshotFinalStandings(db, race.id, scoreDirectionFor(race));
     }
   }
   return { reopened, winnerBefore, winnerAfter };
@@ -593,7 +616,7 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
     if (changed > 0) {
       raceCompleted = true;
       winnerUserId = userId;
-      await snapshotFinalStandings(db, race.id);
+      await snapshotFinalStandings(db, race.id, direction);
     } else {
       const closedRace = await getRace(db, race.id);
       winnerUserId = closedRace?.winner_user_id ?? winnerUserId;
@@ -1575,7 +1598,16 @@ racesRouter.patch('/:id', async (c) => {
 
   const targetValue = positiveIntOrNull(body.targetValue);
   if (targetValue !== undefined) { updates.push('target_value = ?'); values.push(targetValue); }
-  if (typeof body.status === 'string' && RACE_STATUSES.has(body.status)) { updates.push('status = ?'); values.push(body.status); }
+  // Lifecycle (active → completed, winner) is server-derived. The creator may
+  // only withdraw a race (cancel/archive); reopening or completing is never
+  // a client write.
+  if (typeof body.status === 'string' && body.status !== race.status) {
+    if (!CREATOR_WRITABLE_STATUSES.has(body.status)) {
+      return c.json(badRequest('Race status is set by the race itself. You can cancel or archive it.'), 409);
+    }
+    updates.push('status = ?');
+    values.push(body.status);
+  }
   // `visibility` is deliberately NOT writable — it is launch-compatibility
   // state set at creation, not a user choice. Legacy private/invite_code
   // races keep their stored value; existing reads/joins are unaffected.
@@ -1776,84 +1808,20 @@ racesRouter.post('/:id/invite-code', async (c) => {
 });
 
 // POST /races/:id/move-log
-racesRouter.post('/:id/move-log', async (c) => {
-  const userId = c.get('userId');
-
-  if (!(await hasAcceptedTerms(c.env.DB, userId))) {
-    return c.json({ ok: false, error: 'You must accept the Terms of Service before submitting proof' }, 403);
-  }
-
-  const race = await getRace(c.env.DB, c.req.param('id'));
-  if (!race) return c.json(badRequest('Race not found'), 404);
-  // One authoritative lifecycle check — same eligibility as /proof. A
-  // scheduled race cannot silently accept progress before its start line.
-  if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') {
-    return c.json(badRequest('Race is not active'), 400);
-  }
-
-  let body: Record<string, unknown>;
-  try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
-
-  const source = typeof body.source === 'string' && MOVE_SOURCES.has(body.source) ? body.source : 'manual';
-  const value = nonNegativeIntOrNull(body.value) ?? 0;
-  const movementType = stringOrNull(body.movementType) ?? race.movement_type;
-  const unit = stringOrNull(body.unit) ?? race.target_unit;
-  const status = typeof body.status === 'string' && MOVE_STATUSES.has(body.status) ? body.status : 'verified';
-  const summary = stringOrNull(body.summary) ?? null;
-  const validatorVersion = stringOrNull(body.validatorVersion) ?? null;
-  const durationMs = nonNegativeIntOrNull(body.durationMs) ?? null;
-  const metadataJson = typeof body.metadata === 'object' && body.metadata !== null
-    ? JSON.stringify(body.metadata)
-    : null;
-
-  // Evidence contract: self-reported ('manual') moves carry photo evidence —
-  // same rule as /proof. 'movecheck' is verified by the pose pipeline;
-  // 'demo'/'import' are tooling sources with no real-world claim.
-  const mediaObjectKey = stringOrNull(body.mediaObjectKey) ?? stringOrNull(body.media_object_key) ?? null;
-  if (mediaObjectKey) {
-    const media = await c.env.DB.prepare(
-      "SELECT id FROM media_objects WHERE object_key = ? AND owner_user_id = ? AND purpose = 'proof_evidence' AND status = 'active'",
-    ).bind(mediaObjectKey, userId).first<{ id: string }>();
-    if (!media || !mediaObjectKey.startsWith(proofMediaKeyPrefix(race.id))) {
-      return c.json(badRequest('Evidence was not uploaded for this race'), 400);
-    }
-  }
-  if (source === 'manual' && !mediaObjectKey) {
-    return c.json(badRequest('Photo evidence is required for this race'), 400);
-  }
-
-  if (source === 'movecheck' && race.verification_type !== 'movecheck') {
-    return c.json(badRequest('Race does not support MoveCheck verification'), 400);
-  }
-  if (source === 'movecheck' && movementType && movementType !== race.movement_type) {
-    return c.json(badRequest('Movement type does not match race movement type'), 400);
-  }
-
-  // Submitting a move auto-joins the race — enforce the same entry policy as
-  // /:id/join so a private-race ID alone cannot mint membership.
-  const joinEligibility = await checkRaceJoinEligibility(c.env.DB, race, userId);
-  if (!joinEligibility.ok) return c.json(badRequest(joinEligibility.error), joinEligibility.status as 400 | 403);
-
-  await ensureMember(c.env.DB, race.id, userId);
-  await ensureProgress(c.env.DB, race.id, userId);
-
-  const moveId = generateId();
-  await c.env.DB.prepare(
-    `INSERT INTO move_logs (id, race_id, user_id, source, movement_type, value, unit, status, summary,
-      media_object_key, validator_version, duration_ms, metadata_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-  ).bind(moveId, race.id, userId, source, movementType, value, unit, status, summary, mediaObjectKey, validatorVersion, durationMs, metadataJson).run();
-
-  if (status === 'verified') await applyMoveProgress(c.env.DB, race, userId, value, moveId);
-
-  const updated = await getRace(c.env.DB, race.id);
-  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), updated!) });
-});
+// Retired: this legacy write path let the caller choose source/status and
+// auto-joined them, so it could change race truth without the proof
+// contract. Every canonical submission goes through POST /races/:id/proof.
+racesRouter.post('/:id/move-log', (c) =>
+  c.json({ ok: false, error: 'This endpoint has been retired. Submit proof instead.' }, 410),
+);
 
 // GET /races/:id/move-logs
 racesRouter.get('/:id/move-logs', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
+  if (!(await resolveRaceAccess(c.env.DB, race, c.get('userId'))).canRead) {
+    return c.json(badRequest('Race not found'), 404);
+  }
 
   const viewerMember = await isRaceMember(c.env.DB, race.id, c.get('userId'));
   const logs = await c.env.DB.prepare(
@@ -1888,36 +1856,11 @@ racesRouter.get('/:id/move-logs', async (c) => {
   });
 });
 
-// PATCH /races/:id/progress/:userId (founder/demo/internal use)
-racesRouter.patch('/:id/progress/:userId', async (c) => {
-  const userId = c.get('userId');
-  const race = await getRace(c.env.DB, c.req.param('id'));
-  if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can edit progress'), 403);
-
-  const targetUserId = c.req.param('userId');
-  let body: Record<string, unknown>;
-  try { body = await c.req.json(); } catch { return c.json(badRequest('Invalid JSON body'), 400); }
-
-  const progressValue = nonNegativeIntOrNull(body.progressValue);
-  if (progressValue == null) return c.json(badRequest('progressValue is required'), 400);
-
-  await ensureMember(c.env.DB, race.id, targetUserId);
-  await ensureProgress(c.env.DB, race.id, targetUserId);
-
-  const newPercent = race.target_value && race.target_value > 0
-    ? Math.min(100, Math.round((progressValue / race.target_value) * 100))
-    : 0;
-  const completedAt = progressValue >= (race.target_value ?? 0) && race.target_value ? new Date().toISOString() : null;
-
-  await c.env.DB.prepare(
-    `UPDATE race_progress SET progress_value = ?, progress_percent = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE race_id = ? AND user_id = ?`
-  ).bind(progressValue, newPercent, completedAt, race.id, targetUserId).run();
-  await recomputeRanks(c.env.DB, race.id);
-
-  return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
-});
+// Retired: progress is derived from verified proof only — nobody, including
+// the race creator, can write canonical progress directly.
+racesRouter.patch('/:id/progress/:userId', (c) =>
+  c.json({ ok: false, error: 'Progress can only change through verified proof.' }, 410),
+);
 
 // POST /races/:id/proof - legacy endpoint, maps to move_logs.
 racesRouter.post('/:id/proof', async (c) => {
@@ -1945,6 +1888,14 @@ racesRouter.post('/:id/proof', async (c) => {
   const isAiMotion = proofType === 'ai_motion';
   const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
   if (isCustom && !isAiMotion) return c.json(badRequest('Custom races require AI Motion Proof'), 400);
+  // The race's persisted contract decides the proof mode — a payload can
+  // never upgrade a photo-proof race to AI Motion Proof.
+  if (isAiMotion && !raceSupportsAiMotion(race)) {
+    return c.json(badRequest('This race uses photo proof, not AI Motion Proof'), 400);
+  }
+  if (!isSubmissionValueInRange(body.value)) {
+    return c.json(badRequest('value is out of range'), 400);
+  }
   // Optional evidence attachment: must be a proof_evidence object the
   // submitter uploaded through /proof-media/upload-url for THIS race.
   const mediaObjectKey = stringOrNull(body.mediaObjectKey) ?? stringOrNull(body.media_object_key) ?? null;
@@ -1993,7 +1944,8 @@ racesRouter.post('/:id/proof', async (c) => {
   // client-reported capture time precedes end_at AND arrives within the
   // grace window (bounded clock-skew tolerance — see domain/raceFinalize).
   const capturedAtRaw = stringOrNull(body.capturedAt) ?? stringOrNull(body.captured_at) ?? null;
-  const capturedAt = capturedAtRaw ? new Date(capturedAtRaw) : null;
+  const capturedParsed = capturedAtRaw ? new Date(capturedAtRaw) : null;
+  const capturedAt = capturedParsed && !Number.isNaN(capturedParsed.getTime()) ? capturedParsed : null;
   const eligibility = deadlineEligibility(race, capturedAt, new Date());
   if (eligibility === 'closed') return c.json(badRequest('Race is not active'), 400);
 
@@ -2001,6 +1953,25 @@ racesRouter.post('/:id/proof', async (c) => {
   const increment = value ?? 0;
   if (!isAiMotion && increment <= 0) return c.json(badRequest('value must be greater than 0'), 400);
   if (isAiMotion && increment <= 0) return c.json(badRequest('Verified value must be greater than 0'), 400);
+
+  // Server-side provenance: when the client names the verification session
+  // that produced this result, it must be this user's completed session for
+  // this race, cover the claimed value, and back exactly one proof.
+  const verificationSessionId = isAiMotion
+    ? stringOrNull(body.verificationSessionId) ?? stringOrNull(body.verification_session_id) ?? null
+    : null;
+  if (verificationSessionId) {
+    const session = await c.env.DB.prepare(
+      'SELECT status, result_value FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',
+    ).bind(verificationSessionId, userId, race.id).first<{ status: string; result_value: number | null }>();
+    if (!session || session.status !== 'completed' || (session.result_value ?? 0) < increment) {
+      return c.json(badRequest('Verification session does not match this proof'), 400);
+    }
+    const reused = await c.env.DB.prepare(
+      "SELECT id FROM move_logs WHERE race_id = ? AND json_extract(metadata_json, '$.verification_session_id') = ? LIMIT 1",
+    ).bind(race.id, verificationSessionId).first<{ id: string }>();
+    if (reused) return c.json(badRequest('Verification session was already used'), 409);
+  }
 
   await ensureProgress(c.env.DB, race.id, userId);
 
@@ -2071,6 +2042,7 @@ racesRouter.post('/:id/proof', async (c) => {
     valid_pose_frames: validPoseFrames,
     captured_at: capturedAt?.toISOString() ?? null,
     accepted_in_grace: eligibility === 'grace',
+    verification_session_id: verificationSessionId,
     ...(isCustom ? {
       completion_events: completionEvents,
       invalid_attempt_count: invalidAttemptCount,
@@ -2284,6 +2256,9 @@ racesRouter.get('/:id/proof-media/object/*', async (c) => {
 racesRouter.get('/:id/proofs', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
+  if (!(await resolveRaceAccess(c.env.DB, race, c.get('userId'))).canRead) {
+    return c.json(badRequest('Race not found'), 404);
+  }
 
   const viewerMember = await isRaceMember(c.env.DB, race.id, c.get('userId'));
   const logs = await c.env.DB.prepare(
@@ -2370,13 +2345,33 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
       ? 'rejected'
       : 'pending';
 
+  // Review is a gate on HELD proof only (peer_review races), never an
+  // override of race truth:
+  //  - a community veto is final — the creator cannot re-accept it;
+  //  - nobody reviews their own proof;
+  //  - only a pending photo proof can be accepted (AI results and rejected
+  //    proof are not upgradable by a person), and only while the race is open;
+  //  - a proof that already counts is disputed through veto like any other.
+  if (move.vetoed_at) return c.json(badRequest('This proof was vetoed by the race'), 409);
+  if (move.user_id === userId) return c.json(badRequest('You cannot review your own proof'), 403);
+  if (move.status !== 'pending') {
+    return c.json(badRequest('Only proof waiting for review can be reviewed. Use veto to dispute counted proof.'), 409);
+  }
+  if (newStatus === 'verified') {
+    if (move.source !== 'manual' || !move.media_object_key) {
+      return c.json(badRequest('Only photo proof can be accepted by review'), 409);
+    }
+    if (effectiveRaceStatus(race.status, race.start_at, race.end_at) !== 'active') {
+      return c.json(badRequest('Race is not active'), 409);
+    }
+  }
+
   // Attempt-format races bind a score to a declared open attempt — same
   // contract as direct submission (submit opens the attempt; pending proofs
   // keep it open until review closes it). Validate BEFORE the status write
   // so a failed accept never leaves a verified-but-unscored proof.
   const scoring = raceScoringConfigFromRow(race);
   const needsAttempt = newStatus === 'verified' &&
-    move.status !== 'verified' &&
     scoring != null &&
     formatUsesAttempts(scoring.format);
   const boundAttempt = needsAttempt
@@ -2390,20 +2385,10 @@ racesRouter.patch('/:id/proofs/:proofId', async (c) => {
     'UPDATE move_logs SET status = ?, summary = ? WHERE id = ? AND race_id = ?'
   ).bind(newStatus, stringOrNull(body.verificationSummary) ?? move.summary, move.id, race.id).run();
 
-  if (newStatus === 'verified' && move.status !== 'verified') {
+  if (newStatus === 'verified') {
     await applyMoveProgress(c.env.DB, race, move.user_id, move.value ?? 0, move.id);
     if (boundAttempt) {
       await closeAttempt(c.env.DB, boundAttempt.id, move.value ?? 0, move.id);
-    }
-  } else if (move.status === 'verified' && newStatus !== 'verified') {
-    // A reject on a scored proof invalidates its progress — void the events
-    // it produced and recompute race truth from remaining verified moves.
-    const repair = await repairRaceAfterProofInvalidation(c.env.DB, race, move);
-    const affected = new Set([move.user_id, repair.winnerBefore, repair.winnerAfter].filter(Boolean) as string[]);
-    for (const uid of affected) {
-      c.executionCtx.waitUntil(
-        reconcileProgression(c.env.DB, uid).catch((err) => console.error('[progression] reconcile failed:', err)),
-      );
     }
   }
 
