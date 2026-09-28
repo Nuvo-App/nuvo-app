@@ -476,6 +476,8 @@ class _RequestRow extends StatelessWidget {
                     if (_handleLine(user).isNotEmpty)
                       Text(
                         _handleLine(user),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
                             .copyWith(color: context.themeColors.inkSubtle),
                       ),
@@ -484,6 +486,8 @@ class _RequestRow extends StatelessWidget {
               ),
               NuvoPrimaryButton(
                 label: 'Accept',
+                small: true,
+                horizontalPadding: 14,
                 loading: busy,
                 onPressed: busy ? null : onAccept,
               ),

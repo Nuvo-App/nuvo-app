@@ -610,7 +610,8 @@ void main() {
       await _settleDemo(tester);
 
       expect(
-        find.text('Nothing happening yet — find people to race with.'),
+        find.text('Race friends, classmates, teammates — whoever '
+            'makes you want to win. Find someone above.'),
         findsOneWidget,
       );
     });

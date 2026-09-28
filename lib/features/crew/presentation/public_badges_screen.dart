@@ -124,7 +124,8 @@ class _State extends ConsumerState<PublicBadgesScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: NuvoSpacing.lg),
                 child: SizedBox(
-                  height: 34,
+                  height:
+                      34 * MediaQuery.textScalerOf(context).scale(1),
                   child: ListView(
                     scrollDirection: Axis.horizontal,
                     children: [
