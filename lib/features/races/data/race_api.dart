@@ -479,7 +479,6 @@ class RaceApi {
     String? rules,
     String? proofRequirement,
     String? proofReviewMode,
-    String? visibility,
     String? aiActivityType,
     String? activityId,
     String? metric,
@@ -499,7 +498,6 @@ class RaceApi {
     if (rules != null) body['rules'] = rules;
     if (proofRequirement != null) body['proofRequirement'] = proofRequirement;
     if (proofReviewMode != null) body['proofReviewMode'] = proofReviewMode;
-    if (visibility != null) body['visibility'] = visibility;
     if (aiActivityType != null) body['aiActivityType'] = aiActivityType;
     if (activityId != null) body['activityId'] = activityId;
     if (metric != null) body['metric'] = metric;
@@ -530,7 +528,6 @@ class RaceApi {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'verificationMethod': 'ai',
-      'visibility': 'private',
       'verifierType': customPoseVerifierType,
       'verifierVersion': customPoseVerifierSpecSchemaVersion,
       'customActivityName': customActivityName,
@@ -554,7 +551,6 @@ class RaceApi {
     String? rules,
     String? proofRequirement,
     String? proofReviewMode,
-    String? visibility,
     String? aiActivityType,
     String? targetUnit,
     String? proofMode,
@@ -572,7 +568,6 @@ class RaceApi {
     if (rules != null) body['rules'] = rules;
     if (proofRequirement != null) body['proofRequirement'] = proofRequirement;
     if (proofReviewMode != null) body['proofReviewMode'] = proofReviewMode;
-    if (visibility != null) body['visibility'] = visibility;
     if (aiActivityType != null) body['aiActivityType'] = aiActivityType;
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;

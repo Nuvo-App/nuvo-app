@@ -32,7 +32,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   bool _framesPrecached = false;
   bool _sequenceStarted = false;
   bool _firstUseReady = false;
-  bool _replayIntroAfterLogout = false;
   Timer? _autoContinueTimer;
 
   @override
@@ -89,15 +88,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (!_firstUseReady) return;
       _navigated = true;
       _autoContinueTimer?.cancel();
-      // The cinematic is a first-use experience: once this install has seen
-      // it, a signed-out launch goes straight to auth. The dedicated testing
-      // account's forced logout and the explicit demo replay intentionally
-      // bypass the flag so QA can re-walk the full opening.
-      final replay =
-          _replayIntroAfterLogout ||
-          ref.read(demoReplayProvider) ||
-          !ref.read(firstUseStoreProvider).introSeen;
-      context.go(replay ? '/welcome/intro' : '/welcome');
+      // The Nuvo story now lives AFTER account creation, not before it — a
+      // signed-out launch always goes straight to auth.
+      context.go('/welcome');
       return;
     }
     if (!_sequenceStarted) {
@@ -172,26 +165,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         isNuvoStoreDemoEmail(user.email) &&
         user.id != 'offline-demo-user') {
       // The store-review identity must always start fresh from the splash
-      // screen and walk through the full first-launch flow. Flag the replay
-      // before logout — sign-out clears the demo flags, and the
-      // unauthenticated launch that follows must still land on the cinematic,
-      // not /welcome.
+      // screen: sign out and land on /welcome so the reviewer re-walks
+      // auth rather than resuming a session.
       // A local-only offline demo session (sentinel tokens, fixture data)
       // is exempt: it can never reach the API, so force-logging it out would
       // strand a venue demo behind a sign-in that needs connectivity.
-      _replayIntroAfterLogout = true;
       await ref.read(authControllerProvider.notifier).logout();
       return;
     }
 
     _navigated = true;
     if (user != null) {
-      // The intro replay is a first-use experience: an eligible account walks
-      // it ONCE. Once this account's guide completion is persisted, later
-      // signed-in launches go straight to the app — the coach must never
-      // re-appear on every sign-in. The store-review identity never reaches
-      // this branch (it logged out above), so its always-replay contract
-      // holds.
+      // The Nuvo-story replay is a first-use experience: an eligible account
+      // walks it ONCE. Once this account's guide completion is persisted,
+      // later signed-in launches go straight to the app — the coach must
+      // never re-appear on every sign-in. The store-review identity never
+      // reaches this branch (it logged out above), so its always-replay
+      // contract holds.
       final guideDone = ref
           .read(firstUseStoreProvider)
           .isGuideDone(user.email);
@@ -200,14 +190,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           ((user.isDemo || authState.guideFirstRace) && !guideDone);
       if (replayIntro) {
         ref.read(demoReplayProvider.notifier).state = true;
-        context.go('/welcome/intro');
+        context.go('/onboarding/nuvo');
         return;
       }
       // Router redirect (auth_gate) owns onboarding / first-race routing; go to
       // the app entry and let it place the user identically for every provider.
       context.go('/arena');
     } else {
-      context.go('/welcome/intro');
+      context.go('/welcome');
     }
   }
 

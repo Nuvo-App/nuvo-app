@@ -882,17 +882,18 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Compact by design — the header already owns Start/Join; Arena carries
+    // the first-run pitch. This just anchors where races will appear.
     return NuvoEmptyState(
       icon: Icons.flag_rounded,
-      title: 'No races yet',
-      body:
-          'Create one to set a finish line — pushups, a plank, a daily '
-          'check-in — then pull in your crew. Every proof you log moves the '
-          'board.',
-      ctaLabel: 'Create a race',
+      title: 'Your races will live here.',
+      body: 'Start a race or join with a code — every finish line you set '
+          'lands here.',
+      ctaLabel: 'Start a race',
       onCta: onStart,
       secondaryLabel: onJoin != null ? 'Join with a code' : null,
       onSecondary: onJoin,
+      compact: true,
     );
   }
 }

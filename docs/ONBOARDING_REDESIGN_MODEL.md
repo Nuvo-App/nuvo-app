@@ -3,6 +3,91 @@
 Status: design model only. No product behavior changes are defined by this
 file until the implementation is approved.
 
+## First-Run V2 — Founder Decision (supersedes the pre-auth sequence below)
+
+**The Nuvo onboarding runs AFTER account creation, not before sign-in.** A
+newly created account is never dropped straight into Arena. The canonical
+first-run order is:
+
+```text
+Splash
+  -> Welcome (sign in / create account)
+  -> Authentication
+  -> Required account + legal setup (/onboarding/profile)
+  -> Optional motion-improvement consent (/onboarding/motion-consent)
+  -> NUVO ONBOARDING (/onboarding/nuvo — the 8-page story below)
+  -> Arena (purposeful zero-race state)
+  -> "Start your first race" -> FlexiRace composer
+```
+
+Because it runs post-account, the story is personalized (first name where
+tasteful — two moments max) and the payoff page shows the account's REAL
+server progression: a fresh user reads `LEVEL 1` / `0 XP`. The animated XP
+fills elsewhere in the flow are instructional only — no fake XP is ever
+granted during onboarding.
+
+The one job of the story pages is the core loop:
+
+```text
+RACE -> MOVE -> PROVE -> CLIMB -> LEVEL UP
+```
+
+The eight pages, one idea each:
+
+1. **This is Nuvo** — "Ready, {name}?" / "Make real life a race." over the
+   existing cinematic race-path drawing. CTA: Show me.
+2. **Race anything** — FlexiRace intro; real example titles transition
+   (first to 100 pushups, highest math grade, lowest golf score, first to
+   finish 5 books). "Set the finish line. Bring your crew."
+3. **Make your move** — the real jumping-jack Rive preview plus the proof
+   beat (7/10 -> proof accepted -> 8/10). AI Motion Proof is ONE example;
+   Motion/Photo/Result/Time chips communicate proof variety.
+4. **Climb the board** — the overtake animation with the person's real name
+   passing Noah into first. "Every move can change the race."
+5. **Level up** — LEVEL badge + NuvoNumberFlow XP counting; level fills and
+   ticks up. "Race. Progress. Win. Earn XP and level up."
+6. **Identity** — miniature Profile: level + real achievement names (First
+   W, Five Deep, Personal Best). "Make your name mean something."
+7. **Crew** — short social beat; real names with level indicators.
+   "Race friends. Find rivals. Keep moving."
+8. **Ready** — "{name}, you're ready." + REAL `LEVEL 1` / `0 XP` + "Your
+   first move starts now." CTA: Start your first race.
+
+Completion is the ONLY server write in the flow: `completeOnboarding()`
+(server-backed `AuthUser.onboardingComplete`) then `context.go('/arena')`.
+No QR pass, no member ID, no settings rows, no private-race UI, no tutorial
+after this.
+
+### Persistence and replay rules
+
+- **First-use only.** The server flag decides — reinstalls, new devices, and
+  logout/login never replay it for a completed account.
+- **Smart resume.** The router sends incomplete accounts to the earliest
+  owed step: profile/legal -> motion consent -> the story. Mid-setup
+  abandonment resumes correctly.
+- **QA.** `POST /internal/qa/reset` (internal-key gated, testing@getnuvo.net
+  only) tombstones the account; next login walks the exact fresh flow.
+- **Demo replay.** `team@getnuvo.net` replay walks the same screen but never
+  writes `onboarding_complete`; its finish routes into the guided first-race
+  tour instead of the graduation write.
+- **Legacy routes.** `/onboarding/finish` and the retired member-pass path
+  redirect to `/onboarding/nuvo`; `/welcome/intro` is gone — signed-out
+  launches go to `/welcome`.
+
+### Cinematic reuse
+
+Preserved from the earlier work: the race-path drawing, the overtake
+choreography, the Rive jumping-jack preview, NuvoFlipText headlines,
+NuvoNumberFlow counters, spring CTAs that only exist once their page has
+settled, and reduced-motion paths on every page (snapped states, short
+holds — never zero, never blocking).
+
+The pre-auth sequence below (goal selection, practice preview, account
+access inside the cinematic) is superseded by this order and kept for
+visual-spec reference only.
+
+---
+
 ## Product Boundary
 
 The splash screen owns the welcome moment. Onboarding owns a short visual

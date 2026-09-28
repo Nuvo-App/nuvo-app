@@ -11,7 +11,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
-import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_podium.dart';
@@ -237,8 +236,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               else if (activeBoard == null)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: _EmptyState(
+                  child: _FirstRunState(
                     onStart: () => context.push('/races/new'),
+                    onIdea: (idea) => context.push(
+                      '/races/new',
+                      extra: RaceCreatePrefill(idea: idea),
+                    ),
                     onJoin: () => context.push('/races/join'),
                   ),
                 )
@@ -1242,22 +1245,141 @@ class _ErrorState extends StatelessWidget {
   );
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onStart, required this.onJoin});
+/// The zero-board state IS the first-run pitch — Arena owns the one guided
+/// action ("create your first race"), with example finish lines as
+/// inspiration prefills, not fake races.
+class _FirstRunState extends StatelessWidget {
+  const _FirstRunState({
+    required this.onStart,
+    required this.onIdea,
+    required this.onJoin,
+  });
   final VoidCallback onStart;
+  final ValueChanged<String> onIdea;
   final VoidCallback onJoin;
+
+  static const _ideas = [
+    'First to 100 pushups',
+    'Highest math grade',
+    'First to finish 5 books',
+  ];
+
   @override
-  Widget build(BuildContext context) => NuvoEmptyState(
-    icon: Icons.flag_rounded,
-    title: 'Nothing on the board yet',
-    body: 'Create a race and pull in your crew — this is where your next move '
-        'shows up once one is live.',
-    ctaLabel: 'Create a race',
-    onCta: onStart,
-    secondaryLabel: 'Join with a code',
-    onSecondary: onJoin,
-    align: TextAlign.center,
-  );
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 32),
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: c.panel,
+              border: Border.all(color: c.ink, width: 2),
+            ),
+            child: const Icon(
+              Icons.flag_rounded,
+              color: NuvoColors.blue,
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Ready for your first race?',
+            style: AppTextStyles.headlineLarge.copyWith(color: c.ink),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Pick something real.\nSet the finish line.\nBring someone in.',
+            style: AppTextStyles.bodyLarge.copyWith(
+              color: c.inkMuted,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 26),
+          NuvoPrimaryButton(
+            label: 'Create your first race',
+            icon: Icons.flag_rounded,
+            expand: true,
+            onPressed: onStart,
+          ),
+          const SizedBox(height: 26),
+          Text(
+            'OR START FROM AN IDEA',
+            style: AppTextStyles.labelUppercase(10.5, color: c.inkSubtle),
+          ),
+          const SizedBox(height: 10),
+          for (final idea in _ideas) ...[
+            _IdeaRow(label: idea, onTap: () => onIdea(idea)),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 8),
+          Center(
+            child: NuvoPressable(
+              onTap: onJoin,
+              haptic: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Text(
+                  'Join with a code',
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: NuvoColors.blue,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One tappable example finish line — inspiration that prefills the
+/// composer, never a fake race on the board.
+class _IdeaRow extends StatelessWidget {
+  const _IdeaRow({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return NuvoPressable(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: Border.all(color: c.border, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: c.ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_forward_rounded, size: 16, color: c.inkSubtle),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _progressValue(String label, int fallback) {

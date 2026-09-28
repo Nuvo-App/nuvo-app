@@ -350,3 +350,118 @@ test('DELETE /auth/account succeeds without MOTION_DATA_MASTER_KEY and covers ev
   }
   assert.ok(has('UPDATE users'), 'deleted account must be marked on the users row');
 });
+
+// ── Launch visibility — private/public is dead, authorization is not ──────────
+//
+// The user-facing race privacy choice was removed from the client. POST /races
+// must stamp the canonical crew-scoped value regardless of what the client
+// sends, and PATCH must not be able to rewrite it. The resolver matrix above
+// proves each stored value still authorizes correctly for legacy races.
+
+const { RACE_LAUNCH_VISIBILITY } = require('../.tmp-test-dist/lib/raceAccess.js');
+
+test('launch visibility constant is crew-scoped', () => {
+  assert.equal(RACE_LAUNCH_VISIBILITY, 'crew_only');
+});
+
+function raceCreateEnv() {
+  const calls = [];
+  const batchCalls = [];
+  const DB = {
+    prepare(sql) {
+      const q = sql.replace(/\s+/g, ' ').trim();
+      let args = [];
+      return {
+        bind(...a) { args = a; return this; },
+        async run() { calls.push({ q, args }); return { success: true }; },
+        async first() {
+          if (q.includes('FROM users')) {
+            return {
+              id: args[0],
+              status: 'active',
+              terms_accepted_at: '2026-01-01',
+              terms_version: '2026-09-27',
+              age_attested_at: '2026-01-01',
+            };
+          }
+          if (q.includes('FROM races')) {
+            return {
+              id: args[0] ?? 'r1',
+              creator_id: 'user-1',
+              title: 'First to 50 pushups',
+              visibility: RACE_LAUNCH_VISIBILITY,
+              status: 'active',
+              race_type: 'first_to_goal',
+              verification_type: 'manual',
+              target_value: 50,
+            };
+          }
+          if (q.includes('FROM persons')) return { id: 'p1' };
+          return null;
+        },
+        async all() { return { results: [] }; },
+      };
+    },
+    async batch(statements) {
+      for (const s of statements) batchCalls.push(await s.run());
+      return batchCalls;
+    },
+  };
+  return {
+    DB,
+    PROFILE_PHOTOS: { async put() {}, async get() { return null; }, async delete() {} },
+    JWT_SECRET,
+    INTERNAL_API_KEY: INTERNAL_KEY,
+    GOOGLE_IOS_CLIENT_ID: '', APPLE_BUNDLE_ID: '', RESEND_API_KEY: '',
+    RESEND_FROM_EMAIL: '', API_BASE_URL: '',
+    __calls: calls,
+  };
+}
+
+test('POST /races stamps crew_only even when the client sends private', async () => {
+  const env = raceCreateEnv();
+  const res = await app.request('/races', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${await tokenFor('user-1')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: 'First to 50 pushups',
+      targetValue: 50,
+      visibility: 'private',
+    }),
+  }, env);
+  assert.equal(res.status, 201);
+
+  const inserts = env.__calls.filter((c) => c.q.startsWith('INSERT INTO races'));
+  assert.equal(inserts.length, 1);
+  assert.ok(
+    inserts[0].args.includes('crew_only'),
+    `expected crew_only in insert args, got ${JSON.stringify(inserts[0].args)}`,
+  );
+  assert.ok(
+    !inserts[0].args.includes('private'),
+    'client-supplied visibility must never reach the insert',
+  );
+});
+
+test('PATCH /races cannot rewrite visibility', async () => {
+  const env = raceCreateEnv();
+  const res = await app.request('/races/r1', {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${await tokenFor('user-1')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ title: 'Renamed', visibility: 'public_demo' }),
+  }, env);
+  assert.equal(res.status, 200);
+
+  const updates = env.__calls.filter((c) => c.q.startsWith('UPDATE races SET'));
+  assert.ok(updates.length >= 1);
+  for (const u of updates) {
+    assert.ok(!u.q.includes('visibility'), `visibility must not be writable: ${u.q}`);
+    assert.ok(!u.args.includes('public_demo'));
+  }
+});

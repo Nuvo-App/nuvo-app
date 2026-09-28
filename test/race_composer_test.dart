@@ -283,26 +283,24 @@ void main() {
         targetValue: 15,
         title: 'My Race',
         hasCustomName: true,
-        visibility: 'private',
+        inviteCrew: false,
       );
       // Simulate going back to activity and selecting squats, then forward
       final updated = draft.copyWith(activity: _squats, metric: _squats.metric);
       expect(updated.targetValue, 15);
-      expect(updated.visibility, 'private');
+      expect(updated.inviteCrew, isFalse);
       expect(updated.hasCustomName, true);
       expect(updated.resolvedTitle, 'My Race'); // custom preserved
     });
 
-    test('Start solo sets visibility to private', () {
-      final draft = draftForActivity(_jacks).copyWith(visibility: 'private');
-      expect(draft.visibility, 'private');
+    test('Start solo keeps the invite link closed', () {
+      final draft = draftForActivity(_jacks).copyWith(inviteCrew: false);
+      expect(draft.inviteCrew, isFalse);
     });
 
-    test('Pull in crew sets visibility to invite_code', () {
-      final draft = draftForActivity(
-        _jacks,
-      ).copyWith(visibility: 'invite_code');
-      expect(draft.visibility, 'invite_code');
+    test('Pull in crew opens the invite link after create', () {
+      final draft = draftForActivity(_jacks).copyWith(inviteCrew: true);
+      expect(draft.inviteCrew, isTrue);
     });
   });
 
@@ -508,7 +506,6 @@ void main() {
               unit,
               proofRequirement,
               proofReviewMode,
-              visibility,
               aiActivityType,
               activityId,
               metric,
@@ -555,7 +552,6 @@ void main() {
               unit,
               proofRequirement,
               proofReviewMode,
-              visibility,
               aiActivityType,
               activityId,
               metric,
@@ -620,7 +616,6 @@ void main() {
                   unit,
                   proofRequirement,
                   proofReviewMode,
-                  visibility,
                   aiActivityType,
                   activityId,
                   metric,

@@ -54,7 +54,7 @@ export function deadlineEligibility(
 /**
  * Fields that define what the competition IS. Once the race is locked these
  * cannot change — creators cannot rewrite the competition after it starts.
- * Editable forever: title, description, visibility, status (cancel/archive),
+ * Editable forever: title, description, status (cancel/archive),
  * public join toggle.
  */
 export const LOCKED_RULE_FIELDS = [

@@ -55,10 +55,7 @@ Future<GoRouter> _pumpSplash(
     routes: [
       GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
       GoRoute(path: '/arena', builder: (c, s) => const _Screen('arena')),
-      GoRoute(
-        path: '/welcome/intro',
-        builder: (c, s) => const _Screen('welcome-intro'),
-      ),
+      GoRoute(path: '/welcome', builder: (c, s) => const _Screen('welcome')),
     ],
   );
   await tester.pumpWidget(
@@ -107,13 +104,13 @@ void main() {
     expect(_currentPath(router), '/arena');
   });
 
-  testWidgets('no stored session: splash hands off to /welcome/intro', (
+  testWidgets('no stored session: splash hands off to /welcome', (
     tester,
   ) async {
     final router = await _pumpSplash(
       tester,
       restoreResult: const RestoreNoSession(),
     );
-    expect(_currentPath(router), '/welcome/intro');
+    expect(_currentPath(router), '/welcome');
   });
 }

@@ -8,18 +8,18 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// Two independent flags live here:
 ///
-/// - introSeen (install-scoped): the pre-auth cinematic at /welcome/intro is a
-///   first-use experience. Once a user has reached its final page or skipped
-///   to auth, signed-out launches go straight to /welcome instead of
-///   replaying it. Signing out must NOT clear it — it belongs to the install.
+/// - introSeen (install-scoped): legacy flag from the retired pre-auth
+///   cinematic. The Nuvo story now runs post-auth and is gated by the
+///   server-side onboardingComplete flag instead — introSeen no longer
+///   routes anywhere, it is kept only so persisted files decode cleanly.
 /// - guide completion (account-scoped): the post-auth first-race coach marks
 ///   itself done per canonical account email, so a finished guide never
 ///   re-arms for that account while another account on the same install can
 ///   still receive its own guide.
 ///
 /// These are deliberately separate from [AuthUser.onboardingComplete] (the
-/// server-side post-auth questionnaire) — the three flags model different
-/// experiences.
+/// server-side first-use completion written by the Nuvo onboarding story's
+/// final CTA) — the flags model different experiences.
 class FirstUseStore {
   FirstUseStore() : _memoryOnly = false;
 

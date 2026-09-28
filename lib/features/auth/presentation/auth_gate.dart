@@ -73,30 +73,30 @@ class RouterNotifier extends ChangeNotifier {
     debugPrint('[Router] authenticated uid=${user.id} → $loc');
     final replayingDemo = _ref.read(demoReplayProvider);
 
-    // Demo replay deliberately keeps the user in the pre-auth race builder.
-    if (replayingDemo && (loc == '/welcome/intro' || loc == '/welcome')) {
+    // Demo replay deliberately keeps the user inside the first-use
+    // experience — the post-auth cinematic at /onboarding/nuvo and the auth
+    // screen that precedes it.
+    if (replayingDemo && (loc == '/onboarding/nuvo' || loc == '/welcome')) {
       return null;
     }
 
-    // Mandatory post-auth setup (name, username, member pass) applies to
-    // every account, not just internal @getnuvo.net test accounts — a real
-    // person's crew shouldn't see "Nuvo member" because profile setup was
-    // never required of them.
+    // Mandatory post-auth setup (legal, identity, consent, then the Nuvo
+    // story) applies to every account — a real person's crew shouldn't see
+    // "Nuvo member" because profile setup was never required of them.
     if (!user.onboardingComplete) {
       if (_isAuthPreOnboarding(loc) ||
-          loc == '/welcome/intro' ||
           // Accounts that owe setup cannot wander the app — protected
-          // non-onboarding routes bounce back to the questionnaire.
-          // Onboarding routes themselves stay reachable so member-pass can
-          // finish.
+          // non-onboarding routes bounce back to the earliest step they
+          // still owe (see _firstRunTarget). Onboarding routes themselves
+          // stay reachable so setup can finish.
           (_isProtected(loc) && !loc.startsWith('/onboarding/'))) {
-        return '/onboarding/profile';
+        return _firstRunTarget(user);
       }
       return null;
     }
 
-    // Onboarded: hand auth / onboarding / intro routes back to the app.
-    if (_isAuthOrOnboarding(loc) || loc == '/welcome/intro') {
+    // Onboarded: hand auth / onboarding routes back to the app.
+    if (_isAuthOrOnboarding(loc)) {
       if (_shouldArmGuide(authState, user)) return '/compete';
       return '/arena';
     }
@@ -125,6 +125,27 @@ class RouterNotifier extends ChangeNotifier {
       _ref.read(firstRaceGuideProvider.notifier).state =
           FirstRaceGuideStep.competeStart;
     });
+  }
+
+  // The earliest first-run step the account still owes. The Nuvo story is
+  // the LAST step of onboarding, not an entry point: an account that bailed
+  // mid-setup resumes at the step it left, never mid-cinematic.
+  //
+  //  profile+legal incomplete → /onboarding/profile
+  //  consent unanswered       → /onboarding/motion-consent
+  //  everything answered      → /onboarding/nuvo
+  //
+  // Motion consent is a yes/no screen, so "declined" is indistinguishable
+  // from "not yet seen" — both correctly resume at the consent screen once.
+  String _firstRunTarget(AuthUser user) {
+    final profileDone =
+        user.termsAccepted &&
+        user.ageAttested &&
+        (user.fullName?.trim().isNotEmpty ?? false) &&
+        (user.username?.trim().isNotEmpty ?? false);
+    if (!profileDone) return '/onboarding/profile';
+    if (!user.motionTrainingConsent) return '/onboarding/motion-consent';
+    return '/onboarding/nuvo';
   }
 
   bool _shouldArmGuide(AuthState authState, AuthUser user) {

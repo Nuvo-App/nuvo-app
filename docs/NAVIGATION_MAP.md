@@ -31,13 +31,13 @@ If you are adding a control that references a race, its tap target is
 
 | Path | Screen | Page transition | Params | Notes |
 |---|---|---|---|---|
-| `/splash` | `SplashScreen` | none | — | Entry. Restores session, then `go`es to `/arena` or `/welcome/intro`. |
-| `/welcome/intro` | `WelcomeRaceBuilderScreen` | cupertino | — | Welcome → Leaderboard → Movement → Activity → embedded `WelcomeAuthScreen`. No intermediate auth-choice page, Skip, or dots on final Auth. Create account pushes `/auth/email`; Log in switches to the shared email-code form inline and pushes `/auth/verify` after sending a code. |
+| `/splash` | `SplashScreen` | none | — | Entry. Restores session, then `go`es to `/arena` or `/welcome`. |
 | `/welcome` | `WelcomeAuthScreen` | cupertino | `?mode=login` (optional) | The same signup/login composition as the final intro page. Email / Google / Apple behavior is unchanged. Default remains signup. No pre-auth completion flag or completion API write; account completion remains server-owned. |
 | `/auth/email` | `EmailStartScreen` | cupertino | — | |
 | `/auth/verify` | `EmailVerifyScreen` | cupertino | `extra: String email` | On success sets auth state; router redirects. |
 | `/onboarding/profile` | `OnboardingScreen` | cupertino | — | |
-| `/onboarding/member-pass` | `OnboardingMemberPassScreen` | cupertino | — | |
+| `/onboarding/motion-consent` | `MotionContributionScreen` | cupertino | — | |
+| `/onboarding/nuvo` | `NuvoOnboardingScreen` | cupertino | — | First-use story; final "Start your first race" CTA calls completeOnboarding() → /arena |
 | **ShellRoute** (`MainShell` + bottom nav) | | | | Tabs below. Switch with `context.go`. |
 | `/arena` | `ArenaScreen` | none (tab) | — | Home. "Your next move". |
 | `/pass` | `PassScreen` | none (tab) | — | Crew / member pass. |
@@ -67,27 +67,31 @@ If you are adding a control that references a race, its tap target is
 ## 3. Navigation graph (who links where)
 
 ```
-splash ──► arena (restored)  |  welcome/intro (no session)
+splash ──► arena (restored)  |  welcome (no session)
 
-welcome/intro (final Auth) or welcome ──► auth/email ──► auth/verify ──► (router) ─┐
+welcome ──► auth/email ──► auth/verify ──► (router) ─┐
                          ├─► inline email login ──► auth/verify ──► (router) ───┤
                          └─► [Google/Apple] ──► (router) ──────────────────────┤
                                                                       ▼
-                              onboarding/profile ──► onboarding/member-pass ──► arena
-                                              (member-pass Continue calls completeOnboarding()
+                 onboarding/profile ──► onboarding/motion-consent ──► onboarding/nuvo ──► arena
+                                              (the story's final "Start your first race" CTA
+                                               calls completeOnboarding()
                                                before /arena — the account graduates
                                                server-side, so the next sign-in lands
                                                identically. Fresh sign-ins never set
                                                guideFirstRace; only a restored demo-account
-                                               session can still arm the /compete guide.)
+                                               session can still arm the /compete guide.
+                                               The member pass/QR lives at /my-nuvo —
+                                               it is not part of account creation.)
 
-The post-auth questionnaire (/onboarding/profile → /onboarding/member-pass) is
-the INTERNAL/demo setup path: the guard only routes accounts whose canonical
-email domain is exactly getnuvo.net (isInternalNuvoAccount in
-auth_models.dart) through it. Public accounts skip straight to /arena — even
-with onboardingComplete=false — and are bounced off /onboarding/* routes.
-Internal accounts that owe setup are bounced TO /onboarding/profile from any
-protected non-onboarding route. Provider never participates in the decision.
+The post-auth setup (/onboarding/profile → motion-consent → nuvo) applies to
+every account whose onboardingComplete flag is false — the guard routes them
+through the earliest step they still owe (_firstRunTarget in auth_gate.dart):
+profile/legal incomplete → /onboarding/profile, consent unanswered →
+/onboarding/motion-consent, everything answered → /onboarding/nuvo.
+Incomplete accounts are bounced off protected non-onboarding routes back to
+setup; completed accounts are bounced off auth/onboarding routes to /arena.
+Provider never participates in the decision.
 
 ┌──────────── bottom-nav tabs (context.go, never push) ────────────┐
 │  arena   pass   compete   move   profile                          │

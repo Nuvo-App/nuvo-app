@@ -47,14 +47,41 @@ const _internalDoneUser = AuthUser(
   termsAccepted: true,
 );
 
-/// New PUBLIC account — setup owed server-side but the questionnaire is the
-/// internal/demo path, so public accounts skip it entirely.
+/// New PUBLIC account — same first-run path as internal: provider never
+/// changes the destination, only account state does.
 const _publicNewUser = AuthUser(
   id: 'user-public-new',
   email: 'public@gmail.com',
   onboardingComplete: false,
   hasMemberPass: false,
   termsAccepted: false,
+);
+
+/// Mid-setup account — legal + identity done, motion consent unanswered.
+/// Smart-resume must send them straight to the consent page.
+const _consentOwedUser = AuthUser(
+  id: 'user-consent',
+  email: 'mid@example.com',
+  onboardingComplete: false,
+  hasMemberPass: true,
+  termsAccepted: true,
+  ageAttested: true,
+  fullName: 'Mid Way',
+  username: 'midway',
+  motionTrainingConsent: false,
+);
+
+/// Setup done except the Nuvo story — resumes at the cinematic.
+const _storyOwedUser = AuthUser(
+  id: 'user-story',
+  email: 'story@example.com',
+  onboardingComplete: false,
+  hasMemberPass: true,
+  termsAccepted: true,
+  ageAttested: true,
+  fullName: 'Story User',
+  username: 'storyuser',
+  motionTrainingConsent: true,
 );
 
 /// Scripted repository: every sign-in channel returns the same user object so
@@ -176,10 +203,6 @@ class _Screen extends StatelessWidget {
     redirect: notifier.redirect,
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const _Screen('splash')),
-      GoRoute(
-        path: '/welcome/intro',
-        builder: (_, _) => const _Screen('intro'),
-      ),
       GoRoute(path: '/welcome', builder: (_, _) => const _Screen('welcome')),
       GoRoute(
         path: '/auth/email',
@@ -192,6 +215,14 @@ class _Screen extends StatelessWidget {
       GoRoute(
         path: '/onboarding/profile',
         builder: (_, _) => const _Screen('profile-setup'),
+      ),
+      GoRoute(
+        path: '/onboarding/motion-consent',
+        builder: (_, _) => const _Screen('motion-consent'),
+      ),
+      GoRoute(
+        path: '/onboarding/nuvo',
+        builder: (_, _) => const _Screen('nuvo-onboarding'),
       ),
       GoRoute(path: '/arena', builder: (_, _) => const _Screen('arena')),
       GoRoute(path: '/compete', builder: (_, _) => const _Screen('compete')),
@@ -339,21 +370,33 @@ void main() {
       );
 
       testWidgets(
-        'new internal account via $channel from /welcome/intro → /onboarding/profile',
+        'setup-finished account via $channel from /welcome → /onboarding/nuvo',
         (tester) async {
-          final repo = _ScriptedAuthRepo(user: _incompleteUser);
+          final repo = _ScriptedAuthRepo(user: _storyOwedUser);
           final built = await _pumpAt(
             tester,
             repo: repo,
-            location: '/welcome/intro',
+            location: '/welcome',
           );
           await _signIn(built.container, channel);
           await tester.pumpAndSettle();
-          expect(_path(built.router), '/onboarding/profile');
+          expect(_path(built.router), '/onboarding/nuvo');
           expect(tester.takeException(), isNull);
         },
       );
     }
+
+    testWidgets(
+      'consent-owed account resumes at /onboarding/motion-consent',
+      (tester) async {
+        final repo = _ScriptedAuthRepo(user: _consentOwedUser);
+        final built = await _pumpAt(tester, repo: repo, location: '/welcome');
+        await _signIn(built.container, 'google');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/onboarding/motion-consent');
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     for (final channel in _channels) {
       testWidgets(

@@ -29,7 +29,7 @@ enum RaceField {
   manualGoal,
   manualUnit,
   recurrence,
-  visibility,
+  inviteCrew,
   scoreDirection,
 }
 
@@ -42,7 +42,7 @@ class RaceDraft {
     required this.targetValue,
     this.hasCustomName = false,
     this.recurrence = RaceRecurrence.none,
-    this.visibility = 'invite_code',
+    this.inviteCrew = true,
     this.customActivityName,
     this.customUnit,
     this.verifierSpec,
@@ -77,7 +77,11 @@ class RaceDraft {
   /// True only when the user has manually edited the race title.
   final bool hasCustomName;
   final RaceRecurrence recurrence;
-  final String visibility;
+
+  /// Whether the invite link opens right after the race is created. Pure
+  /// UX intent — Nuvo has no user-facing race privacy: the server stamps
+  /// canonical access semantics at creation and this field is never sent.
+  final bool inviteCrew;
 
   /// Populated only for races created from a Teach Nuvo custom movement.
   final String? customActivityName;
@@ -160,7 +164,7 @@ class RaceDraft {
     RaceFormat? format,
     int? targetValue,
     RaceRecurrence? recurrence,
-    String? visibility,
+    bool? inviteCrew,
     String? customActivityName,
     String? customUnit,
     CustomPoseVerifierSpec? verifierSpec,
@@ -189,7 +193,7 @@ class RaceDraft {
           : this.format,
       targetValue: nextTarget,
       recurrence: recurrence ?? this.recurrence,
-      visibility: visibility ?? this.visibility,
+      inviteCrew: inviteCrew ?? this.inviteCrew,
       customActivityName: clearCustom
           ? null
           : customActivityName ?? this.customActivityName,
@@ -229,7 +233,7 @@ class RaceDraft {
           : activity.supportedFormats.first,
       targetValue: targetValue ?? this.targetValue,
       recurrence: recurrence,
-      visibility: visibility,
+      inviteCrew: inviteCrew,
       // Timing survives an activity switch — a timed battle stays a timed
       // battle when the user swaps push-ups for squats.
       finishLineAt: finishLineAt,
@@ -264,7 +268,6 @@ class RaceDraft {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'aiActivityType': activity.activityId,
-      'visibility': visibility,
       if (lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };
@@ -297,7 +300,6 @@ class RaceDraft {
       'proofRequirement': 'manual',
       'proofReviewMode': 'auto_accept',
       'proofMode': 'manual',
-      'visibility': visibility,
       if (lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };

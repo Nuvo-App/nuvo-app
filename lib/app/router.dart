@@ -19,10 +19,9 @@ import '../features/auth/presentation/auth_gate.dart';
 import '../features/auth/presentation/email_start_screen.dart';
 import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
-import '../features/auth/presentation/welcome_race_builder_screen.dart';
 import '../features/compete/presentation/compete_screen_fixed.dart';
-import '../features/onboarding/presentation/member_pass_screen.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
+import '../features/onboarding/presentation/nuvo_onboarding_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/pass/presentation/pass_screen.dart';
 import '../features/profile/presentation/badges_screen.dart';
@@ -109,11 +108,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             NoTransitionPage(key: state.pageKey, child: const SplashScreen()),
       ),
       GoRoute(
-        path: '/welcome/intro',
-        pageBuilder: (_, state) =>
-            _authPage(state, const WelcomeRaceBuilderScreen()),
-      ),
-      GoRoute(
         path: '/welcome',
         pageBuilder: (_, state) => _authPage(
           state,
@@ -198,10 +192,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) =>
             _authPage(state, const MotionContributionScreen()),
       ),
+      // The canonical Nuvo first-use story — runs after account/profile/legal
+      // setup while onboardingComplete is still false; its final CTA is the
+      // server write that graduates the account into Arena.
+      GoRoute(
+        path: '/onboarding/nuvo',
+        pageBuilder: (_, state) =>
+            _authPage(state, const NuvoOnboardingScreen()),
+      ),
+      // Retired first-run paths — the member-pass ceremony and the standalone
+      // finish screen folded into the canonical story above. Redirect rather
+      // than 404 so stale builds/deep links still land somewhere sane.
       GoRoute(
         path: '/onboarding/member-pass',
-        pageBuilder: (_, state) =>
-            _authPage(state, const OnboardingMemberPassScreen()),
+        redirect: (_, _) => '/onboarding/nuvo',
+      ),
+      GoRoute(
+        path: '/onboarding/finish',
+        redirect: (_, _) => '/onboarding/nuvo',
       ),
 
       // ── Main shell (bottom nav) ────────────────────────────────────────────
