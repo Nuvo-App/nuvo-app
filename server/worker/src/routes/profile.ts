@@ -104,6 +104,25 @@ async function deleteR2Object(r2: R2Bucket, objectKey: string) {
   try { await r2.delete(objectKey); } catch { /* ignore R2 errors */ }
 }
 
+/** The R2 key of an avatar object owned by `userId`, or null. Requires a
+ *  media_objects row owned by the user AND the user's own key prefix. */
+async function ownedAvatarKey(
+  db: D1Database,
+  userId: string,
+  match: { publicUrl: string } | { objectKey: string },
+): Promise<string | null> {
+  const [column, value] = 'publicUrl' in match
+    ? ['public_url', match.publicUrl]
+    : ['object_key', match.objectKey];
+  const row = await db
+    .prepare(`SELECT object_key FROM media_objects WHERE ${column} = ? AND owner_user_id = ? LIMIT 1`)
+    .bind(value, userId)
+    .first<{ object_key: string }>();
+  const key = row?.object_key ?? null;
+  const ownPrefix = PROFILE_IMAGE_KEY_PREFIXES.some((p) => key?.startsWith(`${p}${userId}/`));
+  return key && ownPrefix ? key : null;
+}
+
 profileRouter.post('/photo/upload-url', async (c) => {
   console.log('PROFILE_UPLOAD_URL_ROUTE_HIT');
   const userId = c.get('userId');
@@ -234,43 +253,27 @@ profileRouter.post('/', async (c) => {
   ) {
     const photoUrl = (body.profilePhotoUrl ?? body.avatarUrl) as string | null;
 
-    // Delete any previous R2 object when the avatar is changed or removed.
+    // Ownership is only ever established by a media_objects row this user
+    // owns (created by their own signed upload). A URL alone — including
+    // another member's public avatar URL — never becomes an owned R2 key.
+    const newKey = photoUrl ? await ownedAvatarKey(c.env.DB, userId, { publicUrl: photoUrl }) : null;
+
+    // Delete the previous R2 object when the avatar changes — but only an
+    // object this user owns. A stale/foreign key is unlinked, never deleted.
     const oldProfile = await c.env.DB.prepare('SELECT avatar_object_key FROM profiles WHERE user_id = ?')
       .bind(userId)
       .first<{ avatar_object_key: string | null }>();
     const oldKey = oldProfile?.avatar_object_key;
-    if (oldKey) {
-      // Find the object key; if the new photo is the same object, do not delete it.
-      const newKeyFromUrl = photoUrl
-        ? (await c.env.DB.prepare('SELECT object_key FROM media_objects WHERE public_url = ? AND owner_user_id = ?')
-            .bind(photoUrl, userId)
-            .first<{ object_key: string }>())?.object_key
-        : null;
-      if (oldKey !== newKeyFromUrl) {
-        await deleteR2Object(c.env.PROFILE_PHOTOS, oldKey);
-        await c.env.DB.prepare('UPDATE media_objects SET status = \'deleted\', deleted_at = CURRENT_TIMESTAMP WHERE object_key = ?')
-          .bind(oldKey).run();
-      }
+    if (oldKey && oldKey !== newKey && (await ownedAvatarKey(c.env.DB, userId, { objectKey: oldKey }))) {
+      await deleteR2Object(c.env.PROFILE_PHOTOS, oldKey);
+      await c.env.DB.prepare('UPDATE media_objects SET status = \'deleted\', deleted_at = CURRENT_TIMESTAMP WHERE object_key = ? AND owner_user_id = ?')
+        .bind(oldKey, userId).run();
     }
 
     fields.push('avatar_url = ?');
     bindings.push(photoUrl);
-
-    // Try to link to a media_objects row. Fallback to extracting object_key from URL.
-    let objectKey: string | null = null;
-    if (photoUrl) {
-      const media = await c.env.DB.prepare('SELECT object_key FROM media_objects WHERE public_url = ? AND owner_user_id = ?')
-        .bind(photoUrl, userId)
-        .first<{ object_key: string }>();
-      if (media) {
-        objectKey = media.object_key;
-      } else {
-        const match = photoUrl.match(/profile-(?:avatars|photos)\/(.+)$/);
-        if (match) objectKey = `profile-${photoUrl.includes('profile-avatars/') ? 'avatars' : 'photos'}/${match[1]}`;
-      }
-    }
     fields.push('avatar_object_key = ?');
-    bindings.push(objectKey);
+    bindings.push(newKey);
   }
 
   if (fields.length === 1) {

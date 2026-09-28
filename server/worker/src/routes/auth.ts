@@ -139,6 +139,12 @@ export async function hardDeleteAccount(
   for (const row of objectKeys.results) {
     try { await r2.delete(row.object_key); } catch { /* ignore R2 errors */ }
   }
+  // move_logs.media_object_key is a foreign key to media_objects.object_key:
+  // proof rows that stay in shared races lose their (now deleted) evidence
+  // link first, or the media delete below violates the constraint.
+  await db.prepare(
+    'UPDATE move_logs SET media_object_key = NULL WHERE media_object_key IN (SELECT object_key FROM media_objects WHERE owner_user_id = ?)',
+  ).bind(userId).run();
   await db.prepare('DELETE FROM media_objects WHERE owner_user_id = ?').bind(userId).run();
 
   // Anonymize race memberships the user was part of so shared races remain intact.
@@ -165,11 +171,17 @@ export async function hardDeleteAccount(
       await db.prepare('UPDATE races SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_members WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_progress WHERE race_id = ?').bind(race.id).run();
+      // Rows with a foreign key to move_logs go first (proof_votes,
+      // race_attempts, personal_bests — any racer's PB set in this race).
+      await db.prepare('DELETE FROM proof_votes WHERE race_id = ?').bind(race.id).run();
+      await db.prepare('DELETE FROM race_attempts WHERE race_id = ?').bind(race.id).run();
+      await db.prepare(
+        'DELETE FROM personal_bests WHERE race_id = ? OR move_log_id IN (SELECT id FROM move_logs WHERE race_id = ?)',
+      ).bind(race.id, race.id).run();
       await db.prepare('DELETE FROM move_logs WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_invites WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_events WHERE race_id = ?').bind(race.id).run();
-      await db.prepare('DELETE FROM race_attempts WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM verification_sessions WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM proofs WHERE race_id = ?').bind(race.id).run();
       await db.prepare('DELETE FROM race_participants WHERE race_id = ?').bind(race.id).run();
@@ -525,6 +537,13 @@ authRouter.post('/apple', async (c) => {
   // revocable credential, same as legacy beta accounts.
   let appleRefreshToken: string | null = null;
   const appleConfig = appleServiceConfig(c.env);
+  if (authorizationCode && !appleConfig) {
+    // Explicit, visible safe state: sign-in still works, but without the
+    // Apple service secrets no refresh token is captured, so account
+    // deletion cannot revoke this grant. Deployment must set APPLE_TEAM_ID,
+    // APPLE_KEY_ID and APPLE_PRIVATE_KEY.
+    console.warn('[apple] service secrets missing — refresh token not captured; deletion cannot revoke this grant');
+  }
   if (authorizationCode && appleConfig) {
     try {
       const exchange = await exchangeAppleAuthorizationCode(

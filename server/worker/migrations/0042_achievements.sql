@@ -52,7 +52,7 @@ VALUES
   ('ach-hat-trick',        0, 'achievement', 'hat_trick',        'Hat Trick',        'Win 3 races.',                          '{"rarity":"uncommon"}',  'winning',     'trophy_3',      'stat', 'races_won',           3,   20),
   ('ach-high-five',        0, 'achievement', 'high_five',        'High Five',        'Win 5 races.',                          '{"rarity":"uncommon"}',  'winning',     'trophy_5',      'stat', 'races_won',           5,   30),
   ('ach-ten-up',           0, 'achievement', 'ten_up',           'Ten Up',           'Win 10 races.',                         '{"rarity":"milestone"}', 'winning',     'trophy_10',     'stat', 'races_won',           10,  40),
-  ('ach-twentyfive-wins',  0, 'achievement', 'twentyfive_wins',  "Twenty-Five W's",  'Win 25 races.',                         '{"rarity":"milestone"}', 'winning',     'trophy_25',     'stat', 'races_won',           25,  50),
+  ('ach-twentyfive-wins',  0, 'achievement', 'twentyfive_wins',  'Twenty-Five W''s', 'Win 25 races.',                         '{"rarity":"milestone"}', 'winning',     'trophy_25',     'stat', 'races_won',           25,  50),
   ('ach-champion',         0, 'achievement', 'champion',         'Champion',         'Win 50 races.',                         '{"rarity":"legendary"}', 'winning',     'crown',         'stat', 'races_won',           50,  60);
 
 -- ── achievements: creation ───────────────────────────────────────────────────

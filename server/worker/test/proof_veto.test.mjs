@@ -661,7 +661,9 @@ test('non-member cannot submit proof', async () => {
 test('AI Motion Proof does not require a photo', async () => {
   const { db, race } = setupRace({
     activity_id: 'pushups',
-    verifier_type: 'movecheck',
+    // Real preset races: verifier_type NULL, verification_type 'movecheck'.
+    verifier_type: null,
+    verification_type: 'movecheck',
     format: 'most_in_window',
     target_value: 100,
     target_unit: 'reps',
