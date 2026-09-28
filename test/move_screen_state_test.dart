@@ -22,7 +22,7 @@ class _FakeAuthRepo extends AuthRepository {
 
   @override
   Future<RestoreResult> restoreSession() async =>
-      RestoreOk(const AuthUser(
+      const RestoreOk(AuthUser(
     id: 'user-1',
     email: 'test@getnuvo.net',
     fullName: 'Test User',
