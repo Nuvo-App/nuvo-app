@@ -1013,16 +1013,28 @@ class _LargeTextFieldState extends State<_LargeTextField> {
   void initState() {
     super.initState();
     widget.focusNode.addListener(_onFocusChange);
+    widget.controller.addListener(_onTextChange);
   }
 
   @override
   void dispose() {
     widget.focusNode.removeListener(_onFocusChange);
+    widget.controller.removeListener(_onTextChange);
     super.dispose();
   }
 
   void _onFocusChange() {
     setState(() => _focused = widget.focusNode.hasFocus);
+  }
+
+  void _onTextChange() => setState(() {});
+
+  void _clear() {
+    widget.controller.clear();
+    // Route through onChanged so the draft, CTA, and coach state update
+    // exactly as if the user deleted the text. Focus stays — the keyboard
+    // remains open for the next name.
+    widget.onChanged('');
   }
 
   @override
@@ -1044,35 +1056,66 @@ class _LargeTextFieldState extends State<_LargeTextField> {
         ],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: TextField(
-        controller: widget.controller,
-        focusNode: widget.focusNode,
-        onChanged: widget.onChanged,
-        onSubmitted: widget.onSubmitted,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.done,
-        style: AppTextStyles.titleLarge.copyWith(
-          color: context.themeColors.ink,
-          fontSize: 20,
-          height: 1.4,
-        ),
-        maxLines: 2,
-        minLines: 1,
-        decoration: InputDecoration(
-          hintText: widget.hint,
-          hintStyle: AppTextStyles.titleLarge.copyWith(
-            color: context.themeColors.inkMuted.withValues(alpha: 0.45),
-            fontSize: 20,
-            height: 1.4,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: widget.focusNode,
+              onChanged: widget.onChanged,
+              onSubmitted: widget.onSubmitted,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
+              style: AppTextStyles.titleLarge.copyWith(
+                color: context.themeColors.ink,
+                fontSize: 20,
+                height: 1.4,
+              ),
+              maxLines: 2,
+              minLines: 1,
+              decoration: InputDecoration(
+                hintText: widget.hint,
+                hintStyle: AppTextStyles.titleLarge.copyWith(
+                  color: context.themeColors.inkMuted.withValues(alpha: 0.45),
+                  fontSize: 20,
+                  height: 1.4,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                isCollapsed: true,
+              ),
+            ),
           ),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          isDense: true,
-          contentPadding: EdgeInsets.zero,
-          isCollapsed: true,
-        ),
+          // Clear slot is always reserved — the field's text width never
+          // jumps when the X appears or disappears.
+          SizedBox(
+            width: 32,
+            height: 32,
+            child: widget.controller.text.isEmpty
+                ? null
+                : Tooltip(
+                    message: 'Clear race name',
+                    child: NuvoPressable(
+                      onTap: _clear,
+                      scale: 0.9,
+                      haptic: false,
+                      child: Semantics(
+                        button: true,
+                        label: 'Clear race name',
+                        child: Icon(
+                          Icons.cancel_rounded,
+                          size: 22,
+                          color: context.themeColors.inkMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -1125,6 +1168,9 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     _moveNameController.text = widget.draft.customActivityName ?? '';
     _moveUnitController.text = widget.draft.customUnit ?? 'reps';
     _teachMode = widget.draft.isCustom;
+    // The primary tiles are the user's real recents — load them now so the
+    // first paint isn't waiting on keychain storage.
+    ref.read(recentMovementIdsProvider.notifier).load();
   }
 
   @override
@@ -1199,7 +1245,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         .record(activity.activityId);
   }
 
-  /// The four movements that own the primary view — the canonical set first
+  /// Starter picks used to pad the primary view — the canonical set first
   /// (pushups, squats, jumping jacks, plank — rep + time identities), padded
   /// from the catalog if any are unavailable.
   List<MotionActivityDefinition> _primaryPicks(
@@ -1314,6 +1360,18 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     final hasActivity =
         !widget.draft.isCustom && selectedActivityId.isNotEmpty;
 
+    // The primary slots belong to the user's real recent movements when any
+    // exist — padded from the canonical starters under their own label so a
+    // fallback never reads as history. No recents → simple "Quick picks".
+    final recentPicks = recentActivities
+        .where((a) => sorted.any((s) => s.activityId == a.activityId))
+        .take(4)
+        .toList();
+    final starterPads = _primaryPicks(sorted)
+        .where((a) => !recentPicks.any((r) => r.activityId == a.activityId))
+        .take(4 - recentPicks.length)
+        .toList();
+
     return _PageShell(
       question: 'What are you competing in?',
       // A clarification from the title interpretation is the support copy —
@@ -1399,11 +1457,30 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                       key: const ValueKey('primary'),
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _MovementGrid(
-                          activities: _primaryPicks(sorted),
-                          selectedActivityId: selectedActivityId,
-                          onSelect: _select,
-                        ),
+                        if (recentPicks.isNotEmpty) ...[
+                          const _PickLabel('Recent activities'),
+                          _MovementGrid(
+                            activities: recentPicks,
+                            selectedActivityId: selectedActivityId,
+                            onSelect: _select,
+                          ),
+                          if (starterPads.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            const _PickLabel('Suggested'),
+                            _MovementGrid(
+                              activities: starterPads,
+                              selectedActivityId: selectedActivityId,
+                              onSelect: _select,
+                            ),
+                          ],
+                        ] else ...[
+                          const _PickLabel('Quick picks'),
+                          _MovementGrid(
+                            activities: starterPads,
+                            selectedActivityId: selectedActivityId,
+                            onSelect: _select,
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         Center(
                           child: _TextPath(
@@ -1427,6 +1504,27 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                         ),
                       ],
                     ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Quiet section label above a group of primary picks — "Recent activities"
+/// or "Quick picks". Small and secondary; the tiles stay dominant.
+class _PickLabel extends StatelessWidget {
+  const _PickLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label,
+        style: AppTextStyles.eyebrow.copyWith(
+          color: context.themeColors.inkDim,
         ),
       ),
     );
