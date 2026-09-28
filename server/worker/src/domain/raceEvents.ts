@@ -24,6 +24,7 @@ export const RACE_EVENT_TYPES = [
   'winner_determined',
   'personal_best',
   'rematch_requested',
+  'proof_vetoed',
 ] as const;
 export type RaceEventType = (typeof RACE_EVENT_TYPES)[number];
 
@@ -32,6 +33,9 @@ export interface RaceEventInput {
   actorUserId?: string | null;
   subjectUserId?: string | null;
   payload?: Record<string, unknown>;
+  /** The move_log row this event was produced by — lets a proof veto void
+   *  exactly the canonical events that proof created. */
+  moveLogId?: string | null;
 }
 
 export interface RaceEventRow {
@@ -58,8 +62,8 @@ export async function recordRaceEvents(
   const stmts = events.map((e) =>
     db
       .prepare(
-        `INSERT INTO race_events (id, race_id, event_type, actor_user_id, subject_user_id, payload_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        `INSERT INTO race_events (id, race_id, event_type, actor_user_id, subject_user_id, payload_json, move_log_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
       )
       .bind(
         generateId(),
@@ -68,6 +72,7 @@ export async function recordRaceEvents(
         e.actorUserId ?? null,
         e.subjectUserId ?? null,
         e.payload ? JSON.stringify(e.payload) : null,
+        e.moveLogId ?? null,
       ),
   );
   await db.batch(stmts);

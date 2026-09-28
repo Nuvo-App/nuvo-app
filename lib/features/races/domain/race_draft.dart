@@ -297,9 +297,11 @@ class RaceDraft {
       'metric': 'reps',
       'format': format.backendValue,
       'recurrence': recurrence.backendValue,
-      'proofRequirement': 'manual',
+      // Proof contract: Nuvo is evidence-based — anything the camera can't
+      // verify automatically requires a photo on every submission.
+      'proofRequirement': 'photo_video',
       'proofReviewMode': 'auto_accept',
-      'proofMode': 'manual',
+      'proofMode': 'photo',
       if (lowerWins) 'scoreDirection': 'lower',
       ..._timingPayload(),
     };

@@ -210,7 +210,7 @@ export async function computeUserStats(
               e.payload_json, e.created_at,
               r.activity_id, r.custom_activity_name, r.verification_type, r.format
        FROM race_events e LEFT JOIN races r ON r.id = e.race_id
-       WHERE e.subject_user_id = ? OR e.actor_user_id = ?
+       WHERE (e.subject_user_id = ? OR e.actor_user_id = ?) AND e.voided_at IS NULL
        ORDER BY e.created_at ASC, e.id ASC`,
     )
     .bind(userId, userId)
@@ -330,7 +330,8 @@ export async function computeUserStats(
     const leadRows = await db
       .prepare(
         `SELECT race_id, payload_json FROM race_events
-         WHERE race_id IN (${ids.map(() => '?').join(',')}) AND event_type = 'lead_changed'`,
+         WHERE race_id IN (${ids.map(() => '?').join(',')}) AND event_type = 'lead_changed'
+           AND voided_at IS NULL`,
       )
       .bind(...ids)
       .all<{ race_id: string; payload_json: string | null }>();
@@ -403,12 +404,24 @@ export async function reconcileProgression(
     .first<{ level: number }>();
   const previousLevel = prior?.level ?? 1;
 
+  // Projection hygiene: XP rows derived from race events that were later
+  // voided (proof vetoed / review-invalidated) no longer have a valid source.
+  // Remove them so totals, level, and stats re-derive from valid history.
+  await db
+    .prepare(
+      `DELETE FROM xp_events WHERE user_id = ? AND source_id IN
+       (SELECT id FROM race_events WHERE voided_at IS NOT NULL)`,
+    )
+    .bind(userId)
+    .run();
+
   const events = await db
     .prepare(
       `SELECT e.id, e.event_type, e.race_id, e.created_at,
               r.activity_id, r.custom_activity_name
        FROM race_events e LEFT JOIN races r ON r.id = e.race_id
-       WHERE e.subject_user_id = ? AND e.event_type IN (${XP_SOURCE_TYPES.map(() => '?').join(',')})
+       WHERE e.subject_user_id = ? AND e.voided_at IS NULL
+         AND e.event_type IN (${XP_SOURCE_TYPES.map(() => '?').join(',')})
        ORDER BY e.created_at ASC, e.id ASC`,
     )
     .bind(userId, ...XP_SOURCE_TYPES)
@@ -494,6 +507,26 @@ export async function reconcileProgression(
       if ((r.meta.changes ?? 0) > 0) newUnlockIds.push(grantable[i].id);
     });
   }
+
+  // Revocation — the same projection rule runs both ways. When invalidated
+  // proof pulls a stat or the level below a definition's requirement, the
+  // award is no longer provable and is removed. Only reconcile-granted
+  // sources ('level'/'achievement') on active defs are ever revoked.
+  const grantableIds = grantable.map((d) => d.id);
+  const revokeSql = grantableIds.length
+    ? `DELETE FROM user_unlocks WHERE user_id = ? AND source IN ('level', 'achievement')
+         AND unlock_id IN (SELECT id FROM unlock_definitions WHERE active = 1)
+         AND unlock_id NOT IN (${grantableIds.map(() => '?').join(',')})`
+    : `DELETE FROM user_unlocks WHERE user_id = ? AND source IN ('level', 'achievement')
+         AND unlock_id IN (SELECT id FROM unlock_definitions WHERE active = 1)`;
+  await db.prepare(revokeSql).bind(userId, ...grantableIds).run();
+  await db
+    .prepare(
+      `DELETE FROM user_featured_badges WHERE user_id = ?
+         AND unlock_id NOT IN (SELECT unlock_id FROM user_unlocks WHERE user_id = ?)`,
+    )
+    .bind(userId, userId)
+    .run();
 
   return { totalXp, level, previousLevel, newUnlockIds };
 }

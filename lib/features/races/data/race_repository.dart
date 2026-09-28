@@ -366,6 +366,15 @@ class RaceRepository {
     ),
   );
 
+  /// Community veto on a proof — "this shouldn't count in this race".
+  Future<ProofVetoResult> vetoProof(
+    String raceId,
+    String proofId, {
+    required String reason,
+  }) => _withRefresh(
+    (token) => _api.vetoProof(token, raceId, proofId, reason: reason),
+  );
+
   Future<RaceAttemptResult> startAttempt(
     String raceId, {
     String? clientAttemptId,

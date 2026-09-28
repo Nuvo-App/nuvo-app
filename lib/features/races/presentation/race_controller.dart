@@ -825,6 +825,15 @@ class RaceController extends StateNotifier<RaceState> {
     return race;
   }
 
+  /// Community veto — "this proof shouldn't count in this race". Returns the
+  /// server-computed consensus outcome; race truth refresh comes from the
+  /// next getRaceDetail.
+  Future<ProofVetoResult> vetoProof(
+    String raceId,
+    String proofId, {
+    required String reason,
+  }) => _repo.vetoProof(raceId, proofId, reason: reason);
+
   /// [silent] skips the [onMutated] sibling-cache nudge — used when the update
   /// is a read (getRaceDetail), not a user write.
   void _upsertRace(Race race, {bool silent = false}) {

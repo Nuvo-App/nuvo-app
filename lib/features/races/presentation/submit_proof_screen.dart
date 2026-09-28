@@ -76,6 +76,14 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       setState(() => _manualError = 'Enter how much you completed.');
       return;
     }
+    // Evidence contract — self-reported results require a photo. The server
+    // enforces the same rule; this check just fails before the upload.
+    if (_evidence == null) {
+      setState(
+        () => _manualError = 'Add a photo — proof is required for this race.',
+      );
+      return;
+    }
     setState(() {
       _submittingManual = true;
       _manualError = null;
@@ -495,7 +503,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
       Text(
         eligibility.isCameraVerifiable
             ? 'Camera counts and verifies automatically.'
-            : 'Add how much you completed toward the finish line.',
+            : 'Log your result — a photo proves it counts.',
         style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
       ),
 
@@ -1027,9 +1035,9 @@ class _EvidenceTile extends StatelessWidget {
                       ),
                       const Spacer(),
                       Text(
-                        'optional',
+                        'required',
                         style: AppTextStyles.bodySmall.copyWith(
-                          color: context.themeColors.inkMuted,
+                          color: NuvoColors.danger,
                         ),
                       ),
                     ],
