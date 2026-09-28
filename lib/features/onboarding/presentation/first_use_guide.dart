@@ -88,6 +88,7 @@ CoachSpec? composerCoachSpec(
   ComposerGuidePage page, {
   required bool inputReady,
   bool teachMode = false,
+  bool manualGoal = false,
 }) {
   return switch (page) {
     ComposerGuidePage.name =>
@@ -113,7 +114,9 @@ CoachSpec? composerCoachSpec(
                   : 'Set the finish line.',
               body: teachMode
                   ? 'Tap Continue to training.'
-                  : 'Tap Set the finish line.',
+                  : manualGoal
+                      ? 'Tap Set the finish line.'
+                      : 'Tap Continue.',
             )
           : CoachSpec(
               targetKey: FirstRaceGuideKeys.composerActivity,

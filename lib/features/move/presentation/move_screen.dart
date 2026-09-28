@@ -780,6 +780,8 @@ class _UpNextHeroState extends State<_UpNextHero> {
     final proofIcon = _proofIconFor(race);
     final proofLabel = _proofMethodLabel(race);
     final lower = race.scoreDirection == 'lower';
+    final mood = _moodFor(race, widget.userId);
+    final accent = _activityAccent(race);
 
     // Competitors in standing order — canonical rank when the server sends
     // it, else score ordering by race direction.
@@ -848,13 +850,15 @@ class _UpNextHeroState extends State<_UpNextHero> {
               ),
             ),
             const SizedBox(height: 14),
-            // The result is the anchor — never a fake track.
+            // The result is the anchor — its color carries the state.
             _HeroAnchor(
               race: race,
               value: myValue,
               hasDenominator: hasDenominator,
               hasResult: hasResult,
               format: _anchorFormat,
+              accent: accent,
+              moodColor: _moodText(mood, c),
             ),
             if (hasDenominator) ...[
               const SizedBox(height: 14),
@@ -865,40 +869,61 @@ class _UpNextHeroState extends State<_UpNextHero> {
                 rival:
                     rival != null && rival.progressValue > 0 ? rival : null,
                 target: race.targetValue!,
+                markerColor: _moodMarker(mood),
               ),
             ],
             const SizedBox(height: 16),
-            // Rivalry — people, not abstractions.
-            if (showRivalry) ...[
-              if (rival != null && rival.progressValue > 0) ...[
-                _RivalryRow(
-                  name: _firstName(rival.displayName),
-                  userId: rival.userId,
-                  photoUrl: rival.profilePhotoUrl,
-                  score: rival.progressValue,
-                  format: _anchorFormat,
-                  isViewer: false,
-                ),
-                const SizedBox(height: 7),
-              ],
-              _RivalryRow(
-                name: 'You',
-                userId: widget.userId ?? 'you',
-                photoUrl: myPart?.profilePhotoUrl,
-                score: myValue,
-                format: _anchorFormat,
-                isViewer: true,
+            // Rivalry — people, not abstractions — on a soft accent tint so
+            // the competitive context reads as one grouped moment.
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 9),
-            ],
-            Text(
-              _contextLine(rank, myValue, rival, leader),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.labelMedium.copyWith(
-                fontSize: 13.5,
-                color: c.ink,
-                fontWeight: FontWeight.w700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (showRivalry) ...[
+                    if (rival != null && rival.progressValue > 0) ...[
+                      _RivalryRow(
+                        name: _firstName(rival.displayName),
+                        userId: rival.userId,
+                        photoUrl: rival.profilePhotoUrl,
+                        score: rival.progressValue,
+                        format: _anchorFormat,
+                        isViewer: false,
+                      ),
+                      const SizedBox(height: 7),
+                    ],
+                    _RivalryRow(
+                      name: 'You',
+                      userId: widget.userId ?? 'you',
+                      photoUrl: myPart?.profilePhotoUrl,
+                      score: myValue,
+                      format: _anchorFormat,
+                      isViewer: true,
+                      scoreColor: _moodText(mood, c),
+                    ),
+                    const SizedBox(height: 9),
+                  ],
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      fontSize: 13.5,
+                      color: mood == _VerifyMood.startLine
+                          ? c.ink
+                          : _moodText(mood, c),
+                      fontWeight: FontWeight.w700,
+                    ),
+                    child: Text(
+                      _contextLine(rank, myValue, rival, leader),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -906,7 +931,7 @@ class _UpNextHeroState extends State<_UpNextHero> {
             if (proofLabel.isNotEmpty) ...[
               Row(
                 children: [
-                  Icon(proofIcon, size: 15, color: NuvoColors.blue),
+                  Icon(proofIcon, size: 15, color: accent),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -990,6 +1015,8 @@ class _HeroAnchor extends StatelessWidget {
     required this.hasDenominator,
     required this.hasResult,
     required this.format,
+    required this.accent,
+    required this.moodColor,
   });
 
   final Race race;
@@ -998,10 +1025,19 @@ class _HeroAnchor extends StatelessWidget {
   final bool hasResult;
   final String Function(int) format;
 
+  /// The activity's accent family — tints the unit/result labels.
+  final Color accent;
+
+  /// The mood's text color — the giant number goes green/amber when the
+  /// state earns it, ink while chasing or at the start line.
+  final Color moodColor;
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final style = AppTextStyles.statLarge(42, color: c.ink);
+    final numberColor =
+        hasResult && moodColor != c.inkSubtle ? moodColor : c.ink;
+    final style = AppTextStyles.statLarge(42, color: numberColor);
 
     if (hasDenominator) {
       // First-to-goal / cumulative-with-target: "72" + "/ 100" + real track.
@@ -1062,7 +1098,7 @@ class _HeroAnchor extends StatelessWidget {
               Text(
                 resultLabel,
                 style: AppTextStyles.labelUppercase(10.5).copyWith(
-                  color: hasResult ? NuvoColors.blue : c.inkDim,
+                  color: hasResult ? accent : c.inkDim,
                 ),
               ),
             ],
@@ -1071,6 +1107,51 @@ class _HeroAnchor extends StatelessWidget {
       ],
     );
   }
+}
+
+// ── State + activity color ───────────────────────────────────────────────────
+
+/// The hero's competitive mood — derived from canonical standing only.
+enum _VerifyMood { startLine, chasing, tied, leading }
+
+_VerifyMood _moodFor(Race race, String? userId) {
+  final myPart = userId != null ? race.participantFor(userId) : null;
+  final myValue = myPart?.progressValue ?? 0;
+  if (myValue <= 0) return _VerifyMood.startLine;
+  final rank = rankForUser(race, userId);
+  if (rank == null) return _VerifyMood.chasing;
+  if (race.viewerContext?.isTied == true) return _VerifyMood.tied;
+  if (rank == 1) return _VerifyMood.leading;
+  return _VerifyMood.chasing;
+}
+
+/// Marker/track color — the state is carried by the track and dots.
+Color _moodMarker(_VerifyMood m) => switch (m) {
+  _VerifyMood.startLine => NuvoColors.blue,
+  _VerifyMood.chasing => NuvoColors.blue,
+  _VerifyMood.tied => NuvoColors.warning,
+  _VerifyMood.leading => NuvoColors.success,
+};
+
+/// Text color for mood statements — the *_On variants keep contrast on
+/// light surfaces; on dark they stay readable since they sit on ink text.
+Color _moodText(_VerifyMood m, NuvoThemeColors c) => switch (m) {
+  _VerifyMood.startLine => c.inkSubtle,
+  _VerifyMood.chasing => NuvoColors.blue,
+  _VerifyMood.tied => NuvoColors.warningOn,
+  _VerifyMood.leading => NuvoColors.successOn,
+};
+
+/// The activity's accent family — canonical fields only, no invented art.
+/// Timed/endurance reads teal, academic violet, books indigo,
+/// lower-is-better sage, everything else stays Nuvo blue.
+Color _activityAccent(Race race) {
+  if (raceMetric(race) == RaceMetric.seconds) return NuvoColors.avatarTeal;
+  final unit = raceDisplayUnit(race);
+  if (unit == 'percent') return NuvoColors.avatarPlum;
+  if (unit == 'books' || unit == 'pages') return NuvoColors.avatarIndigo;
+  if (race.scoreDirection == 'lower') return NuvoColors.avatarSage;
+  return NuvoColors.blue;
 }
 
 String _firstName(String displayName) {
@@ -1103,12 +1184,17 @@ class _RaceTrack extends StatelessWidget {
     required this.you,
     required this.target,
     this.rival,
+    this.markerColor = NuvoColors.blue,
   });
 
   final Race race;
   final int you;
   final int target;
   final RaceParticipant? rival;
+
+  /// The mood color — viewer dot, viewer fill, and the goal ring share it
+  /// so the track itself carries the race state.
+  final Color markerColor;
 
   String _fmt(int v) =>
       raceMetric(race) == RaceMetric.seconds ? formatClock(v) : '$v';
@@ -1185,10 +1271,12 @@ class _RaceTrack extends StatelessWidget {
                 top: 26,
                 left: 0,
                 width: youX,
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: NuvoColors.blue,
+                    color: markerColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -1203,7 +1291,7 @@ class _RaceTrack extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: c.page,
-                    border: Border.all(color: NuvoColors.blue, width: 2),
+                    border: Border.all(color: markerColor, width: 2),
                   ),
                 ),
               ),
@@ -1223,12 +1311,14 @@ class _RaceTrack extends StatelessWidget {
               Positioned(
                 top: 24,
                 left: (youX - 4.5).clamp(0.0, w - 9),
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
                   width: 9,
                   height: 9,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: NuvoColors.blue,
+                    color: markerColor,
                   ),
                 ),
               ),
@@ -1250,6 +1340,7 @@ class _RivalryRow extends StatelessWidget {
     required this.format,
     required this.isViewer,
     this.photoUrl,
+    this.scoreColor,
   });
 
   final String name;
@@ -1258,6 +1349,7 @@ class _RivalryRow extends StatelessWidget {
   final int score;
   final String Function(int) format;
   final bool isViewer;
+  final Color? scoreColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1288,7 +1380,7 @@ class _RivalryRow extends StatelessWidget {
           format(score),
           style: AppTextStyles.statLarge(
             15,
-            color: isViewer ? c.ink : c.inkSubtle,
+            color: scoreColor ?? (isViewer ? c.ink : c.inkSubtle),
           ),
         ),
       ],
@@ -1396,6 +1488,7 @@ class _ReadyRow extends StatelessWidget {
     final hasResult = myValue > 0;
     final lower = race.scoreDirection == 'lower';
     final earnedRank = hasResult ? rankForUser(race, userId) : null;
+    final mood = _moodFor(race, userId);
 
     // Canonical meta: "39 / 50 reps" · "Best · 78 strokes" · "Start line".
     final String meta = !hasResult
@@ -1494,6 +1587,7 @@ class _ReadyRow extends StatelessWidget {
                 progressPercent: raceProgressPercent(race, myPart),
                 trackHeight: 3,
                 dotDiameter: 6,
+                fillColor: _moodMarker(mood),
               ),
             ],
             const SizedBox(height: 5),
@@ -1506,7 +1600,10 @@ class _ReadyRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.labelSmall.copyWith(
                       fontSize: 12,
-                      color: c.inkSubtle,
+                      color: contextLine != null &&
+                              mood != _VerifyMood.startLine
+                          ? _moodText(mood, c)
+                          : c.inkSubtle,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1705,7 +1802,8 @@ class _CompletedRaceRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: AppTextStyles.raceRowMeta.copyWith(
                       fontSize: 12,
-                      color: c.inkMuted,
+                      color: won ? NuvoColors.gold : c.inkMuted,
+                      fontWeight: won ? FontWeight.w700 : FontWeight.w600,
                     ),
                   ),
                 ],

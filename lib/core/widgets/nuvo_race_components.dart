@@ -119,12 +119,17 @@ class RaceProgress extends StatelessWidget {
     this.onDark = false,
     this.trackHeight = 3.0,
     this.dotDiameter = 10.0,
+    this.fillColor,
   });
 
   final int progressPercent;
   final bool onDark;
   final double trackHeight;
   final double dotDiameter;
+
+  /// Optional accent for the fill/marker — state or activity color. The
+  /// 100% finish-line treatment still wins over any accent.
+  final Color? fillColor;
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +140,7 @@ class RaceProgress extends StatelessWidget {
         : c.track;
     final fillColor = progress >= 1
         ? NuvoColors.success
-        : NuvoColors.actionBlue;
+        : this.fillColor ?? NuvoColors.actionBlue;
 
     return SizedBox(
       height: dotDiameter,

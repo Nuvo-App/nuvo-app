@@ -7,8 +7,9 @@
 //  - guide state survives navigation and back-out without corrupting
 //  - completion persists per account (install file), while the dedicated
 //    testing account re-arms endlessly for QA
-//  - the product intro (/welcome/intro) is install-scoped first-use: seen once
-//    → signed-out launches go straight to auth
+//  - the Nuvo story (/onboarding/nuvo) is account-scoped first-use: the
+//    server-owned onboardingComplete flag decides, so reinstalls/new devices
+//    never replay it for a completed account
 //  - eligibility never depends on the auth provider
 import 'dart:io';
 
@@ -258,11 +259,11 @@ class _Screen extends StatelessWidget {
     redirect: notifier.redirect,
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const _Screen('splash')),
-      GoRoute(
-        path: '/welcome/intro',
-        builder: (_, _) => const _Screen('intro'),
-      ),
       GoRoute(path: '/welcome', builder: (_, _) => const _Screen('welcome')),
+      GoRoute(
+        path: '/onboarding/nuvo',
+        builder: (_, _) => const _Screen('nuvo-onboarding'),
+      ),
       GoRoute(path: '/arena', builder: (_, _) => const _Screen('arena')),
       GoRoute(path: '/compete', builder: (_, _) => const _Screen('compete')),
       GoRoute(path: '/profile', builder: (_, _) => const _Screen('profile')),
@@ -783,7 +784,7 @@ void main() {
 
       spec = composerCoachSpec(ComposerGuidePage.activity, inputReady: true)!;
       expect(spec.targetKey, FirstRaceGuideKeys.composerActivityCta);
-      expect(spec.body, 'Tap Set the finish line.');
+      expect(spec.body, 'Tap Continue.');
 
       // Custom (Teach Nuvo) movement — the CTA says Continue to training.
       spec = composerCoachSpec(
@@ -1023,9 +1024,9 @@ void main() {
       await tester.tap(find.text('Pushups').first);
       await settle(tester);
       expect(find.text('Set the finish line.'), findsOneWidget);
-      expect(find.text('Tap Set the finish line.'), findsOneWidget);
+      expect(find.text('Tap Continue.'), findsOneWidget);
 
-      await tester.tap(find.text('Set the finish line'));
+      await tester.tap(find.text('Continue with Pushups'));
       await settle(tester);
       expect(
         container.read(firstRaceGuideProvider),
@@ -1090,7 +1091,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Pushups').first);
       await settle(tester);
-      await tester.tap(find.text('Set the finish line'));
+      await tester.tap(find.text('Continue with Pushups'));
       await settle(tester);
       expect(find.text('SET THE FINISH'), findsOneWidget);
 
