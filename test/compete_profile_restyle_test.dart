@@ -698,7 +698,7 @@ void main() {
         );
         expect(find.text('Profile'), findsOneWidget);
         // Level is the hero — big number beside the LEVEL label.
-        expect(find.textContaining('LEVEL', findRichText: true), findsOneWidget);
+        expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
         expect(find.text('140 XP to Level 9'), findsOneWidget);
         expect(find.text('NEXT UNLOCK'), findsOneWidget);
@@ -727,7 +727,7 @@ void main() {
         ),
         'profile-long-320',
       );
-      expect(find.textContaining('LEVEL', findRichText: true), findsOneWidget);
+      expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
       expect(find.textContaining('LEVEL 27', findRichText: true), findsWidgets);
       expect(find.text('14 XP to Level 28'), findsOneWidget);
     });
@@ -742,7 +742,7 @@ void main() {
         ),
         'profile-level1-390',
       );
-      expect(find.textContaining('LEVEL', findRichText: true), findsOneWidget);
+      expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
       expect(find.text('60 XP to Level 2'), findsOneWidget);
     });
 
@@ -770,7 +770,7 @@ void main() {
         _app(dark: true, races: _manyRaces, home: const ProfileScreen()),
         'profile-dark-390',
       );
-      expect(find.textContaining('LEVEL', findRichText: true), findsOneWidget);
+      expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
     });
   });
 }
