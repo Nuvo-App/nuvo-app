@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_motion.dart';
@@ -780,7 +781,6 @@ class _PageShell extends StatelessWidget {
     required this.onCta,
     this.ctaEnabled = true,
     this.ctaKey,
-    this.aboveCta,
   });
 
   final String question;
@@ -789,10 +789,6 @@ class _PageShell extends StatelessWidget {
   final String ctaLabel;
   final VoidCallback onCta;
   final bool ctaEnabled;
-
-  /// Optional context strip rendered directly above the CTA (e.g. the picked
-  /// movement). Animates in — keep it one line.
-  final Widget? aboveCta;
 
   /// Spotlight key for the real continue button — the coach retargets here
   /// once the page's input is satisfied.
@@ -838,10 +834,6 @@ class _PageShell extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (aboveCta != null) ...[
-                aboveCta!,
-                const SizedBox(height: 10),
-              ],
               NuvoPrimaryButton(
                 label: ctaLabel,
                 expand: true,
@@ -1120,6 +1112,11 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   /// then Continue advances to the required training stage.
   bool _teachMode = false;
 
+  /// Progressive disclosure — the primary view is just four movements. The
+  /// full browser (search, categories, catalog) opens behind
+  /// "See all movements".
+  bool _browseAll = false;
+
   @override
   void initState() {
     super.initState();
@@ -1202,6 +1199,34 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         .record(activity.activityId);
   }
 
+  /// The four movements that own the primary view — the canonical set first
+  /// (pushups, squats, jumping jacks, plank — rep + time identities), padded
+  /// from the catalog if any are unavailable.
+  List<MotionActivityDefinition> _primaryPicks(
+    List<MotionActivityDefinition> available,
+  ) {
+    const preferred = [
+      'push_ups',
+      'squats',
+      'jumping_jacks',
+      'plank_hold',
+    ];
+    final picks = <MotionActivityDefinition>[];
+    for (final id in preferred) {
+      for (final a in available) {
+        if (a.activityId == id && !picks.contains(a)) {
+          picks.add(a);
+          break;
+        }
+      }
+    }
+    for (final a in available) {
+      if (picks.length >= 4) break;
+      if (!picks.contains(a)) picks.add(a);
+    }
+    return picks;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isManual = widget.draft.goalKind == RaceGoalKind.manual;
@@ -1246,8 +1271,6 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _GoalKindToggle(kind: widget.draft.goalKind, onChanged: _setKind),
-            const SizedBox(height: 16),
             _ComposerField(
               controller: _moveNameController,
               label: 'Movement name',
@@ -1276,6 +1299,12 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               small: true,
               onPressed: () => setState(() => _teachMode = false),
             ),
+            const SizedBox(height: 8),
+            NuvoTertiaryButton(
+              label: 'Use a custom goal instead',
+              small: true,
+              onPressed: () => _setKind(RaceGoalKind.manual),
+            ),
           ],
         ),
       );
@@ -1290,9 +1319,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       // A clarification from the title interpretation is the support copy —
       // answering it IS filling in the fields below.
       support: widget.draft.clarification ??
-          (isManual
-              ? 'Name the goal and how it is measured.'
-              : 'Pick a movement for your crew.'),
+          (isManual ? 'Name the goal and how it is measured.' : 'Pick a movement.'),
       ctaLabel: isManual
           ? 'Set the finish line'
           : hasActivity
@@ -1300,85 +1327,252 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               : 'Pick a movement',
       ctaEnabled: isManual || hasActivity,
       ctaKey: FirstRaceGuideKeys.composerActivityCta,
-      aboveCta: !isManual && hasActivity
-          ? _SelectionContext(activity: widget.draft.activity)
-          : null,
       onCta: () {
         if (isManual) _syncManual();
         widget.onNext();
       },
       body: KeyedSubtree(
         key: FirstRaceGuideKeys.composerActivity,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _GoalKindToggle(kind: widget.draft.goalKind, onChanged: _setKind),
-            const SizedBox(height: 16),
-            if (isManual) ...[
-              _ComposerField(
-                controller: _manualNameController,
-                label: 'Goal',
-                hint: 'e.g. Read, Meditate, Cold plunge',
-                onChanged: (_) => _syncManual(),
-              ),
-              const SizedBox(height: 12),
-              _ComposerField(
-                controller: _manualUnitController,
-                label: 'Measured in',
-                hint: 'e.g. pages, minutes, days',
-                onChanged: (_) => _syncManual(),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Racers log their own progress. Nuvo keeps the leaderboard; '
-                'your crew keeps each other honest.',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: context.themeColors.inkMuted,
-                ),
-              ),
-            ] else ...[
-              _TeachNuvoCard(onTap: () => setState(() => _teachMode = true)),
-              const SizedBox(height: 12),
-              _SearchBar(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _searchQuery = value),
-              ),
-              const SizedBox(height: 14),
-              if (_searchQuery.isNotEmpty)
-                _SearchResults(
-                  query: _searchQuery,
-                  activities: availableActivities,
-                  selectedActivityId: selectedActivityId,
-                  onSelect: _select,
-                  onTeachNuvo: () => setState(() => _teachMode = true),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 240),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: isManual
+              ? Column(
+                  key: const ValueKey('manual'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ComposerField(
+                      controller: _manualNameController,
+                      label: 'Goal',
+                      hint: 'e.g. Read, Meditate, Cold plunge',
+                      onChanged: (_) => _syncManual(),
+                    ),
+                    const SizedBox(height: 12),
+                    _ComposerField(
+                      controller: _manualUnitController,
+                      label: 'Measured in',
+                      hint: 'e.g. pages, minutes, days',
+                      onChanged: (_) => _syncManual(),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Racers log their own progress. Nuvo keeps the leaderboard; '
+                      'your crew keeps each other honest.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.themeColors.inkMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    NuvoTertiaryButton(
+                      label: 'Pick a movement instead',
+                      small: true,
+                      onPressed: () => _setKind(RaceGoalKind.movement),
+                    ),
+                  ],
                 )
-              else ...[
-                if (recentActivities.isNotEmpty) ...[
-                  _RecentMovements(
-                    activities: recentActivities.take(5).toList(),
-                    selectedActivityId: selectedActivityId,
-                    onSelect: _select,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                _CategoryTabs(
-                  categories: categories,
-                  selected: _selectedCategory,
-                  onSelect: (cat) => setState(() => _selectedCategory = cat),
-                ),
-                const SizedBox(height: 12),
-                _MovementGrid(
-                  activities: _selectedCategory == null
-                      ? sorted
-                      : availableActivities.where((activity) => activity.category == _selectedCategory).toList(),
-                  selectedActivityId: selectedActivityId,
-                  onSelect: _select,
-                ),
-              ],
-            ],
+              : _browseAll
+                  ? _MovementBrowser(
+                      key: const ValueKey('browse'),
+                      searchController: _searchController,
+                      searchQuery: _searchQuery,
+                      onSearchChanged: (v) => setState(() => _searchQuery = v),
+                      onCollapse: () => setState(() {
+                        _browseAll = false;
+                        _searchQuery = '';
+                        _searchController.clear();
+                        _selectedCategory = null;
+                      }),
+                      activities: availableActivities,
+                      sorted: sorted,
+                      categories: categories,
+                      recentActivities: recentActivities.take(5).toList(),
+                      selectedCategory: _selectedCategory,
+                      onCategoryChanged: (cat) =>
+                          setState(() => _selectedCategory = cat),
+                      selectedActivityId: selectedActivityId,
+                      onSelect: _select,
+                      onTeachNuvo: () => setState(() => _teachMode = true),
+                      onCustomGoal: () => _setKind(RaceGoalKind.manual),
+                    )
+                  : Column(
+                      key: const ValueKey('primary'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _MovementGrid(
+                          activities: _primaryPicks(sorted),
+                          selectedActivityId: selectedActivityId,
+                          onSelect: _select,
+                        ),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: _TextPath(
+                            label: 'See all movements',
+                            icon: Icons.arrow_forward_rounded,
+                            onTap: () => setState(() => _browseAll = true),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _TeachNuvoCard(
+                          onTap: () => setState(() => _teachMode = true),
+                        ),
+                        const SizedBox(height: 14),
+                        Center(
+                          child: _TextPath(
+                            label: 'Not a movement? Create a custom goal',
+                            icon: Icons.arrow_forward_rounded,
+                            quiet: true,
+                            onTap: () => _setKind(RaceGoalKind.manual),
+                          ),
+                        ),
+                      ],
+                    ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small tappable text path (with trailing arrow) — the secondary routes out
+/// of the primary picker: full browser, custom goal. Quiet by default so the
+/// tiles and CTA stay dominant.
+class _TextPath extends StatelessWidget {
+  const _TextPath({
+    required this.label,
+    required this.onTap,
+    this.icon = Icons.chevron_right_rounded,
+    this.quiet = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData icon;
+  final bool quiet;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = quiet
+        ? context.themeColors.inkMuted
+        : NuvoColors.actionBlue;
+    return NuvoPressable(
+      onTap: onTap,
+      scale: 0.96,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelMedium.copyWith(color: color),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(icon, size: 15, color: color),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The full movement browser behind "See all movements" — search, categories,
+/// recents, and the complete catalog. Collapses back to the quick pick.
+class _MovementBrowser extends StatelessWidget {
+  const _MovementBrowser({
+    super.key,
+    required this.searchController,
+    required this.searchQuery,
+    required this.onSearchChanged,
+    required this.onCollapse,
+    required this.activities,
+    required this.sorted,
+    required this.categories,
+    required this.recentActivities,
+    required this.selectedCategory,
+    required this.onCategoryChanged,
+    required this.selectedActivityId,
+    required this.onSelect,
+    required this.onTeachNuvo,
+    required this.onCustomGoal,
+  });
+
+  final TextEditingController searchController;
+  final String searchQuery;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onCollapse;
+  final List<MotionActivityDefinition> activities;
+  final List<MotionActivityDefinition> sorted;
+  final List<MovementCategory> categories;
+  final List<MotionActivityDefinition> recentActivities;
+  final MovementCategory? selectedCategory;
+  final ValueChanged<MovementCategory?> onCategoryChanged;
+  final String selectedActivityId;
+  final ValueChanged<MotionActivityDefinition> onSelect;
+  final VoidCallback onTeachNuvo;
+  final VoidCallback onCustomGoal;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = selectedCategory == null
+        ? sorted
+        : activities.where((a) => a.category == selectedCategory).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TextPath(
+          label: 'Quick picks',
+          icon: Icons.chevron_left_rounded,
+          quiet: true,
+          onTap: onCollapse,
+        ),
+        const SizedBox(height: 8),
+        _SearchBar(controller: searchController, onChanged: onSearchChanged),
+        const SizedBox(height: 14),
+        if (searchQuery.isNotEmpty)
+          _SearchResults(
+            query: searchQuery,
+            activities: activities,
+            selectedActivityId: selectedActivityId,
+            onSelect: onSelect,
+            onTeachNuvo: onTeachNuvo,
+          )
+        else ...[
+          if (recentActivities.isNotEmpty) ...[
+            _RecentMovements(
+              activities: recentActivities,
+              selectedActivityId: selectedActivityId,
+              onSelect: onSelect,
+            ),
+            const SizedBox(height: 16),
+          ],
+          _CategoryTabs(
+            categories: categories,
+            selected: selectedCategory,
+            onSelect: onCategoryChanged,
+          ),
+          const SizedBox(height: 12),
+          _MovementGrid(
+            activities: filtered,
+            selectedActivityId: selectedActivityId,
+            onSelect: onSelect,
+          ),
+          const SizedBox(height: 16),
+          _TeachNuvoCard(onTap: onTeachNuvo),
+          const SizedBox(height: 14),
+          Center(
+            child: _TextPath(
+              label: 'Not a movement? Create a custom goal',
+              icon: Icons.arrow_forward_rounded,
+              quiet: true,
+              onTap: onCustomGoal,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1401,36 +1595,37 @@ class _TeachNuvoCard extends StatelessWidget {
       onTap: onTap,
       scale: 0.98,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: accent.withValues(
             alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.09,
           ),
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          border: Border.all(color: accent.withValues(alpha: 0.35), width: 1.5),
         ),
         child: Row(
           children: [
             const _Sparkle(),
             const SizedBox(width: 10),
             Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'Teach Nuvo',
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: accent,
-                        fontSize: 13.5,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Teach Nuvo',
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: accent,
+                      fontSize: 13.5,
                     ),
-                    TextSpan(
-                      text: '  ·  Create your own movement',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: c.inkMuted,
-                      ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    'Make your own movement',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: c.inkMuted,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Icon(
@@ -1561,90 +1756,6 @@ class _TrainPage extends StatelessWidget {
               onPressed: onTrain,
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Movement (camera) vs custom manual goal.
-/// A light two-option switch — text + sliding underline, not a bordered
-/// pill tray. The picker below is the visual object; this just filters.
-class _GoalKindToggle extends StatelessWidget {
-  const _GoalKindToggle({required this.kind, required this.onChanged});
-  final RaceGoalKind kind;
-  final ValueChanged<RaceGoalKind> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final selectedIndex = kind == RaceGoalKind.movement ? 0 : 1;
-
-    Widget seg(RaceGoalKind k, String label) {
-      final selected = kind == k;
-      return Expanded(
-        child: NuvoPressable(
-          onTap: () => onChanged(k),
-          scale: 0.98,
-          haptic: false,
-          child: SizedBox(
-            height: 38,
-            child: Center(
-              child: Text(
-                label,
-                style: AppTextStyles.labelMedium.copyWith(
-                  fontSize: 13.5,
-                  color: selected ? c.ink : c.inkSubtle,
-                  fontWeight:
-                      selected ? FontWeight.w800 : FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SizedBox(
-      height: 38,
-      child: Stack(
-        children: [
-          // Sliding accent indicator — the state moves, not a color swap.
-          Positioned.fill(
-            child: AnimatedAlign(
-              alignment:
-                  Alignment(selectedIndex == 0 ? -1.0 : 1.0, 1),
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              child: FractionallySizedBox(
-                widthFactor: 0.5,
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Container(
-                    height: 2.5,
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 28),
-                    decoration: BoxDecoration(
-                      color: NuvoColors.blue,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              seg(RaceGoalKind.movement, 'Movement'),
-              seg(RaceGoalKind.manual, 'Custom goal'),
-            ],
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(height: 1, color: c.divider),
-          ),
         ],
       ),
     );
@@ -1942,7 +2053,7 @@ class _MovementGrid extends StatelessWidget {
         const gap = 10.0;
         final tileWidth = (constraints.maxWidth - gap) / 2;
         // Enough room for icon well + 2-line name + unit, compact at 320.
-        final ratio = tileWidth / 108;
+        final ratio = tileWidth / 116;
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -1989,121 +2100,89 @@ class _MovementTile extends StatelessWidget {
       label: '${activity.title}, ${activity.unit}',
       child: PressableScale(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.all(11),
-          decoration: BoxDecoration(
-            color: selected
-                ? accent.withValues(alpha: dark ? 0.20 : 0.10)
-                : c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-            border: Border.all(
-              color: selected ? accent : c.divider,
-              width: selected ? 1.5 : 1,
+        // Selection springs: slight overshoot on the lift, not a color swap.
+        child: AnimatedScale(
+          scale: selected ? 1.03 : 1.0,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(
+              color: selected
+                  ? accent.withValues(alpha: dark ? 0.22 : 0.12)
+                  : c.surface,
+              borderRadius: BorderRadius.circular(NuvoRadii.lg),
+              border: Border.all(
+                color: selected ? accent : c.ink,
+                width: selected ? 2 : 1.5,
+              ),
+              // Nuvo's hard offset plate: quiet navy for all tiles, the
+              // activity accent takes over when the tile is picked.
+              boxShadow: selected
+                  ? AppShadows.hardOffset(accent, offset: const Offset(4, 4))
+                  : AppShadows.hardOffset(c.inkShadow),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: accent.withValues(
-                        alpha: selected ? (dark ? 0.30 : 0.18) : 0.10,
-                      ),
-                      borderRadius: BorderRadius.circular(NuvoRadii.sm),
-                    ),
-                    child: Icon(activity.icon, size: 16, color: accent),
-                  ),
-                  const Spacer(),
-                  if (selected)
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
                     Container(
-                      width: 18,
-                      height: 18,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
-                        color: accent,
-                        shape: BoxShape.circle,
+                        color: accent.withValues(
+                          alpha: selected ? (dark ? 0.34 : 0.20) : 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(NuvoRadii.md),
                       ),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        size: 12,
-                        color: NuvoColors.white,
-                      ),
+                      child: Icon(activity.icon, size: 19, color: accent),
                     ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                activity.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: c.ink,
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
-                  height: 1.15,
+                    const Spacer(),
+                    if (selected)
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: const BoxDecoration(
+                          color: NuvoColors.actionBlue,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.check_rounded,
+                          size: 13,
+                          color: NuvoColors.white,
+                        ),
+                      ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                activity.unit,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: c.inkSubtle,
-                  fontSize: 11,
+                const Spacer(),
+                Text(
+                  activity.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: c.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    height: 1.12,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The animated line above the CTA once a movement is picked — "Pushups ·
-/// reps" context that morphs as the selection changes.
-class _SelectionContext extends StatelessWidget {
-  const _SelectionContext({required this.activity});
-  final MotionActivityDefinition activity;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final accent = _movementAccent(activity.category);
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.25),
-            end: Offset.zero,
-          ).animate(animation),
-          child: child,
-        ),
-      ),
-      child: Row(
-        key: ValueKey(activity.activityId),
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(activity.icon, size: 15, color: accent),
-          const SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              '${activity.title} · ${activity.unit}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.labelMedium.copyWith(
-                color: c.ink,
-                fontSize: 13,
-              ),
+                const SizedBox(height: 3),
+                Text(
+                  activity.unit,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: selected ? accent : c.inkSubtle,
+                    fontSize: 11.5,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
