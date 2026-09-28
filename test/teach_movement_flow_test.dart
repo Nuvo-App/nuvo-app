@@ -122,8 +122,15 @@ void main() {
       await tester.tap(find.text('Choose activity'));
       await tester.pumpAndSettle();
 
+      // 'Friday burner' resolves to a custom goal — switch to the movement
+      // tab to reach Teach Nuvo.
+      await tester.tap(find.text('Movement'));
+      await tester.pumpAndSettle();
+
       // choose CUSTOM movement
-      await tester.tap(find.text("Don't see your movement?"));
+      await tester.tap(
+        find.textContaining('Teach Nuvo', findRichText: true),
+      );
       await tester.pumpAndSettle();
 
       // customMovementDetails: name + unit
