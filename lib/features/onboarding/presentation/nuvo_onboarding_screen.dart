@@ -908,11 +908,18 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
             duration: const Duration(milliseconds: 1400),
           ),
           SizedBox(height: widget.compact ? 14 : 26),
-          SizedBox(
-            height: widget.compact ? 210 : 270,
-            child: Column(
-              children: [
-                const Spacer(),
+          ConstrainedBox(
+            // minHeight, not height — the example block still fills the
+            // stage (Center does what the Spacer pair did) but taller text
+            // at accessibility scale grows into the page's scroll instead
+            // of overflowing the fixed box.
+            constraints: BoxConstraints(
+              minHeight: widget.compact ? 210 : 270,
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 420),
                   switchInCurve: Curves.easeOutCubic,
@@ -978,8 +985,8 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
                     },
                   ),
                 ),
-                const Spacer(),
               ],
+              ),
             ),
           ),
           SizedBox(height: widget.compact ? 10 : 16),
@@ -1167,11 +1174,17 @@ class _MovePageState extends State<_MovePage>
                                   size: 18,
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  'Race finished',
-                                  style: AppTextStyles.labelLarge.copyWith(
-                                    color: NuvoColors.successOn,
-                                    fontWeight: FontWeight.w800,
+                                // Status pill — a tiny fixed artifact;
+                                // clamped so 1.4 scale can't push it
+                                // past the column's width.
+                                Flexible(
+                                  child: Text(
+                                    'Race finished',
+                                    maxLines: 1,
+                                    style: AppTextStyles.labelLarge.copyWith(
+                                      color: NuvoColors.successOn,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1187,11 +1200,14 @@ class _MovePageState extends State<_MovePage>
                                   size: 18,
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  'Proof accepted',
-                                  style: AppTextStyles.labelLarge.copyWith(
-                                    color: NuvoColors.blue,
-                                    fontWeight: FontWeight.w800,
+                                Flexible(
+                                  child: Text(
+                                    'Proof accepted',
+                                    maxLines: 1,
+                                    style: AppTextStyles.labelLarge.copyWith(
+                                      color: NuvoColors.blue,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1233,15 +1249,21 @@ class _MovePageState extends State<_MovePage>
                                           .clamp(0.0, 1.0),
                                     ))
                             : 1,
-                        child: NuvoNumberFlow(
-                          value: score,
-                          format: (v) => '$v / 10',
-                          duration: const Duration(milliseconds: 500),
-                          style: AppTextStyles.displayMedium.copyWith(
-                            color: NuvoColors.navy,
-                            fontSize: widget.compact ? 34 : 42,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
+                        // Fixed-width score artifact — "10 / 10" is
+                        // decorative chrome, clamped so extreme text
+                        // scale nudges instead of overflowing.
+                        child: MediaQuery.withClampedTextScaling(
+                          maxScaleFactor: 1.2,
+                          child: NuvoNumberFlow(
+                            value: score,
+                            format: (v) => '$v / 10',
+                            duration: const Duration(milliseconds: 500),
+                            style: AppTextStyles.displayMedium.copyWith(
+                              color: NuvoColors.navy,
+                              fontSize: widget.compact ? 34 : 42,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1,
+                            ),
                           ),
                         ),
                       ),
@@ -2553,12 +2575,17 @@ class _GoalRow extends StatelessWidget {
                           color: NuvoColors.gold,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(
-                          'EARNED',
-                          style: AppTextStyles.brandLabel.copyWith(
-                            color: NuvoColors.navy,
-                            letterSpacing: 1.2,
-                            fontSize: 8.5,
+                        child: MediaQuery.withClampedTextScaling(
+                          // Fixed 8.5px tag artifact — accessibility scale
+                          // would double it and crowd the name row out.
+                          maxScaleFactor: 1.0,
+                          child: Text(
+                            'EARNED',
+                            style: AppTextStyles.brandLabel.copyWith(
+                              color: NuvoColors.navy,
+                              letterSpacing: 1.2,
+                              fontSize: 8.5,
+                            ),
                           ),
                         ),
                       ),
@@ -2599,11 +2626,16 @@ class _GoalRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            goal > 0 ? '$progress / $goal' : '',
-            style: AppTextStyles.labelLarge.copyWith(
-              color: earned ? NuvoColors.blue : NuvoColors.navy,
-              fontWeight: FontWeight.w900,
+          MediaQuery.withClampedTextScaling(
+            // The count is fixed-width chrome, not prose — at 1.4 scale it
+            // would eat the name column's share of the card.
+            maxScaleFactor: 1.15,
+            child: Text(
+              goal > 0 ? '$progress / $goal' : '',
+              style: AppTextStyles.labelLarge.copyWith(
+                color: earned ? NuvoColors.blue : NuvoColors.navy,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],
