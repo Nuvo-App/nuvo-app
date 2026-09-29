@@ -240,6 +240,9 @@ class RaceTrackMarker {
     required this.label,
     required this.color,
     this.isViewer = false,
+    this.size,
+    this.haloColor,
+    this.ringColor,
   });
 
   /// Position on the lane, 0..1. Callers normalize against the race target.
@@ -247,8 +250,20 @@ class RaceTrackMarker {
   final String label;
   final Color color;
 
-  /// The viewer's mark — it also drives the lane's fill.
+  /// The viewer's mark — it also drives the lane's fill and reads
+  /// physically larger than rival marks.
   final bool isViewer;
+
+  /// Dot diameter. Rivals default smaller than the viewer; a tied race
+  /// passes the viewer's size so equal standings read as equal marks.
+  final double? size;
+
+  /// A soft glow behind the mark — the "leading" treatment (green).
+  final Color? haloColor;
+
+  /// A hard outer ring around the mark — the takeover payoff (gold).
+  /// Reserved for the brief lead-take moment; never ambient.
+  final Color? ringColor;
 }
 
 /// The race as a single lane: the viewer's mark, rivals' marks, and the goal
@@ -264,10 +279,11 @@ class RaceMarkerTrack extends StatelessWidget {
     required this.markers,
     this.goalLabel,
     this.fillColor = NuvoColors.actionBlue,
+    this.goalReached = false,
   });
 
   /// Marks in any order — the viewer's mark carries [isViewer] and fills
-  /// the lane. Rivals render as ink dots with their name + score.
+  /// the lane. Rivals render as navy dots with their name + score.
   final List<RaceTrackMarker> markers;
 
   /// Label pinned to the goal ring ("Goal 50"). Null draws the ring alone.
@@ -276,7 +292,14 @@ class RaceMarkerTrack extends StatelessWidget {
   /// Lane fill color — the viewer's state color (blue = racing).
   final Color fillColor;
 
+  /// The finish-line ring fills green when the race is over — the only
+  /// finished signal on the lane itself.
+  final bool goalReached;
+
   static const double _labelWidth = 64;
+  static const double _trackHeight = 4;
+  static const double _viewerSize = 11;
+  static const double _rivalSize = 8;
 
   @override
   Widget build(BuildContext context) {
@@ -334,20 +357,20 @@ class RaceMarkerTrack extends StatelessWidget {
                 ),
               // Lane + viewer fill.
               Positioned(
-                top: 26,
+                top: 25,
                 left: 0,
                 right: 0,
                 child: Container(
-                  height: 3,
+                  height: _trackHeight,
                   decoration: BoxDecoration(
                     color: c.track,
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(_trackHeight / 2),
                   ),
                 ),
               ),
               if (viewerX > 0)
                 AnimatedPositioned(
-                  top: 26,
+                  top: 25,
                   left: 0,
                   width: viewerX,
                   duration: slide,
@@ -355,24 +378,32 @@ class RaceMarkerTrack extends StatelessWidget {
                   child: AnimatedContainer(
                     duration: slide,
                     curve: slideCurve,
-                    height: 3,
+                    height: _trackHeight,
                     decoration: BoxDecoration(
                       color: fillColor,
-                      borderRadius: BorderRadius.circular(2),
+                      borderRadius:
+                          BorderRadius.circular(_trackHeight / 2),
                     ),
                   ),
                 ),
-              // Goal ring at the finish.
+              // Goal ring at the finish — open while racing, fills green
+              // when the race is done.
               Positioned(
-                top: 22,
-                left: w - 11,
-                child: Container(
-                  width: 11,
-                  height: 11,
+                top: 20.5,
+                left: w - 13,
+                child: AnimatedContainer(
+                  duration: slide,
+                  curve: slideCurve,
+                  width: 13,
+                  height: 13,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: c.page,
-                    border: Border.all(color: fillColor, width: 2),
+                    color: goalReached ? NuvoColors.success : c.page,
+                    border: Border.all(
+                      color:
+                          goalReached ? NuvoColors.success : fillColor,
+                      width: 2,
+                    ),
                   ),
                 ),
               ),
@@ -381,37 +412,85 @@ class RaceMarkerTrack extends StatelessWidget {
               for (final m in [...markers]..sort(
                   (a, b) => (a.isViewer ? 1 : 0).compareTo(b.isViewer ? 1 : 0),
                 ))
-                AnimatedPositioned(
-                  top: m.isViewer ? 24 : 24.5,
-                  left: ((m.fraction.clamp(0.0, 1.0) * w) - (m.isViewer ? 4.5 : 4))
-                      .clamp(0.0, w - (m.isViewer ? 9 : 8)),
-                  duration: slide,
-                  curve: slideCurve,
-                  child: m.isViewer
-                      ? AnimatedContainer(
-                          duration: slide,
-                          curve: slideCurve,
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: m.color,
-                          ),
-                        )
-                      : Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: m.color,
-                          ),
-                        ),
-                ),
+                Builder(builder: (context) {
+                  final extent = _markExtent(m);
+                  return AnimatedPositioned(
+                    top: 27 - extent / 2,
+                    left: ((m.fraction.clamp(0.0, 1.0) * w) - extent / 2)
+                        .clamp(0.0, w - extent),
+                    duration: slide,
+                    curve: slideCurve,
+                    width: extent,
+                    height: extent,
+                    child: _mark(m, c),
+                  );
+                }),
             ],
           ),
         );
       },
     );
+  }
+
+  /// One lane mark. The viewer is the physical object — larger, navy-edged,
+  /// with a hard offset nub — while rivals stay solid navy dots. State is
+  /// carried by the wrappers: a soft [haloColor] glow while leading, a hard
+  /// [ringColor] ring for the takeover moment only.
+  /// Outer extent of a mark including its halo/ring — the lane positions
+  /// marks by their visual edge so the dot stays centered on its fraction.
+  double _markExtent(RaceTrackMarker m) =>
+      (m.size ?? (m.isViewer ? _viewerSize : _rivalSize)) +
+      (m.haloColor != null ? 6 : 0) +
+      (m.ringColor != null ? 9 : 0);
+
+  Widget _mark(RaceTrackMarker m, NuvoThemeColors c) {
+    final size = m.size ?? (m.isViewer ? _viewerSize : _rivalSize);
+    Widget dot = AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: m.color,
+        // The viewer's mark is a physical bead — navy edge + offset shade
+        // so it reads as something that slid down the track.
+        border: m.isViewer
+            ? Border.all(color: c.inkShadow, width: 1.5)
+            : null,
+        boxShadow: m.isViewer
+            ? [
+                BoxShadow(
+                  color: c.inkShadow.withValues(alpha: 0.35),
+                  offset: const Offset(1.5, 1.5),
+                  blurRadius: 0,
+                ),
+              ]
+            : null,
+      ),
+    );
+    if (m.ringColor != null) {
+      // Hard payoff ring — gold takeover flash.
+      dot = Container(
+        padding: const EdgeInsets.all(2.5),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: m.ringColor!, width: 2),
+        ),
+        child: dot,
+      );
+    }
+    if (m.haloColor != null) {
+      dot = Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: m.haloColor!.withValues(alpha: 0.25),
+        ),
+        child: dot,
+      );
+    }
+    return Center(child: dot);
   }
 }
 

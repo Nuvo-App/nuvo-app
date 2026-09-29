@@ -73,6 +73,7 @@ RaceParticipant _p(
   String name,
   int value, {
   int? rank,
+  double? percent,
   String joinedAt = '2026-01-01T00:00:00Z',
 }) =>
     RaceParticipant(
@@ -80,7 +81,7 @@ RaceParticipant _p(
       userId: userId,
       displayName: name,
       progressValue: value,
-      progressPercent: value,
+      progressPercent: (percent ?? value).toInt(),
       rank: rank,
       joinedAt: joinedAt,
     );
@@ -740,14 +741,14 @@ void main() {
         // Level is the hero — big number beside the LEVEL label.
         expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
-        // The next unlock is fused to the XP line — "…· Clap reaction at
-        // Level 9" — and sits as the tile at the bar's end.
+        // The next unlock is fused to the XP line — the bar terminates in
+        // the target tile and the caption splits into two lines.
         expect(
           find.textContaining('140 XP to Level 9', findRichText: true),
           findsOneWidget,
         );
         expect(
-          find.textContaining('Clap reaction at Level 9', findRichText: true),
+          find.textContaining('Unlock: Clap reaction', findRichText: true),
           findsOneWidget,
         );
         // Edit anchored to the identity row.
@@ -961,12 +962,12 @@ void main() {
       );
       _races(tester).push([tookFirst]);
       // Frame 1 rebuilds the hero (didUpdateWidget arms the flash);
-      // frame 2+ runs the opacity in. Capture inside the 2.6s window.
+      // frame 2+ runs the opacity in. Capture inside the ~1s window.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('YOU TOOK THE LEAD'), findsOneWidget);
       await _capture(tester, 'verify-takefirst-390');
-      // Let the flash timer (2.6s) expire before teardown.
+      // Let the flash timer expire before teardown.
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
       expect(tester.takeException(), isNull);
@@ -984,6 +985,36 @@ void main() {
       expect(find.text('First To 10 Jumping Jacks'), findsOneWidget);
       expect(find.text('Weekend Golf'), findsOneWidget);
       await _capture(tester, 'verify-completed-390');
+    });
+
+    testWidgets('goal reached — green hero, no chase copy', (tester) async {
+      _useViewport(tester, 390, 844);
+      final done = _race(
+        viewerContext: const RaceViewerContext(
+          raceId: 'race-1',
+          status: 'active',
+          rank: 1,
+          leaderUserId: 'user-1',
+          leaderScore: 50,
+          viewerScore: 50,
+          isMember: true,
+        ),
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 50, rank: 1, percent: 100),
+          _p('u-noah', 'Noah Reyes', 42, rank: 2, percent: 84),
+        ],
+      );
+      await _pump(
+        tester,
+        _app(races: [done], home: const MoveScreen()),
+        'verify-finished-390',
+      );
+      // Goal reached while the race is still live — green finish state,
+      // completion action, zero chase copy.
+      expect(find.text('GOAL REACHED — your proof is in'), findsOneWidget);
+      expect(find.text('View race'), findsOneWidget);
+      expect(find.textContaining('take 1st'), findsNothing);
+      expect(find.text('Start AI Motion Proof'), findsNothing);
     });
 
     testWidgets('dark mode 390', (tester) async {
