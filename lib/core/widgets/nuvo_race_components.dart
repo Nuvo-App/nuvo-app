@@ -282,6 +282,7 @@ class RaceMarkerTrack extends StatelessWidget {
     this.goalReached = false,
     this.hasGoal = true,
     this.compact = false,
+    this.hero = false,
   });
 
   /// Marks in any order — the viewer's mark carries [isViewer] and fills
@@ -308,10 +309,21 @@ class RaceMarkerTrack extends StatelessWidget {
   /// marks and animation — less chrome.
   final bool compact;
 
+  /// Hero scale — the lane as the screen's primary graphic: a heavier
+  /// track, physically larger marks, and bigger labels. Same canonical
+  /// geometry, animation, and collision rules — roughly 2x the default.
+  final bool hero;
+
   static const double _labelWidth = 64;
+  static const double _heroLabelWidth = 84;
   static const double _trackHeight = 4;
   static const double _viewerSize = 11;
   static const double _rivalSize = 8;
+
+  // Hero geometry — the same marks, physically louder.
+  static const double _heroTrackHeight = 7;
+  static const double _heroViewerSize = 20;
+  static const double _heroRivalSize = 13;
 
   // Compact geometry — the same marks on a tighter lane.
   static const double _compactTrackHeight = 3;
@@ -321,11 +333,14 @@ class RaceMarkerTrack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    // Compact lane geometry — same marks, no labels.
-    final trackHeight = compact ? _compactTrackHeight : _trackHeight;
-    final laneTop = compact ? 7.0 : 25.0;
-    final goalSize = compact ? 10.0 : 13.0;
-    final height = compact ? 16.0 : 40.0;
+    // Lane geometry — same marks, density decides how loud they read.
+    final trackHeight =
+        compact ? _compactTrackHeight : hero ? _heroTrackHeight : _trackHeight;
+    final laneTop = compact ? 7.0 : hero ? 34.0 : 25.0;
+    final goalSize = compact ? 10.0 : hero ? 22.0 : 13.0;
+    final height = compact ? 16.0 : hero ? 78.0 : 40.0;
+    final labelWidth = hero ? _heroLabelWidth : _labelWidth;
+    final labelSize = hero ? 12.5 : 10.5;
 
     return LayoutBuilder(
       builder: (context, cons) {
@@ -338,7 +353,7 @@ class RaceMarkerTrack extends StatelessWidget {
         // Label slots centered on each mark — placed right-to-left so close
         // standings never overlap: each label slides left until it clears
         // the label on its right.
-        const lw = _labelWidth;
+        final lw = labelWidth;
         final labelSpots = <(double x, String text, Color color)>[
           if (!compact && hasGoal && goalLabel != null)
             (w - 4, goalLabel!, c.inkMuted),
@@ -377,7 +392,7 @@ class RaceMarkerTrack extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: AppTextStyles.labelUppercase(
-                      10.5,
+                      labelSize,
                     ).copyWith(color: r.color),
                   ),
                 ),
@@ -430,7 +445,7 @@ class RaceMarkerTrack extends StatelessWidget {
                       border: Border.all(
                         color:
                             goalReached ? NuvoColors.success : fillColor,
-                        width: 2,
+                        width: hero ? 2.5 : 2,
                       ),
                     ),
                   ),
@@ -473,8 +488,16 @@ class RaceMarkerTrack extends StatelessWidget {
 
   double _markSize(RaceTrackMarker m) => m.size ??
       (m.isViewer
-          ? (compact ? _compactViewerSize : _viewerSize)
-          : (compact ? _compactRivalSize : _rivalSize));
+          ? (compact
+              ? _compactViewerSize
+              : hero
+                  ? _heroViewerSize
+                  : _viewerSize)
+          : (compact
+              ? _compactRivalSize
+              : hero
+                  ? _heroRivalSize
+                  : _rivalSize));
 
   Widget _mark(RaceTrackMarker m, NuvoThemeColors c) {
     final size = _markSize(m);
@@ -489,13 +512,13 @@ class RaceMarkerTrack extends StatelessWidget {
         // The viewer's mark is a physical bead — navy edge + offset shade
         // so it reads as something that slid down the track.
         border: m.isViewer
-            ? Border.all(color: c.inkShadow, width: 1.5)
+            ? Border.all(color: c.inkShadow, width: hero ? 2 : 1.5)
             : null,
         boxShadow: m.isViewer
             ? [
                 BoxShadow(
                   color: c.inkShadow.withValues(alpha: 0.35),
-                  offset: const Offset(1.5, 1.5),
+                  offset: Offset(hero ? 2.5 : 1.5, hero ? 2.5 : 1.5),
                   blurRadius: 0,
                 ),
               ]
