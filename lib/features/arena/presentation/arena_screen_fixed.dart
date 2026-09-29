@@ -14,6 +14,7 @@ import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_podium.dart';
+import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_race_path.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
@@ -148,6 +149,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
             cardTextWidth,
             media.textScaler,
             tall: heroHeight >= 300,
+            race: raceById[board.id],
+            viewerId: user?.id,
           ),
         );
       }
@@ -278,6 +281,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                             controller: _boardsController,
                             index: index,
                             board: boards[index],
+                            race: raceById[boards[index].id],
+                            viewerId: user?.id,
                             heroHeight: heroHeight,
                             onOpen: () => _openBoard(context, boards[index]),
                           ),
@@ -462,6 +467,8 @@ class _BoardCarouselItem extends StatelessWidget {
     required this.board,
     required this.heroHeight,
     required this.onOpen,
+    this.race,
+    this.viewerId,
   });
 
   final PageController controller;
@@ -469,6 +476,11 @@ class _BoardCarouselItem extends StatelessWidget {
   final ArenaBoard board;
   final double heroHeight;
   final VoidCallback onOpen;
+
+  /// The authoritative race behind this board, when loaded — gives the
+  /// hero canonical target/direction/participants for the marker lane.
+  final Race? race;
+  final String? viewerId;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -500,6 +512,8 @@ class _BoardCarouselItem extends StatelessWidget {
     },
     child: _NextMoveHero(
       board: board,
+      race: race,
+      viewerId: viewerId,
       heroHeight: heroHeight,
       onOpen: onOpen,
     ),
@@ -511,10 +525,14 @@ class _NextMoveHero extends StatelessWidget {
     required this.board,
     required this.heroHeight,
     required this.onOpen,
+    this.race,
+    this.viewerId,
   });
   final ArenaBoard board;
   final double heroHeight;
   final VoidCallback onOpen;
+  final Race? race;
+  final String? viewerId;
   @override
   Widget build(BuildContext context) {
     final pct = (board.progressPercent ?? 0).clamp(0, 100);
@@ -530,6 +548,7 @@ class _NextMoveHero extends StatelessWidget {
         .toList();
     final footerTotal = board.racerCount ?? footerAvatars.length;
     final c = context.themeColors;
+    final lane = _heroLane(board, race, viewerId, c.ink);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -566,16 +585,38 @@ class _NextMoveHero extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        board.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.headlineMedium.copyWith(
-                          color: context.themeColors.ink,
-                          fontSize: tall ? 30 : 28,
-                          height: 1.05,
-                          letterSpacing: 0,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              board.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.headlineMedium.copyWith(
+                                color: context.themeColors.ink,
+                                fontSize: tall ? 30 : 28,
+                                height: 1.05,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                          // The standing belongs to the title line — the
+                          // card's verdict reads before the lane does.
+                          if (board.myRank != null) ...[
+                            const SizedBox(width: 10),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                raceOrdinal(board.myRank!),
+                                style: AppTextStyles.placementLabel(
+                                  size: 15,
+                                  color: _arenaPlacement(board.myRank!, c),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       SizedBox(height: tall ? 10 : 8),
                       Row(
@@ -609,11 +650,43 @@ class _NextMoveHero extends StatelessWidget {
                         ],
                       ),
                       SizedBox(height: tall ? 14 : 6),
-                      NuvoRacePath(
-                        key: ValueKey('progress-${board.id}'),
-                        raceId: board.id,
-                        progress: pct / 100,
-                      ),
+                      // The FOCUSED lane — You vs the racer ahead vs the
+                      // goal ring, the same named-mark grammar Verify and
+                      // Compete share. Falls back to the identity path when
+                      // the board has no markable scores.
+                      if (lane != null)
+                        RaceMarkerTrack(
+                          markers: lane.markers,
+                          goalLabel: lane.goalLabel,
+                          fillColor: lane.leading ? _arenaGreen : _arenaBlue,
+                          hasGoal: lane.hasGoal,
+                          goalReached: board.isResult,
+                        )
+                      else
+                        NuvoRacePath(
+                          key: ValueKey('progress-${board.id}'),
+                          raceId: board.id,
+                          progress: pct / 100,
+                        ),
+                      // Stakes — what the next proof changes, straight from
+                      // the server's chase copy.
+                      if (board.chaseCopy != null &&
+                          board.chaseCopy!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          board.chaseCopy!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelMedium.copyWith(
+                            color:
+                                (lane?.leading ?? false)
+                                    ? _arenaGreen
+                                    : _arenaBlue,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   // Participant context — a fixed gap below the track,
@@ -1402,18 +1475,36 @@ double _heroContentHeight(
   double textWidth,
   TextScaler scaler, {
   required bool tall,
+  Race? race,
+  String? viewerId,
 }) {
-  double measure(String text, TextStyle style, {int maxLines = 1}) {
+  double measure(
+    String text,
+    TextStyle style, {
+    int maxLines = 1,
+    double? width,
+  }) {
     final painter = TextPainter(
       text: TextSpan(text: text, style: style),
       maxLines: maxLines,
       textDirection: TextDirection.ltr,
       textScaler: scaler,
-    )..layout(maxWidth: textWidth);
+    )..layout(maxWidth: width ?? textWidth);
     return painter.height;
   }
 
   final pct = (board.progressPercent ?? 0).clamp(0, 100);
+  // The title shares its row with the rank ordinal — measure it against the
+  // width it actually gets, or a just-fits one-liner measures as 1 line and
+  // renders as 2, silently overflowing the card. The rank itself is a small
+  // raised label; the title's two lines always exceed its height.
+  final rankExtent = board.myRank == null
+      ? 0.0
+      : 10.0 +
+          measure(
+            raceOrdinal(board.myRank!),
+            AppTextStyles.placementLabel(size: 15),
+          );
   final title = measure(
     board.title,
     AppTextStyles.headlineMedium.copyWith(
@@ -1421,6 +1512,7 @@ double _heroContentHeight(
       height: 1.05,
     ),
     maxLines: 2,
+    width: textWidth - rankExtent,
   );
   final progress = measure(
     _progressValue(board.progressLabel, pct),
@@ -1434,21 +1526,156 @@ double _heroContentHeight(
     AppTextStyles.headlineMedium.copyWith(fontSize: 24),
   );
   // Mirror of the card's column: pads (top, title gap, progress gap,
-  // racer-row pad, bottom pad) + track + racer row + footer + the
+  // racer-row pad, bottom pad) + lane + stakes + racer row + footer + the
   // carousel's 10px shadow pad + 4px card border inset (2px each side —
-  // the border lays out inside the child's bounds).
+  // the border lays out inside the child's bounds). The marker lane is 40;
+  // the identity-path fallback is 42.
+  final laneHeight =
+      _heroLane(board, race, viewerId, const Color(0xFF000000)) != null
+          ? 40.0
+          : 42.0;
+  final hasStakes =
+      board.chaseCopy != null && board.chaseCopy!.isNotEmpty;
+  // Measured, not assumed — labelMedium's line-height multiplier makes the
+  // stakes line ~19-20px at 13.5pt, and the racer row is the taller of the
+  // 26px avatar stack and its label.
+  final stakes = hasStakes
+      ? 6.0 +
+          measure(
+            board.chaseCopy!,
+            AppTextStyles.labelMedium.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+            ),
+          )
+      : 0.0;
+  final racerRow = math.max(
+    26.0,
+    measure(
+      '${board.racerCount ?? board.miniLeaderboard.length} racers',
+      AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
+    ),
+  );
   return (tall ? 18.0 : 12.0) +
       title +
       (tall ? 10.0 : 8.0) +
       math.max(progress, suffix) +
       (tall ? 14.0 : 6.0) +
-      42 +
+      laneHeight +
+      stakes +
       (tall ? 8.0 : 10.0) +
-      26 +
+      racerRow +
       (tall ? 14.0 : 4.0) +
       (tall ? 58.0 : 52.0) +
       10 +
       4;
+}
+
+/// Podium color for the hero's rank numeral — gold on the win, ink
+/// otherwise. Quiet like [RacePlacement], not a badge.
+Color _arenaPlacement(int rank, NuvoThemeColors c) => switch (rank) {
+      1 => NuvoColors.gold,
+      2 => NuvoColors.position2,
+      3 => NuvoColors.position3,
+      _ => c.inkSubtle,
+    };
+
+/// The hero's named-mark lane. With the authoritative [race] loaded, marks
+/// come from the shared canonical geometry (goal lane vs relative-competition
+/// lane for lower-wins/best-attempt). Without it, "v / t" leaderboard values
+/// still give an honest goal lane. Null → the identity path renders instead.
+({List<RaceTrackMarker> markers, String? goalLabel, bool hasGoal,
+    bool leading})? _heroLane(
+  ArenaBoard board,
+  Race? race,
+  String? viewerId,
+  Color inkColor,
+) {
+  final leading = board.myRank == 1;
+  if (race != null) {
+    final geo = raceLaneGeometry(race, viewerId);
+    final rival = raceNearestRival(race, viewerId);
+    final rivalMark = rival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == rival.userId)
+            .firstOrNull;
+    if (geo.viewer == null && rivalMark == null) return null;
+    final me = viewerId == null ? null : race.participantFor(viewerId);
+    return (
+      markers: [
+        if (rivalMark != null)
+          RaceTrackMarker(
+            fraction: rivalMark.fraction,
+            label:
+                '${_firstOf(rival!.displayName)} ${rival.progressValue}',
+            color: inkColor,
+            size: (race.viewerContext?.isTied ?? false) ? 11 : null,
+          ),
+        if (geo.viewer != null)
+          RaceTrackMarker(
+            fraction: geo.viewer!,
+            label: 'You ${me?.progressValue ?? 0}',
+            color: leading ? _arenaGreen : _arenaBlue,
+            isViewer: true,
+            haloColor:
+                leading && !board.isResult ? _arenaGreen : null,
+          ),
+      ],
+      goalLabel: geo.hasGoal
+          ? 'Goal ${raceScoreLabel(race, race.targetValue!)}'
+          : null,
+      hasGoal: geo.hasGoal,
+      leading: leading,
+    );
+  }
+
+  // Fallback lane — parse the board's own "v / t" strings so demo and
+  // unloaded boards still draw marks instead of an anonymous path.
+  final targetMatch =
+      RegExp(r'/\s*(\d+)').firstMatch(board.progressLabel);
+  final target =
+      targetMatch == null ? null : int.tryParse(targetMatch.group(1)!);
+  if (target == null || target <= 0) return null;
+  (String label, int value, bool isMe)? rivalRow;
+  (String label, int value, bool isMe)? viewerRow;
+  for (final row in board.miniLeaderboard) {
+    final m = RegExp(r'^\s*(\d+)').firstMatch(row.value);
+    if (m == null) continue;
+    final parsed = (row.label, int.parse(m.group(1)!), row.isCurrentUser);
+    if (parsed.$3) {
+      viewerRow = parsed;
+    } else if (rivalRow == null || parsed.$2 > rivalRow.$2) {
+      rivalRow = parsed;
+    }
+  }
+  if (viewerRow == null && rivalRow == null) return null;
+  return (
+    markers: [
+      if (rivalRow != null)
+        RaceTrackMarker(
+          fraction: rivalRow.$2 / target,
+          label: '${rivalRow.$1} ${rivalRow.$2}',
+          color: inkColor,
+        ),
+      if (viewerRow != null)
+        RaceTrackMarker(
+          fraction: viewerRow.$2 / target,
+          label: 'You ${viewerRow.$2}',
+          color: leading ? _arenaGreen : _arenaBlue,
+          isViewer: true,
+          haloColor: leading && !board.isResult ? _arenaGreen : null,
+        ),
+    ],
+    goalLabel: 'Goal $target',
+    hasGoal: true,
+    leading: leading,
+  );
+}
+
+String _firstOf(String name) {
+  final first = name.trim().split(RegExp(r'\s+')).firstOrNull ?? '';
+  return first.isEmpty ? 'Rival' : first;
 }
 
 String _initials(String name) {

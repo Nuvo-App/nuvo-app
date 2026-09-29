@@ -1459,6 +1459,19 @@ class _ProfileRaceGroup extends StatelessWidget {
         ? raceScoreLabel(race, target - myPart.progressValue)
         : null;
 
+    // Quick lane — the viewer's mark plus the racer directly ahead. Lower-
+    // wins and best-attempt races get the relative-competition lane (no
+    // finish ring) from the shared geometry helper.
+    final geo = raceLaneGeometry(race, userId);
+    final rival = raceNearestRival(race, userId);
+    final rivalMark = rival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == rival.userId)
+            .firstOrNull;
+    final leading = rank == 1;
+    final c = context.themeColors;
+
     return _ActiveRaceTile(
       raceTitle: race.displayTitle,
       movementLabel: activity,
@@ -1470,6 +1483,25 @@ class _ProfileRaceGroup extends StatelessWidget {
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
+      trackMarkers: geo.viewer == null
+          ? null
+          : [
+              if (rivalMark != null)
+                RaceTrackMarker(
+                  fraction: rivalMark.fraction,
+                  label: rival!.displayName.split(' ').first,
+                  color: c.ink,
+                ),
+              RaceTrackMarker(
+                fraction: geo.viewer!,
+                label: 'You',
+                color:
+                    leading ? NuvoColors.success : NuvoColors.actionBlue,
+                isViewer: true,
+                haloColor: leading ? NuvoColors.success : null,
+              ),
+            ],
+      hasGoal: geo.hasGoal,
       onTap: () => context.push('/race/${race.id}'),
     );
   }
@@ -1477,9 +1509,8 @@ class _ProfileRaceGroup extends StatelessWidget {
 
 // ── Active race tile — progress is the headline ─────────────────────────────
 
-/// "Racing now" row. The track and my position carry the card — a race
-/// I'm inside is a standing, not a list entry. At the start line it
-/// stays quiet rather than drawing an empty bar.
+/// "Racing now" row — the shared QUICK view ([RaceRow]) with Profile's
+/// movement-icon leading column, matching _ResultTile's 44px gutter.
 class _ActiveRaceTile extends StatelessWidget {
   const _ActiveRaceTile({
     required this.raceTitle,
@@ -1492,6 +1523,8 @@ class _ActiveRaceTile extends StatelessWidget {
     required this.avatars,
     required this.onTap,
     this.remainingLabel,
+    this.trackMarkers,
+    this.hasGoal = true,
   });
 
   final String raceTitle;
@@ -1508,118 +1541,44 @@ class _ActiveRaceTile extends StatelessWidget {
   /// target, shown instead of the activity label when it exists.
   final String? remainingLabel;
 
+  /// Viewer + nearest-rival marks for the quick lane.
+  final List<RaceTrackMarker>? trackMarkers;
+
+  /// Whether the lane ends in a finish ring — false for best-attempt and
+  /// lower-wins races.
+  final bool hasGoal;
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    final hasProof = progressPercent > 0;
-
-    return Semantics(
-      button: true,
-      label: raceTitle,
-      child: PressableScale(
-        onTap: onTap,
-        scale: 0.985,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 58),
-          padding: const EdgeInsets.symmetric(vertical: NuvoSpacing.md),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // The 44px leading column matches _ResultTile's placement
-              // column — every text column in the list shares one gutter.
-              SizedBox(
-                width: 44,
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: c.panelLight,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon, color: c.ink, size: 18),
-                  ),
-                ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            raceTitle,
-                            style: AppTextStyles.raceRowTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (hasProof)
-                          RacePlacement(rank: rank, size: 15)
-                        else
-                          Text(
-                            'Start line',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: c.inkSubtle,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 10,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                      ],
-                    ),
-                    if (hasProof) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        progressLabel,
-                        style: AppTextStyles.labelMedium.copyWith(
-                          color: c.ink,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 7),
-                      RaceProgress(
-                        progressPercent: progressPercent,
-                        trackHeight: 3,
-                        dotDiameter: 9,
-                      ),
-                      const SizedBox(height: 7),
-                    ] else
-                      const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            remainingLabel != null
-                                ? '$remainingLabel to finish · '
-                                    '$participantCount '
-                                    '${participantCount == 1 ? 'racer' : 'racers'}'
-                                : '$movementLabel · $participantCount '
-                                    '${participantCount == 1 ? 'racer' : 'racers'}',
-                            style: AppTextStyles.raceRowMeta.copyWith(color: context.themeColors.inkSubtle),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (avatars.isNotEmpty)
-                          RacePeople(
-                            avatars: avatars,
-                            total: participantCount,
-                            size: 20,
-                            max: 3,
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return RaceRow(
+      raceTitle: raceTitle,
+      movementLabel: movementLabel,
+      progressLabel: progressLabel,
+      progressPercent: progressPercent,
+      rank: rank,
+      participantCount: participantCount,
+      avatars: avatars,
+      onTap: onTap,
+      trackMarkers: trackMarkers,
+      hasGoal: hasGoal,
+      remainingLabel: remainingLabel == null ? null : '$remainingLabel to finish',
+      // The racing-now section already owns the horizontal gutter.
+      padding: const EdgeInsets.symmetric(vertical: NuvoSpacing.md),
+      // The 44px leading column matches _ResultTile's placement column —
+      // every text column in the list shares one gutter.
+      leading: SizedBox(
+        width: 44,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: c.ink, size: 18),
           ),
         ),
       ),
