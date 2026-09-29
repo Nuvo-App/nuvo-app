@@ -1972,10 +1972,10 @@ racesRouter.post('/:id/proof', async (c) => {
     ? stringOrNull(body.verificationSessionId) ?? stringOrNull(body.verification_session_id) ?? null
     : null;
   // AI Motion Proof is bound to a server verification session — without one
-  // the payload is only a self-reported number wearing the proof type.
-  // Custom-verifier races have no registry activity/release, so they cannot
-  // mint sessions yet; they keep their verifier-spec checks for now.
-  if (isAiMotion && !isCustom && !verificationSessionId) {
+  // the payload is only a self-reported number wearing the proof type. Custom
+  // verifiers mint sessions against the seeded custom_pose_sequence release,
+  // so the requirement covers them too.
+  if (isAiMotion && !verificationSessionId) {
     return c.json(badRequest('AI Motion Proof requires a verification session'), 400);
   }
   if (verificationSessionId) {

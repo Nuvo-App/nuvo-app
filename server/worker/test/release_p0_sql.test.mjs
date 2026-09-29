@@ -25,6 +25,7 @@ const SCHEMA = [
   readFileSync(new URL('test/fixtures/prod_schema_2026-09-28.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0042_achievements.sql', root), 'utf8'),
   readFileSync(new URL('migrations/0043_proof_votes.sql', root), 'utf8'),
+  readFileSync(new URL('migrations/0044_custom_verifier_seed.sql', root), 'utf8'),
 ];
 
 // ── D1 adapter over node:sqlite ──────────────────────────────────────────────
@@ -611,6 +612,66 @@ test('P0-3b: AI proof without a verification session is rejected', async () => {
   const res = await ai('A', { value: 20, clientSubmissionId: 'n1' });
   assert.equal(res.status, 400, 'ai_motion proof without verificationSessionId is rejected');
   assert.equal(w.one("SELECT COUNT(*) AS n FROM move_logs WHERE user_id = 'A'").n, 0);
+  await w.flush();
+  w.fkClean();
+});
+
+// ── Custom-verifier (Teach Nuvo) sessions ──────────────────────────────────
+
+test('P0-3c: custom-verifier races mint and require verification sessions', async () => {
+  const w = world();
+  w.user('A'); w.user('B');
+  const r = w.race('cr1', 'A', {
+    title: 'Overhead Knee Touch', verification_type: 'movecheck',
+    verifier_type: 'custom_pose_sequence', activity_id: null, movement_type: null,
+    target_unit: 'reps', metric: 'reps', target_value: 10,
+  });
+  w.exec("UPDATE races SET verifier_version = 1, custom_activity_name = 'Overhead Knee Touch' WHERE id = ?", r);
+  w.member(r, 'B');
+  const ai = (sub, extra) => w.req(sub, 'POST', `/races/${r}/proof`, {
+    proofType: 'ai_motion', metric: 'reps', verificationStatus: 'custom_verified',
+    verifierType: 'custom_pose_sequence', verifierVersion: 1,
+    activityType: 'Overhead Knee Touch', measurementType: 'count',
+    detectedValue: extra?.value ?? 5, ...extra,
+  });
+  const caps = { runtimeCapabilities: ['pose_landmarks_v1', 'derived_features_v1', 'sequence_match_v1'] };
+
+  // No session → rejected before anything is written.
+  assert.equal((await ai('A', { value: 5, clientSubmissionId: 'c0' })).status, 400,
+    'custom ai_motion without session is rejected');
+  assert.equal((await ai('A', { value: 5, clientSubmissionId: 'c1', verificationSessionId: 'vs-fabricated' })).status, 400);
+  assert.equal(w.one("SELECT COUNT(*) AS n FROM move_logs WHERE race_id = ?", r).n, 0);
+
+  // Members mint a session bound to the seeded custom release.
+  const mint = await w.req('A', 'POST', `/races/${r}/verification-sessions`, caps);
+  assert.equal(mint.status, 201, mint.text);
+  const vs = mint.json.session;
+  assert.equal(vs.activityId, 'custom_pose_sequence');
+  assert.equal(vs.releaseId, 'custom_pose_sequence-native-2026.09.0');
+
+  // Unfinished session cannot back a proof; completion binds it.
+  assert.equal((await ai('A', { value: 5, clientSubmissionId: 'c2', verificationSessionId: vs.id })).status, 400);
+  const done = await w.req('A', 'POST', `/verification-sessions/${vs.id}/complete`, {
+    releaseId: vs.releaseId, releaseChecksum: vs.releaseChecksum,
+    status: 'completed', resultValue: 5,
+  });
+  assert.equal(done.status, 200, done.text);
+
+  assert.equal((await ai('A', { value: 9, clientSubmissionId: 'c3', verificationSessionId: vs.id })).status, 400,
+    'claims more than verified');
+  const ok = await ai('A', { value: 5, clientSubmissionId: 'c4', verificationSessionId: vs.id });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal((await ai('A', { value: 5, clientSubmissionId: 'c5', verificationSessionId: vs.id })).status, 409,
+    'one session backs one proof');
+  assert.equal((await ai('A', { value: 5, clientSubmissionId: 'c4', verificationSessionId: vs.id })).status, 200,
+    'same clientSubmissionId replays idempotently');
+
+  // Another member's session on the same race cannot back A's proof.
+  const mintB = await w.req('B', 'POST', `/races/${r}/verification-sessions`, caps);
+  assert.equal(mintB.status, 201, mintB.text);
+  const vsB = mintB.json.session;
+  assert.equal((await ai('A', { value: 5, clientSubmissionId: 'c6', verificationSessionId: vsB.id })).status, 400,
+    'another user’s session');
   await w.flush();
   w.fkClean();
 });

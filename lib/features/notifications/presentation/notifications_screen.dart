@@ -115,20 +115,26 @@ class _State extends ConsumerState<NotificationsScreen> {
                 onPressed: () => context.canPop() ? context.pop() : context.go('/arena'),
               ),
               const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Notifications', style: AppTextStyles.headlineMedium),
-                  if (state.unreadCount > 0)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      '${state.unreadCount} unread',
-                      style: AppTextStyles.labelSmall
-                          .copyWith(color: t.inkSubtle),
+                      'Notifications',
+                      style: AppTextStyles.headlineMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
+                    if (state.unreadCount > 0)
+                      Text(
+                        '${state.unreadCount} unread',
+                        style: AppTextStyles.labelSmall
+                            .copyWith(color: t.inkSubtle),
+                      ),
+                  ],
+                ),
               ),
-              const Spacer(),
               if (state.unreadCount > 0)
                 IconButton(
                   onPressed: () =>
@@ -184,39 +190,29 @@ class _State extends ConsumerState<NotificationsScreen> {
         child: ListView(
           controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 32),
           children: [
-            // One grouped surface, hairline separators — the stack reads as a
-            // single ledger instead of floating cards competing for attention.
-            Container(
-              decoration: BoxDecoration(
-                color: t.surface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: t.border, width: 1.5),
+            // Rows live directly on the page — an inbox, not a card. The
+            // hairline aligns to the text column, past the avatar gutter.
+            for (var i = 0; i < state.items.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 70,
+                  color: t.divider,
+                ),
+              NuvoStaggerIn(
+                index: i,
+                child: _NotificationRow(
+                  item: state.items[i],
+                  busy: _busy.contains(state.items[i].id),
+                  onTap: () => _open(state.items[i]),
+                  onAccept: () => _resolveCrew(state.items[i], true),
+                  onDecline: () => _resolveCrew(state.items[i], false),
+                ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < state.items.length; i++) ...[
-                    if (i > 0)
-                      Divider(height: 1, thickness: 1, color: t.divider),
-                    NuvoStaggerIn(
-                      index: i,
-                      child: _NotificationRow(
-                        item: state.items[i],
-                        busy: _busy.contains(state.items[i].id),
-                        onTap: () => _open(state.items[i]),
-                        onAccept: () =>
-                            _resolveCrew(state.items[i], true),
-                        onDecline: () =>
-                            _resolveCrew(state.items[i], false),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            ],
             if (state.hasMore)
               const Padding(
                 padding: EdgeInsets.all(16),
@@ -257,62 +253,25 @@ class _NotificationRow extends StatelessWidget {
     final t = context.themeColors;
     final accent = socialAccentFor(item.category);
     final role = accent.role(context);
-    final icon = socialAccentIcon(item.category);
+    // One unread signal — the dot. Its color doubles as the semantic
+    // accent (amber = attention, red = threat, green = positive); plain
+    // unread falls back to Nuvo blue. Bold title carries the rest.
+    final unreadColor =
+        accent == SocialAccent.neutral ? NuvoColors.blue : role.base;
     return NuvoPressable(
       onTap: onTap,
       haptic: false,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        // Unread = a quiet ice wash; the event color lives in the marker.
-        color: item.read ? t.surface : t.panelLight,
-        padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // The saturated event marker — the only place category color
-            // floods, so a long inbox stays scannable by color alone.
-            Container(
-              width: 4,
-              height: 44,
-              margin: const EdgeInsets.only(top: 1),
-              decoration: BoxDecoration(
-                color: accent == SocialAccent.neutral
-                    ? t.divider
-                    : role.base,
-                borderRadius: BorderRadius.circular(4),
-              ),
+            NuvoAvatar(
+              initials: notificationInitials(item.actorName),
+              photoUrl: item.actorPhotoUrl,
+              size: 38,
             ),
-            const SizedBox(width: 10),
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                NuvoAvatar(
-                  initials: notificationInitials(item.actorName),
-                  photoUrl: item.actorPhotoUrl,
-                  size: 38,
-                ),
-                Positioned(
-                  right: -2,
-                  bottom: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: accent == SocialAccent.neutral
-                          ? t.inkMuted
-                          : role.base,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: item.read ? t.surface : t.panelLight,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Icon(icon, size: 10, color: NuvoColors.white),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 11),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,7 +283,7 @@ class _NotificationRow extends StatelessWidget {
                       Expanded(
                         child: Text(
                           item.title,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: t.ink,
@@ -352,22 +311,28 @@ class _NotificationRow extends StatelessWidget {
                     ),
                   ],
                   if (_isActionableRequest) ...[
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
-                        NuvoOutlineButton(
-                          label: 'Decline',
-                          small: true,
-                          height: 36,
-                          onPressed: busy ? null : onDecline,
+                        Flexible(
+                          child: NuvoOutlineButton(
+                            label: 'Decline',
+                            small: true,
+                            expand: true,
+                            height: 36,
+                            onPressed: busy ? null : onDecline,
+                          ),
                         ),
                         const SizedBox(width: 8),
-                        NuvoPrimaryButton(
-                          label: 'Accept',
-                          small: true,
-                          height: 36,
-                          loading: busy,
-                          onPressed: busy ? null : onAccept,
+                        Flexible(
+                          child: NuvoPrimaryButton(
+                            label: 'Accept',
+                            small: true,
+                            expand: true,
+                            height: 36,
+                            loading: busy,
+                            onPressed: busy ? null : onAccept,
+                          ),
                         ),
                       ],
                     ),
@@ -377,11 +342,11 @@ class _NotificationRow extends StatelessWidget {
             ),
             if (!item.read)
               Container(
-                margin: const EdgeInsets.only(left: 8, top: 3),
+                margin: const EdgeInsets.only(left: 8, top: 4),
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: role.base,
+                  color: unreadColor,
                   shape: BoxShape.circle,
                 ),
               ),

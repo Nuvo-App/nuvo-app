@@ -1222,10 +1222,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Future<void> _submitVerifiedProof() async {
     // Local presentation fixtures have no server race and resolve in the
     // controller's demo path — they never need a verification session.
-    // Custom-verifier races have no registry release to bind a session to;
-    // everything else fails closed: no completed session, no proof.
-    if (!_isCustom &&
-        !_isPresentationFixtureRace &&
+    // Everything else — preset and custom verifier alike — fails closed:
+    // no completed session, no proof.
+    if (!_isPresentationFixtureRace &&
         !await _verificationSessionReadyForProof()) {
       if (!mounted) return;
       setState(() {
