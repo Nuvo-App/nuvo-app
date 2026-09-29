@@ -1385,6 +1385,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('iOS-style edge swipe steps back inside the flow',
+        (tester) async {
+      await pumpPushedComposer(tester);
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 of 5'), findsOneWidget);
+
+      // Rightward drag starting inside the left-edge zone: the route pop is
+      // vetoed at this step, so the drag performs the internal retreat.
+      await tester.dragFrom(const Offset(10, 400), const Offset(140, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.byType(RaceComposerScreen), findsOneWidget);
+
+      // Re-enter and swipe again mid-screen: outside the edge zone the strip
+      // never claims the drag — nothing happens.
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      await tester.dragFrom(const Offset(200, 400), const Offset(140, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('2 of 5'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('back-then-forward preserves the draft', (tester) async {
       await pumpPushedComposer(tester);
       await tester.tap(find.text('Choose activity'));
