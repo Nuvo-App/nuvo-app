@@ -444,11 +444,17 @@ class _NuvoNumberFlowState extends State<NuvoNumberFlow>
           animation: _ctrl,
           builder: (context, _) {
             final eased = widget.curve.transform(_ctrl.value);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final cell in _cells) _buildCell(cell, eased, style),
-              ],
+            // Digit transitions briefly hold the exiting AND entering cell
+            // sets — their sum can exceed the slot by a few px for a frame.
+            // scaleDown absorbs that transient width instead of overflowing.
+            return FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final cell in _cells) _buildCell(cell, eased, style),
+                ],
+              ),
             );
           },
         ),

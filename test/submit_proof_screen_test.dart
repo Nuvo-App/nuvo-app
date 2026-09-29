@@ -18,7 +18,6 @@ import 'package:nuvo/features/races/presentation/submit_proof_screen.dart';
 import 'package:nuvo/features/races/presentation/widgets/movement_demo.dart';
 import 'package:nuvo/features/races/presentation/widgets/preset_movement_demos.dart';
 import 'package:nuvo/features/races/presentation/widgets/rive_movement_preview.dart';
-import 'package:rive/rive.dart' hide PaintingStyle;
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
@@ -133,9 +132,12 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
 
         final movementType = motionActivityForBackendValue(id)!.type;
+        // Assert the preview pipeline's public type, not its internals —
+        // the native renderer can't link in flutter_test, so the widget
+        // degrades to its fallback while still owning the preview slot.
         if (RiveMovementPreview.supports(movementType)) {
           expect(
-            find.byType(RiveWidgetBuilder),
+            find.byType(RiveMovementPreview),
             findsOneWidget,
             reason: '$id should use the data-bound Nuvo Rive preview',
           );
@@ -146,7 +148,7 @@ void main() {
             reason: '$id should show the static verification setup',
           );
           expect(
-            find.byType(RiveWidgetBuilder),
+            find.byType(RiveMovementPreview),
             findsNothing,
             reason: '$id should keep its existing fallback preview',
           );

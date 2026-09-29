@@ -27,6 +27,10 @@ import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/auth/presentation/welcome_opening_cinematic.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:nuvo/features/notifications/application/push_service.dart';
+import 'package:nuvo/features/onboarding/data/first_use_store.dart';
+import 'package:nuvo/features/onboarding/presentation/notification_permission_screen.dart';
 import 'package:nuvo/features/onboarding/presentation/nuvo_onboarding_screen.dart';
 import 'package:nuvo/features/profile/application/progression_controller.dart';
 import 'package:nuvo/features/profile/data/progression_api.dart';
@@ -91,6 +95,24 @@ class _ScriptedAuthRepo extends AuthRepository {
 /// A controller pre-seeded with a server payload, so the payoff page's
 /// loaded path ('0 / 60 XP', live nextAchievement) is exercised without an
 /// API. Only `state` is touched — presentation reads it like production.
+/// Firebase-free push double — the permission screen asks it for the OS
+/// status and fires its request only behind the CTA.
+class _StubPushService extends PushService {
+  _StubPushService(super.ref);
+
+  int requestCount = 0;
+
+  @override
+  Future<AuthorizationStatus?> notificationAuthorizationStatus() async =>
+      AuthorizationStatus.notDetermined;
+
+  @override
+  Future<bool> requestPermissionInContext() async {
+    requestCount++;
+    return true;
+  }
+}
+
 class _SeededProgression extends ProgressionController {
   _SeededProgression(NuvoProgression progression)
     : super(
@@ -199,6 +221,11 @@ Future<void> tapWhenFound(WidgetTester tester, Finder finder) async {
   final container = ProviderContainer(
     overrides: [
       authControllerProvider.overrideWith((ref) => AuthController(repo)),
+      // The story's finish now hands off to the notification permission
+      // moment — a real route, a memory-backed store, and a push service
+      // that reports notDetermined so the education page renders.
+      firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
+      pushServiceProvider.overrideWith((ref) => _StubPushService(ref)),
       if (progression != null)
         progressionControllerProvider.overrideWith(
           (ref) => _SeededProgression(progression),
@@ -211,6 +238,10 @@ Future<void> tapWhenFound(WidgetTester tester, Finder finder) async {
       GoRoute(
         path: '/onboarding/nuvo',
         builder: (_, _) => const NuvoOnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding/notifications',
+        builder: (_, _) => const NotificationPermissionScreen(),
       ),
       GoRoute(
         path: '/arena',
@@ -230,6 +261,7 @@ Future<({GoRouter router, ProviderContainer container})> _pumpOnboarding(
   required AuthRepository repo,
   bool disableAnimations = false,
   bool dark = false,
+  double textScale = 1.0,
   NuvoProgression? progression,
 }) async {
   final built = _buildApp(repo, progression: progression);
@@ -249,7 +281,10 @@ Future<({GoRouter router, ProviderContainer container})> _pumpOnboarding(
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(
             context,
-          ).copyWith(disableAnimations: disableAnimations),
+          ).copyWith(
+            disableAnimations: disableAnimations,
+            textScaler: TextScaler.linear(textScale),
+          ),
           child: child!,
         ),
       ),
@@ -469,6 +504,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(repo.completionCalls, 1);
+    // The story hands off to the notification permission moment — the
+    // education page is the next step in first-run, not /arena directly.
+    expect(_path(built.router), '/onboarding/notifications');
+    await tester.pump(const Duration(milliseconds: 600));
+    // Maybe later resolves the step and lands in the app — and the OS
+    // prompt is never fired for this path.
+    await tapWhenFound(tester, find.text('Maybe later'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     expect(_path(built.router), '/arena');
     expect(tester.takeException(), isNull);
   });
@@ -610,6 +654,57 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     });
   }
+
+  // Worst-case composition: narrowest width with 1.4 accessibility text.
+  // Pages may scroll instead of clipping — overflow is the failure.
+  testWidgets('no overflow across the flow at 320×568, text scale 1.4', (
+    tester,
+  ) async {
+    _usePhone(tester, const Size(320, 568));
+    await _pumpOnboarding(
+      tester,
+      repo: _ScriptedAuthRepo(_namedUser),
+      textScale: 1.4,
+    );
+
+    await pumpUntilFound(tester, find.text('Show me'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await captureOnboarding(tester, 'p0-320-ts140');
+    expect(tester.takeException(), isNull);
+
+    const headlines = [
+      'Race anything.',
+      'Make your move.',
+      'Climb the board.',
+      'Every race builds\nyour Nuvo.',
+      'Make your name\nmean something.',
+      'Better with\ncompetition.',
+    ];
+    for (var page = 1; page <= 6; page++) {
+      await tapWhenFound(
+        tester,
+        find.text(page == 1 ? 'Show me' : 'Keep going'),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      await pumpUntilFound(tester, findNuvoText(headlines[page - 1]));
+      await _waitForOwnCta(tester);
+      await tester.pump(const Duration(milliseconds: 1200));
+      await captureOnboarding(tester, 'p$page-320-ts140');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'page $page overflowed at 320×568 text 1.4',
+      );
+    }
+
+    await tapWhenFound(tester, find.text('Keep going'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await pumpUntilFound(tester, find.text('Start your first race'));
+    await tester.pump(const Duration(milliseconds: 700));
+    await captureOnboarding(tester, 'p7-320-ts140');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   // The XP/achievement lesson, captured mid-beat — the frames reviewers need
   // to see (award → economy line → level roll → unlock → earn → goals).

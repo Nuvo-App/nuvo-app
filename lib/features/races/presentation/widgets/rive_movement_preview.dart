@@ -80,6 +80,12 @@ class _RiveMovementPreviewState extends State<RiveMovementPreview>
   SideRigPoseController? _sidePoseController;
   RiveWidgetController? _riveController;
 
+  /// True when the Rive runtime itself can't initialize (missing native
+  /// renderer — e.g. `flutter test`, where neither factory can link FFI).
+  /// The preview is decorative; the honest degradation is the caller's
+  /// [RiveMovementPreview.fallback], not a thrown build exception.
+  bool _riveUnavailable = false;
+
   Factory get _riveFactory => Platform.environment.containsKey('FLUTTER_TEST')
       ? Factory.flutter
       : Factory.rive;
@@ -87,6 +93,14 @@ class _RiveMovementPreviewState extends State<RiveMovementPreview>
   @override
   void initState() {
     super.initState();
+    try {
+      _initRive();
+    } catch (_) {
+      _riveUnavailable = true;
+    }
+  }
+
+  void _initRive() {
     final remoteSpec = RemotePreviewSpec.tryParse(widget.remotePreviewJson);
     final remoteSide = RemoteSideKeyframeSequence.tryParse(remoteSpec);
     final remoteFront = RemoteFrontKeyframeSequence.tryParse(remoteSpec);
@@ -129,6 +143,7 @@ class _RiveMovementPreviewState extends State<RiveMovementPreview>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_riveUnavailable) return;
     if (MediaQuery.disableAnimationsOf(context)) {
       _animation.stop();
       _applyStaticPose();
@@ -246,15 +261,18 @@ class _RiveMovementPreviewState extends State<RiveMovementPreview>
 
   @override
   void dispose() {
-    _animation
-      ..removeListener(_applyPose)
-      ..dispose();
-    _fileLoader.dispose();
+    if (!_riveUnavailable) {
+      _animation
+        ..removeListener(_applyPose)
+        ..dispose();
+      _fileLoader.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_riveUnavailable) return widget.fallback;
     return AnimatedBuilder(
       animation: _animation,
       child: RiveWidgetBuilder(
