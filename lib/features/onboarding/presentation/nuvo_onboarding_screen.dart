@@ -17,6 +17,7 @@ import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../auth/presentation/welcome_opening_cinematic.dart';
+import '../data/first_use_store.dart';
 import '../../profile/application/progression_controller.dart';
 import '../../profile/data/progression_models.dart';
 import '../../profile/presentation/widgets/nuvo_badges.dart';
@@ -279,7 +280,10 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
     });
     try {
       await ref.read(authControllerProvider.notifier).completeOnboarding();
-      if (mounted) context.go('/arena');
+      // The notification permission moment is the next first-run step —
+      // mark it owed so a kill there resumes at it rather than skipping.
+      await ref.read(firstUseStoreProvider).markNotificationPromptOwed();
+      if (mounted) context.go('/onboarding/notifications');
     } catch (_) {
       if (mounted) {
         setState(() {

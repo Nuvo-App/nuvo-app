@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 
 import 'auth_controller.dart';
 import '../data/auth_models.dart';
+import '../../onboarding/data/first_use_store.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 
 class RouterNotifier extends ChangeNotifier {
@@ -93,6 +94,19 @@ class RouterNotifier extends ChangeNotifier {
         return _firstRunTarget(user);
       }
       return null;
+    }
+
+    // First-run notification education sits between the Nuvo story and the
+    // first-race guide. The story's completion marks the step owed; if the
+    // app was killed there, relaunch resumes at the permission moment
+    // instead of silently skipping it. Resolved (enable / maybe-later /
+    // auto-skip) clears the flag, so this never replays — and demo replay
+    // never reaches a real permission surface.
+    if (!replayingDemo &&
+        _ref.read(firstUseStoreProvider).isNotificationPromptOwed) {
+      return loc == '/onboarding/notifications'
+          ? null
+          : '/onboarding/notifications';
     }
 
     // Onboarded: hand auth / onboarding routes back to the app.

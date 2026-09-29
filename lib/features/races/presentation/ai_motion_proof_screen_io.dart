@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -2462,8 +2463,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ],
       AiMotionProofStatus.submitting => [const SizedBox.shrink()],
       AiMotionProofStatus.submitted => [const SizedBox.shrink()],
+      // A denied camera can't re-prompt — the only honest actions are the
+      // OS settings deep link (same 'app-settings:' scheme the QR scanner
+      // uses) and the way back.
+      AiMotionProofStatus.permissionDenied => [
+        NuvoPrimaryButton(
+          label: 'Open Settings',
+          icon: Icons.settings_rounded,
+          expand: true,
+          onPressed: () => launchUrl(Uri.parse('app-settings:')),
+        ),
+        const SizedBox(height: 12),
+        NuvoOutlineButton(
+          label: 'Back',
+          expand: true,
+          onPressed: () => safePopOrGo(context, '/race/${widget.raceId}'),
+        ),
+      ],
       AiMotionProofStatus.aiFailed ||
-      AiMotionProofStatus.permissionDenied ||
       AiMotionProofStatus.cameraError => [
         NuvoPrimaryButton(
           label: _basketballPreflightFailed ? 'Retry verification' : 'Record again',
