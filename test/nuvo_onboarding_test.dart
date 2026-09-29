@@ -513,6 +513,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('system back unwinds the story before leaving the route', (
+    tester,
+  ) async {
+    _usePhone(tester);
+    final built = await _pumpOnboarding(
+      tester,
+      repo: _ScriptedAuthRepo(_namedUser),
+    );
+
+    await tapWhenFound(tester, find.text('Show me'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await pumpUntilFound(tester, findNuvoText('Race anything.'));
+    await pumpUntilFound(tester, find.text('Keep going'));
+
+    // iOS edge-swipe / Android system back → previous story page, and the
+    // onboarding route stays on the stack.
+    await tester.pageBack();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(_path(built.router), '/onboarding/nuvo');
+    expect(findNuvoText('Ready, Akshay?'), findsOneWidget);
+    expect(find.text('Show me'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in const [
     Size(320, 568),
     Size(375, 667),
