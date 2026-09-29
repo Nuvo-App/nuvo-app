@@ -280,6 +280,8 @@ class RaceMarkerTrack extends StatelessWidget {
     this.goalLabel,
     this.fillColor = NuvoColors.actionBlue,
     this.goalReached = false,
+    this.hasGoal = true,
+    this.compact = false,
   });
 
   /// Marks in any order — the viewer's mark carries [isViewer] and fills
@@ -287,6 +289,7 @@ class RaceMarkerTrack extends StatelessWidget {
   final List<RaceTrackMarker> markers;
 
   /// Label pinned to the goal ring ("Goal 50"). Null draws the ring alone.
+  /// Ignored in [compact] mode — quick lanes never carry labels.
   final String? goalLabel;
 
   /// Lane fill color — the viewer's state color (blue = racing).
@@ -296,14 +299,34 @@ class RaceMarkerTrack extends StatelessWidget {
   /// finished signal on the lane itself.
   final bool goalReached;
 
+  /// Whether a literal finish-line ring exists. Best-attempt and
+  /// lower-wins races spread marks across a relative-competition lane and
+  /// must not draw a goal ring — there is no denominator to reach.
+  final bool hasGoal;
+
+  /// Quick-view density: no labels, a shorter lane, smaller marks. Same
+  /// marks and animation — less chrome.
+  final bool compact;
+
   static const double _labelWidth = 64;
   static const double _trackHeight = 4;
   static const double _viewerSize = 11;
   static const double _rivalSize = 8;
 
+  // Compact geometry — the same marks on a tighter lane.
+  static const double _compactTrackHeight = 3;
+  static const double _compactViewerSize = 9;
+  static const double _compactRivalSize = 7;
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
+    // Compact lane geometry — same marks, no labels.
+    final trackHeight = compact ? _compactTrackHeight : _trackHeight;
+    final laneTop = compact ? 7.0 : 25.0;
+    final goalSize = compact ? 10.0 : 13.0;
+    final height = compact ? 16.0 : 40.0;
+
     return LayoutBuilder(
       builder: (context, cons) {
         final w = cons.maxWidth;
@@ -317,8 +340,11 @@ class RaceMarkerTrack extends StatelessWidget {
         // the label on its right.
         const lw = _labelWidth;
         final labelSpots = <(double x, String text, Color color)>[
-          if (goalLabel != null) (w - 4, goalLabel!, c.inkMuted),
-          for (final m in markers) (m.fraction.clamp(0.0, 1.0) * w, m.label, m.color),
+          if (!compact && hasGoal && goalLabel != null)
+            (w - 4, goalLabel!, c.inkMuted),
+          if (!compact)
+            for (final m in markers)
+              (m.fraction.clamp(0.0, 1.0) * w, m.label, m.color),
         ]..sort((a, b) => b.$1.compareTo(a.$1));
         var nextRight = w;
         final resolved = <({double left, String text, Color color})>[];
@@ -335,7 +361,7 @@ class RaceMarkerTrack extends StatelessWidget {
         const slideCurve = Curves.easeOutCubic;
 
         return SizedBox(
-          height: 40,
+          height: height,
           child: Stack(
             children: [
               for (final r in resolved)
@@ -357,20 +383,20 @@ class RaceMarkerTrack extends StatelessWidget {
                 ),
               // Lane + viewer fill.
               Positioned(
-                top: 25,
+                top: laneTop,
                 left: 0,
                 right: 0,
                 child: Container(
-                  height: _trackHeight,
+                  height: trackHeight,
                   decoration: BoxDecoration(
                     color: c.track,
-                    borderRadius: BorderRadius.circular(_trackHeight / 2),
+                    borderRadius: BorderRadius.circular(trackHeight / 2),
                   ),
                 ),
               ),
               if (viewerX > 0)
                 AnimatedPositioned(
-                  top: 25,
+                  top: laneTop,
                   left: 0,
                   width: viewerX,
                   duration: slide,
@@ -378,35 +404,37 @@ class RaceMarkerTrack extends StatelessWidget {
                   child: AnimatedContainer(
                     duration: slide,
                     curve: slideCurve,
-                    height: _trackHeight,
+                    height: trackHeight,
                     decoration: BoxDecoration(
                       color: fillColor,
                       borderRadius:
-                          BorderRadius.circular(_trackHeight / 2),
+                          BorderRadius.circular(trackHeight / 2),
                     ),
                   ),
                 ),
               // Goal ring at the finish — open while racing, fills green
-              // when the race is done.
-              Positioned(
-                top: 20.5,
-                left: w - 13,
-                child: AnimatedContainer(
-                  duration: slide,
-                  curve: slideCurve,
-                  width: 13,
-                  height: 13,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: goalReached ? NuvoColors.success : c.page,
-                    border: Border.all(
-                      color:
-                          goalReached ? NuvoColors.success : fillColor,
-                      width: 2,
+              // when the race is done. Best-attempt and lower-wins lanes
+              // have no finish ring — there is no denominator to reach.
+              if (hasGoal)
+                Positioned(
+                  top: laneTop + trackHeight / 2 - goalSize / 2,
+                  left: w - goalSize,
+                  child: AnimatedContainer(
+                    duration: slide,
+                    curve: slideCurve,
+                    width: goalSize,
+                    height: goalSize,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: goalReached ? NuvoColors.success : c.page,
+                      border: Border.all(
+                        color:
+                            goalReached ? NuvoColors.success : fillColor,
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
-              ),
               // Rivals draw first, viewer last — an overtake visibly slides
               // the viewer's mark OVER the rival it just passed.
               for (final m in [...markers]..sort(
@@ -415,7 +443,7 @@ class RaceMarkerTrack extends StatelessWidget {
                 Builder(builder: (context) {
                   final extent = _markExtent(m);
                   return AnimatedPositioned(
-                    top: 27 - extent / 2,
+                    top: laneTop + trackHeight / 2 - extent / 2,
                     left: ((m.fraction.clamp(0.0, 1.0) * w) - extent / 2)
                         .clamp(0.0, w - extent),
                     duration: slide,
@@ -439,12 +467,17 @@ class RaceMarkerTrack extends StatelessWidget {
   /// Outer extent of a mark including its halo/ring — the lane positions
   /// marks by their visual edge so the dot stays centered on its fraction.
   double _markExtent(RaceTrackMarker m) =>
-      (m.size ?? (m.isViewer ? _viewerSize : _rivalSize)) +
+      _markSize(m) +
       (m.haloColor != null ? 6 : 0) +
       (m.ringColor != null ? 9 : 0);
 
+  double _markSize(RaceTrackMarker m) => m.size ??
+      (m.isViewer
+          ? (compact ? _compactViewerSize : _viewerSize)
+          : (compact ? _compactRivalSize : _rivalSize));
+
   Widget _mark(RaceTrackMarker m, NuvoThemeColors c) {
-    final size = m.size ?? (m.isViewer ? _viewerSize : _rivalSize);
+    final size = _markSize(m);
     Widget dot = AnimatedContainer(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
@@ -723,6 +756,9 @@ class RaceHero extends StatelessWidget {
     this.anchorSuffix,
     this.trackMarkers,
     this.goalLabel,
+    this.trackFillColor = NuvoColors.actionBlue,
+    this.trackHasGoal = true,
+    this.goalReached = false,
   });
 
   final String activityLabel;
@@ -753,6 +789,17 @@ class RaceHero extends StatelessWidget {
   /// Label pinned at the goal ring ("Goal 50") — only used with
   /// [trackMarkers].
   final String? goalLabel;
+
+  /// Lane fill — the viewer's state color. Blue while racing, green when
+  /// leading the field to the line.
+  final Color trackFillColor;
+
+  /// Whether the lane ends in a finish ring. False for best-attempt and
+  /// lower-wins races — their marks sit on a relative-competition lane.
+  final bool trackHasGoal;
+
+  /// The race is over — the goal ring fills green.
+  final bool goalReached;
 
   /// The race's stable identity. When provided, the track is rendered as
   /// [NuvoRacePath] — a curved path whose shape is unique to this race but
@@ -895,6 +942,9 @@ class RaceHero extends StatelessWidget {
                       RaceMarkerTrack(
                         markers: trackMarkers!,
                         goalLabel: goalLabel,
+                        fillColor: trackFillColor,
+                        hasGoal: trackHasGoal,
+                        goalReached: goalReached,
                       ),
                       // Stakes — why the next proof matters ("11 reps to
                       // take 1st"), straight from canonical race state.
@@ -1056,15 +1106,21 @@ class RaceHero extends StatelessWidget {
 // RaceRow — active race row
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// Active race row for "Your races" lists.
+/// Active race row for "Your races" lists — the canonical QUICK view.
 ///
-/// Answers quickly: What race? Where am I? How far along? Who am I racing?
+/// Answers in ~1 second: what race, where am I, how close.
 ///
 /// Layout:
-///   race title (dominant)
-///   movement · progress label (meta line)
-///   progress track (compact)
-///   people + placement (right-aligned, quiet)
+///   race title (≤2 lines)          rank / "Start line"
+///   progress value (blue)          ← the second-strongest text
+///   compact marker lane            ← you + nearest rival + goal ring
+///   chase context · participants   [avatars]
+///
+/// The lane is a compact [RaceMarkerTrack] when [trackMarkers] is
+/// provided (viewer + the rival directly ahead), else the plain
+/// [RaceProgress] bar. Lower-wins and best-attempt races pass
+/// `hasGoal: false` so no finish ring implies a denominator that
+/// doesn't exist.
 class RaceRow extends StatelessWidget {
   const RaceRow({
     super.key,
@@ -1078,6 +1134,16 @@ class RaceRow extends StatelessWidget {
     required this.onTap,
     this.rewardLabel,
     this.remainingLabel,
+    this.trackMarkers,
+    this.hasGoal = true,
+    this.goalReached = false,
+    this.contextNote,
+    this.contextColor,
+    this.leading,
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: NuvoSpacing.md,
+      vertical: NuvoSpacing.md,
+    ),
   });
 
   final String raceTitle;
@@ -1093,18 +1159,47 @@ class RaceRow extends StatelessWidget {
   /// constants only, shown when finishing would pay out.
   final String? rewardLabel;
 
-  /// Distance still to the finish line ("22 left") — appended to the meta
-  /// line when the race has a numeric target still ahead of the viewer.
+  /// Distance still to the finish line ("22 left") — the bottom context
+  /// line when no [contextNote] is provided.
   final String? remainingLabel;
+
+  /// Viewer + nearest-rival marks for the compact lane. When null the row
+  /// draws the plain [RaceProgress] bar instead.
+  final List<RaceTrackMarker>? trackMarkers;
+
+  /// Whether the compact lane ends in a finish ring — false for
+  /// best-attempt and lower-wins races (relative-competition lanes).
+  final bool hasGoal;
+
+  /// Fills the goal ring green — a completed race's quiet signal.
+  final bool goalReached;
+
+  /// Canonical stakes line ("3 reps to pass Noah") — replaces the
+  /// remaining/movement meta when present.
+  final String? contextNote;
+
+  /// Chase-state tint for [contextNote] — blue chasing, green leading,
+  /// gold for the takeover moment. Muted when null.
+  final Color? contextColor;
+
+  /// Optional leading slot (a movement icon well on Profile) — the row's
+  /// composition stays identical to its left.
+  final Widget? leading;
+
+  /// Row padding — lists that already carry their own horizontal gutter
+  /// (Profile's racing-now section) pass a vertical-only padding.
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final hasProof = progressPercent > 0;
-    final meta = !hasProof
-        ? movementLabel
-        : remainingLabel != null
-        ? '$movementLabel · $progressLabel · $remainingLabel'
-        : '$movementLabel · $progressLabel';
+    final contextLine = contextNote ??
+        [
+          movementLabel,
+          ?remainingLabel,
+          '$participantCount ${participantCount == 1 ? 'racer' : 'racers'}',
+        ].join(' · ');
 
     return Semantics(
       button: true,
@@ -1114,45 +1209,116 @@ class RaceRow extends StatelessWidget {
         scale: 0.985,
         child: Container(
           constraints: const BoxConstraints(minHeight: 58),
-          padding: const EdgeInsets.symmetric(
-            horizontal: NuvoSpacing.md,
-            vertical: NuvoSpacing.md,
-          ),
+          padding: padding,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(width: NuvoSpacing.sm),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (hasProof) ...[
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              color: NuvoColors.actionBlue,
-                              shape: BoxShape.circle,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Container(
+                              width: 7,
+                              height: 7,
+                              decoration: const BoxDecoration(
+                                color: NuvoColors.actionBlue,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 7),
                         ],
-                        Flexible(
+                        Expanded(
                           child: Text(
                             raceTitle,
                             style: AppTextStyles.raceRowTitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: NuvoSpacing.sm),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: hasProof
+                              ? RacePlacement(rank: rank, size: 15)
+                              : Text(
+                                  'Start line',
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: c.inkSubtle,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 10,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                    if (hasProof) ...[
+                      const SizedBox(height: 4),
+                      // The progress value is the second read — blue and
+                      // weighted, never folded into the gray meta line.
+                      Text(
+                        progressLabel,
+                        style: AppTextStyles.statLarge(
+                          13.5,
+                          color: NuvoColors.actionBlue,
+                          weight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 7),
+                      if (trackMarkers != null)
+                        RaceMarkerTrack(
+                          markers: trackMarkers!,
+                          compact: true,
+                          hasGoal: hasGoal,
+                          goalReached: goalReached,
+                        )
+                      else
+                        RaceProgress(
+                          progressPercent: progressPercent,
+                          trackHeight: 3,
+                          dotDiameter: 9,
+                        ),
+                      const SizedBox(height: 6),
+                    ] else
+                      const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            contextLine,
+                            style: AppTextStyles.raceRowMeta.copyWith(
+                              color: contextColor ?? c.inkSubtle,
+                              fontWeight: contextNote != null
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (avatars.isNotEmpty) ...[
+                          const SizedBox(width: NuvoSpacing.sm),
+                          RacePeople(
+                            avatars: avatars,
+                            total: participantCount,
+                            size: 20,
+                            max: 3,
+                          ),
+                        ],
                       ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      meta,
-                      style: AppTextStyles.raceRowMeta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     if (rewardLabel != null) ...[
                       const SizedBox(height: 3),
@@ -1166,45 +1332,8 @@ class RaceRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                    if (hasProof) ...[
-                      const SizedBox(height: 6),
-                      RaceProgress(
-                        progressPercent: progressPercent,
-                        trackHeight: 3,
-                        dotDiameter: 9,
-                      ),
-                    ],
                   ],
                 ),
-              ),
-              const SizedBox(width: NuvoSpacing.sm),
-              // Right side: placement + people
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (hasProof)
-                    RacePlacement(rank: rank, size: 15)
-                  else
-                    Text(
-                      'At start',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: context.themeColors.inkDim,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  if (avatars.isNotEmpty) ...[
-                    const SizedBox(height: 5),
-                    RacePeople(
-                      avatars: avatars,
-                      total: participantCount,
-                      size: 20,
-                      max: 3,
-                    ),
-                  ],
-                ],
               ),
             ],
           ),
@@ -1697,6 +1826,15 @@ typedef NuvoFeaturedRaceCard = RaceHero;
 
 /// Legacy alias for [RaceRow].
 typedef NuvoRaceRow = RaceRow;
+
+/// The canonical QUICK presentation — [RaceRow] is the quick view: title,
+/// blue progress value, compact marker lane, chase context, avatars.
+/// Named explicitly so screens pick a presentation mode, not a widget.
+typedef NuvoRaceQuickView = RaceRow;
+
+/// The canonical FOCUSED presentation — [RaceHero] is the single-race
+/// view: large viewer score, named marker lane, stakes, one CTA.
+typedef NuvoRaceFocusedView = RaceHero;
 
 /// Legacy alias for [RaceResultRow].
 typedef NuvoFinishedRaceRow = RaceResultRow;

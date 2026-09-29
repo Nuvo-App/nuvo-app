@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,7 +15,9 @@ import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/domain/motion_activity.dart';
 import 'package:nuvo/features/races/domain/motion_activity_catalog.dart';
 import 'package:nuvo/features/races/domain/race_draft.dart';
+import 'package:nuvo/features/races/data/motion_catalog.dart';
 import 'package:nuvo/features/races/presentation/custom_pose/recent_movements_provider.dart';
+import 'package:nuvo/features/races/presentation/motion_catalog_provider.dart';
 import 'package:nuvo/features/races/presentation/race_composer_screen.dart';
 
 import 'fixtures/pose_fixtures.dart';
@@ -784,17 +787,16 @@ void main() {
       expect(find.text('Pick a movement'), findsOneWidget);
     });
 
-    testWidgets('1 recent → full-width recent + suggested fills to 4',
-        (tester) async {
+    testWidgets('1 recent → recents label, grid fills to 4', (tester) async {
       await pumpPicker(tester, recents: const ['plank_hold']);
       expect(find.text('Recent activity'), findsOneWidget);
-      expect(find.text('Suggested'), findsOneWidget);
+      // Suggested pads merge into the same 2×2 grid — one bounded group,
+      // no second section eating first-view height.
       expect(tileCount(tester), 4);
-      // The lone recent is a full-width tile, not a half-row orphan.
-      expect(tester.getSize(tile('Plank')).width, greaterThan(300));
     });
 
-    testWidgets('2 recents → one full row + suggested row', (tester) async {
+    testWidgets('2 recents → one full row + padded second row',
+        (tester) async {
       await pumpPicker(tester, recents: const ['plank_hold', 'squats']);
       expect(find.text('Recent activities'), findsOneWidget);
       expect(tileCount(tester), 4);
@@ -805,8 +807,7 @@ void main() {
       await pumpPicker(
           tester, recents: const ['plank_hold', 'squats', 'jumping_jacks']);
       expect(find.text('Recent activities'), findsOneWidget);
-      expect(find.text('Suggested'), findsOneWidget);
-      // 3 recents (2 + 1 wide) + 1 suggested (wide) = 4 options, no holes.
+      // 3 recents + 1 suggested = 4 options in one grid, no holes.
       expect(tileCount(tester), 4);
     });
 
@@ -874,6 +875,156 @@ void main() {
       expect(tester.getTopLeft(find.text('Plank')), before);
     });
 
+    // The reported defect: tapping a tile moved it to a new grid slot.
+    // Selection is surface state — every tile must keep its exact position
+    // across repeated selection changes.
+    testWidgets('selection never reorders the grid', (tester) async {
+      await pumpPicker(tester,
+          recents: const ['plank_hold', 'jumping_jacks', 'push_ups']);
+      Map<String, Offset> positions() => {
+            for (final t in ['Plank', 'Jumping Jacks', 'Pushups', 'Squats'])
+              t: tester.getTopLeft(tile(t)),
+          };
+      final initial = positions();
+      // Recents + one suggested tile in the merged grid — the exact
+      // composition from the report.
+      expect(find.text('Recent activities'), findsOneWidget);
+
+      await tester.tap(find.text('Jumping Jacks'));
+      await tester.pumpAndSettle();
+      expect(positions(), initial);
+      expect(find.text('Continue with Jumping Jacks'), findsOneWidget);
+
+      await tester.tap(find.text('Plank'));
+      await tester.pumpAndSettle();
+      expect(positions(), initial);
+      expect(find.text('Continue with Plank'), findsOneWidget);
+      while (tester.takeException() != null) {
+        fail('grid moved under selection');
+      }
+    });
+
+    // Recency means historical use — a tap inside the composer must never
+    // write to the recents store.
+    testWidgets('tapping tiles never writes recency', (tester) async {
+      setSize(tester, const Size(390, 844));
+      final store = _RecordingPickerStore(const ['plank_hold', 'squats']);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider.overrideWithValue(store),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const RaceComposerScreen(
+              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Plank'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Squats'));
+      await tester.pumpAndSettle();
+      expect(store.recorded, isEmpty);
+    });
+
+    // Recents resolving AFTER the user has selected must not reshuffle the
+    // screen they are looking at — the visible order is frozen.
+    testWidgets('late recents after selection cannot reorder',
+        (tester) async {
+      setSize(tester, const Size(390, 844));
+      final gate = _PickerStoreGate(
+          const ['squats', 'lunges', 'mountain_climbers', 'high_knees']);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider.overrideWithValue(gate),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const RaceComposerScreen(
+              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+
+      Map<String, Offset> positions() => {
+            for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
+              t: tester.getTopLeft(tile(t)),
+          };
+      final initial = positions();
+
+      await tester.tap(find.text('Pushups'));
+      await tester.pumpAndSettle();
+      gate.complete();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+
+      // The late personalization lands silently — no reorder, no new heading
+      // appearing under the user's finger.
+      expect(positions(), initial);
+      expect(find.text('Continue with Pushups'), findsOneWidget);
+      expect(find.text('Recent activities'), findsNothing);
+      while (tester.takeException() != null) {
+        fail('late recents reshuffled the picker');
+      }
+    });
+
+    // Same guarantee for the remote catalog snapshot.
+    testWidgets('late remote catalog after selection cannot reorder',
+        (tester) async {
+      setSize(tester, const Size(390, 844));
+      final catalogGate = Completer<MotionCatalogSnapshot>();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider
+                .overrideWithValue(_PickerStore(const [])),
+            motionCatalogProvider.overrideWith((ref) => catalogGate.future),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const RaceComposerScreen(
+              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+
+      Map<String, Offset> positions() => {
+            for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
+              t: tester.getTopLeft(tile(t)),
+          };
+      final initial = positions();
+
+      await tester.tap(find.text('Squats'));
+      await tester.pumpAndSettle();
+      catalogGate.complete(MotionCatalogSnapshot.bundled());
+      await tester.pumpAndSettle();
+
+      expect(positions(), initial);
+      expect(find.text('Continue with Squats'), findsOneWidget);
+      while (tester.takeException() != null) {
+        fail('late catalog reshuffled the picker');
+      }
+    });
+
     testWidgets('See all movements is an active blue path', (tester) async {
       await pumpPicker(tester);
       await tester.tap(find.text('See all movements'));
@@ -886,8 +1037,14 @@ void main() {
       expect(find.text('Teach Nuvo'), findsOneWidget);
     });
 
-    testWidgets('back navigation preserves user selection', (tester) async {
+    testWidgets('back navigation preserves order and selection',
+        (tester) async {
       await pumpPicker(tester);
+      Map<String, Offset> positions() => {
+            for (final t in ['Pushups', 'Squats', 'Jumping Jacks', 'Plank'])
+              t: tester.getTopLeft(tile(t)),
+          };
+      final initial = positions();
       await tester.tap(find.text('Plank'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Continue with Plank'));
@@ -897,6 +1054,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Continue with Plank'), findsOneWidget);
       expect(find.text('Pick a movement'), findsNothing);
+      // Same page instance → same frozen order.
+      expect(positions(), initial);
     });
 
     testWidgets('selection survives late-arriving recents', (tester) async {
@@ -1019,6 +1178,23 @@ class _PickerStore extends RecentMovementsStore {
   Future<List<String>> readIds() async => ids;
   @override
   Future<List<String>> recordSelection(String movementId) async => ids;
+}
+
+/// Records every `recordSelection` call — taps inside the composer must
+/// never write recency; only an actual create may.
+class _RecordingPickerStore extends RecentMovementsStore {
+  _RecordingPickerStore(this.ids);
+  final List<String> ids;
+  final List<String> recorded = [];
+
+  @override
+  Future<List<String>> readIds() async => ids;
+
+  @override
+  Future<List<String>> recordSelection(String movementId) async {
+    recorded.add(movementId);
+    return [movementId, ...ids];
+  }
 }
 
 /// Delays recents until [complete] — models the real keychain fetch racing

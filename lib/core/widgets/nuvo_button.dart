@@ -34,11 +34,13 @@ import 'pressable_scale.dart';
 /// designed height. Full cookbook: docs/agents/09-widget-and-token-reference.md.
 
 Widget _buttonContent({
+  required BuildContext context,
   required String label,
   required Color textColor,
   IconData? icon,
   Widget? leadingWidget,
   bool loading = false,
+  bool animatedLabel = false,
 }) {
   if (loading) {
     return SizedBox(
@@ -51,23 +53,34 @@ Widget _buttonContent({
     );
   }
 
+  // A button label must never truncate to "Submit…". When the button is
+  // narrower than the label, shrink the text to fit instead of clipping it.
+  Widget labelText = Text(
+    label,
+    key: ValueKey(label),
+    maxLines: 1,
+    softWrap: false,
+    style: AppTextStyles.buttonLabel.copyWith(color: textColor),
+  );
+  if (animatedLabel && !MediaQuery.disableAnimationsOf(context)) {
+    // Labels that react to user choices (e.g. "Continue with Plank") swap
+    // with a short crossfade — the button chrome itself stays put.
+    labelText = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 160),
+      child: labelText,
+    );
+  }
+
   return Row(
     mainAxisSize: MainAxisSize.min,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
       if (leadingWidget != null) ...[leadingWidget, const SizedBox(width: 8)],
-      // A button label must never truncate to "Submit…". When the button is
-      // narrower than the label, shrink the text to fit instead of clipping it.
       Flexible(
         child: FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.center,
-          child: Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            style: AppTextStyles.buttonLabel.copyWith(color: textColor),
-          ),
+          child: labelText,
         ),
       ),
       if (icon != null) ...[
@@ -247,6 +260,7 @@ class NuvoPrimaryButton extends StatelessWidget {
     this.subtleLift = false,
     this.height,
     this.horizontalPadding,
+    this.animatedLabel = false,
   });
 
   final String label;
@@ -256,6 +270,11 @@ class NuvoPrimaryButton extends StatelessWidget {
   final bool expand;
   final bool loading;
   final bool small;
+
+  /// Crossfades the label text when it changes (e.g. a CTA that reacts to a
+  /// choice) without touching the button chrome. Off by default so static
+  /// labels pay nothing.
+  final bool animatedLabel;
 
   /// Overrides the default 46/56 height for a screen that needs its own
   /// emphasis (e.g. a chunkier hero action row) without changing every
@@ -306,11 +325,13 @@ class NuvoPrimaryButton extends StatelessWidget {
       expand: expand,
       horizontalPadding: horizontalPadding ?? 24,
       child: _buttonContent(
+        context: context,
         label: label,
         textColor: enabled ? NuvoColors.white : c.inkDim,
         icon: icon,
         leadingWidget: leadingWidget,
         loading: loading,
+        animatedLabel: animatedLabel,
       ),
     );
   }
@@ -393,6 +414,7 @@ class NuvoOutlineButton extends StatelessWidget {
               ),
             )
           : _buttonContent(
+              context: context,
               label: label,
               textColor: c.ink,
               icon: icon,
@@ -488,6 +510,7 @@ class _NuvoCopyButtonState extends State<NuvoCopyButton> {
         child: KeyedSubtree(
           key: ValueKey(copied),
           child: _buttonContent(
+            context: context,
             label: copied ? widget.copiedLabel : widget.label,
             textColor: copied ? success.on : c.ink,
             icon: copied ? Icons.check_rounded : widget.icon,
@@ -543,6 +566,7 @@ class NuvoTertiaryButton extends StatelessWidget {
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
+        context: context,
         label: label,
         textColor: c.ink,
         icon: icon,
@@ -606,6 +630,7 @@ class NuvoSuccessButton extends StatelessWidget {
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
+        context: context,
         label: label,
         textColor: solid ? NuvoColors.white : role.on,
         icon: icon,
@@ -660,6 +685,7 @@ class NuvoDangerButton extends StatelessWidget {
       enabled: enabled,
       expand: expand,
       child: _buttonContent(
+        context: context,
         label: label,
         textColor: solid ? NuvoColors.white : role.on,
         icon: icon,

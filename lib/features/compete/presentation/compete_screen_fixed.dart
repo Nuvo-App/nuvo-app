@@ -267,31 +267,53 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
     final isSeconds = raceMetric(race) == RaceMetric.seconds;
     String fmt(int v) => isSeconds ? formatClock(v) : '$v';
 
+    // Lane geometry is canonical: a real finish target gives a literal
+    // share-of-distance lane; best-attempt and lower-wins races get a
+    // relative-competition lane with no goal ring.
+    final geo = raceLaneGeometry(race, uid);
+    final vc = race.viewerContext;
+    final completed = raceIsCompleted(race);
+    final leading = (vc?.isLeading ?? false) || rank == 1;
+    final tied = vc?.isTied ?? false;
+    final rival = raceNearestRival(race, uid);
+    final rivalMark = rival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == rival.userId)
+            .firstOrNull;
+
     List<RaceTrackMarker>? markers;
     String? anchorValue;
     String? anchorSuffix;
     String? goalLabel;
-    if (targetValue != null && targetValue > 0) {
+    if (geo.hasGoal) {
       anchorValue = fmt(myValue);
-      anchorSuffix = '/ ${raceScoreLabel(race, targetValue)}';
+      anchorSuffix = '/ ${raceScoreLabel(race, targetValue!)}';
       goalLabel = 'Goal ${fmt(targetValue)}';
-      final ranked = serverRankedParticipants(race);
-      final rival = ranked
-          .where((p) => p.userId != uid && p.progressValue > 0)
-          .firstOrNull;
+    } else {
+      // No denominator — the score stands alone ("78 strokes", not "0%").
+      anchorValue = raceScoreLabel(race, myValue);
+    }
+    if (geo.viewer != null || rivalMark != null) {
       markers = [
-        RaceTrackMarker(
-          fraction: myValue / targetValue,
-          label: 'You ${fmt(myValue)}',
-          color: NuvoColors.actionBlue,
-          isViewer: true,
-        ),
-        if (rival != null)
+        if (rivalMark != null)
           RaceTrackMarker(
-            fraction: rival.progressValue / targetValue,
+            fraction: rivalMark.fraction,
             label:
-                '${_firstName(rival.displayName)} ${fmt(rival.progressValue)}',
+                '${_firstName(rival!.displayName)} ${fmt(rival.progressValue)}',
             color: c.ink,
+            // A tied race gives the rival the viewer's physical mark size —
+            // equal standing reads as equal marks.
+            size: tied ? 11 : null,
+          ),
+        if (geo.viewer != null)
+          RaceTrackMarker(
+            fraction: geo.viewer!,
+            label: 'You ${fmt(myValue)}',
+            color: leading ? NuvoColors.success : NuvoColors.actionBlue,
+            isViewer: true,
+            haloColor:
+                leading && !completed ? NuvoColors.success : null,
           ),
       ];
     }
@@ -319,6 +341,10 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
         anchorSuffix: anchorSuffix,
         trackMarkers: markers,
         goalLabel: goalLabel,
+        trackFillColor:
+            leading ? NuvoColors.success : NuvoColors.actionBlue,
+        trackHasGoal: geo.hasGoal,
+        goalReached: completed,
         contextNote: _stakesLine(race, uid),
         // Always open the race board (the leaderboard). Logging progress /
         // verifying happens from the pinned action on that screen — every
@@ -574,7 +600,7 @@ class _CappedRaceList extends StatelessWidget {
         Column(
           children: [
             for (var i = 0; i < visible.length; i++) ...[
-              _buildRow(visible[i], i + 1),
+              _buildRow(context, visible[i], i + 1),
               if (i < visible.length - 1)
                 Divider(
                   height: 1,
@@ -590,13 +616,15 @@ class _CappedRaceList extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(Race race, int index) {
+  Widget _buildRow(BuildContext context, Race race, int index) {
+    final c = context.themeColors;
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
     final rank = rankForUser(race, userId);
     final avatars = _rowAvatars(race, userId);
     final activity = raceActivityTitle(race);
     final progressLabel = raceProgressLabel(race, myPart);
+    final completed = raceIsCompleted(race);
     // Distance to the finish line, when the race has a numeric target
     // still ahead of the viewer ("22 left" / "1:18 left").
     final targetValue = race.targetValue;
@@ -610,6 +638,37 @@ class _CappedRaceList extends StatelessWidget {
         ? null
         : '${raceMetric(race) == RaceMetric.seconds ? formatClock(left) : left} left';
 
+    // Quick lane — the viewer's mark plus the racer directly ahead. Lower-
+    // wins and best-attempt races get the relative-competition lane (no
+    // finish ring) from the shared geometry helper.
+    final geo = raceLaneGeometry(race, userId);
+    final rival = raceNearestRival(race, userId);
+    final rivalMark = rival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == rival.userId)
+            .firstOrNull;
+    final leading = rank == 1 || (race.viewerContext?.isLeading ?? false);
+    List<RaceTrackMarker>? markers;
+    if (geo.viewer != null) {
+      markers = [
+        if (rivalMark != null)
+          RaceTrackMarker(
+            fraction: rivalMark.fraction,
+            label: _firstName(rival!.displayName),
+            color: c.ink,
+          ),
+        RaceTrackMarker(
+          fraction: geo.viewer!,
+          label: 'You',
+          color: leading ? NuvoColors.success : NuvoColors.actionBlue,
+          isViewer: true,
+          haloColor: leading && !completed ? NuvoColors.success : null,
+        ),
+      ];
+    }
+    final contextNote = pct > 0 ? _raceRowContext(race, userId) : null;
+
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
       movementLabel: activity,
@@ -619,8 +678,19 @@ class _CappedRaceList extends StatelessWidget {
       participantCount: race.participantCount,
       avatars: avatars,
       remainingLabel: remaining,
+      trackMarkers: markers,
+      hasGoal: geo.hasGoal,
+      goalReached: completed,
+      contextNote: contextNote,
+      contextColor: contextNote == null
+          ? null
+          : leading
+              ? NuvoColors.success
+              : NuvoColors.actionBlue,
       // Finishing pays +25 — deterministic from the server award table.
-      rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
+      rewardLabel: myPart != null && !completed
+          ? 'Finish · +$kXpFinish XP'
+          : null,
       onTap: () => onOpen(race),
     );
   }
@@ -661,7 +731,7 @@ class _SummaryExpansionList extends StatelessWidget {
     return Column(
       children: [
         for (var i = 0; i < races.length; i++) ...[
-          _buildRow(races[i], i + 1),
+          _buildRow(context, races[i], i + 1),
           if (i < races.length - 1)
             Divider(
               height: 1,
@@ -675,7 +745,8 @@ class _SummaryExpansionList extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(Race race, int index) {
+  Widget _buildRow(BuildContext context, Race race, int index) {
+    final c = context.themeColors;
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
     final rank = rankForUser(race, userId);
@@ -694,6 +765,16 @@ class _SummaryExpansionList extends StatelessWidget {
       return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
     }).toList();
 
+    final geo = raceLaneGeometry(race, userId);
+    final rival = raceNearestRival(race, userId);
+    final rivalMark = rival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == rival.userId)
+            .firstOrNull;
+    final leading = rank == 1 || (race.viewerContext?.isLeading ?? false);
+    final contextNote = pct > 0 ? _raceRowContext(race, userId) : null;
+
     return NuvoRaceRow(
       raceTitle: race.displayTitle,
       movementLabel: activity,
@@ -702,6 +783,32 @@ class _SummaryExpansionList extends StatelessWidget {
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
+      trackMarkers: geo.viewer == null
+          ? null
+          : [
+              if (rivalMark != null)
+                RaceTrackMarker(
+                  fraction: rivalMark.fraction,
+                  label: _firstName(rival!.displayName),
+                  color: c.ink,
+                ),
+              RaceTrackMarker(
+                fraction: geo.viewer!,
+                label: 'You',
+                color:
+                    leading ? NuvoColors.success : NuvoColors.actionBlue,
+                isViewer: true,
+                haloColor: leading ? NuvoColors.success : null,
+              ),
+            ],
+      hasGoal: geo.hasGoal,
+      goalReached: raceIsCompleted(race),
+      contextNote: contextNote,
+      contextColor: contextNote == null
+          ? null
+          : leading
+              ? NuvoColors.success
+              : NuvoColors.actionBlue,
       rewardLabel: myPart != null ? 'Finish · +$kXpFinish XP' : null,
       onTap: () => onOpen(race),
     );
@@ -1004,6 +1111,37 @@ class _EmptyState extends StatelessWidget {
 
 /// First name for lane/rivalry labels — rivals are people, and first names
 /// are how a crew actually reads them.
+/// The one-line stakes under a quick row — what the next proof changes.
+/// Server verdicts first, then the honest "to pass" gap computed from
+/// canonical standings; never fabricated.
+String? _raceRowContext(Race race, String? uid) {
+  final vc = race.viewerContext;
+  final rival = raceNearestRival(race, uid);
+  final rivalName = rival == null ? null : _firstName(rival.displayName);
+  if (vc != null) {
+    if (vc.isLeading) {
+      final gap = vc.gapToNextRank;
+      return gap != null && gap > 0 && rivalName != null
+          ? 'You lead $rivalName by ${raceScoreLabel(race, gap)}'
+          : 'You lead';
+    }
+    if (vc.isTied && vc.rank == 1) return 'Tied at the front';
+    if (rivalName != null && vc.gapToNextRank != null) {
+      return '${raceScoreLabel(race, vc.gapToNextRank!)} to pass '
+          '$rivalName';
+    }
+  }
+  final myPart = uid != null ? race.participantFor(uid) : null;
+  if (rival != null && myPart != null) {
+    final gap = (rival.progressValue - myPart.progressValue).abs();
+    if (gap > 0) {
+      return '${raceScoreLabel(race, gap)} to pass $rivalName';
+    }
+    if (rivalName != null) return 'Level with $rivalName';
+  }
+  return null;
+}
+
 String _firstName(String displayName) {
   final first = displayName.trim().split(RegExp(r'\s+')).firstOrNull ?? '';
   return first.isEmpty ? 'Crew' : first;

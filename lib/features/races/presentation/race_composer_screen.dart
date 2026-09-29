@@ -12,6 +12,7 @@ import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_shadows.dart';
+import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_motion.dart';
@@ -416,6 +417,13 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
         createCustomRace: controller.createCustomRace,
         createRace: controller.createRace,
       );
+      // Recency belongs to real use: the movement becomes "recent" once the
+      // race exists — never because a tile was tapped mid-compose.
+      if (!draft.isCustom) {
+        unawaited(ref
+            .read(recentMovementIdsProvider.notifier)
+            .record(draft.activity.activityId));
+      }
       if (!mounted) return;
       final wantsInvite = draft.inviteCrew;
       if (isFirstRace) {
@@ -803,7 +811,15 @@ class _PageShell extends StatelessWidget {
           child: NuvoFadeScroll(
             child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            // Density-aware chrome: a short phone gets a tighter question
+            // block so the decision surface fits the first viewport; the
+            // composition below is identical at every density.
+            padding: EdgeInsets.fromLTRB(
+              24,
+              context.nuvoDensity.pick(compact: 10, regular: 18, large: 18),
+              24,
+              16,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -814,14 +830,17 @@ class _PageShell extends StatelessWidget {
                     height: 1.1,
                   ),
                 ).animate().fadeIn(duration: 220.ms),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   support,
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: context.themeColors.inkMuted,
                   ),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(
+                  height: context.nuvoDensity
+                      .pick(compact: 12, regular: 16, large: 16),
+                ),
                 body.animate(delay: 60.ms).fadeIn(duration: 220.ms),
               ],
             ),
@@ -830,7 +849,7 @@ class _PageShell extends StatelessWidget {
         ),
         Padding(
           key: ctaKey,
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1160,6 +1179,19 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   /// "See all movements".
   bool _browseAll = false;
 
+  // ── Frozen visible order ─────────────────────────────────────────────────
+  // The picker's layout is derived ONCE, then frozen for the life of the
+  // page: taps and late async data must never reshuffle tiles under the
+  // user's finger. The freeze lands when recents finish resolving (the
+  // personalized composition) or on the first interaction, whichever comes
+  // first — after that the lists below are the screen's fixed truth.
+  bool _freezeRequested = false;
+  List<MotionActivityDefinition>? _frozenRecentPicks;
+  List<MotionActivityDefinition>? _frozenPads;
+  List<MotionActivityDefinition>? _frozenBrowseRecents;
+  List<MotionActivityDefinition>? _frozenActivities;
+  List<MovementCategory>? _frozenCategories;
+
   @override
   void initState() {
     super.initState();
@@ -1169,8 +1201,11 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     _moveUnitController.text = widget.draft.customUnit ?? 'reps';
     _teachMode = widget.draft.isCustom;
     // The primary tiles are the user's real recents — load them now so the
-    // first paint isn't waiting on keychain storage.
-    ref.read(recentMovementIdsProvider.notifier).load();
+    // first paint isn't waiting on keychain storage. When they resolve, the
+    // starter composition freezes into the personalized one — once.
+    unawaited(ref.read(recentMovementIdsProvider.notifier).load().then((_) {
+      if (mounted) setState(() => _freezeRequested = true);
+    }));
   }
 
   @override
@@ -1237,12 +1272,16 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
           )
           .copyWith(markEdited: {RaceField.activity}),
     );
-    setState(() => _teachMode = false);
+    setState(() {
+      _teachMode = false;
+      // A tap freezes the visible order — nothing reshuffles under the
+      // finger once the user has committed to a tile.
+      _freezeRequested = true;
+    });
     widget.onInput?.call();
-    // Record selection in recent movements
-    ref
-        .read(recentMovementIdsProvider.notifier)
-        .record(activity.activityId);
+    // NOTE: selection is NOT recorded into recents here — tapping a tile in
+    // this composer is not "recently raced". Recency is written once the
+    // race is actually created (see _create).
   }
 
   /// Starter picks used to pad the primary view — the canonical set first
@@ -1391,6 +1430,23 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       }
     }
 
+    // Freeze point: once requested (recents resolved, or the user has
+    // interacted), snapshot the composition — taps and late provider updates
+    // can no longer reorder the visible list.
+    if (_freezeRequested && _frozenPads == null) {
+      _frozenRecentPicks = recentPicks;
+      _frozenPads = starterPads;
+      _frozenBrowseRecents = recentActivities.take(5).toList();
+      _frozenActivities = sorted;
+      _frozenCategories = categories;
+    }
+    final pickerRecents = _frozenRecentPicks ?? recentPicks;
+    final pickerPads = _frozenPads ?? starterPads;
+    final browserActivities = _frozenActivities ?? sorted;
+    final browserCategories = _frozenCategories ?? categories;
+    final browserRecents =
+        _frozenBrowseRecents ?? recentActivities.take(5).toList();
+
     return _PageShell(
       question: 'What are you competing in?',
       // A clarification from the title interpretation is the support copy —
@@ -1464,10 +1520,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                         _searchController.clear();
                         _selectedCategory = null;
                       }),
-                      activities: availableActivities,
-                      sorted: sorted,
-                      categories: categories,
-                      recentActivities: recentActivities.take(5).toList(),
+                      activities: browserActivities,
+                      sorted: browserActivities,
+                      categories: browserCategories,
+                      recentActivities: browserRecents,
                       selectedCategory: _selectedCategory,
                       onCategoryChanged: (cat) =>
                           setState(() => _selectedCategory = cat),
@@ -1491,54 +1547,45 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                               : const Duration(milliseconds: 220),
                           child: Column(
                             key: ValueKey(
-                              recentPicks.isEmpty
+                              pickerRecents.isEmpty
                                   ? 'starters'
-                                  : 'recent-${recentPicks.length}',
+                                  : 'recent-${pickerRecents.length}',
                             ),
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (recentPicks.isNotEmpty) ...[
-                                _PickLabel(recentPicks.length == 1
-                                    ? 'Recent activity'
-                                    : 'Recent activities'),
-                                _PickRows(
-                                  activities: recentPicks,
-                                  selectedActivityId: selectedActivityId,
-                                  onSelect: _select,
-                                ),
-                                if (starterPads.isNotEmpty) ...[
-                                  const SizedBox(height: 14),
-                                  const _PickLabel('Suggested'),
-                                  _PickRows(
-                                    activities: starterPads,
-                                    selectedActivityId: selectedActivityId,
-                                    onSelect: _select,
-                                  ),
+                              // One header row carries the group label AND
+                              // the catalog escape — the standalone "See
+                              // all" row was what pushed the secondary
+                              // paths below the fold.
+                              _PickHeader(
+                                label: pickerRecents.isEmpty
+                                    ? 'Quick picks'
+                                    : pickerRecents.length == 1
+                                        ? 'Recent activity'
+                                        : 'Recent activities',
+                                actionLabel: 'See all movements',
+                                onAction: () =>
+                                    setState(() => _browseAll = true),
+                              ),
+                              // Four choices max — recents first, starters
+                              // pad to fill. The grid is bounded: it does
+                              // not grow with recent count.
+                              _PickRows(
+                                activities: [
+                                  ...pickerRecents,
+                                  ...pickerPads,
                                 ],
-                              ] else ...[
-                                const _PickLabel('Quick picks'),
-                                _PickRows(
-                                  activities: starterPads,
-                                  selectedActivityId: selectedActivityId,
-                                  onSelect: _select,
-                                ),
-                              ],
+                                selectedActivityId: selectedActivityId,
+                                onSelect: _select,
+                              ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 10),
-                        Center(
-                          child: _TextPath(
-                            label: 'See all movements',
-                            icon: Icons.arrow_forward_rounded,
-                            onTap: () => setState(() => _browseAll = true),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 6),
                         _TeachNuvoCard(
                           onTap: () => setState(() => _teachMode = true),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 4),
                         Center(
                           child: _TextPath(
                             label: 'Not a movement? Create a custom goal',
@@ -1555,30 +1602,83 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   }
 }
 
-/// Quiet section label above a group of primary picks — "Recent activities"
-/// or "Quick picks". Small and secondary; the tiles stay dominant.
-class _PickLabel extends StatelessWidget {
-  const _PickLabel(this.label);
+/// The picks header — group label on the left, the full-catalog path on the
+/// right. One row does the work of two: "See all movements" stays above the
+/// fold on every supported phone because it shares the label's line.
+class _PickHeader extends StatelessWidget {
+  const _PickHeader({
+    required this.label,
+    required this.actionLabel,
+    required this.onAction,
+  });
 
   final String label;
+  final String actionLabel;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        label,
-        style: AppTextStyles.eyebrow.copyWith(
-          color: context.themeColors.inkDim,
-        ),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.eyebrow.copyWith(color: c.inkDim),
+            ),
+          ),
+          // The catalog path is a real 44px tap target, just vertically
+          // centered on the label line — density without a hidden row.
+          Semantics(
+            button: true,
+            label: actionLabel,
+            child: NuvoPressable(
+              onTap: onAction,
+              scale: 0.96,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  minHeight: 40,
+                  minWidth: 44,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        actionLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.actionBlue,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: NuvoColors.actionBlue,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// The primary pick layout — pairs of tiles plus a full-width trailing tile
-/// when the group is odd. Always balanced: no half-empty rows, no dead
-/// second column, and the same tile component at every count.
+/// The primary pick layout — pairs of compact tiles plus a single-line
+/// full-width strip when the group is odd. Always balanced: no half-empty
+/// rows, no dead second column, and the same tile component at every count.
+/// The first-view budget is fixed: this region must not grow with recents.
 class _PickRows extends StatelessWidget {
   const _PickRows({
     required this.activities,
@@ -1590,38 +1690,63 @@ class _PickRows extends StatelessWidget {
   final String selectedActivityId;
   final ValueChanged<MotionActivityDefinition> onSelect;
 
-  /// Same tile height as the catalog grid so primary and browse read as the
-  /// same component. Scales with the user's text size — a 2-line name +
-  /// metric must fit at accessibility scales.
+  /// Compact tiles — the primary picker is a fast decision, not a catalog.
+  /// Density-aware (short phones get shorter tiles) and text-scaled so the
+  /// name + metric still fit at accessibility sizes.
   static double tileHeight(BuildContext context) =>
-      MediaQuery.textScalerOf(context).scale(116);
-  static const double gap = 10;
+      MediaQuery.textScalerOf(context).scale(
+        context.nuvoDensity.pick(compact: 80, regular: 90, large: 92),
+      );
+
+  /// Full-width strips are WIDER, not taller — an odd trailing pick or a
+  /// single suggested tile reads as the same weight as the pair above.
+  static double flatTileHeight(BuildContext context) =>
+      MediaQuery.textScalerOf(context).scale(
+        context.nuvoDensity.pick(compact: 54, regular: 58, large: 60),
+      );
+
+  static const double gap = 8;
 
   @override
   Widget build(BuildContext context) {
     final rows = <Widget>[];
     for (var i = 0; i < activities.length; i += 2) {
       final pair = activities.sublist(i, (i + 2).clamp(0, activities.length));
-      rows.add(
-        SizedBox(
-          height: tileHeight(context),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final a in pair) ...[
-                Expanded(
-                  child: _MovementTile(
-                    activity: a,
-                    selected: a.activityId == selectedActivityId,
-                    onTap: () => onSelect(a),
-                  ),
-                ),
-                if (a != pair.last) const SizedBox(width: gap),
-              ],
-            ],
+      if (pair.length == 1) {
+        // Odd trailing pick — a flat full-width strip, not a giant block.
+        rows.add(
+          SizedBox(
+            height: flatTileHeight(context),
+            child: _MovementTile(
+              activity: pair.single,
+              selected: pair.single.activityId == selectedActivityId,
+              onTap: () => onSelect(pair.single),
+              flat: true,
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        rows.add(
+          SizedBox(
+            height: tileHeight(context),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final a in pair) ...[
+                  Expanded(
+                    child: _MovementTile(
+                      activity: a,
+                      selected: a.activityId == selectedActivityId,
+                      onTap: () => onSelect(a),
+                    ),
+                  ),
+                  if (a != pair.last) const SizedBox(width: gap),
+                ],
+              ],
+            ),
+          ),
+        );
+      }
       if (i + 2 < activities.length) {
         rows.add(const SizedBox(height: gap));
       }
@@ -1807,7 +1932,7 @@ class _TeachNuvoCard extends StatelessWidget {
       onTap: onTap,
       scale: 0.98,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
           color: accent.withValues(
             alpha: Theme.of(context).brightness == Brightness.dark ? 0.16 : 0.09,
@@ -2263,10 +2388,8 @@ class _MovementGrid extends StatelessWidget {
       builder: (context, constraints) {
         const gap = 10.0;
         final tileWidth = (constraints.maxWidth - gap) / 2;
-        // Enough room for icon well + 2-line name + unit, compact at 320 —
-        // the height follows text scale so accessibility sizes still fit.
-        final ratio =
-            tileWidth / MediaQuery.textScalerOf(context).scale(116);
+        // Same tile component as the primary picker — same compact height.
+        final ratio = tileWidth / _PickRows.tileHeight(context);
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -2296,11 +2419,16 @@ class _MovementTile extends StatelessWidget {
     required this.activity,
     required this.selected,
     required this.onTap,
+    this.flat = false,
   });
 
   final MotionActivityDefinition activity;
   final bool selected;
   final VoidCallback onTap;
+
+  /// Flat = the single-line full-width strip used for odd trailing picks —
+  /// wider, not taller.
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -2321,7 +2449,11 @@ class _MovementTile extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.all(11),
+            padding: flat
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+                : EdgeInsets.all(
+                    context.nuvoDensity.pick(compact: 8, regular: 9, large: 9),
+                  ),
             decoration: BoxDecoration(
               color: selected ? NuvoColors.actionBlue : c.surface,
               borderRadius: BorderRadius.circular(NuvoRadii.lg),
@@ -2331,81 +2463,136 @@ class _MovementTile extends StatelessWidget {
                 offset: selected ? const Offset(4, 4) : const Offset(3, 3),
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? NuvoColors.white.withValues(alpha: 0.22)
-                            : accent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(NuvoRadii.md),
-                      ),
-                      child: Icon(
-                        activity.icon,
-                        size: 19,
-                        color: selected ? NuvoColors.white : accent,
-                      ),
-                    ),
-                    const Spacer(),
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: selected
-                          ? Container(
-                              decoration: const BoxDecoration(
-                                color: NuvoColors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check_rounded,
-                                size: 13,
-                                color: NuvoColors.actionBlue,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  activity.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: selected ? NuvoColors.white : c.ink,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    height: 1.12,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                // The canonical unit stays visible in every state — a
-                // selected tile must still tell you what you're logging.
-                Text(
-                  activity.unit,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: selected
-                        ? NuvoColors.white.withValues(alpha: 0.82)
-                        : c.inkSubtle,
-                    fontSize: 11.5,
-                    fontWeight:
-                        selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+            child: flat
+                ? _flatContent(c, accent)
+                : _stackedContent(context, c, accent),
           ),
         ),
       ),
     );
   }
+
+  Widget _iconBox(Color accent, [double size = 30]) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: selected
+              ? NuvoColors.white.withValues(alpha: 0.22)
+              : accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(NuvoRadii.md - 2),
+        ),
+        child: Icon(
+          activity.icon,
+          size: size - 13,
+          color: selected ? NuvoColors.white : accent,
+        ),
+      );
+
+  Widget _check() => SizedBox(
+        width: 20,
+        height: 20,
+        child: selected
+            ? Container(
+                decoration: const BoxDecoration(
+                  color: NuvoColors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  size: 13,
+                  color: NuvoColors.actionBlue,
+                ),
+              )
+            : null,
+      );
+
+  /// Compact stack: icon row, short gap, name, hair gap, unit — no dead
+  /// middle space. One-line name: the tile is a fast pick, not a card.
+  Widget _stackedContent(BuildContext context, NuvoThemeColors c, Color accent) {
+    // Compact phones get a tighter stack — the same content in less air so
+    // the fixed tile height is real, not aspirational.
+    final compact = context.nuvoDensity == NuvoDensity.compact;
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _iconBox(accent, compact ? 26 : 30),
+              const Spacer(),
+              _check(),
+            ],
+          ),
+          SizedBox(height: compact ? 4 : 6),
+          Text(
+            activity.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.labelMedium.copyWith(
+              color: selected ? NuvoColors.white : c.ink,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              height: 1.12,
+            ),
+          ),
+          SizedBox(height: compact ? 1 : 2),
+          // The canonical unit stays visible in every state — a selected
+          // tile must still tell you what you're logging.
+          Text(
+            activity.unit,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: selected
+                  ? NuvoColors.white.withValues(alpha: 0.82)
+                  : c.inkSubtle,
+              fontSize: 11.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+    );
+  }
+
+  /// The odd-trailing strip: icon · name · unit · check on one line —
+  /// same affordance, a fraction of the height.
+  Widget _flatContent(NuvoThemeColors c, Color accent) => Row(
+        children: [
+          _iconBox(accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: activity.title,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      color: selected ? NuvoColors.white : c.ink,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.12,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '  ·  ${activity.unit}',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: selected
+                          ? NuvoColors.white.withValues(alpha: 0.82)
+                          : c.inkSubtle,
+                      fontSize: 11.5,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _check(),
+        ],
+      );
 }
 
 /// One transient lift when a tile becomes selected — a quick 1→1.045→1 pulse

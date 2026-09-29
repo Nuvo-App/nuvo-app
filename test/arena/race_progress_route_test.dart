@@ -1,20 +1,20 @@
-// Regression coverage for Arena's route-shaped progress track. The curved
-// path itself now lives in the shared, reusable `NuvoRacePath` widget
-// (lib/core/widgets/nuvo_race_path.dart) — its painter class is private to
-// that file, so the Arena-hosted test below drives it through the public
-// ArenaScreen(preview: true) surface, and the determinism/uniqueness
-// contract is covered directly in test/nuvo_race_path_test.dart via
-// NuvoRacePath's own public API.
+// Regression coverage for Arena's hero race lane. The hero renders the
+// shared marker track (You / rival / goal ring) when the board carries
+// markable scores; the curved identity path remains the fallback and is
+// covered directly in test/nuvo_race_path_test.dart via NuvoRacePath's own
+// public API — plus a direct painter-bounds check below.
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nuvo/core/widgets/nuvo_race_components.dart';
+import 'package:nuvo/core/widgets/nuvo_race_path.dart';
 import 'package:nuvo/features/arena/presentation/arena_screen.dart';
 import 'package:nuvo/features/shell/presentation/main_shell.dart';
 
-Future<CustomPaint> _pumpProgressPainter(WidgetTester tester) async {
+Future<void> _pumpArenaPreview(WidgetTester tester) async {
   final router = GoRouter(
     initialLocation: '/arena',
     routes: [
@@ -32,47 +32,45 @@ Future<CustomPaint> _pumpProgressPainter(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(child: MaterialApp.router(routerConfig: router)),
   );
-  // Progress animates in via TweenAnimationBuilder (700ms easeOutCubic) —
-  // settle it so the painter receives its final target value, not a
-  // mid-animation one.
   await tester.pumpAndSettle();
-
-  final finder = find.byWidgetPredicate(
-    (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_RacePathPainter',
-  );
-  expect(finder, findsOneWidget);
-  return tester.widget<CustomPaint>(finder);
 }
 
 void main() {
-  testWidgets('progress track renders with semantics describing completion', (
+  testWidgets('hero renders the marker lane with named marks', (
     tester,
   ) async {
-    await _pumpProgressPainter(tester);
+    await _pumpArenaPreview(tester);
 
-    // Checked on the Semantics widget's own properties rather than the
-    // assembled SemanticsNode tree — this widget sits inside several
-    // ancestor Semantics boundaries (the card, the row), so its label can
-    // get merged into a combined node upstream; the properties it
-    // contributes are what this test cares about.
-    final semanticsWidgets = tester
-        .widgetList<Semantics>(find.byType(Semantics))
-        .where((w) => w.properties.label == 'Race progress')
-        .toList();
-    expect(semanticsWidgets, hasLength(1));
-    // The preview snapshot's focus board is 65/100 — 65%.
-    expect(semanticsWidgets.single.properties.value, '65%');
+    // The preview board is 65/100 vs Alex 48/100 — the lane names both.
+    expect(find.byType(RaceMarkerTrack), findsWidgets);
+    expect(find.textContaining('You 65'), findsWidgets);
+    expect(find.textContaining('Alex'), findsWidgets);
+    expect(find.textContaining('Goal'), findsWidgets);
   });
 
   testWidgets('painter stays within its own bounds and does not throw', (
     tester,
   ) async {
-    final customPaint = await _pumpProgressPainter(tester);
-    final painter = customPaint.painter!;
+    // The identity path is still the hero's fallback — drive its painter
+    // directly at the hero variant's fixed height.
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox(
+          width: 280,
+          child: NuvoRacePath(raceId: 'preview-race', progress: 0.65),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Paint onto a real, bounded canvas via PictureRecorder — proves
-    // paint() doesn't throw for a real (65%) progress value, at the hero
-    // variant's fixed height.
+    final customPaint = tester.widget<CustomPaint>(
+      find.byWidgetPredicate(
+        (w) =>
+            w is CustomPaint &&
+            w.painter.runtimeType.toString() == '_RacePathPainter',
+      ),
+    );
+    final painter = customPaint.painter!;
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
     const size = Size(280, 42);
