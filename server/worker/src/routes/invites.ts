@@ -3,6 +3,7 @@ import type { MiddlewareHandler } from 'hono';
 import type { AppEnv } from '../types';
 import { generateId } from '../lib/crypto';
 import { requireAuth, verifyJwt } from '../lib/jwt';
+import { SQLITE_NOW_ISO } from '../lib/time';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked, resolveRaceMemberVisibility } from '../lib/privacy';
 import { transitionCrew } from '../domain/crewLifecycle';
@@ -193,7 +194,7 @@ invitesRouter.post('/', requireAuth, async (c) => {
     `SELECT * FROM invites
      WHERE actor_user_id = ? AND kind = ? AND target_type = ? AND target_id = ?
        AND revoked_at IS NULL
-       AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+       AND (expires_at IS NULL OR expires_at > ${SQLITE_NOW_ISO})
      ORDER BY created_at DESC LIMIT 1`,
   )
     .bind(userId, kind, targetType, targetId)

@@ -9,21 +9,24 @@
  * Anything without a stated retention number is intentionally NOT purged here.
  */
 import type { D1Database } from '@cloudflare/workers-types';
+import { sqliteIsoOffset } from './time';
 
 export async function purgeExpiredAuthData(
   db: D1Database,
 ): Promise<{ emailCodes: number; sessions: number }> {
+  // expires_at columns are ISO-written (toISOString); used_at/revoked_at are
+  // CURRENT_TIMESTAMP-written — each compares against a same-format now.
   const codes = await db
     .prepare(
       `DELETE FROM email_codes
-       WHERE expires_at < datetime('now', '-1 day')
+       WHERE expires_at < ${sqliteIsoOffset('-1 day')}
           OR (used_at IS NOT NULL AND used_at < datetime('now', '-1 day'))`,
     )
     .run();
   const sessions = await db
     .prepare(
       `DELETE FROM sessions
-       WHERE expires_at < datetime('now', '-30 days')
+       WHERE expires_at < ${sqliteIsoOffset('-30 days')}
           OR (revoked_at IS NOT NULL AND revoked_at < datetime('now', '-30 days'))`,
     )
     .run();

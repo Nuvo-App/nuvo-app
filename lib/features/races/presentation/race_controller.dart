@@ -492,6 +492,7 @@ class RaceController extends StateNotifier<RaceState> {
     required AiMotionResult result,
     required String clientSubmissionId,
     required String metric,
+    String? verificationSessionId,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -517,6 +518,7 @@ class RaceController extends StateNotifier<RaceState> {
       result: result,
       clientSubmissionId: clientSubmissionId,
       metric: metric,
+      verificationSessionId: verificationSessionId,
     );
     if (mounted) {
       state = state.copyWith(
@@ -540,6 +542,7 @@ class RaceController extends StateNotifier<RaceState> {
     required String validatorVersion,
     required int framesAnalyzed,
     required int durationMs,
+    String? verificationSessionId,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -570,6 +573,7 @@ class RaceController extends StateNotifier<RaceState> {
       validatorVersion: validatorVersion,
       framesAnalyzed: framesAnalyzed,
       durationMs: durationMs,
+      verificationSessionId: verificationSessionId,
     );
     if (mounted) {
       state = state.copyWith(
@@ -585,6 +589,7 @@ class RaceController extends StateNotifier<RaceState> {
     String raceId, {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
+    String? verificationSessionId,
   }) async {
     if (_isPresentationLocalRace(raceId)) {
       final race = _applyPresentationProof(
@@ -609,6 +614,7 @@ class RaceController extends StateNotifier<RaceState> {
       raceId,
       result: result,
       clientSubmissionId: clientSubmissionId,
+      verificationSessionId: verificationSessionId,
     );
     if (mounted) {
       state = state.copyWith(

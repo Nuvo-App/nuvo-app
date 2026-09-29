@@ -40,6 +40,7 @@ import '../data/ai_motion_models.dart';
 import '../data/motion_analysis_contract.dart';
 import '../data/motion_capabilities.dart';
 import '../data/motion_package_installer.dart';
+import '../data/race_api.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/motion_activity.dart';
@@ -102,6 +103,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String? _verificationSessionId;
   String? _verificationReleaseId;
   String? _verificationReleaseChecksum;
+  ({int value, double confidence, bool verified})? _sessionCompletionResult;
+  Future<void>? _sessionCompletion;
+  bool _verificationSessionCompleted = false;
 
   /// Release whose package is pin-protected for the active session — the
   /// installer must never evict the bytes a live verifier depends on.
@@ -291,9 +295,14 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         });
         return;
       }
+      // Every AI Motion Proof binds to a server verification session — the
+      // proof only counts when the server can match it to a completed,
+      // caller-owned session for this race. Remote-spec races additionally
+      // pin the exact verifier release through the same handshake.
       RemoteVerifierSpec? sessionRemoteSpec;
-      if (eligibility.remoteVerifierSpec != null) {
-        final handshake = await ref
+      VerificationSessionHandshake? handshake;
+      try {
+        handshake = await ref
             .read(raceControllerProvider.notifier)
             .createVerificationSession(
               race.id,
@@ -304,6 +313,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _verificationSessionId = handshake.session.id;
         _verificationReleaseId = handshake.session.releaseId;
         _verificationReleaseChecksum = handshake.session.releaseChecksum;
+      } catch (_) {
+        // No session yet — proof submission fails closed (retry creates one).
+        _debugLog('verificationSessionCreateFailed');
+      }
+      if (eligibility.remoteVerifierSpec != null && handshake != null) {
         final rawSpec = handshake.verifier['spec'];
         if (rawSpec is Map) {
           sessionRemoteSpec = RemoteVerifierSpec.fromJson(
@@ -901,14 +915,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         metrics: {'count': value.toDouble()},
       );
       _finalizeSession();
-      if (verified) _scheduleAutoSubmit();
-      unawaited(
-        _completeVerificationSession(
-          value: value,
-          confidence: _objectConfidence,
-          verified: verified,
-        ),
+      _sessionCompletionResult = (
+        value: value,
+        confidence: _objectConfidence,
+        verified: verified,
       );
+      _sessionCompletion = _completeVerificationSession();
+      if (verified) _scheduleAutoSubmit();
       return;
     }
 
@@ -941,14 +954,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _message = null;
       });
       unawaited(_analyzeCapturedMotion());
-      if (acceptedResult.isVerified) _scheduleAutoSubmit();
-      unawaited(
-        _completeVerificationSession(
-          value: acceptedResult.count,
-          confidence: acceptedResult.confidence,
-          verified: acceptedResult.isVerified,
-        ),
+      _sessionCompletionResult = (
+        value: acceptedResult.count,
+        confidence: acceptedResult.confidence,
+        verified: acceptedResult.isVerified,
       );
+      _sessionCompletion = _completeVerificationSession();
+      if (acceptedResult.isVerified) _scheduleAutoSubmit();
       return;
     }
     final result = verifierResult.aiMotionResult;
@@ -977,25 +989,22 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _message = null;
     });
     unawaited(_analyzeCapturedMotion());
-    if (acceptedResult.isVerified) _scheduleAutoSubmit();
-    unawaited(
-      _completeVerificationSession(
-        value: acceptedResult.detectedReps,
-        confidence: acceptedResult.confidence,
-        verified: acceptedResult.isVerified,
-      ),
+    _sessionCompletionResult = (
+      value: acceptedResult.detectedReps,
+      confidence: acceptedResult.confidence,
+      verified: acceptedResult.isVerified,
     );
+    _sessionCompletion = _completeVerificationSession();
+    if (acceptedResult.isVerified) _scheduleAutoSubmit();
   }
 
-  Future<void> _completeVerificationSession({
-    required int value,
-    required double confidence,
-    required bool verified,
-  }) async {
+  Future<void> _completeVerificationSession() async {
+    final result = _sessionCompletionResult;
     final sessionId = _verificationSessionId;
     final releaseId = _verificationReleaseId;
     final checksum = _verificationReleaseChecksum;
-    if (sessionId == null ||
+    if (result == null ||
+        sessionId == null ||
         sessionId.isEmpty ||
         releaseId == null ||
         releaseId.isEmpty ||
@@ -1010,18 +1019,54 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             sessionId,
             releaseId: releaseId,
             releaseChecksum: checksum,
-            status: verified ? 'completed' : 'failed',
-            resultValue: value,
-            confidence: confidence,
-            failureReason: verified
+            status: result.verified ? 'completed' : 'failed',
+            resultValue: result.value,
+            confidence: result.confidence,
+            failureReason: result.verified
                 ? null
                 : _isObjectComposition
                 ? (_objectUpdate?.diagnostic ?? 'shot_not_confirmed')
                 : _runtime.failedRuleReason,
           );
+      if (result.verified) _verificationSessionCompleted = true;
     } catch (_) {
       _debugLog('verificationSessionCompletionUnavailable');
     }
+  }
+
+  /// The server only accepts an AI Motion Proof bound to this user's
+  /// completed verification session for this race — proof submission must
+  /// never outrun session completion. If the background completion dropped,
+  /// retry once here; complete is idempotent server-side. Fails closed: no
+  /// completed session, no proof.
+  Future<bool> _verificationSessionReadyForProof() async {
+    if (_verificationSessionCompleted) return true;
+    if (_verificationSessionId == null || _verificationSessionId!.isEmpty) {
+      // The load-time handshake may have dropped (e.g. no network when the
+      // camera opened) — mint the session now, then complete it.
+      try {
+        final handshake = await ref
+            .read(raceControllerProvider.notifier)
+            .createVerificationSession(
+              widget.raceId,
+              appVersion: 'local',
+              appBuild: MotionCapabilities.appBuild,
+              runtimeCapabilities: MotionCapabilities.current(
+                objectDotProducer: _objectDotProducer,
+              ),
+            );
+        _verificationSessionId = handshake.session.id;
+        _verificationReleaseId = handshake.session.releaseId;
+        _verificationReleaseChecksum = handshake.session.releaseChecksum;
+      } catch (_) {
+        _debugLog('verificationSessionCreateFailed');
+        return false;
+      }
+    }
+    await _sessionCompletion;
+    if (_verificationSessionCompleted) return true;
+    await _completeVerificationSession();
+    return _verificationSessionCompleted;
   }
 
   Future<void> _startVerificationSession(String sessionId) async {
@@ -1170,7 +1215,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     });
   }
 
+  bool get _isPresentationFixtureRace =>
+      isPresentationDemoRace(widget.raceId) ||
+      isPresentationDemoCreatedRace(widget.raceId);
+
   Future<void> _submitVerifiedProof() async {
+    // Local presentation fixtures have no server race and resolve in the
+    // controller's demo path — they never need a verification session.
+    // Custom-verifier races have no registry release to bind a session to;
+    // everything else fails closed: no completed session, no proof.
+    if (!_isCustom &&
+        !_isPresentationFixtureRace &&
+        !await _verificationSessionReadyForProof()) {
+      if (!mounted) return;
+      setState(() {
+        _status = AiMotionProofStatus.aiVerified;
+        _message =
+            'Verification is still syncing. Check your connection and try again.';
+      });
+      return;
+    }
     if (_isObjectComposition) {
       if (_objectCount <= 0 || _status != AiMotionProofStatus.aiVerified) {
         return;
@@ -1197,6 +1261,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               validatorVersion: _objectCompositionSpec!.releaseId,
               framesAnalyzed: _session?.objectFrameCount ?? 0,
               durationMs: _elapsed.inMilliseconds,
+              verificationSessionId: _verificationSessionId,
             );
         if (!mounted) return;
         setState(() => _status = AiMotionProofStatus.submitted);
@@ -1232,6 +1297,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               widget.raceId,
               result: result,
               clientSubmissionId: clientSubmissionId,
+              verificationSessionId: _verificationSessionId,
             );
         if (!mounted) return;
         setState(() => _status = AiMotionProofStatus.submitted);
@@ -1268,6 +1334,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             result: result,
             clientSubmissionId: clientSubmissionId,
             metric: _metric,
+            verificationSessionId: _verificationSessionId,
           );
       if (!mounted) return;
       setState(() => _status = AiMotionProofStatus.submitted);

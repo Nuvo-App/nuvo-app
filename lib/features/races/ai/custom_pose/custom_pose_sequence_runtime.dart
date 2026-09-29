@@ -972,10 +972,15 @@ class CustomPoseRuntimeResult {
     if (finalFailureReason != null) 'finalFailureReason': finalFailureReason,
   };
 
-  Map<String, dynamic> toProofPayload({required String clientSubmissionId}) => {
+  Map<String, dynamic> toProofPayload({
+    required String clientSubmissionId,
+    String? verificationSessionId,
+  }) => {
     'proofType': 'ai_motion',
     'clientSubmissionId': clientSubmissionId,
     'client_submission_id': clientSubmissionId,
+    if (verificationSessionId != null && verificationSessionId.isNotEmpty)
+      'verificationSessionId': verificationSessionId,
     'verifierType': verifierType,
     'verifierVersion': verifierVersion,
     'activityType': movementName,

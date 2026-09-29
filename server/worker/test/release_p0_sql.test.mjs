@@ -504,3 +504,113 @@ test('P0-6: another user’s avatar URL never becomes a deletable owned key', as
   assert.ok(w.r2.objects.has(a.key));
   w.fkClean();
 });
+
+// ── Expiry semantics: ISO-written expiry columns vs a same-format SQL now ──
+// expires_at columns are written via toISOString(); comparing them to
+// CURRENT_TIMESTAMP ('YYYY-MM-DD HH:MM:SS') silently disabled expiry — ' '
+// sorts before 'T'. These tests pin ISO-now comparisons on real SQLite.
+
+test('expiry: email code expires at its ISO instant, not UTC rollover', async () => {
+  const w = world();
+  const email = 'expiry-check@example.com';
+  const hash = createHash('sha256').update('123456').digest('hex');
+  const pastIso = new Date(Date.now() - 60_000).toISOString();
+  w.exec(
+    "INSERT INTO email_codes (id, email, code_hash, attempts, expires_at, created_at) VALUES ('expired', ?, ?, 0, ?, CURRENT_TIMESTAMP)",
+    email, hash, pastIso,
+  );
+  const dead = await w.req(null, 'POST', '/auth/email/verify', { email, code: '123456' });
+  assert.equal(dead.status, 401, 'a code one minute past expiry must not verify');
+  assert.equal(w.one('SELECT id FROM users WHERE primary_email = ?', email), undefined);
+
+  // A code that is still valid same-day still works — ISO vs ISO compares
+  // correctly inside the same calendar date.
+  const freshIso = new Date(Date.now() + 60_000).toISOString();
+  w.exec(
+    "INSERT INTO email_codes (id, email, code_hash, attempts, expires_at, created_at) VALUES ('fresh', ?, ?, 0, ?, CURRENT_TIMESTAMP)",
+    email, hash, freshIso,
+  );
+  const fresh = await w.req(null, 'POST', '/auth/email/verify', { email, code: '123456' });
+  assert.equal(fresh.status, 200, fresh.text);
+  assert.ok(fresh.json.accessToken);
+  await w.flush();
+  w.fkClean();
+});
+
+test('expiry: refresh sessions honor ISO expires_at', async () => {
+  const w = world();
+  w.user('A');
+  const deadToken = 'rt-dead';
+  const deadHash = createHash('sha256').update(deadToken).digest('hex');
+  w.exec(
+    "INSERT INTO sessions (id, user_id, refresh_token_hash, expires_at, created_at) VALUES ('s-dead', 'A', ?, ?, CURRENT_TIMESTAMP)",
+    deadHash, new Date(Date.now() - 60_000).toISOString(),
+  );
+  const dead = await w.req(null, 'POST', '/auth/refresh', { refreshToken: deadToken });
+  assert.equal(dead.status, 401, 'expired session must not refresh');
+
+  const liveToken = 'rt-live';
+  const liveHash = createHash('sha256').update(liveToken).digest('hex');
+  w.exec(
+    "INSERT INTO sessions (id, user_id, refresh_token_hash, expires_at, created_at) VALUES ('s-live', 'A', ?, ?, CURRENT_TIMESTAMP)",
+    liveHash, new Date(Date.now() + 60_000).toISOString(),
+  );
+  const live = await w.req(null, 'POST', '/auth/refresh', { refreshToken: liveToken });
+  assert.equal(live.status, 200, live.text);
+  assert.ok(live.json.accessToken);
+  await w.flush();
+  w.fkClean();
+});
+
+test('expiry: expired invite is not reused and cannot be accepted', async () => {
+  const w = world();
+  w.user('A'); w.user('B');
+  const r = w.race('r1', 'A');
+  const pastIso = new Date(Date.now() - 60_000).toISOString();
+  const deadToken = 'deadtokdeadtokdeadtokdeadtokdead'; // 30 url-safe chars
+  w.exec(
+    "INSERT INTO invites (id, token, kind, actor_user_id, target_type, target_id, max_uses, use_count, expires_at, created_at) VALUES ('i-dead', ?, 'race_join', 'A', 'race', ?, NULL, 0, ?, CURRENT_TIMESTAMP)",
+    deadToken, r, pastIso,
+  );
+  // Share again: must mint a fresh token, not return the expired one.
+  const res = await w.req('A', 'POST', '/invites', { kind: 'race_join', targetId: r });
+  assert.equal(res.status, 200, res.text);
+  assert.notEqual(res.json.token, deadToken, 'expired invite must not be reused');
+  // Accepting the dead token still fails.
+  const accept = await w.req('B', 'POST', `/invites/${deadToken}/accept`, {});
+  assert.equal(accept.status, 410);
+  assert.equal(accept.json.status, 'expired');
+  await w.flush();
+  w.fkClean();
+});
+
+// ── Rename must pass through the same safety gate as creation ──────────────
+
+test('safety: race rename cannot bypass the creation-time safety gate', async () => {
+  const w = world();
+  w.user('A'); w.user('B');
+  const r = w.race('r1', 'A', { title: 'Morning Pages' });
+  const unsafe = await w.req('A', 'PATCH', `/races/${r}`, { title: 'casino night all-in poker' });
+  assert.equal(unsafe.status, 400, 'unsafe rename rejected');
+  assert.equal(w.one('SELECT title FROM races WHERE id = ?', r).title, 'Morning Pages',
+    'rejected rename leaves the title unchanged');
+  const safe = await w.req('A', 'PATCH', `/races/${r}`, { title: 'Evening Reading Sprint' });
+  assert.equal(safe.status, 200, safe.text);
+  assert.equal(w.one('SELECT title FROM races WHERE id = ?', r).title, 'Evening Reading Sprint');
+  // Non-creators still cannot rename at all.
+  const foreign = await w.req('B', 'PATCH', `/races/${r}`, { title: 'Harmless Title' });
+  assert.equal(foreign.status, 403);
+  await w.flush();
+  w.fkClean();
+});
+
+// ── AI proof must carry the verification session id ────────────────────────
+
+test('P0-3b: AI proof without a verification session is rejected', async () => {
+  const { w, ai } = motionWorld();
+  const res = await ai('A', { value: 20, clientSubmissionId: 'n1' });
+  assert.equal(res.status, 400, 'ai_motion proof without verificationSessionId is rejected');
+  assert.equal(w.one("SELECT COUNT(*) AS n FROM move_logs WHERE user_id = 'A'").n, 0);
+  await w.flush();
+  w.fkClean();
+});
