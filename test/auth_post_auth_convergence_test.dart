@@ -19,6 +19,7 @@ import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/auth/presentation/auth_gate.dart';
+import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 
 const _completeUser = AuthUser(
@@ -190,10 +191,13 @@ class _Screen extends StatelessWidget {
 ({GoRouter router, ProviderContainer container}) _buildRouter({
   required AuthRepository repo,
   required String initialLocation,
+  FirstUseStore? firstUseStore,
 }) {
   final container = ProviderContainer(
     overrides: [
       authControllerProvider.overrideWith((ref) => AuthController(repo)),
+      firstUseStoreProvider
+          .overrideWithValue(firstUseStore ?? FirstUseStore.memory()),
     ],
   );
   final notifier = container.read(routerNotifierProvider);
@@ -224,6 +228,10 @@ class _Screen extends StatelessWidget {
         path: '/onboarding/nuvo',
         builder: (_, _) => const _Screen('nuvo-onboarding'),
       ),
+      GoRoute(
+        path: '/onboarding/notifications',
+        builder: (_, _) => const _Screen('notification-permission'),
+      ),
       GoRoute(path: '/arena', builder: (_, _) => const _Screen('arena')),
       GoRoute(path: '/compete', builder: (_, _) => const _Screen('compete')),
       GoRoute(path: '/profile', builder: (_, _) => const _Screen('profile')),
@@ -236,8 +244,13 @@ Future<({GoRouter router, ProviderContainer container})> _pumpAt(
   WidgetTester tester, {
   required AuthRepository repo,
   required String location,
+  FirstUseStore? firstUseStore,
 }) async {
-  final built = _buildRouter(repo: repo, initialLocation: location);
+  final built = _buildRouter(
+    repo: repo,
+    initialLocation: location,
+    firstUseStore: firstUseStore,
+  );
   addTearDown(built.container.dispose);
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -586,4 +599,75 @@ void main() {
       },
     );
   });
+
+// ── First-run notification education ─────────────────────────────────────────
+// The permission moment sits between the Nuvo story and the first-race
+// guide. The story's completion marks the step OWED; an app killed there
+// must resume at the screen, a resolved step never replays, and demo replay
+// never reaches it.
+group('notification education routing', () {
+  testWidgets('owed + fresh entry resumes at the permission screen',
+      (tester) async {
+    final store = FirstUseStore.memory();
+    await store.markNotificationPromptOwed();
+    final built = await _pumpAt(
+      tester,
+      repo: _ScriptedAuthRepo(user: _completeUser)
+        ..restoreResult = const RestoreOk(_completeUser),
+      location: '/arena',
+      firstUseStore: store,
+    );
+    expect(_path(built.router), '/onboarding/notifications');
+  });
+
+  testWidgets('owed + already on the screen stays put', (tester) async {
+    final store = FirstUseStore.memory();
+    await store.markNotificationPromptOwed();
+    final built = await _pumpAt(
+      tester,
+      repo: _ScriptedAuthRepo(user: _completeUser)
+        ..restoreResult = const RestoreOk(_completeUser),
+      location: '/onboarding/notifications',
+      firstUseStore: store,
+    );
+    expect(_path(built.router), '/onboarding/notifications');
+    expect(find.text('notification-permission'), findsOneWidget);
+  });
+
+  testWidgets('resolved (flag clear) routes normally', (tester) async {
+    final built = await _pumpAt(
+      tester,
+      repo: _ScriptedAuthRepo(user: _completeUser)
+        ..restoreResult = const RestoreOk(_completeUser),
+      location: '/arena',
+    );
+    expect(_path(built.router), '/arena');
+    expect(find.text('arena'), findsOneWidget);
+  });
+
+  testWidgets('demo replay is never trapped by an owed step', (tester) async {
+    final store = FirstUseStore.memory();
+    await store.markNotificationPromptOwed();
+    final built = _buildRouter(
+      repo: _ScriptedAuthRepo(user: _completeUser)
+        ..restoreResult = const RestoreOk(_completeUser),
+      initialLocation: '/onboarding/nuvo',
+      firstUseStore: store,
+    );
+    addTearDown(built.container.dispose);
+    // Replay must be armed BEFORE the first redirect resolves — the guard
+    // reads it at decision time.
+    built.container.read(demoReplayProvider.notifier).state = true;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: built.container,
+        child: MaterialApp.router(routerConfig: built.router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // Replay keeps the user inside the story — the guard must not yank
+    // them into the permission screen.
+    expect(_path(built.router), '/onboarding/nuvo');
+  });
+});
 }

@@ -18,6 +18,7 @@ import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../onboarding/data/first_use_store.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
@@ -410,6 +411,24 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
     if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
       completeFirstRaceGuide(ref);
     }
+    // First camera use gets the why-before-the-ask primer — the OS prompt
+    // itself is what the camera plugin raises inside the proof flow. Shown
+    // once per install; a dismissed primer asks again next time.
+    final firstUse = ref.read(firstUseStoreProvider);
+    if (!firstUse.isCameraPrimerSeen) {
+      final proceed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: context.themeColors.page,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (_) => const _CameraPrimerSheet(),
+      );
+      if (proceed != true) return;
+      await firstUse.markCameraPrimerSeen();
+    }
+    if (!mounted) return;
     setState(() => _navigating = true);
     HapticFeedback.mediumImpact();
     debugLogCameraVerificationDecision(
@@ -1109,6 +1128,116 @@ class _EvidenceSheetOption extends StatelessWidget {
             Icon(icon, size: 20, color: context.themeColors.ink),
             const SizedBox(width: 12),
             Text(label, style: AppTextStyles.titleMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Camera primer ────────────────────────────────────────────────────────────
+
+/// One-time "why the camera" sheet shown before the first AI Motion launch.
+/// Education only — the OS permission dialog belongs to the camera plugin
+/// inside the proof flow; this sheet never triggers it.
+class _CameraPrimerSheet extends StatelessWidget {
+  const _CameraPrimerSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: c.panel,
+                  border: Border.all(color: c.ink, width: 1.6),
+                ),
+                child: const Icon(
+                  Icons.accessibility_new_rounded,
+                  color: NuvoColors.blue,
+                  size: 28,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Move. We’ll verify it.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.headlineMedium.copyWith(
+                color: c.ink,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Nuvo uses your camera to track your movement while you race.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: c.inkMuted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                for (final (i, fact) in const [
+                  (
+                    icon: Icons.accessibility_new_rounded,
+                    label: 'Processed for motion',
+                  ),
+                  (
+                    icon: Icons.videocam_off_rounded,
+                    label: 'Video isn’t uploaded',
+                  ),
+                ].indexed) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Icon(fact.icon, color: NuvoColors.blue, size: 22),
+                        const SizedBox(height: 6),
+                        Text(
+                          fact.label,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: c.ink,
+                            fontWeight: FontWeight.w700,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 20),
+            NuvoPrimaryButton(
+              label: 'Continue',
+              expand: true,
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Not now',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: c.inkMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
           ],
         ),
       ),

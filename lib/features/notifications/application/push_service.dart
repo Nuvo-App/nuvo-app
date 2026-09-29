@@ -63,6 +63,21 @@ class PushService {
     messaging.onTokenRefresh.listen(_syncToken);
   }
 
+  /// The OS notification authorization state — the only honest source for
+  /// "can we notify". Never inferred from whether a device token exists
+  /// (a token says delivery plumbing worked once, not that the user
+  /// currently allows alerts). Null when push transport is unavailable.
+  Future<AuthorizationStatus?> notificationAuthorizationStatus() async {
+    if (!_available) return null;
+    try {
+      final settings =
+          await FirebaseMessaging.instance.getNotificationSettings();
+      return settings.authorizationStatus;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Contextual permission prompt — call it the first time push is relevant
   /// (after a first race join / first crew connection), never on cold launch.
   Future<bool> requestPermissionInContext() async {

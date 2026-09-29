@@ -21,6 +21,7 @@ import '../features/auth/presentation/email_verify_screen.dart';
 import '../features/auth/presentation/welcome_auth_screen.dart';
 import '../features/compete/presentation/compete_screen_fixed.dart';
 import '../features/onboarding/presentation/motion_contribution_screen.dart';
+import '../features/onboarding/presentation/notification_permission_screen.dart';
 import '../features/onboarding/presentation/nuvo_onboarding_screen.dart';
 import '../features/onboarding/presentation/onboarding_screen.dart';
 import '../features/pass/presentation/pass_screen.dart';
@@ -199,6 +200,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/onboarding/nuvo',
         pageBuilder: (_, state) =>
             _authPage(state, const NuvoOnboardingScreen()),
+      ),
+      // First-run notification education — between the Nuvo story and the
+      // first-race guide. The OS prompt fires only from its CTA; every
+      // resolution clears the owed flag and continues to Arena.
+      GoRoute(
+        path: '/onboarding/notifications',
+        pageBuilder: (_, state) =>
+            _authPage(state, const NotificationPermissionScreen()),
       ),
       // Retired first-run paths — the member-pass ceremony and the standalone
       // finish screen folded into the canonical story above. Redirect rather

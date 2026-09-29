@@ -1,6 +1,8 @@
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
@@ -11,6 +13,7 @@ import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../core/widgets/nuvo_page.dart';
 import '../../../core/widgets/nuvo_toggle.dart';
+import '../application/push_service.dart';
 import '../data/notification_prefs.dart';
 
 final notificationPrefsApiProvider =
@@ -33,11 +36,22 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
   List<NotificationPref>? _prefs;
   Object? _error;
   final _saving = <String>{};
+  AuthorizationStatus? _osStatus;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadOsStatus();
+  }
+
+  /// The OS-level switch: when the device has denied Nuvo alerts the push
+  /// toggles below can't deliver — surface the way back to iOS Settings
+  /// rather than letting a user flip dead toggles.
+  Future<void> _loadOsStatus() async {
+    final status =
+        await ref.read(pushServiceProvider).notificationAuthorizationStatus();
+    if (mounted) setState(() => _osStatus = status);
   }
 
   Future<void> _load() async {
@@ -133,6 +147,35 @@ class _State extends ConsumerState<NotificationPrefsScreen> {
           'Control in-app and push alerts.',
           style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
         ),
+        if (_osStatus == AuthorizationStatus.denied) ...[
+          const SizedBox(height: NuvoSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.notifications_off_rounded,
+                    size: 18, color: c.inkMuted),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Notifications are off on this device.',
+                    style: AppTextStyles.bodySmall.copyWith(color: c.ink),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      launchUrl(Uri.parse('app-settings:')),
+                  child: const Text('Open Settings'),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: NuvoSpacing.xl),
         for (final entry in groups.entries.toList().asMap().entries) ...[
           _SectionHeader(label: entry.value.key.toUpperCase()),

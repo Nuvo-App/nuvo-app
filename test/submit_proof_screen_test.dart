@@ -6,6 +6,7 @@ import 'package:nuvo/features/auth/data/auth_api.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
+import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
 import 'package:nuvo/features/races/data/race_models.dart';
 import 'package:nuvo/features/races/data/race_repository.dart';
@@ -89,10 +90,13 @@ class _AiMotionPlaceholder extends StatelessWidget {
       const Scaffold(body: Center(child: Text('AI Motion Screen')));
 }
 
-Widget _buildTestApp(Race race) {
+Widget _buildTestApp(Race race, {FirstUseStore? firstUseStore}) {
+  final store =
+      firstUseStore ?? (FirstUseStore.memory()..markCameraPrimerSeen());
   return ProviderScope(
     overrides: [
       raceRepositoryProvider.overrideWithValue(_FakeRaceRepo(race)),
+      firstUseStoreProvider.overrideWithValue(store),
       authControllerProvider.overrideWith((ref) {
         return AuthController(_FakeAuthRepo());
       }),
