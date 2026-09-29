@@ -107,15 +107,13 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     final standingsCount = activeBoard == null
         ? 0
         : _standingsCount(activeBoard, raceById[activeBoard.id]);
-    // Standings extents as they actually render — the flat solo leader
-    // state, two head-to-head rows, the flat podium. Measured extents,
+    // Standings extents as they actually render — every non-empty board is
+    // the flat podium (1–3 places); ranks 4+ scroll below. Measured extents,
     // not upper bounds: over-reserving starves the hero while the floor
     // forces it back.
     final leaderboardReserve = switch (standingsCount) {
       0 => 0.0,
-      1 => 150.0, // flat leader state
-      2 => 120.0, // two head-to-head rows
-      _ => 140.0, // three-place podium
+      _ => 140.0, // flat podium
     };
     // What the usable viewport already spent before the hero: the screen
     // header (~110 — Arena + greeting sliver above the list), then in the
@@ -947,34 +945,9 @@ class _Standings extends StatelessWidget {
       );
     }
 
-    // One racer is a valid state — a designed leader panel, not a lonely
-    // podium slot: rank, avatar, identity, score, and the board's own
-    // context line ("Solo · add crew from the race room") as the pull.
-    if (entries.length == 1) {
-      return _SoloLeaderState(entry: entries.first, board: board);
-    }
-
-    // Two racers is a head-to-head — rows, not a three-slot podium with an
-    // empty seat. Same row treatment as ranks 4+: rank, avatar, name, score,
-    // the viewer's row carrying the blue surface.
-    if (entries.length == 2) {
-      return _OutlinedSheet(
-        child: Column(
-          children: [
-            _StandingRow(entry: entries[0]),
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: context.themeColors.divider,
-              indent: 16,
-              endIndent: 16,
-            ),
-            _StandingRow(entry: entries[1]),
-          ],
-        ),
-      );
-    }
-
+    // Small fields use the same podium composition as the race room — a
+    // 1- or 2-person race still shows a podium (empty places simply don't
+    // render), never the generic rows reserved for ranks 4+.
     final rest = entries.length > 3 ? entries.sublist(3) : const <_LbEntry>[];
 
     return NuvoPodium(
@@ -1011,82 +984,6 @@ class _Standings extends StatelessWidget {
                 ],
               ),
             ),
-    );
-  }
-}
-
-/// The one-racer leaderboard: a deliberate leader state, not a lonely podium
-/// slot and NOT a second card — the same flat treatment the podium uses
-/// (badge, avatar, identity, score) so one racer reads as *leading* rather
-/// than boxed in. The board's own context line — "Solo · add crew from the
-/// race room" — reads as the pull, not a caveat. All real data.
-class _SoloLeaderState extends StatelessWidget {
-  const _SoloLeaderState({required this.entry, required this.board});
-  final _LbEntry entry;
-  final ArenaBoard board;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Placement badge — the same gold '1' the podium stamps on its
-        // raised slot.
-        Container(
-          width: 22,
-          height: 22,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: NuvoColors.gold,
-            borderRadius: BorderRadius.circular(NuvoRadii.badge),
-            border: Border.all(color: context.themeColors.border, width: 1.5),
-          ),
-          child: Text(
-            '${entry.rank}',
-            style: AppTextStyles.labelSmall.copyWith(
-              color: NuvoColors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        NuvoAvatar(
-          initials: entry.initials ?? _initials(entry.name),
-          photoUrl: entry.photoUrl,
-          size: 52,
-          bgColor: nuvoAvatarColorFor(entry.seed),
-          textColor: NuvoColors.white,
-          borderColor: entry.isMe ? _arenaBlue : context.themeColors.border,
-          borderWidth: 2.5,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          entry.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.titleMedium.copyWith(
-            color: context.themeColors.ink,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          entry.stat,
-          style: AppTextStyles.raceRowMeta.copyWith(
-            color: _arenaBlue,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        if (board.boardContext.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            board.boardContext,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkSubtle),
-          ),
-        ],
-      ],
     );
   }
 }

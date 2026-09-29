@@ -1,6 +1,7 @@
-// Arena standings adapt to field size — one racer gets a compact leader
-// card, two get head-to-head rows, three-plus get the full podium — and the
-// page's last row must scroll fully clear of the floating dock.
+// Arena standings adapt to field size — every non-empty board uses the
+// canonical podium (1–3 places, empty seats simply don't render), ranks 4+
+// scroll as rows — and the page's last row must scroll fully clear of the
+// floating dock.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -87,7 +88,7 @@ Finder _iceStagePieces() => find.byWidgetPredicate(
 );
 
 void main() {
-  testWidgets('one racer: compact leader card, no three-slot podium', (
+  testWidgets('one racer: podium composition, no generic list', (
     tester,
   ) async {
     await _pump(
@@ -102,7 +103,7 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(NuvoPodium), findsNothing);
+    expect(find.byType(NuvoPodium), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('39 / 50'), findsOneWidget);
     // No stage geometry: the standing is badge + avatar + name + score on
@@ -110,7 +111,7 @@ void main() {
     expect(_iceStagePieces(), findsNothing);
   });
 
-  testWidgets('two racers: head-to-head rows, no podium', (tester) async {
+  testWidgets('two racers: podium composition preserves ranking', (tester) async {
     await _pump(
       tester,
       _snapshot(const [
@@ -124,12 +125,13 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(NuvoPodium), findsNothing);
-    expect(find.text('Noah W.'), findsOneWidget);
+    expect(find.byType(NuvoPodium), findsOneWidget);
+    // Podium slots render first names; the viewer renders as 'You'.
+    expect(find.text('Noah'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
     expect(find.text('41 / 50'), findsOneWidget);
     expect(find.text('39 / 50'), findsOneWidget);
-    // Head-to-head stands clean too — no slabs, no shared floor band.
+    // Podium stands clean too — no slabs, no shared floor band.
     expect(_iceStagePieces(), findsNothing);
   });
 

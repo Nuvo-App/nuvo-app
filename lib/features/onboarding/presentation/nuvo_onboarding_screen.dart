@@ -302,7 +302,14 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
     // it at the screen root so captures include the full canvas.
     return RepaintBoundary(
       key: const ValueKey('onboarding-capture'),
-      child: Scaffold(
+      child: PopScope(
+        // Back unwinds the story one page at a time — mirrors the UI back
+        // button — and only leaves the flow from page 0.
+        canPop: _page == 0,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && _page > 0) _goToPage(_page - 1);
+        },
+        child: Scaffold(
         backgroundColor: NuvoColors.page,
       body: SafeArea(
         child: AnimatedBuilder(
@@ -444,6 +451,7 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
             },
           ),
         ),
+      ),
       ),
       ),
     );
