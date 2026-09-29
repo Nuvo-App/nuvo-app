@@ -15,6 +15,7 @@ import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
+import '../../../core/widgets/nuvo_edge_back_swipe.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
@@ -631,7 +632,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           _retreat();
         }
       },
-      child: Scaffold(
+      child: Stack(
+        children: [
+          Scaffold(
       backgroundColor: context.themeColors.page,
       // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
       resizeToAvoidBottomInset: true,
@@ -714,6 +717,20 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           ],
         ),
       ),
+          ),
+          // iOS edge swipe: canPop=false disables the route's native pop
+          // gesture, so a left-edge rightward drag performs the same
+          // internal step-back the swipe would have taken. Translucent —
+          // taps fall through to whatever is underneath.
+          if (!_onFirstStep && !_loading)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 28,
+              child: NuvoEdgeBackSwipe(onBack: _retreat),
+            ),
+        ],
       ),
     );
 
