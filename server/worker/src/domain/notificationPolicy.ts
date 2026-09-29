@@ -303,24 +303,40 @@ export async function notifyRaceEvents(
         .bind(race.id, userId)
         .first<{ rank_cache: number | null }>()
     )?.rank_cache ?? null;
+  const scoreOf = async (userId: string): Promise<number | null> =>
+    (
+      await db
+        .prepare('SELECT progress_value FROM race_progress WHERE race_id = ? AND user_id = ?')
+        .bind(race.id, userId)
+        .first<{ progress_value: number | null }>()
+    )?.progress_value ?? null;
 
-  const overtakeIntent = (
+  const overtakeIntent = async (
     targetId: string,
     actorId: string,
     rank: number | null,
-  ): Intent => ({
-    userId: targetId,
-    category: 'passed_on_leaderboard',
-    priority: 'high',
-    title: `${nameOf(actorId)} just passed you in ${race.title}`,
-    body: rank ? `You're #${rank}.` : undefined,
-    actorUserId: actorId,
-    dest: { ...dest, context: 'leaderboard' },
-    entityType: 'race',
-    entityId: race.id,
-    dedupeKey: `overtake:${race.id}:${actorId}:${targetId}:${halfHourBucket()}`,
-    budgeted: true,
-  });
+  ): Promise<Intent> => {
+    const actorScore = await scoreOf(actorId);
+    const myScore = await scoreOf(targetId);
+    return {
+      userId: targetId,
+      category: 'passed_on_leaderboard',
+      priority: 'high',
+      title: `${nameOf(actorId)} just passed you in ${race.title}`,
+      body:
+        actorScore != null && myScore != null
+          ? `${nameOf(actorId)} is at ${actorScore}. You're at ${myScore}.`
+          : rank
+            ? `You're #${rank}.`
+            : undefined,
+      actorUserId: actorId,
+      dest: { ...dest, context: 'leaderboard' },
+      entityType: 'race',
+      entityId: race.id,
+      dedupeKey: `overtake:${race.id}:${actorId}:${targetId}:${halfHourBucket()}`,
+      budgeted: true,
+    };
+  };
 
   for (const event of events) {
     switch (event.type) {
@@ -409,7 +425,9 @@ export async function notifyRaceEvents(
             }),
           );
         } else {
-          outcomes.push(await deliver(env, waitUntil, overtakeIntent(displaced, actor, rank)));
+          outcomes.push(
+            await deliver(env, waitUntil, await overtakeIntent(displaced, actor, rank)),
+          );
         }
         break;
       }
@@ -443,7 +461,9 @@ export async function notifyRaceEvents(
             });
             continue;
           }
-          outcomes.push(await deliver(env, waitUntil, overtakeIntent(targetId, actor, rank)));
+          outcomes.push(
+            await deliver(env, waitUntil, await overtakeIntent(targetId, actor, rank)),
+          );
         }
         break;
       }

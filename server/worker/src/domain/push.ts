@@ -65,10 +65,33 @@ export async function sendPush(
     return 0;
   }
 
-  let sent = 0;
-  for (const device of devices.results) {
-    try {
-      const res = await fetch(
+  // The badge mirrors the durable inbox — a push always lands its row first,
+  // so the unread count it carries is current at send time. (It can go stale
+  // if the user reads in-app and no further push arrives; correcting that
+  // needs a client-side badge API the SDK version doesn't expose.)
+  const unread = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL',
+  )
+    .bind(userId)
+    .first<{ n: number }>();
+
+  const deliver = async (deviceToken: string): Promise<Response> => {
+    const body = JSON.stringify({
+      message: {
+        token: deviceToken,
+        notification: { title: payload.title, body: payload.body ?? '' },
+        data: {
+          category: payload.category,
+          notificationId: payload.notificationId ?? '',
+          destType: payload.dest?.type ?? '',
+          destId: payload.dest?.id ?? '',
+          destContext: payload.dest?.context ?? '',
+        },
+        apns: { payload: { aps: { sound: 'default', badge: unread?.n ?? 0 } } },
+      },
+    });
+    const post = () =>
+      fetch(
         `https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`,
         {
           method: 'POST',
@@ -76,22 +99,30 @@ export async function sendPush(
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            message: {
-              token: device.token,
-              notification: { title: payload.title, body: payload.body ?? '' },
-              data: {
-                category: payload.category,
-                notificationId: payload.notificationId ?? '',
-                destType: payload.dest?.type ?? '',
-                destId: payload.dest?.id ?? '',
-                destContext: payload.dest?.context ?? '',
-              },
-              apns: { payload: { aps: { sound: 'default' } } },
-            },
-          }),
+          body,
         },
       );
+    // One retry on transient failure (network error or 5xx) — FCM blips are
+    // common and `waitUntil` gives the retry room. Permanent errors (4xx)
+    // are never retried; a dead token is disabled on the first response.
+    let res: Response;
+    try {
+      res = await post();
+    } catch {
+      await new Promise((r) => setTimeout(r, 700));
+      res = await post();
+    }
+    if (res.status >= 500) {
+      await new Promise((r) => setTimeout(r, 700));
+      res = await post();
+    }
+    return res;
+  };
+
+  let sent = 0;
+  for (const device of devices.results) {
+    try {
+      const res = await deliver(device.token);
       if (res.ok) {
         sent++;
       } else {

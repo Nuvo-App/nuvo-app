@@ -8,11 +8,14 @@ import 'package:image_picker/image_picker.dart' show ImageSource;
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/photo_service.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_confirm_dialog.dart';
+import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
@@ -58,24 +61,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
-      backgroundColor: NuvoColors.white,
+      backgroundColor: context.themeColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetCtx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 36,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: NuvoColors.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+              // Shell owns the drag handle (theme showDragHandle) — sheet
+              // content starts below it.
               const SizedBox(height: 16),
               Text('Profile photo', style: AppTextStyles.titleLarge),
               const SizedBox(height: 16),
@@ -245,20 +242,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final user = ref.watch(authControllerProvider).user;
     final photoUrl = user?.profilePhotoUrl;
     final initials = user?.avatarInitials ?? '?';
     final hasPhoto = photoUrl != null || _pendingImageBytes != null;
 
     return Scaffold(
-      backgroundColor: NuvoColors.page,
+      backgroundColor: c.page,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child:
                   ListView(
-                        padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                         children: [
                           Align(
                             alignment: Alignment.centerLeft,
@@ -278,143 +276,184 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           Text(
                             'Update your photo, name, and username.',
                             style: AppTextStyles.bodyLarge.copyWith(
-                              color: NuvoColors.muted,
+                              color: c.inkMuted,
                             ),
                           ),
                           const SizedBox(height: 24),
 
-                          // ── Photo section ──────────────────────────────────────────
-                          Center(
+                          // ── The object being edited ──────────────────────
+                          // A signature card (outline + hard shadow) whose
+                          // header IS the identity card — it live-previews
+                          // the name/handle being typed so the user sees
+                          // "I'm editing MY profile", not filling a form.
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                            decoration: BoxDecoration(
+                              color: c.surface,
+                              borderRadius: BorderRadius.circular(
+                                NuvoRadii.lg,
+                              ),
+                              border: Border.all(
+                                color: c.border,
+                                width: 1.5,
+                              ),
+                              boxShadow: AppShadows.hardOffset(c.inkShadow),
+                            ),
                             child: Column(
                               children: [
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: _uploading
-                                      ? null
-                                      : () {
-                                          debugPrint(
-                                            'EDIT_PROFILE_AVATAR_TAPPED',
-                                          );
-                                          _openProfilePhotoSheet();
-                                        },
-                                  child: SizedBox(
-                                    width: 88,
-                                    height: 88,
-                                    child: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        _uploading
-                                            ? Container(
-                                                width: 88,
-                                                height: 88,
-                                                decoration: BoxDecoration(
-                                                  color: NuvoColors.navy
-                                                      .withValues(alpha: 0.08),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                alignment: Alignment.center,
-                                                child: const SizedBox(
-                                                  width: 24,
-                                                  height: 24,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2.5,
-                                                        color: NuvoColors.blue,
+                                Row(
+                                  children: [
+                                    // Photo is part of the identity card —
+                                    // the blue badge is the one affordance.
+                                    Semantics(
+                                      button: true,
+                                      label: hasPhoto
+                                          ? 'Change profile photo'
+                                          : 'Add profile photo',
+                                      child: NuvoPressable(
+                                        haptic: false,
+                                        onTap: _uploading
+                                            ? null
+                                            : _openProfilePhotoSheet,
+                                        child: SizedBox(
+                                          width: 64,
+                                          height: 64,
+                                          child: Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              _uploading
+                                                  ? Container(
+                                                      width: 64,
+                                                      height: 64,
+                                                      decoration: BoxDecoration(
+                                                        color: c.panel,
+                                                        shape: BoxShape.circle,
                                                       ),
-                                                ),
-                                              )
-                                            : NuvoAvatar(
-                                                initials: initials,
-                                                localBytes: _pendingImageBytes,
-                                                photoUrl: photoUrl,
-                                                size: 88,
-                                                bgColor: NuvoColors.navy
-                                                    .withValues(alpha: 0.08),
-                                                textColor: NuvoColors.navy,
-                                              ),
-                                        if (!_uploading)
-                                          Positioned(
-                                            bottom: 0,
-                                            right: 0,
-                                            child: GestureDetector(
-                                              behavior: HitTestBehavior.opaque,
-                                              onTap: () {
-                                                debugPrint(
-                                                  'EDIT_PROFILE_BADGE_TAPPED',
-                                                );
-                                                _openProfilePhotoSheet();
-                                              },
-                                              child: Container(
-                                                width: 26,
-                                                height: 26,
-                                                decoration: BoxDecoration(
-                                                  color: NuvoColors.blue,
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                    color: NuvoColors.page,
-                                                    width: 2,
+                                                      alignment:
+                                                          Alignment.center,
+                                                      child: const SizedBox(
+                                                        width: 22,
+                                                        height: 22,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                              strokeWidth: 2.5,
+                                                              color: NuvoColors
+                                                                  .blue,
+                                                            ),
+                                                      ),
+                                                    )
+                                                  : NuvoAvatar(
+                                                      initials: initials,
+                                                      localBytes:
+                                                          _pendingImageBytes,
+                                                      photoUrl: photoUrl,
+                                                      size: 64,
+                                                      bgColor: c.panel,
+                                                      textColor: c.ink,
+                                                    ),
+                                              if (!_uploading)
+                                                Positioned(
+                                                  bottom: -2,
+                                                  right: -2,
+                                                  child: Container(
+                                                    width: 24,
+                                                    height: 24,
+                                                    decoration: BoxDecoration(
+                                                      color: NuvoColors.blue,
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: c.surface,
+                                                        width: 2,
+                                                      ),
+                                                    ),
+                                                    alignment:
+                                                        Alignment.center,
+                                                    child: Icon(
+                                                      hasPhoto
+                                                          ? Icons.edit_rounded
+                                                          : Icons
+                                                                .photo_camera_rounded,
+                                                      color: NuvoColors.white,
+                                                      size: 12,
+                                                    ),
                                                   ),
                                                 ),
-                                                alignment: Alignment.center,
-                                                child: Icon(
-                                                  hasPhoto
-                                                      ? Icons.edit_rounded
-                                                      : Icons
-                                                            .photo_camera_rounded,
-                                                  color: NuvoColors.white,
-                                                  size: 12,
-                                                ),
-                                              ),
-                                            ),
+                                            ],
                                           ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: _uploading
-                                      ? null
-                                      : () {
-                                          debugPrint(
-                                            'EDIT_PROFILE_ADD_PHOTO_TAPPED',
-                                          );
-                                          _openProfilePhotoSheet();
-                                        },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    child: Text(
-                                      hasPhoto ? 'Change photo' : 'Add photo',
-                                      style: AppTextStyles.labelMedium.copyWith(
-                                        color: NuvoColors.blue,
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          ValueListenableBuilder<
+                                            TextEditingValue
+                                          >(
+                                            valueListenable: _nameController,
+                                            builder: (_, value, _) => Text(
+                                              value.text.trim().isEmpty
+                                                  ? 'Your name'
+                                                  : value.text.trim(),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTextStyles.titleLarge
+                                                  .copyWith(
+                                                    color: value.text
+                                                            .trim()
+                                                            .isEmpty
+                                                        ? c.inkSubtle
+                                                        : c.ink,
+                                                    fontWeight:
+                                                        FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          ValueListenableBuilder<
+                                            TextEditingValue
+                                          >(
+                                            valueListenable:
+                                                _usernameController,
+                                            builder: (_, value, _) => Text(
+                                              '@${value.text.trim()}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                                                  .copyWith(
+                                                    color: c.inkMuted,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Divider(color: c.divider, height: 1),
+                                const SizedBox(height: 14),
+                                NuvoTextInput(
+                                  controller: _nameController,
+                                  label: 'Full name',
+                                  hint: 'Your full name',
+                                  errorText: _nameError,
+                                  onChanged: (_) =>
+                                      setState(() => _nameError = null),
+                                ),
+                                const SizedBox(height: 14),
+                                NuvoTextInput(
+                                  controller: _usernameController,
+                                  label: 'Username',
+                                  hint: 'e.g. akshay',
+                                  errorText: _usernameError,
+                                  onChanged: (_) =>
+                                      setState(() => _usernameError = null),
                                 ),
                               ],
                             ),
-                          ),
-
-                          const SizedBox(height: 24),
-                          NuvoTextInput(
-                            controller: _nameController,
-                            label: 'Full name',
-                            hint: 'Your full name',
-                            errorText: _nameError,
-                            onChanged: (_) => setState(() => _nameError = null),
-                          ),
-                          const SizedBox(height: 16),
-                          NuvoTextInput(
-                            controller: _usernameController,
-                            label: 'Username',
-                            hint: 'e.g. akshay',
-                            errorText: _usernameError,
-                            onChanged: (_) =>
-                                setState(() => _usernameError = null),
                           ),
                         ],
                       )
@@ -461,7 +500,8 @@ class _EditSheetOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isDestructive ? NuvoColors.danger : NuvoColors.navy;
+    final c = context.themeColors;
+    final color = isDestructive ? NuvoColors.danger : c.ink;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -470,12 +510,12 @@ class _EditSheetOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDestructive
               ? NuvoColors.danger.withValues(alpha: 0.05)
-              : NuvoColors.panel,
+              : c.panel,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isDestructive
                 ? NuvoColors.danger.withValues(alpha: 0.20)
-                : NuvoColors.navy,
+                : c.ink,
             width: isDestructive ? 1 : 2,
           ),
         ),

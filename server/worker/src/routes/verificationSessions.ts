@@ -8,13 +8,20 @@ import {
   assignmentInsert,
   stableReleaseForActivity,
 } from '../domain/motionAssignments';
+import type { RegistryRelease } from '../domain/motionRegistry';
+import { CUSTOM_VERIFIER_TYPE } from '../domain/raceValidation';
 import { recordReleaseMetric } from '../domain/motionTelemetry';
 
 export const verificationSessionsRouter = new Hono<AppEnv>();
 
+// Custom-verifier (Teach Nuvo) races have no per-race registry activity —
+// their sessions bind to this seeded activity's stable release instead.
+const CUSTOM_VERIFIER_ACTIVITY_ID = 'custom_pose_sequence';
+
 type RaceAccessRow = {
   id: string;
   activity_id: string | null;
+  verifier_type: string | null;
   status: string;
 };
 
@@ -103,7 +110,7 @@ verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireA
   const raceId = c.req.param('raceId');
   const userId = c.get('userId');
   const race = await c.env.DB.prepare(
-    "SELECT id, activity_id, status FROM races WHERE id = ? AND deleted_at IS NULL LIMIT 1",
+    "SELECT id, activity_id, verifier_type, status FROM races WHERE id = ? AND deleted_at IS NULL LIMIT 1",
   ).bind(raceId).first<RaceAccessRow>();
   if (!race) return c.json({ ok: false, error: 'Race not found.' }, 404);
   if (race.status === 'cancelled' || race.status === 'archived' || race.status === 'completed') {
@@ -113,43 +120,61 @@ verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireA
     "SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active' LIMIT 1",
   ).bind(raceId, userId).first<{ id: string }>();
   if (!member) return c.json({ ok: false, error: 'Join the race before submitting proof.' }, 403);
-  if (!race.activity_id) return c.json({ ok: false, error: 'This race does not have a supported verifier.' }, 409);
 
-  let assignment = await assignmentForNextSession(c.env.DB, raceId);
-  // Races created before the motion registry rollout may have an activity but
-  // no assignment row. Repair that compatibility gap on the first proof
-  // attempt instead of making the user recreate the race.
-  if (!assignment && race.activity_id) {
-    const stableRelease = await stableReleaseForActivity(c.env.DB, race.activity_id, userId);
-    if (stableRelease) {
-      await c.env.DB.batch([
-        assignmentInsert(c.env.DB, raceId, stableRelease, 'follow_compatible_patch', 'lazy_backfill'),
-        c.env.DB.prepare(
-          'UPDATE races SET verifier_release_id = COALESCE(verifier_release_id, ?) WHERE id = ?',
-        ).bind(stableRelease.id, raceId),
-      ]);
-      assignment = await assignmentForNextSession(c.env.DB, raceId);
+  // Custom-verifier (Teach Nuvo) races carry no registry activity — their
+  // sessions bind to the seeded custom_pose_sequence stable release so AI
+  // proof provenance is identical to preset motions.
+  const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  if (!race.activity_id && !isCustomVerifier) {
+    return c.json({ ok: false, error: 'This race does not have a supported verifier.' }, 409);
+  }
+
+  let release: RegistryRelease | null;
+  let assignmentPolicy = 'pinned';
+  let assignmentReason = 'race_created';
+  if (isCustomVerifier) {
+    release = await stableReleaseForActivity(c.env.DB, CUSTOM_VERIFIER_ACTIVITY_ID, userId);
+    assignmentReason = 'custom_verifier';
+  } else {
+    let assignment = await assignmentForNextSession(c.env.DB, raceId);
+    // Races created before the motion registry rollout may have an activity but
+    // no assignment row. Repair that compatibility gap on the first proof
+    // attempt instead of making the user recreate the race.
+    if (!assignment && race.activity_id) {
+      const stableRelease = await stableReleaseForActivity(c.env.DB, race.activity_id, userId);
+      if (stableRelease) {
+        await c.env.DB.batch([
+          assignmentInsert(c.env.DB, raceId, stableRelease, 'follow_compatible_patch', 'lazy_backfill'),
+          c.env.DB.prepare(
+            'UPDATE races SET verifier_release_id = COALESCE(verifier_release_id, ?) WHERE id = ?',
+          ).bind(stableRelease.id, raceId),
+        ]);
+        assignment = await assignmentForNextSession(c.env.DB, raceId);
+      }
     }
+    if (!assignment || assignment.assignment.activityId !== race.activity_id) {
+      return c.json({ ok: false, code: 'verifier_unavailable', error: 'A compatible verifier is not available for this race yet.' }, 503);
+    }
+    release = assignment.release;
+    assignmentPolicy = assignment.assignment.assignmentPolicy;
+    assignmentReason = assignment.assignment.assignmentReason;
   }
-  if (!assignment || assignment.assignment.activityId !== race.activity_id) {
-    return c.json({ ok: false, code: 'verifier_unavailable', error: 'A compatible verifier is not available for this race yet.' }, 503);
-  }
-  if (assignment.release.status !== 'stable') {
+  if (!release || release.status !== 'stable') {
     return c.json({ ok: false, code: 'verifier_unavailable', error: 'This verifier release is not currently available.' }, 503);
   }
 
   const body = await readJson(c);
   if (!body) return c.json({ ok: false, error: 'Invalid JSON body.' }, 400);
   const runtimeCapabilities = capabilities(body.runtimeCapabilities);
-  const missingCapabilities = assignment.release.requiredCapabilities.filter((required) => !runtimeCapabilities.includes(required));
+  const missingCapabilities = release.requiredCapabilities.filter((required) => !runtimeCapabilities.includes(required));
   if (missingCapabilities.length > 0) {
     return c.json({
       ok: false,
       code: 'unsupported_client',
       error: 'This app build cannot run the verifier assigned to the race.',
       missingCapabilities,
-      releaseId: assignment.release.id,
-      releaseChecksum: assignment.release.checksum,
+      releaseId: release.id,
+      releaseChecksum: release.checksum,
     }, 409);
   }
 
@@ -163,11 +188,11 @@ verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireA
     sessionId,
     raceId,
     userId,
-    assignment.release.activityId,
-    assignment.release.id,
-    assignment.release.checksum,
-    assignment.release.specSchemaVersion,
-    assignment.release.engineType,
+    release.activityId,
+    release.id,
+    release.checksum,
+    release.specSchemaVersion,
+    release.engineType,
     stringValue(body.appVersion, 'unknown'),
     stringValue(body.appBuild, 'unknown'),
     JSON.stringify(runtimeCapabilities),
@@ -178,22 +203,22 @@ verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireA
     session: {
       id: sessionId,
       raceId,
-      activityId: assignment.release.activityId,
-      releaseId: assignment.release.id,
-      releaseChecksum: assignment.release.checksum,
-      assignmentPolicy: assignment.assignment.assignmentPolicy,
-      assignmentReason: assignment.assignment.assignmentReason,
+      activityId: release.activityId,
+      releaseId: release.id,
+      releaseChecksum: release.checksum,
+      assignmentPolicy,
+      assignmentReason,
       status: 'created',
     },
     verifier: {
-      releaseId: assignment.release.id,
-      checksum: assignment.release.checksum,
-      activityId: assignment.release.activityId,
-      engineType: assignment.release.engineType,
-      specSchemaVersion: assignment.release.specSchemaVersion,
-      spec: assignment.release.spec,
-      requiredCapabilities: assignment.release.requiredCapabilities,
-      minimumAppBuild: assignment.release.minimumAppBuild,
+      releaseId: release.id,
+      checksum: release.checksum,
+      activityId: release.activityId,
+      engineType: release.engineType,
+      specSchemaVersion: release.specSchemaVersion,
+      spec: release.spec,
+      requiredCapabilities: release.requiredCapabilities,
+      minimumAppBuild: release.minimumAppBuild,
     },
   }, 201);
 });
