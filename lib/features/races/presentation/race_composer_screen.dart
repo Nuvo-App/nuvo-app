@@ -1430,7 +1430,9 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     final selectedActivityId =
         userPicked ? widget.draft.activity.activityId : '';
 
-    if (_teachMode && !isManual) {
+    // Entering Teach Nuvo is an explicit path choice — a manual-goalKind
+    // draft must not dead-end the card's tap on this guard.
+    if (_teachMode) {
       final canContinue = _moveNameController.text.trim().isNotEmpty;
       return _PageShell(
         question: 'Your custom movement',

@@ -122,11 +122,8 @@ void main() {
       await tester.tap(find.text('Choose activity'));
       await tester.pumpAndSettle();
 
-      // 'Friday burner' resolves to a custom goal — switch to the movement
-      // tab to reach Teach Nuvo.
-      await tester.tap(find.text('Movement'));
-      await tester.pumpAndSettle();
-
+      // 'Friday burner' resolves to a custom goal — the movement picker
+      // still leads, with Teach Nuvo as a direct path.
       // choose CUSTOM movement
       await tester.tap(
         find.textContaining('Teach Nuvo', findRichText: true),
@@ -134,8 +131,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // customMovementDetails: name + unit
-      await tester.enterText(
-          find.widgetWithText(TextField, '').first, 'Side reach');
+      await tester.enterText(find.byType(TextField).first, 'Side reach');
       await tester.pump();
       await tester.tap(find.text('Continue to training'));
       await tester.pumpAndSettle();
