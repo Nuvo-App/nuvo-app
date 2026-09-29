@@ -35,6 +35,7 @@ class NotificationPref {
         'passed_on_leaderboard' => (label: 'Passed on leaderboard', group: 'Races'),
         'proof_accepted' => (label: 'Proof accepted', group: 'Proof'),
         'proof_rejected' => (label: 'Proof needs another try', group: 'Proof'),
+        'proof_disputed' => (label: 'Proof disputes', group: 'Proof'),
         'crew_request' => (label: 'Crew requests', group: 'Crew'),
         'crew_request_accepted' => (label: 'Request accepted', group: 'Crew'),
         'crew_connected' => (label: 'New crew member', group: 'Crew'),

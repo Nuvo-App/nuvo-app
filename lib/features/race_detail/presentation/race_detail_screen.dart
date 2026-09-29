@@ -442,10 +442,11 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     final isOwner = user != null && race.isCreator(user.id);
     final isParticipant = user != null && race.isParticipant(user.id);
     final eligibility = resolveCameraVerification(race);
+    // Proof submission is the participation contract: every active racer
+    // can submit. Camera capability only selects the proof METHOD (see
+    // raceProofAction) — it never decides whether the CTA exists.
     final canVerify =
-        raceIsActive(race) &&
-        (isOwner || isParticipant) &&
-        eligibility.isCameraVerifiable;
+        raceIsActive(race) && (isOwner || isParticipant);
     final canJoin = raceIsActive(race) && !isOwner && !isParticipant;
     final myPart = isParticipant ? race.participantFor(user.id) : null;
     final myProgress = raceProgressPercent(race, myPart);
@@ -469,7 +470,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
         : myRaceComplete
         ? (isOwner || isParticipant ? 'Race again' : 'Start another race')
         : canVerify
-        ? (usesAttempts ? 'Start attempt' : 'Verify now')
+        ? (usesAttempts ? 'Start attempt' : raceProofCta(race).label)
         : 'Unsupported';
     final onPrimary = _busy
         ? null
@@ -538,7 +539,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                   timeLeft: chase?.timeLeft,
                 ),
 
-              if (raceIsActive(race) && !eligibility.isCameraVerifiable) ...[
+              // The camera-unsupported notice belongs only to races that
+              // WANTED AI Motion and can't run it — a manual/photo race
+              // ('manual_goal') is working as designed, not unsupported.
+              if (raceIsActive(race) &&
+                  !eligibility.isCameraVerifiable &&
+                  eligibility.reason != 'manual_goal') ...[
                 const SizedBox(height: 12),
                 _UnsupportedVerificationNotice(
                   message: eligibility.unsupportedMessage,
@@ -648,7 +654,8 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
                 _MoveLogGroup(
                   proofs: race.recentProofs.take(8).toList(),
                   race: race,
-                  isOwner: isOwner,
+                  canOpenProofs:
+                      raceCanInspectProofs(race, user?.id),
                   onProofTap: (proof) =>
                       context.push('/race/${race.id}/proofs/${proof.id}'),
                 ),
@@ -1530,13 +1537,13 @@ class _MoveLogGroup extends StatelessWidget {
   const _MoveLogGroup({
     required this.proofs,
     required this.race,
-    required this.isOwner,
+    required this.canOpenProofs,
     required this.onProofTap,
   });
 
   final List<RaceProof> proofs;
   final Race race;
-  final bool isOwner;
+  final bool canOpenProofs;
   final ValueChanged<RaceProof> onProofTap;
 
   @override
@@ -1557,7 +1564,7 @@ class _MoveLogGroup extends StatelessWidget {
               isPositive:
                   proofs[i].verificationStatus == 'accepted' ||
                   proofs[i].verificationStatus == 'ai_verified',
-              onTap: isOwner ? () => onProofTap(proofs[i]) : null,
+              onTap: canOpenProofs ? () => onProofTap(proofs[i]) : null,
             ),
             if (i < proofs.length - 1)
               Divider(

@@ -18,6 +18,7 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../data/race_models.dart';
+import '../domain/race_display.dart';
 import 'race_controller.dart';
 
 class ProofReviewScreen extends ConsumerStatefulWidget {
@@ -359,7 +360,15 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       evidenceImage: _evidenceImage(proof),
                     ),
                     const SizedBox(height: 22),
-                    if (!isOwner) ...[
+                    // Action visibility mirrors the backend contract so the
+                    // UI never offers a mutation that will 409:
+                    //  - creator review controls only while the proof is
+                    //    HELD (pending → 'needs_review'/'submitted'); counted
+                    //    proof is disputed through veto, vetoed proof is final;
+                    //  - nobody reviews or vetoes their own proof;
+                    //  - any participant (creator included) can veto another
+                    //    racer's non-vetoed proof.
+                    if (!raceProofIsReviewable(race, proof, user?.id)) ...[
                       Text(
                         _viewerStatus(proof),
                         style: AppTextStyles.bodySmall.copyWith(
@@ -371,8 +380,7 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                       // Race-truth action: other racers can dispute whether
                       // this proof should count. Own vetoed proofs get the
                       // replacement path — the old record stays for audit.
-                      if (proof.userId != user?.id &&
-                          proof.vetoState != 'vetoed') ...[
+                      if (raceProofIsVetoable(race, proof, user?.id)) ...[
                         NuvoOutlineButton(
                           label: proof.viewerVoted
                               ? 'You vetoed this proof'
@@ -397,17 +405,18 @@ class _ProofReviewScreenState extends ConsumerState<ProofReviewScreen> {
                         ),
                         const SizedBox(height: 10),
                       ],
-                      Center(
-                        child: TextButton(
-                          onPressed: () => _reportProof(proof),
-                          child: Text(
-                            'Report this move',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: context.themeColors.inkMuted,
+                      if (proof.userId != user?.id)
+                        Center(
+                          child: TextButton(
+                            onPressed: () => _reportProof(proof),
+                            child: Text(
+                              'Report this move',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: context.themeColors.inkMuted,
+                              ),
                             ),
                           ),
                         ),
-                      ),
                     ] else ...[
                     NuvoTextInput(
                       controller: _summaryController,
