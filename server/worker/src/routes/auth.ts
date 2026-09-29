@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv, UserRow, ProfileRow, EmailCodeRow, SessionRow, AuthIdentityRow } from '../types';
 import { requireAuth, signJwt } from '../lib/jwt';
+import { SQLITE_NOW_ISO } from '../lib/time';
 import {
   generateId,
   generateOtp,
@@ -386,7 +387,7 @@ authRouter.post('/email/verify', async (c) => {
 
   const codeRow = await c.env.DB.prepare(
     `SELECT * FROM email_codes
-     WHERE email = ? AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+     WHERE email = ? AND used_at IS NULL AND expires_at > ${SQLITE_NOW_ISO}
      ORDER BY created_at DESC LIMIT 1`,
   )
     .bind(email)
@@ -710,7 +711,7 @@ authRouter.post('/refresh', async (c) => {
 
   const session = await c.env.DB.prepare(
     `SELECT * FROM sessions
-     WHERE refresh_token_hash = ? AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+     WHERE refresh_token_hash = ? AND revoked_at IS NULL AND expires_at > ${SQLITE_NOW_ISO}
      LIMIT 1`,
   )
     .bind(tokenHash)

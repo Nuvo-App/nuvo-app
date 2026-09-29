@@ -619,6 +619,7 @@ class RaceApi {
     required AiMotionResult result,
     required String clientSubmissionId,
     required String metric,
+    String? verificationSessionId,
   }) async {
     final json = await _post(
       '/races/$raceId/proof',
@@ -626,6 +627,7 @@ class RaceApi {
       result.toProofPayload(
         clientSubmissionId: clientSubmissionId,
         metric: metric,
+        verificationSessionId: verificationSessionId,
       ),
     );
     return Race.fromJson(json['race'] as Map<String, dynamic>);
@@ -644,10 +646,13 @@ class RaceApi {
     required String validatorVersion,
     required int framesAnalyzed,
     required int durationMs,
+    String? verificationSessionId,
   }) async {
     final json = await _post('/races/$raceId/proof', token, {
       'proofType': 'ai_motion',
       'clientSubmissionId': clientSubmissionId,
+      if (verificationSessionId != null && verificationSessionId.isNotEmpty)
+        'verificationSessionId': verificationSessionId,
       'activityType': activityId,
       'metric': metric,
       'value': value,
@@ -669,11 +674,15 @@ class RaceApi {
     String raceId, {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
+    String? verificationSessionId,
   }) async {
     final json = await _post(
       '/races/$raceId/proof',
       token,
-      result.toProofPayload(clientSubmissionId: clientSubmissionId),
+      result.toProofPayload(
+        clientSubmissionId: clientSubmissionId,
+        verificationSessionId: verificationSessionId,
+      ),
     );
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }

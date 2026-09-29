@@ -40,6 +40,7 @@ function raceDb() {
     user_unlocks: [],
     user_featured_badges: [],
     unlock_definitions: [],
+    verification_sessions: [],
   };
 
   const activityKey = (r) =>
@@ -85,6 +86,23 @@ function raceDb() {
           x.purpose === 'proof_evidence' &&
           x.status === 'active',
       );
+      return m ? { id: m.id } : null;
+    }
+    if (q.startsWith('SELECT status, result_value FROM verification_sessions')) {
+      const s = T.verification_sessions.find(
+        (x) => x.id === args[0] && x.user_id === args[1] && x.race_id === args[2],
+      );
+      return s ? { status: s.status, result_value: s.result_value } : null;
+    }
+    if (q.startsWith('SELECT id FROM move_logs') && q.includes('verification_session_id')) {
+      const m = T.move_logs.find((x) => {
+        if (x.race_id !== args[0] || !x.metadata_json) return false;
+        try {
+          return JSON.parse(x.metadata_json).verification_session_id === args[1];
+        } catch {
+          return false;
+        }
+      });
       return m ? { id: m.id } : null;
     }
     if (q.startsWith('SELECT * FROM move_logs') && q.includes('client_submission_id')) {
@@ -670,10 +688,16 @@ test('AI Motion Proof does not require a photo', async () => {
     metric: 'reps',
   });
   const c = makeClient(db);
+  // AI proofs bind to a completed, caller-owned verification session.
+  db.T.verification_sessions.push({
+    id: 'vs-1', race_id: race.id, user_id: 'A', status: 'completed',
+    result_value: 30,
+  });
   const res = await c.postProof('A', race.id, {
     proofType: 'ai_motion',
     value: 30,
     clientSubmissionId: 'cs-1',
+    verificationSessionId: 'vs-1',
     verificationStatus: 'ai_verified',
     activityType: 'pushups',
     metric: 'reps',

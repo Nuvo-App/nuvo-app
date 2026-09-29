@@ -9,6 +9,7 @@ import {
   resolveRaceAccess,
 } from '../lib/raceAccess';
 import { evaluateRaceSafety } from '../domain/raceSafety';
+import { SQLITE_NOW_ISO } from '../lib/time';
 import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityIdLoose, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
@@ -1219,7 +1220,7 @@ racesRouter.post('/join-code', async (c) => {
 
   const invite = await c.env.DB.prepare(
     `SELECT * FROM race_invites WHERE invite_code = ? AND status = 'active'
-     AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`
+     AND (expires_at IS NULL OR expires_at > ${SQLITE_NOW_ISO})`
   ).bind(code).first<InviteRow>();
   if (!invite) return c.json(badRequest('Invite code not found'), 404);
 
@@ -1576,6 +1577,16 @@ racesRouter.patch('/:id', async (c) => {
       if (jsonKey === 'title' && !parsed) return c.json(badRequest('title is required'), 400);
       updates.push(`${dbKey} = ?`);
       values.push(parsed);
+    }
+  }
+
+  // Renames run the same safety gate as creation — a race must not be
+  // created clean and then renamed into policy-violating text.
+  const nextTitle = stringOrNull(body.title);
+  if (nextTitle != null) {
+    const safety = evaluateRaceSafety(`${nextTitle} ${race.custom_activity_name ?? ''}`.trim());
+    if (!safety.ok) {
+      return c.json({ ok: false, error: safety.reason, safetyCategory: safety.category }, 400);
     }
   }
 
@@ -1960,6 +1971,13 @@ racesRouter.post('/:id/proof', async (c) => {
   const verificationSessionId = isAiMotion
     ? stringOrNull(body.verificationSessionId) ?? stringOrNull(body.verification_session_id) ?? null
     : null;
+  // AI Motion Proof is bound to a server verification session — without one
+  // the payload is only a self-reported number wearing the proof type.
+  // Custom-verifier races have no registry activity/release, so they cannot
+  // mint sessions yet; they keep their verifier-spec checks for now.
+  if (isAiMotion && !isCustom && !verificationSessionId) {
+    return c.json(badRequest('AI Motion Proof requires a verification session'), 400);
+  }
   if (verificationSessionId) {
     const session = await c.env.DB.prepare(
       'SELECT status, result_value FROM verification_sessions WHERE id = ? AND user_id = ? AND race_id = ?',

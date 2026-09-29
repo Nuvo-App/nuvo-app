@@ -193,9 +193,12 @@ class AiMotionResult {
   Map<String, dynamic> toProofPayload({
     required String clientSubmissionId,
     required String metric,
+    String? verificationSessionId,
   }) => {
     'proofType': 'ai_motion',
     'clientSubmissionId': clientSubmissionId,
+    if (verificationSessionId != null && verificationSessionId.isNotEmpty)
+      'verificationSessionId': verificationSessionId,
     'activityType': effectiveActivityId,
     'metric': metric,
     'note': 'AI motion proof: $detectedReps $effectiveActivityLabel detected.',

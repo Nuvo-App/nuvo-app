@@ -275,6 +275,7 @@ class RaceRepository {
     required AiMotionResult result,
     required String clientSubmissionId,
     required String metric,
+    String? verificationSessionId,
   }) => _withRefresh(
     (token) => _api.submitAiMotionProof(
       token,
@@ -282,6 +283,7 @@ class RaceRepository {
       result: result,
       clientSubmissionId: clientSubmissionId,
       metric: metric,
+      verificationSessionId: verificationSessionId,
     ),
   );
 
@@ -289,12 +291,14 @@ class RaceRepository {
     String raceId, {
     required CustomPoseRuntimeResult result,
     required String clientSubmissionId,
+    String? verificationSessionId,
   }) => _withRefresh(
     (token) => _api.submitCustomPoseProof(
       token,
       raceId,
       result: result,
       clientSubmissionId: clientSubmissionId,
+      verificationSessionId: verificationSessionId,
     ),
   );
 
@@ -310,6 +314,7 @@ class RaceRepository {
     required String validatorVersion,
     required int framesAnalyzed,
     required int durationMs,
+    String? verificationSessionId,
   }) => _withRefresh(
     (token) => _api.submitObjectCompositionProof(
       token,
@@ -324,6 +329,7 @@ class RaceRepository {
       validatorVersion: validatorVersion,
       framesAnalyzed: framesAnalyzed,
       durationMs: durationMs,
+      verificationSessionId: verificationSessionId,
     ),
   );
 
