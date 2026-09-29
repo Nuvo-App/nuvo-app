@@ -1,8 +1,8 @@
 // Regression coverage for Arena's hero race lane. The hero renders the
-// shared marker track (You / rival / goal ring) when the board carries
-// markable scores; the curved identity path remains the fallback and is
-// covered directly in test/nuvo_race_path_test.dart via NuvoRacePath's own
-// public API — plus a direct painter-bounds check below.
+// curved identity path carrying named marks (You / rival / goal) when the
+// board has markable scores — covered directly in
+// test/nuvo_race_path_test.dart via NuvoRacePath's own public API — plus a
+// direct painter-bounds check below.
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -41,11 +41,17 @@ void main() {
   ) async {
     await _pumpArenaPreview(tester);
 
-    // The preview board is 65/100 vs Alex 48/100 — the lane names both.
-    expect(find.byType(RaceMarkerTrack), findsWidgets);
-    expect(find.textContaining('You 65'), findsWidgets);
-    expect(find.textContaining('Alex'), findsWidgets);
-    expect(find.textContaining('Goal'), findsWidgets);
+    // The preview board is 65/100 vs Alex 48/100 — the hero path names
+    // both marks and the goal. Labels paint via the path's CustomPainter,
+    // so the contract is the widget's own properties.
+    final heroPath = find.byWidgetPredicate(
+      (w) => w is NuvoRacePath && w.viewerLabel != null,
+    );
+    expect(heroPath, findsOneWidget);
+    final path = tester.widget<NuvoRacePath>(heroPath);
+    expect(path.viewerLabel, contains('You 65'));
+    expect(path.rivalLabel, contains('Alex'));
+    expect(path.goalLabel, contains('Goal'));
   });
 
   testWidgets('painter stays within its own bounds and does not throw', (

@@ -1015,10 +1015,7 @@ void main() {
       // already satisfied, so the coach points at the continue CTA.
       expect(find.text('Tap Set the finish line.'), findsOneWidget);
 
-      // The title preselected the custom-goal tab — switch to Movement to
-      // pick a real movement.
-      await tester.tap(find.text('Movement'));
-      await settle(tester);
+      // The picker leads the activity step — pick a real movement.
       await tester.ensureVisible(find.text('Pushups').first);
       await tester.pump();
       await tester.tap(find.text('Pushups').first);
@@ -1084,8 +1081,6 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Morning Mile');
       await settle(tester);
       await tester.tap(find.text('Choose activity'));
-      await settle(tester);
-      await tester.tap(find.text('Movement'));
       await settle(tester);
       await tester.ensureVisible(find.text('Pushups').first);
       await tester.pump();
