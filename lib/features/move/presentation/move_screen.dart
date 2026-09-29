@@ -458,7 +458,12 @@ class _VerifyTab extends StatelessWidget {
         child: Container(
           height: double.infinity,
           alignment: Alignment.center,
-          child: Row(
+          // Fixed-width slots: filter chrome, so the label scale is pinned
+          // — a third of 320px cannot take "Completed 12" scaled up, and a
+          // truncated tab reads as broken, not dense.
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.0,
+            child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
@@ -484,6 +489,7 @@ class _VerifyTab extends StatelessWidget {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -586,8 +592,8 @@ class _ReadySegment extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          // Level-0 tactile rows directly on the page — hairline rhythm, no
-          // card-per-row. The hero above is the one loud surface.
+          // Compact race strips — layered objects, quieter than the hero
+          // board. Breath between them, not hairlines.
           for (var i = 0; i < visibleAlsoReady.length; i++) ...[
             _ReadyRow(
               race: visibleAlsoReady[i],
@@ -595,11 +601,7 @@ class _ReadySegment extends StatelessWidget {
               onTap: () => onVerify(visibleAlsoReady[i]),
             ),
             if (i < visibleAlsoReady.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: context.themeColors.divider,
-              ),
+              const SizedBox(height: 10),
           ],
         ],
       ],
@@ -765,12 +767,56 @@ class _UpNextHeroState extends State<_UpNextHero> {
     final rival = _rival(others, rank);
     final leader = others.isNotEmpty ? others.first : null;
 
+    // Canonical lane geometry — a real finish target gives literal
+    // share-of-distance fractions; best-attempt and lower-wins races get
+    // the relative-competition lane (no invented goal ring).
+    final geo = raceLaneGeometry(race, widget.userId);
+    final rivalMark = rival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == rival.userId)
+            .firstOrNull;
+    final showLane =
+        geo.hasGoal || geo.viewer != null || rivalMark != null;
+
+    // The stakes line is an artifact hanging off the lane's bottom edge —
+    // uppercase, arrowed, colored by standing. A finished race drops the
+    // chase copy entirely.
+    final stakes = mood == _VerifyMood.finished
+        ? (raceIsCompleted(race)
+            ? 'RACE FINISHED'
+            : 'GOAL REACHED — your proof is in')
+        : _contextLine(rank, myValue, rival, leader).toUpperCase();
+    final stakesColor =
+        mood == _VerifyMood.startLine ? c.ink : _moodText(mood, c);
+
     return Stack(
       children: [
-        Column(
-          key: const Key('verify-up-next-hero'),
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        // The race board — one physical object: navy edge, offset depth,
+        // white surface. WHAT → WHERE I AM → WHO I'M CHASING → WHAT I
+        // NEED → DO IT, top to bottom.
+        Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: Border.all(color: c.inkShadow, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: c.inkShadow,
+                offset: const Offset(4, 4),
+                blurRadius: 0,
+              ),
+            ],
+          ),
+          child: Column(
+            key: const Key('verify-up-next-hero'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // Race name + earned rank — no kicker, the hero is the headline.
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,91 +873,150 @@ class _UpNextHeroState extends State<_UpNextHero> {
               accent: accent,
               moodColor: _moodText(mood, c),
             ),
-            if (hasDenominator) ...[
-              const SizedBox(height: 10),
-              // The track IS the rivalry: viewer mark, rival mark, goal
-              // ring — named, canonical, animated. No card underneath.
-              // Tied gives the rival the viewer's physical mark size —
-              // equal standing reads as equal marks. Leading wraps the
-              // viewer's mark in a green halo; the takeover earns a hard
-              // gold ring for its ~1s moment.
+            if (showLane) ...[
+              const SizedBox(height: 4),
+              // The lane IS the rivalry — hero scale: you, the racer you're
+              // chasing, the finish ring. Tied gives the rival the viewer's
+              // physical mark size; leading wraps the viewer in a green
+              // halo; the takeover earns a hard gold ring for its moment.
               RaceMarkerTrack(
+                hero: true,
                 fillColor: _moodMarker(mood),
                 goalReached: mood == _VerifyMood.finished,
-                goalLabel: 'Goal ${_anchorFormat(race.targetValue!)}',
+                hasGoal: geo.hasGoal,
+                goalLabel: geo.hasGoal
+                    ? 'Goal ${_anchorFormat(race.targetValue!)}'
+                    : null,
                 markers: [
-                  if (rival != null && rival.progressValue > 0)
+                  if (rival != null && rivalMark != null)
                     RaceTrackMarker(
-                      fraction: rival.progressValue / race.targetValue!,
+                      fraction: rivalMark.fraction,
                       label:
                           '${_firstName(rival.displayName)} '
                           '${_anchorFormat(rival.progressValue)}',
                       color: c.ink,
-                      size: mood == _VerifyMood.tied ? 11 : null,
+                      size: mood == _VerifyMood.tied ? 20 : null,
                     ),
-                  RaceTrackMarker(
-                    fraction: myValue / race.targetValue!,
-                    label: 'You ${_anchorFormat(myValue)}',
-                    color: _moodMarker(mood),
-                    isViewer: true,
-                    haloColor:
-                        mood == _VerifyMood.leading ? NuvoColors.success : null,
-                    ringColor: _leadFlash ? NuvoColors.gold : null,
-                  ),
+                  if (geo.viewer != null)
+                    RaceTrackMarker(
+                      fraction: geo.viewer!,
+                      label: 'You ${_anchorFormat(myValue)}',
+                      color: _moodMarker(mood),
+                      isViewer: true,
+                      haloColor: (mood == _VerifyMood.leading
+                              ? NuvoColors.success
+                              : NuvoColors.blue)
+                          .withValues(alpha: 0.28),
+                      ringColor: _leadFlash ? NuvoColors.gold : null,
+                    ),
                 ],
               ),
             ] else ...[
               const SizedBox(height: 10),
             ],
-            const SizedBox(height: 4),
-            // The stakes live on the page, not in a tinted card — one line
-            // under the lane, colored by standing. A finished race drops
-            // the chase copy entirely.
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              style: AppTextStyles.labelMedium.copyWith(
-                fontSize: 13.5,
-                color: mood == _VerifyMood.startLine
-                    ? c.ink
-                    : _moodText(mood, c),
-                fontWeight: FontWeight.w700,
-              ),
-              child: Text(
-                mood == _VerifyMood.finished
-                    ? (raceIsCompleted(race)
-                        ? 'RACE FINISHED'
-                        : 'GOAL REACHED — your proof is in')
-                    : _contextLine(rank, myValue, rival, leader),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            // The stakes tab hangs off the lane's bottom edge — attached to
+            // the visualization, not floating copy.
+            Transform.translate(
+              offset: Offset(0, showLane ? -10 : 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  margin: const EdgeInsets.only(left: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.surface,
+                    borderRadius: BorderRadius.circular(9),
+                    // Semantic standing color on the artifact edge, not
+                    // just the copy.
+                    border: Border.all(color: stakesColor, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: c.inkShadow,
+                        offset: const Offset(2, 2),
+                        blurRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        mood == _VerifyMood.finished
+                            ? Icons.flag_rounded
+                            : Icons.north_rounded,
+                        size: 11,
+                        color: stakesColor,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
+                          style: AppTextStyles.labelUppercase(
+                            10.5,
+                          ).copyWith(
+                            color: stakesColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          child: Text(
+                            stakes,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            // One primary action — the proof method IS the label, and the
-            // navy keycap icon makes it a specific Nuvo action, not a
-            // generic button. A finished race swaps to the room itself.
-            NuvoPrimaryButton(
-              key: const Key('verify-hero-cta'),
-              label: mood == _VerifyMood.finished
-                  ? 'View race'
-                  : raceProofCta(race).label,
-              onPressed: mood == _VerifyMood.finished
-                  ? widget.onOpen
-                  : widget.onVerify,
-              leadingWidget: _ctaKeycap(
-                mood == _VerifyMood.finished
-                    ? Icons.flag_rounded
-                    : raceProofCta(race).icon,
+                ],
               ),
-              expand: true,
-              height: 48,
             ),
-          ],
+            SizedBox(height: showLane ? 4 : 12),
+            // DO IT — the board's one action band: full-bleed foot
+            // separated by the structural hairline so the proof action
+            // reads as part of the race object, not a card inside a card.
+            // The proof method IS the label; a finished race swaps to the
+            // room itself.
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 13, 18, 15),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: c.inkShadow.withValues(alpha: 0.14),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              child: NuvoPrimaryButton(
+                key: const Key('verify-hero-cta'),
+                label: mood == _VerifyMood.finished
+                    ? 'View race'
+                    : raceProofCta(race).label,
+                onPressed: mood == _VerifyMood.finished
+                    ? widget.onOpen
+                    : widget.onVerify,
+                leadingWidget: _ctaKeycap(
+                  mood == _VerifyMood.finished
+                      ? Icons.flag_rounded
+                      : raceProofCta(race).icon,
+                ),
+                expand: true,
+                height: 48,
+              ),
+            ),
+            ],
+          ),
         ),
-        // Lead-takeover flash — state change creates motion; idle stays calm.
+        // Lead-takeover flash — a tag pinned on the board's top rail:
+        // straddling the edge keeps the title readable under it instead of
+        // stamping over the headline. Idle stays calm.
         Positioned(
-          top: 14,
+          top: -13,
           left: 18,
           right: 18,
           child: IgnorePointer(
@@ -1235,6 +1340,17 @@ class _ReadyRow extends StatelessWidget {
     final earnedRank = hasResult ? rankForUser(race, userId) : null;
     final mood = _moodFor(race, userId);
 
+    // Canonical lane geometry for the strip's compact race lane.
+    final geo = raceLaneGeometry(race, userId);
+    final stripRival = raceNearestRival(race, userId);
+    final stripRivalMark = stripRival == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == stripRival.userId)
+            .firstOrNull;
+    final showLane =
+        geo.hasGoal || geo.viewer != null || stripRivalMark != null;
+
     // Canonical meta: "39 / 50 reps" · "Best · 78 strokes" · "Start line".
     final String meta = !hasResult
         ? race.participantCount > 1
@@ -1289,11 +1405,26 @@ class _ReadyRow extends StatelessWidget {
       }
     }
 
+    // A compact race strip — a quiet layered object between the hero board
+    // and the bare page. Same composition as the hero (title → standing →
+    // lane → context) at middle-ground volume.
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.card),
+          border: Border.all(color: c.border, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: c.inkShadow.withValues(alpha: 0.10),
+              offset: const Offset(2, 2),
+              blurRadius: 0,
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1313,7 +1444,9 @@ class _ReadyRow extends StatelessWidget {
                     _ordinalLabel(earnedRank).toLowerCase(),
                     style: AppTextStyles.placementLabel(
                       size: 12.5,
-                      color: _placementTint(earnedRank) ?? c.inkSubtle,
+                      // Same state language as the hero: gold only on a
+                      // finished win — a live lead reads green.
+                      color: _rankTint(mood, earnedRank, false, c),
                     ),
                   ),
                 ],
@@ -1329,34 +1462,36 @@ class _ReadyRow extends StatelessWidget {
                 color: c.inkSubtle,
               ),
             ),
-            if (hasDenominator && hasResult) ...[
-              const SizedBox(height: 7),
-              RaceProgress(
-                progressPercent: raceProgressPercent(race, myPart),
-                trackHeight: 3,
-                dotDiameter: 6,
+            if (showLane) ...[
+              const SizedBox(height: 9),
+              // The same canonical marks as the hero, at strip scale —
+              // unlabeled compact lane, viewer bead + rival dot + goal ring.
+              RaceMarkerTrack(
+                compact: true,
                 fillColor: _moodMarker(mood),
+                goalReached: mood == _VerifyMood.finished,
+                hasGoal: geo.hasGoal,
+                markers: [
+                  if (stripRivalMark != null)
+                    RaceTrackMarker(
+                      fraction: stripRivalMark.fraction,
+                      label: '',
+                      color: c.ink,
+                      size: mood == _VerifyMood.tied ? 9 : null,
+                    ),
+                  if (geo.viewer != null)
+                    RaceTrackMarker(
+                      fraction: geo.viewer!,
+                      label: '',
+                      color: _moodMarker(mood),
+                      isViewer: true,
+                    ),
+                ],
               ),
             ],
             const SizedBox(height: 5),
             Row(
               children: [
-                // The state dot is the row's marker — blue racing, green
-                // leading/done, navy outline at the start line. No card.
-                Container(
-                  width: 7,
-                  height: 7,
-                  margin: const EdgeInsets.only(right: 6),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: mood == _VerifyMood.startLine
-                        ? null
-                        : _moodMarker(mood),
-                    border: mood == _VerifyMood.startLine
-                        ? Border.all(color: c.inkDim, width: 1.2)
-                        : null,
-                  ),
-                ),
                 Expanded(
                   child: Text(
                     contextLine ?? '',

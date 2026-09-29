@@ -93,6 +93,9 @@ Race _race({
   String? movement = 'Pushup',
   int? targetValue = 50,
   String? unit = 'reps',
+  String format = 'first_to_goal',
+  String scoreDirection = 'higher',
+  String? metric,
   List<RaceParticipant>? participants,
   RaceViewerContext? viewerContext,
   String? aiActivityType,
@@ -104,6 +107,9 @@ Race _race({
     goalType: 'first_to_goal',
     targetValue: targetValue,
     unit: unit,
+    format: format,
+    scoreDirection: scoreDirection,
+    metric: metric,
     customActivityName: movement,
     aiActivityType: aiActivityType,
     proofRequirement: 'photo_video',
@@ -874,7 +880,7 @@ void main() {
         expect(find.text('Noah 42'), findsOneWidget);
         expect(find.text('Goal 50'), findsOneWidget);
         // Stakes live under the track, not in a tinted card.
-        expect(find.textContaining('take 1st'), findsOneWidget);
+        expect(find.textContaining('TAKE 1ST'), findsOneWidget);
         // One merged primary CTA — proof method + action together.
         expect(find.text('Start AI Motion Proof'), findsOneWidget);
       });
@@ -904,7 +910,7 @@ void main() {
         _app(races: [leading], home: const MoveScreen()),
         'verify-leading-390',
       );
-      expect(find.textContaining('lead'), findsWidgets);
+      expect(find.textContaining('LEAD'), findsWidgets);
 
       final tied = _race(
         viewerContext: const RaceViewerContext(
@@ -933,7 +939,7 @@ void main() {
       _races(tester).push([tied]);
       await _settle(tester);
       await _capture(tester, 'verify-tied-390');
-      expect(find.textContaining('Tied'), findsWidgets);
+      expect(find.textContaining('TIED'), findsWidgets);
     });
 
     testWidgets('taking first fires the payoff moment', (tester) async {
@@ -1041,5 +1047,120 @@ void main() {
         );
       });
     }
+
+    // Scoring-semantics variants — the lane is canonical
+    // (raceLaneGeometry): lower-wins and best-attempt draw a relative
+    // competition lane with NO goal ring; a finish target draws one.
+    testWidgets('lower-wins golf — relative lane, no goal ring', (
+      tester,
+    ) async {
+      _useViewport(tester, 390, 844);
+      final golf = _race(
+        title: 'Weekend Golf',
+        movement: 'Golf',
+        format: 'best_attempt',
+        scoreDirection: 'lower',
+        targetValue: null,
+        unit: 'strokes',
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 78, rank: 1),
+          _p('u-noah', 'Noah Reyes', 82, rank: 2),
+        ],
+        viewerContext: const RaceViewerContext(
+          raceId: 'race-1',
+          status: 'active',
+          rank: 1,
+          viewerScore: 78,
+          isLeading: true,
+          isMember: true,
+        ),
+      );
+      await _pump(
+        tester,
+        _app(races: [golf], home: const MoveScreen()),
+        'verify-golf-390',
+      );
+      expect(find.text('Lowest score wins'), findsOneWidget);
+      // No denominator — a goal ring would lie about the race.
+      expect(find.textContaining('Goal'), findsNothing);
+    });
+
+    testWidgets('best-attempt — bare result, relative lane', (tester) async {
+      _useViewport(tester, 390, 844);
+      final best = _race(
+        title: 'Max Pushups',
+        format: 'best_attempt',
+        targetValue: null,
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 39, rank: 2),
+          _p('u-noah', 'Noah Reyes', 42, rank: 1),
+        ],
+      );
+      await _pump(
+        tester,
+        _app(races: [best], home: const MoveScreen()),
+        'verify-bestattempt-390',
+      );
+      expect(find.text('Highest score wins'), findsOneWidget);
+      expect(find.textContaining('Goal'), findsNothing);
+    });
+
+    testWidgets('timed — clock anchor on the hero lane', (tester) async {
+      _useViewport(tester, 390, 844);
+      final timed = _race(
+        title: 'Two Minute Plank',
+        movement: 'Plank',
+        format: 'timed_attempt',
+        metric: 'seconds',
+        unit: 'seconds',
+        targetValue: 120,
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 82, rank: 2),
+          _p('u-noah', 'Noah Reyes', 97, rank: 1),
+        ],
+      );
+      await _pump(
+        tester,
+        _app(races: [timed], home: const MoveScreen()),
+        'verify-timed-390',
+      );
+      expect(find.textContaining('1:22'), findsWidgets);
+      expect(find.textContaining('Goal 2:00'), findsOneWidget);
+    });
+
+    testWidgets('solo — goal lane, no invented rivalry', (tester) async {
+      _useViewport(tester, 390, 844);
+      final solo = _race(
+        title: 'Solo Plank Race',
+        participants: [_p('user-1', 'Akshay Sanjai', 0)],
+      );
+      await _pump(
+        tester,
+        _app(races: [solo], home: const MoveScreen()),
+        'verify-solo-390',
+      );
+      expect(find.text('Solo Plank Race'), findsOneWidget);
+      expect(find.textContaining('SET THE PACE'), findsOneWidget);
+    });
+
+    testWidgets('many racers — adjacent rival only', (tester) async {
+      _useViewport(tester, 390, 844);
+      final crowded = _race(
+        participants: [
+          _p('user-1', 'Akshay Sanjai', 39, rank: 3),
+          _p('u-noah', 'Noah Reyes', 44, rank: 1),
+          _p('u-maya', 'Maya Chen', 42, rank: 2),
+          _p('u-jay', 'Jay Park', 30, rank: 4),
+          _p('u-kim', 'Kim Lee', 12, rank: 5),
+        ],
+      );
+      await _pump(
+        tester,
+        _app(races: [crowded], home: const MoveScreen()),
+        'verify-many-390',
+      );
+      // The mark that matters is the racer directly ahead — Maya at 2nd.
+      expect(find.text('Maya 42'), findsOneWidget);
+    });
   });
 }

@@ -180,7 +180,8 @@ void main() {
       // Canonical competitive context — rank 2 against a leader reads as
       // a gap to the top ("20 reps to take 1st"), and the rivalry block
       // names the actual person.
-      expect(find.textContaining('to take 1st'), findsOneWidget);
+      // The stakes tab uppercases the canonical copy.
+      expect(find.textContaining('TO TAKE 1ST'), findsOneWidget);
       expect(find.textContaining('Racer'), findsWidgets);
     });
 
@@ -192,7 +193,7 @@ void main() {
       ])));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Set the pace'), findsOneWidget);
+      expect(find.textContaining('SET THE PACE'), findsOneWidget);
     });
   });
 
@@ -213,11 +214,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Row meta carries the canonical progress + placement ("12 / 25
-      // reps" + "2nd") — no invented remaining math, no mini track; the
-      // only track in this segment is the hero's real denominator.
+      // reps" + "2nd") — and the strip carries the same canonical lane as
+      // the hero, at compact scale.
       expect(find.textContaining('12 / 25 reps'), findsOneWidget);
       expect(find.textContaining('2nd'), findsOneWidget);
-      expect(find.byType(RaceProgress), findsOneWidget);
+      expect(find.byType(RaceMarkerTrack), findsWidgets);
     });
 
     testWidgets('start-line row says so with the racer count', (
