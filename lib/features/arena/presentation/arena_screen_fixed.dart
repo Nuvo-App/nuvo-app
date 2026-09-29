@@ -546,7 +546,7 @@ class _NextMoveHero extends StatelessWidget {
         .toList();
     final footerTotal = board.racerCount ?? footerAvatars.length;
     final c = context.themeColors;
-    final lane = _heroLane(board, race, viewerId, c.ink);
+    final lane = _heroLane(board, race, viewerId);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -567,7 +567,7 @@ class _NextMoveHero extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(20, tall ? 18 : 12, 20, tall ? 14 : 4),
+              padding: EdgeInsets.fromLTRB(20, tall ? 12 : 10, 20, tall ? 8 : 4),
               // Anchored to the top with a fixed gap before the participant
               // context — not spaceBetween, which used to stretch to fill
               // whatever height the card happened to get and left a large
@@ -616,7 +616,7 @@ class _NextMoveHero extends StatelessWidget {
                           ],
                         ],
                       ),
-                      SizedBox(height: tall ? 10 : 8),
+                      SizedBox(height: tall ? 8 : 6),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -647,30 +647,32 @@ class _NextMoveHero extends StatelessWidget {
                           ),
                         ],
                       ),
-                      SizedBox(height: tall ? 14 : 6),
-                      // The FOCUSED lane — You vs the racer ahead vs the
-                      // goal ring, the same named-mark grammar Verify and
-                      // Compete share. Falls back to the identity path when
-                      // the board has no markable scores.
-                      if (lane != null)
-                        RaceMarkerTrack(
-                          markers: lane.markers,
-                          goalLabel: lane.goalLabel,
-                          fillColor: lane.leading ? _arenaGreen : _arenaBlue,
-                          hasGoal: lane.hasGoal,
-                          goalReached: board.isResult,
-                        )
-                      else
-                        NuvoRacePath(
-                          key: ValueKey('progress-${board.id}'),
-                          raceId: board.id,
-                          progress: pct / 100,
-                        ),
+                      SizedBox(height: tall ? 8 : 4),
+                      // The hero's race PATH — the seeded curved course,
+                      // not a straight lane: this is the world of the race,
+                      // where Verify is its control board. Canonical marks
+                      // ride the same course — your bead, the racer you're
+                      // chasing, the finish flag — positions from
+                      // raceLaneGeometry, so lower-wins/best-attempt races
+                      // still get the honest relative lane (no fake goal).
+                      NuvoRacePath(
+                        key: ValueKey('progress-${board.id}'),
+                        raceId: board.id,
+                        progress: lane?.viewerFraction ?? pct / 100,
+                        rivalFraction: lane?.rivalFraction,
+                        viewerLabel: lane?.viewerLabel,
+                        rivalLabel: lane?.rivalLabel,
+                        goalLabel: lane?.goalLabel,
+                        hasGoal: lane?.hasGoal ?? true,
+                        progressColor:
+                            (lane?.leading ?? false) ? _arenaGreen : _arenaBlue,
+                        completedColor: _arenaGreen,
+                      ),
                       // Stakes — what the next proof changes, straight from
                       // the server's chase copy.
                       if (board.chaseCopy != null &&
                           board.chaseCopy!.isNotEmpty) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Text(
                           board.chaseCopy!,
                           maxLines: 1,
@@ -690,7 +692,7 @@ class _NextMoveHero extends StatelessWidget {
                   // Participant context — a fixed gap below the track,
                   // never a stretch-to-fill blank area.
                   Padding(
-                    padding: EdgeInsets.only(top: tall ? 8 : 10),
+                    padding: EdgeInsets.only(top: tall ? 6 : 8),
                     child: _RaceDetails(board: board),
                   ),
                 ],
@@ -708,7 +710,7 @@ class _NextMoveHero extends StatelessWidget {
             child: Container(
               // The chunky blue footer — a real tappable band, sized up with
               // the card.
-              height: tall ? 58 : 52,
+              height: tall ? 54 : 50,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               color: _arenaBlue,
               child: Row(
@@ -1425,19 +1427,16 @@ double _heroContentHeight(
   // Mirror of the card's column: pads (top, title gap, progress gap,
   // racer-row pad, bottom pad) + lane + stakes + racer row + footer + the
   // carousel's 10px shadow pad + 4px card border inset (2px each side —
-  // the border lays out inside the child's bounds). The marker lane is 40;
-  // the identity-path fallback is 42.
-  final laneHeight =
-      _heroLane(board, race, viewerId, const Color(0xFF000000)) != null
-          ? 40.0
-          : 42.0;
+  // the border lays out inside the child's bounds). The hero's curved
+  // course with its caption band is 60 tall.
+  const laneHeight = 60.0;
   final hasStakes =
       board.chaseCopy != null && board.chaseCopy!.isNotEmpty;
   // Measured, not assumed — labelMedium's line-height multiplier makes the
   // stakes line ~19-20px at 13.5pt, and the racer row is the taller of the
   // 26px avatar stack and its label.
   final stakes = hasStakes
-      ? 6.0 +
+      ? 4.0 +
           measure(
             board.chaseCopy!,
             AppTextStyles.labelMedium.copyWith(
@@ -1453,17 +1452,17 @@ double _heroContentHeight(
       AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
     ),
   );
-  return (tall ? 18.0 : 12.0) +
+  return (tall ? 12.0 : 10.0) +
       title +
-      (tall ? 10.0 : 8.0) +
+      (tall ? 8.0 : 6.0) +
       math.max(progress, suffix) +
-      (tall ? 14.0 : 6.0) +
+      (tall ? 8.0 : 4.0) +
       laneHeight +
       stakes +
-      (tall ? 8.0 : 10.0) +
+      (tall ? 6.0 : 8.0) +
       racerRow +
-      (tall ? 14.0 : 4.0) +
-      (tall ? 58.0 : 52.0) +
+      (tall ? 8.0 : 4.0) +
+      (tall ? 54.0 : 50.0) +
       10 +
       4;
 }
@@ -1477,16 +1476,17 @@ Color _arenaPlacement(int rank, NuvoThemeColors c) => switch (rank) {
       _ => c.inkSubtle,
     };
 
-/// The hero's named-mark lane. With the authoritative [race] loaded, marks
-/// come from the shared canonical geometry (goal lane vs relative-competition
-/// lane for lower-wins/best-attempt). Without it, "v / t" leaderboard values
-/// still give an honest goal lane. Null → the identity path renders instead.
-({List<RaceTrackMarker> markers, String? goalLabel, bool hasGoal,
+/// The hero's course data — the canonical fractions + captions that ride
+/// the curved race path. With the authoritative [race] loaded, marks come
+/// from the shared canonical geometry (goal lane vs relative-competition
+/// lane for lower-wins/best-attempt). Without it, "v / t" leaderboard
+/// values still give an honest goal course. Null → the path draws bare.
+({double? viewerFraction, double? rivalFraction, String? viewerLabel,
+    String? rivalLabel, String? goalLabel, bool hasGoal,
     bool leading})? _heroLane(
   ArenaBoard board,
   Race? race,
   String? viewerId,
-  Color inkColor,
 ) {
   final leading = board.myRank == 1;
   if (race != null) {
@@ -1500,25 +1500,14 @@ Color _arenaPlacement(int rank, NuvoThemeColors c) => switch (rank) {
     if (geo.viewer == null && rivalMark == null) return null;
     final me = viewerId == null ? null : race.participantFor(viewerId);
     return (
-      markers: [
-        if (rivalMark != null)
-          RaceTrackMarker(
-            fraction: rivalMark.fraction,
-            label:
-                '${_firstOf(rival!.displayName)} ${rival.progressValue}',
-            color: inkColor,
-            size: (race.viewerContext?.isTied ?? false) ? 11 : null,
-          ),
-        if (geo.viewer != null)
-          RaceTrackMarker(
-            fraction: geo.viewer!,
-            label: 'You ${me?.progressValue ?? 0}',
-            color: leading ? _arenaGreen : _arenaBlue,
-            isViewer: true,
-            haloColor:
-                leading && !board.isResult ? _arenaGreen : null,
-          ),
-      ],
+      viewerFraction: geo.viewer,
+      rivalFraction: rivalMark?.fraction,
+      viewerLabel: geo.viewer != null
+          ? 'You ${me?.progressValue ?? 0}'
+          : null,
+      rivalLabel: rivalMark != null
+          ? '${_firstOf(rival!.displayName)} ${rival.progressValue}'
+          : null,
       goalLabel: geo.hasGoal
           ? 'Goal ${raceScoreLabel(race, race.targetValue!)}'
           : null,
@@ -1548,22 +1537,10 @@ Color _arenaPlacement(int rank, NuvoThemeColors c) => switch (rank) {
   }
   if (viewerRow == null && rivalRow == null) return null;
   return (
-    markers: [
-      if (rivalRow != null)
-        RaceTrackMarker(
-          fraction: rivalRow.$2 / target,
-          label: '${rivalRow.$1} ${rivalRow.$2}',
-          color: inkColor,
-        ),
-      if (viewerRow != null)
-        RaceTrackMarker(
-          fraction: viewerRow.$2 / target,
-          label: 'You ${viewerRow.$2}',
-          color: leading ? _arenaGreen : _arenaBlue,
-          isViewer: true,
-          haloColor: leading && !board.isResult ? _arenaGreen : null,
-        ),
-    ],
+    viewerFraction: viewerRow == null ? null : viewerRow.$2 / target,
+    rivalFraction: rivalRow == null ? null : rivalRow.$2 / target,
+    viewerLabel: viewerRow == null ? null : 'You ${viewerRow.$2}',
+    rivalLabel: rivalRow == null ? null : '${rivalRow.$1} ${rivalRow.$2}',
     goalLabel: 'Goal $target',
     hasGoal: true,
     leading: leading,

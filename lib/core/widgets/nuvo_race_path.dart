@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_colors.dart';
 
@@ -26,6 +27,11 @@ class NuvoRacePath extends StatelessWidget {
     this.trackColor,
     this.progressColor,
     this.completedColor,
+    this.rivalFraction,
+    this.viewerLabel,
+    this.rivalLabel,
+    this.goalLabel,
+    this.hasGoal = true,
   });
 
   final String raceId;
@@ -37,8 +43,27 @@ class NuvoRacePath extends StatelessWidget {
   final Color? progressColor;
   final Color? completedColor;
 
+  /// The chased racer's position on the same course, 0.0–1.0 — drawn as a
+  /// smaller navy mark the viewer's bead slides past. Hero variant only.
+  final double? rivalFraction;
+
+  /// Named marks' captions ("You 39", "Noah 42"), drawn in a label band
+  /// above the course, collision-resolved right-to-left. Hero only.
+  final String? viewerLabel;
+  final String? rivalLabel;
+
+  /// Caption pinned to the finish flag ("Goal 50"). Hero only.
+  final String? goalLabel;
+
+  /// Whether the course ends in a finish flag. Lower-wins and best-attempt
+  /// races run a relative-competition course — no literal finish line —
+  /// so the flag must not draw.
+  final bool hasGoal;
+
   double get _height => switch (variant) {
-    NuvoRacePathVariant.hero => 42,
+    // The hero course carries a caption band above the bends — the lane
+    // needs real vertical room to read as a path, not a divider.
+    NuvoRacePathVariant.hero => 60,
     NuvoRacePathVariant.compact => 30,
     NuvoRacePathVariant.mini => 16,
   };
@@ -66,6 +91,13 @@ class NuvoRacePath extends StatelessWidget {
               progressColor: progressColor ?? NuvoColors.blue,
               completedColor: completedColor ?? NuvoColors.success,
               inkColor: context.themeColors.border,
+              labelInk: context.themeColors.ink,
+              labelMuted: context.themeColors.inkMuted,
+              rivalFraction: rivalFraction,
+              viewerLabel: viewerLabel,
+              rivalLabel: rivalLabel,
+              goalLabel: goalLabel,
+              hasGoal: hasGoal,
             ),
           ),
         ),
@@ -95,6 +127,13 @@ class _RacePathPainter extends CustomPainter {
     required this.progressColor,
     required this.completedColor,
     required this.inkColor,
+    required this.labelInk,
+    required this.labelMuted,
+    this.rivalFraction,
+    this.viewerLabel,
+    this.rivalLabel,
+    this.goalLabel,
+    this.hasGoal = true,
   });
 
   final int seed;
@@ -108,6 +147,20 @@ class _RacePathPainter extends CustomPainter {
   /// the theme border tone on dark so the lane keeps its silhouette.
   final Color inkColor;
 
+  /// Theme-adaptive label ink — the rival/goal captions must stay legible
+  /// on dark boards, so they resolve through the theme, not fixed palette.
+  final Color labelInk;
+  final Color labelMuted;
+
+  /// Named competition on the course — hero variant only. The rival's
+  /// fraction positions a smaller navy mark along the same path; captions
+  /// sit in a label band above the bends.
+  final double? rivalFraction;
+  final String? viewerLabel;
+  final String? rivalLabel;
+  final String? goalLabel;
+  final bool hasGoal;
+
   /// Deterministic pseudo-random value in [0, 1) for a given [salt], derived
   /// purely from [seed] — no external randomness, no per-frame variance.
   double _rand(int salt) {
@@ -116,7 +169,13 @@ class _RacePathPainter extends CustomPainter {
     return (scrambled % 10000) / 10000.0;
   }
 
-  Path _buildPath(Size size, double startX, double finishX, double baseY) {
+  Path _buildPath(
+    Size size,
+    double startX,
+    double finishX,
+    double baseY,
+    double usableHalfHeight,
+  ) {
     final span = finishX - startX;
     if (variant == NuvoRacePathVariant.mini || span < 40) {
       // Too small to bend meaningfully — stay a straight line rather than
@@ -128,9 +187,8 @@ class _RacePathPainter extends CustomPainter {
 
     // Restrained, seed-derived variation: 1–2 gentle bends, a wave
     // direction, and an amplitude bounded to a fixed fraction of the
-    // available height — enough to make every race recognizable without
-    // ever producing an unreadable roller coaster.
-    final usableHalfHeight = baseY * 0.72;
+    // available course band — enough to make every race recognizable
+    // without ever producing an unreadable roller coaster.
     final bendCount = 1 + (_rand(1) * 2).floor(); // 1 or 2
     final baseDirection = _rand(2) < 0.5 ? 1.0 : -1.0;
     final amplitude = usableHalfHeight * (0.55 + _rand(3) * 0.45);
@@ -165,15 +223,24 @@ class _RacePathPainter extends CustomPainter {
       NuvoRacePathVariant.mini => 3.0,
     };
     final flagReserve = switch (variant) {
-      NuvoRacePathVariant.hero => 36.0,
+      NuvoRacePathVariant.hero => hasGoal ? 36.0 : 20.0,
       NuvoRacePathVariant.compact => 22.0,
       NuvoRacePathVariant.mini => 0.0,
     };
     final startX = strokeWidth / 2 + 2;
     final finishX = size.width - flagReserve;
-    final baseY = size.height / 2;
+    // Hero variant reserves a caption band above the course — the named
+    // marks' labels live there, so the bends get the rest of the height.
+    final labelBand = variant == NuvoRacePathVariant.hero ? 14.0 : 0.0;
+    final baseY = labelBand + (size.height - labelBand) / 2;
+    // Bends must leave room for the stroke edge and the marker bead —
+    // amplitude is a fraction of the course band, not the full height.
+    final usableHalf =
+        ((size.height - labelBand) / 2 - strokeWidth / 2 - 10).clamp(0.0,
+            double.infinity) *
+        0.85;
 
-    final path = _buildPath(size, startX, finishX, baseY);
+    final path = _buildPath(size, startX, finishX, baseY, usableHalf);
     final metric = path.computeMetrics().first;
 
     final trackPaint = Paint()
@@ -204,6 +271,24 @@ class _RacePathPainter extends CustomPainter {
     final markerRadius = variant == NuvoRacePathVariant.hero
         ? (progress <= 0 ? 7.0 : 10.0)
         : (progress <= 0 ? 4.5 : 6.5);
+    // The rival's mark rides the same course — a smaller navy dot drawn
+    // BEFORE the viewer's bead so an overtake visibly crosses it.
+    Offset? rivalPosition;
+    if (variant == NuvoRacePathVariant.hero && rivalFraction != null) {
+      final rivalTangent = metric.getTangentForOffset(
+        (metric.length * rivalFraction!.clamp(0.0, 1.0))
+            .clamp(0.0, metric.length),
+      );
+      rivalPosition = rivalTangent?.position;
+      if (rivalPosition != null) {
+        canvas.drawCircle(
+          rivalPosition,
+          7.5,
+          Paint()..color = inkColor,
+        );
+      }
+    }
+
     canvas.drawCircle(markerPosition, markerRadius, Paint()..color = markerColor);
     canvas.drawCircle(
       markerPosition,
@@ -214,23 +299,84 @@ class _RacePathPainter extends CustomPainter {
         ..style = PaintingStyle.stroke,
     );
 
-    // Finish flag at the path's actual endpoint.
-    final flagX = finishX + (variant == NuvoRacePathVariant.hero ? 12 : 8);
-    final poleHeight = variant == NuvoRacePathVariant.hero ? 28.0 : 16.0;
-    final poleTop = baseY - poleHeight * 0.6;
-    canvas.drawRect(
-      Rect.fromLTWH(flagX, poleTop, 2, poleHeight),
-      Paint()..color = inkColor,
-    );
-    final flagSize = variant == NuvoRacePathVariant.hero ? 15.0 : 9.0;
-    canvas.drawPath(
-      Path()
-        ..moveTo(flagX + 2, poleTop)
-        ..lineTo(flagX + 2 + flagSize, poleTop + poleHeight * 0.22)
-        ..lineTo(flagX + 2, poleTop + poleHeight * 0.44)
-        ..close(),
-      Paint()..color = inkColor,
-    );
+    // Finish flag at the path's actual endpoint — only when the race has a
+    // literal finish line. Relative-competition courses (lower-wins,
+    // best-attempt) draw no flag: there is no goal to fake.
+    if (hasGoal) {
+      final flagX = finishX + (variant == NuvoRacePathVariant.hero ? 12 : 8);
+      final poleHeight = variant == NuvoRacePathVariant.hero ? 28.0 : 16.0;
+      final poleTop = baseY - poleHeight * 0.6;
+      canvas.drawRect(
+        Rect.fromLTWH(flagX, poleTop, 2, poleHeight),
+        Paint()..color = inkColor,
+      );
+      final flagSize = variant == NuvoRacePathVariant.hero ? 15.0 : 9.0;
+      canvas.drawPath(
+        Path()
+          ..moveTo(flagX + 2, poleTop)
+          ..lineTo(flagX + 2 + flagSize, poleTop + poleHeight * 0.22)
+          ..lineTo(flagX + 2, poleTop + poleHeight * 0.44)
+          ..close(),
+        Paint()..color = inkColor,
+      );
+    }
+
+    // Hero captions — the named marks' labels in the band above the course,
+    // resolved right-to-left so close standings never overlap.
+    if (variant == NuvoRacePathVariant.hero) {
+      _paintHeroLabels(
+        canvas,
+        size,
+        viewerX: markerPosition.dx,
+        rivalX: rivalPosition?.dx,
+      );
+    }
+  }
+
+  /// Right-to-left collision-resolved captions in the hero's label band —
+  /// the same slotting [RaceMarkerTrack] uses, painted because the marks
+  /// live on a curve, not a straight lane.
+  void _paintHeroLabels(
+    Canvas canvas,
+    Size size, {
+    required double viewerX,
+    double? rivalX,
+  }) {
+    const maxLabelW = 76.0;
+    final spots = <(double x, String text, Color color)>[
+      if (hasGoal && goalLabel != null)
+        (size.width - 4, goalLabel!, labelMuted),
+      if (rivalX != null && rivalLabel != null)
+        (rivalX, rivalLabel!, labelInk),
+      if (viewerLabel != null)
+        (viewerX, viewerLabel!, progressColor),
+    ]..sort((a, b) => b.$1.compareTo(a.$1));
+
+    var nextRight = size.width;
+    for (final spot in spots) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: spot.$2,
+          style: GoogleFonts.manrope(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: spot.$3,
+            letterSpacing: 0.3,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+        ellipsis: '…',
+      )..layout(maxWidth: maxLabelW);
+      var left = (spot.$1 - tp.width / 2)
+          .clamp(0.0, (size.width - tp.width).clamp(0.0, size.width));
+      if (left + tp.width > nextRight) {
+        left = (nextRight - tp.width - 2)
+            .clamp(0.0, (size.width - tp.width).clamp(0.0, size.width));
+      }
+      nextRight = left;
+      tp.paint(canvas, Offset(left, 1));
+    }
   }
 
   @override
@@ -241,5 +387,10 @@ class _RacePathPainter extends CustomPainter {
       oldDelegate.trackColor != trackColor ||
       oldDelegate.progressColor != progressColor ||
       oldDelegate.completedColor != completedColor ||
-      oldDelegate.inkColor != inkColor;
+      oldDelegate.inkColor != inkColor ||
+      oldDelegate.rivalFraction != rivalFraction ||
+      oldDelegate.viewerLabel != viewerLabel ||
+      oldDelegate.rivalLabel != rivalLabel ||
+      oldDelegate.goalLabel != goalLabel ||
+      oldDelegate.hasGoal != hasGoal;
 }
