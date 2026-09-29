@@ -1,4 +1,7 @@
+import 'package:flutter/material.dart' show IconData, Icons;
+
 import '../data/race_models.dart';
+import 'camera_verification_resolver.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 
@@ -266,3 +269,76 @@ RaceParticipant? raceNearestRival(Race race, String? userId) {
   }
   return null;
 }
+
+/// What "submit proof" means for a race — resolved from the race's
+/// canonical verifier/proof fields (the same truth the proof screen
+/// branches on), never inferred from the title. Camera capability
+/// determines whether AI Motion can run; it never decides whether a
+/// racer may participate — every race accepts proof submission.
+enum RaceProofAction { motion, manual, generic }
+
+RaceProofAction raceProofAction(Race race) {
+  if (resolveCameraVerification(race).isCameraVerifiable) {
+    return RaceProofAction.motion;
+  }
+  if (race.verifierType == manualLogVerifierType ||
+      race.proofMode == 'manual') {
+    return RaceProofAction.manual;
+  }
+  return RaceProofAction.generic;
+}
+
+/// Whether each new submission ADDS to a running total (reps, books read)
+/// vs. standing alone as a best attempt (golf score, test grade, plank
+/// time). Drives "+N" vs bare score presentation and the manual CTA.
+bool raceIsAccumulating(Race race) =>
+    race.scoringRule == 'cumulative_sum' ||
+    race.format == 'first_to_goal' ||
+    race.format == 'most_in_window';
+
+/// The CTA the race's proof capability actually performs. Race Detail and
+/// Verify both derive from this so the same race offers the same action.
+({String label, IconData icon}) raceProofCta(Race race) =>
+    switch (raceProofAction(race)) {
+      RaceProofAction.motion => (
+          label: 'Start AI Motion Proof',
+          icon: Icons.camera_alt_rounded,
+        ),
+      RaceProofAction.manual => (
+          label: raceIsAccumulating(race) ? 'Log progress' : 'Add result',
+          icon: Icons.edit_note_rounded,
+        ),
+      RaceProofAction.generic => (
+          label: 'Submit proof',
+          icon: Icons.upload_rounded,
+        ),
+    };
+
+/// Whether a race's proof rows open the proof inspection/review surface for
+/// this viewer. Race members can inspect and act (owner review, community
+/// veto); non-members get nothing — the backend stays authoritative either
+/// way, this only controls whether the row is offered.
+bool raceCanInspectProofs(Race race, String? userId) =>
+    userId != null && (race.isCreator(userId) || race.isParticipant(userId));
+
+/// Whether the creator's review controls (accept / ask for another /
+/// reject) are valid for this proof. Mirrors the Worker contract: review
+/// is a gate on HELD proof only — counted proof is disputed through veto,
+/// vetoed proof is final, and nobody reviews their own proof.
+bool raceProofIsReviewable(Race race, RaceProof proof, String? userId) =>
+    userId != null &&
+    race.isCreator(userId) &&
+    proof.userId != userId &&
+    proof.vetoState != 'vetoed' &&
+    (proof.verificationStatus == 'needs_review' ||
+        proof.verificationStatus == 'submitted');
+
+/// Whether this viewer may cast a community veto on the proof. Mirrors the
+/// Worker contract: any active race member may dispute another racer's
+/// proof that isn't already vetoed — never your own.
+bool raceProofIsVetoable(Race race, RaceProof proof, String? userId) =>
+    userId != null &&
+    raceCanInspectProofs(race, userId) &&
+    proof.userId != userId &&
+    proof.vetoState != 'vetoed' &&
+    !raceProofIsReviewable(race, proof, userId);

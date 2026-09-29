@@ -103,6 +103,16 @@ class NuvoMoveLogItem extends StatelessWidget {
                 ),
               ),
             ],
+            // Rows that open the proof surface earn a chevron — the log
+            // stays dense, but tappable entries read as tappable.
+            if (onTap != null) ...[
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: context.themeColors.inkSubtle,
+              ),
+            ],
           ],
         ),
       ),

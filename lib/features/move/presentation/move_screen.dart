@@ -58,46 +58,9 @@ class MoveScreen extends ConsumerStatefulWidget {
 
 enum _VerifySegment { ready, completed, recent }
 
-/// What "verify" means for a race — resolved from the race's canonical
-/// verifier/proof fields (the same truth the proof screen branches on),
-/// never inferred from the title.
-enum _ProofAction { motion, manual, generic }
-
-_ProofAction _proofActionFor(Race race) {
-  if (resolveCameraVerification(race).isCameraVerifiable) {
-    return _ProofAction.motion;
-  }
-  if (race.verifierType == manualLogVerifierType ||
-      race.proofMode == 'manual') {
-    return _ProofAction.manual;
-  }
-  return _ProofAction.generic;
-}
-
-/// The CTA the race's proof capability actually performs.
-({String label, IconData icon}) _proofCta(Race race) => switch (
-    _proofActionFor(race)) {
-  _ProofAction.motion => (
-    label: 'Start AI Motion Proof',
-    icon: Icons.camera_alt_rounded,
-  ),
-  _ProofAction.manual => (
-    label: _isAccumulating(race) ? 'Log progress' : 'Add result',
-    icon: Icons.edit_note_rounded,
-  ),
-  _ProofAction.generic => (
-    label: 'Submit proof',
-    icon: Icons.upload_rounded,
-  ),
-};
-
-/// Whether each new submission ADDS to a running total (reps, books read)
-/// vs. standing alone as a best attempt (golf score, test grade, plank
-/// time). Drives "+N" vs bare score presentation and the manual CTA.
-bool _isAccumulating(Race race) =>
-    race.scoringRule == 'cumulative_sum' ||
-    race.format == 'first_to_goal' ||
-    race.format == 'most_in_window';
+// Proof-action semantics are canonical in race_display.dart
+// (raceProofAction / raceProofCta / raceIsAccumulating) — Race Detail and
+// Verify resolve the same race to the same CTA.
 
 class _MoveScreenState extends ConsumerState<MoveScreen> {
   _VerifySegment _segment = _VerifySegment.ready;
@@ -932,14 +895,14 @@ class _UpNextHeroState extends State<_UpNextHero> {
               key: const Key('verify-hero-cta'),
               label: mood == _VerifyMood.finished
                   ? 'View race'
-                  : _proofCta(race).label,
+                  : raceProofCta(race).label,
               onPressed: mood == _VerifyMood.finished
                   ? widget.onOpen
                   : widget.onVerify,
               leadingWidget: _ctaKeycap(
                 mood == _VerifyMood.finished
                     ? Icons.flag_rounded
-                    : _proofCta(race).icon,
+                    : raceProofCta(race).icon,
               ),
               expand: true,
               height: 48,
@@ -1803,7 +1766,7 @@ class _RecentProofRow extends StatelessWidget {
     final value = proof.value;
     final valueLabel = value == null
         ? null
-        : _isAccumulating(race)
+        : raceIsAccumulating(race)
             ? '+${_scoreText(race, value)}'
             : _scoreText(race, value);
 
