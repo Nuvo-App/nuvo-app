@@ -803,7 +803,7 @@ class _ProgressionSection extends ConsumerWidget {
               ),
             ),
             if (next != null) ...[
-              const SizedBox(width: NuvoSpacing.sm),
+              // Flush contact — the bar terminates INTO the target tile.
               Container(
                 width: 34,
                 height: 34,
@@ -831,29 +831,25 @@ class _ProgressionSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: NuvoSpacing.sm),
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: '${p.xpToNext} XP to Level ${p.level + 1}',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: xpColor,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              if (next != null)
-                TextSpan(
-                  text: ' · ${next.name} at Level ${next.level}',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: c.inkMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-            ],
-          ),
+        Text(
+          '${p.xpToNext} XP to Level ${p.level + 1}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: xpColor,
+            fontWeight: FontWeight.w800,
+          ),
         ),
+        if (next != null)
+          Text(
+            'Unlock: ${next.name}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: c.inkMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
       ],
     );
   }
@@ -889,7 +885,6 @@ class _ProgressionSkeleton extends StatelessWidget {
                 trackColor: c.track,
               ),
             ),
-            const SizedBox(width: NuvoSpacing.sm),
             Container(
               width: 34,
               height: 34,

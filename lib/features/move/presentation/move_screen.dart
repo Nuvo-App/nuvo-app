@@ -150,26 +150,29 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
     // least proof leads ("what can I prove next" = "what finishes soonest").
     // Decorated index sort keeps the server's order on ties (Dart's sort
     // isn't stable).
-    final readyUnsorted = myRaces.where((race) {
-      final myPart = uid != null ? race.participantFor(uid) : null;
-      return race.status == 'active' && (myPart?.progressPercent ?? 0) < 100;
-    }).toList();
+    // Ready = every live race — including ones where I already hit the
+    // goal and the crew is still racing. Those read green ("GOAL REACHED")
+    // instead of asking for more proof; they sort after actionable races.
+    final readyUnsorted =
+        myRaces.where((race) => race.status == 'active').toList();
     final readyRaces = [
       for (final e in readyUnsorted.indexed.toList()
         ..sort((a, b) {
-          final pa = _remainingToGoal(a.$2, uid);
-          final pb = _remainingToGoal(b.$2, uid);
+          var pa = _remainingToGoal(a.$2, uid);
+          var pb = _remainingToGoal(b.$2, uid);
+          // A race I'm done with never leads the queue — it trails the
+          // races that still need proof.
+          if (pa <= 0) pa = 1 << 21;
+          if (pb <= 0) pb = 1 << 21;
           return pa != pb ? pa.compareTo(pb) : a.$1.compareTo(b.$1);
         }))
         e.$2,
     ];
 
-    // Completed = the server says the race ended OR I hit my goal. A
-    // lowest-wins / best-attempt race can close without a 100% bar.
-    final completedRaces = myRaces.where((race) {
-      final myPart = uid != null ? race.participantFor(uid) : null;
-      return raceIsCompleted(race) || (myPart?.progressPercent ?? 0) >= 100;
-    }).toList();
+    // Completed = the race itself ended. A live race where I've hit my
+    // goal stays in Ready (it can still flip on a rival's proof).
+    final completedRaces =
+        myRaces.where((race) => raceIsCompleted(race)).toList();
 
     final recentMoves = myRaces
         .expand((r) => r.recentProofs.map((p) => (race: r, proof: p)))
@@ -280,6 +283,7 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
                         onToggleExpand: () =>
                             setState(() => _readyExpanded = !_readyExpanded),
                         onVerify: openVerification,
+                        onOpen: (race) => context.push('/race/${race.id}'),
                         onStartRace: () => context.go('/compete'),
                       ),
                       _VerifySegment.completed => _CompletedSegment(
@@ -534,6 +538,7 @@ class _ReadySegment extends StatelessWidget {
     required this.cap,
     required this.onToggleExpand,
     required this.onVerify,
+    required this.onOpen,
     required this.onStartRace,
   });
 
@@ -543,6 +548,7 @@ class _ReadySegment extends StatelessWidget {
   final int cap;
   final VoidCallback onToggleExpand;
   final ValueChanged<Race> onVerify;
+  final ValueChanged<Race> onOpen;
   final VoidCallback onStartRace;
 
   @override
@@ -580,6 +586,7 @@ class _ReadySegment extends StatelessWidget {
             race: upNext,
             userId: userId,
             onVerify: () => onVerify(upNext),
+            onOpen: () => onOpen(upNext),
           ),
         ),
         if (alsoReady.isNotEmpty) ...[
@@ -658,12 +665,17 @@ class _UpNextHero extends StatefulWidget {
   const _UpNextHero({
     required this.race,
     required this.onVerify,
+    required this.onOpen,
     this.userId,
   });
 
   final Race race;
   final String? userId;
   final VoidCallback onVerify;
+
+  /// Finished-race action — opens the leaderboard room instead of the
+  /// proof flow.
+  final VoidCallback onOpen;
 
   @override
   State<_UpNextHero> createState() => _UpNextHeroState();
@@ -686,7 +698,8 @@ class _UpNextHeroState extends State<_UpNextHero> {
       if (now == 1 && was != null && was > 1 && !_leadFlash) {
         setState(() => _leadFlash = true);
         HapticFeedback.mediumImpact();
-        Future.delayed(const Duration(milliseconds: 2600), () {
+        // Hold ~1s, then settle — a takeover is a moment, not a mood.
+        Future.delayed(const Duration(milliseconds: 1000), () {
           if (mounted) setState(() => _leadFlash = false);
         });
       }
@@ -814,16 +827,17 @@ class _UpNextHeroState extends State<_UpNextHero> {
                   const SizedBox(width: 10),
                   Padding(
                     padding: const EdgeInsets.only(top: 5),
-                    child: Text(
-                      _ordinalLabel(earnedRank).toLowerCase(),
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
                       style: AppTextStyles.placementLabel(
                         size: 14,
-                        // A shared first isn't the payoff yet — gold waits
-                        // for the outright lead/win.
-                        color: mood == _VerifyMood.tied
-                            ? c.ink
-                            : (_placementTint(earnedRank) ?? c.inkSubtle),
+                        // Rank color is state: gold only during the takeover
+                        // flash or a finished win, restrained green while
+                        // leading, navy when tied, muted while chasing.
+                        color: _rankTint(mood, earnedRank, _leadFlash, c),
                       ),
+                      child: Text(_ordinalLabel(earnedRank).toLowerCase()),
                     ),
                   ),
                 ],
@@ -839,7 +853,7 @@ class _UpNextHeroState extends State<_UpNextHero> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             // The result is the anchor — its color carries the state.
             _HeroAnchor(
               race: race,
@@ -851,11 +865,16 @@ class _UpNextHeroState extends State<_UpNextHero> {
               moodColor: _moodText(mood, c),
             ),
             if (hasDenominator) ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               // The track IS the rivalry: viewer mark, rival mark, goal
               // ring — named, canonical, animated. No card underneath.
+              // Tied gives the rival the viewer's physical mark size —
+              // equal standing reads as equal marks. Leading wraps the
+              // viewer's mark in a green halo; the takeover earns a hard
+              // gold ring for its ~1s moment.
               RaceMarkerTrack(
                 fillColor: _moodMarker(mood),
+                goalReached: mood == _VerifyMood.finished,
                 goalLabel: 'Goal ${_anchorFormat(race.targetValue!)}',
                 markers: [
                   if (rival != null && rival.progressValue > 0)
@@ -865,20 +884,26 @@ class _UpNextHeroState extends State<_UpNextHero> {
                           '${_firstName(rival.displayName)} '
                           '${_anchorFormat(rival.progressValue)}',
                       color: c.ink,
+                      size: mood == _VerifyMood.tied ? 11 : null,
                     ),
                   RaceTrackMarker(
                     fraction: myValue / race.targetValue!,
                     label: 'You ${_anchorFormat(myValue)}',
                     color: _moodMarker(mood),
                     isViewer: true,
+                    haloColor:
+                        mood == _VerifyMood.leading ? NuvoColors.success : null,
+                    ringColor: _leadFlash ? NuvoColors.gold : null,
                   ),
                 ],
               ),
             ] else ...[
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
             ],
+            const SizedBox(height: 4),
             // The stakes live on the page, not in a tinted card — one line
-            // under the lane, colored by standing.
+            // under the lane, colored by standing. A finished race drops
+            // the chase copy entirely.
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
@@ -890,18 +915,32 @@ class _UpNextHeroState extends State<_UpNextHero> {
                 fontWeight: FontWeight.w700,
               ),
               child: Text(
-                _contextLine(rank, myValue, rival, leader),
+                mood == _VerifyMood.finished
+                    ? (raceIsCompleted(race)
+                        ? 'RACE FINISHED'
+                        : 'GOAL REACHED — your proof is in')
+                    : _contextLine(rank, myValue, rival, leader),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(height: 16),
-            // One primary action — the proof method IS the label.
+            const SizedBox(height: 12),
+            // One primary action — the proof method IS the label, and the
+            // navy keycap icon makes it a specific Nuvo action, not a
+            // generic button. A finished race swaps to the room itself.
             NuvoPrimaryButton(
               key: const Key('verify-hero-cta'),
-              label: _proofCta(race).label,
-              onPressed: widget.onVerify,
-              icon: _proofCta(race).icon,
+              label: mood == _VerifyMood.finished
+                  ? 'View race'
+                  : _proofCta(race).label,
+              onPressed: mood == _VerifyMood.finished
+                  ? widget.onOpen
+                  : widget.onVerify,
+              leadingWidget: _ctaKeycap(
+                mood == _VerifyMood.finished
+                    ? Icons.flag_rounded
+                    : _proofCta(race).icon,
+              ),
               expand: true,
               height: 48,
             ),
@@ -1062,11 +1101,16 @@ class _HeroAnchor extends StatelessWidget {
 // ── State + activity color ───────────────────────────────────────────────────
 
 /// The hero's competitive mood — derived from canonical standing only.
-enum _VerifyMood { startLine, chasing, tied, leading }
+/// `finished` is the viewer's own finish line crossed while the race is
+/// still live (or the race itself closed): green, and no chase copy.
+enum _VerifyMood { startLine, chasing, tied, leading, finished }
 
 _VerifyMood _moodFor(Race race, String? userId) {
   final myPart = userId != null ? race.participantFor(userId) : null;
   final myValue = myPart?.progressValue ?? 0;
+  if (raceIsCompleted(race) || raceProgressPercent(race, myPart) >= 100) {
+    return _VerifyMood.finished;
+  }
   if (myValue <= 0) return _VerifyMood.startLine;
   final rank = rankForUser(race, userId);
   if (rank == null) return _VerifyMood.chasing;
@@ -1077,12 +1121,13 @@ _VerifyMood _moodFor(Race race, String? userId) {
 
 /// Marker/track color — the state is carried by the track and dots.
 /// Palette is state-based only: blue = racing/chasing (a tie is still a
-/// chase), green = leading. Gold is reserved for the win payoff.
+/// chase), green = leading/finished. Gold is reserved for the win payoff.
 Color _moodMarker(_VerifyMood m) => switch (m) {
   _VerifyMood.startLine => NuvoColors.blue,
   _VerifyMood.chasing => NuvoColors.blue,
   _VerifyMood.tied => NuvoColors.blue,
   _VerifyMood.leading => NuvoColors.success,
+  _VerifyMood.finished => NuvoColors.success,
 };
 
 /// Text color for mood statements — the *_On variants keep contrast on
@@ -1092,6 +1137,7 @@ Color _moodText(_VerifyMood m, NuvoThemeColors c) => switch (m) {
   _VerifyMood.chasing => NuvoColors.blue,
   _VerifyMood.tied => NuvoColors.blue,
   _VerifyMood.leading => NuvoColors.successOn,
+  _VerifyMood.finished => NuvoColors.successOn,
 };
 
 /// The activity's accent family — canonical fields only, no invented art.
@@ -1128,6 +1174,37 @@ Color? _placementTint(int? rank) => switch (rank) {
   3 => NuvoColors.position3,
   _ => null,
 };
+
+/// The hero rank's tint, by state — gold is the payoff only (takeover
+/// flash or a finished win), green reads "in front", navy "level", and a
+/// chasing rank stays quiet.
+Color _rankTint(
+  _VerifyMood mood,
+  int rank,
+  bool leadFlash,
+  NuvoThemeColors c,
+) {
+  if (leadFlash) return NuvoColors.gold;
+  return switch (mood) {
+    _VerifyMood.tied => c.ink,
+    _VerifyMood.leading => NuvoColors.successOn,
+    _VerifyMood.finished =>
+      rank == 1 ? NuvoColors.position1 : c.inkSubtle,
+    _ => c.inkSubtle,
+  };
+}
+
+/// The CTA's proof-method icon as a navy keycap — reads as a specific
+/// physical action on the blue band, not a generic arrow.
+Widget _ctaKeycap(IconData icon) => Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: NuvoColors.navy,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(icon, size: 16, color: Colors.white),
+    );
 
 /// Compact target text for the hero — timed races read "2:00", not
 /// "2 minutes"; everything else uses the canonical target label.
@@ -1206,7 +1283,10 @@ class _ReadyRow extends StatelessWidget {
 
     // One context line — what's left or who to pass. No invented rivalry.
     String? contextLine;
-    if (hasResult && hasDenominator) {
+    if (mood == _VerifyMood.finished) {
+      contextLine =
+          raceIsCompleted(race) ? 'Race finished' : 'Goal reached';
+    } else if (hasResult && hasDenominator) {
       final remaining = race.targetValue! - myValue;
       if (remaining > 0) {
         contextLine = '${_scoreText(race, remaining)} left';
@@ -1298,6 +1378,22 @@ class _ReadyRow extends StatelessWidget {
             const SizedBox(height: 5),
             Row(
               children: [
+                // The state dot is the row's marker — blue racing, green
+                // leading/done, navy outline at the start line. No card.
+                Container(
+                  width: 7,
+                  height: 7,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: mood == _VerifyMood.startLine
+                        ? null
+                        : _moodMarker(mood),
+                    border: mood == _VerifyMood.startLine
+                        ? Border.all(color: c.inkDim, width: 1.2)
+                        : null,
+                  ),
+                ),
                 Expanded(
                   child: Text(
                     contextLine ?? '',

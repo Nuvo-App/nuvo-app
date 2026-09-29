@@ -123,7 +123,12 @@ Race _readyRace({
 }
 
 Race _completedRace({String id = 'c-1', String title = 'Done Race'}) =>
-    _readyRace(id: id, title: 'Pushup $title', progressPercent: 100);
+    _readyRace(
+      id: id,
+      title: 'Pushup $title',
+      progressPercent: 100,
+      status: 'completed',
+    );
 
 Race _raceWithProof({String id = 'r-1', String title = 'Proof Race'}) =>
     _readyRace(
@@ -502,6 +507,7 @@ void main() {
               title: 'Reading Race',
               unit: 'books',
               targetValue: 10,
+              progressPercent: 4,
               format: 'most_in_window',
               verifierType: 'manual_log',
               proofMode: 'manual',
