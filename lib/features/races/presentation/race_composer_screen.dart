@@ -247,6 +247,22 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     }
   }
 
+  /// True when the committed race name already IS a catalog movement —
+  /// "Pushups", "50 squats". Two guards, both cheap:
+  ///
+  /// * the whole normalized name matches a title/alias exactly — an
+  ///   alias *substring* ("Burpee backflip challenge" → burpees) is never
+  ///   enough to silently arm a verifier;
+  /// * the pick isn't user-authored — interpretation fills
+  ///   [RaceDraft.activity] without touching `userEditedFields`, so a
+  ///   manual tile pick can never be skipped or reinterpreted away.
+  bool _nameResolvedActivity(RaceDraft draft) =>
+      !draft.isManual &&
+      !draft.isCustom &&
+      !draft.userEditedFields.contains(RaceField.activity) &&
+      motionActivityFromName(draft.title)?.activityId ==
+          draft.activity.activityId;
+
   /// Advance to the next visible stage in response to a step's CTA.
   ///
   /// Custom movement: `activity` → `train` opens Teach Nuvo immediately and the
@@ -269,7 +285,15 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final v = _visibleSteps;
     final i = v.indexOf(_step);
     if (i < 0 || i >= v.length - 1) return;
-    final next = v[i + 1];
+    var next = v[i + 1];
+    // "Pushups" already IS the movement pick — asking again on the activity
+    // step makes the user say the same thing twice. Skip it.
+    if (_step == _Step.name &&
+        next == _Step.activity &&
+        _nameResolvedActivity(draft)) {
+      _syncGuide(_Step.activity);
+      next = v[i + 2];
+    }
     if (next == _Step.train && draft.verifierSpec == null) {
       _openTraining(reason: r);
       return;
@@ -299,23 +323,39 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     // spec == null → user backed out; stay on `train` (retry button visible).
   }
 
+  /// Backing all the way out to Compete re-arms the guide's first step so
+  /// the Start button is the next obvious action. Runs on the system-pop
+  /// path too (PopScope didPop), not just the UI back button.
+  void _rearmCompeteGuide() {
+    final guide = ref.read(firstRaceGuideProvider);
+    if (guide != FirstRaceGuideStep.idle &&
+        guide != FirstRaceGuideStep.complete) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.competeStart;
+    }
+  }
+
+  /// System back may leave the route only from the first visible step —
+  /// anywhere deeper, PopScope hands the pop to [_retreat] instead.
+  bool get _onFirstStep => _visibleSteps.indexOf(_step) <= 0;
+
   void _retreat() {
     final v = _visibleSteps;
     final i = v.indexOf(_step);
     if (i > 0) {
+      var target = v[i - 1];
+      // Symmetric with the auto-resolve skip in _advance: if the pick step
+      // was skipped on the way here, back must not dead-end on it.
+      if (target == _Step.activity &&
+          _nameResolvedActivity(ref.read(_composerDraftProvider))) {
+        target = v[i - 2];
+      }
       // Back inside the composer: the coach re-derives the right substep from
       // the page + draft — no provider rewind needed.
-      _goToStep(v[i - 1], reason: 'back button');
+      _goToStep(target, reason: 'back button');
     } else {
       _dismissKeyboard();
-      // Backing all the way out to Compete re-arms the guide's first step so
-      // the Start button is the next obvious action.
-      final guide = ref.read(firstRaceGuideProvider);
-      if (guide != FirstRaceGuideStep.idle &&
-          guide != FirstRaceGuideStep.complete) {
-        ref.read(firstRaceGuideProvider.notifier).state =
-            FirstRaceGuideStep.competeStart;
-      }
+      _rearmCompeteGuide();
       safePopOrGo(context, '/compete');
     }
   }
@@ -579,7 +619,19 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final visible = _visibleSteps;
     final stepIndex = visible.indexOf(_step).clamp(0, visible.length - 1);
 
-    final screen = Scaffold(
+    final screen = PopScope(
+      // Back unwinds the flow one step at a time; the route only pops from
+      // the first visible step. Applies to the nav back button, the iOS
+      // edge swipe, and Android system back alike.
+      canPop: _onFirstStep,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          _rearmCompeteGuide();
+        } else {
+          _retreat();
+        }
+      },
+      child: Scaffold(
       backgroundColor: context.themeColors.page,
       // resizeToAvoidBottomInset keeps CTA above keyboard on Name step
       resizeToAvoidBottomInset: true,
@@ -661,6 +713,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
 
@@ -1179,6 +1232,13 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   /// "See all movements".
   bool _browseAll = false;
 
+  /// The user opened the custom-goal form while the draft's manual kind came
+  /// from name interpretation — a fallback, not a choice. An explicit choice
+  /// marks [RaceField.goalKind] in `userEditedFields`; this flag covers the
+  /// remaining case (tapping "Create a custom goal" is a no-op in
+  /// [_setKind] when the draft is already manual).
+  bool _manualMode = false;
+
   // ── Frozen visible order ─────────────────────────────────────────────────
   // The picker's layout is derived ONCE, then frozen for the life of the
   // page: taps and late async data must never reshuffle tiles under the
@@ -1270,7 +1330,13 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
             activity: activity,
             targetValue: keepTarget ? currentTarget : activity.defaultTarget,
           )
-          .copyWith(markEdited: {RaceField.activity}),
+          // A tile tap IS choosing the movement kind — a draft that arrived
+          // manual (name didn't resolve) must not stay honor-logged, and a
+          // later rename can't reinterpret the pick away.
+          .copyWith(
+            goalKind: RaceGoalKind.movement,
+            markEdited: {RaceField.activity, RaceField.goalKind},
+          ),
     );
     setState(() {
       _teachMode = false;
@@ -1316,6 +1382,13 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   @override
   Widget build(BuildContext context) {
     final isManual = widget.draft.goalKind == RaceGoalKind.manual;
+    // A manual goalKind that came from the name interpretation is a
+    // fallback, not a choice — the movement picker still owns the screen
+    // (suggested tiles, See all, Teach Nuvo, custom goal). The custom-goal
+    // form only leads when the user actually chose that path.
+    final showManual = isManual &&
+        (_manualMode ||
+            widget.draft.userEditedFields.contains(RaceField.goalKind));
     final recentActivities = recentActivitiesFromIds(
       ref.watch(recentMovementIdsProvider),
     );
@@ -1452,20 +1525,20 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       // A clarification from the title interpretation is the support copy —
       // answering it IS filling in the fields below.
       support: widget.draft.clarification ??
-          (isManual ? 'Name the goal and how it is measured.' : 'Pick a movement.'),
+          (showManual ? 'Name the goal and how it is measured.' : 'Pick a movement.'),
       // Long movement names fall back to "Continue" — the selected tile
       // carries the name; a FittedBox-shrunk 48-char label is unreadable.
-      ctaLabel: isManual
+      ctaLabel: showManual
           ? 'Set the finish line'
           : hasActivity
               ? (widget.draft.activity.title.length <= 18
                   ? 'Continue with ${widget.draft.activity.title}'
                   : 'Continue')
               : 'Pick a movement',
-      ctaEnabled: isManual || hasActivity,
+      ctaEnabled: showManual || hasActivity,
       ctaKey: FirstRaceGuideKeys.composerActivityCta,
       onCta: () {
-        if (isManual) _syncManual();
+        if (showManual) _syncManual();
         widget.onNext();
       },
       body: KeyedSubtree(
@@ -1474,7 +1547,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
           duration: const Duration(milliseconds: 240),
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
-          child: isManual
+          child: showManual
               ? Column(
                   key: const ValueKey('manual'),
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1504,7 +1577,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                     NuvoTertiaryButton(
                       label: 'Pick a movement instead',
                       small: true,
-                      onPressed: () => _setKind(RaceGoalKind.movement),
+                      onPressed: () {
+                        _setKind(RaceGoalKind.movement);
+                        setState(() => _manualMode = false);
+                      },
                     ),
                   ],
                 )
@@ -1530,7 +1606,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                       selectedActivityId: selectedActivityId,
                       onSelect: _select,
                       onTeachNuvo: () => setState(() => _teachMode = true),
-                      onCustomGoal: () => _setKind(RaceGoalKind.manual),
+                      onCustomGoal: () {
+                        _setKind(RaceGoalKind.manual);
+                        setState(() => _manualMode = true);
+                      },
                     )
                   : Column(
                       key: const ValueKey('primary'),
@@ -1591,7 +1670,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                             label: 'Not a movement? Create a custom goal',
                             icon: Icons.arrow_forward_rounded,
                             quiet: true,
-                            onTap: () => _setKind(RaceGoalKind.manual),
+                            onTap: () {
+                              _setKind(RaceGoalKind.manual);
+                              setState(() => _manualMode = true);
+                            },
                           ),
                         ),
                       ],

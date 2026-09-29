@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nuvo/core/theme/app_theme.dart';
+import 'package:nuvo/core/widgets/nuvo_button.dart';
 import 'package:nuvo/core/widgets/pressable_scale.dart';
 import 'package:nuvo/features/races/ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
@@ -751,7 +752,7 @@ void main() {
             home: MediaQuery(
               data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
               child: const RaceComposerScreen(
-                prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+                prefill: RaceCreatePrefill(idea: 'Weekend book club'),
               ),
             ),
           ),
@@ -917,7 +918,7 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
-              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+              prefill: RaceCreatePrefill(idea: 'Weekend book club'),
             ),
           ),
         ),
@@ -951,7 +952,7 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
-              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+              prefill: RaceCreatePrefill(idea: 'Weekend book club'),
             ),
           ),
         ),
@@ -998,7 +999,7 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
-              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+              prefill: RaceCreatePrefill(idea: 'Weekend book club'),
             ),
           ),
         ),
@@ -1070,7 +1071,7 @@ void main() {
           child: MaterialApp(
             theme: AppTheme.light(),
             home: const RaceComposerScreen(
-              prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+              prefill: RaceCreatePrefill(idea: 'Weekend book club'),
             ),
           ),
         ),
@@ -1165,6 +1166,256 @@ void main() {
       expect(_plank.unit, 'seconds');
       expect(_pushups.unit, 'reps');
       expect(_jacks.unit, 'reps');
+    });
+  });
+
+  // ── Name → activity auto-resolve ─────────────────────────────────────────
+  // A name that IS a catalog movement skips the redundant pick step; anything
+  // else lands on the picker with nothing pre-armed.
+
+  group('Name auto-resolve', () {
+    void setViewportSize(WidgetTester tester, Size size) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+    }
+
+    Future<void> pumpComposer(WidgetTester tester) async {
+      setViewportSize(tester, const Size(390, 844));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider
+                .overrideWithValue(_PickerStore(const [])),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const RaceComposerScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> nameAndAdvance(WidgetTester tester, String name) async {
+      await tester.enterText(find.byType(TextField).first, name);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      while (tester.takeException() != null) {
+        fail('composer threw on name commit');
+      }
+    }
+
+    Future<void> goBack(WidgetTester tester) async {
+      await tester.tap(find.byType(NuvoBackButton).first);
+      await tester.pumpAndSettle();
+    }
+
+    for (final (name, prompt) in [
+      ('Pushups', 'How many pushups?'),
+      ('pushups', 'How many pushups?'),
+      ('Push Ups', 'How many pushups?'),
+      ('Jumping Jacks', 'How many jumping jacks?'),
+      ('Plank', 'How long?'),
+    ]) {
+      testWidgets('"$name" skips the pick step straight to the goal',
+          (tester) async {
+        await pumpComposer(tester);
+        await nameAndAdvance(tester, name);
+        // Goal step — the picker never rendered.
+        expect(find.text(prompt), findsOneWidget);
+        expect(find.text('Invite racers'), findsOneWidget);
+        expect(find.text('Pick a movement'), findsNothing);
+        expect(find.text('Quick picks'), findsNothing);
+      });
+    }
+
+    testWidgets('substring alias is not a pick — "Burpee backflip challenge"',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Burpee backflip challenge');
+      // The picker shows, nothing pre-selected — "burpee" inside a longer
+      // name must not silently arm the burpees verifier.
+      expect(find.text('Pick a movement'), findsOneWidget);
+      expect(find.text('Continue with Burpees'), findsNothing);
+      expect(find.text('How many burpees?'), findsNothing);
+      // All escape paths stay reachable.
+      expect(find.text('See all movements'), findsOneWidget);
+      expect(find.text('Teach Nuvo'), findsOneWidget);
+      expect(
+          find.text('Not a movement? Create a custom goal'), findsOneWidget);
+    });
+
+    testWidgets('unknown manual name lands on the picker, nothing armed',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Neighborhood chess league');
+      expect(find.text('Pick a movement'), findsOneWidget);
+      expect(find.text('Continue with'), findsNothing);
+      // The custom-goal path is one tap away and still prefilled.
+      await tester.tap(find.text('Not a movement? Create a custom goal'));
+      await tester.pumpAndSettle();
+      expect(find.text('Goal'), findsOneWidget);
+      expect(find.text('Measured in'), findsOneWidget);
+      expect(find.text('Set the finish line'), findsOneWidget);
+    });
+
+    testWidgets('back from auto-resolved goal returns to name; rename '
+        're-resolves', (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Pushups');
+      expect(find.text('How many pushups?'), findsOneWidget);
+      // Back skips the redundant pick step symmetrically → name page.
+      await goBack(tester);
+      expect(find.text('Name your race.'), findsOneWidget);
+      // Rename to a different movement — the stale pick is replaced, not
+      // carried.
+      await nameAndAdvance(tester, 'Jumping Jacks');
+      expect(find.text('How many jumping jacks?'), findsOneWidget);
+      expect(find.text('How many pushups?'), findsNothing);
+      // Back again → name, rename to something unresolvable → picker,
+      // stale movement cleared.
+      await goBack(tester);
+      await nameAndAdvance(tester, 'Neighborhood chess league');
+      expect(find.text('Pick a movement'), findsOneWidget);
+      expect(find.text('Continue with Pushups'), findsNothing);
+      expect(find.text('Continue with Jumping Jacks'), findsNothing);
+    });
+
+    testWidgets('manual pick survives and navigates normally', (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Neighborhood chess league');
+      expect(find.text('Pick a movement'), findsOneWidget);
+      await tester.tap(find.text('Squats'));
+      await tester.pumpAndSettle();
+      expect(find.text('Continue with Squats'), findsOneWidget);
+      await tester.tap(find.text('Continue with Squats'));
+      await tester.pumpAndSettle();
+      expect(find.text('How many squats?'), findsOneWidget);
+      // Manual pick → back lands on the picker with the selection intact.
+      await goBack(tester);
+      expect(find.text('Continue with Squats'), findsOneWidget);
+    });
+  });
+
+  // ── System back contract ─────────────────────────────────────────────────
+  //
+  // iOS edge-swipe / Android system back must unwind the composer's internal
+  // steps before the route may pop — same logical destination as the UI back
+  // button — and the draft survives the retreat.
+
+  group('System back contract', () {
+    void setBackTestSize(WidgetTester tester) {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding =
+          const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding =
+          const FakeViewPadding(top: 47, bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+    }
+
+    Future<void> pumpPushedComposer(WidgetTester tester) async {
+      setBackTestSize(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider
+                .overrideWithValue(_PickerStore(const [])),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const RaceComposerScreen(
+                          prefill:
+                              RaceCreatePrefill(idea: 'Weekend book club'),
+                        ),
+                      ),
+                    ),
+                    child: const Text('open composer'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open composer'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('system back unwinds internal steps before exiting',
+        (tester) async {
+      await pumpPushedComposer(tester);
+      expect(find.text('1 of 5'), findsOneWidget);
+
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 of 5'), findsOneWidget);
+      expect(find.text('Pick a movement'), findsOneWidget);
+
+      // System back → previous internal step; the route stays mounted.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.byType(RaceComposerScreen), findsOneWidget);
+
+      // Back at the first step exits the flow — a single pop, no doubling.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(RaceComposerScreen), findsNothing);
+      expect(find.text('open composer'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('back-then-forward preserves the draft', (tester) async {
+      await pumpPushedComposer(tester);
+      await tester.tap(find.text('Choose activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Squats'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with Squats'));
+      await tester.pumpAndSettle();
+      expect(find.text('How many squats?'), findsOneWidget);
+
+      // System back → picker, selection still armed.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('2 of 5'), findsOneWidget);
+      expect(find.text('Continue with Squats'), findsOneWidget);
+      // Forward again — the pick carries, no re-select needed.
+      await tester.tap(find.text('Continue with Squats'));
+      await tester.pumpAndSettle();
+      expect(find.text('How many squats?'), findsOneWidget);
+
+      // Back to name → a manual pick keeps the picker step live (it is not
+      // redundant once the user chose by hand), so back lands on it first.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('2 of 5'), findsOneWidget);
+      expect(find.text('Continue with Squats'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('1 of 5'), findsOneWidget);
+      expect(find.text('Weekend book club'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

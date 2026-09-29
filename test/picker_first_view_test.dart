@@ -149,7 +149,7 @@ void main() {
             child: RepaintBoundary(key: _captureKey, child: child!),
           ),
           home: const RaceComposerScreen(
-            prefill: RaceCreatePrefill(idea: 'First to 50 pushups'),
+            prefill: RaceCreatePrefill(idea: 'Weekend book club'),
           ),
         ),
       ),

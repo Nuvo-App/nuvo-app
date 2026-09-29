@@ -772,6 +772,29 @@ MotionActivityDefinition? motionActivityFromText(String text) {
   return matched;
 }
 
+/// Strict name→activity resolution for composer auto-pick: the ENTIRE
+/// normalized name must equal a title or alias — "Pushups", "push ups",
+/// "50 squats". Unlike [motionActivityFromText], a bare substring never
+/// binds: "Burpee backflip challenge" mentions a burpee but names a
+/// different movement, so it must not silently arm the burpees verifier.
+MotionActivityDefinition? motionActivityFromName(String name) {
+  final normalized = name
+      .toLowerCase()
+      .replaceAll(RegExp(r'[-_]+'), ' ')
+      .replaceAll(RegExp(r'\b\d+\b'), ' ')
+      .replaceAll(RegExp(r'[^a-z\s]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (normalized.isEmpty) return null;
+  for (final d in motionActivityDefinitions) {
+    if (d.title.toLowerCase() == normalized ||
+        d.aliases.contains(normalized)) {
+      return d;
+    }
+  }
+  return null;
+}
+
 /// Infers a supported camera-verified [MotionActivityDefinition] from
 /// free-text fields (title, unit, target unit). Used ONLY to rescue legacy
 /// races stored without `aiActivityType` — new race creation never reaches
