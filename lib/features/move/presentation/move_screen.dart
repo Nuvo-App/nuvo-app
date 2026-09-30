@@ -588,11 +588,17 @@ class _ReadySegment extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 22),
       child: NuvoStateMorph(
         stateKey: upNext.id,
-        child: _UpNextHero(
-          race: upNext,
-          userId: userId,
-          onVerify: () => onVerify(upNext),
-          onOpen: () => onOpen(upNext),
+        // Paint room for the board's 4px offset shadow — the morph's
+        // AnimatedSize hard-clips to its child bounds, so the shadow's
+        // room must live inside them.
+        child: Padding(
+          padding: const EdgeInsets.only(right: 4, bottom: 4),
+          child: _UpNextHero(
+            race: upNext,
+            userId: userId,
+            onVerify: () => onVerify(upNext),
+            onOpen: () => onOpen(upNext),
+          ),
         ),
       ),
     );
@@ -937,6 +943,9 @@ class _UpNextHeroState extends State<_UpNextHero> {
         mood == _VerifyMood.startLine ? c.ink : _moodText(mood, c);
 
     return Stack(
+      // The board's offset shadow paints past its bounds — this decorative
+      // stack must not clip it.
+      clipBehavior: Clip.none,
       children: [
         // The race board — one physical object: navy edge, offset depth,
         // white surface. WHAT → WHERE I AM → WHO I'M CHASING → WHAT I
