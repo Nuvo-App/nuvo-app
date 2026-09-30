@@ -1249,12 +1249,14 @@ class RaceRow extends StatelessWidget {
               ? BoxDecoration(
                   color: c.surface,
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  border: Border.all(color: c.border, width: 1.25),
+                  // A lighter edge than the hero's structural border — a
+                  // strip on the field, not a second foreground card.
+                  border: Border.all(color: c.border, width: 1),
                   // A quiet offset — the object stands off its field
                   // without shouting over the hero.
                   boxShadow: AppShadows.hardOffset(
                     c.inkShadow,
-                    offset: const Offset(2.5, 2.5),
+                    offset: const Offset(2, 2),
                   ),
                 )
               : null,
