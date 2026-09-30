@@ -343,7 +343,11 @@ final crewControllerProvider = StateNotifierProvider<CrewController, CrewState>(
     onSessionExpired: () => ref.read(authControllerProvider.notifier).sessionExpired(),
   );
   var demo = isPresentationDemoUser(ref.read(authControllerProvider).user);
-  if (ref.read(authControllerProvider).status == AuthStatus.authenticated) controller.load(force: false);
+  // Deferred: a synchronous mutation during the kickoff would modify other
+  // providers while this one is still initializing (Riverpod asserts).
+  if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
+    Future(() => controller.load(force: false));
+  }
   ref.listen<AuthState>(authControllerProvider, (prev, next) {
     if (prev?.user?.id != next.user?.id || prev?.status != next.status) {
       controller.clear();

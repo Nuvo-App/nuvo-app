@@ -197,8 +197,11 @@ final arenaControllerProvider =
           ref.read(authControllerProvider.notifier).sessionExpired();
         },
       );
+      // Deferred: a synchronous mutation during the kickoff would modify
+      // other providers while this one is still initializing (Riverpod
+      // asserts).
       if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
-        controller.loadSnapshot(force: false);
+        Future(() => controller.loadSnapshot(force: false));
       }
       ref.listen<AuthState>(authControllerProvider, (prev, next) {
         if (next.status == AuthStatus.unauthenticated) {

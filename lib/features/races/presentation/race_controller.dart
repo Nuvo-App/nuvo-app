@@ -1067,7 +1067,10 @@ final raceControllerProvider = StateNotifierProvider<RaceController, RaceState>(
       },
     );
     if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
-      controller.loadRaces(force: false);
+      // Deferred: kicking loadRaces inside the factory lets a synchronous
+      // onMutated modify progressionController while this provider is still
+      // initializing — Riverpod asserts on that in debug builds.
+      Future(() => controller.loadRaces(force: false));
     }
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (next.status == AuthStatus.unauthenticated) {
