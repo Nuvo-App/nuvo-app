@@ -522,6 +522,7 @@ class _ReadySegment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     if (races.isEmpty) {
       return _SegmentEmptyState(
         icon: Icons.emoji_events_outlined,
@@ -559,50 +560,72 @@ class _ReadySegment extends StatelessWidget {
           ),
         ),
         if (alsoReady.isNotEmpty) ...[
+          // Breathing transition — the hero is foreground; the queue sits a
+          // depth below it.
           const SizedBox(height: NuvoSpacing.xxl),
-          Row(
-            children: [
-              Text(
-                'Ready next',
-                style: AppTextStyles.labelMedium.copyWith(
-                  fontSize: 14.5,
-                  color: context.themeColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              if (hasMore)
-                NuvoPressable(
-                  onTap: onToggleExpand,
-                  haptic: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    child: Text(
-                      expanded ? 'Show less' : 'See all ${alsoReady.length}',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: context.themeColors.ink,
-                        fontWeight: FontWeight.w700,
+          // Ice-blue queue plane: the races waiting behind the hero live on
+          // one tinted section field, not as loose cards on the canvas. The
+          // header and "See all" belong to the plane — they label the layer,
+          // not any single strip.
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(NuvoRadii.md),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Ready next',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelMedium.copyWith(
+                          fontSize: 14.5,
+                          color: c.inkMuted,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                  ),
+                    if (hasMore)
+                      NuvoPressable(
+                        onTap: onToggleExpand,
+                        haptic: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          child: Text(
+                            expanded
+                                ? 'Show less'
+                                : 'See all ${alsoReady.length}',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: c.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          // Compact race strips — layered objects, quieter than the hero
-          // board. Breath between them, not hairlines.
-          for (var i = 0; i < visibleAlsoReady.length; i++) ...[
-            _ReadyRow(
-              race: visibleAlsoReady[i],
-              userId: userId,
-              onTap: () => onVerify(visibleAlsoReady[i]),
+                const SizedBox(height: 8),
+                // Strips sit on the plane — the ice reads through the gaps.
+                for (var i = 0; i < visibleAlsoReady.length; i++) ...[
+                  _ReadyRow(
+                    race: visibleAlsoReady[i],
+                    userId: userId,
+                    onTap: () => onVerify(visibleAlsoReady[i]),
+                  ),
+                  if (i < visibleAlsoReady.length - 1)
+                    const SizedBox(height: 8),
+                ],
+              ],
             ),
-            if (i < visibleAlsoReady.length - 1)
-              const SizedBox(height: 10),
-          ],
+          ),
         ],
       ],
     );
@@ -1405,9 +1428,11 @@ class _ReadyRow extends StatelessWidget {
       }
     }
 
-    // A compact race strip — a quiet layered object between the hero board
-    // and the bare page. Same composition as the hero (title → standing →
-    // lane → context) at middle-ground volume.
+    // A compact race strip — a quiet lift on the queue plane, not an
+    // object on the canvas: white fill, a whisper hairline, a 1px ink kiss
+    // instead of an offset plate. Same composition as the hero (title →
+    // standing → lane → context) at the quietest voice; the press is the
+    // physical response.
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
@@ -1415,12 +1440,15 @@ class _ReadyRow extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.card),
-          border: Border.all(color: c.border, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: c.border.withValues(alpha: 0.35),
+            width: 1,
+          ),
           boxShadow: [
             BoxShadow(
-              color: c.inkShadow.withValues(alpha: 0.10),
-              offset: const Offset(2, 2),
+              color: c.inkShadow.withValues(alpha: 0.06),
+              offset: const Offset(0, 1),
               blurRadius: 0,
             ),
           ],
