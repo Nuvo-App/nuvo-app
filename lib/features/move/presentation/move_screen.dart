@@ -667,52 +667,37 @@ class _ReadySegment extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            // ONE vertical queue, not a card stack: a spine grows out of
-            // the field beneath the hero and every waiting race is a stop
-            // on it. The ● NEXT marker names the first stop; only the
-            // immediate next race gets a lifted object; deeper races are
-            // markers + content on the line — no cards, no dividers.
-            _QueueStop(
-              spineFromTop: false,
-              markerTop: 1,
-              marker: const _QueueMarker.next(),
-              child: Text(
-                'NEXT',
-                style: AppTextStyles.labelSmall.copyWith(
-                  fontSize: 10.5,
-                  color: c.inkMuted,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.4,
+            // ONE queue board — the middle ground between card soup and
+            // flat text: a single white surface on the ice field carries
+            // every waiting race. One radius, one edge, one offset; rows
+            // separate by hairlines inside it. The NEXT pill names the
+            // first row — it never becomes a card of its own.
+            Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(NuvoRadii.lg),
+                border: Border.all(color: c.border, width: 1),
+                boxShadow: AppShadows.hardOffset(
+                  c.inkShadow,
+                  offset: const Offset(2, 2),
                 ),
+              ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < visibleAlsoReady.length; i++) ...[
+                    _ReadyRow(
+                      race: visibleAlsoReady[i],
+                      userId: userId,
+                      first: i == 0,
+                      onTap: () => onVerify(visibleAlsoReady[i]),
+                    ),
+                    if (i < visibleAlsoReady.length - 1)
+                      Divider(height: 1, thickness: 1, color: c.divider),
+                  ],
+                ],
               ),
             ),
-            _QueueStop(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 3, bottom: 6),
-                child: _ReadyRow(
-                  race: visibleAlsoReady[0],
-                  userId: userId,
-                  tier: _QueueTier.next,
-                  onTap: () => onVerify(visibleAlsoReady[0]),
-                ),
-              ),
-            ),
-            for (var i = 1; i < visibleAlsoReady.length; i++)
-              _QueueStop(
-                markerTop: 14,
-                marker: _QueueMarker(
-                  mood: _moodFor(visibleAlsoReady[i], userId),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6, bottom: 10),
-                  child: _ReadyRow(
-                    race: visibleAlsoReady[i],
-                    userId: userId,
-                    tier: _QueueTier.deep,
-                    onTap: () => onVerify(visibleAlsoReady[i]),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -766,146 +751,6 @@ class _QueueBehindHeroState extends State<_QueueBehindHero> {
           child: widget.hero,
         ),
       ],
-    );
-  }
-}
-
-// ── Queue spine ──────────────────────────────────────────────────────────────
-
-/// Gutter geometry for the Ready-next spine: a 2px rail in a 26px column,
-/// with state markers centered on it and all race content to its right.
-const double _spineGutter = 26;
-const double _spineX = 9;
-const double _spineW = 2;
-
-/// One stop on the queue: `child` (a [_ReadyRow] or a label) beside a
-/// spine cell. Each row paints its own full-height rail segment so stacked
-/// stops form a continuous line with no measuring — [spineFromTop] /
-/// [spineToBottom] only crop the very ends of the queue.
-class _QueueStop extends StatelessWidget {
-  const _QueueStop({
-    required this.child,
-    this.marker,
-    this.markerTop = 0,
-    this.spineFromTop = true,
-  });
-
-  final Widget child;
-
-  /// The stop's dot; null for the bare rail running beside the next card.
-  final Widget? marker;
-
-  /// Marker offset so the dot centers on the child's first text line.
-  final double markerTop;
-
-  /// false → the rail starts at the marker (the queue's origin under the
-  /// hero). The rail always runs through the row's bottom edge — at the
-  /// list's end it reads as the queue continuing, correct under See all.
-  final bool spineFromTop;
-
-  @override
-  Widget build(BuildContext context) {
-    final marker = this.marker;
-    // The rail starts at a marker's center, never inside the dot.
-    final startAt = markerTop + 5.5;
-    // A Stack sized by the content — not IntrinsicHeight, which the lane's
-    // LayoutBuilder can't answer. Positioned rail + marker overlay the
-    // left gutter; adjacent stops' segments meet at row boundaries, so
-    // the queue reads as one continuous line.
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: _spineGutter),
-          child: child,
-        ),
-        Positioned(
-          left: _spineX,
-          top: spineFromTop ? 0 : startAt,
-          bottom: 0,
-          width: _spineW,
-          child: ColoredBox(color: NuvoColors.blue.withValues(alpha: 0.28)),
-        ),
-        if (marker != null)
-          Positioned(left: 4.5, top: markerTop, child: marker),
-      ],
-    );
-  }
-}
-
-/// The 11px stop dot — the queue's semantic vocabulary. The outer dot is
-/// field-colored so the marker reads as a break in the rail, not a bead
-/// on top of it; the inner disc carries the state.
-class _QueueMarker extends StatelessWidget {
-  const _QueueMarker({required this.mood}) : isNext = false;
-  const _QueueMarker.next() : mood = _VerifyMood.chasing, isNext = true;
-
-  final _VerifyMood mood;
-  final bool isNext;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    final Widget inner;
-    if (isNext) {
-      inner = const DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: NuvoColors.navy,
-        ),
-      );
-    } else {
-      inner = switch (mood) {
-        // Nothing proven — an outlined blue marker, not a filled one.
-        _VerifyMood.startLine => DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: c.panelLight,
-              border: Border.all(color: NuvoColors.blue, width: 1.6),
-            ),
-          ),
-        // A tie is still a chase — navy ring, blue core.
-        _VerifyMood.tied => DecoratedBox(
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: NuvoColors.navy,
-            ),
-            child: Center(
-              child: Container(
-                width: 3,
-                height: 3,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: NuvoColors.blue,
-                ),
-              ),
-            ),
-          ),
-        _VerifyMood.leading ||
-        _VerifyMood.finished =>
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: NuvoColors.success,
-            ),
-          ),
-        _VerifyMood.chasing => const DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: NuvoColors.blue,
-            ),
-          ),
-      };
-    }
-    return Container(
-      width: 11,
-      height: 11,
-      padding: const EdgeInsets.all(2.5),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: c.panelLight,
-      ),
-      child: inner,
     );
   }
 }
@@ -1648,26 +1493,22 @@ String _scoreText(Race race, int value) {
 /// thin track when a denominator exists, and one context line — what's
 /// left, who to pass, or the start line. The whole row is the tap target;
 /// no repeated blue verb, the chevron carries the affordance.
-/// Queue grade — where a waiting race sits on the spine.
-///   next — the one lifted object: white surface, structural edge, offset
-///   deep — a stop on the line: no surface, no edge, marker + content
-enum _QueueTier { next, deep }
-
 class _ReadyRow extends StatelessWidget {
   const _ReadyRow({
     required this.race,
     required this.onTap,
     this.userId,
-    this.tier = _QueueTier.next,
+    this.first = false,
   });
 
   final Race race;
   final String? userId;
   final VoidCallback onTap;
 
-  /// Where this strip sits in the queue's depth stack — chrome only;
-  /// the race content (title, rank, lane, context) never changes.
-  final _QueueTier tier;
+  /// True only for the queue board's first row — the NEXT race: a pill
+  /// plus a little more air and a stronger title, all on the board's
+  /// shared surface. Hierarchy inside the object, never a second card.
+  final bool first;
 
   @override
   Widget build(BuildContext context) {
@@ -1745,33 +1586,49 @@ class _ReadyRow extends StatelessWidget {
       }
     }
 
-    // Position earns chrome: `next` is the queue's one lifted object
-    // (white fill, thin structural edge, restrained 2px plate — smaller
-    // and lighter than a race card elsewhere); `deep` carries none at
-    // all — the spine's marker is the identity, the press the response.
-    final decoration = tier == _QueueTier.next
-        ? BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: Border.all(color: c.border, width: 1),
-            boxShadow: AppShadows.hardOffset(
-              c.inkShadow,
-              offset: const Offset(2, 2),
-            ),
-          )
-        : null;
+    final arrow = Icon(
+      Icons.arrow_forward_rounded,
+      color: c.inkDim,
+      size: 16,
+    );
 
+    // No per-race chrome — the board owns the surface, the edge, and the
+    // depth. `first` earns a NEXT pill and a beat more air; a start-line
+    // row stays shorter by docking its arrow on the meta line instead of
+    // spending a fourth line on it.
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
-      child: Container(
-        padding: tier == _QueueTier.next
-            ? const EdgeInsets.fromLTRB(12, 10, 10, 10)
-            : EdgeInsets.zero,
-        decoration: decoration,
+      child: Padding(
+        padding: first
+            ? const EdgeInsets.fromLTRB(14, 12, 12, 13)
+            : const EdgeInsets.fromLTRB(14, 11, 12, 11),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (first)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: c.panelLight,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'NEXT',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontSize: 9.5,
+                      color: c.ink,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.3,
+                    ),
+                  ),
+                ),
+              ),
             Row(
               children: [
                 Expanded(
@@ -1779,7 +1636,11 @@ class _ReadyRow extends StatelessWidget {
                     race.displayTitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.raceRowTitle.copyWith(fontSize: 15),
+                    style: AppTextStyles.raceRowTitle.copyWith(
+                      fontSize: first ? 15.5 : 15,
+                      fontWeight:
+                          first ? FontWeight.w800 : FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (earnedRank != null) ...[
@@ -1797,14 +1658,21 @@ class _ReadyRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 3),
-            Text(
-              meta,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.raceRowMeta.copyWith(
-                fontSize: 12.5,
-                color: c.inkSubtle,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.raceRowMeta.copyWith(
+                      fontSize: 12.5,
+                      color: c.inkSubtle,
+                    ),
+                  ),
+                ),
+                if (contextLine == null) arrow,
+              ],
             ),
             if (showLane) ...[
               const SizedBox(height: 9),
@@ -1833,31 +1701,28 @@ class _ReadyRow extends StatelessWidget {
                 ],
               ),
             ],
-            const SizedBox(height: 5),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    contextLine ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontSize: 12,
-                      color: contextLine != null &&
-                              mood != _VerifyMood.startLine
-                          ? _moodText(mood, c)
-                          : c.inkSubtle,
-                      fontWeight: FontWeight.w600,
+            if (contextLine != null) ...[
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      contextLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        fontSize: 12,
+                        color: mood != _VerifyMood.startLine
+                            ? _moodText(mood, c)
+                            : c.inkSubtle,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  color: c.inkDim,
-                  size: 16,
-                ),
-              ],
-            ),
+                  arrow,
+                ],
+              ),
+            ],
           ],
         ),
       ),
