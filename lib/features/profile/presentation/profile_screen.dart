@@ -550,28 +550,72 @@ class _IdentityCard extends StatelessWidget {
           children: [
             Hero(
               tag: 'profile-avatar',
-              // The identity mark gets physical treatment — navy edge +
-              // hard offset — because this is the one object on the page
-              // that is the person.
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: c.border, width: 2.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: c.inkShadow,
-                      offset: const Offset(2.5, 2.5),
-                      blurRadius: 0,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // The identity mark gets physical treatment — navy edge +
+                  // hard offset — because this is the one object on the page
+                  // that is the person.
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: c.border, width: 2.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: c.inkShadow,
+                          offset: const Offset(2.5, 2.5),
+                          blurRadius: 0,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: NuvoAvatar(
-                  initials: initials,
-                  photoUrl: photoUrl,
-                  size: NuvoAvatarSizes.xl,
-                  bgColor: nuvoAvatarColorFor(user?.id ?? ''),
-                  textColor: NuvoColors.white,
-                ),
+                    child: NuvoAvatar(
+                      initials: initials,
+                      photoUrl: photoUrl,
+                      size: NuvoAvatarSizes.xl,
+                      bgColor: nuvoAvatarColorFor(user?.id ?? ''),
+                      textColor: NuvoColors.white,
+                    ),
+                  ),
+                  // Edit docks onto the avatar's corner — a tactile ice
+                  // dial attached to the identity object, not a floating
+                  // pencil. The 26px circle rides a 44px tap target.
+                  Positioned(
+                    right: -10,
+                    bottom: -10,
+                    child: Semantics(
+                      button: true,
+                      label: 'Edit profile',
+                      child: NuvoPressable(
+                        onTap: () => context.push('/profile/edit'),
+                        scale: 0.94,
+                        haptic: false,
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Center(
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: c.surface,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: c.border,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.edit_outlined,
+                                color: c.ink,
+                                size: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: NuvoSpacing.lg),
@@ -588,7 +632,7 @@ class _IdentityCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (username != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       username,
                       style: AppTextStyles.bodyMedium.copyWith(
@@ -599,53 +643,31 @@ class _IdentityCard extends StatelessWidget {
                     ),
                   ],
                   if (level != null) ...[
-                    const SizedBox(height: 4),
-                    // The level is part of who this is — it answers "where
-                    // are they in Nuvo" before the stats even start.
-                    Text(
-                      'LEVEL $level',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: NuvoColors.blue,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
+                    const SizedBox(height: 6),
+                    // The level is status, not helper text — an ice badge
+                    // against the name, the same figure the leaderboard
+                    // sees.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
                       ),
-                      maxLines: 1,
+                      decoration: BoxDecoration(
+                        color: c.panelLight,
+                        borderRadius: BorderRadius.circular(NuvoRadii.pill),
+                      ),
+                      child: Text(
+                        'LEVEL $level',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: NuvoColors.blue,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
+                        maxLines: 1,
+                      ),
                     ),
                   ],
                 ],
-              ),
-            ),
-            // Edit is anchored to the identity row — a small tactile ice
-            // button, not a floating pencil. The 44px target stays for
-            // touch; the affordance itself is a quiet 36px circle.
-            Semantics(
-              button: true,
-              label: 'Edit profile',
-              child: NuvoPressable(
-                onTap: () => context.push('/profile/edit'),
-                scale: 0.94,
-                haptic: false,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: c.panelLight,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: c.border, width: 1),
-                      ),
-                      child: Icon(
-                        Icons.edit_outlined,
-                        color: c.ink,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -891,25 +913,40 @@ class _LevelTrack extends ConsumerWidget {
           ),
         ),
         if (next != null) ...[
-          const SizedBox(height: 14),
-          // The next collectible docks under the lane's finish side — the
-          // object the track is running toward. Named, grounded, small.
-          Center(
-            child: Column(
-              children: [
-                _NextUnlockArtifact(unlock: next),
-                const SizedBox(height: 6),
-                Text(
-                  next.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: c.inkMuted,
-                    fontWeight: FontWeight.w700,
+          const SizedBox(height: 8),
+          // The next collectible hangs off the lane's finish end — a
+          // short connector drops from the ring's column into the
+          // artifact, so the reward reads attached to the destination
+          // it's racing toward, never floating mid-page.
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 2,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: c.border,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
                   ),
-                ),
-              ],
+                  _NextUnlockArtifact(unlock: next),
+                  const SizedBox(height: 6),
+                  Text(
+                    next.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: c.inkMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -929,8 +966,8 @@ class _LevelRoute extends StatelessWidget {
 
   static const double _trackHeight = 12;
   static const double _startSize = 14;
-  static const double _markerSize = 16;
-  static const double _goalSize = 18;
+  static const double _markerSize = 18;
+  static const double _goalSize = 20;
   static const double _height = 30;
   static const double _centerY = _height / 2;
 
@@ -989,7 +1026,9 @@ class _LevelRoute extends StatelessWidget {
                   ),
                 ),
               ),
-              // The viewer's mark — physical head of the climb.
+              // The viewer's mark — physical head of the climb, distinct
+              // from the start dot: navy edge, colored fill, white core —
+              // the same "you" read the race lanes carry.
               Positioned(
                 left: markerLeft,
                 top: _centerY - _markerSize / 2,
@@ -999,7 +1038,17 @@ class _LevelRoute extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: color,
                     shape: BoxShape.circle,
-                    border: Border.all(color: c.border, width: 2),
+                    border: Border.all(color: c.border, width: 2.5),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1013,7 +1062,7 @@ class _LevelRoute extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: c.surface,
                     shape: BoxShape.circle,
-                    border: Border.all(color: NuvoColors.blue, width: 2.5),
+                    border: Border.all(color: NuvoColors.blue, width: 3),
                   ),
                 ),
               ),
@@ -1157,77 +1206,89 @@ class _AchievementsSection extends StatelessWidget {
             ],
           ),
         ),
-        if (featured.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          // Each artifact + its name is one unit — the collectible and
-          // what it's called, fused in a single column. Unused slot
-          // columns stay empty so the shelf keeps its rhythm.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < featured.length; i++) ...[
-                Expanded(
-                  child: PressableScale(
-                    scale: 0.94,
-                    onTap: () => context.push('/profile/badges'),
-                    child: Column(
-                      children: [
-                        // A 4px drop on the center trophy keeps the trio
-                        // reading as collectibles, not a tab bar.
-                        Transform.translate(
-                          offset: Offset(
-                            0,
-                            featured.length == 3 && i == 1 ? 4 : 0,
-                          ),
-                          child: NuvoAchievementBadge(
-                            badge: featured[i],
-                            size: 56,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        // Earned names carry the achievement's family
-                        // accent — gold for a win, blue for depth, teal
-                        // for a PB, violet for creation. Same language
-                        // as the badge.
-                        Text(
-                          featured[i].name,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: nuvoBadgeAccent(featured[i]),
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+        const SizedBox(height: 14),
+        // The shelf holds fixed positions: earned artifacts take seats
+        // first, the next target fills the first empty seat locked, and
+        // seats beyond it stay as quiet outlines — a shelf with space
+        // left to fill, never one item stretched across the page.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < p.featuredSlots; i++) ...[
+              Expanded(
+                child: PressableScale(
+                  scale: 0.94,
+                  onTap: () => context.push('/profile/badges'),
+                  child: _ShelfSlot(
+                    badge: i < featured.length
+                        ? featured[i]
+                        : i == featured.length
+                            ? next
+                            : null,
+                    // A 4px drop on the center trophy keeps a full trio
+                    // reading as collectibles, not a tab bar.
+                    dropped: featured.length >= 3 && i == 1,
+                  ),
+                ),
+              ),
+              if (i < p.featuredSlots - 1)
+                const SizedBox(width: NuvoSpacing.sm),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One seat on the collectible shelf — an earned artifact with its name
+/// fused beneath, the locked next target in the first open seat, or a
+/// quiet outlined seat still waiting for its object.
+class _ShelfSlot extends StatelessWidget {
+  const _ShelfSlot({required this.badge, this.dropped = false});
+
+  /// Null renders an empty seat — the shelf keeps its rhythm even before
+  /// anything is earned.
+  final NuvoBadge? badge;
+  final bool dropped;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final b = badge;
+    final earned = b != null && b.unlocked;
+    return Column(
+      children: [
+        Transform.translate(
+          offset: Offset(0, dropped ? 4 : 0),
+          child: b != null
+              ? NuvoAchievementBadge(badge: b, size: 56)
+              : Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(17),
+                    border: Border.all(
+                      color: c.border.withValues(alpha: 0.45),
+                      width: 1.5,
                     ),
                   ),
                 ),
-                if (i < featured.length - 1)
-                  const SizedBox(width: NuvoSpacing.sm),
-              ],
-              for (var i = featured.length; i < p.featuredSlots; i++)
-                const Expanded(child: SizedBox.shrink()),
-            ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          b?.name ?? ' ',
+          style: AppTextStyles.labelSmall.copyWith(
+            // Earned names carry the badge's family accent — gold for a
+            // win, blue for depth, teal for a PB, violet for creation.
+            // A locked seat stays muted.
+            color: earned ? nuvoBadgeAccent(b) : c.inkMuted,
+            fontWeight: FontWeight.w700,
           ),
-        ] else if (next != null) ...[
-          const SizedBox(height: 12),
-          // The locked target in reach — the next collectible, previewed.
-          Row(
-            children: [
-              NuvoAchievementBadge(badge: next, size: 52),
-              const SizedBox(width: NuvoSpacing.sm),
-              Expanded(
-                child: Text(
-                  '${next.name} — ${next.description ?? 'keep racing'}',
-                  style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ],
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
       ],
     );
   }
@@ -1491,7 +1552,7 @@ class _HeaderStat extends StatelessWidget {
                 weight: FontWeight.w800,
               ),
             ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Text(
             label,
             style: AppTextStyles.labelUppercase(10, color: c.inkSubtle).copyWith(color: context.themeColors.inkSubtle),
@@ -1506,17 +1567,14 @@ class _HeaderDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: 1,
-    height: 32,
-    color: context.themeColors.ink.withValues(alpha: 0.12),
-    margin: const EdgeInsets.symmetric(horizontal: 4),
+    height: 26,
+    color: context.themeColors.divider,
+    margin: const EdgeInsets.symmetric(horizontal: 6),
   );
 }
 
-// ── Race section — capped grouped list with inline expansion ─────────────────
+// ── Racing-now shelf — horizontal race tiles ─────────────────────────────────
 
-/// A labeled race group ("Racing now", "Recent results") capped at [cap]
-/// rows, expanding inline on "See all" — the same pattern Compete uses for
-/// its race list, so the summary doesn't grow linearly with history.
 /// Racing now as a horizontal SHELF — live races are objects in motion,
 /// each on its own soft ice tile ~78% of the content width so the next
 /// one always peeks off the right edge. See all drops into the vertical
@@ -1587,7 +1645,7 @@ class _RaceShelf extends StatelessWidget {
             builder: (context, cons) {
               final tileW = cons.maxWidth * 0.78;
               return SizedBox(
-                height: 190,
+                height: 152,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: EdgeInsets.only(
