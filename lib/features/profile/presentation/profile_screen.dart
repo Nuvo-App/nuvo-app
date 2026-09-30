@@ -9,7 +9,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
-import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_entrance.dart';
 import '../../../core/theme/nuvo_theme_mode.dart';
@@ -551,132 +550,117 @@ class _IdentityCard extends StatelessWidget {
     final hasPass = user?.hasMemberPass ?? false;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Hero(
-              tag: 'profile-avatar',
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // The identity mark gets physical treatment — navy edge +
-                  // hard offset — because this is the one object on the page
-                  // that is the person.
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: c.border, width: 2.5),
-                      boxShadow: [
-                        BoxShadow(
-                          color: c.inkShadow,
-                          offset: const Offset(2.5, 2.5),
-                          blurRadius: 0,
-                        ),
-                      ],
+        Hero(
+          tag: 'profile-avatar',
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // The identity mark gets physical treatment — navy edge +
+              // hard offset — because this is the one object on the page
+              // that is the person.
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.border, width: 2.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.inkShadow,
+                      offset: const Offset(2.5, 2.5),
+                      blurRadius: 0,
                     ),
-                    child: NuvoAvatar(
-                      initials: initials,
-                      photoUrl: photoUrl,
-                      size: NuvoAvatarSizes.xl,
-                      bgColor: nuvoAvatarColorFor(user?.id ?? ''),
-                      textColor: NuvoColors.white,
-                    ),
-                  ),
-                  // Edit docks onto the avatar's corner — a tactile ice
-                  // dial attached to the identity object, not a floating
-                  // pencil. The 26px circle rides a 44px tap target.
-                  Positioned(
-                    right: -10,
-                    bottom: -10,
-                    child: Semantics(
-                      button: true,
-                      label: 'Edit profile',
-                      child: NuvoPressable(
-                        onTap: () => context.push('/profile/edit'),
-                        scale: 0.94,
-                        haptic: false,
-                        child: SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: Center(
-                            child: Container(
-                              width: 26,
-                              height: 26,
-                              decoration: BoxDecoration(
-                                color: c.surface,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: c.border, width: 1.5),
-                              ),
-                              child: Icon(
-                                Icons.edit_outlined,
-                                color: c.ink,
-                                size: 13,
-                              ),
-                            ),
+                  ],
+                ),
+                child: NuvoAvatar(
+                  initials: initials,
+                  photoUrl: photoUrl,
+                  size: 84,
+                  bgColor: nuvoAvatarColorFor(user?.id ?? ''),
+                  textColor: NuvoColors.white,
+                ),
+              ),
+              // Edit docks onto the avatar's corner — a tactile ice
+              // dial attached to the identity object, not a floating
+              // pencil. The 26px circle rides a 44px tap target.
+              Positioned(
+                right: -10,
+                bottom: -10,
+                child: Semantics(
+                  button: true,
+                  label: 'Edit profile',
+                  child: NuvoPressable(
+                    onTap: () => context.push('/profile/edit'),
+                    scale: 0.94,
+                    haptic: false,
+                    child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Center(
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: c.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: c.border, width: 1.5),
+                          ),
+                          child: Icon(
+                            Icons.edit_outlined,
+                            color: c.ink,
+                            size: 13,
                           ),
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(width: NuvoSpacing.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (username != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      username,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: c.inkSubtle,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (level != null) ...[
-                    const SizedBox(height: 6),
-                    // The level is status, not helper text — an ice badge
-                    // against the name, the same figure the leaderboard
-                    // sees.
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: c.panelLight,
-                        borderRadius: BorderRadius.circular(NuvoRadii.pill),
-                      ),
-                      child: Text(
-                        'LEVEL $level',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: NuvoColors.blue,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1,
-                        ),
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(height: 14),
+        Text(
+          displayName,
+          style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+        if (username != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            username,
+            style: AppTextStyles.bodyMedium.copyWith(color: c.inkSubtle),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ],
+        if (level != null) ...[
+          const SizedBox(height: 6),
+          // The level is status, not helper text — an ice badge under
+          // the name, the same figure the leaderboard sees.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(NuvoRadii.pill),
+            ),
+            child: Text(
+              'LEVEL $level',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: NuvoColors.blue,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+              maxLines: 1,
+            ),
+          ),
+        ],
         const SizedBox(height: NuvoSpacing.md),
         Wrap(
+          alignment: WrapAlignment.center,
           spacing: NuvoSpacing.sm,
           runSpacing: NuvoSpacing.sm,
           children: [
@@ -792,12 +776,12 @@ class _NextUnlockArtifact extends StatelessWidget {
 }
 
 /// Persistent progression — the Nuvo Level that belongs to the person,
-/// not any single race — carried by ONE hero card: the level header,
-/// the beam to the next level with the unlock milestone docked under
-/// its finish ring, and the record as the card's lower band. Always
-/// present: real data fills it, a quiet skeleton holds its place while
-/// the server answers, and an outage reads as a sync note — never a
-/// missing piece of identity.
+/// not any single race — composed on the page's center axis: the level
+/// header, the beam to the next level with the unlock milestone docked
+/// under its finish ring, and the record directly beneath on the open
+/// canvas. Always present: real data fills it, a quiet skeleton holds
+/// its place while the server answers, and an outage reads as a sync
+/// note — never a missing piece of identity.
 class _LevelTrack extends ConsumerWidget {
   const _LevelTrack({
     required this.state,
@@ -820,169 +804,151 @@ class _LevelTrack extends ConsumerWidget {
     // moment in the progression loop, so the last stretch previews it.
     final nearNext = (p?.progress ?? 0) >= 0.9;
     final xpColor = nearNext ? NuvoColors.gold : NuvoColors.blue;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
-      decoration: BoxDecoration(
-        color: c.panelLight,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: c.border, width: 1.5),
-        boxShadow: AppShadows.hardOffset(
-          c.inkShadow,
-          offset: const Offset(2.5, 2.5),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (p == null)
-            state.hasError
-                ? _ProgressionUnavailable(c: c, ref: ref)
-                : _ProgressionSkeleton(c: c)
-          else ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (p == null)
+          state.hasError
+              ? _ProgressionUnavailable(c: c, ref: ref)
+              : _ProgressionSkeleton(c: c)
+        else ...[
+          // LEVEL + fraction — stacked on the center axis.
+          Text.rich(
+            TextSpan(
               children: [
-                // One text run so LEVEL + number shrink together under
-                // large text scale instead of fighting in a nested Row.
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: 'LEVEL ',
-                          style: AppTextStyles.titleMedium.copyWith(
-                            color: c.ink,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        // The level number is the anchor — big and blue,
-                        // the same figure the leaderboard sees.
-                        TextSpan(
-                          text: '${p.level}',
-                          style: AppTextStyles.statLarge(
-                            36,
-                            color: NuvoColors.blue,
-                            weight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                TextSpan(
+                  text: 'LEVEL ',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: c.ink,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(width: NuvoSpacing.sm),
-                Flexible(
-                  child: Text(
-                    '${p.currentLevelXp} / ${p.nextLevelXp} XP',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: c.inkSubtle,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
+                // The level number is the anchor — big and blue, the
+                // same figure the leaderboard sees.
+                TextSpan(
+                  text: '${p.level}',
+                  style: AppTextStyles.statLarge(
+                    36,
+                    color: NuvoColors.blue,
+                    weight: FontWeight.w900,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            // The beam — the level's anchor to the open ring at the next
-            // level; the unlock milestone docks under the ring as the
-            // destination's reward, inside the card.
-            SizedBox(
-              height: _LevelRoute.blockHeight(next != null),
-              child: LayoutBuilder(
-                builder: (context, cons) {
-                  final w = cons.maxWidth;
-                  final ringX = _LevelRoute.ringX(w);
-                  final metric = _LevelRoute.routePath(
-                    w,
-                  ).computeMetrics().first;
-                  final beadX = metric
-                      .getTangentForOffset(
-                        _LevelRoute.beadOffset(metric.length, p.progress),
-                      )!
-                      .position
-                      .dx;
-                  // The XP requirement lives in the beam's whitespace —
-                  // centered on the stretch between the bead and the
-                  // destination, kept clear of the milestone column.
-                  const capW = 132.0;
-                  final capCx = ((beadX + ringX) / 2)
-                      .clamp(
-                        capW / 2 + 2,
-                        math.max(capW / 2 + 2, ringX - 30 - capW / 2),
-                      )
-                      .toDouble();
-                  const nameW = 116.0;
-                  final nameLeft = (ringX - nameW / 2)
-                      .clamp(0.0, math.max(0.0, w - nameW))
-                      .toDouble();
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _LevelRoute(
-                        level: p.level,
-                        progress: p.progress,
-                        color: xpColor,
-                        hasDock: next != null,
-                      ),
-                      Positioned(
-                        top: _LevelRoute.captionTop,
-                        left: capCx - capW / 2,
-                        width: capW,
-                        child: Text(
-                          '${p.xpToNext} XP to Level ${p.level + 1}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: xpColor,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ),
-                      if (next != null) ...[
-                        Positioned(
-                          top: _LevelRoute.dockTop,
-                          // 46px artifact centered on the ring's column.
-                          left: ringX - 23,
-                          child: _NextUnlockArtifact(unlock: next),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${p.currentLevelXp} / ${p.nextLevelXp} XP',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: c.inkSubtle,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          // The beam — ~80% of the row on the center axis; the unlock
+          // milestone docks under the finish ring on a short connector.
+          Center(
+            child: FractionallySizedBox(
+              widthFactor: 0.8,
+              child: SizedBox(
+                height: _LevelRoute.blockHeight(next != null),
+                child: LayoutBuilder(
+                  builder: (context, cons) {
+                    final w = cons.maxWidth;
+                    final ringX = _LevelRoute.ringX(w);
+                    final metric = _LevelRoute.routePath(
+                      w,
+                    ).computeMetrics().first;
+                    final beadX = metric
+                        .getTangentForOffset(
+                          _LevelRoute.beadOffset(metric.length, p.progress),
+                        )!
+                        .position
+                        .dx;
+                    // The XP requirement rides the beam's whitespace —
+                    // centered on the stretch between the bead and the
+                    // destination, kept clear of the milestone column.
+                    const capW = 132.0;
+                    final capCx = ((beadX + ringX) / 2)
+                        .clamp(
+                          capW / 2 + 2,
+                          math.max(capW / 2 + 2, ringX - 30 - capW / 2),
+                        )
+                        .toDouble();
+                    const nameW = 116.0;
+                    final nameLeft = (ringX - nameW / 2)
+                        .clamp(0.0, math.max(0.0, w - nameW))
+                        .toDouble();
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        _LevelRoute(
+                          level: p.level,
+                          progress: p.progress,
+                          color: xpColor,
+                          hasDock: next != null,
                         ),
                         Positioned(
-                          top: _LevelRoute.dockTop + 48,
-                          left: nameLeft,
-                          width: nameW,
+                          top: _LevelRoute.captionTop,
+                          left: capCx - capW / 2,
+                          width: capW,
                           child: Text(
-                            'Unlock: ${next.name}',
+                            '${p.xpToNext} XP to Level ${p.level + 1}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: c.inkMuted,
-                              fontWeight: FontWeight.w700,
+                              color: xpColor,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
                             ),
                           ),
                         ),
+                        if (next != null) ...[
+                          Positioned(
+                            top: _LevelRoute.dockTop,
+                            // 46px artifact centered on the ring's column.
+                            left: ringX - 23,
+                            child: _NextUnlockArtifact(unlock: next),
+                          ),
+                          Positioned(
+                            top: _LevelRoute.dockTop + 48,
+                            left: nameLeft,
+                            width: nameW,
+                            child: Text(
+                              next.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: c.inkMuted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ],
-          const SizedBox(height: 12),
-          Divider(height: 1, thickness: 1, color: c.divider),
-          const SizedBox(height: 10),
-          // The record — the lower band of the same module.
-          _StatsStrip(activeCount: activeCount, wins: wins, winRate: winRate),
+          ),
         ],
-      ),
+        const SizedBox(height: 18),
+        // The record — three equal centered columns directly beneath the
+        // progression module.
+        _StatsStrip(activeCount: activeCount, wins: wins, winRate: winRate),
+      ],
     );
   }
 }
@@ -1212,46 +1178,29 @@ class _ProgressionSkeleton extends StatelessWidget {
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: c.surface,
+        color: c.panelLight,
         borderRadius: BorderRadius.circular(999),
       ),
     );
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         bar(120, 26),
+        const SizedBox(height: 8),
+        bar(110, 12),
         const SizedBox(height: 14),
-        SizedBox(
-          height: 93,
-          child: Stack(
-            children: [
-              Positioned(
-                top: 9,
-                left: 0,
-                right: 0,
-                child: Container(
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 30,
-                right: 12,
-                child: Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
+        FractionallySizedBox(
+          widthFactor: 0.8,
+          child: Container(
+            height: 12,
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
         ),
+        const SizedBox(height: 8),
+        bar(130, 10),
       ],
     );
   }
@@ -1272,7 +1221,7 @@ class _ProgressionUnavailable extends StatelessWidget {
       scale: 0.99,
       haptic: false,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             'LEVEL',
