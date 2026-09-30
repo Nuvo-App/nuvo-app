@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
@@ -53,6 +54,13 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
   bool _featuredFlipped = false;
 
   static const _racesCap = 3;
+
+  /// Hero→field overlap: the field's cap rises 16px behind the hero's
+  /// bottom edge; the field body bleeds 10px past the page gutter — a
+  /// region, not a card in a row of cards.
+  static const _fieldOverlap = 16.0;
+  static const _fieldCapRise = 14.0;
+  static const _fieldBleed = 10.0;
 
   @override
   Widget build(BuildContext context) {
@@ -129,8 +137,36 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                     )
                   else ...[
                     if (needsAttention != null) ...[
-                      _buildFeaturedCard(needsAttention, uid),
-                      const SizedBox(height: NuvoSpacing.xl),
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          // The field's cap, painted BEFORE the hero — it
+                          // peeks out ~16px behind the hero's bottom edge
+                          // so the active-races region begins beneath the
+                          // foreground object, then flows seamlessly into
+                          // the field body below.
+                          if (inMotionRows.isNotEmpty)
+                            Positioned(
+                              left: -_fieldBleed,
+                              right: -_fieldBleed,
+                              bottom: -_fieldOverlap,
+                              height: _fieldOverlap + _fieldCapRise,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: context.themeColors.panelLight,
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(22),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          _buildFeaturedCard(needsAttention, uid),
+                        ],
+                      ),
+                      if (inMotionRows.isNotEmpty)
+                        const SizedBox(height: _fieldOverlap)
+                      else
+                        const SizedBox(height: NuvoSpacing.xl),
                     ],
                     if (inMotionRows.isNotEmpty) ...[
                       _CappedRaceList(
@@ -138,6 +174,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                         userId: uid,
                         expanded: _racesExpanded,
                         cap: _racesCap,
+                        tuckedUnderHero: needsAttention != null,
                         onToggleExpand: () =>
                             setState(() => _racesExpanded = !_racesExpanded),
                         onOpen: (race) => context.push('/race/${race.id}'),
@@ -548,6 +585,7 @@ class _CappedRaceList extends StatelessWidget {
     required this.cap,
     required this.onToggleExpand,
     required this.onOpen,
+    this.tuckedUnderHero = false,
   });
 
   final List<Race> races;
@@ -557,9 +595,12 @@ class _CappedRaceList extends StatelessWidget {
   final VoidCallback onToggleExpand;
   final ValueChanged<Race> onOpen;
 
+  /// When the hero overlaps the field's cap, the body's top corners stay
+  /// square — the cap it merges into carries the rounding.
+  final bool tuckedUnderHero;
+
   @override
   Widget build(BuildContext context) {
-    final c = context.themeColors;
     final visible = expanded ? races : races.take(cap).toList();
     final hasMore = races.length > cap;
     // A race is an object only once it has real motion behind it — a race
@@ -573,7 +614,29 @@ class _CappedRaceList extends StatelessWidget {
 
     // The active-races field — a middle plane between the hero and the
     // canvas. Ice tint groups the section; no navy edge, no shadow —
-    // grouping is the plane's whole job.
+    // grouping is the plane's whole job. OverflowBox bleeds it past the
+    // page gutter symmetrically, so the region reads as a band, not a
+    // card in a row of cards.
+    return LayoutBuilder(
+      builder: (context, constraints) => OverflowBox(
+        // deferToChild — the box takes the field's size and just grants it
+        // a wider lane; in a sliver (unbounded height) fit:max would try
+        // to be infinitely tall.
+        fit: OverflowBoxFit.deferToChild,
+        maxWidth:
+            constraints.maxWidth + _CompeteScreenState._fieldBleed * 2,
+        child: _buildField(context, hasMotion, visible, hasMore),
+      ),
+    );
+  }
+
+  Widget _buildField(
+    BuildContext context,
+    bool Function(Race) hasMotion,
+    List<Race> visible,
+    bool hasMore,
+  ) {
+    final c = context.themeColors;
     return Container(
       padding: const EdgeInsets.fromLTRB(
         NuvoSpacing.sm,
@@ -583,7 +646,11 @@ class _CappedRaceList extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: c.panelLight,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+        borderRadius: tuckedUnderHero
+            ? const BorderRadius.vertical(
+                bottom: Radius.circular(NuvoRadii.lg),
+              )
+            : BorderRadius.circular(NuvoRadii.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -623,19 +690,14 @@ class _CappedRaceList extends StatelessWidget {
           ),
           const SizedBox(height: NuvoSpacing.xs),
           // Two tiers on one field: races with motion rise off the plane as
-          // white objects; start-line races stay flat, hairlines between
-          // them — depth is earned by progress, not handed to every row.
+          // white objects; start-line races stay flat. A hairline separates
+          // every strip — embedded rows on a shared field, not a card list.
           for (var i = 0; i < visible.length; i++) ...[
-            if (i > 0) const SizedBox(height: NuvoSpacing.xs),
-            if (i > 0 && !hasMotion(visible[i]) && !hasMotion(visible[i - 1]))
-              Padding(
-                padding: const EdgeInsets.only(bottom: NuvoSpacing.xs),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: c.divider,
-                ),
-              ),
+            if (i > 0) ...[
+              const SizedBox(height: NuvoSpacing.xs),
+              Divider(height: 1, thickness: 1, color: c.divider),
+              const SizedBox(height: NuvoSpacing.xs),
+            ],
             _buildRow(context, visible[i], i + 1, raised: hasMotion(visible[i])),
           ],
         ],
