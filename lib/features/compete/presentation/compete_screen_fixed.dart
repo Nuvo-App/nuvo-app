@@ -236,7 +236,11 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                   NuvoSpacing.pageHorizontal,
                   0,
                   NuvoSpacing.pageHorizontal,
-                  NuvoBottomNav.bottomPadding(context),
+                  // Nav-occupied height + safe inset are already inside
+                  // bottomPadding (the shell inflates padding.bottom);
+                  // +sm is extra breathing so Finished scrolls fully
+                  // clear of the dock, not flush against it.
+                  NuvoBottomNav.bottomPadding(context) + NuvoSpacing.sm,
                 ),
                 sliver: SliverToBoxAdapter(
                   child: _QuickStarts(
@@ -248,7 +252,8 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
             else
               SliverPadding(
                 padding: EdgeInsets.only(
-                  bottom: NuvoBottomNav.bottomPadding(context),
+                  bottom:
+                      NuvoBottomNav.bottomPadding(context) + NuvoSpacing.sm,
                 ),
                 sliver: const SliverToBoxAdapter(child: SizedBox.shrink()),
               ),
