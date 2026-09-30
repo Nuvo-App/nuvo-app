@@ -273,12 +273,12 @@ void main() {
       expect(pill().alignment, const Alignment(1, 1));
     });
 
-    testWidgets('40 ready races: Also ready capped at 8, not artificially at 3', (
+    testWidgets('40 ready races: shelf renders a carousel, not a vertical feed', (
       tester,
     ) async {
-      // The cap was raised from a mockup-matched 3 to 8 — a real viewport
-      // with real data should read as populated, not truncated to a
-      // cherry-picked few rows with a blank lower half.
+      // Verify is no longer the master list: upcoming races live on a
+      // horizontal ticket shelf (all 39 reachable by swiping) and
+      // "See all" drills into the complete listing.
       await tester.pumpWidget(
         _buildApp(_StubRaceRepo(_generateReadyRaces(40))),
       );
@@ -286,12 +286,11 @@ void main() {
 
       // Up next shows first race.
       expect(find.textContaining('Ready 1'), findsOneWidget);
-      // 8 capped "Also ready" rows (races 2 through 9).
-      for (var i = 2; i <= 9; i++) {
-        expect(find.textContaining('Ready $i'), findsOneWidget);
-      }
-      // Race 10 should NOT be visible (capped at 8).
-      expect(find.textContaining('Ready 10'), findsNothing);
+      // The next race is the centered shelf ticket.
+      expect(find.byType(PageView), findsOneWidget);
+      expect(find.textContaining('Ready 2'), findsOneWidget);
+      // Deep races are not laid out as vertical rows.
+      expect(find.textContaining('Ready 40'), findsNothing);
       // "See all" should be visible.
       expect(find.textContaining('See all'), findsOneWidget);
     });
