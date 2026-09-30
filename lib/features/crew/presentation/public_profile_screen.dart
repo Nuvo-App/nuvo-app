@@ -968,7 +968,12 @@ class _PublicDockedBadges extends StatelessWidget {
         for (var i = 0; i < badges.length; i++) ...[
           Expanded(
             child: Center(
-              child: NuvoAchievementBadge(badge: badges[i], size: 48),
+              // Same collectible stagger as the self profile — a 4px drop
+              // on the center trophy.
+              child: Transform.translate(
+                offset: Offset(0, badges.length == 3 && i == 1 ? 4 : 0),
+                child: NuvoAchievementBadge(badge: badges[i], size: 48),
+              ),
             ),
           ),
           if (i < badges.length - 1) const SizedBox(width: 8),

@@ -396,33 +396,23 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: c.inkShadow, width: 2.5),
-        boxShadow: [
-          BoxShadow(
-            color: c.inkShadow,
-            offset: const Offset(4, 4),
-            blurRadius: 0,
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: c.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: NuvoSpacing.lg),
+    // Shell owns the sheet: surface, radius, drag handle (theme
+    // showDragHandle), and dismissal. Content never draws its own
+    // grabber — the SafeArea + scroll view keep every CTA above the
+    // home indicator and reachable at max text scale.
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          0,
+          20,
+          24 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: NuvoSpacing.sm),
           NuvoAchievementBadge(badge: badge, size: 72),
           const SizedBox(height: NuvoSpacing.md),
           Text(
@@ -515,7 +505,8 @@ class NuvoAchievementDetailSheet extends StatelessWidget {
               ),
             ),
           ],
-        ],
+          ],
+        ),
       ),
     ).nuvoEnter();
   }
