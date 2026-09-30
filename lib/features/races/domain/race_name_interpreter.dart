@@ -109,7 +109,15 @@ class FlexiRaceInterpretation {
 
 /// The ONE canonical entry point: race name → structured interpretation.
 /// Rules-first, offline, deterministic — no remote calls, ever.
-FlexiRaceInterpretation interpretRaceName(String input) {
+///
+/// [catalog] is the activity search space: the bundled definitions by
+/// default, or the composer's merged catalog (bundled + remote). Remote
+/// movements resolve by alias without a client release.
+FlexiRaceInterpretation interpretRaceName(
+  String input, {
+  Iterable<MotionActivityDefinition>? catalog,
+}) {
+  final activities = (catalog ?? motionActivityDefinitions).toList();
   final assumptions = <String>[];
 
   // Clauses: the race phrase is the head; everything after ',' / ';' is a
@@ -148,7 +156,7 @@ FlexiRaceInterpretation interpretRaceName(String input) {
     final next = core
         .replaceFirst(
           RegExp(
-            r'^(who|whichever|whatever|what|which|whoever|lets|let us|can you|could you|do you|how)\s+',
+            r'^(who|whichever|whatever|what|which|whoever|lets|let s|let us|can you|could you|do you|how)\s+',
           ),
           '',
         )
@@ -311,6 +319,38 @@ FlexiRaceInterpretation interpretRaceName(String input) {
     }
   }
 
+  // ── Grammar slot: DURATION GOAL — "2 minute plank", "plank for 2 minutes",
+  // "a 30 second wall sit". A stated hold length on a time-metric movement is
+  // the finish line itself, not an attempt window: the number IS the target.
+  // Only fires when the subject resolves to a seconds-metric activity and the
+  // whole phrase justifies it — "2 minute squats" stays a timed attempt and
+  // "30 second plank jacks" keeps its own (rep-count) subject.
+  final durGoal = _durationGoal(core, activities);
+  if (durGoal != null) {
+    final (activity, seconds) = durGoal;
+    final question =
+        contradicts ? _contradictionQuestion(input) : constraintQuestion;
+    return FlexiRaceInterpretation(
+      input: input.trim(),
+      goalKind: RaceGoalKind.movement,
+      activity: activity,
+      metric: activity.metric,
+      format: RaceFormat.firstToGoal,
+      targetValue: seconds,
+      deadline: deadline,
+      proofNeed: _motionNeed(activity),
+      confidence: InterpretationConfidence.high,
+      inferredFields: const {
+        RaceField.activity,
+        RaceField.goalKind,
+        RaceField.format,
+        RaceField.target,
+      },
+      assumptions: assumptions,
+      question: question,
+    );
+  }
+
   // ── Grammar slot: TIMED ATTEMPT — "most X in 30 seconds", "how many X in
   // a minute", "as many X as possible in 20 seconds", "30 second plank
   // jacks", "burpee sprint 25 seconds". A window ≤ 1 hour is an attempt;
@@ -319,7 +359,7 @@ FlexiRaceInterpretation interpretRaceName(String input) {
   if (timed != null) {
     var subject = timed.subject;
     var duration = timed.seconds;
-    final activity = _activityFor(subject);
+    final activity = _activityFor(subject, activities);
     String? question;
     if (duration <= 0) {
       question = 'Attempt duration must be greater than zero.';
@@ -435,7 +475,7 @@ FlexiRaceInterpretation interpretRaceName(String input) {
         assumptions: assumptions,
       );
     }
-    final activity = _activityFor(subject);
+    final activity = _activityFor(subject, activities);
     final unit = activity == null
         ? _bestUnit(subject, _canonSubjectDomain(subject))
         : null;
@@ -503,6 +543,7 @@ FlexiRaceInterpretation interpretRaceName(String input) {
         RaceField.format,
         RaceField.target,
         if (activity == null) RaceField.manualGoal,
+        if (activity == null && unit != null) RaceField.manualUnit,
       },
       assumptions: assumptions,
       question: question,
@@ -549,7 +590,7 @@ FlexiRaceInterpretation interpretRaceName(String input) {
         question: _measureQuestion(measureSubject, measureUnit),
       );
     }
-    var activity = _activityFor(subject);
+    var activity = _activityFor(subject, activities);
     var goalName = _canonSubjectDomain(subject);
     if ((proofOverride == ProofNeed.manual ||
             proofOverride == ProofNeed.note) &&
@@ -733,7 +774,11 @@ FlexiRaceInterpretation interpretRaceName(String input) {
   }
 
   // ── Fallback: bare subject, count anywhere, or genuinely ambiguous ──────
-  final activity = _activityFor(core);
+  // `_activityFor` applies the whole-subject justification gate itself —
+  // a substring alias hit only arms a camera verifier when the remaining
+  // phrase is framing ("50 push ups"), not a different thing ("burpee
+  // backflips", "planking a wall").
+  final activity = _activityFor(core, activities);
   final target = _firstNumber(core);
   if (activity != null) {
     return FlexiRaceInterpretation(
@@ -781,6 +826,16 @@ FlexiRaceInterpretation interpretRaceName(String input) {
   // not a tally to a finish line.
   final scoreLike =
       fbUnit == 'percent' || stripped == 'score' || stripped == 'test score';
+  // A bare "a"/"an" is an article, not a stated target — the field only
+  // counts as inferred when the number was actually said ("read 5 books",
+  // "two laps"), so the composer can tell "Read 5 books" (finish line was
+  // stated) apart from "Summer challenge" (nothing was).
+  final statedNumber = target != null &&
+      core
+          .split(' ')
+          .any((t) => _numberAt(t) != null && t != 'a' && t != 'an');
+  final formatPrincipled =
+      scoreLike || statedNumber || stripped == 'completion';
   return FlexiRaceInterpretation(
     input: input.trim(),
     goalKind: RaceGoalKind.manual,
@@ -797,6 +852,9 @@ FlexiRaceInterpretation interpretRaceName(String input) {
     inferredFields: {
       RaceField.goalKind,
       if (stripped.isNotEmpty) RaceField.manualGoal,
+      if (fbUnit != null && fbUnit.isNotEmpty) RaceField.manualUnit,
+      if (statedNumber) RaceField.target,
+      if (formatPrincipled) RaceField.format,
     },
     assumptions: assumptions,
     question: fbQuestion,
@@ -2427,8 +2485,11 @@ String _contradictionQuestion(String input) {
 /// Preset lookup with domain vetoes: a static hold or a weighted lift is a
 /// DIFFERENT race than the rep-count homonym ("squat hold" ≠ squats, "squat
 /// the most weight" ≠ squats). General rule, applied everywhere.
-MotionActivityDefinition? _activityFor(String subject) {
-  final a = motionActivityFromText(subject);
+MotionActivityDefinition? _activityFor(
+  String subject,
+  Iterable<MotionActivityDefinition> catalog,
+) {
+  final a = motionActivityFromText(subject, catalog: catalog);
   if (a == null) return null;
   final holdPhrase = RegExp(
     r'\b(hold|hang|wall sit|hollow|handstand|balance|static|stance)\b',
@@ -2466,8 +2527,158 @@ MotionActivityDefinition? _activityFor(String subject) {
   ).hasMatch(subject)) {
     return null;
   }
+  // Whole-subject justification: after the matched alias is lifted out,
+  // only framing tokens may remain — "50 push ups" arms pushups, but
+  // "burpee backflips" or "consecutive free throws" name a different thing
+  // than the substring suggests. A loose alias hit never arms a verifier.
+  if (!activityJustifiedByName(subject, a)) return null;
   return a;
 }
+
+/// Duration-goal phrasings on a time-metric activity — "2 minute plank",
+/// "plank for 2 minutes", "a 30 second wall sit". Returns the activity and
+/// the target in seconds; null unless the subject resolves to a
+/// seconds-metric preset AND the whole phrase justifies the match (so
+/// "30 second plank jacks" never silently arms Plank).
+(MotionActivityDefinition, int)? _durationGoal(
+  String core,
+  Iterable<MotionActivityDefinition> catalog,
+) {
+  int? secondsOf(String n, String unit) {
+    final v = _numberAt(n);
+    if (v == null || v <= 0) return null;
+    if (unit.startsWith('h')) return v * 3600;
+    if (unit.startsWith('m')) return v * 60;
+    return v;
+  }
+
+  const u = r'(seconds?|secs?|secs|minutes?|mins?|min|hours?|hrs?|hr)';
+  (MotionActivityDefinition, int)? finish(String subject, int? seconds) {
+    if (seconds == null) return null;
+    final a = _activityFor(subject.trim(), catalog);
+    if (a == null ||
+        a.metric != RaceMetric.seconds ||
+        !activityJustifiedByName(core, a)) {
+      return null;
+    }
+    return (a, seconds);
+  }
+
+  // "2 minute plank" / "a 30 second wall sit" — duration prefix names the
+  // goal; the rest is the subject.
+  var m = RegExp('^(?:a\\s+|an\\s+)?(\\w+)\\s*$u\\s+(.+?)\$').firstMatch(core);
+  if (m != null) {
+    final hit = finish(_cleanSubject(m.group(3)!), secondsOf(m.group(1)!, m.group(2)!));
+    if (hit != null) return hit;
+  }
+  // "plank for 2 minutes" / "hold a plank for 5 minutes" — trailing duration.
+  m = RegExp('^(.+?)\\s+for\\s+(?:a\\s+|an\\s+)?(\\w+)\\s*$u\\s*\$')
+      .firstMatch(core);
+  if (m != null) {
+    return finish(_cleanSubject(m.group(1)!), secondsOf(m.group(2)!, m.group(3)!));
+  }
+  return null;
+}
+
+/// Whole-phrase justification for arming a preset from free text: after the
+/// longest matching title/alias span is lifted out of the normalized name,
+/// every remaining token must be framing — numbers, units, comparators,
+/// connectives, or scope words. Anything else means the name describes a
+/// different thing and the substring match is a false positive:
+/// "burpee backflip challenge" mentions "burpee" but names a different
+/// movement; "squat building project" is not a squats race.
+bool activityJustifiedByName(String name, MotionActivityDefinition activity) {
+  final norm = _normalizeLoose(name);
+  if (norm.isEmpty) return false;
+  final names = <String>[activity.title, ...activity.aliases]
+      .map(_normalizeLoose)
+      .where((a) => a.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort((a, b) => b.length.compareTo(a.length));
+  for (final alias in names) {
+    final m = RegExp('(^|\\s)${RegExp.escape(alias)}(\\s|\$)').firstMatch(norm);
+    if (m == null) continue;
+    final residual =
+        '${norm.substring(0, m.start)} ${norm.substring(m.end)}'.trim();
+    if (_residualIsFraming(residual)) return true;
+  }
+  return false;
+}
+
+String _normalizeLoose(String s) => s
+    .toLowerCase()
+    .replaceAll(RegExp(r'[-_]+'), ' ')
+    .replaceAll(RegExp(r'[^a-z0-9\s$%.]'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+bool _residualIsFraming(String residual) {
+  for (final t in residual.split(' ')) {
+    if (t.isEmpty) continue;
+    // Numeric / measurement tokens — "100", "2.5", "$500", "95%", "5x".
+    if (RegExp(r'^[\d$%.,]+$').hasMatch(t) || RegExp(r'^\d').hasMatch(t)) {
+      continue;
+    }
+    if (!_framingTokens.contains(t)) return false;
+  }
+  return true;
+}
+
+/// Tokens allowed to surround a matched activity name without changing what
+/// the race is about: race framing, connectives, comparators, units, and
+/// scope words. A leftover noun outside this set is a different subject.
+const _framingTokens = {
+  // race framing
+  'race', 'races', 'racing', 'challenge', 'battle', 'sprint', 'showdown',
+  'faceoff', 'duel', 'off', 'first', 'to', 'wins', 'win', 'winner', 'beat',
+  'beats', 'me', 'against', 'vs', 'versus', 'together', 'solo', 'crew',
+  'team',
+  // connectives / articles / pronouns / auxiliaries
+  'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'for', 'by', 'with',
+  'without', 'from', 'into', 'over', 'under', 'within', 'before', 'after',
+  'during', 'til', 'until', 'per', 'each', 'every', 'as', 'if', 'than',
+  'then', 'that', 'this', 'it', 'its', 'my', 'our', 'your', 'their', 'his',
+  'her', 'we', 'i', 'you', 'they', 'who', 'whoever', 'whichever', 'can',
+  'could', 'will', 'would', 'do', 'does', 'did', 'done', 'doing', 'lets',
+  'let', 'us', 'is', 'are', 'be', 'go', 'goes', 'going', 'try', 'trying',
+  // apostrophe fragments — normalization turns "let's"/"who's" into "let s"/"who s"
+  's', 't', 're', 'll', 've', 'd',
+  // quality modifiers that don't change the subject
+  'proper', 'strict', 'clean', 'perfect', 'unbroken', 'controlled',
+  'assisted', 'weighted', 'full', 'good', 'slow', 'deep',
+  // intent verbs / quantifiers
+  'get', 'gets', 'got', 'getting', 'make', 'makes', 'made', 'making', 'see',
+  'how', 'what', 'which', 'keep', 'keeps', 'hold', 'holds', 'holding',
+  'stay', 'stays', 'staying', 'maintain', 'maintaining', 'complete',
+  'completes', 'finish', 'finishes', 'finished', 'perform', 'performs',
+  'reach', 'reaches', 'hit', 'hits', 'score', 'scores', 'earn', 'earns',
+  'attempt', 'many', 'much', 'more', 'most', 'possible',
+  // comparators / superlatives
+  'highest', 'lowest', 'longest', 'shortest', 'fastest', 'slowest',
+  'quickest', 'best', 'fewest', 'least', 'biggest', 'heaviest', 'tallest',
+  'smallest', 'max', 'maximum', 'minimum', 'closest', 'farthest', 'furthest',
+  'farther', 'further', 'higher', 'lower', 'longer', 'shorter', 'faster',
+  'slower', 'better', 'bigger', 'heavier',
+  // units / scope / quantity
+  'rep', 'reps', 'repetitions', 'set', 'sets', 'round', 'rounds', 'second',
+  'seconds', 'sec', 'secs', 'minute', 'minutes', 'min', 'mins', 'hour',
+  'hours', 'hr', 'hrs', 'day', 'days', 'week', 'weeks', 'month', 'months',
+  'time', 'times', 'x', 'total', 'goal', 'target', 'count', 'number',
+  'amount', 'point', 'points', 'mile', 'miles', 'km', 'kilometer',
+  'kilometers', 'meter', 'meters', 'yard', 'yards', 'lap', 'laps', 'percent',
+  'row', 'person', 'one', 'two', 'nonstop', 'straight',
+  'daily', 'all', 'any', 'some', 'no', 'not', 'both', 'just',
+  'only', 'even', 'now', 'while', 'afap', 'amrap', 'up', 'down', 'out',
+  'away', 'there', 'here', 'failure',
+  // venue / event scope
+  'game', 'games', 'session', 'sessions', 'practice', 'practices', 'match',
+  'matches', 'workout', 'workouts', 'class', 'end', 'deadline', 'eod',
+  // calendar anchors
+  'today', 'tonight', 'tomorrow', 'weekend', 'midnight', 'noon', 'morning',
+  'evening', 'night', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday',
+  'saturday', 'sunday', 'summer', 'semester',
+};
 
 /// Canonical domain naming — the same competition described ten ways ("most
 /// miles run", "first to run 20 miles", "fastest 5k") lands on ONE subject

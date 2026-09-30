@@ -26,6 +26,7 @@ import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
+import '../domain/race_intent.dart';
 import '../domain/race_name_interpreter.dart';
 import '../domain/race_safety.dart';
 import 'motion_catalog_provider.dart';
@@ -248,21 +249,35 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     }
   }
 
-  /// True when the committed race name already IS a catalog movement —
-  /// "Pushups", "50 squats". Two guards, both cheap:
+  /// THE intent read: the committed race name runs through the domain
+  /// resolver against the merged catalog (bundled + remote). Deterministic —
+  /// re-derived from `draft.title` at each routing decision so renames,
+  /// back-navigation, and user-edited fields are always judged fresh.
+  RaceIntentResolution _nameResolution(RaceDraft draft) {
+    if (draft.title.trim().isEmpty) {
+      return RaceIntentResolution.unresolved(draft.title);
+    }
+    final catalog = availableMotionActivities(
+      ref.read(motionCatalogProvider).valueOrNull,
+      ref.read(motionCapabilitiesProvider),
+    );
+    return resolveRaceIntent(draft.title, catalog: catalog);
+  }
+
+  /// True when the committed race name already answers "what are you
+  /// competing in" — a trusted movement OR a trusted custom goal — so the
+  /// subject step adds nothing. Two guards, both cheap:
   ///
-  /// * the whole normalized name matches a title/alias exactly — an
-  ///   alias *substring* ("Burpee backflip challenge" → burpees) is never
-  ///   enough to silently arm a verifier;
-  /// * the pick isn't user-authored — interpretation fills
-  ///   [RaceDraft.activity] without touching `userEditedFields`, so a
-  ///   manual tile pick can never be skipped or reinterpreted away.
-  bool _nameResolvedActivity(RaceDraft draft) =>
-      !draft.isManual &&
+  /// * the resolver's path must be resolved: a whole-phrase-justified
+  ///   movement or a structured custom goal — never an alias substring
+  ///   ("Burpee backflip challenge") or a bare noun ("Summer challenge");
+  /// * the pick isn't user-authored — a manual tile pick or custom-goal
+  ///   choice owns `userEditedFields` and is never reinterpreted away.
+  bool _nameResolvedSubject(RaceDraft draft) =>
       !draft.isCustom &&
       !draft.userEditedFields.contains(RaceField.activity) &&
-      motionActivityFromName(draft.title)?.activityId ==
-          draft.activity.activityId;
+      !draft.userEditedFields.contains(RaceField.goalKind) &&
+      _nameResolution(draft).resolvesSubject;
 
   /// Advance to the next visible stage in response to a step's CTA.
   ///
@@ -287,11 +302,12 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final i = v.indexOf(_step);
     if (i < 0 || i >= v.length - 1) return;
     var next = v[i + 1];
-    // "Pushups" already IS the movement pick — asking again on the activity
+    // "Pushups" already IS the movement pick — and "Highest math grade"
+    // already IS the custom-goal decision. Asking again on the activity
     // step makes the user say the same thing twice. Skip it.
     if (_step == _Step.name &&
         next == _Step.activity &&
-        _nameResolvedActivity(draft)) {
+        _nameResolvedSubject(draft)) {
       _syncGuide(_Step.activity);
       next = v[i + 2];
     }
@@ -348,7 +364,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       // Symmetric with the auto-resolve skip in _advance: if the pick step
       // was skipped on the way here, back must not dead-end on it.
       if (target == _Step.activity &&
-          _nameResolvedActivity(ref.read(_composerDraftProvider))) {
+          _nameResolvedSubject(ref.read(_composerDraftProvider))) {
         target = v[i - 2];
       }
       // Back inside the composer: the coach re-derives the right substep from
@@ -396,6 +412,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   /// Whether the name field currently has the keyboard — while it does, the
   /// coach must not retarget the continue CTA even if the name is valid.
   bool _nameFocused = false;
+
+  /// Set when the goal step's subject chip reopens the subject step for a
+  /// resolved custom goal — the manual form leads instead of the picker.
+  bool _preferManualSubject = false;
 
   Future<void> _startRace() async {
     if (_loading) return; // guard against double-tap
@@ -653,6 +673,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                 children: [
                   _NamePage(
                     draft: draft,
+                    catalog: availableMotionActivities(
+                      ref.watch(motionCatalogProvider).valueOrNull,
+                      ref.watch(motionCapabilitiesProvider),
+                    ),
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
@@ -673,6 +697,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                   ),
                   _ActivityPage(
                     draft: draft,
+                    preferManual: _preferManualSubject,
                     onDraftChanged: (d) =>
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
@@ -691,6 +716,19 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                         ref.read(_composerDraftProvider.notifier).state = d,
                     onNext: _advance,
                     onInput: () => _markInput(_Step.goal),
+                    onEditSubject: () {
+                      // A resolved custom goal reopens the manual form, not
+                      // the movement picker — the chip says "edit Math Grade"
+                      // so that's the surface it must land on.
+                      final d = ref.read(_composerDraftProvider);
+                      if (d.isManual && !_preferManualSubject) {
+                        setState(() => _preferManualSubject = true);
+                      }
+                      _goToStep(
+                        _Step.activity,
+                        reason: 'edit resolved subject',
+                      );
+                    },
                   ),
                   _RacersPage(
                     draft: draft,
@@ -941,12 +979,17 @@ class _PageShell extends StatelessWidget {
 class _NamePage extends StatefulWidget {
   const _NamePage({
     required this.draft,
+    required this.catalog,
     required this.onDraftChanged,
     required this.onNext,
     this.onInput,
     this.onFocusChange,
   });
   final RaceDraft draft;
+
+  /// The merged movement catalog (bundled + remote) the commit-time
+  /// interpretation resolves against — remote-only aliases work the same.
+  final List<MotionActivityDefinition> catalog;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
 
@@ -1044,7 +1087,7 @@ class _NamePageState extends State<_NamePage> {
           hasCustomName: true,
           markEdited: {RaceField.title},
         ),
-        interpretRaceName(text),
+        interpretRaceName(text, catalog: widget.catalog),
       ),
     );
     widget.onNext();
@@ -1218,10 +1261,15 @@ class _ActivityPage extends ConsumerStatefulWidget {
     required this.onDraftChanged,
     required this.onNext,
     this.onInput,
+    this.preferManual = false,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// The goal step's subject chip routed here to edit a resolved custom
+  /// goal — the manual form leads instead of the movement picker.
+  final bool preferManual;
 
   /// Fires once the user has picked/named a movement — lets the coach
   /// retarget the page's continue CTA.
@@ -1283,6 +1331,22 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     unawaited(ref.read(recentMovementIdsProvider.notifier).load().then((_) {
       if (mounted) setState(() => _freezeRequested = true);
     }));
+  }
+
+  @override
+  void didUpdateWidget(_ActivityPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // An interpreted rename can rewrite the manual goal while this page is
+    // alive in the PageView — resync the fields unless the user owns them.
+    final edited = widget.draft.userEditedFields;
+    if (!edited.contains(RaceField.manualGoal) &&
+        widget.draft.manualGoalName != oldWidget.draft.manualGoalName) {
+      _manualNameController.text = widget.draft.manualGoalName ?? '';
+    }
+    if (!edited.contains(RaceField.manualUnit) &&
+        widget.draft.manualUnit != oldWidget.draft.manualUnit) {
+      _manualUnitController.text = widget.draft.manualUnit ?? '';
+    }
   }
 
   @override
@@ -1405,6 +1469,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
     // form only leads when the user actually chose that path.
     final showManual = isManual &&
         (_manualMode ||
+            widget.preferManual ||
             widget.draft.userEditedFields.contains(RaceField.goalKind));
     final recentActivities = recentActivitiesFromIds(
       ref.watch(recentMovementIdsProvider),
@@ -2911,10 +2976,15 @@ class _GoalPage extends StatefulWidget {
     required this.onDraftChanged,
     required this.onNext,
     this.onInput,
+    this.onEditSubject,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// Opens the subject step when the name already answered it — the user's
+  /// escape hatch to swap the resolved movement or switch to a custom goal.
+  final VoidCallback? onEditSubject;
 
   /// Fires once the user has set a goal — lets the coach retarget the page's
   /// continue CTA.
@@ -3213,13 +3283,23 @@ class _GoalPageState extends State<_GoalPage> {
     return widget.draft.activity.goalPrompt;
   }
 
+  /// The resolved subject as a compact confirmation — "Pushups · reps",
+  /// "Math grade · percent". Tapping it reopens the subject step so the
+  /// user can override what the name resolved to.
+  String get _subjectLabel {
+    final unit = _unitWord;
+    return '${widget.draft.displayActivityName} · $unit';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isSeconds = widget.draft.metric == RaceMetric.seconds;
 
     return _PageShell(
       question: _goalPrompt,
-      support: 'First racer to reach it wins.',
+      // A clarification from the name interpretation is the live question
+      // here — the subject step was skipped, so this page carries it.
+      support: widget.draft.clarification ?? 'First racer to reach it wins.',
       ctaLabel: 'Invite racers',
       onCta: widget.onNext,
       ctaKey: FirstRaceGuideKeys.composerGoalCta,
@@ -3228,6 +3308,15 @@ class _GoalPageState extends State<_GoalPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Resolved subject — quiet confirmation + override path ─────
+            if (widget.onEditSubject != null) ...[
+              _SubjectChip(
+                label: _subjectLabel,
+                onTap: widget.onEditSubject!,
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // ── Race mode ─────────────────────────────────────────────────
             if (_availableFormats.length > 1) ...[
               Wrap(
@@ -3532,6 +3621,50 @@ class _StepButton extends StatelessWidget {
           ),
           alignment: Alignment.center,
           child: Icon(icon, color: context.themeColors.ink, size: 22),
+        ),
+      ),
+    );
+  }
+}
+
+/// The quiet confirmation of what the race name resolved to — a context
+/// chip on the goal step ("Pushups · reps"). Tapping reopens the subject
+/// step, so a resolved name never locks the user out of changing it.
+class _SubjectChip extends StatelessWidget {
+  const _SubjectChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: context.themeColors.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.pill),
+          border: Border.all(color: context.themeColors.inkMuted, width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: context.themeColors.ink,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              Icons.edit_rounded,
+              size: 14,
+              color: context.themeColors.inkMuted,
+            ),
+          ],
         ),
       ),
     );

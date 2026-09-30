@@ -1302,6 +1302,215 @@ void main() {
       await goBack(tester);
       expect(find.text('Continue with Squats'), findsOneWidget);
     });
+
+    // ── Intent routing matrix ──────────────────────────────────────────
+    // The resolver treats a committed name as structured intent — the
+    // composer skips only what the name already answered and never
+    // re-asks it.
+
+    testWidgets('"100 pushups" skips the picker with the target stated',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, '100 pushups');
+      expect(find.text('How many pushups?'), findsOneWidget);
+      expect(find.text('Pick a movement'), findsNothing);
+      // Quiet confirmation + override path, not another question.
+      expect(find.text('Pushups · reps'), findsOneWidget);
+      await tester.tap(find.text('Invite racers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Review race'));
+      await tester.pumpAndSettle();
+      expect(find.text('First to 100 verified pushups wins.'),
+          findsOneWidget);
+    });
+
+    testWidgets('"First to 20 jumping jacks" carries the target through',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'First to 20 jumping jacks');
+      expect(find.text('How many jumping jacks?'), findsOneWidget);
+      expect(find.text('Pick a movement'), findsNothing);
+      await tester.tap(find.text('Invite racers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Review race'));
+      await tester.pumpAndSettle();
+      expect(find.text('First to 20 verified jumping jacks wins.'),
+          findsOneWidget);
+    });
+
+    testWidgets('"2 minute plank" resolves the duration target',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, '2 minute plank');
+      expect(find.text('How long?'), findsOneWidget);
+      expect(find.text('Pick a movement'), findsNothing);
+      await tester.tap(find.text('Invite racers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Review race'));
+      await tester.pumpAndSettle();
+      // 120 seconds of hold — the duration IS the finish line.
+      expect(find.text('First to 2 min verified plank wins.'),
+          findsOneWidget);
+    });
+
+    testWidgets('"Highest math grade" routes straight to a custom goal',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Highest math grade');
+      // No picker — the name already chose the custom-goal path.
+      expect(find.text('Pick a movement'), findsNothing);
+      expect(find.text('Quick picks'), findsNothing);
+      expect(find.text('What is the goal?'), findsOneWidget);
+      expect(find.text('Grade · percent'), findsOneWidget);
+      expect(
+        find.text('Best single attempt wins — every verified score counts.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('"Lowest golf score" is a lower-wins custom goal',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Lowest golf score');
+      expect(find.text('Pick a movement'), findsNothing);
+      expect(find.text('What is the goal?'), findsOneWidget);
+      expect(find.textContaining('Golf Score'), findsOneWidget);
+      expect(
+        find.text('Lowest score wins — every verified attempt counts.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('"Read 5 books" is a count to a finish line', (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Read 5 books');
+      expect(find.text('Pick a movement'), findsNothing);
+      expect(find.text('What is the goal?'), findsOneWidget);
+      expect(find.textContaining('Read'), findsWidgets);
+      await tester.tap(find.text('Invite racers'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Review race'));
+      await tester.pumpAndSettle();
+      expect(find.text('Read 5 books'), findsWidgets);
+    });
+
+    testWidgets('custom goal renamed to a movement clears custom state',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Read 5 books');
+      expect(find.text('What is the goal?'), findsOneWidget);
+      // Back skips the subject step symmetrically → name page.
+      await goBack(tester);
+      expect(find.text('Name your race.'), findsOneWidget);
+      await nameAndAdvance(tester, '50 squats');
+      // Movement path rebuilt from scratch — no stale manual fields.
+      expect(find.text('How many squats?'), findsOneWidget);
+      expect(find.text('Squats · reps'), findsOneWidget);
+      expect(find.text('Read · books'), findsNothing);
+    });
+
+    testWidgets('explicit movement pick survives a rename to a movement',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Neighborhood chess league');
+      await tester.tap(find.text('Squats'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with Squats'));
+      await tester.pumpAndSettle();
+      expect(find.text('How many squats?'), findsOneWidget);
+      await goBack(tester); // picker — the pick was user-authored
+      expect(find.text('Continue with Squats'), findsOneWidget);
+      await goBack(tester); // name
+      // Renaming to a catalog movement does NOT steal the explicit pick —
+      // the picker returns with Squats still armed.
+      await nameAndAdvance(tester, 'Pushups');
+      expect(find.text('Continue with Squats'), findsOneWidget);
+      expect(find.text('How many pushups?'), findsNothing);
+    });
+
+    testWidgets('subject chip reopens the picker — automation keeps control',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Pushups');
+      expect(find.text('How many pushups?'), findsOneWidget);
+      // The resolved subject is a chip, not a wall — tap it and every
+      // escape path (browse, Teach Nuvo, custom goal) is there.
+      await tester.tap(find.text('Pushups · reps'));
+      await tester.pumpAndSettle();
+      expect(find.text('Quick picks'), findsOneWidget);
+      expect(find.text('See all movements'), findsOneWidget);
+      expect(find.text('Teach Nuvo'), findsOneWidget);
+      expect(
+          find.text('Not a movement? Create a custom goal'), findsOneWidget);
+      // Switching is one tap.
+      await tester.tap(find.text('Squats'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Continue with Squats'));
+      await tester.pumpAndSettle();
+      expect(find.text('How many squats?'), findsOneWidget);
+    });
+
+    testWidgets('subject chip on a custom goal reopens the manual form',
+        (tester) async {
+      await pumpComposer(tester);
+      await nameAndAdvance(tester, 'Highest math grade');
+      expect(find.text('What is the goal?'), findsOneWidget);
+      await tester.tap(find.text('Grade · percent'));
+      await tester.pumpAndSettle();
+      // The manual form leads — goal name + unit fields, prefilled.
+      expect(find.text('Measured in'), findsOneWidget);
+      expect(find.text('Set the finish line'), findsOneWidget);
+      // And the movement path is still one tap away.
+      expect(find.text('Pick a movement instead'), findsOneWidget);
+    });
+
+    testWidgets('remote catalog alias resolves through the merged catalog',
+        (tester) async {
+      setViewportSize(tester, const Size(390, 844));
+      const remote = MotionCatalogActivity(
+        id: 'dragon_jump',
+        displayName: 'Dragon Jumps',
+        category: 'cardio',
+        proofLabel: 'dragon jumps',
+        measurementType: 'repetitions',
+        metric: 'reps',
+        suggestedTargets: [10, 20, 50],
+        supportedFormats: ['first_to_goal'],
+        iconKey: 'whatshot',
+        availability: 'supported',
+        releaseId: 'rel_1',
+        releaseChecksum: 'sum_1',
+        requiredCapabilities: [],
+        minimumAppBuild: null,
+        engineType: 'native_v1',
+        featured: false,
+        sortPriority: 90,
+        aliases: ['dragon jumps'],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recentMovementsStoreProvider
+                .overrideWithValue(_PickerStore(const [])),
+            motionCatalogProvider.overrideWith(
+              (ref) async => const MotionCatalogSnapshot(
+                catalogVersion: 'test',
+                activities: [remote],
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const RaceComposerScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Unknown to the bundled catalog — the remote alias resolves it.
+      await nameAndAdvance(tester, 'Do 20 dragon jumps');
+      expect(find.text('Pick a movement'), findsNothing);
+      expect(find.text('Dragon Jumps · reps'), findsOneWidget);
+    });
   });
 
   // ── System back contract ─────────────────────────────────────────────────
