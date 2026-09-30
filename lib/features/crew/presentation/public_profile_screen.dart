@@ -377,12 +377,17 @@ class _State extends ConsumerState<PublicProfileScreen> {
               docksBadges: shown.isNotEmpty,
             ).nuvoEnter(),
           ],
-          // Earned artifacts straddle the plane's bottom edge — trophies
-          // earned FROM the progression system, same as the self profile.
+          // Earned artifacts straddle the plane's bottom edge at their
+          // centerline — trophies earned FROM the progression system,
+          // same 50/50 breakout as the self profile.
           if (hasPlane && shown.isNotEmpty)
-            Transform.translate(
-              offset: const Offset(0, -24),
-              child: _PublicDockedBadges(badges: shown),
+            SizedBox(
+              height: 28,
+              child: OverflowBox(
+                alignment: Alignment.bottomCenter,
+                maxHeight: 64,
+                child: _PublicDockedBadges(badges: shown),
+              ),
             ),
           // Earned collection — featured first; tap opens the earned-only
           // collection (locked progress stays self-only).
@@ -793,10 +798,10 @@ class _PublicProgressionPlane extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 30 : 12),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, docksBadges ? 34 : 14),
       decoration: BoxDecoration(
         color: c.panelLight,
-        borderRadius: BorderRadius.circular(NuvoRadii.card),
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -852,15 +857,27 @@ class _PublicProgressionPlane extends StatelessWidget {
             ),
           ],
           if (card.racesFinished != null) ...[
+            const SizedBox(height: 14),
+            // Same second-depth stats shelf as the self profile — a
+            // lighter inset inside the stage, not a card. Mode-aware:
+            // dark surface sits below panelLight, so a cold-ink lift
+            // keeps the shelf lighter than the field.
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: c.ink.withValues(alpha: 0.10),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 74),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? c.ink.withValues(alpha: 0.05)
+                      : c.surface.withValues(alpha: 0.7),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(14),
+                    bottom: Radius.circular(8),
+                  ),
+                ),
+                child: Center(child: _PubStatsStrip(card: card)),
               ),
             ),
-            _PubStatsStrip(card: card),
           ],
         ],
       ),
@@ -882,17 +899,14 @@ class _PubStatsStrip extends StatelessWidget {
     final races = card.racesFinished ?? 0;
     final wins = card.racesWon ?? 0;
     final rate = races > 0 ? ((wins / races) * 100).round() : 0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          _PubStat(value: '$races', label: 'RACING', color: NuvoColors.blue),
-          _divider(c),
-          _PubStat(value: '$wins', label: 'WINS', color: NuvoColors.gold),
-          _divider(c),
-          _PubStat(value: '$rate%', label: 'WIN RATE', color: c.ink),
-        ],
-      ),
+    return Row(
+      children: [
+        _PubStat(value: '$races', label: 'RACING', color: NuvoColors.blue),
+        _divider(c),
+        _PubStat(value: '$wins', label: 'WINS', color: NuvoColors.gold),
+        _divider(c),
+        _PubStat(value: '$rate%', label: 'WIN RATE', color: c.ink),
+      ],
     );
   }
 
@@ -972,7 +986,7 @@ class _PublicDockedBadges extends StatelessWidget {
               // on the center trophy.
               child: Transform.translate(
                 offset: Offset(0, badges.length == 3 && i == 1 ? 4 : 0),
-                child: NuvoAchievementBadge(badge: badges[i], size: 48),
+                child: NuvoAchievementBadge(badge: badges[i], size: 56),
               ),
             ),
           ),
@@ -1001,6 +1015,39 @@ class _PublicAchievements extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (shown.isNotEmpty) ...[
+          // Names pair under their artifacts on the plane edge — same
+          // icon → label unit as the self profile.
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < shown.length; i++) ...[
+                Expanded(
+                  child: Text(
+                    shown[i].name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: nuvoBadgeAccent(shown[i]),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (i < shown.length - 1) const SizedBox(width: 8),
+              ],
+              // Keep cells evenly sized when fewer than 3 are earned.
+              for (var i = shown.length; i < 3; i++) ...[
+                const SizedBox(width: 8),
+                const Expanded(child: SizedBox()),
+              ],
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+        // The collection's navigation after the units — same ordering as
+        // the self profile.
         NuvoPressable(
           onTap: () => context.push('/u/${card.id}/badges', extra: card),
           haptic: false,
@@ -1036,34 +1083,6 @@ class _PublicAchievements extends ConsumerWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        if (shown.isNotEmpty)
-          // Names only — the artifacts dock on the plane edge above.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < shown.length; i++) ...[
-                Expanded(
-                  child: Text(
-                    shown[i].name,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: nuvoBadgeAccent(shown[i]),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (i < shown.length - 1) const SizedBox(width: 8),
-              ],
-              // Keep cells evenly sized when fewer than 3 are earned.
-              for (var i = shown.length; i < 3; i++) ...[
-                const SizedBox(width: 8),
-                const Expanded(child: SizedBox()),
-              ],
-            ],
-          ),
       ],
     );
   }

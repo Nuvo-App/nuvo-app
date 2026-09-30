@@ -212,46 +212,55 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: NuvoSpacing.lg),
 
                     // Level — the progression that belongs to the person,
-                    // not any one race. One ice-blue plane carries the whole
-                    // system: level, the climb, the next capability, and the
-                    // competitive record share a single field so they read
-                    // as one instrument. Always visible: data fills it, a
+                    // not any one race. One ice-blue STAGE carries the
+                    // system in four depths: the field itself, a lighter
+                    // stats shelf inset inside it, the NEXT-UNLOCK dock
+                    // breaking its right edge, and earned trophies breaking
+                    // its bottom edge. Always present: data fills it, a
                     // quiet skeleton holds its place while the server
                     // answers, and a failure reads as "syncing" — never a
                     // missing piece of identity.
-                    _ProgressionPlane(
-                      state: progressionAsync,
-                      activeCount: activeCount,
-                      wins: wins,
-                      winRate: winRate,
-                      docksBadges:
-                          progression?.featuredBadges.isNotEmpty ?? false,
-                    ).nuvoEnter(),
-                    // Earned artifacts straddle the plane's bottom edge —
-                    // trophies pulled out of the climb, not a gallery hung
-                    // below it. The 12px slot + OverflowBox makes the
-                    // overlap real layout: the 52px row renders 40px above
-                    // the boundary, and everything below flows up with it —
-                    // icon → label stays one system. Their names land on
-                    // white under the section header.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: _ProgressionPlane(
+                        state: progressionAsync,
+                        activeCount: activeCount,
+                        wins: wins,
+                        winRate: winRate,
+                        docksBadges:
+                            progression?.featuredBadges.isNotEmpty ?? false,
+                      ).nuvoEnter(),
+                    ),
+                    // Earned trophies break the stage's bottom edge at
+                    // their centerline — half on the field that produced
+                    // them, half on white. The 28px slot + OverflowBox
+                    // makes the breakout real layout: the 56px row renders
+                    // its upper half above the boundary and everything
+                    // below flows with it.
                     if (progression?.featuredBadges.isNotEmpty ?? false)
-                      SizedBox(
-                        height: 12,
-                        child: OverflowBox(
-                          alignment: Alignment.bottomCenter,
-                          maxHeight: 60,
-                          child: _DockedBadges(
-                            badges: progression!.featuredBadges,
-                            slots: progression.featuredSlots,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: SizedBox(
+                          height: 28,
+                          child: OverflowBox(
+                            alignment: Alignment.bottomCenter,
+                            maxHeight: 64,
+                            child: _DockedBadges(
+                              badges: progression!.featuredBadges,
+                              slots: progression.featuredSlots,
+                            ),
                           ),
                         ),
                       ),
 
-                    // The collection is part of identity — names under the
-                    // docked artifacts, or the next target in reach when
-                    // nothing is featured yet. Back on the page: status
-                    // objects, not another tinted field. Never empty.
-                    _AchievementsSection(progression: progression),
+                    // Badge names pair directly under their trophies —
+                    // icon → label is one collectible unit. The
+                    // Achievements count row below navigates to the full
+                    // collection; never a label wedged between the two.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: _AchievementsSection(progression: progression),
+                    ),
 
                     // One goal in reach — the reason to race again. Stays
                     // unboxed, but a hairline and the collection's artifact
@@ -740,12 +749,15 @@ class _IdentityChip extends StatelessWidget {
 
 // ── Progression plane ───────────────────────────────────────────────────────
 
-/// One ice-blue field carrying the whole progression system — level, the XP
-/// climb, the next capability, and the competitive record. A layer that
-/// groups related information, not a card around an object: flat fill, quiet
-/// radius, no border. The bar stays the strongest graphic inside it, and the
-/// next-capability tile docks physically onto the plane's right edge. The
-/// plane is ALWAYS present: real data fills it, a quiet skeleton holds its
+/// One ice-blue stage carrying the whole progression system in four
+/// depths: the field itself, a lighter stats shelf inset inside it, the
+/// NEXT-UNLOCK dock breaking its right edge, and earned trophies breaking
+/// its bottom edge. A layer that groups related information, not a card
+/// around an object: flat fill, quiet radius, no border. The bar stays
+/// the strongest graphic inside it — uninterrupted — and the stage's
+/// top region reserves the dock's interior half so the field terminates
+/// INTO the artifact rather than the artifact floating on it. The plane
+/// is ALWAYS present: real data fills it, a quiet skeleton holds its
 /// place while the server answers, and an outage reads as a sync note —
 /// never a missing piece of the profile.
 class _ProgressionPlane extends StatelessWidget {
@@ -763,66 +775,90 @@ class _ProgressionPlane extends StatelessWidget {
   final int? winRate;
 
   /// True when earned badges straddle the plane's bottom edge — the field
-  /// keeps an empty ice band beneath the stats so the artifacts land on
-  /// clear field, never on the labels.
+  /// keeps an empty ice band beneath the shelf so the artifacts land on
+  /// clear field, never on the stats.
   final bool docksBadges;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final next = state.valueOrNull?.nextUnlock;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          // The empty ice band under the stats is the landing field for
-          // the straddling trophies — tall enough to keep their tops on
-          // ice (40px overlap + margin), not on the stat labels.
-          padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 46 : 12),
-          decoration: BoxDecoration(
-            color: c.panelLight,
-            borderRadius: BorderRadius.circular(NuvoRadii.lg),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      // The ice band under the shelf is the landing field for the
+      // straddling trophies — tall enough that badge tops stay on ice
+      // (half the badge crosses the boundary + a small margin under the
+      // shelf), never touching the stats shelf itself.
+      padding: EdgeInsets.fromLTRB(20, 20, 20, docksBadges ? 34 : 14),
+      decoration: BoxDecoration(
+        color: c.panelLight,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top region — LEVEL header, the uninterrupted XP bar, and the
+          // payoff copy. The right side reserves the dock's interior half
+          // (~24px) so the stage terminates into the NEXT-UNLOCK artifact;
+          // the dock is centered on this region — the XP + unlock-copy
+          // zone — never the bar endpoint or the top corner.
+          Stack(
+            clipBehavior: Clip.none,
             children: [
-              _ProgressionSection(state: state),
-              // A hairline splits the climb from the record inside the same
-              // field — the stats belong to the system, not to separate
-              // cards. Tight padding: the plane stays compact.
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: c.ink.withValues(alpha: 0.10),
+                padding: EdgeInsets.only(right: next != null ? 26 : 0),
+                child: _ProgressionSection(state: state),
+              ),
+              if (next != null)
+                // Half the dock breaks the stage boundary — the stack
+                // edge sits 20px inside the field (stage padding), so
+                // -40 pushes the dock's outer face 20px past it: 24px of
+                // 44 inside the plane (~55%), the rest outside.
+                Positioned(
+                  right: -40,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(child: _NextUnlockArtifact(unlock: next)),
                 ),
-              ),
-              _StatsStrip(
-                activeCount: activeCount,
-                wins: wins,
-                winRate: winRate,
-              ),
             ],
           ),
-        ),
-        // The next-unlock artifact hugs the plane's right edge at header
-        // height — most of the square sits ON the field (attached, not
-        // floating off the corner) while ~a third of it crosses the
-        // boundary (11px of 34 ≈ 32%, inside the 25–35% straddle rule).
-        if (next != null)
-          Positioned(
-            top: 2,
-            right: -11,
-            child: _NextUnlockArtifact(unlock: next),
+          const SizedBox(height: 14),
+          // Stats shelf — the second depth inside the stage: a lighter
+          // inset with softened top geometry. No border, no shadow, no
+          // individual stat cards — one recessed tray the record sits in.
+          // "Lighter" is mode-aware: a white wash over ice in light, a
+          // cold-ink lift over the dark field (dark surface is BELOW
+          // panelLight in the dark ramp, so a surface wash would darken).
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 74),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? c.ink.withValues(alpha: 0.05)
+                    : c.surface.withValues(alpha: 0.7),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(14),
+                  bottom: Radius.circular(8),
+                ),
+              ),
+              child: Center(
+                child: _StatsStrip(
+                  activeCount: activeCount,
+                  wins: wins,
+                  winRate: winRate,
+                ),
+              ),
+            ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// The physical "what's next" tile docked on the progression plane's edge —
-/// navy edge + hard offset so it reads as an object pinned to the field.
+/// The physical "what's next" dock on the progression stage's right edge —
+/// navy structural edge + hard offset, same object language as the earned
+/// badges. Half of it sits on the field, half breaks outside.
 class _NextUnlockArtifact extends StatelessWidget {
   const _NextUnlockArtifact({required this.unlock});
 
@@ -833,16 +869,16 @@ class _NextUnlockArtifact extends StatelessWidget {
     final c = context.themeColors;
     final iconKey = unlock.metadata?['iconKey'] as String?;
     return Container(
-      width: 34,
-      height: 34,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
         color: c.panelLight,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border, width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.inkShadow, width: 2),
         boxShadow: [
           BoxShadow(
             color: c.inkShadow,
-            offset: const Offset(2, 2),
+            offset: const Offset(3, 3),
             blurRadius: 0,
           ),
         ],
@@ -851,7 +887,7 @@ class _NextUnlockArtifact extends StatelessWidget {
         iconKey != null
             ? nuvoBadgeIconFor(iconKey)
             : Icons.lock_outline_rounded,
-        size: 17,
+        size: 20,
         color: c.ink,
       ),
     );
@@ -938,19 +974,18 @@ class _ProgressionSection extends ConsumerWidget {
 
           ],
         ),
-        const SizedBox(height: NuvoSpacing.sm),
+        const SizedBox(height: 6),
         // The bar carries physical presence — taller than a hairline track
-        // so the climb reads as the section's main event — and it runs the
-        // plane's full width, uninterrupted. The "what's next" object lives
-        // on the plane's upper-right edge with the LEVEL header instead —
-        // the bar shows where you ARE, the artifact shows what comes NEXT.
+        // so the climb reads as the section's main event — and it runs
+        // uninterrupted across the reserved top region, never under or
+        // into the next-unlock dock on the stage's right edge.
         NuvoProgressBar(
           value: p.progress,
           height: 12,
           color: xpColor,
           trackColor: c.track,
         ),
-        const SizedBox(height: NuvoSpacing.sm),
+        const SizedBox(height: 6),
         Text(
           '${p.xpToNext} XP to Level ${p.level + 1}',
           maxLines: 1,
@@ -1074,7 +1109,7 @@ class _DockedBadges extends StatelessWidget {
                     0,
                     badges.length == 3 && i == 1 ? 4 : 0,
                   ),
-                  child: NuvoAchievementBadge(badge: badges[i], size: 52),
+                  child: NuvoAchievementBadge(badge: badges[i], size: 56),
                 ),
               ),
             ),
@@ -1090,10 +1125,12 @@ class _DockedBadges extends StatelessWidget {
 
 // ── Achievements section ────────────────────────────────────────────────────
 
-/// The collection is part of identity: the header claims the earned/total
-/// count, and the artifacts' names sit directly under the badges docked on
-/// the progression field — or the locked target in reach when nothing is
-/// featured yet. Never an empty section — the next goal is the point.
+/// The collection is part of identity: each earned badge's name sits
+/// directly under its artifact on the stage's edge — icon → label reads as
+/// one collectible unit — and the count row below is the collection's
+/// navigation, never a label wedged between artifact and name. When
+/// nothing is featured yet the locked target in reach fills the slot.
+/// Never an empty section — the next goal is the point.
 class _AchievementsSection extends StatelessWidget {
   const _AchievementsSection({required this.progression});
 
@@ -1114,6 +1151,63 @@ class _AchievementsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (featured.isNotEmpty) ...[
+          // Names only — the artifacts themselves are docked on the
+          // progression field above. Columns match the badge row so each
+          // name lands under its trophy.
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < featured.length; i++) ...[
+                Expanded(
+                  child: PressableScale(
+                    scale: 0.94,
+                    onTap: () => context.push('/profile/badges'),
+                    // Earned names carry the achievement's family accent —
+                    // gold for a win, blue for depth, teal for a PB,
+                    // violet for creation. Same language as the badge.
+                    child: Text(
+                      featured[i].name,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: nuvoBadgeAccent(featured[i]),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+                if (i < featured.length - 1)
+                  const SizedBox(width: NuvoSpacing.sm),
+              ],
+              // Fill unused slot columns so names align across layouts.
+              for (var i = featured.length; i < p.featuredSlots; i++)
+                const Expanded(child: SizedBox.shrink()),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ] else if (next != null) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              NuvoAchievementBadge(badge: next, size: 52),
+              const SizedBox(width: NuvoSpacing.sm),
+              Expanded(
+                child: Text(
+                  '${next.name} — ${next.description ?? 'keep racing'}',
+                  style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+        // The collection's navigation comes AFTER the units — the path to
+        // the full set, not a header inserted between icon and label.
         NuvoPressable(
           onTap: () => context.push('/profile/badges'),
           scale: 0.98,
@@ -1151,57 +1245,6 @@ class _AchievementsSection extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: NuvoSpacing.sm + 2),
-        if (featured.isNotEmpty)
-          // Names only — the artifacts themselves are docked on the
-          // progression field above. Columns match the badge row so each
-          // name lands under its trophy.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < featured.length; i++) ...[
-                Expanded(
-                  child: PressableScale(
-                    scale: 0.94,
-                    onTap: () => context.push('/profile/badges'),
-                    // Earned names carry the achievement's family accent —
-                    // gold for a win, blue for depth, teal for a PB,
-                    // violet for creation. Same language as the badge.
-                    child: Text(
-                      featured[i].name,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: nuvoBadgeAccent(featured[i]),
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-                if (i < featured.length - 1)
-                  const SizedBox(width: NuvoSpacing.sm),
-              ],
-              // Fill unused slot columns so names align across layouts.
-              for (var i = featured.length; i < p.featuredSlots; i++)
-                const Expanded(child: SizedBox.shrink()),
-            ],
-          )
-        else if (next != null)
-          Row(
-            children: [
-              NuvoAchievementBadge(badge: next, size: 52),
-              const SizedBox(width: NuvoSpacing.sm),
-              Expanded(
-                child: Text(
-                  '${next.name} — ${next.description ?? 'keep racing'}',
-                  style: AppTextStyles.bodySmall.copyWith(color: c.inkMuted),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
       ],
     );
   }
@@ -1403,22 +1446,19 @@ class _StatsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          _HeaderStat(value: activeCount, label: 'RACING', color: NuvoColors.blue),
-          _HeaderDivider(),
-          _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
-          _HeaderDivider(),
-          _HeaderStat(
-            value: winRate,
-            label: 'WIN RATE',
-            suffix: winRate == null ? '' : '%',
-            color: c.ink,
-          ),
-        ],
-      ),
+    return Row(
+      children: [
+        _HeaderStat(value: activeCount, label: 'RACING', color: NuvoColors.blue),
+        _HeaderDivider(),
+        _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
+        _HeaderDivider(),
+        _HeaderStat(
+          value: winRate,
+          label: 'WIN RATE',
+          suffix: winRate == null ? '' : '%',
+          color: c.ink,
+        ),
+      ],
     );
   }
 }
