@@ -399,8 +399,9 @@ void main() {
 
       // Pushup Battle (me 39, leader 50) is the tightest chase —
       // it heads the surface as the matchup card, once.
-      expect(find.text('39 — 50'), findsOneWidget);
-      expect(find.text('11 reps behind'), findsOneWidget);
+      expect(find.text('50'), findsOneWidget);
+      expect(find.text('39'), findsWidgets);
+      expect(find.text('Sam leads by 11 reps'), findsOneWidget);
       expect(find.text('You'), findsWidgets);
       expect(find.text('Sam'), findsWidgets);
       expect(find.text('See race'), findsOneWidget);
@@ -467,7 +468,8 @@ void main() {
       ));
       await _settleDemo(tester);
       expect(tester.takeException(), isNull);
-      expect(find.text('39 — 50'), findsOneWidget);
+      expect(find.text('50'), findsOneWidget);
+      expect(find.text('39'), findsWidgets);
     });
 
     testWidgets('live item still heads the surface over the hero',

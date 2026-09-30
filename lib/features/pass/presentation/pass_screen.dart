@@ -727,6 +727,14 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     final crewHero = _feedTab == 0 && liveItems.isEmpty
         ? _heroRaceFor(activeRaces, myId)
         : null;
+    // The featured social object — the first live race, else the matchup —
+    // straddles the field's bottom edge: its top rides the ice, its body
+    // lands on white. The field grows an apron exactly as deep as the
+    // rise, so the object is the only thing crossing the boundary.
+    final featuredBridge =
+        _feedTab == 0 && (crewHero != null || liveItems.isNotEmpty)
+            ? _kFeaturedBridge
+            : 0.0;
 
     return Scaffold(
       backgroundColor: context.themeColors.page,
@@ -836,6 +844,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 // their asks, and the lens switch. A layer groups
                 // information; this is the field the matchup rises out of.
                 _SocialField(
+                  tail: featuredBridge,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -937,13 +946,12 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     ),
                   ),
 
-                // The tab body rises over the field's edge when a matchup
-                // is featured — the hero card's top sits on the ice, its
-                // body lands on white: the bridge, not another stacked row.
+                // The featured object rises over the field's edge — its
+                // top sits on the ice apron, its body lands on white.
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Transform.translate(
-                  offset: Offset(0, crewHero != null ? -22 : 0),
+                  offset: Offset(0, -featuredBridge),
                   child: switch (_feedTab) {
                   0 => _ForYouTab(
                       featuredHero: crewHero,
@@ -1643,14 +1651,16 @@ class _CrewHeroCard extends StatelessWidget {
     final finished = raceIsCompleted(race);
     final leader = ranked.first;
 
-    // Who I'm measured against: the leader while I chase, the runner-up
-    // while I lead; when I'm not in the race, it's the top pair.
-    final left = me ?? leader;
-    final right = me == null
-        ? (ranked.length > 1 ? ranked[1] : null)
+    // The rival stands left, me on the right — my read of the score is
+    // always "their number, then mine". Who I'm measured against: the
+    // leader while I chase, the runner-up while I lead; when I'm not in
+    // the race, it's the top pair.
+    final left = me == null
+        ? leader
         : (leader.userId == myId
             ? (ranked.length > 1 ? ranked[1] : null)
             : leader);
+    final right = me ?? (ranked.length > 1 ? ranked[1] : null);
 
     // The consequence line — plain words, colored by what it means for me.
     final status = _statusLine(
@@ -1703,100 +1713,62 @@ class _CrewHeroCard extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            // The duel — each racer is a name-over-score column with their
+            // face attached. The rival stands left, me on the right in
+            // blue; a centered VS holds the tension between them.
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _HeroRacer(
-                    participant: left,
-                    isMe: left.userId == myId,
-                    highlight: left.userId == leader.userId,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Column(
-                    children: [
-                      if (right != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
-                          child: Text(
-                            'VS',
-                            style: AppTextStyles.labelUppercase(
-                              9,
-                              color: c.inkDim,
-                            ),
-                          ),
-                        ),
-                      Text(
-                        right == null
-                            ? raceScoreLabel(race, left.progressValue)
-                            : '${left.progressValue} — ${right.progressValue}',
-                        style: AppTextStyles.number(
-                          26,
-                          color: c.ink,
-                          weight: FontWeight.w800,
-                        ),
+                if (left != null)
+                  Expanded(
+                    child: _HeroDuel(
+                      participant: left,
+                      isMe: left.userId == myId,
+                      alignEnd: false,
+                    ),
+                  )
+                else
+                  const Expanded(child: SizedBox.shrink()),
+                if (left != null && right != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Text(
+                      'VS',
+                      style: AppTextStyles.labelUppercase(
+                        10,
+                        color: c.inkDim,
                       ),
-                    ],
+                    ),
                   ),
-                ),
                 if (right != null)
                   Expanded(
-                    child: _HeroRacer(
+                    child: _HeroDuel(
                       participant: right,
                       isMe: right.userId == myId,
-                      highlight: right.userId == leader.userId,
+                      alignEnd: true,
                     ),
                   )
                 else
                   const Expanded(child: SizedBox.shrink()),
               ],
             ),
-            const SizedBox(height: 14),
-            // The stakes line rides the foot hairline — an attached tag
-            // (semantic edge, surface face) so the consequence belongs to
-            // the object, not to floating copy under it.
-            SizedBox(
-              height: 30,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 14,
-                    child: Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: c.divider,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: status.color, width: 1.5),
-                    ),
-                    child: Text(
-                      status.text,
-                      style: AppTextStyles.labelMedium.copyWith(
-                        color: status.color,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      maxLines: 1,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 10),
+            // The consequence in plain words — "Noah leads by 2" — colored
+            // by what it means for me, centered under the duel.
+            Text(
+              status.text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: status.color,
+                fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 10),
+            Divider(height: 1, thickness: 1, color: c.divider),
+            const SizedBox(height: 9),
             Row(
               children: [
                 const Spacer(),
@@ -1825,7 +1797,7 @@ class _CrewHeroCard extends StatelessWidget {
     required Color muted,
     required bool finished,
     required RaceParticipant? me,
-    required RaceParticipant left,
+    required RaceParticipant? left,
     required RaceParticipant? right,
     required RaceParticipant leader,
     required int? rank,
@@ -1858,62 +1830,90 @@ class _CrewHeroCard extends StatelessWidget {
 
     final ctx = race.viewerContext;
     final leading = ctx?.isLeading ?? leader.userId == myId;
+    // The rival sits left — tied/gap are measured against them, never
+    // against my own score.
     final tied = ctx?.isTied ??
-        (right != null && right.progressValue == me.progressValue);
+        (left != null && left.progressValue == me.progressValue);
     final gap =
         ctx?.gapToLeader?.abs() ??
-        (right != null ? (right.progressValue - me.progressValue).abs() : 0);
+        (left != null ? (left.progressValue - me.progressValue).abs() : 0);
 
     if (tied) {
       return (text: 'Dead even', color: NuvoColors.blue);
     }
     if (leading) {
-      return (text: "You're in front", color: NuvoColors.gold);
+      return (
+        text: 'You lead by ${raceScoreLabel(race, gap)}',
+        color: NuvoColors.gold,
+      );
     }
-    if (right == null || gap <= 0) {
+    if (left == null || gap <= 0) {
       return (text: 'On the start line', color: muted);
     }
     return (
-      text: '${raceScoreLabel(race, gap)} behind',
+      text:
+          '${_firstName(leader.displayName)} leads by ${raceScoreLabel(race, gap)}',
       color: NuvoColors.blue,
     );
   }
 }
 
-/// One side of the hero matchup — avatar, name, nothing else. Gold ring
-/// marks who's in front; "You" replaces my name.
-class _HeroRacer extends StatelessWidget {
-  const _HeroRacer({
+/// One side of the hero matchup — the racer's face beside their name,
+/// then their score large underneath. "You" replaces my name and my
+/// score reads blue; the rival stays navy.
+class _HeroDuel extends StatelessWidget {
+  const _HeroDuel({
     required this.participant,
     required this.isMe,
-    required this.highlight,
+    required this.alignEnd,
   });
 
   final RaceParticipant participant;
   final bool isMe;
-  final bool highlight;
+
+  /// Right column mirrors: name then face, score right-aligned.
+  final bool alignEnd;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return Column(
-      children: [
-        NuvoAvatar(
-          initials: _CrewHeroCard._initialsFor(participant.displayName),
-          size: NuvoAvatarSizes.lg,
-          photoUrl: participant.profilePhotoUrl,
-          borderColor: highlight ? NuvoColors.gold : c.divider,
-          borderWidth: highlight ? 2 : 1.5,
+    final avatar = NuvoAvatar(
+      initials: _CrewHeroCard._initialsFor(participant.displayName),
+      size: 26,
+      photoUrl: participant.profilePhotoUrl,
+      borderColor: c.divider,
+      borderWidth: 1.25,
+    );
+    final name = Flexible(
+      child: Text(
+        isMe ? 'You' : _CrewHeroCard._firstName(participant.displayName),
+        style: AppTextStyles.labelSmall.copyWith(
+          color: isMe ? NuvoColors.blue : c.inkMuted,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
         ),
-        const SizedBox(height: 6),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: alignEnd
+              ? [name, const SizedBox(width: 6), avatar]
+              : [avatar, const SizedBox(width: 6), name],
+        ),
+        const SizedBox(height: 3),
         Text(
-          isMe ? 'You' : _CrewHeroCard._firstName(participant.displayName),
-          style: AppTextStyles.labelSmall.copyWith(
+          '${participant.progressValue}',
+          style: AppTextStyles.number(
+            30,
             color: isMe ? NuvoColors.blue : c.ink,
-            fontWeight: FontWeight.w800,
+            weight: FontWeight.w900,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -2352,8 +2352,8 @@ class _SocialPostCard extends StatelessWidget {
   }
 
   /// The soft territory a featured moment earns: competitive events take
-  /// the ice wash, results a neutral wash (their gold accent already
-  /// carries the earned note). Standard posts stay on the bare page.
+  /// the ice wash, results a warm cream — a win lands differently than a
+  /// pass. Standard posts stay on the bare page.
   Color _bandColor(BuildContext context) {
     const resultTypes = {
       'race_finished',
@@ -2362,7 +2362,7 @@ class _SocialPostCard extends StatelessWidget {
       'personal_best',
     };
     return resultTypes.contains(item.type)
-        ? context.themeColors.panelLight
+        ? context.semanticColors.warning.surface
         : context.semanticColors.neutral.surface;
   }
 
@@ -4068,6 +4068,9 @@ class _RequestSurface extends StatelessWidget {
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
         border: Border.all(color: context.themeColors.divider, width: 1),
+        // A soft ambient lift — the sheet floats on the social field, a
+        // real object, but quieter than the featured race's navy plate.
+        boxShadow: AppShadows.softSubtle,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.card - 1),
@@ -4380,10 +4383,23 @@ class _SearchResultList extends StatelessWidget {
 /// the lens switch. Full-bleed (it cancels the page's horizontal padding)
 /// so it reads as territory, not a card; the rounded foot is the edge the
 /// featured matchup bridges when one is featured below it.
+/// How far the featured social object rises onto the field — its top
+/// ~40% sits on the ice apron, the rest lands on white below.
+const _kFeaturedBridge = 84.0;
+
+/// The social stage — one ice region under the people, their asks, and
+/// the lens switch. No edge, no shadow: a layer, not a card. [tail]
+/// extends the field below the tab row so the featured object rising out
+/// of it still lands on ice — the boundary it crosses is the field's own
+/// bottom edge.
 class _SocialField extends StatelessWidget {
-  const _SocialField({required this.child});
+  const _SocialField({required this.child, this.tail = 0});
 
   final Widget child;
+
+  /// Extra field depth below the tabs — sized to the featured object's
+  /// rise so its top straddles the ice instead of dead air.
+  final double tail;
 
   @override
   Widget build(BuildContext context) {
@@ -4391,7 +4407,7 @@ class _SocialField extends StatelessWidget {
     // full width, so the ice bleeds edge-to-edge and the 20 inset lives
     // inside.
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 12 + tail),
       decoration: BoxDecoration(
         color: context.themeColors.panelLight,
         borderRadius: const BorderRadius.vertical(
