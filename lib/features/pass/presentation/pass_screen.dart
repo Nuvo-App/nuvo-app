@@ -19,6 +19,7 @@ import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_ripple_surface.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
+import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../../core/widgets/nuvo_stagger_in.dart';
 import '../../../data/models/user_profile.dart';
@@ -1154,6 +1155,9 @@ const _microFeedTypes = {
   'race_joined',
   'attempt_started',
   'progress_accepted',
+  // Proof in flight is informational — a timeline note, never weighted
+  // like a rivalry moment.
+  'proof_submitted',
 };
 
 /// 1 = social moment · 2 = activity · 3 = utility/micro. Level 1 is earned
@@ -3034,12 +3038,20 @@ class _ActiveRaceCard extends StatelessWidget {
     if (me != null && top.every((p) => p.userId != myId)) {
       top.add(me);
     }
-    final leader = standings.firstOrNull;
-    final fill = leader == null
-        ? 0.0
-        : (leader.progressPercent / 100).clamp(0.0, 1.0);
     final crewCount =
         standings.where((p) => crewIds.contains(p.userId)).length;
+    final myRank = rankForUser(race, myId);
+    // Canonical lane geometry — the same marks as Verify's queue: my bead
+    // fills the lane, the nearest rival is a navy dot, the goal is a ring.
+    final geo = raceLaneGeometry(race, myId);
+    final nearest = raceNearestRival(race, myId);
+    final nearestMark = nearest == null
+        ? null
+        : geo.rivals
+            .where((r) => r.racer.userId == nearest.userId)
+            .firstOrNull;
+    final showLane =
+        geo.hasGoal || geo.viewer != null || nearestMark != null;
     String? daysLeft;
     final finish = DateTime.tryParse(race.finishLineAt ?? '');
     if (finish != null) {
@@ -3071,6 +3083,25 @@ class _ActiveRaceCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Where I stand in this race — live lead reads green.
+                if (myRank != null) ...[
+                  Text(
+                    _ordinal(myRank),
+                    style: AppTextStyles.placementLabel(
+                      size: 12,
+                      color: myRank == 1
+                          ? NuvoColors.success
+                          : context.themeColors.inkSubtle,
+                    ),
+                  ),
+                  if (daysLeft != null)
+                    Text(
+                      '  ·  ',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: context.themeColors.inkMuted,
+                      ),
+                    ),
+                ],
                 if (daysLeft != null)
                   Text(
                     daysLeft,
@@ -3117,24 +3148,31 @@ class _ActiveRaceCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted),
             ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: SizedBox(
-                height: 5,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(color: context.themeColors.track),
-                    FractionallySizedBox(
-                      widthFactor: fill,
-                      alignment: Alignment.centerLeft,
-                      child: Container(color: NuvoColors.blue),
+            if (showLane) ...[
+              const SizedBox(height: 9),
+              // Compact canonical lane — viewer bead + rival dot + goal
+              // ring, same marks the rest of the app uses.
+              RaceMarkerTrack(
+                compact: true,
+                fillColor: NuvoColors.blue,
+                hasGoal: geo.hasGoal,
+                markers: [
+                  if (nearestMark != null)
+                    RaceTrackMarker(
+                      fraction: nearestMark.fraction,
+                      label: '',
+                      color: context.themeColors.ink,
                     ),
-                  ],
-                ),
+                  if (geo.viewer != null)
+                    RaceTrackMarker(
+                      fraction: geo.viewer!,
+                      label: '',
+                      color: NuvoColors.blue,
+                      isViewer: true,
+                    ),
+                ],
               ),
-            ),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [
@@ -3163,6 +3201,16 @@ class _ActiveRaceCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _ordinal(int n) {
+  if (n >= 11 && n <= 13) return '${n}th';
+  return switch (n % 10) {
+    1 => '${n}st',
+    2 => '${n}nd',
+    3 => '${n}rd',
+    _ => '${n}th',
+  };
 }
 
 /// A scheduled shared race — who I'm meeting and when, one compact line.
@@ -4460,8 +4508,15 @@ class _SocialField extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 16, NuvoSpacing.pageHorizontal, 12 + tail),
       decoration: BoxDecoration(
         color: context.themeColors.panelLight,
+        // A designed edge, not a symmetric cookie-cut: the left corner
+        // scoops deep while the right lifts, so the boundary reads as a
+        // shape transition between worlds. The tonal lip underneath is
+        // the folded edge of the sheet — a whisper, not a border.
         borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(26),
+          bottom: Radius.elliptical(52, 34),
+        ),
+        border: Border(
+          bottom: BorderSide(color: context.themeColors.divider, width: 1),
         ),
       ),
       child: child,
