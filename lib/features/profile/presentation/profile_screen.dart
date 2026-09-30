@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,7 +74,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _setPresentationMode(bool enabled) async {
-    if (!canTogglePresentationMode(ref.read(authControllerProvider).user)) return;
+    if (!canTogglePresentationMode(ref.read(authControllerProvider).user))
+      return;
     final persistence = setPresentationModeEnabled(enabled);
     // Clear generations before loading so an older request cannot restore the
     // previous mode. Crew and notifications observe the preference directly.
@@ -157,9 +160,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               .where(
                 (r) =>
                     r.winnerUserId == uid ||
-                    r.finalStandings.any(
-                      (s) => s.userId == uid && s.rank == 1,
-                    ),
+                    r.finalStandings.any((s) => s.userId == uid && s.rank == 1),
               )
               .length;
     final winRate = finishedRaces.isEmpty
@@ -182,7 +183,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 32, NuvoSpacing.pageHorizontal, 0),
+                padding: const EdgeInsets.fromLTRB(
+                  NuvoSpacing.pageHorizontal,
+                  32,
+                  NuvoSpacing.pageHorizontal,
+                  0,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -191,9 +197,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // word "Profile".
                     Text(
                       'Profile',
-                      style: AppTextStyles.screenTitle.copyWith(
-                        color: c.ink,
-                      ),
+                      style: AppTextStyles.screenTitle.copyWith(color: c.ink),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -203,8 +207,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // same deterministic palette color other racers see on
                     // leaderboards; Edit stays in the header so this card is
                     // about who I am, not settings.
-                    _IdentityCard(user: user, level: progression?.level)
-                        .nuvoEnter(),
+                    _IdentityCard(
+                      user: user,
+                      level: progression?.level,
+                    ).nuvoEnter(),
                     const SizedBox(height: NuvoSpacing.lg),
 
                     // Level — the progression that belongs to the person,
@@ -292,8 +298,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final activeRaces = raceState.races.where(raceIsActive).toList()
       // The race nearest its finish line is the one that matters right now.
       ..sort((a, b) {
-        final ap = raceProgressPercent(a, uid == null ? null : a.participantFor(uid));
-        final bp = raceProgressPercent(b, uid == null ? null : b.participantFor(uid));
+        final ap = raceProgressPercent(
+          a,
+          uid == null ? null : a.participantFor(uid),
+        );
+        final bp = raceProgressPercent(
+          b,
+          uid == null ? null : b.participantFor(uid),
+        );
         return bp.compareTo(ap);
       });
     final finishedRaces = raceState.races.where(raceIsCompleted).toList();
@@ -599,10 +611,7 @@ class _IdentityCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: c.surface,
                                 shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: c.border,
-                                  width: 1.5,
-                                ),
+                                border: Border.all(color: c.border, width: 1.5),
                               ),
                               child: Icon(
                                 Icons.edit_outlined,
@@ -625,9 +634,7 @@ class _IdentityCard extends StatelessWidget {
                 children: [
                   Text(
                     displayName,
-                    style: AppTextStyles.headlineMedium.copyWith(
-                      color: c.ink,
-                    ),
+                    style: AppTextStyles.headlineMedium.copyWith(color: c.ink),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -869,209 +876,291 @@ class _LevelTrack extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 12),
-        // The route — progression drawn as a race lane: the current
-        // level's numeral and start mark on the left, the ice track
-        // running to the finish ring at the next level on the right,
-        // the climb filled and capped by the viewer's marker.
-        Row(
-          children: [
-            Text(
-              '${p.level}',
-              style: AppTextStyles.statLarge(
-                15,
-                color: c.ink,
-                weight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _LevelRoute(progress: p.progress, color: xpColor),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              '${p.level + 1}',
-              style: AppTextStyles.statLarge(
-                15,
-                color: c.inkSubtle,
-                weight: FontWeight.w900,
-              ),
-            ),
-          ],
+        // The route — ONE drawn sentence: the current level's filled
+        // anchor on the upper lane, the climb stepping down through a
+        // small bend to the open ring at the next level, and the next
+        // collectible docked under that destination on a short
+        // connector. Level numerals live ON the route's ends — start
+        // point, bead, ring, reward.
+        SizedBox(
+          height: _LevelRoute.height + (next != null ? _LevelRoute.dockH : 0),
+          child: LayoutBuilder(
+            builder: (context, cons) {
+              final ringX = _LevelRoute.ringX(cons.maxWidth);
+              const nameW = 104.0;
+              final nameLeft = (ringX - nameW / 2)
+                  .clamp(0.0, math.max(0.0, cons.maxWidth - nameW))
+                  .toDouble();
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _LevelRoute(
+                    level: p.level,
+                    progress: p.progress,
+                    color: xpColor,
+                    hasDock: next != null,
+                  ),
+                  if (next != null) ...[
+                    Positioned(
+                      top: _LevelRoute.dockTop,
+                      // 46px artifact centered on the ring's column.
+                      left: ringX - 23,
+                      child: _NextUnlockArtifact(unlock: next),
+                    ),
+                    Positioned(
+                      top: _LevelRoute.dockTop + 50,
+                      left: nameLeft,
+                      width: nameW,
+                      child: Text(
+                        next.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: c.inkMuted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              );
+            },
+          ),
         ),
         const SizedBox(height: 8),
-        // The remaining climb — the lane's caption, centered under it.
-        Center(
-          child: Text(
-            '${p.xpToNext} XP to Level ${p.level + 1}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: xpColor,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
-            ),
+        // The remaining climb — anchored to the route's start, not
+        // floating mid-line under it.
+        Text(
+          '${p.xpToNext} XP to Level ${p.level + 1}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: xpColor,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.6,
           ),
         ),
-        if (next != null) ...[
-          const SizedBox(height: 8),
-          // The next collectible hangs off the lane's finish end — a
-          // short connector drops from the ring's column into the
-          // artifact, so the reward reads attached to the destination
-          // it's racing toward, never floating mid-page.
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 2,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: c.border,
-                      borderRadius: BorderRadius.circular(1),
-                    ),
-                  ),
-                  _NextUnlockArtifact(unlock: next),
-                  const SizedBox(height: 6),
-                  Text(
-                    next.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: c.inkMuted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
 }
 
-/// The lane itself — ice track, colored climb, the viewer's marker at the
-/// fill's head, and the open finish ring. The same marks the race lanes
-/// carry, scaled up because this route IS the section's main event.
+/// The route itself — a drawn path, not a bar. The climb runs the upper
+/// lane from the current level's filled anchor, steps down through a
+/// small bend, and finishes at the open ring that is the next level. The
+/// viewer's bead rides the path — including through the bend — and a
+/// short connector drops under the ring where the next collectible
+/// docks. Level numerals sit ON the route's ends.
 class _LevelRoute extends StatelessWidget {
-  const _LevelRoute({required this.progress, required this.color});
+  const _LevelRoute({
+    required this.level,
+    required this.progress,
+    required this.color,
+    required this.hasDock,
+  });
 
+  final int level;
   final double progress;
   final Color color;
+  final bool hasDock;
 
-  static const double _trackHeight = 12;
-  static const double _startSize = 14;
-  static const double _markerSize = 18;
-  static const double _goalSize = 20;
-  static const double _height = 30;
-  static const double _centerY = _height / 2;
+  // Route geometry shared by the painter and the dock positioning.
+  static const double lane = 12;
+  static const double y1 = 18; // upper lane — the current level
+  static const double y2 = 42; // lower lane — the destination
+  static const double padL = 30; // start numeral zone
+  static const double padR = 30; // finish numeral zone
+  static const double ringR = 10;
+  static const double connector = 8;
+  static const double height = y2 + ringR + connector; // 60
+  static const double dockTop = height;
+  static const double dockH = 64; // artifact 46 + gap + name
+
+  static double ringX(double width) => width - padR - ringR;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return LayoutBuilder(
-      builder: (context, cons) {
-        final w = cons.maxWidth;
-        final p = progress.clamp(0.0, 1.0);
-        final fillW = (w * p).clamp(0.0, w);
-        final markerLeft =
-            (fillW - _markerSize / 2).clamp(0.0, w - _markerSize);
-        return SizedBox(
-          height: _height,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Ice track — the remaining route to the next level.
-              Positioned(
-                left: 0,
-                right: 0,
-                top: _centerY - _trackHeight / 2,
-                child: Container(
-                  height: _trackHeight,
-                  decoration: BoxDecoration(
-                    color: c.track,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              // The climb — filled from the start mark to the viewer's
-              // marker.
-              Positioned(
-                left: 0,
-                top: _centerY - _trackHeight / 2,
-                width: fillW,
-                child: Container(
-                  height: _trackHeight,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              // Start mark — the current level's anchor.
-              Positioned(
-                left: 0,
-                top: _centerY - _startSize / 2,
-                child: Container(
-                  width: _startSize,
-                  height: _startSize,
-                  decoration: BoxDecoration(
-                    color: c.ink,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-              // The viewer's mark — physical head of the climb, distinct
-              // from the start dot: navy edge, colored fill, white core —
-              // the same "you" read the race lanes carry.
-              Positioned(
-                left: markerLeft,
-                top: _centerY - _markerSize / 2,
-                child: Container(
-                  width: _markerSize,
-                  height: _markerSize,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.border, width: 2.5),
-                  ),
-                  child: Center(
-                    child: Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Finish ring — the next level, open until earned.
-              Positioned(
-                right: 0,
-                top: _centerY - _goalSize / 2,
-                child: Container(
-                  width: _goalSize,
-                  height: _goalSize,
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: NuvoColors.blue, width: 3),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _RoutePainter(
+          level: level,
+          progress: progress,
+          color: color,
+          hasDock: hasDock,
+          c: c,
+          scaler: MediaQuery.textScalerOf(context),
+        ),
+      ),
     );
   }
+}
+
+class _RoutePainter extends CustomPainter {
+  _RoutePainter({
+    required this.level,
+    required this.progress,
+    required this.color,
+    required this.hasDock,
+    required this.c,
+    required this.scaler,
+  });
+
+  final int level;
+  final double progress;
+  final Color color;
+  final bool hasDock;
+  final dynamic c;
+  final TextScaler scaler;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final end = _LevelRoute.ringX(w);
+    final bendStart = _LevelRoute.padL + (end - _LevelRoute.padL) * 0.68;
+    final bendEnd = math.min(bendStart + 30, end - 8);
+
+    // The path — upper lane, a small step down, lower lane into the ring.
+    final path = Path()
+      ..moveTo(_LevelRoute.padL, _LevelRoute.y1)
+      ..lineTo(bendStart, _LevelRoute.y1)
+      ..cubicTo(
+        bendStart + 16,
+        _LevelRoute.y1,
+        bendEnd - 16,
+        _LevelRoute.y2,
+        bendEnd,
+        _LevelRoute.y2,
+      )
+      ..lineTo(end, _LevelRoute.y2);
+
+    // Ice track — the whole remaining route.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = c.track
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _LevelRoute.lane
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final metric = path.computeMetrics().first;
+    final len = metric.length;
+    final p = progress.clamp(0.0, 1.0);
+
+    // The climb — filled along the route to the viewer's mark.
+    if (p > 0) {
+      canvas.drawPath(
+        metric.extractPath(0, len * p),
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _LevelRoute.lane
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Start anchor — the current level's filled mark.
+    canvas.drawCircle(
+      const Offset(_LevelRoute.padL, _LevelRoute.y1),
+      7,
+      Paint()..color = c.ink,
+    );
+
+    // The viewer's bead ON the route — colored fill, navy edge, white
+    // core, the same "you" mark the race lanes carry. Held clear of the
+    // anchor and the ring so the marks never merge.
+    final off = (len * p).clamp(20.0, math.max(20.0, len - 24)).toDouble();
+    final pos = metric.getTangentForOffset(off)!.position;
+    canvas
+      ..drawCircle(pos, 9, Paint()..color = color)
+      ..drawCircle(
+        pos,
+        9,
+        Paint()
+          ..color = c.border
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5,
+      )
+      ..drawCircle(pos, 3, Paint()..color = Colors.white);
+
+    // Finish ring — the next level, open until earned.
+    final ring = Offset(end, _LevelRoute.y2);
+    canvas
+      ..drawCircle(ring, _LevelRoute.ringR, Paint()..color = c.surface)
+      ..drawCircle(
+        ring,
+        _LevelRoute.ringR,
+        Paint()
+          ..color = NuvoColors.blue
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+
+    // Dock connector — where the next collectible hangs.
+    if (hasDock) {
+      canvas.drawLine(
+        ring + const Offset(0, _LevelRoute.ringR + 1),
+        ring + const Offset(0, _LevelRoute.ringR + _LevelRoute.connector),
+        Paint()
+          ..color = c.border
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // Level numerals ON the route's ends.
+    _paintNum(
+      canvas,
+      '$level',
+      right: _LevelRoute.padL - 8,
+      cy: _LevelRoute.y1,
+      color: c.ink,
+    );
+    _paintNum(
+      canvas,
+      '${level + 1}',
+      left: end + _LevelRoute.ringR + 4,
+      cy: _LevelRoute.y2,
+      color: c.inkSubtle,
+    );
+  }
+
+  void _paintNum(
+    Canvas canvas,
+    String text, {
+    double? left,
+    double? right,
+    required double cy,
+    required Color color,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: AppTextStyles.statLarge(
+          15,
+          color: color,
+          weight: FontWeight.w900,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    final x = left ?? right! - tp.width;
+    tp.paint(canvas, Offset(x, cy - tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(_RoutePainter old) =>
+      old.level != level ||
+      old.progress != progress ||
+      old.color != color ||
+      old.hasDock != hasDock ||
+      old.c != c ||
+      old.scaler != scaler;
 }
 
 /// First-read placeholder — same rhythm as the real section so nothing
@@ -1083,21 +1172,51 @@ class _ProgressionSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget bar(double w, double h) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: c.panelLight,
-            borderRadius: BorderRadius.circular(999),
-          ),
-        );
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        color: c.panelLight,
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         bar(120, 26),
-        const SizedBox(height: NuvoSpacing.sm),
-        NuvoProgressBar(value: 0, height: 12, trackColor: c.track),
-        const SizedBox(height: NuvoSpacing.sm),
-        bar(150, 10),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 104,
+          child: Stack(
+            children: [
+              Positioned(
+                top: 12,
+                left: 0,
+                right: 24,
+                child: Container(
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: c.panelLight,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 34,
+                right: 12,
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: c.panelLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        bar(140, 10),
       ],
     );
   }
@@ -1113,9 +1232,8 @@ class _ProgressionUnavailable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NuvoPressable(
-      onTap: () => ref
-          .read(progressionControllerProvider.notifier)
-          .load(force: true),
+      onTap: () =>
+          ref.read(progressionControllerProvider.notifier).load(force: true),
       scale: 0.99,
       haptic: false,
       child: Column(
@@ -1223,8 +1341,8 @@ class _AchievementsSection extends StatelessWidget {
                     badge: i < featured.length
                         ? featured[i]
                         : i == featured.length
-                            ? next
-                            : null,
+                        ? next
+                        : null,
                     // A 4px drop on the center trophy keeps a full trio
                     // reading as collectibles, not a tab bar.
                     dropped: featured.length >= 3 && i == 1,
@@ -1331,10 +1449,7 @@ class _NextUpCard extends StatelessWidget {
               onTap: () => context.go('/compete'),
               haptic: false,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 4,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1455,9 +1570,9 @@ class _NextUpCard extends StatelessWidget {
                       'proofs' => 'ONE MORE PROOF',
                       _ => 'ONE TO GO',
                     },
-                    style: AppTextStyles.labelUppercase(10).copyWith(
-                      color: accent,
-                    ),
+                    style: AppTextStyles.labelUppercase(
+                      10,
+                    ).copyWith(color: accent),
                   ),
                 ),
               ],
@@ -1492,7 +1607,11 @@ class _StatsStrip extends StatelessWidget {
     final c = context.themeColors;
     return Row(
       children: [
-        _HeaderStat(value: activeCount, label: 'RACING', color: NuvoColors.blue),
+        _HeaderStat(
+          value: activeCount,
+          label: 'RACING',
+          color: NuvoColors.blue,
+        ),
         _HeaderDivider(),
         _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
         _HeaderDivider(),
@@ -1555,7 +1674,10 @@ class _HeaderStat extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: AppTextStyles.labelUppercase(10, color: c.inkSubtle).copyWith(color: context.themeColors.inkSubtle),
+            style: AppTextStyles.labelUppercase(
+              10,
+              color: c.inkSubtle,
+            ).copyWith(color: context.themeColors.inkSubtle),
           ),
         ],
       ),
@@ -1648,9 +1770,7 @@ class _RaceShelf extends StatelessWidget {
                 height: 152,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.only(
-                    right: cons.maxWidth - tileW,
-                  ),
+                  padding: EdgeInsets.only(right: cons.maxWidth - tileW),
                   itemCount: races.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(width: NuvoSpacing.sm),
@@ -1775,17 +1895,13 @@ class _ProfileRaceGroup extends StatelessWidget {
         children: [
           for (var i = 0; i < races.length; i++)
             Padding(
-              padding: EdgeInsets.only(
-                bottom: i < races.length - 1 ? 10 : 0,
-              ),
+              padding: EdgeInsets.only(bottom: i < races.length - 1 ? 10 : 0),
               child: Container(
                 decoration: BoxDecoration(
                   color: c.panelLight,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NuvoSpacing.md,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.md),
                 child: _buildRow(context, races[i]),
               ),
             ),
@@ -1800,12 +1916,7 @@ class _ProfileRaceGroup extends StatelessWidget {
         for (var i = 0; i < races.length; i++) ...[
           _buildRow(context, races[i]),
           if (i < races.length - 1)
-            Divider(
-              height: 1,
-              thickness: 1,
-              indent: 52,
-              color: c.divider,
-            ),
+            Divider(height: 1, thickness: 1, indent: 52, color: c.divider),
         ],
       ],
     );
@@ -1825,97 +1936,93 @@ Widget _buildProfileRaceRow(
   String? userId,
   bool onInset = false,
 }) {
-    final uid = userId;
-    final myPart = uid != null ? race.participantFor(uid) : null;
-    final pct = raceProgressPercent(race, myPart);
-    final rank = rankForUser(race, userId);
-    final activity = raceActivityTitle(race);
-    final progressLabel = raceProgressLabel(race, myPart);
-    final isComplete = raceIsCompleted(race);
+  final uid = userId;
+  final myPart = uid != null ? race.participantFor(uid) : null;
+  final pct = raceProgressPercent(race, myPart);
+  final rank = rankForUser(race, userId);
+  final activity = raceActivityTitle(race);
+  final progressLabel = raceProgressLabel(race, myPart);
+  final isComplete = raceIsCompleted(race);
 
-    final avatars = race.participants.where((p) => p.userId != userId).map((p) {
-      final name = p.displayName.trim();
-      final initials = name.isEmpty
-          ? '?'
-          : name
-                .split(RegExp(r'\s+'))
-                .where((w) => w.isNotEmpty)
-                .take(2)
-                .map((w) => w[0].toUpperCase())
-                .join();
-      return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
-    }).toList();
+  final avatars = race.participants.where((p) => p.userId != userId).map((p) {
+    final name = p.displayName.trim();
+    final initials = name.isEmpty
+        ? '?'
+        : name
+              .split(RegExp(r'\s+'))
+              .where((w) => w.isNotEmpty)
+              .take(2)
+              .map((w) => w[0].toUpperCase())
+              .join();
+    return (initials: initials, photoUrl: p.profilePhotoUrl, id: p.userId);
+  }).toList();
 
-    if (isComplete) {
-      return _ResultTile(
-        raceTitle: race.displayTitle,
-        movementLabel: activity,
-        scoreLabel:
-            myPart != null ? raceScoreLabel(race, myPart.progressValue) : null,
-        rank: rank,
-        participantCount: race.participantCount,
-        avatars: avatars,
-        onTap: () => context.push('/race/${race.id}'),
-      );
-    }
-
-    // Derived context for an in-flight race: how far I still have to go,
-    // formatted through the canonical metric formatter ("11 reps", "0:45").
-    // Falls back to the activity name when the goal isn't a fixed target
-    // or I'm already at the line.
-    final target = race.targetValue;
-    final remaining = target != null &&
-            myPart != null &&
-            target > myPart.progressValue
-        ? raceScoreLabel(race, target - myPart.progressValue)
-        : null;
-
-    // Quick lane — the viewer's mark plus the racer directly ahead. Lower-
-    // wins and best-attempt races get the relative-competition lane (no
-    // finish ring) from the shared geometry helper.
-    final geo = raceLaneGeometry(race, userId);
-    final rival = raceNearestRival(race, userId);
-    final rivalMark = rival == null
-        ? null
-        : geo.rivals
-            .where((r) => r.racer.userId == rival.userId)
-            .firstOrNull;
-    final leading = rank == 1;
-    final c = context.themeColors;
-
-    return _ActiveRaceTile(
+  if (isComplete) {
+    return _ResultTile(
       raceTitle: race.displayTitle,
       movementLabel: activity,
-      icon: raceActivityDefinition(race)?.icon ??
-          Icons.fitness_center_rounded,
-      progressLabel: progressLabel,
-      progressPercent: pct,
-      remainingLabel: remaining,
+      scoreLabel: myPart != null
+          ? raceScoreLabel(race, myPart.progressValue)
+          : null,
       rank: rank,
       participantCount: race.participantCount,
       avatars: avatars,
-      trackMarkers: geo.viewer == null
-          ? null
-          : [
-              if (rivalMark != null)
-                RaceTrackMarker(
-                  fraction: rivalMark.fraction,
-                  label: rival!.displayName.split(' ').first,
-                  color: c.ink,
-                ),
-              RaceTrackMarker(
-                fraction: geo.viewer!,
-                label: 'You',
-                color:
-                    leading ? NuvoColors.success : NuvoColors.actionBlue,
-                isViewer: true,
-                haloColor: leading ? NuvoColors.success : null,
-              ),
-            ],
-      hasGoal: geo.hasGoal,
-      onInset: onInset,
       onTap: () => context.push('/race/${race.id}'),
     );
+  }
+
+  // Derived context for an in-flight race: how far I still have to go,
+  // formatted through the canonical metric formatter ("11 reps", "0:45").
+  // Falls back to the activity name when the goal isn't a fixed target
+  // or I'm already at the line.
+  final target = race.targetValue;
+  final remaining =
+      target != null && myPart != null && target > myPart.progressValue
+      ? raceScoreLabel(race, target - myPart.progressValue)
+      : null;
+
+  // Quick lane — the viewer's mark plus the racer directly ahead. Lower-
+  // wins and best-attempt races get the relative-competition lane (no
+  // finish ring) from the shared geometry helper.
+  final geo = raceLaneGeometry(race, userId);
+  final rival = raceNearestRival(race, userId);
+  final rivalMark = rival == null
+      ? null
+      : geo.rivals.where((r) => r.racer.userId == rival.userId).firstOrNull;
+  final leading = rank == 1;
+  final c = context.themeColors;
+
+  return _ActiveRaceTile(
+    raceTitle: race.displayTitle,
+    movementLabel: activity,
+    icon: raceActivityDefinition(race)?.icon ?? Icons.fitness_center_rounded,
+    progressLabel: progressLabel,
+    progressPercent: pct,
+    remainingLabel: remaining,
+    rank: rank,
+    participantCount: race.participantCount,
+    avatars: avatars,
+    trackMarkers: geo.viewer == null
+        ? null
+        : [
+            if (rivalMark != null)
+              RaceTrackMarker(
+                fraction: rivalMark.fraction,
+                label: rival!.displayName.split(' ').first,
+                color: c.ink,
+              ),
+            RaceTrackMarker(
+              fraction: geo.viewer!,
+              label: 'You',
+              color: leading ? NuvoColors.success : NuvoColors.actionBlue,
+              isViewer: true,
+              haloColor: leading ? NuvoColors.success : null,
+            ),
+          ],
+    hasGoal: geo.hasGoal,
+    onInset: onInset,
+    onTap: () => context.push('/race/${race.id}'),
+  );
 }
 
 // ── Active race tile — progress is the headline ─────────────────────────────
@@ -1978,7 +2085,9 @@ class _ActiveRaceTile extends StatelessWidget {
       onTap: onTap,
       trackMarkers: trackMarkers,
       hasGoal: hasGoal,
-      remainingLabel: remainingLabel == null ? null : '$remainingLabel to finish',
+      remainingLabel: remainingLabel == null
+          ? null
+          : '$remainingLabel to finish',
       // The racing-now section already owns the horizontal gutter.
       padding: const EdgeInsets.symmetric(vertical: NuvoSpacing.md),
       // The 44px leading column matches _ResultTile's placement column —
@@ -2032,9 +2141,9 @@ class _ResultTile extends StatelessWidget {
     final won = rank == 1;
     final meta = scoreLabel != null
         ? '$scoreLabel · $participantCount '
-            '${participantCount == 1 ? 'racer' : 'racers'}'
+              '${participantCount == 1 ? 'racer' : 'racers'}'
         : '$movementLabel · $participantCount '
-            '${participantCount == 1 ? 'racer' : 'racers'}';
+              '${participantCount == 1 ? 'racer' : 'racers'}';
 
     return Semantics(
       button: true,
@@ -2062,9 +2171,7 @@ class _ResultTile extends StatelessWidget {
                     Text(
                       rank != null ? _ordinalLabel(rank!) : '--',
                       style: AppTextStyles.placementLabel(
-                        color: won
-                            ? NuvoColors.gold
-                            : c.inkSubtle,
+                        color: won ? NuvoColors.gold : c.inkSubtle,
                         size: won ? 14 : 13,
                       ),
                     ),
@@ -2085,7 +2192,9 @@ class _ResultTile extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       meta,
-                      style: AppTextStyles.raceRowMeta.copyWith(color: context.themeColors.inkSubtle),
+                      style: AppTextStyles.raceRowMeta.copyWith(
+                        color: context.themeColors.inkSubtle,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2151,9 +2260,7 @@ class _BestFinishRow extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                won
-                    ? Icons.emoji_events_rounded
-                    : Icons.military_tech_rounded,
+                won ? Icons.emoji_events_rounded : Icons.military_tech_rounded,
                 size: 17,
                 color: won ? NuvoColors.gold : c.inkMuted,
               ),
@@ -2211,12 +2318,7 @@ class _ProfileActionGroup extends StatelessWidget {
         for (var i = 0; i < children.length; i++) ...[
           children[i],
           if (i < children.length - 1)
-            Divider(
-              height: 1,
-              thickness: 1,
-              indent: 58,
-              color: c.divider,
-            ),
+            Divider(height: 1, thickness: 1, indent: 58, color: c.divider),
         ],
       ],
     );
@@ -2251,11 +2353,7 @@ class _PresentationModeRow extends StatelessWidget {
               color: c.panelLight,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.slideshow_rounded,
-              color: c.ink,
-              size: 17,
-            ),
+            child: Icon(Icons.slideshow_rounded, color: c.ink, size: 17),
           ),
           const SizedBox(width: NuvoSpacing.md),
           Expanded(
@@ -2264,17 +2362,13 @@ class _PresentationModeRow extends StatelessWidget {
               children: [
                 Text(
                   'Presentation mode',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: c.ink,
-                  ),
+                  style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
                 ),
                 Text(
                   enabled
                       ? 'Showing demo data for presenting'
                       : 'Off — showing your real data',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: c.inkSubtle,
-                  ),
+                  style: AppTextStyles.labelSmall.copyWith(color: c.inkSubtle),
                 ),
               ],
             ),
@@ -2298,8 +2392,7 @@ class _AppearanceRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.themeColors;
-    final isDark =
-        ref.watch(nuvoThemeModeProvider) == ThemeMode.dark;
+    final isDark = ref.watch(nuvoThemeModeProvider) == ThemeMode.dark;
     return Container(
       constraints: const BoxConstraints(minHeight: 56),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2325,23 +2418,18 @@ class _AppearanceRow extends ConsumerWidget {
               children: [
                 Text(
                   'Appearance',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: c.ink,
-                  ),
+                  style: AppTextStyles.bodyMedium.copyWith(color: c.ink),
                 ),
                 Text(
                   isDark ? 'Dark' : 'Light',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: c.inkSubtle,
-                  ),
+                  style: AppTextStyles.labelSmall.copyWith(color: c.inkSubtle),
                 ),
               ],
             ),
           ),
           NuvoToggle(
             value: isDark,
-            onChanged: (_) =>
-                ref.read(nuvoThemeModeProvider.notifier).toggle(),
+            onChanged: (_) => ref.read(nuvoThemeModeProvider.notifier).toggle(),
           ),
         ],
       ),
@@ -2448,11 +2536,7 @@ class _MotionConsentRowState extends ConsumerState<_MotionConsentRow> {
               color: c.panelLight,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.motion_photos_on_rounded,
-              color: c.ink,
-              size: 17,
-            ),
+            child: Icon(Icons.motion_photos_on_rounded, color: c.ink, size: 17),
           ),
           const SizedBox(width: NuvoSpacing.md),
           Expanded(
@@ -2554,11 +2638,7 @@ class _AccountRow extends StatelessWidget {
               ),
             ),
             if (navigates)
-              NuvoIcon(
-                NuvoIconType.arrow,
-                color: c.inkMuted,
-                size: 14,
-              ),
+              NuvoIcon(NuvoIconType.arrow, color: c.inkMuted, size: 14),
           ],
         ),
       ),
