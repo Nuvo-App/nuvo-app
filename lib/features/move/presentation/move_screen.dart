@@ -168,17 +168,18 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
           ),
-          padding: EdgeInsets.fromLTRB(
-            22,
-            32,
-            22,
-            NuvoBottomNav.bottomPadding(context),
-          ),
+          // Gutters live on the children, not the ListView — the Ready
+          // segment's ice queue field runs to the screen edges, and each
+          // segment owns its own bottom clearance.
+          padding: const EdgeInsets.only(top: 32),
           children: [
             // ── Action header ─────────────────────────────────────────
-            _VerifyHeader(
-              readyCount: readyRaces.length,
-              onHistory: () => _setSegment(_VerifySegment.recent),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: _VerifyHeader(
+                readyCount: readyRaces.length,
+                onHistory: () => _setSegment(_VerifySegment.recent),
+              ),
             ),
             const SizedBox(height: NuvoSpacing.lg),
 
@@ -195,21 +196,41 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
             else if (raceState.error != null &&
                 readyRaces.isEmpty &&
                 completedRaces.isEmpty)
-              NuvoErrorState(
-                message: "Couldn't load your races.",
-                onRetry: () =>
-                    ref.read(raceControllerProvider.notifier).loadRaces(),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  22,
+                  0,
+                  22,
+                  NuvoBottomNav.bottomPadding(context),
+                ),
+                child: NuvoErrorState(
+                  message: "Couldn't load your races.",
+                  onRetry: () =>
+                      ref.read(raceControllerProvider.notifier).loadRaces(),
+                ),
               )
             else if (allEmpty)
-              _EmptyState(onStart: () => context.push('/races/new'))
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  22,
+                  0,
+                  22,
+                  NuvoBottomNav.bottomPadding(context),
+                ),
+                child:
+                    _EmptyState(onStart: () => context.push('/races/new')),
+              )
             // ── Segmented control + segment content ───────────────────
             else ...[
-              _VerifyTabs(
-                segment: _segment,
-                readyCount: readyRaces.length,
-                completedCount: completedRaces.length,
-                recentCount: recentMoves.length,
-                onChanged: _setSegment,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: _VerifyTabs(
+                  segment: _segment,
+                  readyCount: readyRaces.length,
+                  completedCount: completedRaces.length,
+                  recentCount: recentMoves.length,
+                  onChanged: _setSegment,
+                ),
               ),
               const SizedBox(height: NuvoSpacing.xl),
 
@@ -249,24 +270,41 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
                         onOpen: (race) => context.push('/race/${race.id}'),
                         onStartRace: () => context.go('/compete'),
                       ),
-                      _VerifySegment.completed => _CompletedSegment(
-                        races: completedRaces,
-                        userId: uid,
-                        expanded: _completedExpanded,
-                        cap: _completedCap,
-                        onToggleExpand: () => setState(
-                          () => _completedExpanded = !_completedExpanded,
+                      _VerifySegment.completed => Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          22,
+                          0,
+                          22,
+                          NuvoBottomNav.bottomPadding(context),
                         ),
-                        onOpen: (race) => context.push('/race/${race.id}'),
+                        child: _CompletedSegment(
+                          races: completedRaces,
+                          userId: uid,
+                          expanded: _completedExpanded,
+                          cap: _completedCap,
+                          onToggleExpand: () => setState(
+                            () => _completedExpanded = !_completedExpanded,
+                          ),
+                          onOpen: (race) => context.push('/race/${race.id}'),
+                        ),
                       ),
-                      _VerifySegment.recent => _RecentSegment(
-                        entries: recentMoves,
-                        userId: uid,
-                        expanded: _recentExpanded,
-                        cap: _recentCap,
-                        onToggleExpand: () =>
-                            setState(() => _recentExpanded = !_recentExpanded),
-                        onOpen: (race) => context.push('/race/${race.id}'),
+                      _VerifySegment.recent => Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          22,
+                          0,
+                          22,
+                          NuvoBottomNav.bottomPadding(context),
+                        ),
+                        child: _RecentSegment(
+                          entries: recentMoves,
+                          userId: uid,
+                          expanded: _recentExpanded,
+                          cap: _recentCap,
+                          onToggleExpand: () => setState(
+                            () => _recentExpanded = !_recentExpanded,
+                          ),
+                          onOpen: (race) => context.push('/race/${race.id}'),
+                        ),
                       ),
                     },
                   ),
@@ -544,91 +582,176 @@ class _ReadySegment extends StatelessWidget {
         : alsoReady.take(cap).toList();
     final hasMore = alsoReady.length > cap;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Up next — the action surface. When a race finishes and the
-        // next one steps up, the hero morphs to the new race (state change
-        // → motion), rather than silently swapping content.
-        NuvoStateMorph(
-          stateKey: upNext.id,
-          child: _UpNextHero(
-            race: upNext,
-            userId: userId,
-            onVerify: () => onVerify(upNext),
-            onOpen: () => onOpen(upNext),
-          ),
+    // Gutters are applied per-child (the ListView carries none) so the
+    // queue field below can run to the screen edges.
+    final hero = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: NuvoStateMorph(
+        stateKey: upNext.id,
+        child: _UpNextHero(
+          race: upNext,
+          userId: userId,
+          onVerify: () => onVerify(upNext),
+          onOpen: () => onOpen(upNext),
         ),
-        if (alsoReady.isNotEmpty) ...[
-          // Breathing transition — the hero is foreground; the queue sits a
-          // depth below it.
-          const SizedBox(height: NuvoSpacing.xxl),
-          // Ice-blue queue plane: the races waiting behind the hero live on
-          // one tinted section field, not as loose cards on the canvas. The
-          // header and "See all" belong to the plane — they label the layer,
-          // not any single strip.
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 13, 14, 14),
-            decoration: BoxDecoration(
-              color: c.panelLight,
-              borderRadius: BorderRadius.circular(NuvoRadii.md),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+    );
+
+    if (alsoReady.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: NuvoBottomNav.bottomPadding(context),
+        ),
+        child: hero,
+      );
+    }
+
+    return _QueueBehindHero(
+      hero: hero,
+      // Ice-blue queue field: the races waiting behind the hero live on
+      // one tinted band that runs edge-to-edge and under the scroll — a
+      // field, not another card on the canvas. The header and "See all"
+      // belong to the field — they label the layer, not any one strip.
+      queue: Container(
+        padding: EdgeInsets.fromLTRB(
+          36,
+          30,
+          36,
+          14 + NuvoBottomNav.bottomPadding(context),
+        ),
+        color: c.panelLight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
+                Expanded(
+                  child: Text(
+                    'Ready next',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelMedium.copyWith(
+                      fontSize: 14.5,
+                      color: c.inkMuted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (hasMore)
+                  NuvoPressable(
+                    onTap: onToggleExpand,
+                    haptic: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
                       child: Text(
-                        'Ready next',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelMedium.copyWith(
-                          fontSize: 14.5,
-                          color: c.inkMuted,
-                          fontWeight: FontWeight.w800,
+                        expanded
+                            ? 'Show less'
+                            : 'See all ${alsoReady.length}',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: c.ink,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    if (hasMore)
-                      NuvoPressable(
-                        onTap: onToggleExpand,
-                        haptic: false,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            expanded
-                                ? 'Show less'
-                                : 'See all ${alsoReady.length}',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: c.ink,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Strips sit on the plane — the ice reads through the gaps.
-                for (var i = 0; i < visibleAlsoReady.length; i++) ...[
-                  _ReadyRow(
-                    race: visibleAlsoReady[i],
-                    userId: userId,
-                    onTap: () => onVerify(visibleAlsoReady[i]),
                   ),
-                  if (i < visibleAlsoReady.length - 1)
-                    const SizedBox(height: 8),
-                ],
               ],
             ),
+            const SizedBox(height: 8),
+            // Strips sit on the field — the ice reads through the gaps.
+            for (var i = 0; i < visibleAlsoReady.length; i++) ...[
+              _ReadyRow(
+                race: visibleAlsoReady[i],
+                userId: userId,
+                onTap: () => onVerify(visibleAlsoReady[i]),
+              ),
+              if (i < visibleAlsoReady.length - 1) const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The hero floats in front of the queue: the ice field's top edge begins
+/// ~16px behind the board's bottom edge, so waiting races read as behind
+/// the action rather than stacked after it.
+///
+/// The hero's height is dynamic (wrapped titles, absent lanes, the
+/// finish-morph), so the field's offset is measured — the hero paints
+/// last and always wins the overlap.
+class _QueueBehindHero extends StatefulWidget {
+  const _QueueBehindHero({required this.hero, required this.queue});
+
+  final Widget hero;
+  final Widget queue;
+
+  /// How far the field's top edge tucks under the board's bottom edge.
+  static const double _overlap = 16;
+
+  @override
+  State<_QueueBehindHero> createState() => _QueueBehindHeroState();
+}
+
+class _QueueBehindHeroState extends State<_QueueBehindHero> {
+  double? _heroHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final heroHeight = _heroHeight ?? 390;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Field first — it loses the overlap by paint order alone.
+        Padding(
+          padding: EdgeInsets.only(
+            top: (heroHeight - _QueueBehindHero._overlap)
+                .clamp(0.0, double.infinity),
           ),
-        ],
+          child: widget.queue,
+        ),
+        _SizeReporting(
+          onSize: (size) {
+            if (size.height != _heroHeight) {
+              setState(() => _heroHeight = size.height);
+            }
+          },
+          child: widget.hero,
+        ),
       ],
     );
+  }
+}
+
+/// Reports its child's laid-out size after each frame — the one-way feed
+/// [_QueueBehindHero] needs to track a morphing hero.
+class _SizeReporting extends StatefulWidget {
+  const _SizeReporting({required this.onSize, required this.child});
+
+  final ValueChanged<Size> onSize;
+  final Widget child;
+
+  @override
+  State<_SizeReporting> createState() => _SizeReportingState();
+}
+
+class _SizeReportingState extends State<_SizeReporting> {
+  Size? _last;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final size = context.size;
+      if (size != null && size != _last) {
+        _last = size;
+        widget.onSize(size);
+      }
+    });
+    return widget.child;
   }
 }
 
