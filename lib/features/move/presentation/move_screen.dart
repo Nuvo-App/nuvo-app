@@ -667,14 +667,36 @@ class _ReadySegment extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            // Strips sit on the field — the ice reads through the gaps.
-            for (var i = 0; i < visibleAlsoReady.length; i++) ...[
+            // A depth-graded queue, not a run of equal cards: the next race
+            // is the one lifted object, the race after it tucks beneath,
+            // and deeper races embed into the field between hairlines.
+            _TuckedBelow(
+              tuck: 8,
+              top: _ReadyRow(
+                race: visibleAlsoReady[0],
+                userId: userId,
+                tier: _QueueTier.next,
+                onTap: () => onVerify(visibleAlsoReady[0]),
+              ),
+              under: visibleAlsoReady.length > 1
+                  ? _ReadyRow(
+                      race: visibleAlsoReady[1],
+                      userId: userId,
+                      tier: _QueueTier.tucked,
+                      onTap: () => onVerify(visibleAlsoReady[1]),
+                    )
+                  : null,
+            ),
+            for (var i = 2; i < visibleAlsoReady.length; i++) ...[
+              const SizedBox(height: 4),
+              Divider(height: 1, thickness: 1, color: c.divider),
+              const SizedBox(height: 4),
               _ReadyRow(
                 race: visibleAlsoReady[i],
                 userId: userId,
+                tier: _QueueTier.deep,
                 onTap: () => onVerify(visibleAlsoReady[i]),
               ),
-              if (i < visibleAlsoReady.length - 1) const SizedBox(height: 8),
             ],
           ],
         ),
@@ -733,8 +755,59 @@ class _QueueBehindHeroState extends State<_QueueBehindHero> {
   }
 }
 
+/// The queue's depth stack, level 2: `under` tucks `tuck` pixels behind
+/// `top`. Painted first (it loses the overlap by paint order alone) and
+/// offset by `top`'s measured height — the same trick [_QueueBehindHero]
+/// uses for the hero↔field seam.
+class _TuckedBelow extends StatefulWidget {
+  const _TuckedBelow({
+    required this.top,
+    this.under,
+    this.tuck = 8,
+  });
+
+  final Widget top;
+  final Widget? under;
+  final double tuck;
+
+  @override
+  State<_TuckedBelow> createState() => _TuckedBelowState();
+}
+
+class _TuckedBelowState extends State<_TuckedBelow> {
+  double? _topHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final under = widget.under;
+    if (under == null) return widget.top;
+    // A plausible first-frame estimate — the reported size corrects it
+    // before anyone can scroll to the seam.
+    final topHeight = _topHeight ?? 96;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(
+            top: (topHeight - widget.tuck).clamp(0.0, double.infinity),
+          ),
+          child: under,
+        ),
+        _SizeReporting(
+          onSize: (size) {
+            if (size.height != _topHeight) {
+              setState(() => _topHeight = size.height);
+            }
+          },
+          child: widget.top,
+        ),
+      ],
+    );
+  }
+}
+
 /// Reports its child's laid-out size after each frame — the one-way feed
-/// [_QueueBehindHero] needs to track a morphing hero.
+/// [_QueueBehindHero] and [_TuckedBelow] need to track morphing content.
 class _SizeReporting extends StatefulWidget {
   const _SizeReporting({required this.onSize, required this.child});
 
@@ -1471,16 +1544,28 @@ String _scoreText(Race race, int value) {
 /// thin track when a denominator exists, and one context line — what's
 /// left, who to pass, or the start line. The whole row is the tap target;
 /// no repeated blue verb, the chevron carries the affordance.
+/// Queue depth grade — how far behind the hero a waiting race sits.
+///   next   — the lifted object: white surface, structural edge, offset
+///   tucked — one step behind: same strip, lighter edge, no offset,
+///            tighter footprint; the pair overlaps it under `next`
+///   deep   — embedded in the field: no surface at all, hairline rhythm
+enum _QueueTier { next, tucked, deep }
+
 class _ReadyRow extends StatelessWidget {
   const _ReadyRow({
     required this.race,
     required this.onTap,
     this.userId,
+    this.tier = _QueueTier.next,
   });
 
   final Race race;
   final String? userId;
   final VoidCallback onTap;
+
+  /// Where this strip sits in the queue's depth stack — chrome only;
+  /// the race content (title, rank, lane, context) never changes.
+  final _QueueTier tier;
 
   @override
   Widget build(BuildContext context) {
@@ -1558,16 +1643,13 @@ class _ReadyRow extends StatelessWidget {
       }
     }
 
-    // A compact race strip on the queue plane — same raised recipe as the
-    // field strips on Compete/Profile: white fill, 1px structural edge,
-    // small offset plate. Same composition as the hero (title → standing →
-    // lane → context) at a quieter voice; the press is the response.
-    return PressableScale(
-      onTap: onTap,
-      scale: 0.98,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-        decoration: BoxDecoration(
+    // Depth is earned by position in the queue: `next` is a lifted object
+    // (white fill, structural edge, offset plate), `tucked` keeps the same
+    // strip but drops the shadow and thins the edge — it's visibly behind
+    // the next race — and `deep` carries no chrome at all, sitting on the
+    // field between hairlines. The press is the response on every tier.
+    final decoration = switch (tier) {
+      _QueueTier.next => BoxDecoration(
           color: c.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
           border: Border.all(color: c.border, width: 1),
@@ -1576,6 +1658,25 @@ class _ReadyRow extends StatelessWidget {
             offset: const Offset(2, 2),
           ),
         ),
+      _QueueTier.tucked => BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: Border.all(color: c.divider, width: 1),
+        ),
+      _QueueTier.deep => null,
+    };
+    final stripPadding = switch (tier) {
+      _QueueTier.next => const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      _QueueTier.tucked => const EdgeInsets.fromLTRB(14, 9, 12, 9),
+      _QueueTier.deep => const EdgeInsets.fromLTRB(6, 9, 2, 9),
+    };
+
+    return PressableScale(
+      onTap: onTap,
+      scale: 0.98,
+      child: Container(
+        padding: stripPadding,
+        decoration: decoration,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

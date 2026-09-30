@@ -1089,6 +1089,41 @@ void main() {
       });
     }
 
+    // Queue depth grading: 2 queued races exercise next + tucked with no
+    // deep rows; 12 exercise the cap, See all expansion, and the embedded
+    // hairline-separated tail.
+    testWidgets('queue depth — 2 ready and 12 ready', (tester) async {
+      _useViewport(tester, 390, 844);
+      await _pump(
+        tester,
+        _app(
+          races: [_heroRace, _manyRaces[1], _manyRaces[3]],
+          home: const MoveScreen(),
+        ),
+        'verify-queue2-390',
+      );
+      _races(tester).push([
+        _heroRace,
+        for (var i = 0; i < 11; i++)
+          _race(
+            id: 'race-q$i',
+            title: 'Queue Race ${i + 1}',
+            participants: [
+              _p('user-1', 'Akshay Sanjai', i * 2 + 1, rank: i.isEven ? 1 : 2),
+              _p('u-noah', 'Noah Reyes', i * 2 + 3, rank: i.isEven ? 2 : 1),
+            ],
+          ),
+      ]);
+      await _settle(tester);
+      await _capture(tester, 'verify-queue12-390');
+      await tester.tap(find.textContaining('See all'));
+      await _settle(tester);
+      await tester.drag(find.byType(ListView), const Offset(0, -2400));
+      await _settle(tester);
+      await _capture(tester, 'verify-queue12-tail-390');
+      expect(tester.takeException(), isNull);
+    });
+
     // Scoring-semantics variants — the lane is canonical
     // (raceLaneGeometry): lower-wins and best-attempt draw a relative
     // competition lane with NO goal ring; a finish target draws one.
