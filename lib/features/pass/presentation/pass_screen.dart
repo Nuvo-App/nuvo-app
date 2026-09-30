@@ -731,10 +731,15 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     // straddles the field's bottom edge: its top rides the ice, its body
     // lands on white. The field grows an apron exactly as deep as the
     // rise, so the object is the only thing crossing the boundary.
-    final featuredBridge =
-        _feedTab == 0 && (crewHero != null || liveItems.isNotEmpty)
-            ? _kFeaturedBridge
-            : 0.0;
+    final featured =
+        _feedTab == 0 && (crewHero != null || liveItems.isNotEmpty);
+    // No featured object — the field still breathes past the tabs, and on
+    // For you the tab body rises a touch so the Start-a-race rail straddles
+    // the boundary instead of the field ending in dead air.
+    final featuredBridge = featured
+        ? _kFeaturedBridge
+        : (_feedTab == 0 ? _kRailBridge : 0.0);
+    final fieldTail = featured ? _kFeaturedBridge : _kFieldRest;
 
     return Scaffold(
       backgroundColor: context.themeColors.page,
@@ -844,7 +849,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 // their asks, and the lens switch. A layer groups
                 // information; this is the field the matchup rises out of.
                 _SocialField(
-                  tail: featuredBridge,
+                  tail: fieldTail,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -1710,7 +1715,25 @@ class _CrewHeroCard extends StatelessWidget {
                       10,
                       color: c.inkSubtle,
                     ),
+                  )
+                else ...[
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: NuvoColors.danger,
+                      shape: BoxShape.circle,
+                    ),
                   ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'LIVE',
+                    style: AppTextStyles.labelUppercase(
+                      10,
+                      color: NuvoColors.danger,
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -2324,7 +2347,8 @@ class _SocialPostCard extends StatelessWidget {
           lines: [
             '$best${metric != null ? ' $metric' : ''}${delta != null && delta > 0 ? '  ↗ +$delta' : ''}',
           ],
-          accent: NuvoColors.gold,
+          // PB is performance family — teal, not gold (wins own gold).
+          accent: NuvoColors.avatarTeal,
         );
       case 'race_finished':
       case 'winner_determined':
@@ -2351,19 +2375,34 @@ class _SocialPostCard extends StatelessWidget {
     }
   }
 
-  /// The soft territory a featured moment earns: competitive events take
-  /// the ice wash, results a warm cream — a win lands differently than a
-  /// pass. Standard posts stay on the bare page.
+  /// The soft territory a featured moment earns — the social color system:
+  /// ice-blue for a rivalry in motion, teal for a personal best, violet
+  /// for an invite, pale green for a teammate's verified finish, warm
+  /// cream only when a WIN lands. Standard posts stay on the bare page.
   Color _bandColor(BuildContext context) {
-    const resultTypes = {
-      'race_finished',
-      'winner_determined',
-      'participant_finished',
-      'personal_best',
-    };
-    return resultTypes.contains(item.type)
-        ? context.semanticColors.warning.surface
-        : context.semanticColors.neutral.surface;
+    final sem = context.semanticColors;
+    switch (item.type) {
+      case 'personal_best':
+        return NuvoColors.avatarTeal.withValues(alpha: 0.10);
+      case 'race_invite':
+      case 'rematch_requested':
+        return NuvoColors.avatarPlum.withValues(alpha: 0.10);
+      case 'race_finished':
+      case 'winner_determined':
+        return item.payload['winnerUserId'] == myId
+            ? sem.warning.surface
+            : NuvoColors.success.withValues(alpha: 0.07);
+      case 'participant_finished':
+        final rank = race?.participants
+            .where((p) => p.userId == item.actor?.id)
+            .firstOrNull
+            ?.rank;
+        return rank == 1
+            ? sem.warning.surface
+            : NuvoColors.success.withValues(alpha: 0.07);
+      default:
+        return sem.neutral.surface;
+    }
   }
 
   @override
@@ -4389,6 +4428,14 @@ class _SearchResultList extends StatelessWidget {
 /// How far the featured social object rises onto the field — its top
 /// ~40% sits on the ice apron, the rest lands on white below.
 const _kFeaturedBridge = 84.0;
+
+/// The field always extends this far past the tab row — it breathes
+/// instead of ending dead at the tabs.
+const _kFieldRest = 30.0;
+
+/// With no featured object, the tab body's modest rise — the first module
+/// (the Start-a-race rail) straddles the field's edge as the bridge.
+const _kRailBridge = 30.0;
 
 /// The social stage — one ice region under the people, their asks, and
 /// the lens switch. No edge, no shadow: a layer, not a card. [tail]
