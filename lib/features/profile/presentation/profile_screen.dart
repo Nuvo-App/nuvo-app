@@ -212,29 +212,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: NuvoSpacing.lg),
 
                     // Level — the progression that belongs to the person,
-                    // not any one race. Always visible: data fills it, a
+                    // not any one race. One ice-blue plane carries the whole
+                    // system: level, the climb, the next capability, and the
+                    // competitive record share a single field so they read
+                    // as one instrument. Always visible: data fills it, a
                     // quiet skeleton holds its place while the server
                     // answers, and a failure reads as "syncing" — never a
                     // missing piece of identity.
-                    _ProgressionSection(state: progressionAsync).nuvoEnter(),
-                    const SizedBox(height: NuvoSpacing.lg),
-
-                    // Competitive snapshot — three stats that mean something.
-                    _StatsStrip(
+                    _ProgressionPlane(
+                      state: progressionAsync,
                       activeCount: activeCount,
                       wins: wins,
                       winRate: winRate,
-                    ),
+                    ).nuvoEnter(),
                     const SizedBox(height: NuvoSpacing.lg),
 
                     // The collection is part of identity — featured
                     // achievements with names, or the next target in reach
-                    // when nothing is featured yet. Never an empty section.
+                    // when nothing is featured yet. Back on the page: these
+                    // are status objects, not another tinted field. Never an
+                    // empty section.
                     _AchievementsSection(progression: progression),
-                    const SizedBox(height: NuvoSpacing.lg),
 
-                    // One goal in reach — the reason to race again.
-                    _NextUpCard(progression: progression),
+                    // One goal in reach — the reason to race again. Stays
+                    // unboxed, but a hairline and the collection's artifact
+                    // scale pin it to the field above: the NEXT badge is the
+                    // next object in the set, not a detached block.
+                    if (progression?.nextAchievement != null) ...[
+                      const SizedBox(height: NuvoSpacing.sm + 4),
+                      Divider(height: 1, thickness: 1, color: c.divider),
+                      const SizedBox(height: NuvoSpacing.md + 4),
+                      _NextUpCard(progression: progression),
+                    ],
                   ],
                 ),
               ),
@@ -318,6 +327,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           userId: uid,
           expanded: _racingExpanded,
           cap: _racingFeaturedCap,
+          // Live races are objects in motion — each sits on its own soft
+          // ice inset, unlike the flat history rows below.
+          inset: true,
           onToggleExpand: () =>
               setState(() => _racingExpanded = !_racingExpanded),
         ),
@@ -707,14 +719,71 @@ class _IdentityChip extends StatelessWidget {
   }
 }
 
+// ── Progression plane ───────────────────────────────────────────────────────
+
+/// One ice-blue field carrying the whole progression system — level, the XP
+/// climb, the next capability, and the competitive record. A layer that
+/// groups related information, not a card around an object: flat fill, quiet
+/// radius, no border. The bar stays the strongest graphic inside it, and the
+/// next-capability tile docks physically onto the plane's right edge. The
+/// plane is ALWAYS present: real data fills it, a quiet skeleton holds its
+/// place while the server answers, and an outage reads as a sync note —
+/// never a missing piece of the profile.
+class _ProgressionPlane extends StatelessWidget {
+  const _ProgressionPlane({
+    required this.state,
+    required this.activeCount,
+    required this.wins,
+    required this.winRate,
+  });
+
+  final AsyncValue<NuvoProgression> state;
+  final int activeCount;
+  final int wins;
+  final int? winRate;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      decoration: BoxDecoration(
+        color: c.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ProgressionSection(state: state),
+          // A hairline splits the climb from the record inside the same
+          // field — the stats belong to the system, not to separate cards.
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: c.ink.withValues(alpha: 0.10),
+            ),
+          ),
+          _StatsStrip(
+            activeCount: activeCount,
+            wins: wins,
+            winRate: winRate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Progression section ─────────────────────────────────────────────────────
 
 /// Persistent progression — the Nuvo Level that belongs to the person, not
-/// any single race. Type, progress, and the next reward carry it; nothing
-/// boxes it in, so it reads as part of the identity rather than an attached
-/// card. The section is ALWAYS present: real data fills it, a quiet
-/// skeleton holds its place while the server answers, and an outage reads
-/// as a sync note — never a missing piece of the profile.
+/// any single race. Type, progress, and the next reward carry it; inside the
+/// progression plane it supplies the climb half — the record strip lives
+/// below it on the same field. The section is ALWAYS present: real data
+/// fills it, a quiet skeleton holds its place while the server answers, and
+/// an outage reads as a sync note — never a missing piece of the profile.
 class _ProgressionSection extends ConsumerWidget {
   const _ProgressionSection({required this.state});
 
@@ -789,46 +858,59 @@ class _ProgressionSection extends ConsumerWidget {
         ),
         const SizedBox(height: NuvoSpacing.sm),
         // The bar carries physical presence — taller than a hairline track
-        // so the climb reads as the section's main event — and it runs
-        // directly into the reward: the next unlock sits at the bar's end,
-        // the thing the climb is FOR.
-        Row(
-          children: [
-            Expanded(
-              child: NuvoProgressBar(
-                value: p.progress,
-                height: 12,
-                color: xpColor,
-                trackColor: c.track,
+        // so the climb reads as the section's main event — and it runs the
+        // plane's full width straight INTO the reward: the next-capability
+        // tile overhangs the plane's right edge so the payoff reads as a
+        // physical object docked on the field, not a glyph inside it. The
+        // 6px break stays well inside the screen gutter even at 320.
+        SizedBox(
+          height: 34,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                top: 11,
+                bottom: 11,
+                child: NuvoProgressBar(
+                  value: p.progress,
+                  height: 12,
+                  color: xpColor,
+                  trackColor: c.track,
+                ),
               ),
-            ),
-            if (next != null) ...[
-              // Flush contact — the bar terminates INTO the target tile.
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: c.panelLight,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: c.inkShadow, width: 1.75),
-                  boxShadow: [
-                    BoxShadow(
-                      color: c.inkShadow,
-                      offset: const Offset(2, 2),
-                      blurRadius: 0,
+              if (next != null)
+                Positioned(
+                  right: -22,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: c.panelLight,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: c.inkShadow, width: 1.75),
+                        boxShadow: [
+                          BoxShadow(
+                            color: c.inkShadow,
+                            offset: const Offset(2, 2),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        nextIconKey != null
+                            ? nuvoBadgeIconFor(nextIconKey)
+                            : Icons.lock_outline_rounded,
+                        size: 17,
+                        color: c.ink,
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-                child: Icon(
-                  nextIconKey != null
-                      ? nuvoBadgeIconFor(nextIconKey)
-                      : Icons.lock_outline_rounded,
-                  size: 17,
-                  color: c.ink,
-                ),
-              ),
             ],
-          ],
+          ),
         ),
         const SizedBox(height: NuvoSpacing.sm),
         Text(
@@ -1136,7 +1218,9 @@ class _NextUpCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  NuvoAchievementBadge(badge: next, size: 44),
+                  // Same 52px scale as the featured artifacts above — the
+                  // next badge is the next object in the set.
+                  NuvoAchievementBadge(badge: next, size: 52),
                   const SizedBox(width: NuvoSpacing.md),
                   Expanded(
                     child: Column(
@@ -1327,6 +1411,7 @@ class _RaceSection extends StatelessWidget {
     required this.expanded,
     required this.cap,
     required this.onToggleExpand,
+    this.inset = false,
   });
 
   final String label;
@@ -1335,6 +1420,10 @@ class _RaceSection extends StatelessWidget {
   final bool expanded;
   final int cap;
   final VoidCallback onToggleExpand;
+
+  /// Racing-now rows are live objects — each sits on its own soft ice inset
+  /// instead of hairline-separated page rows like history.
+  final bool inset;
 
   @override
   Widget build(BuildContext context) {
@@ -1379,21 +1468,51 @@ class _RaceSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NuvoSpacing.sm),
-        _ProfileRaceGroup(races: visible, userId: userId),
+        _ProfileRaceGroup(races: visible, userId: userId, inset: inset),
       ],
     );
   }
 }
 
 class _ProfileRaceGroup extends StatelessWidget {
-  const _ProfileRaceGroup({required this.races, this.userId});
+  const _ProfileRaceGroup({
+    required this.races,
+    this.userId,
+    this.inset = false,
+  });
 
   final List<Race> races;
   final String? userId;
 
+  /// Live races get a local surface — each row is an object in motion on a
+  /// soft ice inset. History stays flat on the page with hairlines.
+  final bool inset;
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
+    if (inset) {
+      return Column(
+        children: [
+          for (var i = 0; i < races.length; i++)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: i < races.length - 1 ? 10 : 0,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: c.panelLight,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NuvoSpacing.md,
+                ),
+                child: _buildRow(context, races[i]),
+              ),
+            ),
+        ],
+      );
+    }
     // Structured-compact level: rows sit on the page under the section
     // title — no enclosing sheet. The only separator is a hairline aligned
     // to the shared text column, past the 44px placement/icon column.
@@ -1502,6 +1621,7 @@ class _ProfileRaceGroup extends StatelessWidget {
               ),
             ],
       hasGoal: geo.hasGoal,
+      onInset: inset,
       onTap: () => context.push('/race/${race.id}'),
     );
   }
@@ -1525,6 +1645,7 @@ class _ActiveRaceTile extends StatelessWidget {
     this.remainingLabel,
     this.trackMarkers,
     this.hasGoal = true,
+    this.onInset = false,
   });
 
   final String raceTitle;
@@ -1547,6 +1668,10 @@ class _ActiveRaceTile extends StatelessWidget {
   /// Whether the lane ends in a finish ring — false for best-attempt and
   /// lower-wins races.
   final bool hasGoal;
+
+  /// True when the row sits on a tinted inset — the icon well lifts to the
+  /// page surface so it stays visible against the ice field.
+  final bool onInset;
 
   @override
   Widget build(BuildContext context) {
@@ -1575,7 +1700,7 @@ class _ActiveRaceTile extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: c.panelLight,
+              color: onInset ? c.surface : c.panelLight,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: c.ink, size: 18),
