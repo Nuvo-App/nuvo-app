@@ -1163,6 +1163,8 @@ class RaceRow extends StatelessWidget {
     this.contextNote,
     this.contextColor,
     this.leading,
+    this.raised = false,
+    this.rewardArtifact = false,
     this.padding = const EdgeInsets.symmetric(
       horizontal: NuvoSpacing.md,
       vertical: NuvoSpacing.md,
@@ -1209,6 +1211,16 @@ class RaceRow extends StatelessWidget {
   /// composition stays identical to its left.
   final Widget? leading;
 
+  /// Lifts the row off a section plane — white surface, restrained navy
+  /// edge, small offset shadow. Opt-in: a race with real progress is an
+  /// interactive object, not another line on the field.
+  final bool raised;
+
+  /// Renders [rewardLabel] as a compact tag at the trailing edge of the
+  /// context line instead of a second text line — the reward reads as an
+  /// artifact attached to the race, not more metadata.
+  final bool rewardArtifact;
+
   /// Row padding — lists that already carry their own horizontal gutter
   /// (Profile's racing-now section) pass a vertical-only padding.
   final EdgeInsetsGeometry padding;
@@ -1233,6 +1245,19 @@ class RaceRow extends StatelessWidget {
         child: Container(
           constraints: const BoxConstraints(minHeight: 58),
           padding: padding,
+          decoration: raised
+              ? BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(NuvoRadii.md),
+                  border: Border.all(color: c.border, width: 1.25),
+                  // A quiet offset — the object stands off its field
+                  // without shouting over the hero.
+                  boxShadow: AppShadows.hardOffset(
+                    c.inkShadow,
+                    offset: const Offset(2.5, 2.5),
+                  ),
+                )
+              : null,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1332,6 +1357,34 @@ class RaceRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (rewardArtifact && rewardLabel != null) ...[
+                          const SizedBox(width: NuvoSpacing.sm),
+                          // The payout docks at the context line's trailing
+                          // edge — a small ice tag the race carries, not a
+                          // dangling second line of metadata.
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: c.panel,
+                              borderRadius:
+                                  BorderRadius.circular(NuvoRadii.pill),
+                            ),
+                            child: Text(
+                              rewardLabel!,
+                              style: AppTextStyles.raceRowMeta.copyWith(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: NuvoColors.actionBlue,
+                                letterSpacing: 0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
                         if (avatars.isNotEmpty) ...[
                           const SizedBox(width: NuvoSpacing.sm),
                           RacePeople(
@@ -1343,7 +1396,7 @@ class RaceRow extends StatelessWidget {
                         ],
                       ],
                     ),
-                    if (rewardLabel != null) ...[
+                    if (!rewardArtifact && rewardLabel != null) ...[
                       const SizedBox(height: 3),
                       Text(
                         rewardLabel!,
