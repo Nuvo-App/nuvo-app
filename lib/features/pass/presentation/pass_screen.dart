@@ -757,7 +757,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
             children: [
               // ── Header ───────────────────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                 child: _CrewHeader(
                 subtitle: crew.isEmpty
                     ? 'Find people to race with.'
@@ -774,7 +774,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               if (_searchOpen) ...[
                 const SizedBox(height: 12),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                   child: Row(
                     children: [
                       Expanded(
@@ -794,7 +794,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 if (_results.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                     child: _SearchResultList(
                       results: _results,
                       crewState: crewState,
@@ -805,7 +805,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 ] else if (_searchError != null && !_searching) ...[
                   const SizedBox(height: 16),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                     child: NuvoPressable(
                       onTap: () => _onSearchChanged(_searchController.text),
                       haptic: false,
@@ -816,7 +816,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     !_searching) ...[
                   const SizedBox(height: 16),
                   const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20),
+                    padding: EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                     child: _EmptyNote(text: 'No matching Nuvo members found.'),
                   ),
                 ],
@@ -826,13 +826,13 @@ class _PassScreenState extends ConsumerState<PassScreen> {
               // ── Loading ──────────────────────────────────────────────────
               if (_loading)
                 const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                   child: _CrewSkeleton(),
                 )
               // ── Error ────────────────────────────────────────────────────
               else if (_error != null)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                   child: NuvoErrorState(
                     message: _error!,
                     onRetry: _refreshAll,
@@ -927,7 +927,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
 
                 if (crewState.error != null && crew.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                    padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 0, NuvoSpacing.pageHorizontal, 14),
                     child: NuvoErrorState(
                       message: crewState.error!,
                       onRetry: () => ref
@@ -937,7 +937,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                   ),
                 if (activityState.error != null && feedItems.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                    padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 0, NuvoSpacing.pageHorizontal, 14),
                     child: NuvoErrorState(
                       message: activityState.error!,
                       onRetry: () => ref
@@ -949,7 +949,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 // The featured object rises over the field's edge — its
                 // top sits on the ice apron, its body lands on white.
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
                   child: Transform.translate(
                   offset: Offset(0, -featuredBridge),
                   child: switch (_feedTab) {
@@ -1684,7 +1684,7 @@ class _CrewHeroCard extends StatelessWidget {
           border: Border.all(color: c.border, width: 2),
           boxShadow: AppShadows.hardOffset(
             c.inkShadow,
-            offset: const Offset(5, 5),
+            offset: const Offset(7, 7),
           ),
         ),
         child: Column(
@@ -4067,10 +4067,13 @@ class _RequestSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.themeColors.surface,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
-        border: Border.all(color: context.themeColors.divider, width: 1),
-        // A soft ambient lift — the sheet floats on the social field, a
-        // real object, but quieter than the featured race's navy plate.
-        boxShadow: AppShadows.softSubtle,
+        border: Border.all(color: context.themeColors.border, width: 1),
+        // A quiet offset plate — the sheet floats on the social field,
+        // quieter than the featured race's hero plate.
+        boxShadow: AppShadows.hardOffset(
+          context.themeColors.inkShadow,
+          offset: const Offset(2, 2),
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(NuvoRadii.card - 1),
@@ -4404,10 +4407,10 @@ class _SocialField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // The list carries no horizontal padding — this field is already at
-    // full width, so the ice bleeds edge-to-edge and the 20 inset lives
+    // full width, so the ice bleeds edge-to-edge and the page inset lives
     // inside.
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 12 + tail),
+      padding: EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 16, NuvoSpacing.pageHorizontal, 12 + tail),
       decoration: BoxDecoration(
         color: context.themeColors.panelLight,
         borderRadius: const BorderRadius.vertical(
@@ -4617,7 +4620,7 @@ class _PersonSheetState extends State<_PersonSheet> {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 4, NuvoSpacing.pageHorizontal, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
