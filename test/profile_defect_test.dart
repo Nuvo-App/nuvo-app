@@ -246,7 +246,7 @@ void main() {
       expect(find.textContaining('%'), findsNothing);
     });
 
-    testWidgets('Racing now features one race; the rest sit behind See all',
+    testWidgets('Racing now is a horizontal shelf; See all lists all races',
         (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([
         _activeRace('r1', 'First To 50 Pushups'),
@@ -256,14 +256,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
-      // One featured race — the one closest to its finish line (18/50
-      // beats 5/25). The second race stays collapsed behind See all.
+      // The shelf carries every live race as a scrollable tile — the
+      // closest-to-finish leads (18/50 before 5/25). See all drops into
+      // the vertical list.
       expect(find.text('First To 50 Pushups'), findsOneWidget);
-      expect(find.text('First To 25 Squats'), findsNothing);
+      expect(find.text('First To 25 Squats'), findsOneWidget);
       expect(find.text('See all'), findsOneWidget);
 
       await tester.tap(find.text('See all'));
       await tester.pumpAndSettle();
+      expect(find.text('First To 50 Pushups'), findsOneWidget);
       expect(find.text('First To 25 Squats'), findsOneWidget);
     });
 

@@ -747,14 +747,14 @@ void main() {
         // Level is the hero — big number beside the LEVEL label.
         expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
-        // The next unlock is fused to the XP line — the bar terminates in
-        // the target tile and the caption splits into two lines.
+        // The remaining climb is the lane's caption; the next collectible
+        // docks under the track with its name fused beneath it.
         expect(
           find.textContaining('140 XP to Level 9', findRichText: true),
           findsOneWidget,
         );
         expect(
-          find.textContaining('Unlock: Clap reaction', findRichText: true),
+          find.textContaining('Clap reaction', findRichText: true),
           findsOneWidget,
         );
         // Edit anchored to the identity row.
