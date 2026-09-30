@@ -73,7 +73,7 @@ class _State extends ConsumerState<PublicBadgesScreen> {
   Future<void> _openDetail(NuvoBadge badge) async {
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => NuvoAchievementDetailSheet(badge: badge),
     );
   }
@@ -98,7 +98,9 @@ class _State extends ConsumerState<PublicBadgesScreen> {
       backgroundColor: c.page,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          // Same pushed-page clearance as the self collection — the last
+          // row rests visibly above the edge even without a bottom inset.
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
           children: [
             NuvoBackHeader(
               title: 'Achievements',

@@ -96,7 +96,7 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
   Future<void> _openDetail(NuvoBadge badge) async {
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => NuvoAchievementDetailSheet(
         badge: badge,
         onFeature: badge.unlocked
@@ -130,7 +130,11 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
       backgroundColor: c.page,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          // Pushed pages reserve real breathing room below the last tile —
+          // the same clearance Race Detail uses (56). On inset-less devices
+          // (viewPadding.bottom == 0) this padding is the only thing
+          // keeping the final row off the physical screen edge.
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 56),
           children: [
             NuvoBackHeader(
               title: 'Achievements',

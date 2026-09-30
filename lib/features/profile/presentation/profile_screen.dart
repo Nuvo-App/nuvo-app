@@ -763,32 +763,85 @@ class _ProgressionPlane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
+    final next = state.valueOrNull?.nextUnlock;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 34 : 12),
+          decoration: BoxDecoration(
+            color: c.panelLight,
+            borderRadius: BorderRadius.circular(NuvoRadii.lg),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ProgressionSection(state: state),
+              // A hairline splits the climb from the record inside the same
+              // field — the stats belong to the system, not to separate cards.
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: c.ink.withValues(alpha: 0.10),
+                ),
+              ),
+              _StatsStrip(
+                activeCount: activeCount,
+                wins: wins,
+                winRate: winRate,
+              ),
+            ],
+          ),
+        ),
+        // The next-unlock artifact pins to the plane's top-right corner —
+        // it belongs to the "X XP to Level N / Unlock: …" payoff line,
+        // not to the bar's current position. The 9px overhang on both
+        // axes keeps it inside the screen gutter even at 320.
+        if (next != null)
+          Positioned(
+            top: -9,
+            right: -9,
+            child: _NextUnlockArtifact(unlock: next),
+          ),
+      ],
+    );
+  }
+}
+
+/// The physical "what's next" tile docked on the progression plane's edge —
+/// navy edge + hard offset so it reads as an object pinned to the field.
+class _NextUnlockArtifact extends StatelessWidget {
+  const _NextUnlockArtifact({required this.unlock});
+
+  final NuvoUnlockRef unlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final iconKey = unlock.metadata?['iconKey'] as String?;
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 34 : 12),
+      width: 34,
+      height: 34,
       decoration: BoxDecoration(
         color: c.panelLight,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ProgressionSection(state: state),
-          // A hairline splits the climb from the record inside the same
-          // field — the stats belong to the system, not to separate cards.
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: c.ink.withValues(alpha: 0.10),
-            ),
-          ),
-          _StatsStrip(
-            activeCount: activeCount,
-            wins: wins,
-            winRate: winRate,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.border, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: c.inkShadow,
+            offset: const Offset(2, 2),
+            blurRadius: 0,
           ),
         ],
+      ),
+      child: Icon(
+        iconKey != null
+            ? nuvoBadgeIconFor(iconKey)
+            : Icons.lock_outline_rounded,
+        size: 17,
+        color: c.ink,
       ),
     );
   }
@@ -822,7 +875,6 @@ class _ProgressionSection extends ConsumerWidget {
     // moment in the progression loop, so the last stretch previews it.
     final nearNext = p.progress >= 0.9;
     final xpColor = nearNext ? NuvoColors.gold : NuvoColors.blue;
-    final nextIconKey = next?.metadata?['iconKey'] as String?;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -872,63 +924,20 @@ class _ProgressionSection extends ConsumerWidget {
                 ),
               ),
             ),
+
           ],
         ),
         const SizedBox(height: NuvoSpacing.sm),
         // The bar carries physical presence — taller than a hairline track
         // so the climb reads as the section's main event — and it runs the
-        // plane's full width straight INTO the reward: the next-capability
-        // tile overhangs the plane's right edge so the payoff reads as a
-        // physical object docked on the field, not a glyph inside it. The
-        // 6px break stays well inside the screen gutter even at 320.
-        SizedBox(
-          height: 34,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                top: 11,
-                bottom: 11,
-                child: NuvoProgressBar(
-                  value: p.progress,
-                  height: 12,
-                  color: xpColor,
-                  trackColor: c.track,
-                ),
-              ),
-              if (next != null)
-                Positioned(
-                  right: -22,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: c.panelLight,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: c.border, width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: c.inkShadow,
-                            offset: const Offset(2, 2),
-                            blurRadius: 0,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        nextIconKey != null
-                            ? nuvoBadgeIconFor(nextIconKey)
-                            : Icons.lock_outline_rounded,
-                        size: 17,
-                        color: c.ink,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+        // plane's full width, uninterrupted. The "what's next" object lives
+        // on the plane's upper-right edge with the LEVEL header instead —
+        // the bar shows where you ARE, the artifact shows what comes NEXT.
+        NuvoProgressBar(
+          value: p.progress,
+          height: 12,
+          color: xpColor,
+          trackColor: c.track,
         ),
         const SizedBox(height: NuvoSpacing.sm),
         Text(
@@ -976,25 +985,7 @@ class _ProgressionSkeleton extends StatelessWidget {
       children: [
         bar(120, 26),
         const SizedBox(height: NuvoSpacing.sm),
-        Row(
-          children: [
-            Expanded(
-              child: NuvoProgressBar(
-                value: 0,
-                height: 12,
-                trackColor: c.track,
-              ),
-            ),
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: c.panelLight,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ],
-        ),
+        NuvoProgressBar(value: 0, height: 12, trackColor: c.track),
         const SizedBox(height: NuvoSpacing.sm),
         bar(150, 10),
       ],
@@ -1065,7 +1056,15 @@ class _DockedBadges extends StatelessWidget {
               scale: 0.94,
               onTap: () => context.push('/profile/badges'),
               child: Center(
-                child: NuvoAchievementBadge(badge: badges[i], size: 52),
+                // A 4px drop on the center trophy keeps the trio reading
+                // as collectibles, not a tab bar.
+                child: Transform.translate(
+                  offset: Offset(
+                    0,
+                    badges.length == 3 && i == 1 ? 4 : 0,
+                  ),
+                  child: NuvoAchievementBadge(badge: badges[i], size: 52),
+                ),
               ),
             ),
           ),
@@ -1268,72 +1267,91 @@ class _NextUpCard extends StatelessWidget {
           onTap: () => context.go('/compete'),
           scale: 0.99,
           haptic: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Expanded(
-                    child: Text(
-                      next.name,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: c.ink,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // A thin mission rail in the goal's own accent — the strip
+                // reads as a mission in flight, never a card.
+                Container(
+                  width: 3,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.85),
+                    borderRadius: BorderRadius.circular(1.5),
                   ),
-                  if (next.threshold != null) ...[
-                    const SizedBox(width: NuvoSpacing.sm),
-                    Text(
-                      '${next.progressValue} / ${next.threshold}',
-                      style: AppTextStyles.statLarge(
-                        15,
-                        color: accent,
-                        weight: FontWeight.w800,
+                ),
+                const SizedBox(width: NuvoSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              next.name,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: c.ink,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (next.threshold != null) ...[
+                            const SizedBox(width: NuvoSpacing.sm),
+                            Text(
+                              '${next.progressValue} / ${next.threshold}',
+                              style: AppTextStyles.statLarge(
+                                15,
+                                color: accent,
+                                weight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ),
-                  ],
-                ],
-              ),
-              if (next.description != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  next.description!,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: c.inkMuted,
+                      if (next.description != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          next.description!,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: c.inkMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (next.threshold != null) ...[
+                        const SizedBox(height: NuvoSpacing.sm),
+                        NuvoProgressBar(
+                          value: next.goalProgress,
+                          height: 10,
+                          color: NuvoColors.blue,
+                          trackColor: c.track,
+                        ),
+                        if (next.threshold! - next.progressValue == 1) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            switch (next.statKey) {
+                              'wins' => 'ONE MORE WIN',
+                              'races' => 'ONE MORE RACE',
+                              'proofs' => 'ONE MORE PROOF',
+                              _ => 'ONE TO GO',
+                            },
+                            style: AppTextStyles.labelUppercase(10).copyWith(
+                              color: accent,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
-              if (next.threshold != null) ...[
-                const SizedBox(height: NuvoSpacing.sm),
-                NuvoProgressBar(
-                  value: next.goalProgress,
-                  height: 10,
-                  color: NuvoColors.blue,
-                  trackColor: c.track,
-                ),
-                if (next.threshold! - next.progressValue == 1) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    switch (next.statKey) {
-                      'wins' => 'ONE MORE WIN',
-                      'races' => 'ONE MORE RACE',
-                      'proofs' => 'ONE MORE PROOF',
-                      _ => 'ONE TO GO',
-                    },
-                    style: AppTextStyles.labelUppercase(10).copyWith(
-                      color: accent,
-                    ),
-                  ),
-                ],
-              ],
-            ],
+            ),
           ),
         ),
       ],
