@@ -224,14 +224,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       activeCount: activeCount,
                       wins: wins,
                       winRate: winRate,
+                      docksBadges:
+                          progression?.featuredBadges.isNotEmpty ?? false,
                     ).nuvoEnter(),
-                    const SizedBox(height: NuvoSpacing.lg),
+                    // Earned artifacts straddle the plane's bottom edge —
+                    // trophies pulled out of the climb, not a gallery hung
+                    // below it. Their names land on white under the section
+                    // header.
+                    if (progression?.featuredBadges.isNotEmpty ?? false)
+                      Transform.translate(
+                        offset: const Offset(0, -26),
+                        child: _DockedBadges(
+                          badges: progression!.featuredBadges,
+                          slots: progression.featuredSlots,
+                        ),
+                      ),
 
-                    // The collection is part of identity — featured
-                    // achievements with names, or the next target in reach
-                    // when nothing is featured yet. Back on the page: these
-                    // are status objects, not another tinted field. Never an
-                    // empty section.
+                    // The collection is part of identity — names under the
+                    // docked artifacts, or the next target in reach when
+                    // nothing is featured yet. Back on the page: status
+                    // objects, not another tinted field. Never empty.
                     _AchievementsSection(progression: progression),
 
                     // One goal in reach — the reason to race again. Stays
@@ -735,6 +747,7 @@ class _ProgressionPlane extends StatelessWidget {
     required this.activeCount,
     required this.wins,
     required this.winRate,
+    required this.docksBadges,
   });
 
   final AsyncValue<NuvoProgression> state;
@@ -742,11 +755,16 @@ class _ProgressionPlane extends StatelessWidget {
   final int wins;
   final int? winRate;
 
+  /// True when earned badges straddle the plane's bottom edge — the field
+  /// keeps an empty ice band beneath the stats so the artifacts land on
+  /// clear field, never on the labels.
+  final bool docksBadges;
+
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 34 : 12),
       decoration: BoxDecoration(
         color: c.panelLight,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
@@ -1021,12 +1039,51 @@ class _ProgressionUnavailable extends StatelessWidget {
   }
 }
 
+// ── Docked badges ───────────────────────────────────────────────────────────
+
+/// The earned artifacts themselves — rendered straddling the progression
+/// plane's bottom edge (translated half their height into the field) so a
+/// featured badge reads as a trophy earned FROM the climb. Objects on the
+/// boundary, names left behind on the page.
+class _DockedBadges extends StatelessWidget {
+  const _DockedBadges({required this.badges, required this.slots});
+
+  final List<NuvoBadge> badges;
+
+  /// The collection's fixed column count — unused cells stay empty so the
+  /// names row below aligns with the artifacts' columns.
+  final int slots;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < badges.length; i++) ...[
+          Expanded(
+            child: PressableScale(
+              scale: 0.94,
+              onTap: () => context.push('/profile/badges'),
+              child: Center(
+                child: NuvoAchievementBadge(badge: badges[i], size: 52),
+              ),
+            ),
+          ),
+          if (i < badges.length - 1) const SizedBox(width: NuvoSpacing.sm),
+        ],
+        for (var i = badges.length; i < slots; i++)
+          const Expanded(child: SizedBox.shrink()),
+      ],
+    );
+  }
+}
+
 // ── Achievements section ────────────────────────────────────────────────────
 
-/// The collection is part of identity: featured achievements as named
-/// objects under an earned/total count, or the locked target in reach when
-/// nothing is featured yet. Never an empty section — the next goal is the
-/// point.
+/// The collection is part of identity: the header claims the earned/total
+/// count, and the artifacts' names sit directly under the badges docked on
+/// the progression field — or the locked target in reach when nothing is
+/// featured yet. Never an empty section — the next goal is the point.
 class _AchievementsSection extends StatelessWidget {
   const _AchievementsSection({required this.progression});
 
@@ -1086,6 +1143,9 @@ class _AchievementsSection extends StatelessWidget {
         ),
         const SizedBox(height: NuvoSpacing.sm + 2),
         if (featured.isNotEmpty)
+          // Names only — the artifacts themselves are docked on the
+          // progression field above. Columns match the badge row so each
+          // name lands under its trophy.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1094,24 +1154,18 @@ class _AchievementsSection extends StatelessWidget {
                   child: PressableScale(
                     scale: 0.94,
                     onTap: () => context.push('/profile/badges'),
-                    child: Column(
-                      children: [
-                        NuvoAchievementBadge(badge: featured[i], size: 52),
-                        const SizedBox(height: 6),
-                        // Earned names carry the achievement's family accent
-                        // — gold for a win, blue for depth, teal for a PB,
-                        // violet for creation. Same language as the badge.
-                        Text(
-                          featured[i].name,
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: nuvoBadgeAccent(featured[i]),
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+                    // Earned names carry the achievement's family accent —
+                    // gold for a win, blue for depth, teal for a PB,
+                    // violet for creation. Same language as the badge.
+                    child: Text(
+                      featured[i].name,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: nuvoBadgeAccent(featured[i]),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),
@@ -1207,8 +1261,9 @@ class _NextUpCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NuvoSpacing.sm),
-        // The whole row is the challenge — tap it and you're back in a race
-        // earning toward the goal.
+        // The whole strip is the mission — tap it and you're back in a race
+        // earning toward the goal. No badge here: the count and the progress
+        // line are the anchors, the artifact only exists once it's earned.
         NuvoPressable(
           onTap: () => context.go('/compete'),
           scale: 0.99,
@@ -1217,34 +1272,18 @@ class _NextUpCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
                 children: [
-                  // Same 52px scale as the featured artifacts above — the
-                  // next badge is the next object in the set.
-                  NuvoAchievementBadge(badge: next, size: 52),
-                  const SizedBox(width: NuvoSpacing.md),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          next.name,
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: c.ink,
-                            fontWeight: FontWeight.w800,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (next.description != null)
-                          Text(
-                            next.description!,
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: c.inkMuted,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
+                    child: Text(
+                      next.name,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: c.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (next.threshold != null) ...[
@@ -1260,11 +1299,22 @@ class _NextUpCard extends StatelessWidget {
                   ],
                 ],
               ),
+              if (next.description != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  next.description!,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: c.inkMuted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
               if (next.threshold != null) ...[
                 const SizedBox(height: NuvoSpacing.sm),
                 NuvoProgressBar(
                   value: next.goalProgress,
-                  height: 8,
+                  height: 10,
                   color: NuvoColors.blue,
                   trackColor: c.track,
                 ),

@@ -360,22 +360,35 @@ class _State extends ConsumerState<PublicProfileScreen> {
     if (card == null) {
       return const Center(child: NuvoLoadingIndicator());
     }
+    final hasPlane = card.level != null || card.racesFinished != null;
+    final shown = _publicFeaturedBadges(card);
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         children: [
           _hero(card).nuvoEnter(),
           // Same progression plane as the self profile — the level climb and
-          // the canonical racing record share one ice-blue field.
+          // the canonical racing record share one ice-blue field. When their
+          // badges dock on its edge the field keeps clear room beneath.
           if (card.level != null || card.racesFinished != null) ...[
             const SizedBox(height: 20),
-            _PublicProgressionPlane(card: card).nuvoEnter(),
+            _PublicProgressionPlane(
+              card: card,
+              docksBadges: shown.isNotEmpty,
+            ).nuvoEnter(),
           ],
+          // Earned artifacts straddle the plane's bottom edge — trophies
+          // earned FROM the progression system, same as the self profile.
+          if (hasPlane && shown.isNotEmpty)
+            Transform.translate(
+              offset: const Offset(0, -24),
+              child: _PublicDockedBadges(badges: shown),
+            ),
           // Earned collection — featured first; tap opens the earned-only
           // collection (locked progress stays self-only).
           if ((card.achievementsEarned ?? 0) > 0) ...[
-            const SizedBox(height: 24),
-            _PublicAchievements(card: card),
+            if (!hasPlane || shown.isEmpty) const SizedBox(height: 24),
+            _PublicAchievements(card: card, shown: shown),
           ],
           _racesWithYou(card),
           // Racing together — races I'm in that this person races too,
@@ -768,15 +781,19 @@ class _Badge extends StatelessWidget {
 /// system. The public contract shows level and the 0..1 fraction only;
 /// absolute XP never leaves the owner's own profile.
 class _PublicProgressionPlane extends StatelessWidget {
-  const _PublicProgressionPlane({required this.card});
+  const _PublicProgressionPlane({required this.card, required this.docksBadges});
 
   final PublicProfileCard card;
+
+  /// Keeps an empty ice band under the stats when earned badges straddle
+  /// the plane's bottom edge.
+  final bool docksBadges;
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 30 : 12),
       decoration: BoxDecoration(
         color: c.panelLight,
         borderRadius: BorderRadius.circular(NuvoRadii.card),
@@ -925,24 +942,57 @@ class _PubStat extends StatelessWidget {
   }
 }
 
-/// Featured + earned achievements on someone else's profile. Tapping opens
-/// their earned-only collection — locked progress is never exposed.
+/// Featured achievements resolve to full badges from the earned list so
+/// they render with the same silhouette as the collection.
+List<NuvoBadge> _publicFeaturedBadges(PublicProfileCard card) {
+  final shown = <NuvoBadge>[];
+  for (final f in card.featured) {
+    final hit = card.earned.where((b) => b.unlockId == f.unlockId);
+    if (hit.isNotEmpty) shown.add(hit.first);
+  }
+  if (shown.isEmpty) shown.addAll(card.earned.take(3));
+  return shown;
+}
+
+/// Earned artifacts docked on the public progression plane's bottom edge —
+/// the same trophy-on-the-boundary language as the self profile.
+class _PublicDockedBadges extends StatelessWidget {
+  const _PublicDockedBadges({required this.badges});
+
+  final List<NuvoBadge> badges;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var i = 0; i < badges.length; i++) ...[
+          Expanded(
+            child: Center(
+              child: NuvoAchievementBadge(badge: badges[i], size: 48),
+            ),
+          ),
+          if (i < badges.length - 1) const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+}
+
+/// Featured + earned achievements on someone else's profile. The header
+/// claims the earned/total count; the artifacts' names sit under the badges
+/// docked on the plane above. Tapping opens their earned-only collection —
+/// locked progress is never exposed.
 class _PublicAchievements extends ConsumerWidget {
-  const _PublicAchievements({required this.card});
+  const _PublicAchievements({required this.card, required this.shown});
 
   final PublicProfileCard card;
+
+  /// Resolved in `_body` — the same list that docks on the plane's edge.
+  final List<NuvoBadge> shown;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.themeColors;
-    // Featured achievements resolve to full badges from the earned list so
-    // they render with the same silhouette as the collection.
-    final shown = <NuvoBadge>[];
-    for (final f in card.featured) {
-      final hit = card.earned.where((b) => b.unlockId == f.unlockId);
-      if (hit.isNotEmpty) shown.add(hit.first);
-    }
-    if (shown.isEmpty) shown.addAll(card.earned.take(3));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -983,30 +1033,21 @@ class _PublicAchievements extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         if (shown.isNotEmpty)
+          // Names only — the artifacts dock on the plane edge above.
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (var i = 0; i < shown.length; i++) ...[
                 Expanded(
-                  child: Column(
-                    children: [
-                      Center(
-                        child: NuvoAchievementBadge(
-                          badge: shown[i],
-                          size: 48,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        shown[i].name,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: nuvoBadgeAccent(shown[i]),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    shown[i].name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: nuvoBadgeAccent(shown[i]),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (i < shown.length - 1) const SizedBox(width: 8),
