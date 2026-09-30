@@ -158,8 +158,13 @@ void main() {
     await tester.pumpAndSettle();
     tester.takeException();
 
-    // Content should exceed the small viewport.
-    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+    // Content should exceed the small viewport. The shelf adds a horizontal
+    // PageView Scrollable — scope to the page's vertical one.
+    final scrollable = tester.state<ScrollableState>(
+      find.byWidgetPredicate(
+        (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+      ),
+    );
     expect(
       scrollable.position.maxScrollExtent,
       greaterThan(0),
@@ -167,7 +172,12 @@ void main() {
     );
 
     // Drag up to scroll.
-    await tester.drag(find.byType(Scrollable), const Offset(0, -200));
+    await tester.drag(
+      find.byWidgetPredicate(
+        (w) => w is Scrollable && w.axisDirection == AxisDirection.down,
+      ),
+      const Offset(0, -200),
+    );
     await tester.pumpAndSettle();
     expect(
       scrollable.position.pixels,
