@@ -1082,7 +1082,7 @@ class _QuickStartTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.themeColors.surface,
           borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: Border.all(color: context.themeColors.border, width: 1.25),
+          border: Border.all(color: context.themeColors.border, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

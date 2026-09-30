@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_geometry.dart';
+import '../../../core/theme/app_shadows.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/bottom_nav.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -588,11 +589,11 @@ class _ReadySegment extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 22),
       child: NuvoStateMorph(
         stateKey: upNext.id,
-        // Paint room for the board's 4px offset shadow — the morph's
+        // Paint room for the board's 7px offset shadow — the morph's
         // AnimatedSize hard-clips to its child bounds, so the shadow's
         // room must live inside them.
         child: Padding(
-          padding: const EdgeInsets.only(right: 4, bottom: 4),
+          padding: const EdgeInsets.only(right: 7, bottom: 7),
           child: _UpNextHero(
             race: upNext,
             userId: userId,
@@ -953,15 +954,12 @@ class _UpNextHeroState extends State<_UpNextHero> {
         Container(
           decoration: BoxDecoration(
             color: c.surface,
-            borderRadius: BorderRadius.circular(NuvoRadii.md),
-            border: Border.all(color: c.inkShadow, width: 2),
-            boxShadow: [
-              BoxShadow(
-                color: c.inkShadow,
-                offset: const Offset(4, 4),
-                blurRadius: 0,
-              ),
-            ],
+            borderRadius: BorderRadius.circular(NuvoRadii.lg),
+            border: Border.all(color: c.border, width: 2),
+            boxShadow: AppShadows.hardOffset(
+              c.inkShadow,
+              offset: const Offset(7, 7),
+            ),
           ),
           child: Column(
             key: const Key('verify-up-next-hero'),
@@ -1560,11 +1558,10 @@ class _ReadyRow extends StatelessWidget {
       }
     }
 
-    // A compact race strip — a quiet lift on the queue plane, not an
-    // object on the canvas: white fill, a whisper hairline, a 1px ink kiss
-    // instead of an offset plate. Same composition as the hero (title →
-    // standing → lane → context) at the quietest voice; the press is the
-    // physical response.
+    // A compact race strip on the queue plane — same raised recipe as the
+    // field strips on Compete/Profile: white fill, 1px structural edge,
+    // small offset plate. Same composition as the hero (title → standing →
+    // lane → context) at a quieter voice; the press is the response.
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
@@ -1572,18 +1569,12 @@ class _ReadyRow extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: c.border.withValues(alpha: 0.35),
-            width: 1,
+          borderRadius: BorderRadius.circular(NuvoRadii.md),
+          border: Border.all(color: c.border, width: 1),
+          boxShadow: AppShadows.hardOffset(
+            c.inkShadow,
+            offset: const Offset(2, 2),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: c.inkShadow.withValues(alpha: 0.06),
-              offset: const Offset(0, 1),
-              blurRadius: 0,
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

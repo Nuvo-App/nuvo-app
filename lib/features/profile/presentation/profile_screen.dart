@@ -186,7 +186,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 32, 20, 0),
+                padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 32, NuvoSpacing.pageHorizontal, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -570,7 +570,7 @@ class _IdentityCard extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: c.inkShadow, width: 2.5),
+                  border: Border.all(color: c.border, width: 2.5),
                   boxShadow: [
                     BoxShadow(
                       color: c.inkShadow,
@@ -767,7 +767,7 @@ class _ProgressionPlane extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 16, 16, docksBadges ? 34 : 12),
       decoration: BoxDecoration(
         color: c.panelLight,
-        borderRadius: BorderRadius.circular(NuvoRadii.card),
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -908,7 +908,7 @@ class _ProgressionSection extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: c.panelLight,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: c.inkShadow, width: 1.75),
+                        border: Border.all(color: c.border, width: 1.5),
                         boxShadow: [
                           BoxShadow(
                             color: c.inkShadow,
