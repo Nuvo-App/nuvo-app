@@ -626,7 +626,15 @@ class _ReadySegment extends StatelessWidget {
           36,
           14 + NuvoBottomNav.bottomPadding(context),
         ),
-        color: c.panelLight,
+        // The field's top boundary curves so the hero's silhouette settles
+        // onto the plane instead of the plane cutting in behind it as a
+        // hard horizontal band.
+        decoration: BoxDecoration(
+          color: c.panelLight,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -669,19 +677,24 @@ class _ReadySegment extends StatelessWidget {
             const SizedBox(height: 10),
             // ONE queue board — the middle ground between card soup and
             // flat text: a single white surface on the ice field carries
-            // every waiting race. One radius, one edge, one offset; rows
-            // separate by hairlines inside it. The NEXT pill names the
-            // first row — it never becomes a card of its own.
+            // every waiting race. One radius; a blue-gray hairline, not
+            // the hero's navy plate — the sheet floats, it isn't boxed.
+            // Rows separate by hairlines inside it. The NEXT pill names
+            // the first row — it never becomes a card of its own.
             Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: c.surface,
                 borderRadius: BorderRadius.circular(NuvoRadii.lg),
-                border: Border.all(color: c.border, width: 1),
-                boxShadow: AppShadows.hardOffset(
-                  c.inkShadow,
-                  offset: const Offset(2, 2),
-                ),
+                border: Border.all(color: c.divider, width: 1),
+                // A 2px tonal lip under the sheet — the smallest depth cue
+                // that separates white-on-ice, not a cast shadow.
+                boxShadow: [
+                  BoxShadow(
+                    color: c.inkShadow.withValues(alpha: 0.10),
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
