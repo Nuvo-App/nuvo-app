@@ -1089,9 +1089,9 @@ void main() {
       });
     }
 
-    // Queue depth grading: 2 queued races exercise next + tucked with no
-    // deep rows; 12 exercise the cap, See all expansion, and the embedded
-    // hairline-separated tail.
+    // Queue depth grading: 2 queued races exercise the NEXT card + one
+    // spine stop; 12 exercise the cap, See all expansion, and the
+    // continuous-spine tail.
     testWidgets('queue depth — 2 ready and 12 ready', (tester) async {
       _useViewport(tester, 390, 844);
       await _pump(
