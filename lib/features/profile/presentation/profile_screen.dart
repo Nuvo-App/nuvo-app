@@ -236,7 +236,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // them, half on white. The 28px slot + OverflowBox
                     // makes the breakout real layout: the 56px row renders
                     // its upper half above the boundary and everything
-                    // below flows with it.
+                    // below flows with it — 28 on ice, 28 on white.
                     if (progression?.featuredBadges.isNotEmpty ?? false)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -811,12 +811,14 @@ class _ProgressionPlane extends StatelessWidget {
               if (next != null)
                 // Half the dock breaks the stage boundary — the stack
                 // edge sits 20px inside the field (stage padding), so
-                // -40 pushes the dock's outer face 20px past it: 24px of
-                // 44 inside the plane (~55%), the rest outside.
+                // -43 pushes the dock's outer face 23px past it: 23px of
+                // 46 inside the plane, 23 outside. The 16px vertical
+                // offset lands the dock's center on the XP-bar → unlock
+                // zone, not the region's middle or the top corner.
                 Positioned(
-                  right: -40,
-                  top: 0,
-                  bottom: 0,
+                  right: -43,
+                  top: 16,
+                  bottom: -16,
                   child: Center(child: _NextUnlockArtifact(unlock: next)),
                 ),
             ],
@@ -825,17 +827,17 @@ class _ProgressionPlane extends StatelessWidget {
           // Stats shelf — the second depth inside the stage: a lighter
           // inset with softened top geometry. No border, no shadow, no
           // individual stat cards — one recessed tray the record sits in.
-          // "Lighter" is mode-aware: a white wash over ice in light, a
-          // cold-ink lift over the dark field (dark surface is BELOW
-          // panelLight in the dark ramp, so a surface wash would darken).
+          // "Lighter" is mode-aware: solid surface over ice in light, the
+          // next ramp step over the dark field (dark surface is BELOW
+          // panelLight, so it would read recessed-dark instead).
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Container(
               constraints: const BoxConstraints(minHeight: 74),
               decoration: BoxDecoration(
                 color: Theme.of(context).brightness == Brightness.dark
-                    ? c.ink.withValues(alpha: 0.05)
-                    : c.surface.withValues(alpha: 0.7),
+                    ? c.panel
+                    : c.surface,
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(14),
                   bottom: Radius.circular(8),
@@ -869,12 +871,12 @@ class _NextUnlockArtifact extends StatelessWidget {
     final c = context.themeColors;
     final iconKey = unlock.metadata?['iconKey'] as String?;
     return Container(
-      width: 44,
-      height: 44,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: c.panelLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.inkShadow, width: 2),
+        border: Border.all(color: c.border, width: 2),
         boxShadow: [
           BoxShadow(
             color: c.inkShadow,
@@ -939,6 +941,7 @@ class _ProgressionSection extends ConsumerWidget {
                       text: 'LEVEL ',
                       style: AppTextStyles.titleMedium.copyWith(
                         color: c.ink,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
                       ),
@@ -948,7 +951,7 @@ class _ProgressionSection extends ConsumerWidget {
                     TextSpan(
                       text: '${p.level}',
                       style: AppTextStyles.statLarge(
-                        30,
+                        36,
                         color: NuvoColors.blue,
                         weight: FontWeight.w900,
                       ),
@@ -967,6 +970,7 @@ class _ProgressionSection extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppTextStyles.labelSmall.copyWith(
                   color: c.inkSubtle,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -974,7 +978,7 @@ class _ProgressionSection extends ConsumerWidget {
 
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 9),
         // The bar carries physical presence — taller than a hairline track
         // so the climb reads as the section's main event — and it runs
         // uninterrupted across the reserved top region, never under or
@@ -985,7 +989,7 @@ class _ProgressionSection extends ConsumerWidget {
           color: xpColor,
           trackColor: c.track,
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 9),
         Text(
           '${p.xpToNext} XP to Level ${p.level + 1}',
           maxLines: 1,
@@ -996,14 +1000,28 @@ class _ProgressionSection extends ConsumerWidget {
           ),
         ),
         if (next != null)
-          Text(
-            'Unlock: ${next.name}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.labelSmall.copyWith(
-              color: c.inkMuted,
-              fontWeight: FontWeight.w700,
-            ),
+          // The arrow's direction points at the physical dock on the
+          // stage's right edge — the copy and the artifact read as one.
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  'Unlock: ${next.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: c.inkMuted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: 12,
+                color: c.inkMuted,
+              ),
+            ],
           ),
       ],
     );
