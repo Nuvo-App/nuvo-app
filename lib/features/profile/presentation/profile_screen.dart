@@ -233,7 +233,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       winRate: winRate,
                     ),
 
-                    const SizedBox(height: NuvoSpacing.xl),
+                    const SizedBox(height: NuvoSpacing.lg),
 
                     // The collectible shelf — header is the collection's
                     // navigation, artifacts + fused names are the objects.
@@ -883,13 +883,31 @@ class _LevelTrack extends ConsumerWidget {
         // connector. Level numerals live ON the route's ends — start
         // point, bead, ring, reward.
         SizedBox(
-          height: _LevelRoute.height + (next != null ? _LevelRoute.dockH : 0),
+          height: _LevelRoute.blockHeight(next != null),
           child: LayoutBuilder(
             builder: (context, cons) {
-              final ringX = _LevelRoute.ringX(cons.maxWidth);
+              final w = cons.maxWidth;
+              final ringX = _LevelRoute.ringX(w);
+              final metric = _LevelRoute.routePath(w).computeMetrics().first;
+              final beadX = metric
+                  .getTangentForOffset(
+                    _LevelRoute.beadOffset(metric.length, p.progress),
+                  )!
+                  .position
+                  .dx;
+              // The XP requirement lives in the route's whitespace —
+              // centered on the stretch between the bead and the
+              // destination, kept clear of the dock column.
+              const capW = 132.0;
+              final capCx = ((beadX + ringX) / 2)
+                  .clamp(
+                    capW / 2 + 2,
+                    math.max(capW / 2 + 2, ringX - 30 - capW / 2),
+                  )
+                  .toDouble();
               const nameW = 104.0;
               final nameLeft = (ringX - nameW / 2)
-                  .clamp(0.0, math.max(0.0, cons.maxWidth - nameW))
+                  .clamp(0.0, math.max(0.0, w - nameW))
                   .toDouble();
               return Stack(
                 clipBehavior: Clip.none,
@@ -900,6 +918,22 @@ class _LevelTrack extends ConsumerWidget {
                     color: xpColor,
                     hasDock: next != null,
                   ),
+                  Positioned(
+                    top: _LevelRoute.captionTop,
+                    left: capCx - capW / 2,
+                    width: capW,
+                    child: Text(
+                      '${p.xpToNext} XP to Level ${p.level + 1}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: xpColor,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ),
                   if (next != null) ...[
                     Positioned(
                       top: _LevelRoute.dockTop,
@@ -908,7 +942,7 @@ class _LevelTrack extends ConsumerWidget {
                       child: _NextUnlockArtifact(unlock: next),
                     ),
                     Positioned(
-                      top: _LevelRoute.dockTop + 50,
+                      top: _LevelRoute.dockTop + 48,
                       left: nameLeft,
                       width: nameW,
                       child: Text(
@@ -926,19 +960,6 @@ class _LevelTrack extends ConsumerWidget {
                 ],
               );
             },
-          ),
-        ),
-        const SizedBox(height: 8),
-        // The remaining climb — anchored to the route's start, not
-        // floating mid-line under it.
-        Text(
-          '${p.xpToNext} XP to Level ${p.level + 1}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: xpColor,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.6,
           ),
         ),
       ],
@@ -965,25 +986,46 @@ class _LevelRoute extends StatelessWidget {
   final Color color;
   final bool hasDock;
 
-  // Route geometry shared by the painter and the dock positioning.
+  // Route geometry shared by the painter and the dock positioning —
+  // the whole section is sized from these.
   static const double lane = 12;
-  static const double y1 = 18; // upper lane — the current level
-  static const double y2 = 42; // lower lane — the destination
+  static const double y1 = 15; // upper lane — the current level
+  static const double y2 = 39; // lower lane — the destination
   static const double padL = 30; // start numeral zone
   static const double padR = 30; // finish numeral zone
   static const double ringR = 10;
-  static const double connector = 8;
-  static const double height = y2 + ringR + connector; // 60
-  static const double dockTop = height;
-  static const double dockH = 64; // artifact 46 + gap + name
+  static const double connector = 5;
+  // Caption band — the XP requirement lives just under the route.
+  static const double captionTop = 48;
+  static const double dockTop = y2 + ringR + connector; // 54
+  static double blockHeight(bool hasDock) => hasDock ? 117 : 64;
 
   static double ringX(double width) => width - padR - ringR;
+
+  // The path — upper lane, a small step down, lower lane into the ring.
+  // Shared by the painter (draw + bead) and the layout (caption center).
+  static Path routePath(double w) {
+    final end = ringX(w);
+    final bendStart = padL + (end - padL) * 0.68;
+    final bendEnd = math.min(bendStart + 30, end - 8);
+    return Path()
+      ..moveTo(padL, y1)
+      ..lineTo(bendStart, y1)
+      ..cubicTo(bendStart + 16, y1, bendEnd - 16, y2, bendEnd, y2)
+      ..lineTo(end, y2);
+  }
+
+  // Bead offset along the path — held clear of the anchor and the ring.
+  static double beadOffset(double pathLength, double progress) =>
+      (pathLength * progress.clamp(0.0, 1.0))
+          .clamp(20.0, math.max(20.0, pathLength - 24))
+          .toDouble();
 
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
     return SizedBox(
-      height: height,
+      height: dockTop,
       width: double.infinity,
       child: CustomPaint(
         painter: _RoutePainter(
@@ -1018,24 +1060,8 @@ class _RoutePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final end = _LevelRoute.ringX(w);
-    final bendStart = _LevelRoute.padL + (end - _LevelRoute.padL) * 0.68;
-    final bendEnd = math.min(bendStart + 30, end - 8);
-
-    // The path — upper lane, a small step down, lower lane into the ring.
-    final path = Path()
-      ..moveTo(_LevelRoute.padL, _LevelRoute.y1)
-      ..lineTo(bendStart, _LevelRoute.y1)
-      ..cubicTo(
-        bendStart + 16,
-        _LevelRoute.y1,
-        bendEnd - 16,
-        _LevelRoute.y2,
-        bendEnd,
-        _LevelRoute.y2,
-      )
-      ..lineTo(end, _LevelRoute.y2);
+    final end = _LevelRoute.ringX(size.width);
+    final path = _LevelRoute.routePath(size.width);
 
     // Ice track — the whole remaining route.
     canvas.drawPath(
@@ -1050,8 +1076,6 @@ class _RoutePainter extends CustomPainter {
     final metric = path.computeMetrics().first;
     final len = metric.length;
     final p = progress.clamp(0.0, 1.0);
-
-    // The climb — filled along the route to the viewer's mark.
     if (p > 0) {
       canvas.drawPath(
         metric.extractPath(0, len * p),
@@ -1071,10 +1095,10 @@ class _RoutePainter extends CustomPainter {
     );
 
     // The viewer's bead ON the route — colored fill, navy edge, white
-    // core, the same "you" mark the race lanes carry. Held clear of the
-    // anchor and the ring so the marks never merge.
-    final off = (len * p).clamp(20.0, math.max(20.0, len - 24)).toDouble();
-    final pos = metric.getTangentForOffset(off)!.position;
+    // core, the same "you" mark the race lanes carry.
+    final pos = metric
+        .getTangentForOffset(_LevelRoute.beadOffset(len, progress))!
+        .position;
     canvas
       ..drawCircle(pos, 9, Paint()..color = color)
       ..drawCircle(
