@@ -1252,12 +1252,15 @@ class RaceRow extends StatelessWidget {
                   // A lighter edge than the hero's structural border — a
                   // strip on the field, not a second foreground card.
                   border: Border.all(color: c.border, width: 1),
-                  // A quiet offset — the object stands off its field
-                  // without shouting over the hero.
-                  boxShadow: AppShadows.hardOffset(
-                    c.inkShadow,
-                    offset: const Offset(2, 2),
-                  ),
+                  // A whisper of offset — the row lifts off its field
+                  // without hard-shadow weight; the hero owns the heavy
+                  // Nuvo outline.
+                  boxShadow: [
+                    BoxShadow(
+                      color: c.inkShadow.withValues(alpha: 0.16),
+                      offset: const Offset(1, 1),
+                    ),
+                  ],
                 )
               : null,
           child: Row(
