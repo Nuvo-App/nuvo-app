@@ -628,7 +628,15 @@ const motionActivityDefinitions = [
       RaceFormat.mostInWindow,
       RaceFormat.bestAttempt,
     ],
-    aliases: ['basketball shot', 'basketball shots', 'shoot a basketball'],
+    aliases: [
+      'basketball shot',
+      'basketball shots',
+      'shoot a basketball',
+      'free throw',
+      'free throws',
+      'freethrow',
+      'freethrows',
+    ],
     proofLabel: 'made basketball shots',
     cameraInstruction: 'Player, ball, and hoop visible',
     instructions: [
@@ -748,7 +756,14 @@ MotionActivityDefinition? resolveRaceMotionActivity({
 /// The ONE alias matcher — shared by title interpretation and proof-time
 /// activity resolution. Longest alias wins so "jumping jacks" beats "jacks".
 /// Never maintain a second alias table anywhere.
-MotionActivityDefinition? motionActivityFromText(String text) {
+///
+/// [catalog] defaults to the bundled definitions; the composer passes the
+/// merged catalog (bundled + remote) so a server-delivered movement's
+/// aliases resolve without an app release.
+MotionActivityDefinition? motionActivityFromText(
+  String text, {
+  Iterable<MotionActivityDefinition>? catalog,
+}) {
   final normalized = text
       .toLowerCase()
       .replaceAll(RegExp(r'[-_]+'), ' ')
@@ -758,7 +773,7 @@ MotionActivityDefinition? motionActivityFromText(String text) {
 
   MotionActivityDefinition? matched;
   var matchedAliasLength = 0;
-  for (final definition in motionActivityDefinitions) {
+  for (final definition in catalog ?? motionActivityDefinitions) {
     for (final alias in definition.aliases) {
       final pattern = RegExp(
         '(^|[^a-z])${RegExp.escape(alias)}([^a-z]|\$)',
@@ -777,7 +792,10 @@ MotionActivityDefinition? motionActivityFromText(String text) {
 /// "50 squats". Unlike [motionActivityFromText], a bare substring never
 /// binds: "Burpee backflip challenge" mentions a burpee but names a
 /// different movement, so it must not silently arm the burpees verifier.
-MotionActivityDefinition? motionActivityFromName(String name) {
+MotionActivityDefinition? motionActivityFromName(
+  String name, {
+  Iterable<MotionActivityDefinition>? catalog,
+}) {
   final normalized = name
       .toLowerCase()
       .replaceAll(RegExp(r'[-_]+'), ' ')
@@ -786,7 +804,7 @@ MotionActivityDefinition? motionActivityFromName(String name) {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
   if (normalized.isEmpty) return null;
-  for (final d in motionActivityDefinitions) {
+  for (final d in catalog ?? motionActivityDefinitions) {
     if (d.title.toLowerCase() == normalized ||
         d.aliases.contains(normalized)) {
       return d;

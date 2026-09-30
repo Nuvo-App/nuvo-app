@@ -1110,5 +1110,34 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 1));
     });
+
+    // The composer may skip the activity step entirely when the typed name
+    // already resolves the subject — the coach must follow the real route
+    // and land on whatever the goal step still needs, never on an activity
+    // substep that isn't on screen.
+    testWidgets('resolved name — the coach lands on the goal step', (
+      tester,
+    ) async {
+      final container = await pumpComposer(tester);
+      await tester.enterText(find.byType(TextField).first, 'Pushups');
+      await settle(tester);
+      WidgetsBinding.instance.focusManager.primaryFocus?.unfocus();
+      await settle(tester);
+      await tester.tap(find.text('Choose activity'));
+      await settle(tester);
+
+      expect(
+        container.read(firstRaceGuideProvider),
+        FirstRaceGuideStep.composerGoal,
+      );
+      expect(find.text('SET THE FINISH'), findsOneWidget);
+      expect(find.text('Pick the activity.'), findsNothing);
+      expect(find.text('PICK THE MOVE'), findsNothing);
+      // The goal number is still open — the coach targets the real input,
+      // not a stale continue CTA.
+      expect(find.text('How many pushups?'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
   });
 }
