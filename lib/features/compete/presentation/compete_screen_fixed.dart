@@ -130,7 +130,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                   else ...[
                     if (needsAttention != null) ...[
                       _buildFeaturedCard(needsAttention, uid),
-                      const SizedBox(height: NuvoSpacing.md),
+                      const SizedBox(height: NuvoSpacing.xl),
                     ],
                     if (inMotionRows.isNotEmpty) ...[
                       _CappedRaceList(
@@ -142,7 +142,9 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                             setState(() => _racesExpanded = !_racesExpanded),
                         onOpen: (race) => context.push('/race/${race.id}'),
                       ),
-                      const SizedBox(height: NuvoSpacing.sm),
+                      // Back to canvas — a real section beat separates the
+                      // field from the secondary destinations below it.
+                      const SizedBox(height: NuvoSpacing.xl),
                     ],
                     if (waiting.isNotEmpty) ...[
                       NuvoWaitingCrewSummary(
@@ -557,66 +559,96 @@ class _CappedRaceList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     final visible = expanded ? races : races.take(cap).toList();
     final hasMore = races.length > cap;
+    // A race is an object only once it has real motion behind it — a race
+    // on the start line is still information, and stays flat on the field.
+    bool hasMotion(Race race) =>
+        raceProgressPercent(
+          race,
+          userId != null ? race.participantFor(userId!) : null,
+        ) >
+        0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Flexible(
-              child: Text(
-                'Your races · ${races.length} active',
-                style: AppTextStyles.sectionTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const Spacer(),
-            if (hasMore)
-              NuvoPressable(
-                onTap: onToggleExpand,
-                haptic: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
+    // The active-races field — a middle plane between the hero and the
+    // canvas. Ice tint groups the section; no navy edge, no shadow —
+    // grouping is the plane's whole job.
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        NuvoSpacing.sm,
+        NuvoSpacing.md,
+        NuvoSpacing.sm,
+        NuvoSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: c.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.lg),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.xs),
+            child: Row(
+              children: [
+                Expanded(
                   child: Text(
-                    expanded ? 'Show less' : 'See all',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: context.themeColors.ink,
-                      fontWeight: FontWeight.w700,
+                    'Your races · ${races.length} active',
+                    style: AppTextStyles.sectionTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (hasMore)
+                  NuvoPressable(
+                    onTap: onToggleExpand,
+                    haptic: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        expanded ? 'Show less' : 'See all',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: context.themeColors.ink,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: NuvoSpacing.sm),
-        // Flat race rows on the page — a hairline between standings, not a
-        // card around the list. Dashboard chrome is the old language.
-        Column(
-          children: [
-            for (var i = 0; i < visible.length; i++) ...[
-              _buildRow(context, visible[i], i + 1),
-              if (i < visible.length - 1)
-                Divider(
+              ],
+            ),
+          ),
+          const SizedBox(height: NuvoSpacing.xs),
+          // Two tiers on one field: races with motion rise off the plane as
+          // white objects; start-line races stay flat, hairlines between
+          // them — depth is earned by progress, not handed to every row.
+          for (var i = 0; i < visible.length; i++) ...[
+            if (i > 0) const SizedBox(height: NuvoSpacing.xs),
+            if (i > 0 && !hasMotion(visible[i]) && !hasMotion(visible[i - 1]))
+              Padding(
+                padding: const EdgeInsets.only(bottom: NuvoSpacing.xs),
+                child: Divider(
                   height: 1,
                   thickness: 1,
-                  indent: 26,
-                  endIndent: 12,
-                  color: context.themeColors.divider,
+                  color: c.divider,
                 ),
-            ],
+              ),
+            _buildRow(context, visible[i], i + 1, raised: hasMotion(visible[i])),
           ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildRow(BuildContext context, Race race, int index) {
+  Widget _buildRow(
+    BuildContext context,
+    Race race,
+    int index, {
+    bool raised = false,
+  }) {
     final c = context.themeColors;
     final myPart = userId != null ? race.participantFor(userId!) : null;
     final pct = raceProgressPercent(race, myPart);
@@ -688,9 +720,13 @@ class _CappedRaceList extends StatelessWidget {
               ? NuvoColors.success
               : NuvoColors.actionBlue,
       // Finishing pays +25 — deterministic from the server award table.
+      // On the field it docks as a tag on the context line, not a third
+      // text line.
+      rewardArtifact: true,
       rewardLabel: myPart != null && !completed
           ? 'Finish · +$kXpFinish XP'
           : null,
+      raised: raised,
       onTap: () => onOpen(race),
     );
   }
