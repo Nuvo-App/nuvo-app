@@ -767,7 +767,7 @@ class _NextUnlockArtifact extends StatelessWidget {
       width: 46,
       height: 46,
       decoration: BoxDecoration(
-        color: c.panelLight,
+        color: c.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: c.border, width: 2),
         boxShadow: [
@@ -825,7 +825,22 @@ class _LevelTrack extends ConsumerWidget {
           state.hasError
               ? _ProgressionUnavailable(c: c, ref: ref)
               : _ProgressionSkeleton(c: c)
-        else ...[
+        else
+          // A soft ice plate stages the progression system — the header,
+          // beam, caption, and unlock row sit on one quiet support plane,
+          // not a card: no navy edge, no hard offset.
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: c.border.withValues(alpha: 0.35),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           // LEVEL header row — the level figure on the left, the XP
           // fraction on the right, sharing one baseline.
           Row(
@@ -907,7 +922,9 @@ class _LevelTrack extends ConsumerWidget {
               ],
             ),
           ],
-        ],
+              ],
+            ),
+          ),
         const SizedBox(height: 14),
         // The record — three equal centered columns directly beneath the
         // progression block.
@@ -1256,7 +1273,23 @@ class _AchievementsSection extends StatelessWidget {
         // The shelf holds fixed positions: earned artifacts take seats
         // first, the next target fills the first empty seat locked, and
         // seats beyond it stay as quiet outlines — a shelf with space
-        // left to fill, never one item stretched across the page.
+        // left to fill, never one item stretched across the page. A soft
+        // ice rail runs behind the badge row so the slots read as mounts,
+        // while the names stay on the white canvas beneath.
+        Stack(
+          children: [
+            Positioned(
+              top: -4,
+              left: -4,
+              right: -4,
+              height: 66,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: c.panelLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1280,6 +1313,8 @@ class _AchievementsSection extends StatelessWidget {
               if (i < slots - 1)
                 const SizedBox(width: NuvoSpacing.sm),
             ],
+          ],
+        ),
           ],
         ),
       ],
@@ -1313,9 +1348,10 @@ class _ShelfSlot extends StatelessWidget {
                   width: 56,
                   height: 56,
                   decoration: BoxDecoration(
+                    color: c.page.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(17),
                     border: Border.all(
-                      color: c.border.withValues(alpha: 0.45),
+                      color: c.border.withValues(alpha: 0.35),
                       width: 1.5,
                     ),
                   ),
@@ -1618,7 +1654,7 @@ class _HeaderDivider extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: 1,
     height: 26,
-    color: context.themeColors.divider,
+    color: context.themeColors.border.withValues(alpha: 0.5),
     margin: const EdgeInsets.symmetric(horizontal: 6),
   );
 }
@@ -1705,13 +1741,13 @@ class _RaceShelf extends StatelessWidget {
                   itemBuilder: (context, i) => Container(
                     width: tileW,
                     decoration: BoxDecoration(
-                      color: c.panelLight,
+                      color: c.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: c.border, width: 1),
+                      border: Border.all(color: c.border, width: 1.5),
                       boxShadow: [
                         BoxShadow(
                           color: c.inkShadow,
-                          offset: const Offset(2, 2),
+                          offset: const Offset(2.5, 2.5),
                           blurRadius: 0,
                         ),
                       ],
