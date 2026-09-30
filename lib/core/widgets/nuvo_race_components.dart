@@ -135,9 +135,7 @@ class RaceProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final progress = (progressPercent / 100).clamp(0.0, 1.0);
-    final trackColor = onDark
-        ? Colors.white.withValues(alpha: 0.16)
-        : c.track;
+    final trackColor = onDark ? Colors.white.withValues(alpha: 0.16) : c.track;
     final fillColor = progress >= 1
         ? NuvoColors.success
         : this.fillColor ?? NuvoColors.actionBlue;
@@ -334,20 +332,33 @@ class RaceMarkerTrack extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     // Lane geometry — same marks, density decides how loud they read.
-    final trackHeight =
-        compact ? _compactTrackHeight : hero ? _heroTrackHeight : _trackHeight;
-    final laneTop = compact ? 7.0 : hero ? 34.0 : 25.0;
-    final goalSize = compact ? 10.0 : hero ? 22.0 : 13.0;
-    final height = compact ? 16.0 : hero ? 78.0 : 40.0;
+    final trackHeight = compact
+        ? _compactTrackHeight
+        : hero
+        ? _heroTrackHeight
+        : _trackHeight;
+    final laneTop = compact
+        ? 7.0
+        : hero
+        ? 34.0
+        : 25.0;
+    final goalSize = compact
+        ? 10.0
+        : hero
+        ? 22.0
+        : 13.0;
+    final height = compact
+        ? 16.0
+        : hero
+        ? 78.0
+        : 40.0;
     final labelWidth = hero ? _heroLabelWidth : _labelWidth;
     final labelSize = hero ? 12.5 : 10.5;
 
     return LayoutBuilder(
       builder: (context, cons) {
         final w = cons.maxWidth;
-        final viewer = markers
-            .where((m) => m.isViewer)
-            .firstOrNull;
+        final viewer = markers.where((m) => m.isViewer).firstOrNull;
         final viewerX = (viewer?.fraction ?? 0).clamp(0.0, 1.0) * w;
 
         // Label slots centered on each mark — placed right-to-left so close
@@ -422,8 +433,7 @@ class RaceMarkerTrack extends StatelessWidget {
                     height: trackHeight,
                     decoration: BoxDecoration(
                       color: fillColor,
-                      borderRadius:
-                          BorderRadius.circular(trackHeight / 2),
+                      borderRadius: BorderRadius.circular(trackHeight / 2),
                     ),
                   ),
                 ),
@@ -443,8 +453,7 @@ class RaceMarkerTrack extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: goalReached ? NuvoColors.success : c.page,
                       border: Border.all(
-                        color:
-                            goalReached ? NuvoColors.success : fillColor,
+                        color: goalReached ? NuvoColors.success : fillColor,
                         width: hero ? 2.5 : 2,
                       ),
                     ),
@@ -452,22 +461,26 @@ class RaceMarkerTrack extends StatelessWidget {
                 ),
               // Rivals draw first, viewer last — an overtake visibly slides
               // the viewer's mark OVER the rival it just passed.
-              for (final m in [...markers]..sort(
-                  (a, b) => (a.isViewer ? 1 : 0).compareTo(b.isViewer ? 1 : 0),
-                ))
-                Builder(builder: (context) {
-                  final extent = _markExtent(m);
-                  return AnimatedPositioned(
-                    top: laneTop + trackHeight / 2 - extent / 2,
-                    left: ((m.fraction.clamp(0.0, 1.0) * w) - extent / 2)
-                        .clamp(0.0, w - extent),
-                    duration: slide,
-                    curve: slideCurve,
-                    width: extent,
-                    height: extent,
-                    child: _mark(m, c),
-                  );
-                }),
+              for (final m
+                  in [...markers]..sort(
+                    (a, b) =>
+                        (a.isViewer ? 1 : 0).compareTo(b.isViewer ? 1 : 0),
+                  ))
+                Builder(
+                  builder: (context) {
+                    final extent = _markExtent(m);
+                    return AnimatedPositioned(
+                      top: laneTop + trackHeight / 2 - extent / 2,
+                      left: ((m.fraction.clamp(0.0, 1.0) * w) - extent / 2)
+                          .clamp(0.0, w - extent),
+                      duration: slide,
+                      curve: slideCurve,
+                      width: extent,
+                      height: extent,
+                      child: _mark(m, c),
+                    );
+                  },
+                ),
             ],
           ),
         );
@@ -486,18 +499,19 @@ class RaceMarkerTrack extends StatelessWidget {
       (m.haloColor != null ? 6 : 0) +
       (m.ringColor != null ? 9 : 0);
 
-  double _markSize(RaceTrackMarker m) => m.size ??
+  double _markSize(RaceTrackMarker m) =>
+      m.size ??
       (m.isViewer
           ? (compact
-              ? _compactViewerSize
-              : hero
-                  ? _heroViewerSize
-                  : _viewerSize)
+                ? _compactViewerSize
+                : hero
+                ? _heroViewerSize
+                : _viewerSize)
           : (compact
-              ? _compactRivalSize
-              : hero
-                  ? _heroRivalSize
-                  : _rivalSize));
+                ? _compactRivalSize
+                : hero
+                ? _heroRivalSize
+                : _rivalSize));
 
   Widget _mark(RaceTrackMarker m, NuvoThemeColors c) {
     final size = _markSize(m);
@@ -671,17 +685,10 @@ class _EmptyCrewSlot extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: c.page,
-        border: Border.all(
-          color: c.border.withValues(alpha: 0.7),
-          width: 1.5,
-        ),
+        border: Border.all(color: c.border.withValues(alpha: 0.7), width: 1.5),
       ),
       alignment: Alignment.center,
-      child: Icon(
-        Icons.add_rounded,
-        size: size * 0.42,
-        color: c.inkDim,
-      ),
+      child: Icon(Icons.add_rounded, size: size * 0.42, color: c.inkDim),
     );
   }
 }
@@ -853,7 +860,10 @@ class RaceHero extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(NuvoRadii.lg),
           border: Border.all(color: c.border, width: 2),
-          boxShadow: AppShadows.hardOffset(c.inkShadow, offset: const Offset(7, 7)),
+          boxShadow: AppShadows.hardOffset(
+            c.inkShadow,
+            offset: const Offset(7, 7),
+          ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(NuvoRadii.lg - 1),
@@ -971,8 +981,7 @@ class RaceHero extends StatelessWidget {
                       ),
                       // Stakes — why the next proof matters ("11 reps to
                       // take 1st"), straight from canonical race state.
-                      if (contextNote != null &&
-                          contextNote!.isNotEmpty) ...[
+                      if (contextNote != null && contextNote!.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Text(
                           contextNote!,
@@ -987,8 +996,7 @@ class RaceHero extends StatelessWidget {
                     ] else ...[
                       // Stakes — why this proof matters. Blue (forward
                       // action), one line, canonical copy only.
-                      if (contextNote != null &&
-                          contextNote!.isNotEmpty) ...[
+                      if (contextNote != null && contextNote!.isNotEmpty) ...[
                         const SizedBox(height: 5),
                         Text(
                           contextNote!,
@@ -1229,7 +1237,8 @@ class RaceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final hasProof = progressPercent > 0;
-    final contextLine = contextNote ??
+    final contextLine =
+        contextNote ??
         [
           movementLabel,
           ?remainingLabel,
@@ -1244,175 +1253,195 @@ class RaceRow extends StatelessWidget {
         scale: 0.985,
         child: Container(
           constraints: const BoxConstraints(minHeight: 58),
-          padding: padding,
+          // Clip exists only to round the raised rail's left corners —
+          // flat rows carry no decoration.
+          clipBehavior: raised ? Clip.antiAlias : Clip.none,
           decoration: raised
               ? BoxDecoration(
                   color: c.surface,
                   borderRadius: BorderRadius.circular(NuvoRadii.md),
-                  // A lighter edge than the hero's structural border — a
-                  // strip on the field, not a second foreground card.
-                  border: Border.all(color: c.border, width: 1),
-                  // A whisper of offset — the row lifts off its field
-                  // without hard-shadow weight; the hero owns the heavy
-                  // Nuvo outline.
+                  // No perimeter, no plate — the raised row is a quiet
+                  // white strip on the field. The only structural cue is
+                  // the left rail painted inside the clip below; a
+                  // whisper of offset keeps it lifted without card weight.
                   boxShadow: [
                     BoxShadow(
-                      color: c.inkShadow.withValues(alpha: 0.16),
+                      color: c.inkShadow.withValues(alpha: 0.10),
                       offset: const Offset(1, 1),
                     ),
                   ],
                 )
               : null,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              if (leading != null) ...[
-                leading!,
-                const SizedBox(width: NuvoSpacing.sm),
-              ],
-              Expanded(
-                child: Column(
+              if (raised)
+                // The 3px left rail — the strip's structural cue instead
+                // of a border: a slice of the same navy the hero carries,
+                // clipped to the strip's rounded corner.
+                const Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 3,
+                  child: ColoredBox(color: NuvoColors.navy),
+                ),
+              Padding(
+                padding: padding,
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (hasProof) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(top: 5),
-                            child: Container(
-                              width: 7,
-                              height: 7,
-                              decoration: const BoxDecoration(
-                                color: NuvoColors.actionBlue,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 7),
-                        ],
-                        Expanded(
-                          child: Text(
-                            raceTitle,
-                            style: AppTextStyles.raceRowTitle,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: NuvoSpacing.sm),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: hasProof
-                              ? RacePlacement(rank: rank, size: 15)
-                              : Text(
-                                  'Start line',
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: c.inkSubtle,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                    letterSpacing: 0.3,
+                    if (leading != null) ...[
+                      leading!,
+                      const SizedBox(width: NuvoSpacing.sm),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (hasProof) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 5),
+                                  child: Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: NuvoColors.actionBlue,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
                                 ),
-                        ),
-                      ],
-                    ),
-                    if (hasProof) ...[
-                      const SizedBox(height: 4),
-                      // The progress value is the second read — blue and
-                      // weighted, never folded into the gray meta line.
-                      Text(
-                        progressLabel,
-                        style: AppTextStyles.statLarge(
-                          13.5,
-                          color: NuvoColors.actionBlue,
-                          weight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 7),
-                      if (trackMarkers != null)
-                        RaceMarkerTrack(
-                          markers: trackMarkers!,
-                          compact: true,
-                          hasGoal: hasGoal,
-                          goalReached: goalReached,
-                        )
-                      else
-                        RaceProgress(
-                          progressPercent: progressPercent,
-                          trackHeight: 3,
-                          dotDiameter: 9,
-                        ),
-                      const SizedBox(height: 6),
-                    ] else
-                      const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            contextLine,
-                            style: AppTextStyles.raceRowMeta.copyWith(
-                              color: contextColor ?? c.inkSubtle,
-                              fontWeight: contextNote != null
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                                const SizedBox(width: 7),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  raceTitle,
+                                  style: AppTextStyles.raceRowTitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: NuvoSpacing.sm),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: hasProof
+                                    ? RacePlacement(rank: rank, size: 15)
+                                    : Text(
+                                        'Start line',
+                                        style: AppTextStyles.labelSmall
+                                            .copyWith(
+                                              color: c.inkSubtle,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 10,
+                                              letterSpacing: 0.3,
+                                            ),
+                                      ),
+                              ),
+                            ],
                           ),
-                        ),
-                        if (rewardArtifact && rewardLabel != null) ...[
-                          const SizedBox(width: NuvoSpacing.sm),
-                          // The payout docks at the context line's trailing
-                          // edge — a small ice tag the race carries, not a
-                          // dangling second line of metadata.
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: c.panel,
-                              borderRadius:
-                                  BorderRadius.circular(NuvoRadii.pill),
-                            ),
-                            child: Text(
-                              rewardLabel!,
-                              style: AppTextStyles.raceRowMeta.copyWith(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
+                          if (hasProof) ...[
+                            const SizedBox(height: 4),
+                            // The progress value is the second read — blue and
+                            // weighted, never folded into the gray meta line.
+                            Text(
+                              progressLabel,
+                              style: AppTextStyles.statLarge(
+                                13.5,
                                 color: NuvoColors.actionBlue,
-                                letterSpacing: 0.2,
+                                weight: FontWeight.w800,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 7),
+                            if (trackMarkers != null)
+                              RaceMarkerTrack(
+                                markers: trackMarkers!,
+                                compact: true,
+                                hasGoal: hasGoal,
+                                goalReached: goalReached,
+                              )
+                            else
+                              RaceProgress(
+                                progressPercent: progressPercent,
+                                trackHeight: 3,
+                                dotDiameter: 9,
+                              ),
+                            const SizedBox(height: 6),
+                          ] else
+                            const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  contextLine,
+                                  style: AppTextStyles.raceRowMeta.copyWith(
+                                    color: contextColor ?? c.inkSubtle,
+                                    fontWeight: contextNote != null
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (rewardArtifact && rewardLabel != null) ...[
+                                const SizedBox(width: NuvoSpacing.sm),
+                                // The payout docks at the context line's trailing
+                                // edge — a small ice tag the race carries, not a
+                                // dangling second line of metadata.
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: c.panel,
+                                    borderRadius: BorderRadius.circular(
+                                      NuvoRadii.pill,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    rewardLabel!,
+                                    style: AppTextStyles.raceRowMeta.copyWith(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: NuvoColors.actionBlue,
+                                      letterSpacing: 0.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              if (avatars.isNotEmpty) ...[
+                                const SizedBox(width: NuvoSpacing.sm),
+                                RacePeople(
+                                  avatars: avatars,
+                                  total: participantCount,
+                                  size: 20,
+                                  max: 3,
+                                ),
+                              ],
+                            ],
                           ),
+                          if (!rewardArtifact && rewardLabel != null) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              rewardLabel!,
+                              style: AppTextStyles.raceRowMeta.copyWith(
+                                color: NuvoColors.actionBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
-                        if (avatars.isNotEmpty) ...[
-                          const SizedBox(width: NuvoSpacing.sm),
-                          RacePeople(
-                            avatars: avatars,
-                            total: participantCount,
-                            size: 20,
-                            max: 3,
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (!rewardArtifact && rewardLabel != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        rewardLabel!,
-                        style: AppTextStyles.raceRowMeta.copyWith(
-                          color: NuvoColors.actionBlue,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
