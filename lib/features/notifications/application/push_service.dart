@@ -87,18 +87,24 @@ class PushService {
         settings.authorizationStatus == AuthorizationStatus.authorized ||
             settings.authorizationStatus == AuthorizationStatus.provisional;
     if (granted) {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) await _syncToken(token);
+      try {
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null) await _syncToken(token);
+      } catch (_) {}
     }
     return granted;
   }
 
   /// Re-sync the token after sign-in (a token minted while logged out isn't
-  /// attached to any user yet).
+  /// attached to any user yet). getToken throws apns-token-not-set until the
+  /// APNs token materializes (always on simulator, briefly on device) — a
+  /// missed sync here is harmless: onTokenRefresh re-syncs the moment it does.
   Future<void> onSignedIn() async {
     if (!_available) return;
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token != null) await _syncToken(token);
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null) await _syncToken(token);
+    } catch (_) {}
   }
 
   Future<void> onSignedOut() async {

@@ -342,8 +342,11 @@ final progressionControllerProvider =
       isPresentationDemo: () =>
           isPresentationDemoUser(ref.read(authControllerProvider).user),
     );
+    // Deferred: a synchronous mutation during the kickoff would modify
+    // other providers while this one is still initializing (Riverpod
+    // asserts).
     if (ref.read(authControllerProvider).status == AuthStatus.authenticated) {
-      controller.load();
+      Future(() => controller.load());
     }
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (next.status == AuthStatus.unauthenticated) {
