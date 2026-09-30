@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/demo/presentation_demo.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_avatar.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -364,10 +365,11 @@ class _State extends ConsumerState<PublicProfileScreen> {
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
         children: [
           _hero(card).nuvoEnter(),
-          // Canonical racing stats — races, wins, win rate.
-          if (card.racesFinished != null) ...[
-            const SizedBox(height: 24),
-            _PubStatsStrip(card: card),
+          // Same progression plane as the self profile — the level climb and
+          // the canonical racing record share one ice-blue field.
+          if (card.level != null || card.racesFinished != null) ...[
+            const SizedBox(height: 20),
+            _PublicProgressionPlane(card: card).nuvoEnter(),
           ],
           // Earned collection — featured first; tap opens the earned-only
           // collection (locked progress stays self-only).
@@ -387,9 +389,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
   }
 
   /// Same identity composition as the self profile — avatar with physical
-  /// edge, name, @handle, and the Nuvo Level in the block. The level climb
-  /// bar belongs to the identity, not a separate dashboard block; the
-  /// public contract only carries the 0..1 fraction, never absolute XP.
+  /// edge, name, @handle, and the Nuvo Level in the block. The climb bar and
+  /// record live on the shared progression plane below; the public contract
+  /// only carries the 0..1 fraction, never absolute XP.
   Widget _hero(PublicProfileCard card) {
     final c = context.themeColors;
     return Column(
@@ -492,15 +494,6 @@ class _State extends ConsumerState<PublicProfileScreen> {
                 ),
               ),
             ],
-          ),
-        ],
-        if (card.level != null) ...[
-          const SizedBox(height: 16),
-          NuvoProgressBar(
-            value: card.levelProgress ?? 0,
-            height: 12,
-            color: NuvoColors.blue,
-            trackColor: c.track,
           ),
         ],
       ],
@@ -766,6 +759,94 @@ class _Badge extends StatelessWidget {
         Text(label,
             style: AppTextStyles.labelLarge.copyWith(color: color)),
       ]),
+    );
+  }
+}
+
+/// The public half of the progression plane — same ice-blue field as the
+/// self profile, carrying the level climb and the racing record as one
+/// system. The public contract shows level and the 0..1 fraction only;
+/// absolute XP never leaves the owner's own profile.
+class _PublicProgressionPlane extends StatelessWidget {
+  const _PublicProgressionPlane({required this.card});
+
+  final PublicProfileCard card;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+      decoration: BoxDecoration(
+        color: c.panelLight,
+        borderRadius: BorderRadius.circular(NuvoRadii.card),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (card.level != null) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'LEVEL ',
+                          style: AppTextStyles.titleMedium.copyWith(
+                            color: c.ink,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        TextSpan(
+                          text: '${card.level}',
+                          style: AppTextStyles.statLarge(
+                            30,
+                            color: NuvoColors.blue,
+                            weight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${((card.levelProgress ?? 0) * 100).round()}%',
+                  maxLines: 1,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: c.inkSubtle,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: NuvoSpacing.sm),
+            NuvoProgressBar(
+              value: card.levelProgress ?? 0,
+              height: 12,
+              color: NuvoColors.blue,
+              trackColor: c.track,
+            ),
+          ],
+          if (card.racesFinished != null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: c.ink.withValues(alpha: 0.10),
+              ),
+            ),
+            _PubStatsStrip(card: card),
+          ],
+        ],
+      ),
     );
   }
 }

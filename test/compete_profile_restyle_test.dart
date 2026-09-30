@@ -862,6 +862,47 @@ void main() {
       );
       expect(find.textContaining('LEVEL 14', findRichText: true), findsWidgets);
       expect(find.text('Noah Reyes'), findsWidgets);
+      // Fractional progress only — absolute XP is the owner's private data.
+      expect(find.text('62%'), findsOneWidget);
+      expect(find.textContaining('XP'), findsNothing);
+    });
+
+    testWidgets('public profile level 14 — dark, smallest width', (
+      tester,
+    ) async {
+      _useViewport(tester, 320, 568);
+      const friend = PublicProfileCard(
+        id: 'u-friend',
+        displayName: 'Noah Reyes',
+        username: 'noahreyes',
+        initials: 'NR',
+        connectionStatus: CrewConnectionStatus.connected,
+        level: 14,
+        levelProgress: 0.62,
+        achievementsEarned: 12,
+        achievementsTotal: 44,
+        featured: [
+          PublicFeaturedBadge(
+            unlockId: 'u-first-w',
+            key: 'first_w',
+            name: 'First W',
+          ),
+        ],
+        earned: [_badgeFirstW],
+        racesFinished: 20,
+        racesWon: 6,
+      );
+      await _pump(
+        tester,
+        _app(
+          dark: true,
+          crewCard: friend,
+          home: const PublicProfileScreen(userId: 'u-friend'),
+        ),
+        'public-profile-320-dark',
+      );
+      expect(find.textContaining('LEVEL 14', findRichText: true), findsWidgets);
+      expect(find.textContaining('XP'), findsNothing);
     });
   });
 
