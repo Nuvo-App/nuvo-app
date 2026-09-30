@@ -666,38 +666,53 @@ class _ReadySegment extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
-            // A depth-graded queue, not a run of equal cards: the next race
-            // is the one lifted object, the race after it tucks beneath,
-            // and deeper races embed into the field between hairlines.
-            _TuckedBelow(
-              tuck: 8,
-              top: _ReadyRow(
-                race: visibleAlsoReady[0],
-                userId: userId,
-                tier: _QueueTier.next,
-                onTap: () => onVerify(visibleAlsoReady[0]),
+            const SizedBox(height: 10),
+            // ONE vertical queue, not a card stack: a spine grows out of
+            // the field beneath the hero and every waiting race is a stop
+            // on it. The ● NEXT marker names the first stop; only the
+            // immediate next race gets a lifted object; deeper races are
+            // markers + content on the line — no cards, no dividers.
+            _QueueStop(
+              spineFromTop: false,
+              markerTop: 1,
+              marker: const _QueueMarker.next(),
+              child: Text(
+                'NEXT',
+                style: AppTextStyles.labelSmall.copyWith(
+                  fontSize: 10.5,
+                  color: c.inkMuted,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.4,
+                ),
               ),
-              under: visibleAlsoReady.length > 1
-                  ? _ReadyRow(
-                      race: visibleAlsoReady[1],
-                      userId: userId,
-                      tier: _QueueTier.tucked,
-                      onTap: () => onVerify(visibleAlsoReady[1]),
-                    )
-                  : null,
             ),
-            for (var i = 2; i < visibleAlsoReady.length; i++) ...[
-              const SizedBox(height: 4),
-              Divider(height: 1, thickness: 1, color: c.divider),
-              const SizedBox(height: 4),
-              _ReadyRow(
-                race: visibleAlsoReady[i],
-                userId: userId,
-                tier: _QueueTier.deep,
-                onTap: () => onVerify(visibleAlsoReady[i]),
+            _QueueStop(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 3, bottom: 6),
+                child: _ReadyRow(
+                  race: visibleAlsoReady[0],
+                  userId: userId,
+                  tier: _QueueTier.next,
+                  onTap: () => onVerify(visibleAlsoReady[0]),
+                ),
               ),
-            ],
+            ),
+            for (var i = 1; i < visibleAlsoReady.length; i++)
+              _QueueStop(
+                markerTop: 14,
+                marker: _QueueMarker(
+                  mood: _moodFor(visibleAlsoReady[i], userId),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6, bottom: 10),
+                  child: _ReadyRow(
+                    race: visibleAlsoReady[i],
+                    userId: userId,
+                    tier: _QueueTier.deep,
+                    onTap: () => onVerify(visibleAlsoReady[i]),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -755,59 +770,148 @@ class _QueueBehindHeroState extends State<_QueueBehindHero> {
   }
 }
 
-/// The queue's depth stack, level 2: `under` tucks `tuck` pixels behind
-/// `top`. Painted first (it loses the overlap by paint order alone) and
-/// offset by `top`'s measured height — the same trick [_QueueBehindHero]
-/// uses for the hero↔field seam.
-class _TuckedBelow extends StatefulWidget {
-  const _TuckedBelow({
-    required this.top,
-    this.under,
-    this.tuck = 8,
+// ── Queue spine ──────────────────────────────────────────────────────────────
+
+/// Gutter geometry for the Ready-next spine: a 2px rail in a 26px column,
+/// with state markers centered on it and all race content to its right.
+const double _spineGutter = 26;
+const double _spineX = 9;
+const double _spineW = 2;
+
+/// One stop on the queue: `child` (a [_ReadyRow] or a label) beside a
+/// spine cell. Each row paints its own full-height rail segment so stacked
+/// stops form a continuous line with no measuring — [spineFromTop] /
+/// [spineToBottom] only crop the very ends of the queue.
+class _QueueStop extends StatelessWidget {
+  const _QueueStop({
+    required this.child,
+    this.marker,
+    this.markerTop = 0,
+    this.spineFromTop = true,
   });
 
-  final Widget top;
-  final Widget? under;
-  final double tuck;
+  final Widget child;
 
-  @override
-  State<_TuckedBelow> createState() => _TuckedBelowState();
-}
+  /// The stop's dot; null for the bare rail running beside the next card.
+  final Widget? marker;
 
-class _TuckedBelowState extends State<_TuckedBelow> {
-  double? _topHeight;
+  /// Marker offset so the dot centers on the child's first text line.
+  final double markerTop;
+
+  /// false → the rail starts at the marker (the queue's origin under the
+  /// hero). The rail always runs through the row's bottom edge — at the
+  /// list's end it reads as the queue continuing, correct under See all.
+  final bool spineFromTop;
 
   @override
   Widget build(BuildContext context) {
-    final under = widget.under;
-    if (under == null) return widget.top;
-    // A plausible first-frame estimate — the reported size corrects it
-    // before anyone can scroll to the seam.
-    final topHeight = _topHeight ?? 96;
+    final marker = this.marker;
+    // The rail starts at a marker's center, never inside the dot.
+    final startAt = markerTop + 5.5;
+    // A Stack sized by the content — not IntrinsicHeight, which the lane's
+    // LayoutBuilder can't answer. Positioned rail + marker overlay the
+    // left gutter; adjacent stops' segments meet at row boundaries, so
+    // the queue reads as one continuous line.
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Padding(
-          padding: EdgeInsets.only(
-            top: (topHeight - widget.tuck).clamp(0.0, double.infinity),
-          ),
-          child: under,
+          padding: const EdgeInsets.only(left: _spineGutter),
+          child: child,
         ),
-        _SizeReporting(
-          onSize: (size) {
-            if (size.height != _topHeight) {
-              setState(() => _topHeight = size.height);
-            }
-          },
-          child: widget.top,
+        Positioned(
+          left: _spineX,
+          top: spineFromTop ? 0 : startAt,
+          bottom: 0,
+          width: _spineW,
+          child: ColoredBox(color: NuvoColors.blue.withValues(alpha: 0.28)),
         ),
+        if (marker != null)
+          Positioned(left: 4.5, top: markerTop, child: marker),
       ],
     );
   }
 }
 
+/// The 11px stop dot — the queue's semantic vocabulary. The outer dot is
+/// field-colored so the marker reads as a break in the rail, not a bead
+/// on top of it; the inner disc carries the state.
+class _QueueMarker extends StatelessWidget {
+  const _QueueMarker({required this.mood}) : isNext = false;
+  const _QueueMarker.next() : mood = _VerifyMood.chasing, isNext = true;
+
+  final _VerifyMood mood;
+  final bool isNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final Widget inner;
+    if (isNext) {
+      inner = const DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: NuvoColors.navy,
+        ),
+      );
+    } else {
+      inner = switch (mood) {
+        // Nothing proven — an outlined blue marker, not a filled one.
+        _VerifyMood.startLine => DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: c.panelLight,
+              border: Border.all(color: NuvoColors.blue, width: 1.6),
+            ),
+          ),
+        // A tie is still a chase — navy ring, blue core.
+        _VerifyMood.tied => DecoratedBox(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: NuvoColors.navy,
+            ),
+            child: Center(
+              child: Container(
+                width: 3,
+                height: 3,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: NuvoColors.blue,
+                ),
+              ),
+            ),
+          ),
+        _VerifyMood.leading ||
+        _VerifyMood.finished =>
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: NuvoColors.success,
+            ),
+          ),
+        _VerifyMood.chasing => const DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: NuvoColors.blue,
+            ),
+          ),
+      };
+    }
+    return Container(
+      width: 11,
+      height: 11,
+      padding: const EdgeInsets.all(2.5),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: c.panelLight,
+      ),
+      child: inner,
+    );
+  }
+}
+
 /// Reports its child's laid-out size after each frame — the one-way feed
-/// [_QueueBehindHero] and [_TuckedBelow] need to track morphing content.
+/// [_QueueBehindHero] needs to track a morphing hero.
 class _SizeReporting extends StatefulWidget {
   const _SizeReporting({required this.onSize, required this.child});
 
@@ -1544,12 +1648,10 @@ String _scoreText(Race race, int value) {
 /// thin track when a denominator exists, and one context line — what's
 /// left, who to pass, or the start line. The whole row is the tap target;
 /// no repeated blue verb, the chevron carries the affordance.
-/// Queue depth grade — how far behind the hero a waiting race sits.
-///   next   — the lifted object: white surface, structural edge, offset
-///   tucked — one step behind: same strip, lighter edge, no offset,
-///            tighter footprint; the pair overlaps it under `next`
-///   deep   — embedded in the field: no surface at all, hairline rhythm
-enum _QueueTier { next, tucked, deep }
+/// Queue grade — where a waiting race sits on the spine.
+///   next — the one lifted object: white surface, structural edge, offset
+///   deep — a stop on the line: no surface, no edge, marker + content
+enum _QueueTier { next, deep }
 
 class _ReadyRow extends StatelessWidget {
   const _ReadyRow({
@@ -1643,39 +1745,29 @@ class _ReadyRow extends StatelessWidget {
       }
     }
 
-    // Depth is earned by position in the queue: `next` is a lifted object
-    // (white fill, structural edge, offset plate), `tucked` keeps the same
-    // strip but drops the shadow and thins the edge — it's visibly behind
-    // the next race — and `deep` carries no chrome at all, sitting on the
-    // field between hairlines. The press is the response on every tier.
-    final decoration = switch (tier) {
-      _QueueTier.next => BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: Border.all(color: c.border, width: 1),
-          boxShadow: AppShadows.hardOffset(
-            c.inkShadow,
-            offset: const Offset(2, 2),
-          ),
-        ),
-      _QueueTier.tucked => BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: Border.all(color: c.divider, width: 1),
-        ),
-      _QueueTier.deep => null,
-    };
-    final stripPadding = switch (tier) {
-      _QueueTier.next => const EdgeInsets.fromLTRB(14, 12, 12, 12),
-      _QueueTier.tucked => const EdgeInsets.fromLTRB(14, 9, 12, 9),
-      _QueueTier.deep => const EdgeInsets.fromLTRB(6, 9, 2, 9),
-    };
+    // Position earns chrome: `next` is the queue's one lifted object
+    // (white fill, thin structural edge, restrained 2px plate — smaller
+    // and lighter than a race card elsewhere); `deep` carries none at
+    // all — the spine's marker is the identity, the press the response.
+    final decoration = tier == _QueueTier.next
+        ? BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(NuvoRadii.md),
+            border: Border.all(color: c.border, width: 1),
+            boxShadow: AppShadows.hardOffset(
+              c.inkShadow,
+              offset: const Offset(2, 2),
+            ),
+          )
+        : null;
 
     return PressableScale(
       onTap: onTap,
       scale: 0.98,
       child: Container(
-        padding: stripPadding,
+        padding: tier == _QueueTier.next
+            ? const EdgeInsets.fromLTRB(12, 10, 10, 10)
+            : EdgeInsets.zero,
         decoration: decoration,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
