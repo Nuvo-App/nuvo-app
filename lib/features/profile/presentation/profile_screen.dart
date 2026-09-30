@@ -822,144 +822,171 @@ class _LevelTrack extends ConsumerWidget {
     // moment in the progression loop, so the last stretch previews it.
     final nearNext = p.progress >= 0.9;
     final xpColor = nearNext ? NuvoColors.gold : NuvoColors.blue;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // The section is layered: an ice stage holds the route world —
+    // level header, the lanes, the XP requirement — and stops above
+    // the dock so the unlock artifact breaks the plane's lower-right
+    // edge as the foreground object. The stats shelf floats below it;
+    // nothing else shares the stage.
+    return Stack(
+      clipBehavior: Clip.none,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            // One text run so LEVEL + number shrink together under
-            // large text scale instead of fighting in a nested Row.
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: 'LEVEL ',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: c.ink,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    // The level number is the anchor — big and blue,
-                    // the same figure the leaderboard sees.
-                    TextSpan(
-                      text: '${p.level}',
-                      style: AppTextStyles.statLarge(
-                        36,
-                        color: NuvoColors.blue,
-                        weight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+        Positioned.fill(
+          bottom: next != null ? _LevelRoute.breakoutH : 0,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: c.panelLight,
+              borderRadius: BorderRadius.circular(22),
             ),
-            const SizedBox(width: NuvoSpacing.sm),
-            Flexible(
-              child: Text(
-                '${p.currentLevelXp} / ${p.nextLevelXp} XP',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: c.inkSubtle,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 12),
-        // The route — ONE drawn sentence: the current level's filled
-        // anchor on the upper lane, the climb stepping down through a
-        // small bend to the open ring at the next level, and the next
-        // collectible docked under that destination on a short
-        // connector. Level numerals live ON the route's ends — start
-        // point, bead, ring, reward.
-        SizedBox(
-          height: _LevelRoute.blockHeight(next != null),
-          child: LayoutBuilder(
-            builder: (context, cons) {
-              final w = cons.maxWidth;
-              final ringX = _LevelRoute.ringX(w);
-              final metric = _LevelRoute.routePath(w).computeMetrics().first;
-              final beadX = metric
-                  .getTangentForOffset(
-                    _LevelRoute.beadOffset(metric.length, p.progress),
-                  )!
-                  .position
-                  .dx;
-              // The XP requirement lives in the route's whitespace —
-              // centered on the stretch between the bead and the
-              // destination, kept clear of the dock column.
-              const capW = 132.0;
-              final capCx = ((beadX + ringX) / 2)
-                  .clamp(
-                    capW / 2 + 2,
-                    math.max(capW / 2 + 2, ringX - 30 - capW / 2),
-                  )
-                  .toDouble();
-              const nameW = 104.0;
-              final nameLeft = (ringX - nameW / 2)
-                  .clamp(0.0, math.max(0.0, w - nameW))
-                  .toDouble();
-              return Stack(
-                clipBehavior: Clip.none,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
                 children: [
-                  _LevelRoute(
-                    level: p.level,
-                    progress: p.progress,
-                    color: xpColor,
-                    hasDock: next != null,
-                  ),
-                  Positioned(
-                    top: _LevelRoute.captionTop,
-                    left: capCx - capW / 2,
-                    width: capW,
-                    child: Text(
-                      '${p.xpToNext} XP to Level ${p.level + 1}',
+                  // One text run so LEVEL + number shrink together under
+                  // large text scale instead of fighting in a nested Row.
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'LEVEL ',
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: c.ink,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          // The level number is the anchor — big and blue,
+                          // the same figure the leaderboard sees.
+                          TextSpan(
+                            text: '${p.level}',
+                            style: AppTextStyles.statLarge(
+                              36,
+                              color: NuvoColors.blue,
+                              weight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: NuvoSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      '${p.currentLevelXp} / ${p.nextLevelXp} XP',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.labelSmall.copyWith(
-                        color: xpColor,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
+                        color: c.inkSubtle,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                  if (next != null) ...[
-                    Positioned(
-                      top: _LevelRoute.dockTop,
-                      // 46px artifact centered on the ring's column.
-                      left: ringX - 23,
-                      child: _NextUnlockArtifact(unlock: next),
-                    ),
-                    Positioned(
-                      top: _LevelRoute.dockTop + 48,
-                      left: nameLeft,
-                      width: nameW,
-                      child: Text(
-                        next.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: c.inkMuted,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
-              );
-            },
+              ),
+              const SizedBox(height: 12),
+              // The route — ONE drawn sentence: the current level's filled
+              // anchor on the upper lane, the climb stepping down through a
+              // small bend to the open ring at the next level, and the next
+              // collectible docked under that destination on a short
+              // connector. Level numerals live ON the route's ends — start
+              // point, bead, ring, reward.
+              SizedBox(
+                height: _LevelRoute.blockHeight(next != null),
+                child: LayoutBuilder(
+                  builder: (context, cons) {
+                    final w = cons.maxWidth;
+                    final ringX = _LevelRoute.ringX(w);
+                    final metric = _LevelRoute.routePath(
+                      w,
+                    ).computeMetrics().first;
+                    final beadX = metric
+                        .getTangentForOffset(
+                          _LevelRoute.beadOffset(metric.length, p.progress),
+                        )!
+                        .position
+                        .dx;
+                    // The XP requirement lives in the route's whitespace —
+                    // centered on the stretch between the bead and the
+                    // destination, kept clear of the dock column.
+                    const capW = 132.0;
+                    final capCx = ((beadX + ringX) / 2)
+                        .clamp(
+                          capW / 2 + 2,
+                          math.max(capW / 2 + 2, ringX - 30 - capW / 2),
+                        )
+                        .toDouble();
+                    const nameW = 104.0;
+                    final nameLeft = (ringX - nameW / 2)
+                        .clamp(0.0, math.max(0.0, w - nameW))
+                        .toDouble();
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        _LevelRoute(
+                          level: p.level,
+                          progress: p.progress,
+                          color: xpColor,
+                          hasDock: next != null,
+                        ),
+                        Positioned(
+                          top: _LevelRoute.captionTop,
+                          left: capCx - capW / 2,
+                          width: capW,
+                          child: Text(
+                            '${p.xpToNext} XP to Level ${p.level + 1}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: xpColor,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                        if (next != null) ...[
+                          Positioned(
+                            top: _LevelRoute.dockTop,
+                            // 46px artifact centered on the ring's column.
+                            left: ringX - 23,
+                            child: _NextUnlockArtifact(unlock: next),
+                          ),
+                          Positioned(
+                            top: _LevelRoute.dockTop + 48,
+                            left: nameLeft,
+                            width: nameW,
+                            child: Text(
+                              next.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: c.inkMuted,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
+              // Bottom air inside the stage when no reward docks.
+              SizedBox(height: next != null ? 0 : 16),
+            ],
           ),
         ),
       ],
@@ -999,6 +1026,9 @@ class _LevelRoute extends StatelessWidget {
   static const double captionTop = 48;
   static const double dockTop = y2 + ringR + connector; // 54
   static double blockHeight(bool hasDock) => hasDock ? 117 : 64;
+  // How much of the block sits below the stage's lower edge — the
+  // artifact's lower ~43% plus its name, so the lock breaks the plane.
+  static const double breakoutH = 37;
 
   static double ringX(double width) => width - padR - ringR;
 
@@ -1352,30 +1382,49 @@ class _AchievementsSection extends StatelessWidget {
         // The shelf holds fixed positions: earned artifacts take seats
         // first, the next target fills the first empty seat locked, and
         // seats beyond it stay as quiet outlines — a shelf with space
-        // left to fill, never one item stretched across the page.
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        // left to fill, never one item stretched across the page. A pale
+        // base strip runs behind the badges' lower edge so the set reads
+        // displayed on a shelf, not floating on the page.
+        Stack(
+          clipBehavior: Clip.none,
           children: [
-            for (var i = 0; i < p.featuredSlots; i++) ...[
-              Expanded(
-                child: PressableScale(
-                  scale: 0.94,
-                  onTap: () => context.push('/profile/badges'),
-                  child: _ShelfSlot(
-                    badge: i < featured.length
-                        ? featured[i]
-                        : i == featured.length
-                        ? next
-                        : null,
-                    // A 4px drop on the center trophy keeps a full trio
-                    // reading as collectibles, not a tab bar.
-                    dropped: featured.length >= 3 && i == 1,
-                  ),
+            Positioned(
+              left: -4,
+              right: -4,
+              bottom: 22,
+              height: 18,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: c.panelLight,
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
-              if (i < p.featuredSlots - 1)
-                const SizedBox(width: NuvoSpacing.sm),
-            ],
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < p.featuredSlots; i++) ...[
+                  Expanded(
+                    child: PressableScale(
+                      scale: 0.94,
+                      onTap: () => context.push('/profile/badges'),
+                      child: _ShelfSlot(
+                        badge: i < featured.length
+                            ? featured[i]
+                            : i == featured.length
+                            ? next
+                            : null,
+                        // A 4px drop on the center trophy keeps a full trio
+                        // reading as collectibles, not a tab bar.
+                        dropped: featured.length >= 3 && i == 1,
+                      ),
+                    ),
+                  ),
+                  if (i < p.featuredSlots - 1)
+                    const SizedBox(width: NuvoSpacing.sm),
+                ],
+              ],
+            ),
           ],
         ),
       ],
@@ -1629,23 +1678,44 @@ class _StatsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
-    return Row(
-      children: [
-        _HeaderStat(
-          value: activeCount,
-          label: 'RACING',
-          color: NuvoColors.blue,
-        ),
-        _HeaderDivider(),
-        _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
-        _HeaderDivider(),
-        _HeaderStat(
-          value: winRate,
-          label: 'WIN RATE',
-          suffix: winRate == null ? '' : '%',
-          color: c.ink,
-        ),
-      ],
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // The record floats on ONE light shelf — a middle layer between the
+    // ice stage and the white canvas. Slightly inset from the stage,
+    // pale edge + a whisper of lift, never a card.
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: dark
+            ? Color.lerp(c.panelLight, Colors.white, 0.08)
+            : Color.lerp(c.panelLight, Colors.white, 0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.divider, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: c.inkShadow.withValues(alpha: 0.06),
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _HeaderStat(
+            value: activeCount,
+            label: 'RACING',
+            color: NuvoColors.blue,
+          ),
+          _HeaderDivider(),
+          _HeaderStat(value: wins, label: 'WINS', color: NuvoColors.gold),
+          _HeaderDivider(),
+          _HeaderStat(
+            value: winRate,
+            label: 'WIN RATE',
+            suffix: winRate == null ? '' : '%',
+            color: c.ink,
+          ),
+        ],
+      ),
     );
   }
 }
