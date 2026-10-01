@@ -90,7 +90,7 @@ class _ScriptedAuthRepo extends AuthRepository {
       user;
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password) async => user;
+  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async => user;
 
   @override
   Future<void> logout() async {}
@@ -643,26 +643,60 @@ void main() {
       );
     });
 
-    testWidgets('testing account always re-arms for QA', (tester) async {
-      final store = FirstUseStore.memory();
-      await store.markGuideDone(_testingUser.email); // done is ignored for it
-      final repo = _ScriptedAuthRepo(user: _testingUser);
-      final built = await _pumpAt(
-        tester,
-        repo: repo,
-        location: '/welcome',
-        store: store,
-      );
-      await built.container
-          .read(authControllerProvider.notifier)
-          .verifyEmailCode(_testingUser.email, '123456');
-      await tester.pumpAndSettle();
-      expect(_path(built.router), '/compete');
-      expect(
-        built.container.read(firstRaceGuideProvider),
-        FirstRaceGuideStep.competeStart,
-      );
-    });
+    testWidgets(
+      'testing account re-arms under signUp intent, even after completion',
+      (tester) async {
+        // The replay path: persisted "done" is deliberately ignored — every
+        // Sign Up run is a fresh tour.
+        final store = FirstUseStore.memory();
+        await store.markGuideDone(_testingUser.email);
+        final repo = _ScriptedAuthRepo(user: _testingUser);
+        final built = await _pumpAt(
+          tester,
+          repo: repo,
+          location: '/welcome',
+          store: store,
+        );
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signUp;
+        await built.container
+            .read(authControllerProvider.notifier)
+            .verifyEmailCode(_testingUser.email, '123456');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/compete');
+        expect(
+          built.container.read(firstRaceGuideProvider),
+          FirstRaceGuideStep.competeStart,
+        );
+      },
+    );
+
+    testWidgets(
+      'testing account under signIn intent lands on /arena — no tour',
+      (tester) async {
+        // Returning-user semantics: signIn never arms the guide, and the
+        // persisted completion is irrelevant either way.
+        final store = FirstUseStore.memory();
+        final repo = _ScriptedAuthRepo(user: _testingUser);
+        final built = await _pumpAt(
+          tester,
+          repo: repo,
+          location: '/welcome',
+          store: store,
+        );
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signIn;
+        await built.container
+            .read(authControllerProvider.notifier)
+            .verifyEmailCode(_testingUser.email, '123456');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/arena');
+        expect(
+          built.container.read(firstRaceGuideProvider),
+          FirstRaceGuideStep.idle,
+        );
+      },
+    );
 
     testWidgets('public and internal non-demo accounts never get the guide', (
       tester,

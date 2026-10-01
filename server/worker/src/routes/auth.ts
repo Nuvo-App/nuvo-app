@@ -632,15 +632,23 @@ authRouter.post('/apple', async (c) => {
 // password system: it is limited to one configured review email and compares
 // against a Cloudflare secret hash.
 authRouter.post('/reviewer', async (c) => {
-  let body: { email?: unknown; password?: unknown };
+  let body: { email?: unknown; password?: unknown; intent?: unknown };
   try {
-    body = await c.req.json<{ email?: unknown; password?: unknown }>();
+    body = await c.req.json<{
+      email?: unknown;
+      password?: unknown;
+      intent?: unknown;
+    }>();
   } catch {
     return c.json({ ok: false, error: 'Invalid request body' }, 400);
   }
 
   const email = normalizeEmail(typeof body.email === 'string' ? body.email : '');
   const password = typeof body.password === 'string' ? body.password : '';
+  // What the user tapped on the public welcome screen — never inferred from
+  // email or account shape. 'signup' replays the real first-run; anything
+  // else (including absent) is returning-sign-in, the non-destructive path.
+  const intent = body.intent === 'signup' ? 'signup' : 'signin';
   const expectedHash = c.env.REVIEWER_PASSWORD_HASH;
   const INVALID = { ok: false, error: 'Invalid review credentials' } as const;
 
@@ -657,13 +665,16 @@ authRouter.post('/reviewer', async (c) => {
 
   await ensureProfileAndPass(c.env.DB, user.id);
 
-  // True first-time replay: every reviewer sign-in deterministically returns
-  // the account to its just-created state — first-run fields cleared, prior
-  // replay artifacts purged, the seeded review world re-normalized. The
-  // client then walks the REAL new-account path (setup → story → notification
-  // education → first-race guide), not a fixture bypass. See
-  // lib/reviewerReplay.ts for the full reset contract.
-  await resetReviewerReplayState(c.env.DB, c.env.PROFILE_PHOTOS, user.id);
+  // Sign-up intent: deterministically return the account to its just-created
+  // state — first-run fields cleared, prior replay artifacts purged, the
+  // seeded review world re-normalized. The client then walks the REAL
+  // new-account path (setup → story → notification education → first-race
+  // guide), not a fixture bypass. Sign-in intent deliberately skips this so
+  // the reviewer's existing state survives — see lib/reviewerReplay.ts for
+  // the full reset contract.
+  if (intent === 'signup') {
+    await resetReviewerReplayState(c.env.DB, c.env.PROFILE_PHOTOS, user.id);
+  }
 
   const existingIdentity = await c.env.DB.prepare(
     "SELECT id FROM auth_identities WHERE user_id = ? AND provider = 'reviewer'",

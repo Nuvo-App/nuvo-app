@@ -284,8 +284,9 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
       ref.read(demoReplayProvider.notifier).state = false;
       if (storeDemo && !user.onboardingComplete) {
         // The server resets the review account to onboardingComplete=false on
-        // every sign-in, so this replay finish performs the REAL graduation
-        // write — the same completeOnboarding a genuine new account makes.
+        // every signUp-intent sign-in, so this replay finish performs the
+        // REAL graduation write — the same completeOnboarding a genuine new
+        // account makes.
         // Fall through to the normal finish path below; the replay flag is
         // already disarmed so the guard cannot bounce the session back into
         // the story while the write publishes.

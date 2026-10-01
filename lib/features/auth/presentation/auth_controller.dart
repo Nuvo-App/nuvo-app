@@ -59,6 +59,21 @@ class AuthState {
   }
 }
 
+/// Which path the user chose on the public welcome screen — sign up for the
+/// first-account experience, or sign in as a returning user. This is what the
+/// BUTTON said, never an inference from email, onboarding state, or account
+/// shape. For the canonical store-review credential it decides everything
+/// downstream: signUp replays the real first-run (server reset + setup +
+/// story + guide), signIn enters the seeded account directly.
+///
+/// Defaults to signIn — the non-destructive choice — so a deep-linked or
+/// resumed auth screen can never accidentally trigger the first-use reset.
+enum AuthIntent { signIn, signUp }
+
+final authIntentProvider = StateProvider<AuthIntent>(
+  (ref) => AuthIntent.signIn,
+);
+
 class AuthController extends StateNotifier<AuthState> {
   AuthController(this._repo)
     : super(const AuthState(status: AuthStatus.loading)) {
@@ -167,9 +182,17 @@ class AuthController extends StateNotifier<AuthState> {
     return kDebugMode || isNuvoStoreDemoEmail(e);
   }
 
-  Future<void> signInReviewer(String email, String password) async {
+  Future<void> signInReviewer(
+    String email,
+    String password, {
+    required AuthIntent intent,
+  }) async {
     try {
-      final user = await _repo.signInReviewer(email, password);
+      final user = await _repo.signInReviewer(
+        email,
+        password,
+        intent: intent == AuthIntent.signUp ? 'signup' : 'signin',
+      );
       if (mounted) {
         state = AuthState(status: AuthStatus.authenticated, user: user);
       }

@@ -135,7 +135,7 @@ void main() {
       final controller = AuthController(repo);
       await _settle(controller);
 
-      await controller.signInReviewer('testing@getnuvo.net', 'pw');
+      await controller.signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
       expect(controller.state.status, AuthStatus.authenticated);
       expect(controller.state.user?.id, 'offline-demo-user');
       expect(repo.offlineDemoCalls, 1);
@@ -149,7 +149,7 @@ void main() {
       await _settle(controller);
 
       await expectLater(
-        controller.signInReviewer('testing@getnuvo.net', 'wrong'),
+        controller.signInReviewer('testing@getnuvo.net', 'wrong', intent: AuthIntent.signUp),
         throwsA(isA<ApiException>()),
       );
       expect(repo.offlineDemoCalls, 0);
@@ -299,7 +299,7 @@ class _OfflineSignInRepo extends AuthRepository {
   int offlineDemoCalls = 0;
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password) {
+  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) {
     return Future.error(
       unreachable
           ? const ApiException(0, 'unreachable')

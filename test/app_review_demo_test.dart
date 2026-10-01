@@ -18,6 +18,7 @@ import 'package:nuvo/features/auth/presentation/auth_controller.dart';
 import 'package:nuvo/features/auth/presentation/auth_gate.dart';
 import 'package:nuvo/features/auth/presentation/email_start_screen.dart';
 import 'package:nuvo/features/auth/presentation/email_verify_screen.dart';
+import 'package:nuvo/features/auth/presentation/welcome_auth_screen.dart';
 import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 
@@ -74,7 +75,7 @@ class _AuthRepo extends AuthRepository {
   }
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password) async {
+  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async {
     if (failReviewer) {
       throw const ApiException(401, 'Invalid review credentials');
     }
@@ -218,6 +219,73 @@ Future<({GoRouter router, ProviderContainer container})> _pumpAt(
 String _path(GoRouter router) =>
     router.routerDelegate.currentConfiguration.last.matchedLocation;
 
+/// Email-start screen with a live provider container — the intent-driven
+/// reviewer path reads authIntentProvider at submit time.
+Future<({GoRouter router, ProviderContainer container, _AuthRepo repo})>
+_pumpEmailScreen(WidgetTester tester, {required _AuthRepo repo}) async {
+  final container = ProviderContainer(
+    overrides: [
+      authControllerProvider.overrideWith((ref) => AuthController(repo)),
+      firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
+    ],
+  );
+  addTearDown(container.dispose);
+  final router = GoRouter(
+    initialLocation: '/auth/email',
+    routes: [
+      GoRoute(path: '/auth/email', builder: (_, _) => const EmailStartScreen()),
+      GoRoute(path: '/welcome', builder: (_, _) => const _Screen('welcome')),
+    ],
+  );
+  addTearDown(router.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(routerConfig: router),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+  return (router: router, container: container, repo: repo);
+}
+
+/// Welcome screen inside a real router — owns the auth intent.
+Future<({GoRouter router, ProviderContainer container})> _pumpWelcome(
+  WidgetTester tester, {
+  bool login = false,
+  _AuthRepo? repo,
+}) async {
+  final container = ProviderContainer(
+    overrides: [
+      authControllerProvider.overrideWith(
+        (ref) => AuthController(repo ?? _AuthRepo()),
+      ),
+      firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
+    ],
+  );
+  addTearDown(container.dispose);
+  final router = GoRouter(
+    initialLocation: '/welcome',
+    routes: [
+      GoRoute(
+        path: '/welcome',
+        builder: (_, _) => WelcomeAuthScreen(initialLogin: login),
+      ),
+      GoRoute(path: '/auth/email', builder: (_, _) => const EmailStartScreen()),
+      GoRoute(path: '/arena', builder: (_, _) => const _Screen('arena')),
+    ],
+  );
+  addTearDown(router.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(routerConfig: router),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return (router: router, container: container);
+}
+
 void main() {
   group('resetDemoExperienceForColdLaunch', () {
     test('clears only Nuvo-owned experience flags for the demo account',
@@ -302,7 +370,7 @@ void main() {
         built.container.read(demoReplayProvider.notifier).state = true;
         await built.container
             .read(authControllerProvider.notifier)
-            .signInReviewer('testing@getnuvo.net', 'pw');
+            .signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
         await tester.pumpAndSettle();
         for (final loc in ['/arena', '/profile', '/welcome', '/auth/email']) {
           built.router.go(loc);
@@ -322,7 +390,7 @@ void main() {
         built.container.read(demoReplayProvider.notifier).state = true;
         await built.container
             .read(authControllerProvider.notifier)
-            .signInReviewer('testing@getnuvo.net', 'pw');
+            .signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
         await tester.pumpAndSettle();
         expect(_path(built.router), '/onboarding/nuvo');
         expect(tester.takeException(), isNull);
@@ -495,6 +563,9 @@ void main() {
       (tester) async {
         final repo = _AuthRepo(user: _reviewerUser)..failReviewer = true;
         final flow = await pumpEmailFlow(tester, repo: repo);
+        // The reviewer chose Sign Up on Welcome — replay semantics apply.
+        flow.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signUp;
         await tester.enterText(
           find.byType(TextField).first,
           'testing@getnuvo.net',
@@ -689,11 +760,14 @@ void main() {
           location: '/welcome',
           store: store,
         );
+        // The welcome screen owns the intent — Sign Up selected.
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signUp;
         // The email screen arms the replay before auth state publishes.
         built.container.read(demoReplayProvider.notifier).state = true;
         await built.container
             .read(authControllerProvider.notifier)
-            .signInReviewer('testing@getnuvo.net', 'pw');
+            .signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp);
         await tester.pumpAndSettle();
         expect(_path(built.router), '/onboarding/profile');
 
@@ -767,5 +841,236 @@ void main() {
         expect(repo.clearCalls, 1, reason: 'session $i must clear once');
       }
     });
+  });
+
+  group('reviewer sign-up vs sign-in intent', () {
+    testWidgets(
+      'Welcome defaults to Sign Up; the mode toggle drives the intent',
+      (tester) async {
+        // TEST 1/2 — the button the reviewer picks is the only source of
+        // intent; the provider must track the visible mode exactly.
+        final built = await _pumpWelcome(tester);
+        await tester.pumpAndSettle();
+        expect(
+          built.container.read(authIntentProvider),
+          AuthIntent.signUp,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('auth-mode-toggle')));
+        await tester.pumpAndSettle();
+        expect(
+          built.container.read(authIntentProvider),
+          AuthIntent.signIn,
+        );
+
+        await tester.tap(find.byKey(const ValueKey('auth-mode-toggle')));
+        await tester.pumpAndSettle();
+        expect(
+          built.container.read(authIntentProvider),
+          AuthIntent.signUp,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('Welcome opened on Log in starts with signIn intent', (
+      tester,
+    ) async {
+      final built = await _pumpWelcome(tester, login: true);
+      await tester.pumpAndSettle();
+      expect(built.container.read(authIntentProvider), AuthIntent.signIn);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'back from the email screen, then Log in, leaves no stale signUp intent',
+      (tester) async {
+        // TEST 9 — Sign Up → email → Back → Log in must be a signIn.
+        final built = await _pumpWelcome(tester);
+        await tester.pumpAndSettle();
+        expect(
+          built.container.read(authIntentProvider),
+          AuthIntent.signUp,
+        );
+
+        await tester.tap(find.text('Create account'));
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/auth/email');
+
+        built.router.pop();
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/welcome');
+
+        await tester.tap(find.byKey(const ValueKey('auth-mode-toggle')));
+        await tester.pumpAndSettle();
+        expect(
+          built.container.read(authIntentProvider),
+          AuthIntent.signIn,
+          reason: 'the toggle after back nav is the live intent',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'signUp intent arms the replay; signIn intent clears stale replay '
+      'and guide state',
+      (tester) async {
+        // TEST 4/6 — same screen, same credential: the intent decides whether
+        // the session is a first-run replay or a returning-user entry.
+        final repo = _AuthRepo(user: _reviewerUser);
+
+        // Sign Up — replay arms, persisted demo state resets.
+        var flow = await _pumpEmailScreen(tester, repo: repo);
+        flow.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signUp;
+        await tester.enterText(
+          find.byType(TextField).first,
+          'testing@getnuvo.net',
+        );
+        await tester.pump();
+        await tester.enterText(find.byType(TextField).last, 'pw');
+        await tester.pump();
+        await tester.tap(find.text('Sign in'));
+        await tester.pumpAndSettle();
+        expect(flow.container.read(demoReplayProvider), isTrue);
+
+        // Sign In — a stale armed replay from earlier in the process must be
+        // cleared; returning-user semantics only.
+        flow = await _pumpEmailScreen(tester, repo: repo);
+        flow.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signIn;
+        flow.container.read(demoReplayProvider.notifier).state = true;
+        flow.container.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.competeStart;
+        await tester.enterText(
+          find.byType(TextField).first,
+          'testing@getnuvo.net',
+        );
+        await tester.pump();
+        await tester.enterText(find.byType(TextField).last, 'pw');
+        await tester.pump();
+        await tester.tap(find.text('Sign in'));
+        await tester.pumpAndSettle();
+        expect(
+          flow.container.read(authControllerProvider).status,
+          AuthStatus.authenticated,
+        );
+        expect(flow.container.read(demoReplayProvider), isFalse);
+        expect(
+          flow.container.read(firstRaceGuideProvider),
+          FirstRaceGuideStep.idle,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'signIn on the seeded reviewer lands directly in the app — no setup, '
+      'no story, no guide',
+      (tester) async {
+        // TEST 4 — returning-user semantics for the seeded account.
+        final repo = _JourneyRepo(user: _reviewerUser);
+        final built = await _pumpAt(tester, repo: repo, location: '/welcome');
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signIn;
+        await built.container
+            .read(authControllerProvider.notifier)
+            .signInReviewer(
+              'testing@getnuvo.net',
+              'pw',
+              intent: AuthIntent.signIn,
+            );
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/arena');
+        expect(built.container.read(demoReplayProvider), isFalse);
+        expect(
+          built.container.read(firstRaceGuideProvider),
+          FirstRaceGuideStep.idle,
+          reason: 'signIn must not arm the first-race tour',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'a stale armed guide step cannot redirect a signIn session to /compete',
+      (tester) async {
+        // The guard must consult intent for ANY guide step, not just the
+        // idle→arm transition — leaked steps are how old state hijacked
+        // sign-ins.
+        final repo = _JourneyRepo(user: _reviewerUser);
+        final built = await _pumpAt(tester, repo: repo, location: '/welcome');
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signIn;
+        built.container.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.composerGoal;
+        await built.container
+            .read(authControllerProvider.notifier)
+            .signInReviewer(
+              'testing@getnuvo.net',
+              'pw',
+              intent: AuthIntent.signIn,
+            );
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/arena');
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'signIn after a completed signUp run still enters directly — the '
+      'finished state is preserved',
+      (tester) async {
+        // TEST 15 — a new "process" (fresh container) sharing the repo and
+        // store: the completed run survives and signIn goes straight in.
+        final store = FirstUseStore.memory();
+        final repo = _JourneyRepo();
+
+        // Run 1 — Sign Up completes the full first-use sequence.
+        var built = await _pumpAt(
+          tester,
+          repo: repo,
+          location: '/welcome',
+          store: store,
+        );
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signUp;
+        built.container.read(demoReplayProvider.notifier).state = true;
+        var auth = built.container.read(authControllerProvider.notifier);
+        await auth.signInReviewer(
+          'testing@getnuvo.net',
+          'pw',
+          intent: AuthIntent.signUp,
+        );
+        await auth.acceptTerms();
+        await auth.attestAge();
+        await auth.saveProfile(fullName: 'Nuvo Review', username: 'nuvoreview');
+        await auth.setMotionConsent(consented: true);
+        await auth.completeOnboarding();
+        await store.clearNotificationPromptOwed();
+
+        // Run 2 — new container = fresh providers; the reviewer picks
+        // Sign In and the preserved account enters the app.
+        built = await _pumpAt(
+          tester,
+          repo: repo,
+          location: '/welcome',
+          store: store,
+        );
+        built.container.read(authIntentProvider.notifier).state =
+            AuthIntent.signIn;
+        auth = built.container.read(authControllerProvider.notifier);
+        await auth.signInReviewer(
+          'testing@getnuvo.net',
+          'pw',
+          intent: AuthIntent.signIn,
+        );
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/arena');
+        expect(built.container.read(demoReplayProvider), isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }

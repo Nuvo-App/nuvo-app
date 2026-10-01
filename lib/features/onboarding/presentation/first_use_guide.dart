@@ -41,21 +41,24 @@ final demoReplayProvider = StateProvider<bool>((ref) => false);
 
 /// The one place the store-review demo experience is reset.
 ///
-/// Called on every fresh reviewer sign-in (email auth) — the cold-launch
-/// side is handled by AuthController detaching the restored testing@ session
-/// to the public welcome/auth route, so the reviewer always re-enters through
-/// sign-in. The account re-walks the deterministic first-use sequence:
-/// account setup → Nuvo story → notification education → Arena → first-race
-/// guide. The centralized funnel keeps account checks off individual screens.
+/// Called when the reviewer enters through Sign Up (authIntent == signUp) —
+/// the cold-launch side is handled by AuthController detaching the restored
+/// testing@ session to the public welcome/auth route, so the reviewer always
+/// re-enters through the Welcome decision. Sign Up re-walks the
+/// deterministic first-use sequence: account setup → Nuvo story →
+/// notification education → Arena → first-race guide. Sign In deliberately
+/// does not call this — the seeded account enters directly with
+/// returning-user semantics.
 ///
 /// Reset scope — Nuvo-owned EXPERIENCE state only: the replay flag (armed so
-/// the route guard keeps the account inside the story), the armed guide
-/// step, this account's persisted guide completion, and the install-scoped
-/// education flags (notification prompt owed, camera primer, intro). Never
-/// touched: the session, server-owned flags (onboardingComplete stays
-/// complete — the replay drives the story via [demoReplayProvider], not by
-/// un-completing the account), race data, and OS permission state, which
-/// cannot be reset and is re-consulted live by the education step anyway.
+/// the route guard keeps the account inside the first-run sequence), the
+/// armed guide step, this account's persisted guide completion, and the
+/// install-scoped education flags (notification prompt owed, camera primer,
+/// intro). Server-owned first-run fields are reset by the Worker's
+/// resetReviewerReplayState on the same signUp sign-in — the story then
+/// performs a real graduation write. Never touched: the session, race data,
+/// and OS permission state, which cannot be reset and is re-consulted live
+/// by the education step anyway.
 /// [read] accepts `Ref.read`, `WidgetRef.read`, or `ProviderContainer.read` —
 /// callers in the guard, splash, and auth screens all satisfy it.
 Future<void> resetDemoExperienceForColdLaunch(
@@ -205,12 +208,15 @@ CoachSpec? composerCoachSpec(
 
 /// Whether the first-race coach may arm for [user] right now.
 ///
-/// The store-review credential always re-arms — it is the demo identity whose
-/// whole purpose is replaying the first-use flow. Every other eligible
-/// (demo-flagged) identity is suppressed once its guide completion has been
-/// persisted for that account.
+/// The store-review credential re-arms only while the session carries
+/// signUp intent — that is the replay-the-first-run path. Under signIn the
+/// reviewer is a returning user and lands directly in the app. Every other
+/// eligible (demo-flagged) identity is suppressed once its guide completion
+/// has been persisted for that account.
 bool firstRaceGuideAllowed(Ref ref, AuthUser user) {
-  if (isNuvoStoreDemoEmail(user.email)) return true;
+  if (isNuvoStoreDemoEmail(user.email)) {
+    return ref.read(authIntentProvider) == AuthIntent.signUp;
+  }
   return !ref.read(firstUseStoreProvider).isGuideDone(user.email);
 }
 

@@ -125,7 +125,7 @@ class _ScriptedAuthRepo extends AuthRepository {
   }
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password) async {
+  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async {
     calls.add('reviewer');
     return user;
   }
@@ -169,7 +169,7 @@ class _MutableUserRepo extends AuthRepository {
       _user();
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password) async =>
+  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async =>
       _user();
 
   @override
@@ -279,7 +279,7 @@ Future<void> _signIn(
     'email' => auth.verifyEmailCode(email, '123456'),
     'google' => auth.signInWithGoogle('token'),
     'apple' => auth.signInWithApple('token'),
-    'reviewer' => auth.signInReviewer('testing@getnuvo.net', 'pw'),
+    'reviewer' => auth.signInReviewer('testing@getnuvo.net', 'pw', intent: AuthIntent.signUp),
     _ => throw ArgumentError(channel),
   };
 }

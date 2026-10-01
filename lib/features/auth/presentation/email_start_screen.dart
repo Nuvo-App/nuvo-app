@@ -59,12 +59,15 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       _loading = true;
       _error = null;
     });
-    // The reviewer credential always replays the first-use experience. Arm
-    // the replay flag BEFORE the sign-in publishes auth state — the route
-    // guard evaluates the moment the session resolves, and it must already
-    // see the replay armed to land on the story instead of the app.
+    // The reviewer credential's post-auth path is decided by the welcome
+    // screen's intent — Sign Up replays the real first-use experience, Sign
+    // In enters the seeded account directly. Under signUp the replay flag is
+    // armed BEFORE the sign-in publishes auth state: the route guard
+    // evaluates the moment the session resolves and must already see the
+    // replay armed to route into first-run setup instead of the app.
+    final intent = ref.read(authIntentProvider);
     final wasReplaying = ref.read(demoReplayProvider);
-    if (_isReviewerEmail) {
+    if (_isReviewerEmail && intent == AuthIntent.signUp) {
       ref.read(demoReplayProvider.notifier).state = true;
     }
     try {
@@ -74,13 +77,27 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
         // store review works even on networks that block workers.dev.
         await ref
             .read(authControllerProvider.notifier)
-            .signInReviewer(email, _passwordController.text);
-        // Reset the persisted demo state (guide done, education flags) so the
-        // replay is complete, not just the story. Provider flags were armed
-        // above; this finishes the Nuvo-owned reset centrally.
-        final user = ref.read(authControllerProvider).user;
-        if (user != null) {
-          await resetDemoExperienceForColdLaunch(ref.read, user);
+            .signInReviewer(
+              email,
+              _passwordController.text,
+              intent: intent,
+            );
+        // Sign-up intent: reset the persisted demo state (guide done,
+        // education flags) so the replay is complete, not just the story.
+        // Sign-in intent deliberately preserves everything — returning-user
+        // semantics for the seeded reviewer account.
+        if (intent == AuthIntent.signUp) {
+          final user = ref.read(authControllerProvider).user;
+          if (user != null) {
+            await resetDemoExperienceForColdLaunch(ref.read, user);
+          }
+        } else {
+          // Returning-user semantics: drop any stale in-session replay and
+          // guide step so the guard cannot redirect the sign-in into the
+          // tour — e.g. a Sign Up run armed the replay earlier this process.
+          ref.read(demoReplayProvider.notifier).state = false;
+          ref.read(firstRaceGuideProvider.notifier).state =
+              FirstRaceGuideStep.idle;
         }
         return;
       } else {
