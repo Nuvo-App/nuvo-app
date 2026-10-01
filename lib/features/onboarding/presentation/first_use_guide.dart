@@ -21,6 +21,13 @@ enum FirstRaceGuideStep {
   composerReview,
   raceDetail,
   verifySetup,
+
+  /// Armed when a guided proof actually submits — the board-moved continue
+  /// routes to Profile, which coaches the earned progress before the guide
+  /// completes. The guide deliberately survives the verifier so a cancelled
+  /// or failed attempt reacquires the right coached control.
+  profileReward,
+
   complete,
 }
 
@@ -86,6 +93,9 @@ abstract final class FirstRaceGuideKeys {
   static final composerRacersCta = GlobalKey(debugLabel: 'guide-racers-cta');
   static final racePrimary = GlobalKey(debugLabel: 'guide-race-primary');
   static final verifyBegin = GlobalKey(debugLabel: 'guide-verify-begin');
+  static final profileProgress = GlobalKey(
+    debugLabel: 'guide-profile-progress',
+  );
 }
 
 /// Which composer page the coach is reasoning about. Mapped from the
@@ -230,6 +240,7 @@ class FirstRaceGuideCoach extends ConsumerStatefulWidget {
     required this.eyebrow,
     required this.title,
     this.body,
+    this.actionLabel = 'Skip',
     this.avoidKeys = const [],
   });
 
@@ -238,6 +249,10 @@ class FirstRaceGuideCoach extends ConsumerStatefulWidget {
   final String eyebrow;
   final String title;
   final String? body;
+
+  /// The bubble's dismiss affordance — 'Skip' while coaching, a definite
+  /// 'Got it' on the final step that closes the guide.
+  final String actionLabel;
 
   /// Content regions the bubble must never park on (e.g. the featured race
   /// card under the Compete header). Measured from real geometry, not
@@ -443,6 +458,7 @@ class _FirstRaceGuideCoachState extends ConsumerState<FirstRaceGuideCoach>
             eyebrow: widget.eyebrow,
             title: widget.title,
             body: widget.body,
+            actionLabel: widget.actionLabel,
             onSkip: _skip,
           ),
         ],
@@ -501,6 +517,7 @@ class _GuideCallout extends StatelessWidget {
     required this.eyebrow,
     required this.title,
     required this.body,
+    required this.actionLabel,
     required this.onSkip,
   });
 
@@ -516,6 +533,7 @@ class _GuideCallout extends StatelessWidget {
   final String eyebrow;
   final String title;
   final String? body;
+  final String actionLabel;
   final VoidCallback onSkip;
 
   @override
@@ -677,7 +695,7 @@ class _GuideCallout extends StatelessWidget {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(10, 2, 2, 2),
                         child: Text(
-                          'Skip',
+                          actionLabel,
                           style: AppTextStyles.labelSmall.copyWith(
                             color: NuvoColors.muted,
                             fontWeight: FontWeight.w600,

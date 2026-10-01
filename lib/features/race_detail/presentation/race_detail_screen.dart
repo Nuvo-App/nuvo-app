@@ -31,6 +31,7 @@ import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
+import '../../races/presentation/ai_motion_proof_entry.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import '../../profile/presentation/widgets/xp_reward.dart';
@@ -213,23 +214,13 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
 
   /// Verify-and-score path for the primary CTA. Attempt races open a
   /// server-timestamped attempt first — the proof that follows binds to it.
-  Future<void> _verify(
-    Race race,
-    CameraVerificationEligibility eligibility, {
-    required bool usesAttempts,
-  }) async {
-    // The guide follows the user into the verifier — Begin on the proof
-    // setup screen is the final coached action.
+  Future<void> _verify(Race race, {required bool usesAttempts}) async {
+    // The guide follows the user into the verifier — this coached CTA arms
+    // the proof step, which the verifier completes on a successful submit.
     if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.raceDetail) {
       ref.read(firstRaceGuideProvider.notifier).state =
           FirstRaceGuideStep.verifySetup;
     }
-    debugLogCameraVerificationDecision(
-      race,
-      eligibility,
-      routeAction: 'race_detail_to_submit_proof',
-    );
-
     if (usesAttempts) {
       setState(() => _busy = true);
       try {
@@ -257,7 +248,12 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
     }
 
     if (!mounted) return;
-    await context.push('/race/${race.id}/proof');
+    await openAiMotionProof(
+      context,
+      ref,
+      race,
+      routeAction: 'race_detail_to_submit_proof',
+    );
     _load();
   }
 
@@ -481,7 +477,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
               ? _rematch
               : () => context.push('/races/new'))
         : canVerify
-        ? () => _verify(race, eligibility, usesAttempts: usesAttempts)
+        ? () => _verify(race, usesAttempts: usesAttempts)
         : null;
 
     final showBottomBar =

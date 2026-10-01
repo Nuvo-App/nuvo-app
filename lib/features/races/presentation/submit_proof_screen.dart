@@ -18,12 +18,12 @@ import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
 import '../../auth/data/auth_api.dart';
 import '../../auth/presentation/auth_controller.dart';
-import '../../onboarding/data/first_use_store.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
 import '../data/race_models.dart';
 import '../domain/camera_verification_resolver.dart';
 import '../domain/race_display.dart';
 import '../domain/motion_activity.dart';
+import 'ai_motion_proof_entry.dart';
 import 'board_moved_screen.dart';
 import 'motion_catalog_provider.dart';
 import 'race_controller.dart';
@@ -67,11 +67,6 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
   }
 
   Future<void> _submitManual(Race race) async {
-    // A manual-goal race has no Begin button — the real submit is the guide's
-    // last action instead.
-    if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
-      completeFirstRaceGuide(ref);
-    }
     final value = int.tryParse(_logController.text.trim());
     if (value == null || value <= 0) {
       setState(() => _manualError = 'Enter how much you completed.');
@@ -122,6 +117,13 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
             mediaObjectKey: mediaObjectKey,
           );
       if (!mounted) return;
+      // The guide's coached story continues past a real proof: the
+      // celebration's continue lands on Profile, which points at the earned
+      // progress before the guide completes.
+      if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
+        ref.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.profileReward;
+      }
       final proof = updated.recentProofs.isNotEmpty
           ? updated.recentProofs.first
           : null;
@@ -394,50 +396,27 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         expand: true,
         onPressed: _navigating
             ? null
-            : () => _beginCameraProof(race, eligibility),
+            : () => _beginCameraProof(race),
       ),
       const SizedBox(height: 10),
       backToRace,
     ];
   }
 
-  Future<void> _beginCameraProof(
-    Race race,
-    CameraVerificationEligibility eligibility,
-  ) async {
+  Future<void> _beginCameraProof(Race race) async {
     if (_navigating) return;
-    // Begin is the guide's final coached action — the camera flow teaches
-    // itself from here.
-    if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
-      completeFirstRaceGuide(ref);
-    }
-    // First camera use gets the why-before-the-ask primer — the OS prompt
-    // itself is what the camera plugin raises inside the proof flow. Shown
-    // once per install; a dismissed primer asks again next time.
-    final firstUse = ref.read(firstUseStoreProvider);
-    if (!firstUse.isCameraPrimerSeen) {
-      final proceed = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: context.themeColors.page,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        builder: (_) => const _CameraPrimerSheet(),
-      );
-      if (proceed != true) return;
-      await firstUse.markCameraPrimerSeen();
-    }
-    if (!mounted) return;
     setState(() => _navigating = true);
     HapticFeedback.mediumImpact();
-    debugLogCameraVerificationDecision(
-      race,
-      eligibility,
-      routeAction: 'submit_proof_to_camera',
-    );
     try {
-      await context.push('/race/${widget.raceId}/proof/ai-motion');
+      // The guide stays armed through the verifier — it advances to the
+      // Profile reward step only after a proof actually submits, and the
+      // coach reacquires Begin if the user backs out.
+      await openAiMotionProof(
+        context,
+        ref,
+        race,
+        routeAction: 'submit_proof_to_camera',
+      );
     } finally {
       if (mounted) setState(() => _navigating = false);
     }
@@ -1135,112 +1114,3 @@ class _EvidenceSheetOption extends StatelessWidget {
   }
 }
 
-// ── Camera primer ────────────────────────────────────────────────────────────
-
-/// One-time "why the camera" sheet shown before the first AI Motion launch.
-/// Education only — the OS permission dialog belongs to the camera plugin
-/// inside the proof flow; this sheet never triggers it.
-class _CameraPrimerSheet extends StatelessWidget {
-  const _CameraPrimerSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.themeColors;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: c.panel,
-                  border: Border.all(color: c.ink, width: 1.6),
-                ),
-                child: const Icon(
-                  Icons.accessibility_new_rounded,
-                  color: NuvoColors.blue,
-                  size: 28,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Move. We’ll verify it.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.headlineMedium.copyWith(
-                color: c.ink,
-                letterSpacing: -0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Nuvo uses your camera to track your movement while you race.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: c.inkMuted,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                for (final (i, fact) in const [
-                  (
-                    icon: Icons.accessibility_new_rounded,
-                    label: 'Processed for motion',
-                  ),
-                  (
-                    icon: Icons.videocam_off_rounded,
-                    label: 'Video isn’t uploaded',
-                  ),
-                ].indexed) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Icon(fact.icon, color: NuvoColors.blue, size: 22),
-                        const SizedBox(height: 6),
-                        Text(
-                          fact.label,
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: c.ink,
-                            fontWeight: FontWeight.w700,
-                            height: 1.25,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 20),
-            NuvoPrimaryButton(
-              label: 'Continue',
-              expand: true,
-              onPressed: () => Navigator.of(context).pop(true),
-            ),
-            const SizedBox(height: 4),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(
-                'Not now',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: c.inkMuted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,7 +21,7 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../notifications/domain/notification_display.dart';
 import '../../races/data/race_models.dart';
-import '../../races/domain/camera_verification_resolver.dart';
+import '../../races/presentation/ai_motion_proof_entry.dart';
 import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
 import '../../races/presentation/race_controller.dart';
@@ -146,14 +148,18 @@ class _MoveScreenState extends ConsumerState<MoveScreen> {
         .toList();
 
     void openVerification(Race race) {
-      debugLogCameraVerificationDecision(
-        race,
-        resolveCameraVerification(race),
-        routeAction: 'move_screen_to_submit_proof',
+      // Canonical entry: camera-verifiable races go straight to the
+      // fullscreen verifier; manual races keep the proof chooser.
+      unawaited(
+        openAiMotionProof(
+          context,
+          ref,
+          race,
+          routeAction: 'move_screen_to_submit_proof',
+        ).then((_) {
+          ref.read(raceControllerProvider.notifier).loadRaces();
+        }),
       );
-      context.push('/race/${race.id}/proof').then((_) {
-        ref.read(raceControllerProvider.notifier).loadRaces();
-      });
     }
 
     final allEmpty =
