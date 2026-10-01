@@ -161,16 +161,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
 
     final user = authState.user;
-    if (user != null &&
-        isNuvoStoreDemoEmail(user.email) &&
-        user.id != 'offline-demo-user') {
-      // The store-review identity must always start fresh from the splash
-      // screen: sign out and land on /welcome so the reviewer re-walks
-      // auth rather than resuming a session.
-      // A local-only offline demo session (sentinel tokens, fixture data)
-      // is exempt: it can never reach the API, so force-logging it out would
-      // strand a venue demo behind a sign-in that needs connectivity.
-      await ref.read(authControllerProvider.notifier).logout();
+    if (user != null && isNuvoStoreDemoEmail(user.email)) {
+      // The store-review identity replays the first-use experience on every
+      // genuine cold launch: reset Nuvo-owned demo state (never OS
+      // permissions, never the session) and re-enter the story at page 0.
+      // This is process-launch routing — a kill/reopen always lands here,
+      // while tab switches, brief backgrounding, and modal returns never
+      // rebuild the splash.
+      _navigated = true;
+      await resetDemoExperienceForColdLaunch(ref.read, user);
+      if (!mounted) return;
+      context.go('/onboarding/nuvo');
       return;
     }
 
@@ -180,8 +181,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       // walks it ONCE. Once this account's guide completion is persisted,
       // later signed-in launches go straight to the app — the coach must
       // never re-appear on every sign-in. The store-review identity never
-      // reaches this branch (it logged out above), so its always-replay
-      // contract holds.
+      // reaches this branch (it reset and re-entered the story above), so
+      // its always-replay contract holds.
       final guideDone = ref
           .read(firstUseStoreProvider)
           .isGuideDone(user.email);

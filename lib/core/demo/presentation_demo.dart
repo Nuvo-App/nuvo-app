@@ -113,9 +113,9 @@ Future<File> _toggleFile() async {
 }
 
 bool isPresentationDemoUser(AuthUser? user) {
-  // Backend-flagged demo identities (the store-review credential and demo
-  // accounts) always render fixtures. `testing@getnuvo.net` is a real QA
-  // account — it must see the genuine first-user experience, not fixtures.
+  // Backend-flagged demo identities (the store-review credential — the
+  // canonical `testing@getnuvo.net` reviewer account — and any account with
+  // is_demo set) always render fixtures.
   if (user?.isDemo == true) return true;
   final email = user?.email.trim().toLowerCase();
   // The account owner's own identity is presentation mode only while they've

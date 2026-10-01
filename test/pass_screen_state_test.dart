@@ -57,7 +57,7 @@ class _DemoAuthRepo extends AuthRepository {
   @override
   Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
         id: 'demo-viewer-1',
-        email: 'team@getnuvo.net',
+        email: 'testing@getnuvo.net',
         isDemo: true,
         fullName: 'Maya Chen',
         username: 'maya',

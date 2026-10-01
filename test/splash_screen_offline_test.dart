@@ -12,11 +12,20 @@ import 'package:nuvo/features/auth/data/auth_models.dart';
 import 'package:nuvo/features/auth/data/auth_repository.dart';
 import 'package:nuvo/features/auth/data/secure_token_store.dart';
 import 'package:nuvo/features/auth/presentation/auth_controller.dart';
+import 'package:nuvo/features/onboarding/data/first_use_store.dart';
 import 'package:nuvo/features/splash/presentation/splash_screen.dart';
 
 const _user = AuthUser(
   id: 'user-1',
   email: 'test@getnuvo.net',
+  onboardingComplete: true,
+  hasMemberPass: true,
+  termsAccepted: true,
+);
+
+const _reviewerUser = AuthUser(
+  id: 'review-user',
+  email: 'testing@getnuvo.net',
   onboardingComplete: true,
   hasMemberPass: true,
   termsAccepted: true,
@@ -47,6 +56,7 @@ Future<GoRouter> _pumpSplash(
       authControllerProvider.overrideWith(
         (ref) => AuthController(_ScriptedAuthRepo(restoreResult)),
       ),
+      firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
     ],
   );
   addTearDown(container.dispose);
@@ -56,6 +66,10 @@ Future<GoRouter> _pumpSplash(
       GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
       GoRoute(path: '/arena', builder: (c, s) => const _Screen('arena')),
       GoRoute(path: '/welcome', builder: (c, s) => const _Screen('welcome')),
+      GoRoute(
+        path: '/onboarding/nuvo',
+        builder: (c, s) => const _Screen('nuvo-story'),
+      ),
     ],
   );
   await tester.pumpWidget(
@@ -103,6 +117,18 @@ void main() {
     final router = await _pumpSplash(tester, restoreResult: const RestoreOk(_user));
     expect(_currentPath(router), '/arena');
   });
+
+  testWidgets(
+    'store-review session: splash resets the demo and re-enters the story',
+    (tester) async {
+      final router = await _pumpSplash(
+        tester,
+        restoreResult: const RestoreOk(_reviewerUser),
+      );
+      expect(_currentPath(router), '/onboarding/nuvo');
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('no stored session: splash hands off to /welcome', (
     tester,

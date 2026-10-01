@@ -279,7 +279,7 @@ Future<void> _signIn(
     'email' => auth.verifyEmailCode(email, '123456'),
     'google' => auth.signInWithGoogle('token'),
     'apple' => auth.signInWithApple('token'),
-    'reviewer' => auth.signInReviewer('team@getnuvo.net', 'pw'),
+    'reviewer' => auth.signInReviewer('testing@getnuvo.net', 'pw'),
     _ => throw ArgumentError(channel),
   };
 }

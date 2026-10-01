@@ -135,7 +135,7 @@ void main() {
       final controller = AuthController(repo);
       await _settle(controller);
 
-      await controller.signInReviewer('team@getnuvo.net', 'pw');
+      await controller.signInReviewer('testing@getnuvo.net', 'pw');
       expect(controller.state.status, AuthStatus.authenticated);
       expect(controller.state.user?.id, 'offline-demo-user');
       expect(repo.offlineDemoCalls, 1);
@@ -149,7 +149,7 @@ void main() {
       await _settle(controller);
 
       await expectLater(
-        controller.signInReviewer('team@getnuvo.net', 'wrong'),
+        controller.signInReviewer('testing@getnuvo.net', 'wrong'),
         throwsA(isA<ApiException>()),
       );
       expect(repo.offlineDemoCalls, 0);
@@ -159,11 +159,11 @@ void main() {
   });
 
   group('AuthRepository offline restore fallback', () {
-    test('team@ session + unreachable restore lands in the local demo '
+    test('testing@ session + unreachable restore lands in the local demo '
         'session — tokens kept, never a logout', () async {
       final store = _FakeStore()
         ..refresh = 'real-refresh'
-        ..email = 'team@getnuvo.net';
+        ..email = 'testing@getnuvo.net';
       final repo = AuthRepository(_UnreachableApi(), store);
 
       final result = await repo.restoreSession();
@@ -172,10 +172,10 @@ void main() {
       expect(store.refresh, 'real-refresh');
     });
 
-    test('team@ reviewer session falls back in debug builds', () async {
+    test('testing@ reviewer session falls back in debug builds', () async {
       final store = _FakeStore()
         ..refresh = 'real-refresh'
-        ..email = 'team@getnuvo.net';
+        ..email = 'testing@getnuvo.net';
       final repo = AuthRepository(_UnreachableApi(), store);
 
       final result = await repo.restoreSession();

@@ -32,6 +32,40 @@ final firstRaceGuideProvider = StateProvider<FirstRaceGuideStep>(
 /// first-launch experience without destroying its authenticated session.
 final demoReplayProvider = StateProvider<bool>((ref) => false);
 
+/// The one place the store-review demo experience is reset.
+///
+/// Called on every cold launch that restores the canonical App Review account
+/// (splash) and on every fresh reviewer sign-in (email auth), so the account
+/// always re-walks the deterministic first-use sequence: Nuvo story from
+/// page 0 → notification education → Arena → first-race guide. Both call
+/// sites funnel through here instead of scattering account checks across
+/// screens.
+///
+/// Reset scope — Nuvo-owned EXPERIENCE state only: the replay flag (armed so
+/// the route guard keeps the account inside the story), the armed guide
+/// step, this account's persisted guide completion, and the install-scoped
+/// education flags (notification prompt owed, camera primer, intro). Never
+/// touched: the session, server-owned flags (onboardingComplete stays
+/// complete — the replay drives the story via [demoReplayProvider], not by
+/// un-completing the account), race data, and OS permission state, which
+/// cannot be reset and is re-consulted live by the education step anyway.
+/// [read] accepts `Ref.read`, `WidgetRef.read`, or `ProviderContainer.read` —
+/// callers in the guard, splash, and auth screens all satisfy it.
+Future<void> resetDemoExperienceForColdLaunch(
+  T Function<T>(ProviderListenable<T>) read,
+  AuthUser user,
+) async {
+  if (!isNuvoStoreDemoEmail(user.email)) return;
+  // Provider flags first — the route guard can evaluate the moment auth
+  // state publishes, so the replay must already be armed before the store
+  // writes yield.
+  read(demoReplayProvider.notifier).state = true;
+  read(firstRaceGuideProvider.notifier).state = FirstRaceGuideStep.idle;
+  final store = read(firstUseStoreProvider);
+  await store.ensureLoaded();
+  await store.resetDemoExperience(user.email);
+}
+
 abstract final class FirstRaceGuideKeys {
   static final competeStart = GlobalKey(debugLabel: 'guide-compete-start');
   static final composerName = GlobalKey(debugLabel: 'guide-composer-name');

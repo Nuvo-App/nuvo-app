@@ -45,7 +45,7 @@ void main() {
     () {
       const reviewer = AuthUser(
         id: 'reviewer-user',
-        email: 'team@getnuvo.net',
+        email: 'testing@getnuvo.net',
         isDemo: true,
         fullName: 'Reviewer',
         onboardingComplete: true,
@@ -56,11 +56,11 @@ void main() {
     },
   );
 
-  test('the QA account sees the real first-user experience, not fixtures',
-      () {
+  test('an account without the demo flag sees the real experience, not '
+      'fixtures', () {
     const qa = AuthUser(
       id: 'qa-user',
-      email: 'testing@getnuvo.net',
+      email: 'qa@getnuvo.net',
       fullName: 'QA',
       onboardingComplete: true,
       hasMemberPass: true,
