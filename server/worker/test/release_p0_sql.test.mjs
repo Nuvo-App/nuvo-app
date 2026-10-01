@@ -20,6 +20,8 @@ const { finalizeRaceIfEnded } = require('../.tmp-test-dist/domain/raceFinalize.j
 const { reconcileProgression } = require('../.tmp-test-dist/domain/progression.js');
 
 const JWT_SECRET = 'test-secret';
+// Test-only credential for /auth/reviewer — never a real review password.
+const REVIEWER_PASSWORD = 'test-review-pass';
 const root = new URL('..', import.meta.url);
 const SCHEMA = [
   readFileSync(new URL('test/fixtures/prod_schema_2026-09-28.sql', root), 'utf8'),
@@ -89,7 +91,13 @@ function world() {
   const db = d1(sqlite);
   const r2 = fakeR2();
   const pending = [];
-  const env = { DB: db, JWT_SECRET, PROFILE_PHOTOS: r2, APPLE_BUNDLE_ID: 'net.getnuvo.app' };
+  const env = {
+    DB: db,
+    JWT_SECRET,
+    PROFILE_PHOTOS: r2,
+    APPLE_BUNDLE_ID: 'net.getnuvo.app',
+    REVIEWER_PASSWORD_HASH: createHash('sha256').update(REVIEWER_PASSWORD).digest('hex'),
+  };
   const ctx = { waitUntil: (p) => pending.push(p), passThroughOnException() {} };
   const q = (sql, ...a) => sqlite.prepare(sql).all(...a).map((r) => ({ ...r }));
   const one = (sql, ...a) => q(sql, ...a)[0];
@@ -155,12 +163,23 @@ function world() {
   return { sqlite, db, r2, env, req, q, one, exec, user, race, member, photo, progress, fkClean, flush };
 }
 
-// ── P0-1: testing@ is a blank QA account ─────────────────────────────────────
+// ── P0-1: testing@ is the canonical reviewer identity ────────────────────────
 
-test('P0-1: testing@ is not a reviewer alias and email sign-in seeds no races', async () => {
+test('P0-1: testing@ reviewer credential is server-validated; email sign-in seeds no races', async () => {
   const w = world();
-  const reviewer = await w.req(null, 'POST', '/auth/reviewer', { email: 'testing@getnuvo.net', password: 'anything' });
-  assert.equal(reviewer.status, 401);
+  // Wrong password is a real rejection — never a silent success.
+  const wrong = await w.req(null, 'POST', '/auth/reviewer', { email: 'testing@getnuvo.net', password: 'anything' });
+  assert.equal(wrong.status, 401);
+  // The retired team@ alias must NOT authenticate even with the right
+  // credential — the reviewer identity is testing@ only.
+  const retired = await w.req(null, 'POST', '/auth/reviewer', { email: 'team@getnuvo.net', password: REVIEWER_PASSWORD });
+  assert.equal(retired.status, 401);
+  // Right credential on the canonical identity authenticates as the demo
+  // account (is_demo, onboarding complete — the review world).
+  const ok = await w.req(null, 'POST', '/auth/reviewer', { email: 'testing@getnuvo.net', password: REVIEWER_PASSWORD });
+  assert.equal(ok.status, 200, ok.text);
+  assert.equal(ok.json.user.isDemo, true);
+  assert.equal(ok.json.user.email, 'testing@getnuvo.net');
 
   const hash = createHash('sha256').update('123456').digest('hex');
   w.exec(
@@ -170,9 +189,37 @@ test('P0-1: testing@ is not a reviewer alias and email sign-in seeds no races', 
   w.user('someone-real');
   const res = await w.req(null, 'POST', '/auth/email/verify', { email: 'testing@getnuvo.net', code: '123456' });
   assert.equal(res.status, 200, res.text);
-  assert.equal(res.json.user.isDemo, false);
+  // Same account — the email path resolves to the reviewer-created user, it
+  // does not fork a second identity or seed anything.
+  assert.equal(res.json.user.isDemo, true);
+  assert.equal(res.json.user.id, ok.json.user.id);
   assert.equal(w.one('SELECT COUNT(*) AS n FROM races').n, 0, 'no demo races seeded');
   assert.equal(w.one('SELECT COUNT(*) AS n FROM race_members').n, 0, 'no real user pulled into anything');
+  w.fkClean();
+});
+
+// ── P0-1b: /auth/email/start resend throttle ─────────────────────────────────
+
+test('P0-1b: email/start throttles repeat sends with a same-shape response', async () => {
+  const w = world();
+  const count = () => w.one("SELECT COUNT(*) AS n FROM email_codes WHERE email = 'member@example.com'").n;
+
+  const first = await w.req(null, 'POST', '/auth/email/start', { email: 'member@example.com' });
+  assert.equal(first.status, 200);
+  assert.equal(first.json.ok, true);
+  assert.equal(count(), 1);
+
+  // Repeat inside the window: identical response, no second code issued.
+  const again = await w.req(null, 'POST', '/auth/email/start', { email: 'member@example.com' });
+  assert.equal(again.status, 200);
+  assert.deepEqual(again.json, first.json);
+  assert.equal(count(), 1, 'throttled resend must not issue another code');
+
+  // Once the newest code ages past the window a fresh send is allowed.
+  w.exec("UPDATE email_codes SET created_at = datetime('now', '-2 minutes') WHERE email = 'member@example.com'");
+  const later = await w.req(null, 'POST', '/auth/email/start', { email: 'member@example.com' });
+  assert.equal(later.status, 200);
+  assert.equal(count(), 2);
   w.fkClean();
 });
 

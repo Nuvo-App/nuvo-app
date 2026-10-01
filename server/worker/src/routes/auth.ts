@@ -345,6 +345,22 @@ authRouter.post('/email/start', async (c) => {
   }
 
   const email = normalizeEmail(rawEmail);
+
+  // Per-email send throttle: a code issued within the last 30s means the
+  // previous send is still in flight — swallowing the repeat instead of
+  // issuing another row keeps resend-tap abuse from spamming an inbox, and
+  // the generic response leaks nothing about whether a send happened.
+  const recent = await c.env.DB.prepare(
+    `SELECT id FROM email_codes
+     WHERE email = ? AND created_at > datetime('now', '-30 seconds')
+     LIMIT 1`,
+  )
+    .bind(email)
+    .first<{ id: string }>();
+  if (recent) {
+    return c.json(GENERIC_OK);
+  }
+
   const code = generateOtp();
   const codeHash = await hashValue(code);
   const id = generateId();
@@ -628,7 +644,7 @@ authRouter.post('/reviewer', async (c) => {
   const INVALID = { ok: false, error: 'Invalid review credentials' } as const;
 
   if (
-    email !== 'team@getnuvo.net' ||
+    email !== 'testing@getnuvo.net' ||
     !password ||
     !expectedHash ||
     (await hashValue(password)) !== expectedHash
@@ -678,7 +694,7 @@ authRouter.post('/reviewer', async (c) => {
          (id, user_id, provider, provider_user_id, email, email_verified, display_name, avatar_url, created_at)
        VALUES (?, ?, 'reviewer', ?, ?, 1, 'Nuvo Review', NULL, CURRENT_TIMESTAMP)`,
     )
-      .bind(generateId(), user.id, 'team@getnuvo.net', email)
+      .bind(generateId(), user.id, 'testing@getnuvo.net', email)
       .run();
   }
 

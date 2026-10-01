@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 import 'auth_controller.dart';
 
 class EmailStartScreen extends ConsumerStatefulWidget {
@@ -41,7 +42,10 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
 
   String get _normalizedEmail => _emailController.text.trim().toLowerCase();
 
-  bool get _isReviewerEmail => _normalizedEmail == 'team@getnuvo.net';
+  // The canonical App Store review identity — the only email routed to the
+  // reviewer credential path instead of a real inbox code. Exact match only:
+  // other @getnuvo.net accounts are ordinary accounts.
+  bool get _isReviewerEmail => isNuvoStoreDemoEmail(_normalizedEmail);
 
   bool get _canSubmit {
     if (_loading || !_normalizedEmail.contains('@')) return false;
@@ -55,6 +59,14 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
       _loading = true;
       _error = null;
     });
+    // The reviewer credential always replays the first-use experience. Arm
+    // the replay flag BEFORE the sign-in publishes auth state — the route
+    // guard evaluates the moment the session resolves, and it must already
+    // see the replay armed to land on the story instead of the app.
+    final wasReplaying = ref.read(demoReplayProvider);
+    if (_isReviewerEmail) {
+      ref.read(demoReplayProvider.notifier).state = true;
+    }
     try {
       if (_isReviewerEmail) {
         // The shared review credential authenticates through /auth/reviewer;
@@ -63,13 +75,32 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
         await ref
             .read(authControllerProvider.notifier)
             .signInReviewer(email, _passwordController.text);
+        // Reset the persisted demo state (guide done, education flags) so the
+        // replay is complete, not just the story. Provider flags were armed
+        // above; this finishes the Nuvo-owned reset centrally.
+        final user = ref.read(authControllerProvider).user;
+        if (user != null) {
+          await resetDemoExperienceForColdLaunch(ref.read, user);
+        }
         return;
       } else {
         await ref.read(authControllerProvider.notifier).startEmailAuth(email);
-        if (mounted) context.push('/auth/verify', extra: email);
+        // `mounted` alone is not enough: while this screen is still animating
+        // out (back nav, or a redirect that swapped the stack) it stays mounted
+        // but is no longer current — pushing from it would drop the code
+        // screen on top of whatever replaced it.
+        final route = mounted ? ModalRoute.of(context) : null;
+        if (mounted && (route?.isCurrent ?? false)) {
+          context.push('/auth/verify', extra: email);
+        }
       }
     } catch (e) {
       debugPrint('[EmailStart] startEmailAuth failed (${e.runtimeType}): $e');
+      if (_isReviewerEmail) {
+        // Failed sign-in must not leave a replay armed — a normal account
+        // signing in next would be bounced into the story.
+        ref.read(demoReplayProvider.notifier).state = wasReplaying;
+      }
       if (mounted) {
         setState(() {
           _error = isNetworkAuthError(e)
@@ -77,8 +108,15 @@ class _EmailStartScreenState extends ConsumerState<EmailStartScreen> {
               : _isReviewerEmail
               ? 'Invalid review credentials.'
               : 'Could not send code. Please try again.';
-          _loading = false;
         });
+      }
+    } finally {
+      // Every path — success navigation, reviewer sign-in, thrown error —
+      // leaves the form usable. Without this, popping back from the code
+      // screen found the button still spinning (loading was only cleared on
+      // the error path).
+      if (mounted) {
+        setState(() => _loading = false);
       }
     }
   }

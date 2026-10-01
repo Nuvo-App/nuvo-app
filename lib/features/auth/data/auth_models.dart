@@ -86,7 +86,7 @@ class AuthUser {
 /// a real server response — see AuthRepository.signInOfflineDemo.
 AuthUser offlineDemoUser() => const AuthUser(
   id: 'offline-demo-user',
-  email: 'team@getnuvo.net',
+  email: 'testing@getnuvo.net',
   isDemo: true,
   fullName: 'Nuvo Review',
   username: 'nuvoreview',

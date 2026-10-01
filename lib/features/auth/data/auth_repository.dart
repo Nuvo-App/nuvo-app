@@ -96,7 +96,7 @@ class AuthRepository {
   /// demoing.
   bool _offlineDemoAllowedForEmail(String? email) {
     final e = email?.trim().toLowerCase();
-    if (e == 'team@getnuvo.net') return true;
+    if (e == 'testing@getnuvo.net') return true;
     if (!kDebugMode) return false;
     return e == null ||
         e.isEmpty ||

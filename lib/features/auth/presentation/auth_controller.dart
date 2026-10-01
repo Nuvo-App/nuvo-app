@@ -20,11 +20,13 @@ enum AuthStatus {
   offline,
 }
 
-/// The shared store-review credential — the one identity that always renders
-/// the polished demo world. `testing@getnuvo.net` is deliberately NOT here:
-/// it is a real QA account that behaves like a brand-new user.
+/// The shared store-review credential — the canonical App Review identity
+/// (the one named in the review notes). It always renders the polished demo
+/// world and replays the first-use experience on every cold launch. Other
+/// @getnuvo.net accounts are ordinary accounts — this check is an exact
+/// match, never a domain match.
 bool isNuvoStoreDemoEmail(String email) =>
-    email.trim().toLowerCase() == 'team@getnuvo.net';
+    email.trim().toLowerCase() == 'testing@getnuvo.net';
 
 /// True when [e] is a transport-level failure — unreachable (ApiException 0),
 /// timed out (408 / TimeoutException), or a raw socket/TLS error that escaped
@@ -45,7 +47,7 @@ class AuthState {
 
   /// Eligibility for the post-auth first-race coach guide. This is a property
   /// of the resolved ACCOUNT — the dedicated store-review credential
-  /// (team@getnuvo.net) or any backend-flagged demo account — computed
+  /// (testing@getnuvo.net) or any backend-flagged demo account — computed
   /// identically for restore and every sign-in channel. Whether the guide
   /// actually arms is decided at the routing layer (see
   /// firstRaceGuideAllowed), which additionally consults the persisted
@@ -148,7 +150,7 @@ class AuthController extends StateNotifier<AuthState> {
   /// a real account.
   bool _offlineDemoAllowed(String email) {
     final e = email.trim().toLowerCase();
-    return kDebugMode || e == 'team@getnuvo.net';
+    return kDebugMode || isNuvoStoreDemoEmail(e);
   }
 
   Future<void> signInReviewer(String email, String password) async {

@@ -263,15 +263,32 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
   /// The graduation write. `completeOnboarding()` is the server-backed
   /// first-use flag — without it the next launch bounces the account back
   /// into setup. Demo replay never writes account state; it exits into the
-  /// guided first-race tour instead.
+  /// notification education step (store-review account) or the guided
+  /// first-race tour instead.
   Future<void> _finish() async {
     if (_finishing) return;
     HapticFeedback.mediumImpact();
     if (ref.read(demoReplayProvider)) {
+      final user = ref.read(authControllerProvider).user;
+      final storeDemo = user != null && isNuvoStoreDemoEmail(user.email);
+      if (storeDemo) {
+        // The review account walks the full first-use sequence: story →
+        // notification education → Arena → first-race guide. Mark the step
+        // owed BEFORE disarming the replay — once the guard sees the replay
+        // off, /onboarding/notifications is only reachable while it is owed.
+        // The education screen itself checks live OS state: notDetermined
+        // shows the primer and may prompt; already-decided states resolve
+        // straight to /arena without re-prompting.
+        await ref.read(firstUseStoreProvider).markNotificationPromptOwed();
+      }
       ref.read(demoReplayProvider.notifier).state = false;
-      ref.read(firstRaceGuideProvider.notifier).state =
-          FirstRaceGuideStep.competeStart;
-      if (mounted) context.go('/compete');
+      if (storeDemo) {
+        if (mounted) context.go('/onboarding/notifications');
+      } else {
+        ref.read(firstRaceGuideProvider.notifier).state =
+            FirstRaceGuideStep.competeStart;
+        if (mounted) context.go('/compete');
+      }
       return;
     }
     setState(() {

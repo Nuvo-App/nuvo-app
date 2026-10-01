@@ -74,11 +74,15 @@ class RouterNotifier extends ChangeNotifier {
     debugPrint('[Router] authenticated uid=${user.id} → $loc');
     final replayingDemo = _ref.read(demoReplayProvider);
 
-    // Demo replay deliberately keeps the user inside the first-use
-    // experience — the post-auth cinematic at /onboarding/nuvo and the auth
-    // screen that precedes it.
-    if (replayingDemo && (loc == '/onboarding/nuvo' || loc == '/welcome')) {
-      return null;
+    // Demo replay owns the whole authenticated session: every destination —
+    // auth screens it just signed in from, deep links, tabs — resolves to the
+    // story at page 0, which is the only route the replay renders. This is
+    // what makes the store-review account's fresh-demo experience
+    // deterministic: nothing can side-step the replay once it is armed.
+    // (Unauthenticated sessions never reach here — /welcome stays usable so
+    // the reviewer credential can be entered.)
+    if (replayingDemo) {
+      return loc == '/onboarding/nuvo' ? null : '/onboarding/nuvo';
     }
 
     // Mandatory post-auth setup (legal, identity, consent, then the Nuvo
@@ -101,7 +105,7 @@ class RouterNotifier extends ChangeNotifier {
     // app was killed there, relaunch resumes at the permission moment
     // instead of silently skipping it. Resolved (enable / maybe-later /
     // auto-skip) clears the flag, so this never replays — and demo replay
-    // never reaches a real permission surface.
+    // never reaches this point (it is already handled above).
     if (!replayingDemo &&
         _ref.read(firstUseStoreProvider).isNotificationPromptOwed) {
       return loc == '/onboarding/notifications'

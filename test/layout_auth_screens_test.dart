@@ -240,7 +240,7 @@ void main() {
     (tester) async {
       final repository = _AuthTestRepository();
       await _pumpAuth(tester, login: true, repository: repository);
-      await tester.enterText(find.byType(TextField), 'team@getnuvo.net');
+      await tester.enterText(find.byType(TextField), 'testing@getnuvo.net');
       await tester.pump();
       expect(find.byType(TextField), findsNWidgets(2));
       final password = tester.widget<TextField>(find.byType(TextField).last);
@@ -259,9 +259,9 @@ void main() {
       await tester.tap(find.text('Log in'));
       await tester.pump();
       // The shared review credential is the only email routed to the
-      // reviewer action — testing@ is now an ordinary QA account and goes
-      // through normal email-code auth.
-      expect(repository.reviewers, ['team@getnuvo.net']);
+      // reviewer action — every other account goes through normal
+      // email-code auth.
+      expect(repository.reviewers, ['testing@getnuvo.net']);
       expect(repository.emails, isEmpty);
       expect(tester.takeException(), isNull);
     },
@@ -433,7 +433,7 @@ void main() {
       'login fields and action remain reachable with keyboard at $size',
       (tester) async {
         await _pumpAuth(tester, login: true, size: size, textScale: 1.3);
-        await tester.enterText(find.byType(TextField), 'team@getnuvo.net');
+        await tester.enterText(find.byType(TextField), 'testing@getnuvo.net');
         await tester.pump();
         await tester.ensureVisible(find.byType(TextField).last);
         await tester.showKeyboard(find.byType(TextField).last);

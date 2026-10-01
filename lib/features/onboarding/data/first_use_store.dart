@@ -100,6 +100,22 @@ class FirstUseStore {
     await _persist();
   }
 
+  /// Store-review demo reset — clears every Nuvo-owned first-use flag that
+  /// belongs to [accountKey] so a cold launch replays the experience as a
+  /// controlled fresh install: the story, the notification education step,
+  /// the camera primer, and this account's first-race guide completion.
+  ///
+  /// Deliberately NOT touched: OS permission state (cannot be reset), the
+  /// session itself, and other accounts' guide completions recorded on this
+  /// install.
+  Future<void> resetDemoExperience(String accountKey) async {
+    _introSeen = false;
+    _notificationPromptOwed = false;
+    _cameraPrimerSeen = false;
+    _guideDone.remove(_normalize(accountKey));
+    await _persist();
+  }
+
   static String _normalize(String accountKey) => accountKey.trim().toLowerCase();
 
   Future<File> _file() async {

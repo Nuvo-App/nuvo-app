@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,10 +21,17 @@ class EmailVerifyScreen extends ConsumerStatefulWidget {
 }
 
 class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
+  /// Resend cooldown matching the worker's per-email send throttle — the
+  /// countdown the reviewer sees ("Resend code in 30s") is the real server
+  /// window, so an early tap can never be silently swallowed.
+  static const int _resendCooldownSeconds = 30;
+
   late final List<TextEditingController> _controllers;
   bool _loading = false;
   bool _resending = false;
   String? _error;
+  Timer? _resendTimer;
+  int _resendCooldownLeft = _resendCooldownSeconds;
 
   @override
   void initState() {
@@ -31,14 +40,31 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
     for (final c in _controllers) {
       c.addListener(() => setState(() {}));
     }
+    // The screen only exists because a code was just sent — the cooldown
+    // starts armed rather than letting a second send fire immediately.
+    _startResendCooldown();
   }
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     for (final c in _controllers) {
       c.dispose();
     }
     super.dispose();
+  }
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldownLeft = _resendCooldownSeconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCooldownLeft <= 1) {
+        timer.cancel();
+        setState(() => _resendCooldownLeft = 0);
+      } else {
+        setState(() => _resendCooldownLeft -= 1);
+      }
+    });
   }
 
   String get _code => _controllers.map((c) => c.text).join();
@@ -65,7 +91,6 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
               : e.statusCode >= 500
               ? 'Nuvo hit a snag. Try again.'
               : 'Could not verify your code. Try again.';
-          _loading = false;
           if (!isNetworkAuthError(e)) {
             for (final c in _controllers) {
               c.clear();
@@ -80,14 +105,19 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
           _error = isNetworkAuthError(e)
               ? "Can't reach Nuvo. Check your connection and try again."
               : 'Code accepted, but Nuvo could not finish sign-in. Refresh and try again.';
-          _loading = false;
         });
+      }
+    } finally {
+      // Success navigates away via the route guard; every failure leaves the
+      // button usable — and so does a Back that returns to this screen.
+      if (mounted) {
+        setState(() => _loading = false);
       }
     }
   }
 
   Future<void> _resend() async {
-    if (_resending) return;
+    if (_resending || _resendCooldownLeft > 0) return;
     setState(() {
       _resending = true;
       _error = null;
@@ -97,16 +127,23 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
           .read(authControllerProvider.notifier)
           .startEmailAuth(widget.email);
       if (mounted) {
+        // A fresh code supersedes the one already typed (the worker verifies
+        // the newest unused code) — clear the stale digits, not the screen.
         for (final c in _controllers) {
           c.clear();
         }
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('New code sent')));
+        _startResendCooldown();
       }
     } on ApiException catch (e) {
       if (mounted) {
-        setState(() => _error = e.message);
+        setState(
+          () => _error = isNetworkAuthError(e)
+              ? "Can't reach Nuvo. Check your connection and try again."
+              : e.message,
+        );
       }
     } catch (e) {
       debugPrint('[EmailVerify] resend failed (${e.runtimeType}): $e');
@@ -167,14 +204,32 @@ class _EmailVerifyScreenState extends ConsumerState<EmailVerifyScreen> {
                               ),
                             ],
                             const SizedBox(height: 22),
+                            Center(
+                              child: Text(
+                                "Didn't get a code?",
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: NuvoColors.muted,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
                             GestureDetector(
-                              onTap: _resending ? null : _resend,
+                              onTap: (_resending || _resendCooldownLeft > 0)
+                                  ? null
+                                  : _resend,
                               behavior: HitTestBehavior.opaque,
                               child: Center(
                                 child: Text(
-                                  _resending ? 'Sending...' : 'Resend code',
+                                  _resending
+                                      ? 'Sending...'
+                                      : _resendCooldownLeft > 0
+                                      ? 'Resend code in ${_resendCooldownLeft}s'
+                                      : 'Resend code',
                                   style: AppTextStyles.bodySmall.copyWith(
-                                    color: NuvoColors.blue,
+                                    color:
+                                        (_resending || _resendCooldownLeft > 0)
+                                        ? NuvoColors.muted
+                                        : NuvoColors.blue,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
