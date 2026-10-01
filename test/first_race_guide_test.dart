@@ -1031,7 +1031,12 @@ void main() {
       );
       expect(find.text('SET THE FINISH'), findsOneWidget);
 
-      // Change the goal — coach retargets Invite racers.
+      // Change the goal — coach retargets Invite racers. 'Morning Mile'
+      // interpreted as a best-attempt race, so the goal page leads with the
+      // mode chips and no target stepper; switching to first-to-goal reveals
+      // the stepper, then a real increment counts as the input.
+      await tester.tap(find.text('First to the goal'));
+      await settle(tester);
       await tester.tap(find.byIcon(Icons.add_rounded));
       await settle(tester);
       expect(find.text('Bring in your crew.'), findsOneWidget);
