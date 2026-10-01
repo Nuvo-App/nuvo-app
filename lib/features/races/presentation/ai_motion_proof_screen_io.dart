@@ -49,6 +49,7 @@ import '../domain/motion_progress_presentation.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
 import '../domain/race_mode_semantics.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 import 'board_moved_screen.dart';
 
 import 'custom_pose/pose_skeleton_overlay.dart';
@@ -241,6 +242,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   Future<void> _loadRace() async {
     try {
+      setState(() {
+        _status = AiMotionProofStatus.processing;
+        _message = null;
+      });
       final race = await ref
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.raceId);
@@ -395,6 +400,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     } catch (_) {
       if (!mounted) return;
       setState(() {
+        // Back to setup with the message attached — the status scaffold shows
+        // it plus the Try again action instead of a spinner without a way out.
+        _status = AiMotionProofStatus.setup;
         _message = 'Race details could not load. Start when ready.';
       });
     }
@@ -518,14 +526,32 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = _cameraController;
-    if (controller == null || !controller.value.isInitialized) return;
     if (state == AppLifecycleState.inactive) {
-      _stopCamera();
-    } else if (state == AppLifecycleState.resumed &&
-        _status == AiMotionProofStatus.cameraReady) {
+      final controller = _cameraController;
+      if (controller != null && controller.value.isInitialized) {
+        _stopCamera();
+      }
+      return;
+    }
+    if (state != AppLifecycleState.resumed) return;
+    final controller = _cameraController;
+    if (controller != null && controller.value.isInitialized) return;
+    if (_status == AiMotionProofStatus.recording) {
+      unawaited(_resumeInterruptedRecording());
+    } else if (_status == AiMotionProofStatus.cameraReady ||
+        _status == AiMotionProofStatus.cameraError) {
       _initializeCamera(camera: _selectedCamera);
     }
+  }
+
+  /// The OS reclaimed the camera while the proof was backgrounded mid-take.
+  /// The interrupted take cannot be completed honestly, so reset the attempt
+  /// first, then reopen the camera at the ready state — never onto a dead
+  /// preview.
+  Future<void> _resumeInterruptedRecording() async {
+    await _recordAgain();
+    if (!mounted || _disposed) return;
+    await _initializeCamera(camera: _selectedCamera);
   }
 
   @override
@@ -1369,6 +1395,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     if (!mounted) return;
     final uid = ref.read(authControllerProvider).user?.id;
     final proof = race.recentProofs.isNotEmpty ? race.recentProofs.first : null;
+    // First-race guide: the coached story continues past the proof — the
+    // celebration's continue lands on Profile where the earned progress is
+    // pointed out before the guide completes. Only advances an armed guide.
+    if (ref.read(firstRaceGuideProvider) == FirstRaceGuideStep.verifySetup) {
+      ref.read(firstRaceGuideProvider.notifier).state =
+          FirstRaceGuideStep.profileReward;
+    }
     context.pushReplacement(
       '/race/${widget.raceId}/board-moved',
       extra: BoardMovedArgs(
@@ -1380,6 +1413,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         rankBefore: proof?.rankBefore,
         rankAfter: proof?.rankAfter ?? rankForUser(race, uid),
         peoplePassed: proof?.peoplePassed,
+        aiMotionProof: true,
       ),
     );
   }
@@ -1640,8 +1674,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     // Stay immersive across a lens flip so the layout does not thrash.
     if (_switchingCamera) return true;
     // The camera is still opening. Stay on the immersive surface so there is
-    // no boxed intermediate screen before the preview appears.
-    if (_status == AiMotionProofStatus.setup) return true;
+    // no boxed intermediate screen before the preview appears. A setup state
+    // carrying an error means the race/session load failed — that drops to
+    // the status scaffold where the retry action lives.
+    if (_status == AiMotionProofStatus.setup && _message == null) return true;
     final controller = _cameraController;
     return controller != null &&
         controller.value.isInitialized &&
@@ -1653,67 +1689,83 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget build(BuildContext context) {
     if (_isImmersiveCamera) return _immersiveCameraScaffold();
     if (_isResultState) return _immersiveResultScaffold();
+    return _immersiveStatusScaffold();
+  }
 
+  /// Full-screen dark surface for every non-camera, non-result state —
+  /// session setup, permission denial, verifier errors. Same visual family as
+  /// the camera/result scaffolds so no intermediate "old" page can flash.
+  Widget _immersiveStatusScaffold() {
+    final busy = _status == AiMotionProofStatus.processing;
     return Scaffold(
-      backgroundColor: NuvoColors.page,
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
-          child: Column(mainAxisSize: MainAxisSize.min, children: _actions()),
-        ),
-      ),
+      backgroundColor: NuvoColors.navy,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Compact inline header: back button left, title right ──────
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: Row(
                 children: [
-                  NuvoBackButton(
+                  _immersiveIconButton(
+                    icon: Icons.arrow_back_rounded,
                     onPressed: () =>
                         safePopOrGo(context, '/race/${widget.raceId}'),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_movementTitle, style: AppTextStyles.titleLarge),
-                        const SizedBox(height: 2),
-                        Text(
-                          _isObjectComposition
-                              ? 'Camera will confirm $_targetLabel.'
-                              : motionActivityForBackendValue(
-                                      _activityId,
-                                    )?.isHold ==
-                                    true
-                              ? 'Hold until the timer finishes.'
-                              : 'Camera will count $_targetLabel.',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: NuvoColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(width: 10),
+                  _pill('Goal: $_targetLabel', color: NuvoColors.blue),
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-
-            // ── Camera / result stage — Expanded fills remaining space ───
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _status == AiMotionProofStatus.setup
-                    ? _loadingPanel()
-                    : _cameraPanel(),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (busy)
+                        const CircularProgressIndicator(
+                          color: NuvoColors.white,
+                          strokeWidth: 2,
+                        )
+                      else
+                        Icon(
+                          _status ==
+                                  AiMotionProofStatus.unsupportedMovement
+                              ? Icons.block_rounded
+                              : Icons.videocam_off_rounded,
+                          color: NuvoColors.white.withValues(alpha: 0.85),
+                          size: 40,
+                        ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _movementTitle,
+                        style: AppTextStyles.titleLarge.copyWith(
+                          color: NuvoColors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _message ?? _cameraPlaceholderText,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: NuvoColors.white.withValues(alpha: 0.72),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-
-            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: _actions(),
+              ),
+            ),
           ],
         ),
       ),
@@ -1925,109 +1977,6 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         foregroundColor: NuvoColors.white,
       ),
       icon: Icon(icon),
-    );
-  }
-
-  Widget _loadingPanel() {
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-      ),
-      child: const Center(
-        child: CircularProgressIndicator(
-          color: NuvoColors.white,
-          strokeWidth: 2,
-        ),
-      ),
-    );
-  }
-
-  Widget _cameraPanel() {
-    final controller = _cameraController;
-    final showPreview = controller != null && controller.value.isInitialized;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: NuvoColors.navy,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        boxShadow: AppShadows.heroShadow,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (showPreview)
-            _cameraPreview(controller)
-          else
-            Container(
-              color: NuvoColors.navy,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.all(28),
-              child: Text(
-                _cameraPlaceholderText,
-                style: AppTextStyles.bodyLarge.copyWith(
-                  color: NuvoColors.white,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          Positioned(
-            left: 14,
-            right: 14,
-            top: 14,
-            child: Row(
-              children: [
-                _pill(
-                  _status == AiMotionProofStatus.recording
-                      ? _raceProgressReadout
-                      : _restStateLabel,
-                  color: _status == AiMotionProofStatus.recording
-                      ? (_targetReachedNow
-                            ? NuvoColors.success
-                            : _hasFinishTarget
-                            ? NuvoColors.danger
-                            : NuvoColors.blue)
-                      : NuvoColors.blue,
-                ),
-                const Spacer(),
-                _visibilityPill(),
-                const SizedBox(width: 8),
-                if (_cameras.length > 1 &&
-                    _status != AiMotionProofStatus.recording)
-                  IconButton.filled(
-                    onPressed: _toggleCamera,
-                    style: IconButton.styleFrom(
-                      backgroundColor: NuvoColors.white.withValues(alpha: 0.9),
-                      foregroundColor: NuvoColors.navy,
-                    ),
-                    icon: const Icon(Icons.cameraswitch_rounded),
-                  ),
-              ],
-            ),
-          ),
-          if (_status != AiMotionProofStatus.recording)
-            Positioned.fill(child: IgnorePointer(child: _bodyGuideOverlay())),
-          if (_status == AiMotionProofStatus.recording)
-            Positioned(left: 14, right: 14, bottom: 14, child: _recordingHud()),
-          if (_status == AiMotionProofStatus.recording && _repFlashSeq > 0)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 92,
-              child: _repFlashOverlay(),
-            ),
-          if (kDebugMode &&
-              _isCustom &&
-              _status == AiMotionProofStatus.recording)
-            Positioned(
-              left: 14,
-              right: 14,
-              top: 80,
-              child: _customDebugOverlay(),
-            ),
-        ],
-      ),
     );
   }
 
@@ -2463,7 +2412,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _status == AiMotionProofStatus.submitting;
 
     return switch (_status) {
-      AiMotionProofStatus.setup => [const SizedBox.shrink()],
+      AiMotionProofStatus.setup =>
+        _message != null
+            ? [
+                NuvoPrimaryButton(
+                  label: 'Try again',
+                  icon: Icons.replay_rounded,
+                  expand: true,
+                  onPressed: _loadRace,
+                ),
+                const SizedBox(height: 12),
+                NuvoOutlineButton(
+                  label: 'Back',
+                  expand: true,
+                  onPressed: () =>
+                      safePopOrGo(context, '/race/${widget.raceId}'),
+                ),
+              ]
+            : [const SizedBox.shrink()],
       AiMotionProofStatus.unsupportedMovement => [
         NuvoOutlineButton(
           label: 'Back',

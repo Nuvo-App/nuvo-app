@@ -148,6 +148,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         user != null && canTogglePresentationMode(user);
 
     final raceState = ref.watch(raceControllerProvider);
+    final guide = ref.watch(firstRaceGuideProvider);
     final activeCount = raceState.races.where(raceIsActive).length;
     final finishedRaces = raceState.races.where(raceIsCompleted).toList();
     // Wins come only from server-owned truth: the recorded winner, or a
@@ -167,7 +168,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? null
         : (wins / finishedRaces.length * 100).round();
 
-    return Scaffold(
+    final screen = Scaffold(
       backgroundColor: c.page,
       body: RefreshIndicator(
         color: NuvoColors.blue,
@@ -222,6 +223,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // failure reads as "syncing" — never a missing piece
                     // of identity.
                     _LevelTrack(
+                      key: FirstRaceGuideKeys.profileProgress,
                       state: progressionAsync,
                       activeCount: activeCount,
                       wins: wins,
@@ -281,6 +283,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
     );
+
+    // Final guided step: the first proof just landed — point at the real
+    // progression it moved, then 'Got it' completes the guide for good.
+    if (guide == FirstRaceGuideStep.profileReward) {
+      return Stack(
+        children: [
+          screen,
+          FirstRaceGuideCoach(
+            step: FirstRaceGuideStep.profileReward,
+            targetKey: FirstRaceGuideKeys.profileProgress,
+            eyebrow: 'PROOF LANDED',
+            title: 'You’re on the board.',
+            body: 'Every verified effort moves your profile forward.',
+            actionLabel: 'Got it',
+          ),
+        ],
+      );
+    }
+    return screen;
   }
 
   List<Widget> _profileBody(
@@ -798,6 +819,7 @@ class _NextUnlockArtifact extends StatelessWidget {
 /// note — never a missing piece of identity.
 class _LevelTrack extends ConsumerWidget {
   const _LevelTrack({
+    super.key,
     required this.state,
     required this.activeCount,
     required this.wins,

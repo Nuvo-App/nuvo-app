@@ -3,9 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../onboarding/presentation/first_use_guide.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/count_up_text.dart';
 import '../../../core/widgets/nuvo_button.dart';
@@ -26,6 +28,7 @@ class BoardMovedArgs {
     this.leaderName,
     this.leaderPhotoUrl,
     this.leaderGap,
+    this.aiMotionProof = false,
   });
 
   final String raceId;
@@ -39,6 +42,10 @@ class BoardMovedArgs {
   final String? leaderName;
   final String? leaderPhotoUrl;
   final int? leaderGap;
+
+  /// True when the proof came from the fullscreen camera verifier — retry
+  /// actions re-enter it directly instead of stopping at the proof chooser.
+  final bool aiMotionProof;
 }
 
 /// Full-screen payoff shown right after a proof resolves. A verified result is
@@ -218,29 +225,51 @@ class _BoardMovedScreenState extends State<BoardMovedScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-                  child: Column(
-                    children: [
-                      NuvoSuccessButton(
-                        label: 'View race',
-                        expand: true,
-                        onPressed: () => context.go('/race/$raceId'),
-                      ),
-                      const SizedBox(height: 12),
-                      NuvoPressable(
-                        onTap: () => context.go('/race/$raceId/proof'),
-                        haptic: false,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'Record again',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontWeight: FontWeight.w700,
+                  // First-race guide: this verified proof is the story's
+                  // payoff — continue lands on Profile to point at the
+                  // earned progress instead of dropping back on the race.
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      final guided =
+                          ref.watch(firstRaceGuideProvider) ==
+                          FirstRaceGuideStep.profileReward;
+                      return Column(
+                        children: [
+                          NuvoSuccessButton(
+                            label: guided
+                                ? 'See your progress'
+                                : 'View race',
+                            expand: true,
+                            onPressed: () => context.go(
+                              guided ? '/profile' : '/race/$raceId',
                             ),
                           ),
-                        ),
-                      ),
-                    ],
+                          const SizedBox(height: 12),
+                          NuvoPressable(
+                            onTap: () => context.go(
+                              args.aiMotionProof
+                                  ? '/race/$raceId/proof/ai-motion'
+                                  : '/race/$raceId/proof',
+                            ),
+                            haptic: false,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                'Record again',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: Colors.white.withValues(
+                                    alpha: 0.85,
+                                  ),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -504,7 +533,11 @@ class _NotVerifiedView extends StatelessWidget {
                   NuvoPrimaryButton(
                     label: 'Try again',
                     expand: true,
-                    onPressed: () => context.go('/race/$raceId/proof'),
+                    onPressed: () => context.go(
+                      args.aiMotionProof
+                          ? '/race/$raceId/proof/ai-motion'
+                          : '/race/$raceId/proof',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   NuvoTertiaryButton(
