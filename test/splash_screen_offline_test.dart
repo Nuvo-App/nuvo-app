@@ -119,13 +119,14 @@ void main() {
   });
 
   testWidgets(
-    'store-review session: splash resets the demo and re-enters the story',
+    'store-review session: a persisted session detaches to /welcome — '
+    'the reviewer always re-enters through the public auth experience',
     (tester) async {
       final router = await _pumpSplash(
         tester,
         restoreResult: const RestoreOk(_reviewerUser),
       );
-      expect(_currentPath(router), '/onboarding/nuvo');
+      expect(_currentPath(router), '/welcome');
       expect(tester.takeException(), isNull);
     },
   );

@@ -41,12 +41,12 @@ final demoReplayProvider = StateProvider<bool>((ref) => false);
 
 /// The one place the store-review demo experience is reset.
 ///
-/// Called on every cold launch that restores the canonical App Review account
-/// (splash) and on every fresh reviewer sign-in (email auth), so the account
-/// always re-walks the deterministic first-use sequence: Nuvo story from
-/// page 0 → notification education → Arena → first-race guide. Both call
-/// sites funnel through here instead of scattering account checks across
-/// screens.
+/// Called on every fresh reviewer sign-in (email auth) — the cold-launch
+/// side is handled by AuthController detaching the restored testing@ session
+/// to the public welcome/auth route, so the reviewer always re-enters through
+/// sign-in. The account re-walks the deterministic first-use sequence:
+/// account setup → Nuvo story → notification education → Arena → first-race
+/// guide. The centralized funnel keeps account checks off individual screens.
 ///
 /// Reset scope — Nuvo-owned EXPERIENCE state only: the replay flag (armed so
 /// the route guard keeps the account inside the story), the armed guide

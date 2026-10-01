@@ -174,11 +174,14 @@ test('P0-1: testing@ reviewer credential is server-validated; email sign-in seed
   // credential — the reviewer identity is testing@ only.
   const retired = await w.req(null, 'POST', '/auth/reviewer', { email: 'team@getnuvo.net', password: REVIEWER_PASSWORD });
   assert.equal(retired.status, 401);
-  // Right credential on the canonical identity authenticates as the demo
-  // account (is_demo, onboarding complete — the review world).
+  // Right credential on the canonical identity authenticates. The true
+  // first-time reset leaves the account in a just-created shape — onboarding
+  // incomplete, real (non-demo) data world — so the client walks the genuine
+  // setup path every run.
   const ok = await w.req(null, 'POST', '/auth/reviewer', { email: 'testing@getnuvo.net', password: REVIEWER_PASSWORD });
   assert.equal(ok.status, 200, ok.text);
-  assert.equal(ok.json.user.isDemo, true);
+  assert.equal(ok.json.user.isDemo, false);
+  assert.equal(ok.json.user.onboardingComplete, false);
   assert.equal(ok.json.user.email, 'testing@getnuvo.net');
 
   const hash = createHash('sha256').update('123456').digest('hex');
@@ -191,7 +194,7 @@ test('P0-1: testing@ reviewer credential is server-validated; email sign-in seed
   assert.equal(res.status, 200, res.text);
   // Same account — the email path resolves to the reviewer-created user, it
   // does not fork a second identity or seed anything.
-  assert.equal(res.json.user.isDemo, true);
+  assert.equal(res.json.user.isDemo, false);
   assert.equal(res.json.user.id, ok.json.user.id);
   assert.equal(w.one('SELECT COUNT(*) AS n FROM races').n, 0, 'no demo races seeded');
   assert.equal(w.one('SELECT COUNT(*) AS n FROM race_members').n, 0, 'no real user pulled into anything');

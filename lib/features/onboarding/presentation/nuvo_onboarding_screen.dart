@@ -282,14 +282,24 @@ class _NuvoOnboardingScreenState extends ConsumerState<NuvoOnboardingScreen>
         await ref.read(firstUseStoreProvider).markNotificationPromptOwed();
       }
       ref.read(demoReplayProvider.notifier).state = false;
-      if (storeDemo) {
+      if (storeDemo && !user.onboardingComplete) {
+        // The server resets the review account to onboardingComplete=false on
+        // every sign-in, so this replay finish performs the REAL graduation
+        // write — the same completeOnboarding a genuine new account makes.
+        // Fall through to the normal finish path below; the replay flag is
+        // already disarmed so the guard cannot bounce the session back into
+        // the story while the write publishes.
+      } else if (storeDemo) {
+        // Already-complete demo session (e.g. the offline fallback) — no
+        // server write is possible or needed.
         if (mounted) context.go('/onboarding/notifications');
+        return;
       } else {
         ref.read(firstRaceGuideProvider.notifier).state =
             FirstRaceGuideStep.competeStart;
         if (mounted) context.go('/compete');
+        return;
       }
-      return;
     }
     setState(() {
       _finishing = true;

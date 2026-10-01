@@ -81,7 +81,16 @@ class RouterNotifier extends ChangeNotifier {
     // deterministic: nothing can side-step the replay once it is armed.
     // (Unauthenticated sessions never reach here — /welcome stays usable so
     // the reviewer credential can be entered.)
+    //
+    // Exception: the store-review account is server-reset to
+    // onboardingComplete=false on every sign-in, so a replay on an incomplete
+    // account must walk the REAL first-run setup first — replay owns the
+    // session, not the ordering. The story is the last setup step, reached
+    // through the genuine profile/consent screens.
     if (replayingDemo) {
+      if (!user.onboardingComplete) {
+        return loc.startsWith('/onboarding/') ? null : _firstRunTarget(user);
+      }
       return loc == '/onboarding/nuvo' ? null : '/onboarding/nuvo';
     }
 

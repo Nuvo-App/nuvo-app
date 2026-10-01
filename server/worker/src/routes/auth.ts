@@ -21,6 +21,7 @@ import {
 import { sendVerificationCode } from '../lib/resend';
 import { normalizeEmail, isValidEmail } from '../lib/validation';
 import { deleteUserMotionData } from '../lib/motion_privacy';
+import { resetReviewerReplayState } from '../lib/reviewerReplay';
 import { CURRENT_TERMS_VERSION } from '../lib/terms';
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -654,33 +655,15 @@ authRouter.post('/reviewer', async (c) => {
 
   const user = await findOrCreateUser(c.env.DB, email);
 
-  await c.env.DB.prepare(
-    `UPDATE users
-     SET status = 'active',
-         terms_accepted_at = COALESCE(terms_accepted_at, CURRENT_TIMESTAMP),
-         demo_world_enabled = 0,
-         demo_world_seed = NULL,
-         demo_world_variant = NULL,
-         last_login_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-  )
-    .bind(user.id)
-    .run();
-
   await ensureProfileAndPass(c.env.DB, user.id);
 
-  await c.env.DB.prepare(
-    `UPDATE profiles
-     SET full_name = COALESCE(full_name, 'Nuvo Review'),
-         username = COALESCE(username, 'nuvoreview'),
-         onboarding_complete = 1,
-         is_demo = 1,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE user_id = ?`,
-  )
-    .bind(user.id)
-    .run();
+  // True first-time replay: every reviewer sign-in deterministically returns
+  // the account to its just-created state — first-run fields cleared, prior
+  // replay artifacts purged, the seeded review world re-normalized. The
+  // client then walks the REAL new-account path (setup → story → notification
+  // education → first-race guide), not a fixture bypass. See
+  // lib/reviewerReplay.ts for the full reset contract.
+  await resetReviewerReplayState(c.env.DB, c.env.PROFILE_PHOTOS, user.id);
 
   const existingIdentity = await c.env.DB.prepare(
     "SELECT id FROM auth_identities WHERE user_id = ? AND provider = 'reviewer'",
