@@ -177,9 +177,11 @@ class RouterNotifier extends ChangeNotifier {
 
   bool _shouldArmGuide(AuthState authState, AuthUser user) {
     if (!authState.guideFirstRace) return false;
+    // Eligibility first — a stale mid-guide step must not keep a signIn
+    // session inside the tour (for testing@, allowed is intent-gated).
+    if (!firstRaceGuideAllowed(_ref, user)) return false;
     final step = _ref.read(firstRaceGuideProvider);
     if (step == FirstRaceGuideStep.idle) {
-      if (!firstRaceGuideAllowed(_ref, user)) return false;
       _armGuide();
       return true;
     }

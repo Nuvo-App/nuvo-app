@@ -42,7 +42,10 @@ Nuvo is a competition app. Members create or join races with friends and the pub
 
 - The app supports sign-in via one-time email code plus Apple and Google sign-in. The reviewer does **not** need mailbox access.
 - Entering `testing@getnuvo.net` on the email screen switches the form to a **password** field. Supply that password privately in the "App Review Information → Sign-in required" section of App Store Connect — **do not put it in this file or in git**. The password is validated server-side; the account is pre-seeded with a full demo world (races, crew, leaderboard, proof).
-- On every cold launch the review account replays the first-use flow (story → notification education → Arena → first-race guide), so the reviewer can quit and reopen to restart the tour. Notification permission already granted or denied is handled without re-prompting.
+- Every cold launch opens at the public Welcome screen. From there the same credential supports two paths:
+  - **Sign up** walks through Nuvo's complete new-user experience: account setup, the Nuvo story, notification education, then a guided first race ending in the Profile progression payoff. Quitting and reopening the app returns to Welcome, so the flow can be restarted as often as needed.
+  - **Sign in** opens the pre-seeded reviewer account directly at the Arena for immediate feature access.
+- Notification permission already granted or denied is handled without re-prompting.
 
 ## What does not exist
 

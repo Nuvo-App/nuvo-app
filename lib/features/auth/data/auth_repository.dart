@@ -176,8 +176,12 @@ class AuthRepository {
     return res.user;
   }
 
-  Future<AuthUser> signInReviewer(String email, String password) async {
-    final res = await _api.signInReviewer(email, password);
+  Future<AuthUser> signInReviewer(
+    String email,
+    String password, {
+    String intent = 'signin',
+  }) async {
+    final res = await _api.signInReviewer(email, password, intent: intent);
     await _store.saveTokens(
       accessToken: res.accessToken,
       refreshToken: res.refreshToken,

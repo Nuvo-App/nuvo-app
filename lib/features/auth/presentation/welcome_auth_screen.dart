@@ -49,6 +49,22 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
   bool _appleLoading = false;
   String? _appleError;
 
+  @override
+  void initState() {
+    super.initState();
+    // The welcome screen owns the auth intent — the button the reviewer
+    // tapped is the ONLY source of signUp vs signIn for testing@. Sync it
+    // here and on every mode toggle so a stale intent can't leak through
+    // back navigation.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(authIntentProvider.notifier).state = _mode == _AuthMode.signup
+            ? AuthIntent.signUp
+            : AuthIntent.signIn;
+      }
+    });
+  }
+
   Future<void> _openLegalUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -68,6 +84,9 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
       _mode = _mode == _AuthMode.signup ? _AuthMode.login : _AuthMode.signup;
       _googleError = null;
     });
+    ref.read(authIntentProvider.notifier).state = _mode == _AuthMode.signup
+        ? AuthIntent.signUp
+        : AuthIntent.signIn;
     if (_scrollController.hasClients) _scrollController.jumpTo(0);
   }
 

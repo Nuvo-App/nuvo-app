@@ -45,7 +45,7 @@ class _AuthTestRepository extends AuthRepository {
   }
 
   @override
-  Future<AuthUser> signInReviewer(String email, String password) async {
+  Future<AuthUser> signInReviewer(String email, String password, {String intent = 'signin'}) async {
     reviewers.add(email);
     return user;
   }

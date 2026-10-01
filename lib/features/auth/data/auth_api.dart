@@ -192,10 +192,15 @@ class AuthApi {
     return AuthResponse.fromJson(json);
   }
 
-  Future<AuthResponse> signInReviewer(String email, String password) async {
+  Future<AuthResponse> signInReviewer(
+    String email,
+    String password, {
+    String intent = 'signin',
+  }) async {
     final json = await _post('/auth/reviewer', {
       'email': email,
       'password': password,
+      'intent': intent,
     });
     return AuthResponse.fromJson(json);
   }

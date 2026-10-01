@@ -110,8 +110,12 @@ function world() {
     try { json = JSON.parse(text); } catch { /* non-JSON */ }
     return { status: res.status, json, text };
   };
-  const reviewer = (pw = REVIEWER_PASSWORD) =>
-    req(null, 'POST', '/auth/reviewer', { email: 'testing@getnuvo.net', password: pw });
+  const reviewer = (pw = REVIEWER_PASSWORD, intent = 'signup') =>
+    req(null, 'POST', '/auth/reviewer', {
+      email: 'testing@getnuvo.net',
+      password: pw,
+      intent,
+    });
 
   const user = (id, { email = `${id}@example.com`, name = id } = {}) => {
     exec("INSERT INTO users (id, primary_email, status, terms_accepted_at, created_at, updated_at) VALUES (?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", id, email);
@@ -177,7 +181,7 @@ function seedReviewWorld(w, reviewerId) {
 
 test('reviewer sign-in returns a fresh-account user every time', async () => {
   const w = world();
-  const ok = await w.reviewer();
+  const ok = await w.reviewer(REVIEWER_PASSWORD, 'signup');
   assert.equal(ok.status, 200, ok.text);
   const u = ok.json.user;
   assert.equal(u.email, 'testing@getnuvo.net');
@@ -211,7 +215,7 @@ test('wrong password and foreign emails are rejected without creating users', as
 
 test('repeated sign-ins keep one user, one session, and a fresh-account shape', async () => {
   const w = world();
-  const r1 = await w.reviewer();
+  const r1 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
   const u1 = r1.json.user;
 
   // Simulate a fully completed run between launches.
@@ -226,9 +230,9 @@ test('repeated sign-ins keep one user, one session, and a fresh-account shape', 
        onboarding_complete = 1, avatar_url = 'https://x/a.png' WHERE user_id = ?`, u1.id,
   );
 
-  const r2 = await w.reviewer();
+  const r2 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
   const u2 = r2.json.user;
-  const r3 = await w.reviewer();
+  const r3 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
   const u3 = r3.json.user;
 
   assert.equal(u2.id, u1.id, 'stable backend identity — never a new user row');
@@ -251,7 +255,7 @@ test('repeated sign-ins keep one user, one session, and a fresh-account shape', 
 
 test('prior replay artifacts are purged; the seeded review world is re-asserted', async () => {
   const w = world();
-  const r1 = await w.reviewer();
+  const r1 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
   const u1 = r1.json.user;
   seedReviewWorld(w, u1.id);
 
@@ -304,7 +308,7 @@ test('prior replay artifacts are purged; the seeded review world is re-asserted'
     u1.id,
   );
 
-  const r2 = await w.reviewer();
+  const r2 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
   assert.equal(r2.status, 200, r2.text);
   assert.equal(r2.json.user.id, u1.id);
 
@@ -329,5 +333,50 @@ test('prior replay artifacts are purged; the seeded review world is re-asserted'
     w.scalar("SELECT COUNT(*) c FROM crew_connections WHERE id LIKE 'review-crew-link-%'"), 6,
   );
   assert.equal(w.scalar('SELECT COUNT(*) c FROM race_members WHERE user_id = ?', u1.id), 4);
+  w.fkClean();
+});
+
+// ─── signin intent: returning-user semantics ───────────────────────────────
+
+test('signin intent preserves reviewer state — no reset, normal landing shape', async () => {
+  const w = world();
+  const r1 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
+  const u1 = r1.json.user;
+
+  // Simulate a completed run: terms, name, onboarding done.
+  w.exec(
+    `UPDATE users SET terms_accepted_at = CURRENT_TIMESTAMP, age_attested_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    u1.id,
+  );
+  w.exec(
+    `UPDATE profiles SET full_name = 'Nuvo Review', username = 'nuvoreview', onboarding_complete = 1 WHERE user_id = ?`,
+    u1.id,
+  );
+  // A live artifact from the completed run that must NOT be purged by signin.
+  w.exec(
+    `INSERT INTO xp_events (id, user_id, source_type, source_id, xp_amount, created_at)
+     VALUES ('xp-keep', ?, 'race', 'r-x', 50, CURRENT_TIMESTAMP)`,
+    u1.id,
+  );
+
+  const r2 = await w.reviewer(REVIEWER_PASSWORD, 'signin');
+  assert.equal(r2.status, 200, r2.text);
+  const u2 = r2.json.user;
+  assert.equal(u2.id, u1.id);
+  // Returning-user shape — the completed state survived.
+  assert.equal(u2.onboardingComplete, true, 'signin must not reset setup fields');
+  assert.equal(u2.fullName, 'Nuvo Review');
+  assert.equal(u2.termsAccepted, true);
+  assert.equal(w.scalar("SELECT COUNT(*) c FROM xp_events WHERE id = 'xp-keep'"), 1);
+  w.fkClean();
+});
+
+test('absent intent is treated as signin — the non-destructive default', async () => {
+  const w = world();
+  const res = await w.req(null, 'POST', '/auth/reviewer', {
+    email: 'testing@getnuvo.net',
+    password: REVIEWER_PASSWORD,
+  });
+  assert.equal(res.status, 200, res.text);
   w.fkClean();
 });
