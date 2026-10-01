@@ -142,8 +142,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final uid = user?.id;
     final canReplayDemo =
         user != null &&
-        (_demoAccountEmails.contains(user.email.trim().toLowerCase()) ||
-            user.username?.trim().toLowerCase() == 'akshay');
+        _demoAccountEmails.contains(user.email.trim().toLowerCase());
     final canTogglePresentation =
         user != null && canTogglePresentationMode(user);
 

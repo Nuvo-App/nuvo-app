@@ -161,19 +161,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
 
     final user = authState.user;
-    if (user != null && isNuvoStoreDemoEmail(user.email)) {
-      // The store-review identity replays the first-use experience on every
-      // genuine cold launch: reset Nuvo-owned demo state (never OS
-      // permissions, never the session) and re-enter the story at page 0.
-      // This is process-launch routing — a kill/reopen always lands here,
-      // while tab switches, brief backgrounding, and modal returns never
-      // rebuild the splash.
-      _navigated = true;
-      await resetDemoExperienceForColdLaunch(ref.read, user);
-      if (!mounted) return;
-      context.go('/onboarding/nuvo');
-      return;
-    }
+    // The store-review identity never reaches this point: AuthController
+    // detaches its restored session at bootstrap, so a cold launch always
+    // resolves unauthenticated → /welcome (public first-launch entry). Its
+    // next sign-in resets and replays the full first-use experience.
 
     _navigated = true;
     if (user != null) {

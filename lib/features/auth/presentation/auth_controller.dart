@@ -85,6 +85,20 @@ class AuthController extends StateNotifier<AuthState> {
       final result = await _repo.restoreSession();
       debugPrint('[AuthController] restore result: ${result.runtimeType}');
       if (!mounted) return;
+      // The canonical store-review identity never carries a session across a
+      // process boundary: every cold launch must open at the public
+      // welcome/auth experience and sign in again. This is a LOCAL detach
+      // only — the server account, its seeded world, and its server-side
+      // sessions are preserved; the next reviewer sign-in resets the
+      // first-run fields itself. (The offline demo sentinel restores as
+      // testing@ too, so it detaches here as well — the offline fallback
+      // sign-in still works.) Normal accounts never take this branch.
+      if (result is RestoreOk && isNuvoStoreDemoEmail(result.user.email)) {
+        await _repo.clearSession();
+        if (!mounted) return;
+        state = const AuthState(status: AuthStatus.unauthenticated);
+        return;
+      }
       state = switch (result) {
         RestoreOk(:final user) => AuthState(
           status: AuthStatus.authenticated,

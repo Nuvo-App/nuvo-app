@@ -32,6 +32,16 @@ const _reviewerUser = AuthUser(
   termsAccepted: true,
 );
 
+/// The shape the server returns for testing@getnuvo.net after the replay
+/// reset — the account owes the REAL first-run setup path.
+const _freshReviewer = AuthUser(
+  id: 'reviewer-1',
+  email: 'testing@getnuvo.net',
+  onboardingComplete: false,
+  hasMemberPass: true,
+  termsAccepted: false,
+);
+
 const _memberUser = AuthUser(
   id: 'member-1',
   email: 'member@example.com',
@@ -75,6 +85,54 @@ class _AuthRepo extends AuthRepository {
   Future<AuthUser> verifyEmailCode(String email, String code) async => user;
 }
 
+/// Mutable-auth repo for journey tests: setup calls mutate [user] the way
+/// the server writes would, and getMe() reflects the latest state.
+class _JourneyRepo extends _AuthRepo {
+  _JourneyRepo({super.user = _freshReviewer});
+
+  int clearCalls = 0;
+
+  @override
+  Future<void> clearSession() async {
+    clearCalls++;
+  }
+
+  @override
+  Future<void> acceptTerms() async {
+    user = user.copyWith(termsAccepted: true);
+  }
+
+  @override
+  Future<void> attestAge() async {
+    user = user.copyWith(ageAttested: true);
+  }
+
+  @override
+  Future<void> saveProfile({
+    String? fullName,
+    String? username,
+    bool? privateProfile,
+    String? profilePhotoUrl,
+    bool removePhoto = false,
+  }) async {
+    user = user.copyWith(fullName: fullName, username: username);
+  }
+
+  @override
+  Future<Map<String, dynamic>> setMotionConsent({required bool consented}) async {
+    user = user.copyWith(motionTrainingConsent: consented);
+    return const {};
+  }
+
+  @override
+  Future<void> completeOnboarding() async {
+    user = user.copyWith(onboardingComplete: true);
+  }
+
+  @override
+  Future<AuthUser> getMe() async => user;
+}
+
 class _Screen extends StatelessWidget {
   const _Screen(this.label);
   final String label;
@@ -102,6 +160,7 @@ class _Screen extends StatelessWidget {
     redirect: notifier.redirect,
     routes: [
       GoRoute(path: '/welcome', builder: (_, _) => const _Screen('welcome')),
+      GoRoute(path: '/splash', builder: (_, _) => const _Screen('splash')),
       GoRoute(
         path: '/auth/email',
         builder: (_, _) => const _Screen('email'),
@@ -109,6 +168,14 @@ class _Screen extends StatelessWidget {
       GoRoute(
         path: '/auth/verify',
         builder: (_, _) => const _Screen('verify'),
+      ),
+      GoRoute(
+        path: '/onboarding/profile',
+        builder: (_, _) => const _Screen('account-setup'),
+      ),
+      GoRoute(
+        path: '/onboarding/motion-consent',
+        builder: (_, _) => const _Screen('motion-consent'),
       ),
       GoRoute(
         path: '/onboarding/nuvo',
@@ -227,10 +294,16 @@ void main() {
     testWidgets(
       'armed replay forces every authenticated destination to the story',
       (tester) async {
-        final repo = _AuthRepo(user: _reviewerUser)
-          ..restoreResult = const RestoreOk(_reviewerUser);
-        final built = await _pumpAt(tester, repo: repo, location: '/arena');
+        // The replay owns a completed reviewer's session — the session must
+        // come from a live sign-in, never a cold-launch restore (that path
+        // detaches to /welcome — see 'true first-time reviewer reset').
+        final repo = _AuthRepo(user: _reviewerUser);
+        final built = await _pumpAt(tester, repo: repo, location: '/welcome');
         built.container.read(demoReplayProvider.notifier).state = true;
+        await built.container
+            .read(authControllerProvider.notifier)
+            .signInReviewer('testing@getnuvo.net', 'pw');
+        await tester.pumpAndSettle();
         for (final loc in ['/arena', '/profile', '/welcome', '/auth/email']) {
           built.router.go(loc);
           await tester.pumpAndSettle();
@@ -533,6 +606,166 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('New code sent'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('true first-time reviewer reset', () {
+    testWidgets(
+      'cold launch with a stored reviewer session lands on /welcome',
+      (tester) async {
+        // TEST 1/8/14 — a persisted testing@ session never survives a process
+        // boundary: the client detaches locally and opens at the public
+        // welcome/auth experience every single launch.
+        final repo = _JourneyRepo()
+          ..restoreResult = const RestoreOk(_reviewerUser);
+        final built = await _pumpAt(tester, repo: repo, location: '/arena');
+        // The restore resolved as a local detach — the session never published.
+        expect(repo.clearCalls, 1);
+        expect(
+          built.container.read(authControllerProvider).status,
+          AuthStatus.unauthenticated,
+        );
+        // From here the splash hands off to the public entry; any protected
+        // destination the guard sees resolves to /welcome — never the app.
+        built.router.go('/arena');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/welcome');
+        built.router.go('/profile');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/welcome');
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'normal account restores authenticated — no reviewer reset leaks',
+      (tester) async {
+        // TEST 16 — a stored ordinary session keeps its session and lands on
+        // the normal home; the detach path never fires for it.
+        final repo = _JourneyRepo(user: _memberUser)
+          ..restoreResult = const RestoreOk(_memberUser);
+        final built = await _pumpAt(tester, repo: repo, location: '/arena');
+        expect(_path(built.router), '/arena');
+        expect(repo.clearCalls, 0);
+        expect(
+          built.container.read(authControllerProvider).status,
+          AuthStatus.authenticated,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'another @getnuvo.net account never gets reviewer behavior',
+      (tester) async {
+        // TEST 17 — exact-match identity only; the domain carries no weight.
+        final other = const AuthUser(
+          id: 'other-1',
+          email: 'person@getnuvo.net',
+          onboardingComplete: true,
+          hasMemberPass: true,
+          termsAccepted: true,
+        );
+        final repo = _JourneyRepo(user: other)
+          ..restoreResult = RestoreOk(other);
+        final built = await _pumpAt(tester, repo: repo, location: '/arena');
+        expect(_path(built.router), '/arena');
+        expect(repo.clearCalls, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'reviewer sign-in enters the real first-run setup, then story → '
+      'notifications → guide, in order',
+      (tester) async {
+        // TEST 3/5 — post-auth ordering: the server-reset account owes the
+        // genuine setup sequence; nothing skips to the story or Arena.
+        final store = FirstUseStore.memory();
+        final repo = _JourneyRepo();
+        final built = await _pumpAt(
+          tester,
+          repo: repo,
+          location: '/welcome',
+          store: store,
+        );
+        // The email screen arms the replay before auth state publishes.
+        built.container.read(demoReplayProvider.notifier).state = true;
+        await built.container
+            .read(authControllerProvider.notifier)
+            .signInReviewer('testing@getnuvo.net', 'pw');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/onboarding/profile');
+
+        // Real setup writes advance the account — the same calls the setup
+        // screens make, in the same order.
+        final auth = built.container.read(authControllerProvider.notifier);
+        await auth.acceptTerms();
+        await auth.attestAge();
+        await auth.saveProfile(fullName: 'Nuvo Review', username: 'nuvoreview');
+        built.router.go('/onboarding/motion-consent');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/onboarding/motion-consent');
+
+        // Mid-setup, the account cannot wander into the app.
+        built.router.go('/arena');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/onboarding/motion-consent');
+        built.router.go('/onboarding/motion-consent');
+
+        await auth.setMotionConsent(consented: true);
+        built.router.go('/onboarding/nuvo');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/onboarding/nuvo');
+
+        // The story's real graduation write publishes, then notification
+        // education is owed — mirroring NuvoOnboardingScreen._finish.
+        await store.markNotificationPromptOwed();
+        await auth.completeOnboarding();
+        built.container.read(demoReplayProvider.notifier).state = false;
+        built.router.go('/onboarding/notifications');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/onboarding/notifications');
+
+        // Education resolved → the first-race guide arms at the real entry.
+        await store.clearNotificationPromptOwed();
+        built.router.go('/arena');
+        await tester.pumpAndSettle();
+        expect(_path(built.router), '/compete');
+        expect(
+          built.container.read(firstRaceGuideProvider),
+          FirstRaceGuideStep.competeStart,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    test('ten cold launches always detach the reviewer session', () async {
+      // TEST 15 — the reset is deterministic across N sessions, not once.
+      for (var i = 0; i < 10; i++) {
+        final repo = _JourneyRepo()
+          ..restoreResult = const RestoreOk(_reviewerUser);
+        final container = ProviderContainer(
+          overrides: [
+            authControllerProvider.overrideWith(
+              (ref) => AuthController(repo),
+            ),
+            firstUseStoreProvider.overrideWithValue(FirstUseStore.memory()),
+          ],
+        );
+        addTearDown(container.dispose);
+        container.read(authControllerProvider);
+        // Let the async restore + detach settle.
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        final state = container.read(authControllerProvider);
+        expect(
+          state.status,
+          AuthStatus.unauthenticated,
+          reason: 'session $i must detach',
+        );
+        expect(repo.clearCalls, 1, reason: 'session $i must clear once');
+      }
     });
   });
 }
