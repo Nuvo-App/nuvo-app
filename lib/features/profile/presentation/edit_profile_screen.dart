@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart' show ImageSource;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
 import '../../../core/theme/app_colors.dart';
@@ -124,9 +125,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<void> _pickAndUpload(ImageSource source) async {
     debugPrint('PHOTO_PICK_STARTED');
-    final xFile = await PhotoService.pickAndCrop(source);
+    final result = await ref.read(photoPickerProvider)(source);
+    final xFile = result.file;
     if (xFile == null) {
-      debugPrint('PHOTO_PICK_CANCELLED');
+      debugPrint('PHOTO_PICK_RESULT: ${result.status.name}');
+      if (mounted && result.status == PhotoPickStatus.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Photo access is off. Turn it on in Settings to add a photo.',
+            ),
+            action: SnackBarAction(
+              label: 'Open Settings',
+              onPressed: () => launchUrl(Uri.parse('app-settings:')),
+            ),
+          ),
+        );
+      }
       return;
     }
     if (!mounted) return;

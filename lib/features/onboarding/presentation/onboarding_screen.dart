@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart' show ImageSource;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/photo_service.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_flip_text.dart';
 import '../../../core/widgets/nuvo_shared_components.dart';
@@ -34,6 +37,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _usernameChecking = false;
   String? _error;
   Timer? _debounce;
+
+  // Avatar pipeline state — four distinct things, never conflated:
+  // the local selection preview, the saved remote URL (read from the user
+  // model), the in-flight upload, and the last picker/upload problem.
+  Uint8List? _pendingImageBytes;
+  bool _uploadingAvatar = false;
+  bool _avatarDenied = false;
+  String? _avatarError;
 
   Future<void> _openLegalUrl(String url) async {
     final uri = Uri.parse(url);
@@ -88,6 +99,190 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final parts = raw.split(RegExp(r'\s+'));
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  // ── Profile photo ─────────────────────────────────────────────────────────
+  // Optional by design — the photo never gates Continue. A denied OS
+  // permission explains itself and offers Settings; a failed upload keeps
+  // the local preview and shows a retryable error.
+
+  Widget _buildAvatarContent() {
+    final remoteUrl = ref
+        .watch(authControllerProvider)
+        .user
+        ?.profilePhotoUrl;
+    // Priority: freshly picked local bytes > saved remote photo > initials.
+    if (_pendingImageBytes != null) {
+      return Image.memory(
+        _pendingImageBytes!,
+        key: const ValueKey('avatar-local'),
+        fit: BoxFit.cover,
+        width: 64,
+        height: 64,
+      );
+    }
+    if (remoteUrl != null && remoteUrl.isNotEmpty) {
+      return Image.network(
+        remoteUrl,
+        key: const ValueKey('avatar-remote'),
+        fit: BoxFit.cover,
+        width: 64,
+        height: 64,
+        errorBuilder: (_, _, _) => _avatarInitials(),
+      );
+    }
+    return _avatarInitials();
+  }
+
+  Widget _avatarInitials() => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 260),
+    transitionBuilder: (child, animation) => FadeTransition(
+      opacity: animation,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: .7, end: 1).animate(animation),
+        child: child,
+      ),
+    ),
+    child: Text(
+      _initials,
+      key: ValueKey(_initials),
+      style: AppTextStyles.titleLarge.copyWith(
+        color: NuvoColors.white,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+
+  void _openPhotoSheet() {
+    final hasPhoto =
+        _pendingImageBytes != null ||
+        (ref.read(authControllerProvider).user?.profilePhotoUrl != null);
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: NuvoColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              Text('Profile photo', style: AppTextStyles.titleLarge),
+              const SizedBox(height: 16),
+              _PhotoSheetOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Choose from photos',
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _pickAndUpload(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 8),
+              _PhotoSheetOption(
+                icon: Icons.photo_camera_rounded,
+                label: 'Take photo',
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _pickAndUpload(ImageSource.camera);
+                },
+              ),
+              if (hasPhoto) ...[
+                const SizedBox(height: 8),
+                _PhotoSheetOption(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Remove photo',
+                  isDestructive: true,
+                  onTap: () {
+                    Navigator.of(sheetCtx).pop();
+                    _removePhoto();
+                  },
+                ),
+              ],
+              const SizedBox(height: 8),
+              _PhotoSheetOption(
+                icon: Icons.close_rounded,
+                label: 'Cancel',
+                onTap: () => Navigator.of(sheetCtx).pop(),
+              ),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUpload(ImageSource source) async {
+    final result = await ref.read(photoPickerProvider)(source);
+    if (!mounted) return;
+    final xFile = result.file;
+    if (xFile == null) {
+      // Cancel closes silently. Denied explains itself and offers Settings.
+      // A hard failure says so — never a silent dead button.
+      setState(() {
+        _avatarDenied = result.status == PhotoPickStatus.denied;
+        _avatarError = switch (result.status) {
+          PhotoPickStatus.denied =>
+            'Photo access is off. Turn it on in Settings to add a photo.',
+          PhotoPickStatus.failed =>
+            "Couldn't open photos. You can try again or skip this for now.",
+          _ => _avatarError,
+        };
+      });
+      return;
+    }
+
+    final bytes = await xFile.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      // Local preview lands immediately — the avatar shows the pick before
+      // the upload round-trips.
+      _pendingImageBytes = bytes;
+      _uploadingAvatar = true;
+      _avatarDenied = false;
+      _avatarError = null;
+    });
+
+    try {
+      await ref
+          .read(authControllerProvider.notifier)
+          .uploadProfilePhoto(xFile);
+    } catch (e) {
+      debugPrint('PROFILE_PHOTO_UPLOAD_FAILED: $e');
+      if (mounted) {
+        setState(() {
+          // Keep the local preview; the photo is retryable and optional.
+          _avatarError =
+              "Couldn't upload photo. Tap your photo to try again, or continue without it.";
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    setState(() {
+      _uploadingAvatar = true;
+      _pendingImageBytes = null;
+      _avatarError = null;
+      _avatarDenied = false;
+    });
+    try {
+      await ref.read(authControllerProvider.notifier).removeProfilePhoto();
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _avatarError = "Couldn't remove photo. Please try again.",
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
   }
 
   bool get _canContinue =>
@@ -207,62 +402,53 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Stack(
-                                    alignment: Alignment.bottomRight,
-                                    children: [
-                                      Container(
-                                        width: 64,
-                                        height: 64,
-                                        decoration: const BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: NuvoColors.navy,
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: AnimatedSwitcher(
-                                          duration: const Duration(
-                                            milliseconds: 260,
+                                  GestureDetector(
+                                    key: const ValueKey('onboarding-avatar'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: _openPhotoSheet,
+                                    child: Stack(
+                                      alignment: Alignment.bottomRight,
+                                      children: [
+                                        Container(
+                                          width: 64,
+                                          height: 64,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: NuvoColors.navy,
                                           ),
-                                          transitionBuilder:
-                                              (child, animation) =>
-                                                  FadeTransition(
-                                                    opacity: animation,
-                                                    child: ScaleTransition(
-                                                      scale: Tween<double>(
-                                                        begin: .7,
-                                                        end: 1,
-                                                      ).animate(animation),
-                                                      child: child,
-                                                    ),
-                                                  ),
-                                          child: Text(
-                                            _initials,
-                                            key: ValueKey(_initials),
-                                            style: AppTextStyles.titleLarge
-                                                .copyWith(
+                                          clipBehavior: Clip.antiAlias,
+                                          alignment: Alignment.center,
+                                          child: _buildAvatarContent(),
+                                        ),
+                                        Container(
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: NuvoColors.blue,
+                                            border: Border.all(
+                                              color: NuvoColors.page,
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: _uploadingAvatar
+                                              ? const Padding(
+                                                  padding: EdgeInsets.all(3),
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color:
+                                                            NuvoColors.white,
+                                                      ),
+                                                    )
+                                              : const Icon(
+                                                  Icons.camera_alt_rounded,
                                                   color: NuvoColors.white,
-                                                  fontWeight: FontWeight.w800,
+                                                  size: 12,
                                                 ),
-                                          ),
                                         ),
-                                      ),
-                                      Container(
-                                        width: 22,
-                                        height: 22,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: NuvoColors.blue,
-                                          border: Border.all(
-                                            color: NuvoColors.page,
-                                            width: 2,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.camera_alt_rounded,
-                                          color: NuvoColors.white,
-                                          size: 12,
-                                        ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
@@ -349,6 +535,42 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                   delay: const Duration(milliseconds: 350),
                                   duration: const Duration(milliseconds: 400),
                                 ),
+
+                            if (_avatarError != null) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _avatarError!,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: NuvoColors.danger,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_avatarDenied)
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () =>
+                                          launchUrl(Uri.parse('app-settings:')),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 4,
+                                          vertical: 8,
+                                        ),
+                                        child: Text(
+                                          'Open Settings',
+                                          style: AppTextStyles.bodySmall
+                                              .copyWith(
+                                                color: NuvoColors.blue,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 24),
 
                             NuvoTextInput(
@@ -398,15 +620,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                     size: 16,
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
-                                    _usernameAvailable == true
-                                        ? '@$username is available'
-                                        : '@$username is taken',
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color: _usernameAvailable == true
-                                          ? NuvoColors.success
-                                          : NuvoColors.danger,
-                                      fontWeight: FontWeight.w700,
+                                  Expanded(
+                                    child: Text(
+                                      _usernameAvailable == true
+                                          ? '@$username is available'
+                                          : '@$username is taken',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: _usernameAvailable == true
+                                            ? NuvoColors.success
+                                            : NuvoColors.danger,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -542,6 +768,53 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onPressed: _canContinue ? _continue : null,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One row in the profile-photo source sheet — same shape as the edit
+/// profile sheet options (fixed-height row, panel fill, leading icon).
+class _PhotoSheetOption extends StatelessWidget {
+  const _PhotoSheetOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isDestructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? NuvoColors.danger : NuvoColors.navy;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isDestructive
+              ? NuvoColors.danger.withValues(alpha: 0.05)
+              : NuvoColors.page,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDestructive
+                ? NuvoColors.danger.withValues(alpha: 0.20)
+                : NuvoColors.border,
+            width: isDestructive ? 1 : 2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 12),
+            Text(label, style: AppTextStyles.bodyMedium.copyWith(color: color)),
           ],
         ),
       ),

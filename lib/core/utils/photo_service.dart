@@ -1,6 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
+
+/// What happened when the user was sent through the photo picker.
+///
+/// The distinction matters for UX: a cancel must close silently, a denied
+/// permission must explain itself and offer Settings, and a real failure
+/// must be recoverable. Collapsing all three into "null" is what made a
+/// permission denial look like the button was broken.
+enum PhotoPickStatus { picked, cancelled, denied, failed }
+
+class PhotoPickResult {
+  const PhotoPickResult._(this.status, this.file);
+  const PhotoPickResult.picked(XFile file)
+    : this._(PhotoPickStatus.picked, file);
+  const PhotoPickResult.cancelled() : this._(PhotoPickStatus.cancelled, null);
+  const PhotoPickResult.denied() : this._(PhotoPickStatus.denied, null);
+  const PhotoPickResult.failed() : this._(PhotoPickStatus.failed, null);
+
+  final PhotoPickStatus status;
+  final XFile? file;
+}
+
+/// Injectable pick+edit pipeline — screens read this instead of calling
+/// [PhotoService.pickAndCrop] directly so tests can drive every outcome
+/// without a platform channel.
+final photoPickerProvider =
+    Provider<Future<PhotoPickResult> Function(ImageSource)>(
+      (_) => PhotoService.pickAndCrop,
+    );
 
 class PhotoService {
   PhotoService._();
@@ -8,10 +38,15 @@ class PhotoService {
   static const _kNavy = Color(0xFF07152B);
   static const _kBlue = Color(0xFF075BFF);
 
+  static bool _isPermissionError(Object e) =>
+      e is PlatformException &&
+      (e.code.contains('denied') || e.code.contains('restricted'));
+
   /// Pick an image from [source], then present the native crop UI with a
-  /// circular guide and 1:1 lock. Returns an [XFile] pointing at the
-  /// cropped JPEG, or null if the user cancelled at any step.
-  static Future<XFile?> pickAndCrop(ImageSource source) async {
+  /// circular guide and 1:1 lock. The result distinguishes a successful
+  /// pick (possibly the raw file if the cropper fails), a user cancel at
+  /// either step, a denied/restricted OS permission, and a hard failure.
+  static Future<PhotoPickResult> pickAndCrop(ImageSource source) async {
     // ── Step 1: pick ────────────────────────────────────────────────────────
     XFile? picked;
     try {
@@ -23,12 +58,14 @@ class PhotoService {
       );
     } catch (e) {
       debugPrint('PHOTO_PICK_EXCEPTION: $e');
-      return null;
+      return _isPermissionError(e)
+          ? const PhotoPickResult.denied()
+          : const PhotoPickResult.failed();
     }
 
     if (picked == null) {
       debugPrint('PHOTO_PICK_CANCELLED: user dismissed picker');
-      return null;
+      return const PhotoPickResult.cancelled();
     }
     debugPrint('PHOTO_PICK_SUCCESS: ${picked.path}');
 
@@ -65,16 +102,16 @@ class PhotoService {
       );
     } catch (e) {
       debugPrint('PHOTO_CROP_EXCEPTION: $e');
-      // Crop failed — fall back to raw picked image so the user still gets a preview
-      debugPrint('PHOTO_CROP_FALLBACK: using raw picked image');
-      return picked;
+      // Crop failed — fall back to raw picked image so the user still gets a
+      // preview instead of a silent dead end.
+      return PhotoPickResult.picked(picked);
     }
 
     if (cropped == null) {
       debugPrint('PHOTO_CROP_CANCELLED: user dismissed cropper');
-      return null;
+      return const PhotoPickResult.cancelled();
     }
     debugPrint('PHOTO_CROP_SUCCESS: ${cropped.path}');
-    return XFile(cropped.path);
+    return PhotoPickResult.picked(XFile(cropped.path));
   }
 }
