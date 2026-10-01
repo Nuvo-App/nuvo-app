@@ -1,6 +1,7 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
+import 'race_mode_semantics.dart';
 import 'race_name_interpreter.dart';
 
 /// Returns the system-generated title for a given activity + target.
@@ -124,11 +125,23 @@ class RaceDraft {
   bool get isCustom =>
       customActivityName != null && customActivityName!.isNotEmpty;
 
-  /// True when the draft has everything required to start the race.
-  /// For custom drafts, no preset activityId is required.
+  /// True when the draft has everything required to start the race —
+  /// per format: only first-to-goal (and the manual/custom contracts, which
+  /// the backend always scores against a target) requires a real number;
+  /// deadline modes need a finish line; timed battles need a duration.
   bool get isValidToCreate {
     if (resolvedTitle.trim().isEmpty) return false;
-    if (targetValue <= 0) return false;
+    final needsTarget =
+        format.usesScoreTarget || isManual || isCustom;
+    if (needsTarget && targetValue <= 0) return false;
+    if (format == RaceFormat.mostInWindow &&
+        (finishLineAt ?? '').isEmpty) {
+      return false;
+    }
+    if (format == RaceFormat.timedAttempt &&
+        (attemptDurationSeconds ?? 0) <= 0) {
+      return false;
+    }
     if (isManual) {
       return (manualGoalName ?? '').trim().isNotEmpty &&
           (manualUnit ?? '').trim().isNotEmpty;
@@ -146,12 +159,44 @@ class RaceDraft {
       ? customActivityName!
       : activity.title;
 
-  /// System-generated title for this draft, ignoring any manual name override.
+  /// System-generated title for this draft — mode-aware so a generated
+  /// title never claims a finish line the format doesn't have.
   String get generatedTitleText => isManual
-      ? 'First to $targetValue ${manualUnit ?? 'done'}'
+      ? (format.usesScoreTarget
+          ? 'First to $targetValue ${manualUnit ?? 'done'}'
+          : (manualGoalName ?? 'Custom goal'))
       : isCustom
       ? 'First to $targetValue $customActivityName'
-      : generatedTitle(activity, targetValue);
+      : switch (format) {
+          RaceFormat.mostInWindow => 'Most ${activity.title}',
+          RaceFormat.bestAttempt => 'Best ${activity.title} attempt',
+          RaceFormat.timedAttempt =>
+            '${formatDurationShort(attemptDurationSeconds ?? 60)} '
+                '${activity.title} battle',
+          _ => generatedTitle(activity, targetValue),
+        };
+
+  /// What winning this draft means — mode-derived so the review page and
+  /// goal page never describe a rule the race doesn't play by.
+  String get winStatement {
+    final name = displayActivityName.toLowerCase();
+    return switch (format) {
+      RaceFormat.mostInWindow =>
+        'Most verified $name before the finish line wins.',
+      RaceFormat.bestAttempt => lowerWins
+          ? 'Lowest score wins — every verified attempt counts.'
+          : 'Best single attempt wins — every verified score counts.',
+      RaceFormat.timedAttempt =>
+        'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} wins.',
+      // "First to 20 verified jumping jacks wins." — the bare figure for
+      // reps, the spoken duration for timed goals.
+      _ => 'First to $_winValueText verified $name wins.',
+    };
+  }
+
+  String get _winValueText => metric == RaceMetric.seconds
+      ? formatDurationShort(targetValue)
+      : '$targetValue';
 
   /// The title to show everywhere. When not custom, derived from activity+target.
   String get resolvedTitle => hasCustomName ? title : generatedTitleText;
@@ -177,6 +222,7 @@ class RaceDraft {
     int? attemptLimit,
     String? scoreDirection,
     bool clearTiming = false,
+    bool clearAttemptFields = false,
     bool clearCustom = false,
     bool clearClarification = false,
     Set<RaceField>? markEdited,
@@ -206,10 +252,12 @@ class RaceDraft {
       clarification: clearClarification
           ? null
           : clarification ?? this.clarification,
-      attemptDurationSeconds: clearTiming
+      attemptDurationSeconds: clearTiming || clearAttemptFields
           ? null
           : attemptDurationSeconds ?? this.attemptDurationSeconds,
-      attemptLimit: clearTiming ? null : attemptLimit ?? this.attemptLimit,
+      attemptLimit: clearTiming || clearAttemptFields
+          ? null
+          : attemptLimit ?? this.attemptLimit,
       scoreDirection: scoreDirection ?? this.scoreDirection,
       userEditedFields: markEdited == null
           ? userEditedFields
@@ -257,7 +305,9 @@ class RaceDraft {
       'description': '${activity.title} race verified by camera.',
       'category': 'fitness',
       'goalType': format.backendValue,
-      'targetValue': targetValue,
+      // Only send a finish-line number when the format scores against one —
+      // a best-attempt race carrying "50" would mint a fake progress bar.
+      if (format.usesScoreTarget) 'targetValue': targetValue,
       'unit': metric.backendValue,
       'targetUnit': metric.backendValue,
       'activityId': activity.activityId,
