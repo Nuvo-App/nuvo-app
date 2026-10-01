@@ -48,6 +48,7 @@ import '../domain/motion_activity.dart';
 import '../domain/motion_progress_presentation.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_display.dart';
+import '../domain/race_mode_semantics.dart';
 import 'board_moved_screen.dart';
 
 import 'custom_pose/pose_skeleton_overlay.dart';
@@ -78,6 +79,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String _metric = 'reps';
   int _raceTotalBefore = 0;
   int? _raceTargetValue;
+  /// The race's competitive context — format, direction, banked score,
+  /// score-to-beat — so the HUD can talk about the race, not just the count.
+  VerifierRaceContext? _raceContext;
   String? _clientSubmissionId;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = const [];
@@ -382,6 +386,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _metric = race.metric ?? 'reps';
         _raceTotalBefore = myPart?.progressValue ?? 0;
         _raceTargetValue = race.targetValue;
+        _raceContext = VerifierRaceContext.forRace(race, userId);
         _raceTitle = race.title;
         _measurementType = raceMeasurementType(race).name;
       });
@@ -473,6 +478,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _metric = race.metric ?? 'reps';
         _raceTotalBefore = alreadyDone;
         _raceTargetValue = race.targetValue ?? target;
+        _raceContext = VerifierRaceContext.forRace(
+          race,
+          ref.read(authControllerProvider).user?.id,
+        );
         _raceTitle = race.title;
         _measurementType = 'repetitions';
       });
@@ -831,8 +840,10 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           HapticFeedback.lightImpact();
         }
       }
-      // Finish line reached — fire once per recording.
+      // Finish line reached — fire once per recording, and only in a mode
+      // that has a finish line. Attempt races never "reach" one.
       if (!_targetCelebrated &&
+          _hasFinishTarget &&
           _targetValue > 0 &&
           output.count >= _targetValue) {
         _targetCelebrated = true;
@@ -1497,6 +1508,26 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       ? ((_raceTargetValue ?? 1) - _raceTotalBefore).clamp(1, 1000000).toInt()
       : _runtime.targetValue;
 
+  /// Only a format that scores against a finish line gets target-reached
+  /// treatment — celebration, "goal" color states, the /target readout. A
+  /// best-attempt race has nothing to reach; its session target is a
+  /// machine value, never a finish line.
+  bool get _hasFinishTarget =>
+      _raceContext?.format.usesScoreTarget ?? true;
+
+  /// The session reached a real finish line — never true for attempt or
+  /// deadline modes, where the machine target is not a finish.
+  bool get _targetReachedNow =>
+      _hasFinishTarget && _targetValue > 0 && _currentValue >= _targetValue;
+
+  /// What the rest-state pill names before recording — "Goal: 50 pushups"
+  /// when there's a finish line, the mode's own stakes when there isn't.
+  String get _restStateLabel {
+    final ctx = _raceContext;
+    if (ctx != null && !_hasFinishTarget) return ctx.statusLine;
+    return 'Goal: $_targetLabel';
+  }
+
   /// This session's contribution so far (starts at 0). Only this is submitted.
   int get _sessionContribution =>
       _isObjectComposition ? _objectCount : _runtime.currentValue;
@@ -1575,9 +1606,23 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         '$_raceTarget $_activityLabel';
   }
 
-  /// The primary readout during a session: **race progress**, continuing from
-  /// where the athlete left off ("4 / 6 reps", "37 / 100 m").
+  /// The primary readout during a session — mode-aware:
+  ///   first_to_goal  → race progress, continuing from the bank ("32 / 50")
+  ///   most_in_window → accumulated total, no fake finish ("37")
+  ///   attempt races  → the attempt itself ("14") — there is no /target
   String get _raceProgressReadout {
+    final ctx = _raceContext;
+    if (ctx != null &&
+        !_hasFinishTarget &&
+        !_isCustom &&
+        !_isObjectComposition) {
+      final shown = ctx.isAttemptBased
+          ? _sessionContribution
+          : _raceTotalBefore + _sessionContribution;
+      return _isCustom
+          ? '$shown'
+          : formatMotionTarget(_measure, shown, _displayUnit);
+    }
     if (_isCustom) return '$_displayedRaceProgress / $_raceTarget $_metric';
     return _progressText(_displayedRaceProgress, _raceTarget);
   }
@@ -1740,13 +1785,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _pill(
-                        recording
-                            ? _raceProgressReadout
-                            : 'Goal: $_targetLabel',
+                        recording ? _raceProgressReadout : _restStateLabel,
                         color: recording
-                            ? (_currentValue >= _targetValue
+                            ? (_targetReachedNow
                                   ? NuvoColors.success
-                                  : NuvoColors.danger)
+                                  : _hasFinishTarget
+                                  ? NuvoColors.danger
+                                  : NuvoColors.blue)
                             : NuvoColors.blue,
                       ),
                     ),
@@ -1801,7 +1846,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   Widget _skeletonOverlay(CameraController controller) {
     final previewSize = controller.value.previewSize;
     if (previewSize == null) return const SizedBox.shrink();
-    final targetReached = _targetValue > 0 && _currentValue >= _targetValue;
+    final targetReached = _targetReachedNow;
 
     return PoseSkeletonOverlay(
       frame: _skeletonHold.frame,
@@ -1936,11 +1981,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
                 _pill(
                   _status == AiMotionProofStatus.recording
                       ? _raceProgressReadout
-                      : 'Goal: $_targetLabel',
+                      : _restStateLabel,
                   color: _status == AiMotionProofStatus.recording
-                      ? (_currentValue >= _targetValue
+                      ? (_targetReachedNow
                             ? NuvoColors.success
-                            : NuvoColors.danger)
+                            : _hasFinishTarget
+                            ? NuvoColors.danger
+                            : NuvoColors.blue)
                       : NuvoColors.blue,
                 ),
                 const Spacer(),
@@ -2522,7 +2569,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final visible = _isObjectComposition
         ? _objectUpdate != null
         : _runtime.fullBodyVisible;
-    final targetReached = _currentValue >= _targetValue;
+    final targetReached = _targetReachedNow;
 
     final label = recording && targetReached
         ? 'Target complete'

@@ -26,6 +26,7 @@ import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
+import '../domain/race_mode_semantics.dart';
 import '../domain/race_intent.dart';
 import '../domain/race_name_interpreter.dart';
 import '../domain/race_safety.dart';
@@ -3130,35 +3131,18 @@ class _GoalPageState extends State<_GoalPage> {
     return 100;
   }
 
-  String get _winStatement {
-    final activityName = widget.draft.displayActivityName.toLowerCase();
-    final valueLabel = widget.draft.isCustom || widget.draft.isManual
-        ? (widget.draft.metric == RaceMetric.seconds
-              ? _secondsDisplay(_target)
-              : '$_target $_unitWord')
-        : widget.draft.activity.targetLabel(_target);
-    return switch (widget.draft.format) {
-      RaceFormat.mostInWindow =>
-        'Most verified $activityName before the finish line wins.',
-      // Attempt races don't chase a target — the number is a scale hint, not
-      // a finish line, so it stays out of the win statement.
-      RaceFormat.bestAttempt => widget.draft.lowerWins
-          ? 'Lowest score wins — every verified attempt counts.'
-          : 'Best single attempt wins — every verified score counts.',
-      RaceFormat.timedAttempt =>
-        'Most $activityName in '
-            '${formatDurationShort(widget.draft.attemptDurationSeconds ?? 60)} '
-            'wins.',
-      _ => 'First to $valueLabel of verified $activityName wins.',
-    };
-  }
+  /// What winning means — derived on the draft so the goal page and the
+  /// review page can never describe different rules.
+  String get _winStatement => widget.draft.winStatement;
 
   // ── Race mode ───────────────────────────────────────────────────────────
 
   /// Modes this draft can express — preset activities declare their formats
-  /// in the catalog; custom/manual goals support the full set.
-  List<RaceFormat> get _availableFormats =>
-      widget.draft.isCustom || widget.draft.isManual
+  /// in the catalog; custom races are always first-to-goal (the backend pins
+  /// it, so offering more would lie); manual goals support the full set.
+  List<RaceFormat> get _availableFormats => widget.draft.isCustom
+      ? const [RaceFormat.firstToGoal]
+      : widget.draft.isManual
       ? const [
           RaceFormat.firstToGoal,
           RaceFormat.mostInWindow,
@@ -3192,10 +3176,16 @@ class _GoalPageState extends State<_GoalPage> {
                 now.add(const Duration(hours: 24)).toIso8601String(),
           _ => widget.draft.finishLineAt,
         },
+        // Fields that only mean something to attempt races go stale on the
+        // way out — a first-to-goal race must not silently carry an attempt
+        // duration it never asked for.
         attemptDurationSeconds: f == RaceFormat.timedAttempt
             ? widget.draft.attemptDurationSeconds ?? 60
             : widget.draft.attemptDurationSeconds,
         markEdited: {RaceField.format, RaceField.timing},
+        clearAttemptFields: !f.isAttemptBased &&
+            (widget.draft.attemptDurationSeconds != null ||
+                widget.draft.attemptLimit != null),
       ),
     );
     widget.onInput?.call();
@@ -3242,6 +3232,18 @@ class _GoalPageState extends State<_GoalPage> {
       widget.draft.copyWith(
         attemptDurationSeconds: seconds,
         markEdited: {RaceField.timing},
+      ),
+    );
+    widget.onInput?.call();
+  }
+
+  void _setScoreDirection(String direction) {
+    if (widget.draft.scoreDirection == direction) return;
+    HapticFeedback.selectionClick();
+    widget.onDraftChanged(
+      widget.draft.copyWith(
+        scoreDirection: direction,
+        markEdited: {RaceField.scoreDirection},
       ),
     );
     widget.onInput?.call();
@@ -3339,47 +3341,54 @@ class _GoalPageState extends State<_GoalPage> {
             ],
 
             // ── Big tappable number ──────────────────────────────────────────
-            _GoalDisplay(
-              value: _target,
-              format: _displayFor,
-              allowDecimal: _isDistance,
-              unitLabel: isSeconds
-                  ? widget.draft.displayActivityName.toUpperCase()
-                  : _unitWord.toUpperCase(),
-              editing: _editing,
-              editCtrl: _editCtrl,
-              editFocus: _editFocus,
-              onTapNumber: _startEdit,
-              onCommitEdit: _commitEdit,
-              onIncrement: _increment,
-              onDecrement: _decrement,
-              onHoldStart: _startHold,
-              onHoldEnd: _stopHold,
-              decrementNudges: _floorHits,
-            ),
-            const SizedBox(height: 24),
+            // Only formats that score against a finish line (plus manual /
+            // custom goals, whose backend contract always carries a target)
+            // get a numeric selector — a best-attempt race has no target to
+            // chase, and "most before time" is decided by the deadline.
+            if (widget.draft.format.usesScoreTarget ||
+                widget.draft.isManual) ...[
+              _GoalDisplay(
+                value: _target,
+                format: _displayFor,
+                allowDecimal: _isDistance,
+                unitLabel: isSeconds
+                    ? widget.draft.displayActivityName.toUpperCase()
+                    : _unitWord.toUpperCase(),
+                editing: _editing,
+                editCtrl: _editCtrl,
+                editFocus: _editFocus,
+                onTapNumber: _startEdit,
+                onCommitEdit: _commitEdit,
+                onIncrement: _increment,
+                onDecrement: _decrement,
+                onHoldStart: _startHold,
+                onHoldEnd: _stopHold,
+                decrementNudges: _floorHits,
+              ),
+              const SizedBox(height: 24),
 
-            // ── Suggested values (Wrap flows to a second row; not a scroller)
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final t in _suggestedTargets.take(_isDistance ? 7 : 5))
-                  _SuggestedTarget(
-                    value: _isDistance
-                        ? formatMotionGoalOption(_measure, t)
-                        : isSeconds
-                        ? formatDurationShort(t)
-                        : '$t',
-                    selected: _target == t,
-                    onTap: () {
-                      _dismissKeyboard();
-                      setState(() => _editing = false);
-                      _setTarget(t);
-                    },
-                  ),
-              ],
-            ),
+              // ── Suggested values (Wrap flows to a second row; not a scroller)
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final t in _suggestedTargets.take(_isDistance ? 7 : 5))
+                    _SuggestedTarget(
+                      value: _isDistance
+                          ? formatMotionGoalOption(_measure, t)
+                          : isSeconds
+                          ? formatDurationShort(t)
+                          : '$t',
+                      selected: _target == t,
+                      onTap: () {
+                        _dismissKeyboard();
+                        setState(() => _editing = false);
+                        _setTarget(t);
+                      },
+                    ),
+                ],
+              ),
+            ],
 
             // ── Finish line (deadline modes) ────────────────────────────────
             if (widget.draft.format != RaceFormat.firstToGoal) ...[
@@ -3402,6 +3411,37 @@ class _GoalPageState extends State<_GoalPage> {
                       selected: _deadlineSelected(duration),
                       onTap: () => _setDeadline(duration),
                     ),
+                ],
+              ),
+            ],
+
+            // ── Score direction (attempt races) ─────────────────────────────
+            // Best-attempt / timed races can crown the lowest number — golf,
+            // fastest time — so direction is a real field here, and only here.
+            if (widget.draft.format.isAttemptBased) ...[
+              const SizedBox(height: 24),
+              Text(
+                'WINS BY',
+                style: AppTextStyles.labelUppercase(
+                  12,
+                  color: context.themeColors.inkMuted,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _SuggestedTarget(
+                    value: 'Higher score',
+                    selected: !widget.draft.lowerWins,
+                    onTap: () => _setScoreDirection('higher'),
+                  ),
+                  _SuggestedTarget(
+                    value: 'Lower score',
+                    selected: widget.draft.lowerWins,
+                    onTap: () => _setScoreDirection('lower'),
+                  ),
                 ],
               ),
             ],
@@ -3908,7 +3948,23 @@ class _ReviewPage extends StatelessWidget {
   final bool showDiagnostics;
   final VoidCallback onCopyDiagnostics;
 
+  /// The "finish line" row is mode-derived: a real number only exists when
+  /// the format scores against one — attempt and deadline races describe
+  /// their rule instead.
   String get _finishLineLabel {
+    switch (draft.format) {
+      case RaceFormat.bestAttempt:
+        return draft.lowerWins
+            ? 'Lowest verified score wins'
+            : 'Best verified attempt wins';
+      case RaceFormat.mostInWindow:
+        return 'Most verified before the deadline';
+      case RaceFormat.timedAttempt:
+        return 'Most in '
+            '${formatDurationShort(draft.attemptDurationSeconds ?? 60)}';
+      case RaceFormat.firstToGoal:
+        break;
+    }
     if (!draft.isCustom && !draft.isManual) {
       return draft.activity.targetLabel(draft.targetValue);
     }
@@ -3918,12 +3974,42 @@ class _ReviewPage extends StatelessWidget {
         : '${draft.targetValue} ${draft.metric.label}';
   }
 
-  String get _winSubtitle {
-    final isSeconds = draft.metric == RaceMetric.seconds;
-    final valueLabel = isSeconds
-        ? _secondsDisplay(draft.targetValue)
-        : '${draft.targetValue}';
-    return 'First to $valueLabel verified ${draft.displayActivityName.toLowerCase()} wins.';
+  /// Row sub-copy under the finish-line value — names what the number is.
+  String get _finishLineSub => draft.format.usesScoreTarget || draft.isManual
+      ? 'Target everyone races toward'
+      : 'How this race is decided';
+
+  /// What winning means — mode-derived on the draft, never a template.
+  String get _winSubtitle => draft.winStatement;
+
+  // The hero's right-side emphasis: a real finish line shows the target
+  // figure ("10 REPS"); modes without one lead with what decides them —
+  // the deadline, the attempt length, or "best" itself.
+  (String, String) get _goalParts {
+    switch (draft.format) {
+      case RaceFormat.bestAttempt:
+        return ('BEST', 'ATTEMPT');
+      case RaceFormat.mostInWindow:
+        final at = DateTime.tryParse(draft.finishLineAt ?? '');
+        if (at == null) return ('OPEN', 'DEADLINE');
+        final left = at.difference(DateTime.now());
+        if (left.inDays >= 1) return ('${left.inDays}', 'DAYS');
+        if (left.inHours >= 1) return ('${left.inHours}', 'HRS');
+        return ('${left.inMinutes.clamp(1, 59)}', 'MIN');
+      case RaceFormat.timedAttempt:
+        final secs = draft.attemptDurationSeconds ?? 60;
+        final text = formatDurationShort(secs);
+        final i = text.indexOf(' ');
+        return i < 0
+            ? (text.toUpperCase(), '')
+            : (text.substring(0, i), text.substring(i + 1).toUpperCase());
+      case RaceFormat.firstToGoal:
+        break;
+    }
+    final label = _finishLineLabel;
+    final i = label.indexOf(' ');
+    if (i < 0) return (label, '');
+    return (label.substring(0, i), label.substring(i + 1).toUpperCase());
   }
 
   @override
@@ -3965,10 +4051,16 @@ class _ReviewPage extends StatelessWidget {
                   ),
                 ).animate(delay: 40.ms).fadeIn(duration: 200.ms),
                 const SizedBox(height: 22),
-                _RacePathVisual(
-                  targetLabel: _finishLineLabel,
+                _RaceSummaryCard(
                   activityIcon: draft.activity.icon,
                   activityLabel: draft.displayActivityName,
+                  proofLabel: draft.isCustom
+                      ? 'Custom movement · camera verified'
+                      : draft.isManual
+                          ? 'Score + photo proof'
+                          : 'AI Motion verified',
+                  goalValue: _goalParts.$1,
+                  goalUnit: _goalParts.$2,
                 ).animate(delay: 80.ms).fadeIn(duration: 260.ms),
                 const SizedBox(height: 16),
                 _ReviewDetails(
@@ -3977,6 +4069,7 @@ class _ReviewPage extends StatelessWidget {
                       ? 'Custom movement'
                       : 'Camera verified',
                   finishLineLabel: _finishLineLabel,
+                  finishLineSub: _finishLineSub,
                   raceModeLabel: isInvite ? 'Invite crew' : 'Start solo',
                   raceModeSub: isInvite
                       ? 'Invite link opens after race starts'
@@ -4020,13 +4113,12 @@ class _ReviewPage extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: NuvoSuccessButton(
+          child: NuvoPrimaryButton(
             key: FirstRaceGuideKeys.composerReview,
             label: 'Start race',
             icon: Icons.flag_rounded,
             expand: true,
             loading: loading,
-            solid: true,
             onPressed: loading ? null : onStart,
           ),
         ),
@@ -4035,40 +4127,52 @@ class _ReviewPage extends StatelessWidget {
   }
 }
 
-class _RacePathVisual extends StatelessWidget {
-  const _RacePathVisual({
-    required this.targetLabel,
+/// The race object itself — the one hero surface on the page (level 2:
+/// navy edge + hard offset). Icon tile, movement + proof line, the finish
+/// line as a right-side figure, and a start→finish rail underneath so the
+/// launch reads as a course, not a form.
+class _RaceSummaryCard extends StatelessWidget {
+  const _RaceSummaryCard({
     required this.activityIcon,
     required this.activityLabel,
+    required this.proofLabel,
+    required this.goalValue,
+    required this.goalUnit,
   });
-  final String targetLabel;
+
   final IconData activityIcon;
   final String activityLabel;
+  final String proofLabel;
+  final String goalValue;
+  final String goalUnit;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.themeColors;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: context.semanticColors.neutral.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.hero),
-        border: Border.all(color: context.themeColors.border, width: 2),
-      ),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: NuvoSurfaces.strong(radius: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              // The movement artifact — a physical blue tile, same object
+              // language as the collectible badges.
               Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
                   color: NuvoColors.blue,
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: c.border, width: 2),
+                  boxShadow: AppShadows.hardOffset(
+                    c.inkShadow,
+                    offset: const Offset(2, 2),
+                  ),
                 ),
                 alignment: Alignment.center,
-                child: Icon(activityIcon, color: NuvoColors.white, size: 20),
+                child: Icon(activityIcon, color: NuvoColors.white, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -4079,81 +4183,107 @@ class _RacePathVisual extends StatelessWidget {
                       activityLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyLarge.copyWith(
-                        color: context.themeColors.ink,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: c.ink,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Your proof moves the leaderboard',
+                      proofLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: context.themeColors.inkMuted,
+                        color: c.inkMuted,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
+              // The finish line as the destination figure.
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    goalValue,
+                    maxLines: 1,
+                    style: AppTextStyles.statLarge(
+                      30,
+                      color: NuvoColors.blue,
+                      weight: FontWeight.w900,
+                    ),
+                  ),
+                  if (goalUnit.isNotEmpty)
+                    Text(
+                      goalUnit,
+                      maxLines: 1,
+                      style: AppTextStyles.labelUppercase(
+                        10,
+                        color: c.inkSubtle,
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 18),
+          // Start → finish — a clean course, not a diagram: filled start
+          // anchor, ice track, open ring, flag.
           Row(
             children: [
-              const _RacePoint(label: 'Start line', color: NuvoColors.blue),
-              const SizedBox(width: 10),
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: c.ink,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
-                child: CustomPaint(
-                  size: const Size(double.infinity, 16),
-                  painter: _RaceLinePainter(
-                    color: context.themeColors.ink,
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: c.track,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              const _RacePoint(label: 'Finish line', color: NuvoColors.success),
+              const SizedBox(width: 8),
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: NuvoColors.blue, width: 3),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.flag_rounded,
+                color: NuvoColors.blue,
+                size: 18,
+              ),
             ],
           ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              targetLabel,
-              style: AppTextStyles.titleMedium.copyWith(
-                color: context.themeColors.ink,
-                fontWeight: FontWeight.w800,
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                'START LINE',
+                style: AppTextStyles.labelUppercase(9, color: c.inkSubtle),
               ),
-            ),
+              const Spacer(),
+              Text(
+                'FINISH LINE',
+                style: AppTextStyles.labelUppercase(9, color: c.inkSubtle),
+              ),
+            ],
           ),
         ],
       ),
-    );
-  }
-}
-
-class _RacePoint extends StatelessWidget {
-  const _RacePoint({required this.label, required this.color});
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: AppTextStyles.labelSmall.copyWith(
-            color: context.themeColors.ink,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -4163,6 +4293,7 @@ class _ReviewDetails extends StatelessWidget {
     required this.activityLabel,
     required this.activitySub,
     required this.finishLineLabel,
+    required this.finishLineSub,
     required this.raceModeLabel,
     required this.raceModeSub,
     required this.onEditActivity,
@@ -4173,6 +4304,7 @@ class _ReviewDetails extends StatelessWidget {
   final String activityLabel;
   final String activitySub;
   final String finishLineLabel;
+  final String finishLineSub;
   final String raceModeLabel;
   final String raceModeSub;
   final VoidCallback? onEditActivity;
@@ -4182,11 +4314,7 @@ class _ReviewDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: context.themeColors.surface,
-        borderRadius: BorderRadius.circular(NuvoRadii.lg),
-        border: Border.all(color: context.themeColors.divider),
-      ),
+      decoration: NuvoSurfaces.quiet(radius: 18),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -4202,7 +4330,7 @@ class _ReviewDetails extends StatelessWidget {
             icon: Icons.flag_rounded,
             label: 'Finish line',
             value: finishLineLabel,
-            sub: 'Target everyone races toward',
+            sub: finishLineSub,
             onTap: onEditGoal,
             isLast: false,
           ),
@@ -4240,15 +4368,15 @@ class _ReviewDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       child: Row(
         children: [
           Container(
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: context.semanticColors.neutral.surface,
-              shape: BoxShape.circle,
+              color: context.themeColors.panelLight,
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: NuvoColors.blue, size: 17),
           ),
@@ -4258,10 +4386,10 @@ class _ReviewDetailRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: context.themeColors.inkMuted,
-                    fontWeight: FontWeight.w700,
+                  label.toUpperCase(),
+                  style: AppTextStyles.labelUppercase(
+                    10,
+                    color: context.themeColors.inkSubtle,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -4274,19 +4402,29 @@ class _ReviewDetailRow extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                Text(
-                  sub,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.themeColors.inkMuted,
-                  ),
-                ),
               ],
             ),
           ),
-          if (onTap != null)
-            Icon(Icons.edit_outlined, color: context.themeColors.inkMuted, size: 16),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              sub,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.themeColors.inkMuted,
+              ),
+            ),
+          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: context.themeColors.inkSubtle,
+              size: 20,
+            ),
+          ],
         ],
       ),
     );
@@ -4307,38 +4445,6 @@ class _ReviewDetailRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _RaceLinePainter extends CustomPainter {
-  const _RaceLinePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withValues(alpha: 0.22)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    const dashWidth = 8.0;
-    const dashGap = 6.0;
-    var x = 0.0;
-    final y = size.height / 2;
-
-    while (x < size.width) {
-      canvas.drawLine(
-        Offset(x, y),
-        Offset((x + dashWidth).clamp(0, size.width), y),
-        paint,
-      );
-      x += dashWidth + dashGap;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// The "Race is live." beat — a flag, the verdict, the race name. Rendered
