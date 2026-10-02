@@ -68,6 +68,13 @@ export async function resetReviewerReplayState(
     await db.prepare('DELETE FROM race_final_standings WHERE race_id = ?').bind(race.id).run();
     await db.prepare('DELETE FROM race_events WHERE race_id = ?').bind(race.id).run();
     await db.prepare('DELETE FROM verification_sessions WHERE race_id = ?').bind(race.id).run();
+    // race_verifier_assignments.race_id has a hard FK to races(id) — an
+    // ai_check race mints one at creation, and deleting the race without it
+    // 500s the whole reset.
+    await db
+      .prepare('DELETE FROM race_verifier_assignments WHERE race_id = ?')
+      .bind(race.id)
+      .run();
     await db.prepare('DELETE FROM proofs WHERE race_id = ?').bind(race.id).run();
     await db.prepare('DELETE FROM race_participants WHERE race_id = ?').bind(race.id).run();
     await db

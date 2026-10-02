@@ -380,3 +380,187 @@ test('absent intent is treated as signin — the non-destructive default', async
   assert.equal(res.status, 200, res.text);
   w.fkClean();
 });
+
+// ─── write contract: the reset account must write like a normal user ────────
+//
+// Regression for the production release blocker: after a signup reset the
+// reviewer must be able to accept terms, attest age, save a profile, consent,
+// complete onboarding, create a race (including a camera-verified one that
+// mints a race_verifier_assignments row), and save an avatar — then reset
+// again cleanly, forever.
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+function seedPushupsRegistry(w) {
+  w.exec(
+    `INSERT OR IGNORE INTO motion_activities
+       (id, display_name, category, proof_label, measurement_type, metric,
+        suggested_targets_json, supported_formats_json, icon_key, sort_priority, featured, availability)
+     VALUES ('push_ups', 'Pushups', 'upper_body', 'pushups', 'repetitions', 'reps',
+       '[10]', '["first_to_goal"]', 'fitness_center', 1, 1, 'supported')`,
+  );
+  w.exec(
+    `INSERT OR IGNORE INTO verifier_releases
+       (id, activity_id, semver, change_class, engine_type, spec_schema_version,
+        spec_json, checksum, required_capabilities_json, minimum_app_build,
+        compatibility_group, status, published_at)
+     VALUES ('push_ups-rel-1', 'push_ups', '2026.09.0', 'minor', 'native_v1', 1,
+       '{}', 'sum-1', '[]', 'legacy', 'g1', 'stable', CURRENT_TIMESTAMP)`,
+  );
+  w.exec(
+    `INSERT OR IGNORE INTO activity_channel_releases
+       (activity_id, channel, release_id, rollout_percent)
+     VALUES ('push_ups', 'stable', 'push_ups-rel-1', 100)`,
+  );
+}
+
+async function reviewerOnboardingWrites(w, userId) {
+  const t = await w.req(userId, 'POST', '/auth/terms', {});
+  assert.equal(t.status, 200, `terms: ${t.text}`);
+  const a = await w.req(userId, 'POST', '/auth/age-attestation', {});
+  assert.equal(a.status, 200, `age: ${a.text}`);
+  const p = await w.req(userId, 'POST', '/profile', {
+    fullName: 'Nuvo Review',
+    username: `review${Math.floor(Math.random() * 1e6)}`,
+  });
+  assert.equal(p.status, 200, `profile: ${p.text}`);
+  const mc = await w.req(userId, 'PUT', '/motion/consent', { consented: true });
+  assert.equal(mc.status, 200, `consent: ${mc.text}`);
+  const oc = await w.req(userId, 'POST', '/onboarding/complete', {});
+  assert.equal(oc.status, 200, `onboarding: ${oc.text}`);
+}
+
+async function reviewerWritesRaceAndAvatar(w, userId) {
+  // Camera-verified race — mints a race_verifier_assignments row, the exact
+  // child row the reset used to miss.
+  const race = await w.req(userId, 'POST', '/races', {
+    title: 'First to 10 pushups',
+    goalType: 'first_to_goal',
+    targetValue: 10,
+    unit: 'reps',
+    targetUnit: 'reps',
+    metric: 'reps',
+    format: 'first_to_goal',
+    proofRequirement: 'ai_check',
+    proofReviewMode: 'auto_accept',
+    proofMode: 'ai_check',
+    aiActivityType: 'push_ups',
+    activityId: 'push_ups',
+  });
+  assert.equal(race.status, 201, `race create: ${race.text}`);
+  const raceId = race.json.race.id;
+  // Model the production state exactly: camera-verified races carry a
+  // race_verifier_assignments row (FK → races). Inserted directly so the
+  // reset regression is exercised regardless of registry seed depth.
+  w.exec(
+    `INSERT INTO race_verifier_assignments
+       (race_id, activity_id, release_id, release_checksum, assignment_policy,
+        compatibility_group, assignment_reason)
+     VALUES (?, 'push_ups', 'push_ups-rel-1', 'sum-1', 'follow_compatible_patch', 'g1', 'race_created')`,
+    raceId,
+  );
+
+  const url = await w.req(userId, 'POST', '/profile/photo/upload-url', {
+    fileName: 'a.png',
+    contentType: 'image/png',
+  });
+  assert.equal(url.status, 200, `upload-url: ${url.text}`);
+  const put = await w.req(
+    null,
+    'PUT',
+    new URL(url.json.uploadUrl).pathname + new URL(url.json.uploadUrl).search,
+    undefined,
+  );
+  // req() JSON-encodes; the upload route only needs the signed token, so a
+  // small JSON body still exercises the full PUT → R2 → media → profile link.
+  assert.equal(put.status, 200, `photo put: ${put.text}`);
+  const save = await w.req(userId, 'POST', '/profile', {
+    profilePhotoUrl: url.json.publicUrl,
+  });
+  assert.equal(save.status, 200, `avatar save: ${save.text}`);
+  return raceId;
+}
+
+test('reviewer write contract: signup → onboarding → race + avatar → reset again', async () => {
+  const w = world();
+  seedPushupsRegistry(w);
+
+  const r1 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
+  assert.equal(r1.status, 200, r1.text);
+  const u1 = r1.json.user;
+
+  await reviewerOnboardingWrites(w, u1.id);
+  const raceId = await reviewerWritesRaceAndAvatar(w, u1.id);
+  assert.equal(
+    w.scalar('SELECT COUNT(*) c FROM race_verifier_assignments WHERE race_id = ?', raceId),
+    1,
+    'ai_check race must mint a verifier assignment',
+  );
+
+  const me = await w.req(u1.id, 'GET', '/auth/me');
+  assert.equal(me.status, 200, me.text);
+  assert.equal(me.json.user.onboardingComplete, true);
+  assert.ok(me.json.user.profilePhotoUrl, 'avatar must persist on /me');
+
+  // The NEXT signup reset must survive the verifier-assignment race — the
+  // production FK crash this guards against.
+  const r2 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
+  assert.equal(r2.status, 200, `reset after ai_check race: ${r2.text}`);
+  assert.equal(r2.json.user.id, u1.id);
+  assert.equal(r2.json.user.onboardingComplete, false);
+  assert.equal(w.scalar('SELECT COUNT(*) c FROM races WHERE id = ?', raceId), 0);
+  assert.equal(
+    w.scalar('SELECT COUNT(*) c FROM race_verifier_assignments WHERE race_id = ?', raceId),
+    0,
+  );
+  w.fkClean();
+});
+
+test('repeated write replays: three signup→write→reset cycles all succeed', async () => {
+  const w = world();
+  seedPushupsRegistry(w);
+
+  let userId = null;
+  for (let i = 0; i < 3; i++) {
+    const r = await w.reviewer(REVIEWER_PASSWORD, 'signup');
+    assert.equal(r.status, 200, `signup #${i + 1}: ${r.text}`);
+    if (userId == null) userId = r.json.user.id;
+    assert.equal(r.json.user.id, userId, 'stable backend identity every run');
+    await reviewerOnboardingWrites(w, userId);
+    const raceId = await reviewerWritesRaceAndAvatar(w, userId);
+    assert.equal(w.scalar('SELECT COUNT(*) c FROM races WHERE id = ?', raceId), 1);
+  }
+  assert.equal(
+    w.scalar("SELECT COUNT(*) c FROM users WHERE primary_email = 'testing@getnuvo.net'"),
+    1,
+  );
+  w.fkClean();
+});
+
+test('signin after a completed run: no reset, writes still work', async () => {
+  const w = world();
+  seedPushupsRegistry(w);
+
+  const r1 = await w.reviewer(REVIEWER_PASSWORD, 'signup');
+  const u1 = r1.json.user;
+  await reviewerOnboardingWrites(w, u1.id);
+  await reviewerWritesRaceAndAvatar(w, u1.id);
+
+  const r2 = await w.reviewer(REVIEWER_PASSWORD, 'signin');
+  assert.equal(r2.status, 200, r2.text);
+  assert.equal(r2.json.user.onboardingComplete, true, 'signin preserves the completed run');
+
+  const race = await w.req(u1.id, 'POST', '/races', {
+    title: 'Sign-in race',
+    goalType: 'first_to_goal',
+    targetValue: 5,
+    unit: 'reps',
+    metric: 'reps',
+    proofRequirement: 'manual',
+  });
+  assert.equal(race.status, 201, `signin race create: ${race.text}`);
+  w.fkClean();
+});

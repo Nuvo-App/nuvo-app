@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart' show ImageSource;
+import 'package:image_picker/image_picker.dart' show ImageSource, XFile;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -42,7 +42,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // the local selection preview, the saved remote URL (read from the user
   // model), the in-flight upload, and the last picker/upload problem.
   Uint8List? _pendingImageBytes;
-  bool _uploadingAvatar = false;
+  XFile? _pendingImage;
+  bool _avatarUploadFailed = false;
   bool _avatarDenied = false;
   String? _avatarError;
 
@@ -178,7 +179,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 label: 'Choose from photos',
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
-                  _pickAndUpload(ImageSource.gallery);
+                  _pickPhoto(ImageSource.gallery);
                 },
               ),
               const SizedBox(height: 8),
@@ -187,7 +188,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 label: 'Take photo',
                 onTap: () {
                   Navigator.of(sheetCtx).pop();
-                  _pickAndUpload(ImageSource.camera);
+                  _pickPhoto(ImageSource.camera);
                 },
               ),
               if (hasPhoto) ...[
@@ -216,7 +217,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Future<void> _pickAndUpload(ImageSource source) async {
+  Future<void> _pickPhoto(ImageSource source) async {
     final result = await ref.read(photoPickerProvider)(source);
     if (!mounted) return;
     final xFile = result.file;
@@ -239,50 +240,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final bytes = await xFile.readAsBytes();
     if (!mounted) return;
     setState(() {
-      // Local preview lands immediately — the avatar shows the pick before
-      // the upload round-trips.
+      // Local preview only — the actual upload runs on Continue so the
+      // server-side terms gate is already satisfied when it fires.
+      _pendingImage = xFile;
       _pendingImageBytes = bytes;
-      _uploadingAvatar = true;
       _avatarDenied = false;
       _avatarError = null;
     });
-
-    try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .uploadProfilePhoto(xFile);
-    } catch (e) {
-      debugPrint('PROFILE_PHOTO_UPLOAD_FAILED: $e');
-      if (mounted) {
-        setState(() {
-          // Keep the local preview; the photo is retryable and optional.
-          _avatarError =
-              "Couldn't upload photo. Tap your photo to try again, or continue without it.";
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _uploadingAvatar = false);
-    }
   }
 
-  Future<void> _removePhoto() async {
+  void _removePhoto() {
+    // Nothing has been uploaded during onboarding — removal is local.
     setState(() {
-      _uploadingAvatar = true;
+      _pendingImage = null;
       _pendingImageBytes = null;
+      _avatarUploadFailed = false;
       _avatarError = null;
       _avatarDenied = false;
     });
-    try {
-      await ref.read(authControllerProvider.notifier).removeProfilePhoto();
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _avatarError = "Couldn't remove photo. Please try again.",
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _uploadingAvatar = false);
-    }
   }
 
   bool get _canContinue =>
@@ -314,6 +289,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       final controller = ref.read(authControllerProvider.notifier);
       await controller.acceptTerms();
       await controller.attestAge();
+      // Terms are now recorded server-side, so the avatar upload's terms
+      // gate passes. A failed upload keeps the local preview and never
+      // blocks Continue — the second press proceeds without it.
+      if (_pendingImage != null && !_avatarUploadFailed) {
+        try {
+          await controller.uploadProfilePhoto(_pendingImage!);
+        } catch (e) {
+          debugPrint('PROFILE_PHOTO_UPLOAD_FAILED: $e');
+          _avatarUploadFailed = true;
+          if (mounted) {
+            setState(() {
+              _avatarError =
+                  "Couldn't save your photo. Continue to keep going without it.";
+              _loading = false;
+            });
+          }
+          return;
+        }
+      }
       await controller.saveProfile(
         fullName: _nameController.text.trim(),
         username: _usernameController.text.trim().toLowerCase(),
@@ -431,21 +425,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                               width: 2,
                                             ),
                                           ),
-                                          child: _uploadingAvatar
-                                              ? const Padding(
-                                                  padding: EdgeInsets.all(3),
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        color:
-                                                            NuvoColors.white,
-                                                      ),
-                                                    )
-                                              : const Icon(
-                                                  Icons.camera_alt_rounded,
-                                                  color: NuvoColors.white,
-                                                  size: 12,
-                                                ),
+                                          child: const Icon(
+                                            Icons.camera_alt_rounded,
+                                            color: NuvoColors.white,
+                                            size: 12,
+                                          ),
                                         ),
                                       ],
                                     ),

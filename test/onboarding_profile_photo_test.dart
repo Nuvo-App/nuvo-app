@@ -35,6 +35,7 @@ class _Repo extends AuthRepository {
   int uploadUrlCalls = 0;
   int uploadByteCalls = 0;
   String? savedPhotoUrl;
+  final List<String> calls = [];
   bool removePhotoCalled = false;
   bool failUploadBytes = false;
   Completer<void>? uploadGate;
@@ -46,10 +47,10 @@ class _Repo extends AuthRepository {
   Future<bool> checkUsername(String username) async => true;
 
   @override
-  Future<void> acceptTerms() async {}
+  Future<void> acceptTerms() async => calls.add('terms');
 
   @override
-  Future<void> attestAge() async {}
+  Future<void> attestAge() async => calls.add('age');
 
   @override
   Future<void> saveProfile({
@@ -59,8 +60,9 @@ class _Repo extends AuthRepository {
     String? profilePhotoUrl,
     bool removePhoto = false,
   }) async {
+    calls.add('saveProfile');
     removePhotoCalled = removePhotoCalled || removePhoto;
-    savedPhotoUrl = profilePhotoUrl;
+    if (profilePhotoUrl != null) savedPhotoUrl = profilePhotoUrl;
     user = user.copyWith(
       fullName: fullName,
       username: username,
@@ -74,6 +76,7 @@ class _Repo extends AuthRepository {
     required String fileName,
     required String contentType,
   }) async {
+    calls.add('upload-url');
     uploadUrlCalls++;
     return (
       uploadUrl: 'https://storage.test/put',
@@ -88,6 +91,7 @@ class _Repo extends AuthRepository {
     Uint8List bytes,
     String contentType,
   ) async {
+    calls.add('upload-bytes');
     uploadByteCalls++;
     if (uploadGate != null) await uploadGate!.future;
     if (failUploadBytes) throw const ApiException(500, 'upload failed');
@@ -165,6 +169,25 @@ Future<void> _pickViaSheet(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Fills the required fields and taps Continue — the upload is deferred
+/// until after acceptTerms/attestAge land server-side.
+Future<void> _fillFormAndContinue(WidgetTester tester) async {
+  await tester.enterText(find.byType(TextField).at(0), 'Nuvo Review');
+  await tester.enterText(find.byType(TextField).at(1), 'nuvo_review');
+  // Wait out the username-availability debounce.
+  await tester.pump(const Duration(milliseconds: 800));
+  await tester.pump();
+  for (final box in find.byType(Checkbox).evaluate().toList()) {
+    await tester.ensureVisible(find.byWidget(box.widget));
+    await tester.pump();
+    await tester.tap(find.byWidget(box.widget));
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Continue'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   group('onboarding profile photo', () {
     testWidgets(
@@ -176,12 +199,23 @@ void main() {
           tester,
           repo: repo,
           picker: (_) async => PhotoPickResult.picked(_fakePhoto()),
+          withRouter: true,
         );
 
         await _pickViaSheet(tester);
 
-        // Local preview mounted immediately and the upload pipeline ran.
+        // Local preview mounts immediately; the upload does NOT run yet —
+        // the server requires terms first, so it waits for Continue.
         expect(find.byKey(const ValueKey('avatar-local')), findsOneWidget);
+        expect(
+          repo.uploadUrlCalls,
+          0,
+          reason: 'pre-terms upload-url 403s — the pick must not upload',
+        );
+
+        await _fillFormAndContinue(tester);
+
+        expect(find.text('motion-consent'), findsOneWidget);
         expect(repo.uploadUrlCalls, 1);
         expect(repo.uploadByteCalls, 1);
         expect(repo.savedPhotoUrl, 'https://cdn.test/avatar.jpg');
@@ -189,6 +223,11 @@ void main() {
           repo.user.profilePhotoUrl,
           'https://cdn.test/avatar.jpg',
           reason: 'getMe refresh must surface the saved avatar',
+        );
+        expect(
+          repo.calls.indexOf('terms'),
+          lessThan(repo.calls.indexOf('upload-url')),
+          reason: 'upload must run only after terms are recorded',
         );
         expect(tester.takeException(), isNull);
       },
@@ -244,14 +283,23 @@ void main() {
           tester,
           repo: repo,
           picker: (_) async => PhotoPickResult.picked(_fakePhoto()),
+          withRouter: true,
         );
 
         await _pickViaSheet(tester);
-
         expect(find.byKey(const ValueKey('avatar-local')), findsOneWidget);
-        expect(find.textContaining("Couldn't upload photo"), findsOneWidget);
-        // The camera badge (not a spinner) is back — retry is possible.
-        expect(find.byIcon(Icons.camera_alt_rounded), findsOneWidget);
+
+        await _fillFormAndContinue(tester);
+
+        // Upload attempted, failed recoverably — still on this screen.
+        expect(repo.uploadByteCalls, 1);
+        expect(find.textContaining("Couldn't save your photo"), findsOneWidget);
+        expect(find.text('motion-consent'), findsNothing);
+
+        // Second Continue proceeds without the photo — never a dead end.
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(find.text('motion-consent'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -268,9 +316,18 @@ void main() {
           withRouter: true,
         );
 
-        await tester.tap(find.byKey(const ValueKey('onboarding-avatar')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Choose from photos'));
+        await _pickViaSheet(tester);
+
+        // Kick off Continue — the deferred upload stalls on the gate.
+        await tester.enterText(find.byType(TextField).at(0), 'Nuvo Review');
+        await tester.enterText(find.byType(TextField).at(1), 'nuvo_review');
+        await tester.pump(const Duration(milliseconds: 800));
+        for (final box in find.byType(Checkbox).evaluate().toList()) {
+          await tester.ensureVisible(find.byWidget(box.widget));
+          await tester.tap(find.byWidget(box.widget));
+          await tester.pump();
+        }
+        await tester.tap(find.text('Continue'));
         await tester.pump();
         await tester.pump();
 
