@@ -1,0 +1,11 @@
+{
+  "comment": "Copy to bridge.local.json and fill in secrets. bridge.local.json is gitignored. If bridge_key is absent at startup, a random one is generated into bridge.local.json automatically.",
+  "host": "127.0.0.1",
+  "port": 8790,
+  "bridge_key": "REPLACE_WITH_RANDOM_SHARED_SECRET",
+  "repo_dir": "/Users/akshaysanjai/Documents/Scam Call v3/Gear Up Foundation/Websites designed for others/nuvo/nuvo",
+  "devin_api_key": "",
+  "devin_org_id": "",
+  "devin_api_base": "https://api.devin.ai",
+  "devin_bin": "/Applications/Devin.app/Contents/Resources/app/extensions/windsurf/devin/bin/devin"
+}

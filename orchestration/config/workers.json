@@ -1,0 +1,47 @@
+{
+  "comment": "Worker registry for nuvo-orchestrator. Each entry is a capacity slot the architect can address by worker_id, provider, or capabilities. Slots are not tied to named agents — add/remove freely. A slot counts as busy while a running job references it.",
+  "workers": [
+    {
+      "worker_id": "devin-cloud-1",
+      "provider": "devin_cloud",
+      "enabled": true,
+      "capabilities": ["flutter", "backend", "general", "pr"],
+      "role": "worker",
+      "max_concurrent": 1
+    },
+    {
+      "worker_id": "devin-cloud-2",
+      "provider": "devin_cloud",
+      "enabled": true,
+      "capabilities": ["flutter", "backend", "general", "pr"],
+      "role": "worker",
+      "max_concurrent": 1
+    },
+    {
+      "worker_id": "devin-cloud-3",
+      "provider": "devin_cloud",
+      "enabled": true,
+      "capabilities": ["flutter", "backend", "general", "pr"],
+      "role": "worker",
+      "max_concurrent": 1
+    },
+    {
+      "worker_id": "devin-local-1",
+      "provider": "local_cli",
+      "enabled": true,
+      "capabilities": ["flutter", "general", "repo-local"],
+      "role": "worker",
+      "max_concurrent": 1,
+      "note": "runs `devin -p` on this Mac; requires `devin auth login` once"
+    },
+    {
+      "worker_id": "null-test-1",
+      "provider": "null_worker",
+      "enabled": true,
+      "capabilities": ["selftest"],
+      "role": "test",
+      "max_concurrent": 99,
+      "note": "plumbing self-test only — never launches a real Devin session"
+    }
+  ]
+}
