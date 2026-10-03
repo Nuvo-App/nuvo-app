@@ -157,6 +157,15 @@ For all other changes, follow the task declaration format above.
 
 ---
 
+## Commit attribution
+
+Do NOT add any AI-tool attribution to commits or commit messages. No
+`Co-Authored-By:` trailers, no `Generated with <tool>` lines, no agent
+signatures or footers — for Claude Code, Codex, Devin, or any other agent.
+Commits must carry only the human author's identity.
+
+---
+
 ## Protection
 
 The tag `demo-working-before-product-skeleton` points to the last known working
