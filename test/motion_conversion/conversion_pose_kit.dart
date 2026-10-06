@@ -341,20 +341,27 @@ List<NuvoPoseFrame> jitterFrames(
 }
 
 /// A rep-cycle frame stream: [schedule] of (pose, holdFrames) repeated
-/// [reps] times, optionally surrounded by idle frames.
+/// [reps] times, optionally surrounded by idle frames. [idle] overrides
+/// the default standing pose so whole-stream transforms (a subject that
+/// stays at one camera distance / frame position for the whole session)
+/// can transform the idle blocks too — native baseline-seeded detectors
+/// are only meaningful when the baseline is seeded inside the same
+/// framing the reps run under.
 List<NuvoPoseFrame> repCycleFrames(
   List<(PoseMap, int)> oneRep, {
   int reps = 3,
   int idleBefore = 8,
   int idleAfter = 8,
   int msPerFrame = 50,
+  PoseMap? idle,
 }) {
+  final idlePose = idle ?? skeleton();
   final schedule = <(PoseMap, int)>[];
-  if (idleBefore > 0) schedule.add((skeleton(), idleBefore));
+  if (idleBefore > 0) schedule.add((idlePose, idleBefore));
   for (var r = 0; r < reps; r++) {
     schedule.addAll(oneRep);
   }
-  if (idleAfter > 0) schedule.add((skeleton(), idleAfter));
+  if (idleAfter > 0) schedule.add((idlePose, idleAfter));
   return framesOf(schedule, msPerFrame: msPerFrame);
 }
 
