@@ -1,0 +1,105 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "squats-remote-2026.10.0",
+  "activityId": "squats",
+  "engineType": "sequence_match_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "sequence_match_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTimeoutMs": 8000,
+  "lostPoseMs": 1500,
+  "phases": [
+    {
+      "id": "ready",
+      "predicates": [
+        {
+          "kind": "segment_ratio",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "gte",
+          "ratio": 0.71
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "gte",
+          "ratio": 0.71
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 6,
+      "next": "depth"
+    },
+    {
+      "id": "depth",
+      "predicates": [
+        {
+          "kind": "segment_ratio",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "lte",
+          "ratio": 0.5
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "lte",
+          "ratio": 0.5
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 6,
+      "next": "recovered"
+    },
+    {
+      "id": "recovered",
+      "predicates": [
+        {
+          "kind": "segment_ratio",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "gte",
+          "ratio": 0.71
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "gte",
+          "ratio": 0.71
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 8,
+      "next": "complete"
+    }
+  ]
+}

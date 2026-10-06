@@ -1,0 +1,101 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "side_lunges-remote-2026.10.0",
+  "activityId": "side_lunges",
+  "engineType": "sequence_match_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "sequence_match_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTimeoutMs": 8000,
+  "lostPoseMs": 1500,
+  "phases": [
+    {
+      "id": "straight",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "c": "leftAnkle",
+          "operator": "gte",
+          "degrees": 154
+        },
+        {
+          "kind": "angle",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "c": "rightAnkle",
+          "operator": "gte",
+          "degrees": 154
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 6,
+      "next": "separated"
+    },
+    {
+      "id": "separated",
+      "predicates": [
+        {
+          "kind": "segment_ratio",
+          "a": "leftKnee",
+          "b": "rightKnee",
+          "refA": "leftShoulder",
+          "refB": "rightShoulder",
+          "operator": "gte",
+          "ratio": 1.45
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftKnee",
+          "b": "rightKnee",
+          "refA": "leftHip",
+          "refB": "rightHip",
+          "operator": "gte",
+          "ratio": 1.6
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 8,
+      "next": "straight_again"
+    },
+    {
+      "id": "straight_again",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "c": "leftAnkle",
+          "operator": "gte",
+          "degrees": 154
+        },
+        {
+          "kind": "angle",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "c": "rightAnkle",
+          "operator": "gte",
+          "degrees": 154
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 8,
+      "next": "complete"
+    }
+  ]
+}

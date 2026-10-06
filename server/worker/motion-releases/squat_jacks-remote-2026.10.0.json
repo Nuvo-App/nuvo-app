@@ -1,0 +1,191 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "squat_jacks-remote-2026.10.0",
+  "activityId": "squat_jacks",
+  "engineType": "sequence_match_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "sequence_match_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle",
+    "leftWrist",
+    "rightWrist"
+  ],
+  "stableFrames": 3,
+  "repTimeoutMs": 8000,
+  "lostPoseMs": 1500,
+  "phases": [
+    {
+      "id": "closed",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftWrist",
+          "b": "leftShoulder",
+          "c": "leftHip",
+          "operator": "lte",
+          "degrees": 60
+        },
+        {
+          "kind": "angle",
+          "a": "rightWrist",
+          "b": "rightShoulder",
+          "c": "rightHip",
+          "operator": "lte",
+          "degrees": 60
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftAnkle",
+          "b": "rightAnkle",
+          "refA": "leftShoulder",
+          "refB": "rightShoulder",
+          "operator": "lte",
+          "ratio": 1.18
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "gte",
+          "ratio": 0.71
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "gte",
+          "ratio": 0.71
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 6,
+      "next": "open"
+    },
+    {
+      "id": "open",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftWrist",
+          "b": "leftShoulder",
+          "c": "leftHip",
+          "operator": "gte",
+          "degrees": 120
+        },
+        {
+          "kind": "angle",
+          "a": "rightWrist",
+          "b": "rightShoulder",
+          "c": "rightHip",
+          "operator": "gte",
+          "degrees": 120
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftAnkle",
+          "b": "rightAnkle",
+          "refA": "leftShoulder",
+          "refB": "rightShoulder",
+          "operator": "gte",
+          "ratio": 1.38
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftAnkle",
+          "b": "rightAnkle",
+          "refA": "leftHip",
+          "refB": "rightHip",
+          "operator": "gte",
+          "ratio": 1.38
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "lte",
+          "ratio": 0.68
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "lte",
+          "ratio": 0.68
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 6,
+      "next": "closed_again"
+    },
+    {
+      "id": "closed_again",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftWrist",
+          "b": "leftShoulder",
+          "c": "leftHip",
+          "operator": "lte",
+          "degrees": 60
+        },
+        {
+          "kind": "angle",
+          "a": "rightWrist",
+          "b": "rightShoulder",
+          "c": "rightHip",
+          "operator": "lte",
+          "degrees": 60
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftAnkle",
+          "b": "rightAnkle",
+          "refA": "leftShoulder",
+          "refB": "rightShoulder",
+          "operator": "lte",
+          "ratio": 1.18
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftHip",
+          "b": "leftKnee",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "gte",
+          "ratio": 0.71
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightHip",
+          "b": "rightKnee",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "gte",
+          "ratio": 0.71
+        }
+      ],
+      "minDwellFrames": 3,
+      "breakToleranceFrames": 8,
+      "next": "complete"
+    }
+  ]
+}

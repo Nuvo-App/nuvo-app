@@ -1,0 +1,117 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "push_ups-remote-2026.10.0",
+  "activityId": "push_ups",
+  "engineType": "sequence_match_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "sequence_match_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftElbow",
+    "rightElbow",
+    "leftWrist",
+    "rightWrist",
+    "leftHip",
+    "rightHip"
+  ],
+  "stableFrames": 2,
+  "repTimeoutMs": 8000,
+  "lostPoseMs": 1500,
+  "phases": [
+    {
+      "id": "top",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftShoulder",
+          "b": "leftElbow",
+          "c": "leftWrist",
+          "operator": "gte",
+          "degrees": 150
+        },
+        {
+          "kind": "angle",
+          "a": "rightShoulder",
+          "b": "rightElbow",
+          "c": "rightWrist",
+          "operator": "gte",
+          "degrees": 150
+        }
+      ],
+      "minDwellFrames": 2,
+      "breakToleranceFrames": 8,
+      "next": "bottom"
+    },
+    {
+      "id": "bottom",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftShoulder",
+          "b": "leftElbow",
+          "c": "leftWrist",
+          "operator": "lte",
+          "degrees": 120
+        },
+        {
+          "kind": "angle",
+          "a": "rightShoulder",
+          "b": "rightElbow",
+          "c": "rightWrist",
+          "operator": "lte",
+          "degrees": 120
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "leftShoulder",
+          "b": "leftWrist",
+          "refA": "leftShoulder",
+          "refB": "leftHip",
+          "operator": "lte",
+          "ratio": 0.55
+        },
+        {
+          "kind": "segment_ratio",
+          "a": "rightShoulder",
+          "b": "rightWrist",
+          "refA": "rightShoulder",
+          "refB": "rightHip",
+          "operator": "lte",
+          "ratio": 0.55
+        }
+      ],
+      "minDwellFrames": 2,
+      "breakToleranceFrames": 8,
+      "next": "top_again"
+    },
+    {
+      "id": "top_again",
+      "predicates": [
+        {
+          "kind": "angle",
+          "a": "leftShoulder",
+          "b": "leftElbow",
+          "c": "leftWrist",
+          "operator": "gte",
+          "degrees": 150
+        },
+        {
+          "kind": "angle",
+          "a": "rightShoulder",
+          "b": "rightElbow",
+          "c": "rightWrist",
+          "operator": "gte",
+          "degrees": 150
+        }
+      ],
+      "minDwellFrames": 2,
+      "breakToleranceFrames": 8,
+      "next": "complete"
+    }
+  ]
+}
