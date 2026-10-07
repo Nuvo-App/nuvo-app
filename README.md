@@ -1,5 +1,7 @@
 # nuvo
 
+<!-- Nuvo turns real-life goals into leaderboard races with your crew. -->
+
 A new Flutter project.
 
 ## Getting Started
