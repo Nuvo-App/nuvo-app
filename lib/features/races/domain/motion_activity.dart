@@ -374,6 +374,38 @@ class MotionActivityDefinition {
   final String? engineType;
   final List<String> requiredCapabilities;
 
+  /// This definition with the control plane's release identity attached.
+  /// Everything the user sees or the app routes on (type, title, metric, hold
+  /// vs reps, targets, instructions, preview) stays the compiled motion's — a
+  /// published row may pin which release runs, never redefine the motion.
+  MotionActivityDefinition withRelease(MotionActivityDefinition published) =>
+      MotionActivityDefinition(
+        type: type,
+        title: title,
+        metric: metric,
+        suggestedTargets: suggestedTargets,
+        supportedFormats: supportedFormats,
+        aliases: aliases,
+        proofLabel: proofLabel,
+        cameraInstruction: cameraInstruction,
+        instructions: instructions,
+        icon: icon,
+        framingLabel: framingLabel,
+        preferredCameraView: preferredCameraView,
+        category: category,
+        isHold: isHold,
+        featured: featured,
+        sortPriority: sortPriority,
+        measurementType: measurementType,
+        goalPromptOverride: goalPromptOverride,
+        displayUnitOverride: displayUnitOverride,
+        backendId: backendId,
+        releaseId: published.releaseId,
+        releaseChecksum: published.releaseChecksum,
+        engineType: published.engineType,
+        requiredCapabilities: published.requiredCapabilities,
+      );
+
   String get activityId => backendId ?? type.backendValue;
   bool get isRemote => backendId != null;
 
@@ -399,5 +431,3 @@ class MotionActivityDefinition {
   String counterLabel(int current, int target) =>
       formatMotionProgress(resolvedMeasurementType, current, target, unit);
 }
-
-

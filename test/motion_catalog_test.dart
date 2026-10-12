@@ -3,6 +3,7 @@ import 'package:nuvo/features/races/data/motion_catalog.dart';
 import 'package:nuvo/features/races/data/motion_catalog_cache.dart';
 import 'package:nuvo/features/races/data/motion_catalog_repository.dart';
 import 'package:nuvo/features/races/data/race_api.dart';
+import 'package:nuvo/features/races/domain/motion_activity.dart';
 
 class _MemoryCache extends MotionCatalogCache {
   String? value;
@@ -64,16 +65,20 @@ void main() {
     },
   );
 
-  test('database release metadata overrides the bundled identity', () {
-    final snapshot = MotionCatalogSnapshot.fromJson(_catalog(id: 'push_ups'));
-    final definitions = snapshot.toDefinitions({'pose_landmarks_v1'});
-    final pushUps = definitions.singleWhere(
-      (activity) => activity.activityId == 'push_ups',
-    );
-    expect(pushUps.isRemote, isTrue);
-    expect(pushUps.releaseId, 'side-reaches-1');
-    expect(pushUps.title, 'Side Reaches');
-  });
+  test(
+    'a published row pins the release but never redefines a compiled motion',
+    () {
+      final snapshot = MotionCatalogSnapshot.fromJson(_catalog(id: 'push_ups'));
+      final definitions = snapshot.toDefinitions({'pose_landmarks_v1'});
+      final pushUps = definitions.singleWhere(
+        (activity) => activity.activityId == 'push_ups',
+      );
+      expect(pushUps.isRemote, isFalse);
+      expect(pushUps.releaseId, 'side-reaches-1');
+      expect(pushUps.title, 'Pushups');
+      expect(pushUps.type, MotionActivityType.pushUps);
+    },
+  );
 
   test('unknown engine is hidden instead of guessed', () {
     final snapshot = MotionCatalogSnapshot.fromJson(

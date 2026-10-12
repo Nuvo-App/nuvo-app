@@ -75,8 +75,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   // The server-owned activity identity — for remote motions this is the raw
   // stable ID from the release spec (e.g. an id this build has no enum for).
   // Proof payloads and display must use this, never an enum fallback.
-  String _activityId = AiMotionActivity.pushUps.backendValue;
-  String _activityLabel = AiMotionActivity.pushUps.label;
+  // Blank until the race resolves: these used to default to pushups, so every
+  // other motion flashed "Pushups" for the moments the session handshake and
+  // package check took before the real activity arrived.
+  String _activityId = '';
+  String _activityLabel = '';
   String _metric = 'reps';
   int _raceTotalBefore = 0;
   int? _raceTargetValue;
@@ -270,6 +273,15 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
           _message = eligibility.unsupportedMessage;
         });
         return;
+      }
+      // Name the motion as soon as the race resolves — before the slower
+      // session handshake and package check — so the title is never wrong.
+      final early = eligibility.movementDefinition;
+      if (early != null && !race.isCustomVerifierRace) {
+        setState(() {
+          _activityId = early.activityId;
+          _activityLabel = early.title;
+        });
       }
       final raceTarget = race.targetValue;
       final alreadyDone = myPart?.progressValue ?? 0;

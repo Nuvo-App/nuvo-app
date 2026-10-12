@@ -323,7 +323,10 @@ class MotionCatalogSnapshot {
     final isLive = catalogVersion != 'bundled';
     for (final bundled in motionActivityDefinitions) {
       if (isLive && !publishedIds.contains(bundled.activityId)) continue;
-      definitions.add(remoteById.remove(bundled.activityId) ?? bundled);
+      final published = remoteById.remove(bundled.activityId);
+      definitions.add(
+        published == null ? bundled : bundled.withRelease(published),
+      );
     }
     // Database-published activities that were not present in the app build
     // are appended only after the known identities have been overlaid.
