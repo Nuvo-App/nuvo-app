@@ -5,6 +5,8 @@ const ALLOWED_ENGINES = new Set([
   'hold_v1',
   'object_composition_v1',
   'sequence_match_v1',
+  'rep_tree_v1',
+  'native_tuned_v1',
 ]);
 
 const ALLOWED_LANDMARKS = new Set([
@@ -21,7 +23,7 @@ const ALLOWED_SPEC_KEYS = new Set([
   'requiredObjects', 'composition',
   'model',
   'activity', 'package',
-  'phases', 'repTimeoutMs', 'lostPoseMs',
+  'phases', 'repTimeoutMs', 'lostPoseMs', 'repTree', 'params',
 ]);
 
 export class MotionSpecValidationError extends Error {
@@ -192,7 +194,14 @@ const SEQUENCE_PREDICATE_KEYS: Record<string, Set<string>> = {
   angle: new Set(['kind', 'a', 'b', 'c', 'operator', 'degrees', 'minLikelihood']),
   axis_delta: new Set(['kind', 'a', 'b', 'axis', 'operator', 'delta', 'minLikelihood']),
   segment_ratio: new Set(['kind', 'a', 'b', 'refA', 'refB', 'operator', 'ratio', 'minLikelihood']),
+  axis_ratio: new Set(['kind', 'a', 'b', 'axis', 'refA', 'refB', 'refAxis', 'operator', 'ratio', 'minLikelihood']),
 };
+
+// Virtual landmarks (left/right midpoints) a predicate may name. They are
+// derived from the real pair, which requiredLandmarks must still list.
+const VIRTUAL_LANDMARKS = new Set([
+  'midShoulder', 'midElbow', 'midWrist', 'midHip', 'midKnee', 'midAnkle',
+]);
 
 function sequenceOperator(value: unknown, field: string): void {
   if (!['gt', 'gte', 'lt', 'lte'].includes(String(value))) {
@@ -209,7 +218,7 @@ function sequenceLikelihood(value: unknown, field: string): void {
 
 function sequenceLandmark(entry: Record<string, unknown>, field: string, prefix: string): void {
   const name = stringValue(entry[field], `${prefix}_${field}`);
-  if (!ALLOWED_LANDMARKS.has(name)) {
+  if (!ALLOWED_LANDMARKS.has(name) && !VIRTUAL_LANDMARKS.has(name)) {
     throw new MotionSpecValidationError(`${prefix}_${field}_landmark_invalid`);
   }
 }
@@ -252,6 +261,17 @@ function sequencePredicate(entry: unknown, field: string): void {
       sequenceLandmark(item, 'refB', field);
       boundedNumber(item.ratio, `${field}_ratio`, 0, 8);
       break;
+    case 'axis_ratio':
+      sequenceLandmark(item, 'a', field);
+      sequenceLandmark(item, 'b', field);
+      sequenceLandmark(item, 'refA', field);
+      sequenceLandmark(item, 'refB', field);
+      if (item.axis !== 'x' && item.axis !== 'y') throw new MotionSpecValidationError(`${field}_axis_invalid`);
+      if (item.refAxis !== undefined && item.refAxis !== 'x' && item.refAxis !== 'y') {
+        throw new MotionSpecValidationError(`${field}_ref_axis_invalid`);
+      }
+      boundedNumber(item.ratio, `${field}_ratio`, -4, 4);
+      break;
   }
 }
 
@@ -293,6 +313,117 @@ function sequencePhases(value: unknown, stableFrames: number): void {
     if ((value[i] as Record<string, unknown>).next !== expected) {
       throw new MotionSpecValidationError('sequence_chain_invalid');
     }
+  }
+}
+
+// rep_tree_v1 — START/ACTIVE condition trees over a closed set of named body
+// signals. KEEP IN SYNC with lib/features/races/ai/rep_tree.dart; the shared
+// fixture test/fixtures/rep_tree_signals.json is asserted on both sides.
+const SH = ['leftShoulder', 'rightShoulder'];
+const HP = ['leftHip', 'rightHip'];
+const KN = ['leftKnee', 'rightKnee'];
+const AN = ['leftAnkle', 'rightAnkle'];
+const WR = ['leftWrist', 'rightWrist'];
+export const REP_TREE_SIGNALS: Record<string, { landmarks: string[]; min: number; max: number }> = {
+  hipToKneeRatio: { landmarks: [...SH, ...HP, ...KN], min: -2, max: 3 },
+  ankleWidthToBodyWidth: { landmarks: [...SH, ...HP, ...AN], min: 0, max: 12 },
+  kneeSeparationToHipWidth: { landmarks: [...KN, ...HP], min: 0, max: 12 },
+  leftKneeAngle: { landmarks: ['leftHip', 'leftKnee', 'leftAnkle'], min: 0, max: 180 },
+  rightKneeAngle: { landmarks: ['rightHip', 'rightKnee', 'rightAnkle'], min: 0, max: 180 },
+  leftElbowAngle: { landmarks: ['leftShoulder', 'leftElbow', 'leftWrist'], min: 0, max: 180 },
+  rightElbowAngle: { landmarks: ['rightShoulder', 'rightElbow', 'rightWrist'], min: 0, max: 180 },
+  wristsAboveShoulderMargin: { landmarks: [...WR, ...SH], min: -1, max: 1 },
+  wristsBelowShoulderMargin: { landmarks: [...WR, ...SH], min: -1, max: 1 },
+  wristsBelowHipMargin: { landmarks: [...WR, ...HP], min: -1, max: 1 },
+  wristsAboveShoulderTorso: { landmarks: [...WR, ...SH, ...HP], min: -4, max: 4 },
+  wristsBelowShoulderTorso: { landmarks: [...WR, ...SH, ...HP], min: -4, max: 4 },
+  leftWristBelowHipTorso: { landmarks: ['leftWrist', ...SH, ...HP], min: -4, max: 4 },
+};
+export const REP_TREE_FLAGS: Record<string, { landmarks: string[] }> = {
+  wristsAboveShoulders: { landmarks: [...WR, ...SH] },
+  wristsNearBody: { landmarks: [...WR, ...SH, ...HP] },
+};
+
+// native_tuned_v1 — threshold overrides for a compiled validator. KEEP IN SYNC
+// with kNativeTunables in lib/features/races/ai/motion_validators.dart; the
+// shared fixture test/fixtures/native_tunables.json is asserted on both sides.
+// Each entry is [compiled default, min, max].
+export const NATIVE_TUNABLES: Record<string, Record<string, [number, number, number]>> = {
+  push_ups: { topElbowAngle: [150, 100, 180], bottomElbowAngle: [125, 60, 170], shoulderDropRatio: [0.1, 0.02, 0.4], maxSymmetryError: [90, 20, 180] },
+  high_knees: { raiseLift: [-0.35, -1, 0.5], lowerLift: [-0.72, -1.5, 0] },
+  plank_hold: { minKneeAngle: [148, 100, 180], maxTorsoVerticalness: [0.7, 0.2, 1], maxHipLineError: [0.16, 0.03, 0.5], maxKneeLineError: [0.18, 0.03, 0.5] },
+  mountain_climbers: { plankVerticalnessMax: [1.05, 0.3, 3], driveGap: [0.26, 0.05, 1], handShoulderVerticalGapMax: [0.55, 0.1, 2], proximityGap: [0.24, 0.05, 1] },
+  lateral_steps: { stepFraction: [0.55, 0.1, 3], neutralFraction: [0.2, 0.02, 1] },
+  jump_squats: { standingRatio: [0.6, 0.3, 1.2], squatRatio: [0.58, 0.2, 0.9], flightThresholdRatio: [0.18, 0.03, 0.6], groundedToleranceRatio: [0.1, 0.02, 0.4], minFlightThreshold: [0.025, 0.005, 0.1], jitterTolerance: [0.03, 0.005, 0.1] },
+  lunge_jumps: { lungeKneeAngle: [120, 60, 170], trailingKneeAngle: [160, 100, 180], standingRatio: [0.86, 0.3, 1.5], flightThresholdRatio: [0.18, 0.03, 0.6], groundedToleranceRatio: [0.1, 0.02, 0.4], minFlightThreshold: [0.025, 0.005, 0.1], jitterTolerance: [0.03, 0.005, 0.1] },
+  burpees: { standingRatio: [0.72, 0.3, 1.2], downRatio: [0.5, 0.1, 0.9], handsUpMargin: [0.15, -1, 1], handsDownMargin: [0.05, -1, 1] },
+  running_in_place: { liftFraction: [0.18, 0.02, 1], horizontalCentreAlpha: [0.04, 0.005, 0.5], verticalTiltAlpha: [0.01, 0.001, 0.5], stableFrames: [2, 1, 6] },
+  treadmill_running: { liftFraction: [0.18, 0.02, 1], horizontalCentreAlpha: [0.04, 0.005, 0.5], verticalTiltAlpha: [0.01, 0.001, 0.5], stableFrames: [2, 1, 6] },
+  walking_in_place: { liftFraction: [0.12, 0.02, 1], horizontalCentreAlpha: [0.04, 0.005, 0.5], verticalTiltAlpha: [0.01, 0.001, 0.5], stableFrames: [2, 1, 6] },
+  marching_in_place: { liftFraction: [0.3, 0.02, 1], horizontalCentreAlpha: [0.04, 0.005, 0.5], verticalTiltAlpha: [0.01, 0.001, 0.5], stableFrames: [2, 1, 6] },
+  step_ups: { liftFraction: [0.3, 0.02, 1], horizontalCentreAlpha: [0.04, 0.005, 0.5], verticalTiltAlpha: [0.01, 0.001, 0.5], stableFrames: [2, 1, 6] },
+  butt_kicks: { kneeUpFraction: [0.55, 0.1, 1.5], ankleGapFraction: [0.2, 0.03, 1], stableFrames: [2, 1, 6] },
+  calf_raises: { riseFraction: [0.07, 0.01, 0.5], lowerFraction: [0.03, 0.005, 0.4] },
+};
+
+function nativeParams(value: unknown, activityId: string): void {
+  const allowed = NATIVE_TUNABLES[activityId];
+  if (!allowed) throw new MotionSpecValidationError('native_tuned_activity_invalid');
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MotionSpecValidationError('native_params_invalid');
+  }
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const bounds = allowed[key];
+    if (!bounds) throw new MotionSpecValidationError('native_param_unknown');
+    boundedNumber(entry, 'native_param', bounds[1], bounds[2]);
+  }
+}
+
+function repTree(value: unknown, requiredLandmarks: string[]): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new MotionSpecValidationError('rep_tree_invalid');
+  }
+  const tree = value as Record<string, unknown>;
+  if (Object.keys(tree).some((key) => key !== 'start' && key !== 'active')) {
+    throw new MotionSpecValidationError('rep_tree_unknown_key');
+  }
+  let nodes = 0;
+  const used = new Set<string>();
+  const walk = (node: unknown, depth: number): void => {
+    if (++nodes > 24 || depth > 4 || !node || typeof node !== 'object' || Array.isArray(node)) {
+      throw new MotionSpecValidationError('rep_tree_condition_invalid');
+    }
+    const item = node as Record<string, unknown>;
+    const keys = Object.keys(item);
+    if (keys.length === 1 && (keys[0] === 'all' || keys[0] === 'any')) {
+      const list = item[keys[0]];
+      if (!Array.isArray(list) || list.length < 1 || list.length > 8) {
+        throw new MotionSpecValidationError('rep_tree_group_invalid');
+      }
+      list.forEach((child) => walk(child, depth + 1));
+      return;
+    }
+    if (keys.length === 1 && keys[0] === 'flag') {
+      const flag = REP_TREE_FLAGS[String(item.flag)];
+      if (!flag) throw new MotionSpecValidationError('rep_tree_flag_invalid');
+      flag.landmarks.forEach((l) => used.add(l));
+      return;
+    }
+    const op = keys.includes('gt') ? 'gt' : keys.includes('lt') ? 'lt' : null;
+    if (keys.length === 2 && keys.includes('signal') && op) {
+      const signal = REP_TREE_SIGNALS[String(item.signal)];
+      if (!signal) throw new MotionSpecValidationError('rep_tree_signal_invalid');
+      boundedNumber(item[op], 'rep_tree_threshold', signal.min, signal.max);
+      signal.landmarks.forEach((l) => used.add(l));
+      return;
+    }
+    throw new MotionSpecValidationError('rep_tree_condition_invalid');
+  };
+  walk(tree.start, 1);
+  walk(tree.active, 1);
+  const have = new Set(requiredLandmarks);
+  if ([...used].some((landmark) => !have.has(landmark))) {
+    throw new MotionSpecValidationError('rep_tree_landmarks_missing');
   }
 }
 
@@ -424,6 +555,11 @@ export function validateMotionVerifierSpec(
     return value;
   }
 
+  if ((engineType === 'native_tuned_v1') !== (value.params !== undefined)) {
+    throw new MotionSpecValidationError('native_params_field_mismatch');
+  }
+  if (engineType === 'native_tuned_v1') nativeParams(value.params, activityId);
+
   const landmarks = strings(value.requiredLandmarks, 'required_landmarks', 24);
   if (landmarks.some((landmark) => !ALLOWED_LANDMARKS.has(landmark))) {
     throw new MotionSpecValidationError('required_landmark_invalid');
@@ -450,6 +586,16 @@ export function validateMotionVerifierSpec(
   }
   // Sequence fields are engine-scoped: carrying them under another engine
   // is an authoring bug and fails closed, never silently ignored.
+  const isRepTree = engineType === 'rep_tree_v1';
+  if (isRepTree !== (value.repTree !== undefined)) {
+    throw new MotionSpecValidationError('rep_tree_field_mismatch');
+  }
+  if (isRepTree) {
+    if (value.measurementType !== undefined && value.measurementType !== 'repetitions') {
+      throw new MotionSpecValidationError('rep_tree_measurement_invalid');
+    }
+    repTree(value.repTree, landmarks);
+  }
   const isSequence = engineType === 'sequence_match_v1';
   if (!isSequence &&
       (value.phases !== undefined || value.repTimeoutMs !== undefined || value.lostPoseMs !== undefined)) {

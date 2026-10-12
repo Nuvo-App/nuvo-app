@@ -24,7 +24,8 @@ class MotionSessionUploadQueue {
   final Future<void> Function({
     required Map<String, dynamic> metadata,
     required Uint8List gzipBytes,
-  }) upload;
+  })
+  upload;
 
   /// Test seam — when set, staging uses this directory instead of
   /// `getApplicationDocumentsDirectory()`.
@@ -91,8 +92,10 @@ class MotionSessionUploadQueue {
   }
 
   Future<void> _tryOne(File metaFile) async {
-    final sessionId =
-        metaFile.uri.pathSegments.last.replaceAll('.meta.json', '');
+    final sessionId = metaFile.uri.pathSegments.last.replaceAll(
+      '.meta.json',
+      '',
+    );
     final blobFile = File('${metaFile.parent.path}/$sessionId.json.gz');
 
     Map<String, dynamic> meta;

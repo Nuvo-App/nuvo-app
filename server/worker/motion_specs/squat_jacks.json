@@ -1,0 +1,57 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "squat_jacks-tree-2026.10.0",
+  "activityId": "squat_jacks",
+  "engineType": "rep_tree_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "rep_tree_v1"
+  ],
+  "requiredLandmarks": [
+    "leftWrist",
+    "rightWrist",
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTree": {
+    "start": {
+      "all": [
+        {
+          "flag": "wristsNearBody"
+        },
+        {
+          "signal": "ankleWidthToBodyWidth",
+          "lt": 1.18
+        },
+        {
+          "signal": "hipToKneeRatio",
+          "gt": 0.72
+        }
+      ]
+    },
+    "active": {
+      "all": [
+        {
+          "flag": "wristsAboveShoulders"
+        },
+        {
+          "signal": "ankleWidthToBodyWidth",
+          "gt": 1.38
+        },
+        {
+          "signal": "hipToKneeRatio",
+          "lt": 0.6
+        }
+      ]
+    }
+  }
+}

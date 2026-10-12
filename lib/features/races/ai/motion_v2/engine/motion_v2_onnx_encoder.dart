@@ -89,7 +89,7 @@ class MotionV2OnnxEncoder implements MotionEncoderV2 {
   ///   3. bundled launch asset
   /// Every failure degrades silently to the next tier.
   static Future<({Uint8List bytes, String version, String? sha, String source})>
-      _resolveBytes() async {
+  _resolveBytes() async {
     final source = _modelSource;
     if (source == null) {
       // Offline / unauthenticated default: prefer last-known-good, else bundle.
@@ -121,7 +121,10 @@ class MotionV2OnnxEncoder implements MotionEncoderV2 {
       // Exact-release cache hit: same version + checksum, already verified at
       // install time.
       final cached = await _store.read(
-        kMotionV2EncoderFamily, release.modelVersion, release.artifactSha256);
+        kMotionV2EncoderFamily,
+        release.modelVersion,
+        release.artifactSha256,
+      );
       if (cached != null) {
         return (
           bytes: cached.bytes,
@@ -184,15 +187,13 @@ class MotionV2OnnxEncoder implements MotionEncoderV2 {
       OrtEnv.instance.init();
       final opts = OrtSessionOptions()
         ..setIntraOpNumThreads(2)
-        ..setSessionGraphOptimizationLevel(
-            GraphOptimizationLevel.ortEnableAll);
+        ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
       session = OrtSession.fromBuffer(resolved.bytes, opts);
     } catch (_) {
       // A byte-verified artifact can still fail ORT load (corrupt disk read,
       // truncated write). Re-load the bundled asset — Motion must never
       // come down because a model file is unreadable.
-      final bundled =
-          (await rootBundle.load(assetPath)).buffer.asUint8List();
+      final bundled = (await rootBundle.load(assetPath)).buffer.asUint8List();
       session = OrtSession.fromBuffer(bundled, OrtSessionOptions());
       resolved = (
         bytes: bundled,

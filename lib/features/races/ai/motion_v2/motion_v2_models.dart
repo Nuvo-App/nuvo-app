@@ -90,28 +90,29 @@ class MotionAttemptResult {
   static const empty = MotionAttemptResult();
 
   Map<String, dynamic> toJson() => {
-        'outcome': outcome.name,
-        'failureCategory': failureCategory.name,
-        'poseReadiness': poseReadiness,
-        'maxProgress': double.parse(maxProgress.toStringAsFixed(3)),
-        if (prototypeDistance != null) 'prototypeDistance': prototypeDistance,
-        if (prototypeThreshold != null) 'prototypeThreshold': prototypeThreshold,
-        if (trajectoryDistance != null) 'trajectoryDistance': trajectoryDistance,
-        if (trajectoryThreshold != null)
-          'trajectoryThreshold': trajectoryThreshold,
-        'durationMs': durationMs,
-        'expectedDurationMs': [expectedDurationMinMs, expectedDurationMaxMs],
-        'missingRegions': missingRegions,
-        'regionErrors': regionErrors
-            .map((k, v) => MapEntry(k, double.parse(v.toStringAsFixed(3)))),
-        if (primaryMismatchRegion != null)
-          'primaryMismatchRegion': primaryMismatchRegion,
-        'cameraDistanceChange':
-            double.parse(cameraDistanceChange.toStringAsFixed(4)),
-        'rootTranslation': double.parse(rootTranslation.toStringAsFixed(4)),
-        'encoderLatencyMs': double.parse(encoderLatencyMs.toStringAsFixed(1)),
-        'userFeedback': userFeedback,
-      };
+    'outcome': outcome.name,
+    'failureCategory': failureCategory.name,
+    'poseReadiness': poseReadiness,
+    'maxProgress': double.parse(maxProgress.toStringAsFixed(3)),
+    if (prototypeDistance != null) 'prototypeDistance': prototypeDistance,
+    if (prototypeThreshold != null) 'prototypeThreshold': prototypeThreshold,
+    if (trajectoryDistance != null) 'trajectoryDistance': trajectoryDistance,
+    if (trajectoryThreshold != null) 'trajectoryThreshold': trajectoryThreshold,
+    'durationMs': durationMs,
+    'expectedDurationMs': [expectedDurationMinMs, expectedDurationMaxMs],
+    'missingRegions': missingRegions,
+    'regionErrors': regionErrors.map(
+      (k, v) => MapEntry(k, double.parse(v.toStringAsFixed(3))),
+    ),
+    if (primaryMismatchRegion != null)
+      'primaryMismatchRegion': primaryMismatchRegion,
+    'cameraDistanceChange': double.parse(
+      cameraDistanceChange.toStringAsFixed(4),
+    ),
+    'rootTranslation': double.parse(rootTranslation.toStringAsFixed(4)),
+    'encoderLatencyMs': double.parse(encoderLatencyMs.toStringAsFixed(1)),
+    'userFeedback': userFeedback,
+  };
 }
 
 MotionV2RuntimeState _stateFromRaw(String? raw) => switch (raw) {
@@ -137,10 +138,13 @@ class TaughtMotionV2Spec {
   int get version => (json['version'] as num?)?.toInt() ?? 1;
   String get encoder => json['encoder'] as String? ?? 'unknown';
 
-  factory TaughtMotionV2Spec.fromJson(Map<String, dynamic> j) => TaughtMotionV2Spec(
-    json: j,
-    movementName: (j['name'] ?? j['metadata']?['movementName'] ?? 'Custom movement') as String,
-  );
+  factory TaughtMotionV2Spec.fromJson(Map<String, dynamic> j) =>
+      TaughtMotionV2Spec(
+        json: j,
+        movementName:
+            (j['name'] ?? j['metadata']?['movementName'] ?? 'Custom movement')
+                as String,
+      );
 
   Map<String, dynamic> toJson() => json;
 }
@@ -207,29 +211,40 @@ class MotionV2RuntimeResult {
   final List<Map<String, dynamic>> perReference;
 
   static const empty = MotionV2RuntimeResult(
-    matched: false, newRep: false, count: 0, confidence: 0, motionProgress: 0,
-    state: MotionV2RuntimeState.warmingUp, inferenceLatency: Duration.zero,
+    matched: false,
+    newRep: false,
+    count: 0,
+    confidence: 0,
+    motionProgress: 0,
+    state: MotionV2RuntimeState.warmingUp,
+    inferenceLatency: Duration.zero,
   );
 
-  factory MotionV2RuntimeResult.fromJson(Map<String, dynamic> j) => MotionV2RuntimeResult(
-    matched: j['matched'] as bool? ?? false,
-    newRep: j['newRep'] as bool? ?? false,
-    count: (j['count'] as num?)?.toInt() ?? 0,
-    confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
-    motionProgress: (j['progress'] as num?)?.toDouble() ?? 0,
-    state: _stateFromRaw(j['state'] as String?),
-    inferenceLatency: Duration(
-      microseconds: (((j['latencyMs'] as num?)?.toDouble() ?? 0) * 1000).round(),
-    ),
-    bufferFrames: (j['bufferFrames'] as num?)?.toInt() ?? 0,
-    protoDist: (j['proto_dist'] as num?)?.toDouble(),
-    protoMargin: (j['proto_margin'] as num?)?.toDouble(),
-    trajSim: (j['traj_sim'] as num?)?.toDouble(),
-  );
+  factory MotionV2RuntimeResult.fromJson(Map<String, dynamic> j) =>
+      MotionV2RuntimeResult(
+        matched: j['matched'] as bool? ?? false,
+        newRep: j['newRep'] as bool? ?? false,
+        count: (j['count'] as num?)?.toInt() ?? 0,
+        confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
+        motionProgress: (j['progress'] as num?)?.toDouble() ?? 0,
+        state: _stateFromRaw(j['state'] as String?),
+        inferenceLatency: Duration(
+          microseconds: (((j['latencyMs'] as num?)?.toDouble() ?? 0) * 1000)
+              .round(),
+        ),
+        bufferFrames: (j['bufferFrames'] as num?)?.toInt() ?? 0,
+        protoDist: (j['proto_dist'] as num?)?.toDouble(),
+        protoMargin: (j['proto_margin'] as num?)?.toDouble(),
+        trajSim: (j['traj_sim'] as num?)?.toDouble(),
+      );
 
   Map<String, dynamic> toDiagnosticsJson() => {
-    'matched': matched, 'newRep': newRep, 'count': count,
-    'confidence': confidence, 'progress': motionProgress, 'state': state.name,
+    'matched': matched,
+    'newRep': newRep,
+    'count': count,
+    'confidence': confidence,
+    'progress': motionProgress,
+    'state': state.name,
     'latencyMs': inferenceLatency.inMicroseconds / 1000,
     'bufferFrames': bufferFrames,
     if (protoDist != null) 'protoDist': protoDist,

@@ -20,6 +20,9 @@
 //   upload-asset --release-id R --asset-id A --file F
 //   audit [--activity-id A] [--release-id R] [--action X] [--limit N]
 //   signals [--activity-id A] [--release-id R]
+//   sessions-failed [--limit N]                 recent failed/incomplete recorded sessions
+//   session-get <sessionId> [--out file.json]   download one recorded pose log for tool/motion-replay.sh
+//   session-latest <activityId> [--out file.json]  newest recorded session for a motion
 //
 // System B — model releases (Nuvo Motion Intelligence, independent of
 // verifier releases):
@@ -207,6 +210,29 @@ switch (command) {
       if (v) qs.set(param, v);
     }
     print(await call('GET', `/motion/adaptation/signals?${qs}`));
+    break;
+  }
+  case 'sessions-failed': {
+    print(await call('GET', `/motion-sessions/failed?limit=${flag('limit', '20')}`));
+    break;
+  }
+  case 'session-get':
+  case 'session-latest': {
+    const id = firstPositional();
+    if (!id) { console.error(`usage: ${command} <${command === 'session-get' ? 'sessionId' : 'activityId'}> [--out file.json]`); process.exit(2); }
+    const path = command === 'session-get'
+      ? `/motion-sessions/${encodeURIComponent(id)}`
+      : `/activities/${encodeURIComponent(id)}/motion-sessions/latest`;
+    const res = await call('GET', path);
+    const artifact = res.json?.artifact;
+    if (res.status !== 200 || !artifact || artifact.error) {
+      console.error(`HTTP ${res.status}`, JSON.stringify(res.json?.error ?? artifact?.error ?? res.json));
+      process.exit(1);
+    }
+    const out = flag('out', `${res.json.session?.sessionId ?? id}.json`);
+    fs.writeFileSync(out, JSON.stringify(artifact));
+    console.log(`saved ${out} (${artifact.frames?.length ?? 0} frames, app counted ${artifact.result?.detectedValue ?? '?'})`);
+    console.log(`replay: tool/motion-replay.sh ${out}`);
     break;
   }
   case 'activity-visibility': {

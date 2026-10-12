@@ -1,0 +1,27 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "running_in_place-tuned-2026.10.0",
+  "activityId": "running_in_place",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "liftFraction": 0.18,
+    "horizontalCentreAlpha": 0.04,
+    "verticalTiltAlpha": 0.01,
+    "stableFrames": 2.0
+  }
+}

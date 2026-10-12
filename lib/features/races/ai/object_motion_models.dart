@@ -37,18 +37,35 @@ class NuvoObjectDot {
 
     final id = json['id'];
     final kind = json['kind'];
-    if (id is! String || id.trim().isEmpty ||
-        kind is! String || kind.trim().isEmpty) {
+    if (id is! String ||
+        id.trim().isEmpty ||
+        kind is! String ||
+        kind.trim().isEmpty) {
       throw const FormatException('Object dot identity is invalid.');
     }
     final x = number(json['x'], 'x');
     final y = number(json['y'], 'y');
     final likelihood = number(json['likelihood'], 'likelihood');
-    final scale = json['scale'] == null ? 0.0 : number(json['scale'], 'scale').toDouble();
-    if ([x, y, likelihood, scale].any((value) => value.isNaN || value.isInfinite) ||
-        x < 0 || x > 1 || y < 0 || y > 1 || likelihood < 0 || likelihood > 1 ||
-        scale < 0 || scale > 1) {
-      throw const FormatException('Object dot values are outside the supported range.');
+    final scale = json['scale'] == null
+        ? 0.0
+        : number(json['scale'], 'scale').toDouble();
+    if ([
+          x,
+          y,
+          likelihood,
+          scale,
+        ].any((value) => value.isNaN || value.isInfinite) ||
+        x < 0 ||
+        x > 1 ||
+        y < 0 ||
+        y > 1 ||
+        likelihood < 0 ||
+        likelihood > 1 ||
+        scale < 0 ||
+        scale > 1) {
+      throw const FormatException(
+        'Object dot values are outside the supported range.',
+      );
     }
     return NuvoObjectDot(
       id: id.trim(),

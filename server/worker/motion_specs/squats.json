@@ -1,0 +1,33 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "squats-tree-2026.10.0",
+  "activityId": "squats",
+  "engineType": "rep_tree_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "rep_tree_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTree": {
+    "start": {
+      "signal": "hipToKneeRatio",
+      "gt": 0.72
+    },
+    "active": {
+      "signal": "hipToKneeRatio",
+      "lt": 0.5
+    }
+  }
+}

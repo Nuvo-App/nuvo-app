@@ -19,6 +19,10 @@ class MotionCapabilities {
     'alternating_rep_v1',
     'hold_v1',
     'sequence_match_v1',
+    // Midpoint landmarks (midHip…) and the axis_ratio predicate.
+    'sequence_features_v2',
+    'rep_tree_v1',
+    'native_tuned_v1',
     if (objectDotProducer != null) ...objectDotProducer.capabilities,
     for (final activity in motionActivityDefinitions)
       'native_${activity.activityId}_v1',

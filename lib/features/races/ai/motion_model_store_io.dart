@@ -21,7 +21,9 @@ String _safeName(String value) =>
 
 Future<File> _artifactFile(String modelVersion, String sha256) async {
   final dir = await _dir();
-  return File('${dir.path}/${_safeName(modelVersion)}-${sha256.substring(0, 16)}.onnx');
+  return File(
+    '${dir.path}/${_safeName(modelVersion)}-${sha256.substring(0, 16)}.onnx',
+  );
 }
 
 Future<File> _manifestFile() async =>
@@ -54,13 +56,18 @@ Future<void> persistMotionModel(
   Uint8List bytes,
 ) async {
   try {
-    final file = await _artifactFile(release.modelVersion, release.artifactSha256);
+    final file = await _artifactFile(
+      release.modelVersion,
+      release.artifactSha256,
+    );
     final tmp = File('${file.path}.tmp');
     await tmp.writeAsBytes(bytes, flush: true);
     await tmp.rename(file.path);
     final manifest = await _readManifest();
     final families = manifest['families'] is Map<String, dynamic>
-        ? Map<String, dynamic>.from(manifest['families'] as Map<String, dynamic>)
+        ? Map<String, dynamic>.from(
+            manifest['families'] as Map<String, dynamic>,
+          )
         : <String, dynamic>{};
     families[family] = {
       'release': release.toJson(),
@@ -103,9 +110,8 @@ Future<({MotionModelRelease release, Uint8List bytes})?> readMotionModel(
   }
 }
 
-Future<({MotionModelRelease release, Uint8List bytes})?> readLastKnownGoodMotionModel(
-  String family,
-) async {
+Future<({MotionModelRelease release, Uint8List bytes})?>
+readLastKnownGoodMotionModel(String family) async {
   try {
     final manifest = await _readManifest();
     final families = manifest['families'];

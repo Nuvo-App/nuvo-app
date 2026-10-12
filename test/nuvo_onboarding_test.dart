@@ -474,7 +474,7 @@ void main() {
     await tapWhenFound(tester, find.text('Keep going'));
     await tester.pump(const Duration(milliseconds: 600));
     await pumpUntilFound(tester, findNuvoText('Better with\ncompetition.'));
-    expect(find.text('Shresh'), findsOneWidget);
+    expect(find.text('Sam'), findsOneWidget);
     expect(find.text('Lv. 14'), findsOneWidget);
     expect(find.text('Lv. 1'), findsOneWidget);
     // 3 crew glyphs + the keep-alive identity page's badge set.

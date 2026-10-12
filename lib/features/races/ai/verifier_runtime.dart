@@ -207,6 +207,7 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
       confidence: update.confidence,
       completed: update.state == RemoteRuntimeState.completed,
       debugValues: {
+        ...update.metrics,
         'progress': update.progress,
         'elapsedMs': update.elapsedMs.toDouble(),
       },
@@ -238,8 +239,9 @@ class RemotePoseVerifierRuntime implements VerifierRuntime {
         durationMs: update?.elapsedMs ?? 0,
         validatorVersion: '${_spec.releaseId}:${_spec.schemaVersion}',
         remoteActivityId: _movement.remoteActivityId,
-        remoteActivityLabel:
-            _movement.remoteActivityId != null ? _movement.title : null,
+        remoteActivityLabel: _movement.remoteActivityId != null
+            ? _movement.title
+            : null,
         remoteMeasurementType: _movement.remoteActivityId != null
             ? _spec.measurementType
             : null,
@@ -401,8 +403,7 @@ class VerifierRuntimeResolver {
         title: definition.title,
         unit: definition.unit,
         defaultTarget: definition.defaultTarget,
-        isHold: definition.isHold ||
-            spec.measurementType == 'duration',
+        isHold: definition.isHold || spec.measurementType == 'duration',
       );
     }
     final info = spec.activity;

@@ -1,0 +1,23 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "lateral_steps-tuned-2026.10.0",
+  "activityId": "lateral_steps",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftHip",
+    "rightHip",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "stepFraction": 0.55,
+    "neutralFraction": 0.2
+  }
+}

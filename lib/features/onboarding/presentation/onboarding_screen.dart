@@ -64,24 +64,47 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _usernameController.addListener(_onUsernameChanged);
   }
 
+  /// The real reason a username can't be used, or null when the format is
+  /// fine. Mirrors the server rule: 3-20 letters, numbers, or underscore.
+  static String? _usernameFormatError(String raw) {
+    if (raw.length < 3) return null;
+    if (RegExp(r'\s').hasMatch(raw)) return "Usernames can't contain spaces.";
+    if (raw.length > 20) return 'Usernames can be at most 20 characters.';
+    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(raw)) {
+      return 'Use only letters, numbers, or underscore.';
+    }
+    return null;
+  }
+
   void _onUsernameChanged() {
     setState(() {
       _usernameAvailable = null;
+      _usernameChecking = false;
       _error = null;
     });
     _debounce?.cancel();
     final raw = _usernameController.text.trim().toLowerCase();
-    if (raw.length < 3) return;
+    if (raw.length < 3 || _usernameFormatError(raw) != null) return;
     setState(() => _usernameChecking = true);
     _debounce = Timer(const Duration(milliseconds: 650), () async {
-      final available = await ref
-          .read(authControllerProvider.notifier)
-          .checkUsername(raw);
-      if (mounted) {
-        setState(() {
-          _usernameAvailable = available;
-          _usernameChecking = false;
-        });
+      try {
+        final available = await ref
+            .read(authControllerProvider.notifier)
+            .checkUsername(raw);
+        if (mounted && raw == _usernameController.text.trim().toLowerCase()) {
+          setState(() {
+            _usernameAvailable = available;
+            _usernameChecking = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _usernameChecking = false;
+            _error =
+                "Couldn't check that username. Check your connection and try again.";
+          });
+        }
       }
     });
   }
@@ -108,10 +131,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   // the local preview and shows a retryable error.
 
   Widget _buildAvatarContent() {
-    final remoteUrl = ref
-        .watch(authControllerProvider)
-        .user
-        ?.profilePhotoUrl;
+    final remoteUrl = ref.watch(authControllerProvider).user?.profilePhotoUrl;
     // Priority: freshly picked local bytes > saved remote photo > initials.
     if (_pendingImageBytes != null) {
       return Image.memory(
@@ -390,9 +410,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               decoration: BoxDecoration(
                                 color: NuvoColors.white,
                                 borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: NuvoColors.border,
-                                ),
+                                border: Border.all(color: NuvoColors.border),
                               ),
                               child: Row(
                                 children: [
@@ -445,9 +463,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                             milliseconds: 200,
                                           ),
                                           child: Text(
-                                            _nameController.text
-                                                    .trim()
-                                                    .isEmpty
+                                            _nameController.text.trim().isEmpty
                                                 ? 'Your name'
                                                 : _nameController.text.trim(),
                                             key: ValueKey(
@@ -516,9 +532,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 ],
                               ),
                             ).animate().fadeIn(
-                                  delay: const Duration(milliseconds: 350),
-                                  duration: const Duration(milliseconds: 400),
-                                ),
+                              delay: const Duration(milliseconds: 350),
+                              duration: const Duration(milliseconds: 400),
+                            ),
 
                             if (_avatarError != null) ...[
                               const SizedBox(height: 10),
@@ -591,6 +607,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                   color: NuvoColors.muted,
                                 ),
                               )
+                            else if (_usernameFormatError(
+                                  username.toLowerCase(),
+                                ) !=
+                                null)
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.cancel_rounded,
+                                    color: NuvoColors.danger,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      _usernameFormatError(
+                                        username.toLowerCase(),
+                                      )!,
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: NuvoColors.danger,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
                             else if (username.length >= 3) ...[
                               Row(
                                 children: [
@@ -643,7 +684,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 Checkbox.adaptive(
                                   value: _termsAccepted,
                                   fillColor: WidgetStateProperty.resolveWith(
-                                    (states) => states.contains(WidgetState.selected)
+                                    (states) =>
+                                        states.contains(WidgetState.selected)
                                         ? NuvoColors.blue
                                         : null,
                                   ),
@@ -704,7 +746,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 Checkbox.adaptive(
                                   value: _ageAttested,
                                   fillColor: WidgetStateProperty.resolveWith(
-                                    (states) => states.contains(WidgetState.selected)
+                                    (states) =>
+                                        states.contains(WidgetState.selected)
                                         ? NuvoColors.blue
                                         : null,
                                   ),

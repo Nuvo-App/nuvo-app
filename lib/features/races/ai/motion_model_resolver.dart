@@ -20,7 +20,7 @@ class MotionV2ModelSource {
 
   /// Artifact fetch hook — returns bytes + version/sha headers.
   final Future<MotionModelArtifactFetch> Function(String modelVersion)
-      fetchArtifact;
+  fetchArtifact;
 
   /// The build's own number. `local` dev builds are treated as newest so a
   /// `minimumAppBuild` gate never strangles development.
@@ -28,8 +28,9 @@ class MotionV2ModelSource {
   final String channel;
 
   /// Resolved build number with the dev fallback applied.
-  int get effectiveAppBuild =>
-      appBuild > 0 ? appBuild : (int.tryParse(MotionCapabilities.appBuild) ?? 1 << 30);
+  int get effectiveAppBuild => appBuild > 0
+      ? appBuild
+      : (int.tryParse(MotionCapabilities.appBuild) ?? 1 << 30);
 
   /// The release the channel currently assigns this app, or null. Any
   /// malformed or incompatible release resolves to null so callers fall back
@@ -54,7 +55,8 @@ class MotionV2ModelSource {
 
   /// Download + checksum-verify the release artifact.
   Future<VettedMotionModelArtifact> fetchVerified(
-      MotionModelRelease release) async {
+    MotionModelRelease release,
+  ) async {
     final fetch = await fetchArtifact(release.modelVersion);
     final bytes = fetch.bytes;
     if (bytes == null || bytes.isEmpty) {

@@ -53,8 +53,7 @@ class RepEventLog {
 
   /// The interval (ms) between the two most recent reps, if there are at
   /// least two — the number the "fast reps missed" report cares about most.
-  int? get lastIntervalMs =>
-      _entries.isEmpty ? null : _entries.last.intervalMs;
+  int? get lastIntervalMs => _entries.isEmpty ? null : _entries.last.intervalMs;
 
   String summary() => _entries.isEmpty
       ? 'no reps yet'

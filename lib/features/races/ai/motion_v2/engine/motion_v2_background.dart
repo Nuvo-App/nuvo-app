@@ -27,7 +27,9 @@ class MotionV2Background {
       final j = jsonDecode(raw) as Map<String, dynamic>;
       _cached = [
         for (final p in j['protos'] as List)
-          Float32List.fromList([for (final x in p as List) (x as num).toDouble()])
+          Float32List.fromList([
+            for (final x in p as List) (x as num).toDouble(),
+          ]),
       ];
       return _cached;
     } catch (_) {

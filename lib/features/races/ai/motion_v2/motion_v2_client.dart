@@ -12,8 +12,8 @@ import 'motion_verifier_v2.dart';
 /// over LAN. MVP integration milestone — on-device inference replaces this.
 class MotionV2ServiceClient implements MotionVerifierV2, MotionLearnerV2 {
   MotionV2ServiceClient({String? baseUrl, http.Client? client})
-      : _base = (baseUrl ?? kMotionV2ServiceUrl).replaceAll(RegExp(r'/+$'), ''),
-        _client = client ?? http.Client();
+    : _base = (baseUrl ?? kMotionV2ServiceUrl).replaceAll(RegExp(r'/+$'), ''),
+      _client = client ?? http.Client();
 
   final String _base;
   final http.Client _client;
@@ -21,7 +21,10 @@ class MotionV2ServiceClient implements MotionVerifierV2, MotionLearnerV2 {
 
   static const _timeout = Duration(seconds: 20);
 
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     try {
       final res = await _client
           .post(
@@ -34,7 +37,9 @@ class MotionV2ServiceClient implements MotionVerifierV2, MotionLearnerV2 {
           ? <String, dynamic>{}
           : jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode >= 400) {
-        throw MotionV2Exception(json['error'] as String? ?? 'HTTP ${res.statusCode}');
+        throw MotionV2Exception(
+          json['error'] as String? ?? 'HTTP ${res.statusCode}',
+        );
       }
       return json;
     } on TimeoutException {
@@ -50,17 +55,17 @@ class MotionV2ServiceClient implements MotionVerifierV2, MotionLearnerV2 {
   }
 
   static List<Map<String, dynamic>> _wire(List<NuvoPoseFrame> frames) => [
-        for (final f in frames)
-          {
-            't': f.createdAt.millisecondsSinceEpoch,
-            'w': f.imageWidth,
-            'h': f.imageHeight,
-            'points': {
-              for (final e in f.points.entries)
-                e.key: [e.value.x, e.value.y, e.value.z, e.value.likelihood],
-            },
-          },
-      ];
+    for (final f in frames)
+      {
+        't': f.createdAt.millisecondsSinceEpoch,
+        'w': f.imageWidth,
+        'h': f.imageHeight,
+        'points': {
+          for (final e in f.points.entries)
+            e.key: [e.value.x, e.value.y, e.value.z, e.value.likelihood],
+        },
+      },
+  ];
 
   @override
   Future<TaughtMotionV2Spec> learn({
@@ -76,15 +81,21 @@ class MotionV2ServiceClient implements MotionVerifierV2, MotionLearnerV2 {
 
   @override
   Future<void> load(TaughtMotionV2Spec spec) async {
-    final res = await _post('/motion-v2/session', {'spec': spec.json, 'fps': 15});
+    final res = await _post('/motion-v2/session', {
+      'spec': spec.json,
+      'fps': 15,
+    });
     _sessionId = res['sessionId'] as String;
   }
 
   @override
   Future<MotionV2RuntimeResult> update(List<NuvoPoseFrame> frames) async {
     final sid = _sessionId;
-    if (sid == null) throw const MotionV2Exception('No V2 session — call load() first.');
-    final res = await _post('/motion-v2/session/$sid/frames', {'frames': _wire(frames)});
+    if (sid == null)
+      throw const MotionV2Exception('No V2 session — call load() first.');
+    final res = await _post('/motion-v2/session/$sid/frames', {
+      'frames': _wire(frames),
+    });
     return MotionV2RuntimeResult.fromJson(res);
   }
 
@@ -104,7 +115,9 @@ class MotionV2ServiceClient implements MotionVerifierV2, MotionLearnerV2 {
         await _client
             .delete(Uri.parse('$_base/motion-v2/session/$sid'))
             .timeout(const Duration(seconds: 5));
-      } catch (_) {/* best effort */}
+      } catch (_) {
+        /* best effort */
+      }
     }
     _client.close();
   }

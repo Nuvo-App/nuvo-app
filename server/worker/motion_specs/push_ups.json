@@ -1,0 +1,27 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "push_ups-tuned-2026.10.0",
+  "activityId": "push_ups",
+  "engineType": "native_tuned_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "native_tuned_v1"
+  ],
+  "requiredLandmarks": [
+    "leftShoulder",
+    "rightShoulder",
+    "leftElbow",
+    "rightElbow",
+    "leftWrist",
+    "rightWrist"
+  ],
+  "stableFrames": 3,
+  "params": {
+    "topElbowAngle": 150.0,
+    "bottomElbowAngle": 125.0,
+    "shoulderDropRatio": 0.1,
+    "maxSymmetryError": 90.0
+  }
+}

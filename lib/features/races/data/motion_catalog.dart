@@ -155,6 +155,8 @@ class MotionCatalogActivity {
         'alternating_rep_v1',
         'hold_v1',
         'sequence_match_v1',
+        'rep_tree_v1',
+        'native_tuned_v1',
         'object_composition_v1',
       }.contains(engineType) &&
       releaseId != null &&
@@ -164,12 +166,12 @@ class MotionCatalogActivity {
 
   /// Registry camera hint → camera preference. Unknown/absent values default
   /// to front-preferred, matching the previous generic behavior.
-  PreferredCameraView preferredCameraViewFromHint() => switch (
-      cameraOrientation) {
-    'side' => PreferredCameraView.sideOrDiagonalRequired,
-    'front_or_angle' => PreferredCameraView.frontOrSlightAngle,
-    _ => PreferredCameraView.frontPreferred,
-  };
+  PreferredCameraView preferredCameraViewFromHint() =>
+      switch (cameraOrientation) {
+        'side' => PreferredCameraView.sideOrDiagonalRequired,
+        'front_or_angle' => PreferredCameraView.frontOrSlightAngle,
+        _ => PreferredCameraView.frontPreferred,
+      };
 
   MotionActivityDefinition? toDefinition(Set<String> capabilities) {
     if (!isCompatibleWith(capabilities)) return null;
@@ -314,7 +316,13 @@ class MotionCatalogSnapshot {
       final definition = activity.toDefinition(capabilities);
       if (definition != null) remoteById[activity.id] = definition;
     }
+    // A live control-plane catalog is authoritative for which motions exist:
+    // the stable catalog omits motions set to `hidden`, so a bundled motion
+    // missing from it is hidden remotely. The bundled fallback is exempt.
+    final publishedIds = {for (final activity in activities) activity.id};
+    final isLive = catalogVersion != 'bundled';
     for (final bundled in motionActivityDefinitions) {
+      if (isLive && !publishedIds.contains(bundled.activityId)) continue;
       definitions.add(remoteById.remove(bundled.activityId) ?? bundled);
     }
     // Database-published activities that were not present in the app build

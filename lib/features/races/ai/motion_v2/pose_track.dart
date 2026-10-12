@@ -95,7 +95,11 @@ class PoseTrack {
         final sx = (_fx[name] ??= _OneEuro()).filter(p.x, dt);
         final sy = (_fy[name] ??= _OneEuro()).filter(p.y, dt);
         smoothedPts[name] = NuvoPosePoint(
-            x: sx, y: sy, z: p.z, likelihood: p.likelihood);
+          x: sx,
+          y: sy,
+          z: p.z,
+          likelihood: p.likelihood,
+        );
         _carried[name] = _Carried(sx, sy, p.likelihood, 0);
         _smoothedThisFrame++;
       } else {
@@ -129,8 +133,7 @@ class PoseTrack {
     // temporal readiness from the SMOOTHED frame
     final q = evaluatePoseQuality(smoothed);
     _lastQuality = q;
-    final trackable =
-        q.trackable || q.readiness == PoseReadiness.unstable;
+    final trackable = q.trackable || q.readiness == PoseReadiness.unstable;
     if (trackable) _goodFrames++;
     _noteTrackable(trackable);
 
@@ -184,8 +187,9 @@ class PoseTrack {
       final p = prev[e.key];
       if (p == null) continue;
       sum += math.sqrt(
-          (e.value.x - p.x) * (e.value.x - p.x) +
-              (e.value.y - p.y) * (e.value.y - p.y));
+        (e.value.x - p.x) * (e.value.x - p.x) +
+            (e.value.y - p.y) * (e.value.y - p.y),
+      );
       n++;
     }
     final inst = n == 0 ? 0.0 : sum / n / math.max(dt, 1e-3);
@@ -232,8 +236,10 @@ class PoseTrack {
     final root = mid('leftHip', 'rightHip');
     final neck = mid('leftShoulder', 'rightShoulder');
     if (root == null || neck == null) return null;
-    final scale = math.sqrt((neck.x - root.x) * (neck.x - root.x) +
-        (neck.y - root.y) * (neck.y - root.y));
+    final scale = math.sqrt(
+      (neck.x - root.x) * (neck.x - root.x) +
+          (neck.y - root.y) * (neck.y - root.y),
+    );
     if (scale < 1e-4) return null;
 
     final out = <String, ({double x, double y})>{};
@@ -287,22 +293,22 @@ class PoseTrack {
   }
 
   Map<String, dynamic> toDiagnosticsJson() => {
-        'framesSeen': _framesSeen,
-        'goodFrameRatio': _framesSeen == 0 ? 0 : _goodFrames / _framesSeen,
-        'readyConfidence': double.parse(readyConfidence.toStringAsFixed(3)),
-        'ready': _ready,
-        'consecutiveBadFrames': _consecutiveBad,
-        'interpolatedJointCount': _interpolatedThisFrame,
-        'smoothedJointCount': _smoothedThisFrame,
-        'articulationEnergy': double.parse(_articulationEnergy.toStringAsFixed(4)),
-        'energyBaseline': _energyBaseline == null
-            ? null
-            : double.parse(_energyBaseline!.toStringAsFixed(4)),
-        'motionStarted': _motionStarted,
-        'motionStartedAt': _motionStartedAt?.toIso8601String(),
-        'readiness': _lastQuality.readiness.name,
-        'guidance': _lastQuality.guidance,
-      };
+    'framesSeen': _framesSeen,
+    'goodFrameRatio': _framesSeen == 0 ? 0 : _goodFrames / _framesSeen,
+    'readyConfidence': double.parse(readyConfidence.toStringAsFixed(3)),
+    'ready': _ready,
+    'consecutiveBadFrames': _consecutiveBad,
+    'interpolatedJointCount': _interpolatedThisFrame,
+    'smoothedJointCount': _smoothedThisFrame,
+    'articulationEnergy': double.parse(_articulationEnergy.toStringAsFixed(4)),
+    'energyBaseline': _energyBaseline == null
+        ? null
+        : double.parse(_energyBaseline!.toStringAsFixed(4)),
+    'motionStarted': _motionStarted,
+    'motionStartedAt': _motionStartedAt?.toIso8601String(),
+    'readiness': _lastQuality.readiness.name,
+    'guidance': _lastQuality.guidance,
+  };
 }
 
 class _Carried {

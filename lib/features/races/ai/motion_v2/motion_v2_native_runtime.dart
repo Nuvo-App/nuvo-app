@@ -31,12 +31,12 @@ class SelfValidationReport {
   final double worstTrajMargin;
 
   Map<String, dynamic> toJson() => {
-        'passed': passed,
-        'perDemo': perDemo,
-        'leaveOneOut': leaveOneOut,
-        'worstProtoMargin': double.parse(worstProtoMargin.toStringAsFixed(3)),
-        'worstTrajMargin': double.parse(worstTrajMargin.toStringAsFixed(3)),
-      };
+    'passed': passed,
+    'perDemo': perDemo,
+    'leaveOneOut': leaveOneOut,
+    'worstProtoMargin': double.parse(worstProtoMargin.toStringAsFixed(3)),
+    'worstTrajMargin': double.parse(worstTrajMargin.toStringAsFixed(3)),
+  };
 }
 
 class MotionV2LearnException implements Exception {
@@ -63,22 +63,24 @@ class LearnProfile {
   int get encoderPasses => encodeMs.length;
 
   Map<String, dynamic> toJson() => {
-        'warmStart': warmStart,
-        'modelLoadMs': modelLoadMs,
-        'sessionCreateMs': sessionCreateMs,
-        'preprocessMs': preprocessMs,
-        'encodeMs': encodeMs,
-        'totalEncodeMs': totalEncodeMs,
-        'encoderPasses': encoderPasses,
-        'buildRefsMs': buildRefsMs,
-        'selfValidateMs': selfValidateMs,
-        'looMs': looMs,
-        'totalMs': totalMs,
-      };
+    'warmStart': warmStart,
+    'modelLoadMs': modelLoadMs,
+    'sessionCreateMs': sessionCreateMs,
+    'preprocessMs': preprocessMs,
+    'encodeMs': encodeMs,
+    'totalEncodeMs': totalEncodeMs,
+    'encoderPasses': encoderPasses,
+    'buildRefsMs': buildRefsMs,
+    'selfValidateMs': selfValidateMs,
+    'looMs': looMs,
+    'totalMs': totalMs,
+  };
 
   String toText() {
-    final b = StringBuffer('Motion V2 Learn Profile'
-        ' (${warmStart ? "warm" : "cold"})\n');
+    final b = StringBuffer(
+      'Motion V2 Learn Profile'
+      ' (${warmStart ? "warm" : "cold"})\n',
+    );
     if (!warmStart) {
       b.writeln('  model load:        $modelLoadMs ms');
       b.writeln('  session create:    $sessionCreateMs ms');
@@ -90,8 +92,10 @@ class LearnProfile {
     b.writeln('  build references:  $buildRefsMs ms');
     b.writeln('  self-validation:   $selfValidateMs ms  (0 encoder passes)');
     b.writeln('  leave-one-out:     $looMs ms  (0 encoder passes)');
-    b.writeln('  TOTAL:             $totalMs ms  '
-        '($encoderPasses encoder passes)');
+    b.writeln(
+      '  TOTAL:             $totalMs ms  '
+      '($encoderPasses encoder passes)',
+    );
     return b.toString();
   }
 }
@@ -156,7 +160,10 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
         ? MotionV2OnnxEncoder.activeEncoderId
         : 'release_action';
     final motion = TaughtMotionV2.learnFromEncoded(
-      name: movementName, encoderId: encoderId, encoded: encoded);
+      name: movementName,
+      encoderId: encoderId,
+      encoded: encoded,
+    );
     p.buildRefsMs = sw.elapsedMilliseconds;
 
     // Self-validation + leave-one-out — pure matcher math on the cached
@@ -218,14 +225,19 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
     final loo = <bool>[];
     for (var i = 0; i < encoded.length; i++) {
       final two = motion.twoRefSubset(i); // cached refs, no encoder
-      final r = two.matchEncoded(encoded[i].rep, encoded[i].emb, background: bg);
+      final r = two.matchEncoded(
+        encoded[i].rep,
+        encoded[i].emb,
+        background: bg,
+      );
       loo.add(r.isSameFamily);
     }
     p.looMs = swLoo.elapsedMilliseconds;
 
     final need = encoded.length - (encoded.length ~/ 3); // majority
     return SelfValidationReport(
-      passed: perDemo.where((x) => x).length >= need &&
+      passed:
+          perDemo.where((x) => x).length >= need &&
           loo.where((x) => x).length >= need,
       perDemo: perDemo,
       leaveOneOut: loo,
@@ -256,7 +268,8 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   @override
   Future<MotionV2RuntimeResult> update(List<NuvoPoseFrame> frames) async {
     final s = _session;
-    if (s == null) throw const MotionV2Exception('No V2 session — call load() first.');
+    if (s == null)
+      throw const MotionV2Exception('No V2 session — call load() first.');
     return s.push(frames);
   }
 

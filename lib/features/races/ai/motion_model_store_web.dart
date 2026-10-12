@@ -14,9 +14,7 @@ Future<({MotionModelRelease release, Uint8List bytes})?> readMotionModel(
   String family,
   String modelVersion,
   String sha256,
-) async =>
-    null;
+) async => null;
 
 Future<({MotionModelRelease release, Uint8List bytes})?>
-    readLastKnownGoodMotionModel(String family) async =>
-        null;
+readLastKnownGoodMotionModel(String family) async => null;

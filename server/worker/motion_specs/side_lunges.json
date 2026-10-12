@@ -1,0 +1,55 @@
+{
+  "specSchemaVersion": 1,
+  "releaseId": "side_lunges-tree-2026.10.0",
+  "activityId": "side_lunges",
+  "engineType": "rep_tree_v1",
+  "measurementType": "repetitions",
+  "requiredCapabilities": [
+    "pose_landmarks_v1",
+    "derived_features_v1",
+    "rep_tree_v1"
+  ],
+  "requiredLandmarks": [
+    "leftHip",
+    "rightHip",
+    "leftKnee",
+    "rightKnee",
+    "leftAnkle",
+    "rightAnkle"
+  ],
+  "stableFrames": 3,
+  "repTree": {
+    "start": {
+      "all": [
+        {
+          "signal": "leftKneeAngle",
+          "gt": 154
+        },
+        {
+          "signal": "rightKneeAngle",
+          "gt": 154
+        }
+      ]
+    },
+    "active": {
+      "all": [
+        {
+          "signal": "kneeSeparationToHipWidth",
+          "gt": 0.85
+        },
+        {
+          "any": [
+            {
+              "signal": "leftKneeAngle",
+              "lt": 118
+            },
+            {
+              "signal": "rightKneeAngle",
+              "lt": 118
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

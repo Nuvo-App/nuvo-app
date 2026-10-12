@@ -2750,7 +2750,7 @@ class _CrewPageState extends State<_CrewPage>
     // Your row is deliberately clean: Level 1, nothing earned yet — the gap
     // is the pull.
     final rows = <(String, int, String?, bool)>[
-      ('Shresh', 14, 'trophy_3', false),
+      ('Sam', 14, 'trophy_3', false),
       ('Maya', 9, 'flags_5', false),
       ('Noah', 4, 'trophy_1', false),
       (widget.firstName ?? 'You', 1, null, true),

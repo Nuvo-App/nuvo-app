@@ -207,6 +207,23 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       return;
     }
 
+    if (RegExp(r'\s').hasMatch(username)) {
+      setState(() => _usernameError = "Usernames can't contain spaces.");
+      return;
+    }
+    if (username.length > 20) {
+      setState(
+        () => _usernameError = 'Usernames can be at most 20 characters.',
+      );
+      return;
+    }
+    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(username)) {
+      setState(
+        () => _usernameError = 'Use only letters, numbers, or underscore.',
+      );
+      return;
+    }
+
     setState(() {
       _loading = true;
       _nameError = null;
@@ -305,13 +322,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                             decoration: BoxDecoration(
                               color: c.surface,
-                              borderRadius: BorderRadius.circular(
-                                NuvoRadii.lg,
-                              ),
-                              border: Border.all(
-                                color: c.border,
-                                width: 1.5,
-                              ),
+                              borderRadius: BorderRadius.circular(NuvoRadii.lg),
+                              border: Border.all(color: c.border, width: 1.5),
                               boxShadow: AppShadows.hardOffset(c.inkShadow),
                             ),
                             child: Column(
@@ -381,8 +393,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                                         width: 2,
                                                       ),
                                                     ),
-                                                    alignment:
-                                                        Alignment.center,
+                                                    alignment: Alignment.center,
                                                     child: Icon(
                                                       hasPhoto
                                                           ? Icons.edit_rounded
@@ -416,13 +427,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                               overflow: TextOverflow.ellipsis,
                                               style: AppTextStyles.titleLarge
                                                   .copyWith(
-                                                    color: value.text
+                                                    color:
+                                                        value.text
                                                             .trim()
                                                             .isEmpty
                                                         ? c.inkSubtle
                                                         : c.ink,
-                                                    fontWeight:
-                                                        FontWeight.w800,
+                                                    fontWeight: FontWeight.w800,
                                                   ),
                                             ),
                                           ),
@@ -436,10 +447,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                               '@${value.text.trim()}',
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: AppTextStyles.bodySmall.copyWith(color: context.themeColors.inkMuted)
+                                              style: AppTextStyles.bodySmall
                                                   .copyWith(
-                                                    color: c.inkMuted,
-                                                  ),
+                                                    color: context
+                                                        .themeColors
+                                                        .inkMuted,
+                                                  )
+                                                  .copyWith(color: c.inkMuted),
                                             ),
                                           ),
                                         ],

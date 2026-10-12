@@ -412,10 +412,100 @@ class MotionValidationUpdate {
   final int durationMs;
 }
 
+/// Per-release overrides for a compiled validator's thresholds, published
+/// over the air by a `native_tuned_v1` verifier release. Every lookup carries
+/// the compiled default, so an empty tuning is exactly today's behavior.
+/// Keys and bounds are enforced by [kNativeTunables] before a value gets here.
+class MotionTuning {
+  const MotionTuning(this._values);
+
+  static const empty = MotionTuning({});
+
+  final Map<String, double> _values;
+
+  double value(String key, double fallback) => _values[key] ?? fallback;
+}
+
+/// The thresholds an over-the-air release may adjust, per activity id:
+/// `key: (compiled default, min, max)`. Anything outside this table, or
+/// outside its bounds, fails closed when the spec is parsed.
+final Map<String, Map<String, (double, double, double)>> kNativeTunables = {
+  'push_ups': {
+    'topElbowAngle': (150, 100, 180),
+    'bottomElbowAngle': (125, 60, 170),
+    'shoulderDropRatio': (0.10, 0.02, 0.4),
+    'maxSymmetryError': (90, 20, 180),
+  },
+  'high_knees': {'raiseLift': (-0.35, -1, 0.5), 'lowerLift': (-0.72, -1.5, 0)},
+  'plank_hold': {
+    'minKneeAngle': (148, 100, 180),
+    'maxTorsoVerticalness': (0.7, 0.2, 1),
+    'maxHipLineError': (0.16, 0.03, 0.5),
+    'maxKneeLineError': (0.18, 0.03, 0.5),
+  },
+  'mountain_climbers': {
+    'plankVerticalnessMax': (1.05, 0.3, 3),
+    'driveGap': (0.26, 0.05, 1),
+    'handShoulderVerticalGapMax': (0.55, 0.1, 2),
+    'proximityGap': (0.24, 0.05, 1),
+  },
+  'lateral_steps': {
+    'stepFraction': (0.55, 0.1, 3),
+    'neutralFraction': (0.20, 0.02, 1),
+  },
+  'jump_squats': {
+    'standingRatio': (0.60, 0.3, 1.2),
+    'squatRatio': (0.58, 0.2, 0.9),
+    'flightThresholdRatio': (0.18, 0.03, 0.6),
+    'groundedToleranceRatio': (0.10, 0.02, 0.4),
+    'minFlightThreshold': (0.025, 0.005, 0.1),
+    'jitterTolerance': (0.030, 0.005, 0.1),
+  },
+  'lunge_jumps': {
+    'lungeKneeAngle': (120, 60, 170),
+    'trailingKneeAngle': (160, 100, 180),
+    'standingRatio': (0.86, 0.3, 1.5),
+    'flightThresholdRatio': (0.18, 0.03, 0.6),
+    'groundedToleranceRatio': (0.10, 0.02, 0.4),
+    'minFlightThreshold': (0.025, 0.005, 0.1),
+    'jitterTolerance': (0.030, 0.005, 0.1),
+  },
+  'burpees': {
+    'standingRatio': (0.72, 0.3, 1.2),
+    'downRatio': (0.50, 0.1, 0.9),
+    'handsUpMargin': (0.15, -1, 1),
+    'handsDownMargin': (0.05, -1, 1),
+  },
+  'running_in_place': _gaitTunables(0.18),
+  'treadmill_running': _gaitTunables(0.18),
+  'walking_in_place': _gaitTunables(0.12),
+  'marching_in_place': _gaitTunables(0.30),
+  'step_ups': _gaitTunables(0.30),
+  'butt_kicks': {
+    'kneeUpFraction': (0.55, 0.1, 1.5),
+    'ankleGapFraction': (0.20, 0.03, 1),
+    'stableFrames': (2, 1, 6),
+  },
+  'calf_raises': {
+    'riseFraction': (0.07, 0.01, 0.5),
+    'lowerFraction': (0.03, 0.005, 0.4),
+  },
+};
+
+Map<String, (double, double, double)> _gaitTunables(double lift) => {
+  'liftFraction': (lift, 0.02, 1),
+  'horizontalCentreAlpha': (0.04, 0.005, 0.5),
+  'verticalTiltAlpha': (0.01, 0.001, 0.5),
+  'stableFrames': (2, 1, 6),
+};
+
 abstract class MotionValidator {
   MotionValidator({required this.targetValue});
 
   final int targetValue;
+
+  /// Over-the-air threshold overrides; see [MotionTuning].
+  MotionTuning tuning = MotionTuning.empty;
 
   AiMotionActivity get activity;
   int get currentValue;
@@ -453,7 +543,21 @@ abstract class MotionValidator {
 /// [verifyValidatorDispatchComplete] verifies this invariant.
 MotionValidator createMotionValidator(
   AiMotionActivity activity,
+  int targetValue, {
+  MotionTuning tuning = MotionTuning.empty,
+}) => (_createMotionValidator(activity, targetValue, tuning)..tuning = tuning);
+
+AirborneStateTracker _airborneFor(MotionTuning t) => AirborneStateTracker(
+  flightThresholdRatio: t.value('flightThresholdRatio', 0.18),
+  groundedToleranceRatio: t.value('groundedToleranceRatio', 0.10),
+  minFlightThreshold: t.value('minFlightThreshold', 0.025),
+  jitterTolerance: t.value('jitterTolerance', 0.030),
+);
+
+MotionValidator _createMotionValidator(
+  AiMotionActivity activity,
   int targetValue,
+  MotionTuning tuning,
 ) => switch (activity) {
   AiMotionActivity.pushUps => PushupsValidator(targetValue: targetValue),
   AiMotionActivity.jumpingJacks => ConfigurableRepValidator(
@@ -490,7 +594,10 @@ MotionValidator createMotionValidator(
   AiMotionActivity.jumpSquats => MultiPhaseSequenceValidator(
     activity: AiMotionActivity.jumpSquats,
     targetValue: targetValue,
-    definitions: (airborne) => [buildJumpSquatDefinition(airborne)],
+    airborne: _airborneFor(tuning),
+    definitions: (airborne) => [
+      buildJumpSquatDefinition(airborne, tuning: tuning),
+    ],
     statusText: 'Tracking jump squats',
     coachingTextActive: 'Squat down, jump up, land soft',
     coachingTextIncomplete: 'Full body needed',
@@ -498,7 +605,9 @@ MotionValidator createMotionValidator(
   AiMotionActivity.lungeJumps => MultiPhaseSequenceValidator(
     activity: AiMotionActivity.lungeJumps,
     targetValue: targetValue,
-    definitions: buildLungeJumpDefinitions,
+    airborne: _airborneFor(tuning),
+    definitions: (airborne) =>
+        buildLungeJumpDefinitions(airborne, tuning: tuning),
     statusText: 'Tracking lunge jumps',
     coachingTextActive: 'Lunge, jump, switch legs',
     coachingTextIncomplete: 'Full body needed',
@@ -506,22 +615,27 @@ MotionValidator createMotionValidator(
   AiMotionActivity.runningInPlace => CadenceMotionValidator(
     definition: runningInPlaceDefinition,
     targetValue: targetValue,
+    tuning: tuning,
   ),
   AiMotionActivity.treadmillRunning => CadenceMotionValidator(
     definition: treadmillRunningDefinition,
     targetValue: targetValue,
+    tuning: tuning,
   ),
   AiMotionActivity.walkingInPlace => CadenceMotionValidator(
     definition: walkingInPlaceDefinition,
     targetValue: targetValue,
+    tuning: tuning,
   ),
   AiMotionActivity.marchingInPlace => CadenceMotionValidator(
     definition: marchingInPlaceDefinition,
     targetValue: targetValue,
+    tuning: tuning,
   ),
   AiMotionActivity.buttKicks => CadenceMotionValidator(
     definition: buttKicksDefinition,
     targetValue: targetValue,
+    tuning: tuning,
   ),
   AiMotionActivity.mountainClimbers => MountainClimbersValidator(
     targetValue: targetValue,
@@ -529,6 +643,7 @@ MotionValidator createMotionValidator(
   AiMotionActivity.stepUps => CadenceMotionValidator(
     definition: stepUpsDefinition,
     targetValue: targetValue,
+    tuning: tuning,
   ),
   AiMotionActivity.lateralSteps => LateralStepsValidator(
     targetValue: targetValue,
@@ -537,7 +652,7 @@ MotionValidator createMotionValidator(
   AiMotionActivity.burpees => MultiPhaseSequenceValidator(
     activity: AiMotionActivity.burpees,
     targetValue: targetValue,
-    definitions: (_) => [buildBurpeeDefinition()],
+    definitions: (_) => [buildBurpeeDefinition(tuning: tuning)],
     statusText: 'Tracking burpees',
     coachingTextActive: 'Crouch, hands down, then stand tall',
     coachingTextIncomplete: 'Full body needed',
@@ -911,7 +1026,7 @@ class PushupsValidator extends _BaseValidator {
         wristY > shoulderY - _movementScale(frame) * 0.30;
     // A three-quarter view, a low-contrast sleeve, or a partially occluded
     // elbow can make the two sides disagree without invalidating the rep.
-    final symmetrical = symmetryError < 90;
+    final symmetrical = symmetryError < tuning.value('maxSymmetryError', 90);
 
     _lastElbowAngle = elbowAngle;
     _lastSymmetryError = symmetryError;
@@ -942,7 +1057,8 @@ class PushupsValidator extends _BaseValidator {
       return;
     }
 
-    if (elbowAngle > 150) {
+    final topAngle = tuning.value('topElbowAngle', 150);
+    if (elbowAngle > topAngle) {
       _topShoulderY = _topShoulderY == null
           ? shoulderY
           : math.min(_topShoulderY!, shoulderY);
@@ -954,14 +1070,15 @@ class PushupsValidator extends _BaseValidator {
     final previousCount = _counter.count;
     if (_cooldownFrames > 0) _cooldownFrames--;
 
-    if (elbowAngle > 150) {
+    if (elbowAngle > topAngle) {
       _counter.update(MovementPhase.start, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Start when ready.';
     } else if (_cooldownFrames == 0 &&
         // A pushup must show both elbow flexion and the torso moving down.
         // Using either signal lets arm-only movement or camera jitter count.
-        elbowAngle < 125 &&
-        shoulderDrop > _movementScale(frame) * 0.10) {
+        elbowAngle < tuning.value('bottomElbowAngle', 125) &&
+        shoulderDrop >
+            _movementScale(frame) * tuning.value('shoulderDropRatio', 0.10)) {
       _counter.update(MovementPhase.active, stableFrames: _phaseStableFrames);
       _pushupFeedback = 'Keep going.';
     } else {
@@ -1370,8 +1487,8 @@ class HighKneesValidator extends _BaseValidator {
     // Count when the knee has climbed a bit past halfway to hip height; re-arm
     // only once it has dropped most of the way back down. The wide gap between
     // the two is the hysteresis that rejects threshold oscillation.
-    const raiseLift = -0.35;
-    const lowerLift = -0.72;
+    final raiseLift = tuning.value('raiseLift', -0.35);
+    final lowerLift = tuning.value('lowerLift', -0.72);
     final leftRaised = _lastLeftLift > raiseLift;
     final rightRaised = _lastRightLift > raiseLift;
     final leftLowered = _lastLeftLift < lowerLift;
@@ -1414,6 +1531,7 @@ class PlankHoldValidator extends _BaseValidator {
   double _hipLineError = 0;
   double _kneeLineError = 0;
   double _averageKneeAngle = 0;
+  double _torsoVerticalness = 0;
 
   @override
   AiMotionActivity get activity => AiMotionActivity.plankHold;
@@ -1446,6 +1564,7 @@ class PlankHoldValidator extends _BaseValidator {
     _hipLineError = 0;
     _kneeLineError = 0;
     _averageKneeAngle = 0;
+    _torsoVerticalness = 0;
   }
 
   @override
@@ -1464,10 +1583,22 @@ class PlankHoldValidator extends _BaseValidator {
     _averageKneeAngle =
         (features.kneeAngle(left: true) + features.kneeAngle(left: false)) / 2;
 
-    final kneesBent = _averageKneeAngle < 148;
-    final kneesDropped = knee.y > hip.y && _kneeLineError > 0.16;
-    final hipsOutOfLine = _hipLineError > 0.16;
-    final legsNotExtended = _kneeLineError > 0.18 || kneesBent;
+    final kneesBent = _averageKneeAngle < tuning.value('minKneeAngle', 148);
+    final maxHip = tuning.value('maxHipLineError', 0.16);
+    final maxKnee = tuning.value('maxKneeLineError', 0.18);
+    // A plank is a horizontal body. Without this gate a person standing
+    // upright (straight legs, hips in line) held the timer for free.
+    final torsoDx = shoulder.x - hip.x;
+    final torsoDy = shoulder.y - hip.y;
+    final torsoLength = math
+        .sqrt(torsoDx * torsoDx + torsoDy * torsoDy)
+        .clamp(0.06, 0.8);
+    _torsoVerticalness = torsoDy.abs() / torsoLength;
+    final notHorizontal =
+        _torsoVerticalness > tuning.value('maxTorsoVerticalness', 0.7);
+    final kneesDropped = knee.y > hip.y && _kneeLineError > maxHip;
+    final hipsOutOfLine = _hipLineError > maxHip;
+    final legsNotExtended = _kneeLineError > maxKnee || kneesBent;
 
     if (!fullBodyVisible) {
       _pause(
@@ -1475,6 +1606,10 @@ class PlankHoldValidator extends _BaseValidator {
         'low_landmark_confidence',
         'Position your full body in frame.',
       );
+      return;
+    }
+    if (notHorizontal) {
+      _pause(frame, 'not_in_plank', 'Get into a plank position.');
       return;
     }
     if (kneesDropped) {
@@ -1505,6 +1640,7 @@ class PlankHoldValidator extends _BaseValidator {
     'hipLineError': _hipLineError,
     'kneeLineError': _kneeLineError,
     'averageKneeAngle': _averageKneeAngle,
+    'torsoVerticalness': _torsoVerticalness,
   };
 
   void _pause(NuvoPoseFrame frame, String reason, String feedback) {
@@ -1668,7 +1804,8 @@ class MultiPhaseSequenceValidator extends _BaseValidator {
     required this.statusText,
     required this.coachingTextActive,
     required this.coachingTextIncomplete,
-  }) : _airborne = AirborneStateTracker() {
+    AirborneStateTracker? airborne,
+  }) : _airborne = airborne ?? AirborneStateTracker() {
     final defs = definitions(_airborne);
     _trackers = defs
         .map((def) => MultiPhaseSequenceTracker(definition: def))
@@ -2247,7 +2384,7 @@ const squatJackRepDefinition = RepMovementDefinition(
 // ─────────────────────────────────────────────────────────────────────────────
 
 typedef CadenceSideSignal =
-    CadenceSide? Function(PoseFeatureExtractor features);
+    CadenceSide? Function(PoseFeatureExtractor features, MotionTuning tuning);
 
 class CadenceMovementDefinition {
   const CadenceMovementDefinition({
@@ -2277,7 +2414,7 @@ class CadenceMovementDefinition {
   /// set it replaces [sideSignal] — Running / Treadmill use this so the
   /// alternation reading survives a collapsed hip width and a horizontal-only
   /// stride. See [AlternatingGaitSignal].
-  final AlternatingGaitSignal Function()? gaitSignalFactory;
+  final AlternatingGaitSignal Function(MotionTuning tuning)? gaitSignalFactory;
   final String statusText;
   final String coachingTextActive;
   final String coachingTextIncomplete;
@@ -2300,12 +2437,21 @@ class CadenceMovementDefinition {
 /// Extends [_BaseValidator] for frame-counting, visibility, confidence, and
 /// finish behavior — the same contract every other preset validator honors.
 class CadenceMotionValidator extends _BaseValidator {
-  CadenceMotionValidator({required this.definition, required super.targetValue})
-    : _cadence = CadenceDetector(stableFrames: definition.stableFrames),
-      _gaitSignal = definition.gaitSignalFactory?.call(),
-      _distance = definition.measuresVirtualDistance
-          ? VirtualDistanceEstimator()
-          : null;
+  CadenceMotionValidator({
+    required this.definition,
+    required super.targetValue,
+    MotionTuning tuning = MotionTuning.empty,
+  }) : _cadence = CadenceDetector(
+         stableFrames: tuning
+             .value('stableFrames', definition.stableFrames.toDouble())
+             .round(),
+       ),
+       _gaitSignal = definition.gaitSignalFactory?.call(tuning),
+       _distance = definition.measuresVirtualDistance
+           ? VirtualDistanceEstimator()
+           : null {
+    this.tuning = tuning;
+  }
 
   final CadenceMovementDefinition definition;
   final CadenceDetector _cadence;
@@ -2367,7 +2513,7 @@ class CadenceMotionValidator extends _BaseValidator {
     final gait = _gaitSignal;
     _lastMeasuredSide = gait != null
         ? gait.measure(features)
-        : definition.sideSignal!(features);
+        : definition.sideSignal!(features, tuning);
     // A run that has produced clean alternation is unambiguously "moving";
     // don't let a stale `missing_landmarks` from the pre-lock frames ride
     // through to the diagnostic/telemetry result.
@@ -2509,7 +2655,10 @@ class AlternatingGaitSignal {
     final devY = dy - _tiltDy;
     _tiltDy += verticalTiltAlpha * (dy - _tiltDy);
 
-    final swing = devX + devY;
+    // Front view moves the knees vertically (devY), side view moves them
+    // horizontally (devX). Summing the two cancelled out when the athlete
+    // faced one way, so follow whichever axis is moving more.
+    final swing = devY.abs() >= devX.abs() ? devY : devX;
     _lastSwing = swing;
 
     final threshold = f.torsoHeight * liftFraction;
@@ -2533,10 +2682,16 @@ const marchingInPlaceDefinition = CadenceMovementDefinition(
   coachingTextIncomplete: 'Lower body needed',
 );
 
-AlternatingGaitSignal _marchGaitSignal() =>
-    AlternatingGaitSignal(liftFraction: 0.30);
-AlternatingGaitSignal _walkGaitSignal() =>
-    AlternatingGaitSignal(liftFraction: 0.12);
+AlternatingGaitSignal _gait(MotionTuning t, double lift) =>
+    AlternatingGaitSignal(
+      liftFraction: t.value('liftFraction', lift),
+      horizontalCentreAlpha: t.value('horizontalCentreAlpha', 0.04),
+      verticalTiltAlpha: t.value('verticalTiltAlpha', 0.01),
+    );
+
+AlternatingGaitSignal _marchGaitSignal(MotionTuning t) => _gait(t, 0.30);
+AlternatingGaitSignal _runGaitSignal(MotionTuning t) => _gait(t, 0.18);
+AlternatingGaitSignal _walkGaitSignal(MotionTuning t) => _gait(t, 0.12);
 
 /// Running in Place: alternating leg drive at a fast cadence. Uses the
 /// stateful [AlternatingGaitSignal] (torso-normalized, dominant-axis,
@@ -2545,7 +2700,7 @@ AlternatingGaitSignal _walkGaitSignal() =>
 const runningInPlaceDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.runningInPlace,
   requiredLandmarks: _cadenceGaitLandmarks,
-  gaitSignalFactory: AlternatingGaitSignal.new,
+  gaitSignalFactory: _runGaitSignal,
   statusText: 'Tracking running in place',
   coachingTextActive: 'Keep your feet moving',
   coachingTextIncomplete: 'Lower body needed',
@@ -2562,7 +2717,7 @@ const runningInPlaceDefinition = CadenceMovementDefinition(
 const treadmillRunningDefinition = CadenceMovementDefinition(
   activity: AiMotionActivity.treadmillRunning,
   requiredLandmarks: _cadenceGaitLandmarks,
-  gaitSignalFactory: AlternatingGaitSignal.new,
+  gaitSignalFactory: _runGaitSignal,
   measuresVirtualDistance: true,
   statusText: 'Tracking treadmill running',
   coachingTextActive: 'Keep your feet moving',
@@ -2611,7 +2766,7 @@ const _buttKickLandmarks = [
 /// well-tracked ankle behind the body — often the worst-tracked landmark in
 /// this movement). The thigh-down gate is what keeps a High Knee (thigh up,
 /// ankle also up but knee up too) from reading as a butt kick.
-CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
+CadenceSide? _buttKickSide(PoseFeatureExtractor f, MotionTuning tuning) {
   final leftShoulder = f.frame.point('leftShoulder')!;
   final rightShoulder = f.frame.point('rightShoulder')!;
   final leftHip = f.frame.point('leftHip')!;
@@ -2632,8 +2787,10 @@ CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
   // Thigh stays down: reject a side whose knee has lifted toward the hip
   // (that's a knee raise, not a heel kick). Resting knee sits ~0.9 torso below
   // the hip; anything above ~0.55 torso below is a real thigh lift.
-  final leftKneeUp = leftKnee.y < leftHip.y + torso * 0.55;
-  final rightKneeUp = rightKnee.y < rightHip.y + torso * 0.55;
+  final leftKneeUp =
+      leftKnee.y < leftHip.y + torso * tuning.value('kneeUpFraction', 0.55);
+  final rightKneeUp =
+      rightKnee.y < rightHip.y + torso * tuning.value('kneeUpFraction', 0.55);
 
   // Alternating ankle stagger — a smaller y is a higher ankle (heel up). A
   // real heel-to-glute fold lifts the ankle by ~0.35+ torso; require a clear
@@ -2641,7 +2798,7 @@ CadenceSide? _buttKickSide(PoseFeatureExtractor f) {
   // worst-tracked landmark in this movement — a stricter gap loses real reps
   // to noise, and the thigh-down gate below is what actually rejects a high
   // knee, not this number.
-  final threshold = torso * 0.20;
+  final threshold = torso * tuning.value('ankleGapFraction', 0.20);
   final diff = rightAnkle.y - leftAnkle.y; // > 0 => left ankle is higher
   if (diff > threshold && !leftKneeUp) return CadenceSide.left;
   if (diff < -threshold && !rightKneeUp) return CadenceSide.right;
@@ -2692,20 +2849,22 @@ class MountainClimbersValidator extends _BaseValidator {
   /// Vertical projection can reach 1.0 when a front-facing plank is viewed
   /// down the length of the body. The hand-height gate below is what keeps a
   /// standing knee raise from entering this context.
-  static const _plankVerticalnessMax = 1.05;
+  double get _plankVerticalnessMax =>
+      tuning.value('plankVerticalnessMax', 1.05);
 
   /// Drive-difference (already torso-normalized) for one knee to read as the
   /// active side. Real footage often shows a smaller projected gap than the
   /// idealized side-biased fixture.
-  static const _driveGap = 0.26;
+  double get _driveGap => tuning.value('driveGap', 0.26);
 
   /// A hand line close to the shoulder line is a useful support cue for a
   /// mountain climber. This is deliberately permissive for camera tilt.
-  static const _handShoulderVerticalGapMax = 0.55;
+  double get _handShoulderVerticalGapMax =>
+      tuning.value('handShoulderVerticalGapMax', 0.55);
 
   /// Fallback knee-proximity gap for front-facing views where projection onto
   /// the torso axis under-reports a knee drive.
-  static const _proximityGap = 0.24;
+  double get _proximityGap => tuning.value('proximityGap', 0.24);
 
   @override
   AiMotionActivity get activity => AiMotionActivity.mountainClimbers;
@@ -2843,8 +3002,8 @@ class LateralStepsValidator extends _BaseValidator {
 
   // Fraction of hip width the ankle-center must deviate from baseline to
   // count as an intentional step (vs a small positioning correction).
-  static const _stepFraction = 0.55;
-  static const _neutralFraction = 0.20;
+  double get _stepFraction => tuning.value('stepFraction', 0.55);
+  double get _neutralFraction => tuning.value('neutralFraction', 0.20);
   static const _baselineEmaAlpha = 0.15;
 
   @override
@@ -2938,8 +3097,10 @@ class CalfRaisesValidator extends _BaseValidator {
   // ~3-4% of frame height, so the rise threshold has to sit low against torso
   // height or a genuine raise never arms. The re-arm floor stays well below it
   // for hysteresis.
-  static const _riseFraction = 0.07; // rise threshold, fraction of torsoHeight
-  static const _lowerFraction = 0.03; // must fall back below this to re-arm
+  // Rise threshold, fraction of torsoHeight.
+  double get _riseFraction => tuning.value('riseFraction', 0.07);
+  // Must fall back below this to re-arm.
+  double get _lowerFraction => tuning.value('lowerFraction', 0.03);
   static const _baselineEmaAlpha = 0.12;
 
   @override

@@ -19,9 +19,12 @@ import 'taught_motion_v2.dart';
 ///  - a structured [MotionAttemptResult] for every failed attempt, so a
 ///    failure at 5% ("never started") is distinguishable from 85% ("almost").
 class StreamingMotionV2 {
-  StreamingMotionV2(this.motion, this.encoder,
-      {double fpsHint = 15.0, this.background})
-      : _bufCap = math.max(30, (5.0 * fpsHint).round());
+  StreamingMotionV2(
+    this.motion,
+    this.encoder, {
+    double fpsHint = 15.0,
+    this.background,
+  }) : _bufCap = math.max(30, (5.0 * fpsHint).round());
 
   final TaughtMotionV2 motion;
   final MotionEncoderV2 encoder;
@@ -100,7 +103,10 @@ class StreamingMotionV2 {
 
     // Camera readiness — computed every push, cheap, needed for the big message.
     final recent = _buf.length <= 6 ? _buf : _buf.sublist(_buf.length - 6);
-    final pq = evaluatePoseQuality(_buf.isEmpty ? null : _buf.last, recent: recent);
+    final pq = evaluatePoseQuality(
+      _buf.isEmpty ? null : _buf.last,
+      recent: recent,
+    );
 
     if (_framesSeen < _minFrames) {
       return _result(false, 0, 0, MotionV2RuntimeState.warmingUp, t0, pq: pq);
@@ -117,8 +123,13 @@ class StreamingMotionV2 {
     final repM = await encoder.encode(hm);
     final emb = perFrameEmbedding(rep);
     final embM = perFrameEmbedding(repM);
-    final m = motion.matchEncoded(rep, emb,
-        repM: repM, embM: embM, background: background);
+    final m = motion.matchEncoded(
+      rep,
+      emb,
+      repM: repM,
+      embM: embM,
+      background: background,
+    );
 
     final seg = segmentAction(emb);
     final activeLen = seg.end - seg.start;
@@ -130,8 +141,10 @@ class StreamingMotionV2 {
     final vSeg = activeLen >= 4
         ? [for (var i = seg.start; i < seg.end; i++) v[i]]
         : v;
-    final movementNow = activeLen >= 4 &&
-        (motion.demoActiveVel <= 0 || median(vSeg) > motion.demoActiveVel * 0.35);
+    final movementNow =
+        activeLen >= 4 &&
+        (motion.demoActiveVel <= 0 ||
+            median(vSeg) > motion.demoActiveVel * 0.35);
 
     if (!_attemptActive && movementNow && pq.trackable) {
       _resetAttempt();
@@ -141,9 +154,10 @@ class StreamingMotionV2 {
     if (_attemptActive) {
       _maxProgress = math.max(_maxProgress, prog);
       _bestProtoMargin = math.min(_bestProtoMargin, m.protoMargin);
-      _bestTrajMargin = math.min(_bestTrajMargin, 1.0 - m.trajSim <= 0
-          ? 0
-          : (1.0 - m.trajSim) / motion.acceptTrajDist);
+      _bestTrajMargin = math.min(
+        _bestTrajMargin,
+        1.0 - m.trajSim <= 0 ? 0 : (1.0 - m.trajSim) / motion.acceptTrajDist,
+      );
       _worstScale = math.max(_worstScale, hDiag.diag.scaleChangeFraction);
       _worstRoot = math.max(_worstRoot, hDiag.diag.rootTranslationMagnitude);
       if (!pq.trackable) _sawUntrackableMidAttempt = true;
@@ -177,16 +191,24 @@ class StreamingMotionV2 {
 
     final state = _inMatch
         ? MotionV2RuntimeState.matching
-        : (_armed ? MotionV2RuntimeState.neutral : MotionV2RuntimeState.returning);
+        : (_armed
+              ? MotionV2RuntimeState.neutral
+              : MotionV2RuntimeState.returning);
 
-    final r = _result(newRep, m.score, prog, state, t0,
-        protoDist: m.protoDist,
-        protoMargin: m.protoMargin,
-        trajSim: m.trajSim,
-        rootDrift: hDiag.diag.rootTranslationMagnitude,
-        scaleSpread: hDiag.diag.scaleChangeFraction,
-        pq: pq,
-        match: m);
+    final r = _result(
+      newRep,
+      m.score,
+      prog,
+      state,
+      t0,
+      protoDist: m.protoDist,
+      protoMargin: m.protoMargin,
+      trajSim: m.trajSim,
+      rootDrift: hDiag.diag.rootTranslationMagnitude,
+      scaleSpread: hDiag.diag.scaleChangeFraction,
+      pq: pq,
+      match: m,
+    );
     _last = r;
     return r;
   }
@@ -206,8 +228,7 @@ class StreamingMotionV2 {
       poseReadiness: PoseReadiness.ready.name,
       maxProgress: 1.0,
       durationMs: durMs,
-      encoderLatencyMs:
-          DateTime.now().difference(t0).inMilliseconds.toDouble(),
+      encoderLatencyMs: DateTime.now().difference(t0).inMilliseconds.toDouble(),
       userFeedback: '',
     );
   }
@@ -236,7 +257,9 @@ class StreamingMotionV2 {
     motion.demoRegionActivity.forEach((region, taught) {
       final live = liveRegion[region] ?? 0;
       // How much this region fell short of the taught motion (0 = met it).
-      regionErr[region] = taught <= 1e-6 ? 0.0 : math.max(0.0, (taught - live) / taught);
+      regionErr[region] = taught <= 1e-6
+          ? 0.0
+          : math.max(0.0, (taught - live) / taught);
     });
     String? primary;
     var worst = 0.0;
@@ -307,8 +330,7 @@ class StreamingMotionV2 {
       primaryMismatchRegion: primary,
       cameraDistanceChange: _worstScale,
       rootTranslation: _worstRoot,
-      encoderLatencyMs:
-          DateTime.now().difference(t0).inMilliseconds.toDouble(),
+      encoderLatencyMs: DateTime.now().difference(t0).inMilliseconds.toDouble(),
       userFeedback: feedback,
     );
   }

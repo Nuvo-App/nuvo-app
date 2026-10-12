@@ -108,8 +108,10 @@ class VirtualDistanceEstimator {
     final hz = _cadenceHz;
     final cadenceStretch = 0.85 + 0.15 * ((hz - 1.5) / 1.5).clamp(0.0, 1.0);
     final targetStride =
-        ((_baseStride + _driveSpan * _lastDriveFactor) * cadenceStretch)
-            .clamp(_minStride, _maxStride);
+        ((_baseStride + _driveSpan * _lastDriveFactor) * cadenceStretch).clamp(
+          _minStride,
+          _maxStride,
+        );
     _smoothedStride += _strideEmaAlpha * (targetStride - _smoothedStride);
     _metres += _smoothedStride;
 
@@ -164,22 +166,22 @@ class VirtualDistanceEstimator {
   }
 
   String get intensityLabel => switch (intensityLevel) {
-        0 => 'Ready',
-        1 => 'Easy',
-        2 => 'Moderate',
-        _ => 'Hard',
-      };
+    0 => 'Ready',
+    1 => 'Easy',
+    2 => 'Moderate',
+    _ => 'Hard',
+  };
 
   /// Snapshot for `debugValues` / telemetry.
   Map<String, double> get metrics => {
-        'virtualDistanceM': _round(_metres),
-        'movingSeconds': _round(_movingSeconds),
-        'cadenceSpm': _round(cadenceStepsPerMinute),
-        'strideM': _round(_smoothedStride),
-        'paceSecPerMile': _round(paceSecondsPerMile ?? 0),
-        'avgPaceSecPerMile': _round(averagePaceSecondsPerMile ?? 0),
-        'intensity': intensityLevel.toDouble(),
-      };
+    'virtualDistanceM': _round(_metres),
+    'movingSeconds': _round(_movingSeconds),
+    'cadenceSpm': _round(cadenceStepsPerMinute),
+    'strideM': _round(_smoothedStride),
+    'paceSecPerMile': _round(paceSecondsPerMile ?? 0),
+    'avgPaceSecPerMile': _round(averagePaceSecondsPerMile ?? 0),
+    'intensity': intensityLevel.toDouble(),
+  };
 
   static double _round(double v) => (v * 100).roundToDouble() / 100;
 

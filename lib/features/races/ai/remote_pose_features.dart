@@ -84,6 +84,54 @@ class RemotePoseFeatures {
     return ratio.isFinite ? ratio : null;
   }
 
+  /// `(a.axis − b.axis) / refLength` — a signed axis delta normalized by a
+  /// reference segment so it reads the same at any camera distance. The
+  /// reference length is the Euclidean |refA−refB|, or, when [refIsX] is
+  /// given, the absolute delta of refA and refB on that axis only (e.g. torso
+  /// height = |hip.y − shoulder.y|). Null on any invalid or degenerate input.
+  static double? axisRatio({
+    required NuvoPosePoint? a,
+    required NuvoPosePoint? b,
+    required NuvoPosePoint? refA,
+    required NuvoPosePoint? refB,
+    required bool isX,
+    bool? refIsX,
+    double minLikelihood = 0.35,
+  }) {
+    if (!_valid(a, minLikelihood) ||
+        !_valid(b, minLikelihood) ||
+        !_valid(refA, minLikelihood) ||
+        !_valid(refB, minLikelihood)) {
+      return null;
+    }
+    final rx = refA!.x - refB!.x;
+    final ry = refA.y - refB.y;
+    final refLen = refIsX == null
+        ? math.sqrt(rx * rx + ry * ry)
+        : (refIsX ? rx.abs() : ry.abs());
+    if (refLen < _epsilon) return null;
+    final delta = isX ? a!.x - b!.x : a!.y - b!.y;
+    final ratio = delta / refLen;
+    return ratio.isFinite ? ratio : null;
+  }
+
+  /// The midpoint of [a] and [b] with the weaker of the two likelihoods, or
+  /// null when either is missing/low-likelihood. Used for virtual landmarks
+  /// such as `midHip`.
+  static NuvoPosePoint? midpoint(
+    NuvoPosePoint? a,
+    NuvoPosePoint? b, {
+    double minLikelihood = 0.35,
+  }) {
+    if (!_valid(a, minLikelihood) || !_valid(b, minLikelihood)) return null;
+    return NuvoPosePoint(
+      x: (a!.x + b!.x) / 2,
+      y: (a.y + b.y) / 2,
+      z: (a.z + b.z) / 2,
+      likelihood: math.min(a.likelihood, b.likelihood),
+    );
+  }
+
   static bool _valid(NuvoPosePoint? p, double minLikelihood) =>
       p != null &&
       p.x.isFinite &&
