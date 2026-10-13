@@ -126,6 +126,7 @@ const _trustedGoalUnits = {
   'oz', 'glasses', 'ml', 'cups', 'meals',
   'lb', 'lbs', 'pounds', 'kg', 'kilos', 'x bodyweight',
   'games', 'wins', 'matches', 'sets', 'rounds', 'levels', 'levels beaten',
+  'steps', 'gpa', 'xp', 'attendance',
 };
 
 /// THE resolver: a typed race name → [RaceIntentResolution]. Wraps

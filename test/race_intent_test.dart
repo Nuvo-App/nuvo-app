@@ -241,6 +241,23 @@ void main() {
     });
   });
 
+  group('recognized measures route as custom goals', () {
+    const cases = <String, String>{
+      'who has the best GPA': 'gpa',
+      'most steps by friday': 'steps',
+      'best attendance': 'attendance',
+      'highest score on duolingo': 'xp',
+    };
+    cases.forEach((name, unit) {
+      test('"$name" resolves customGoal in $unit', () {
+        final r = resolveRaceIntent(name);
+        expect(r.path, RaceIntentPath.customGoal, reason: r.reason);
+        expect(r.interpretation.manualUnit, unit);
+        expect(r.interpretation.scoreDirection, 'higher');
+      });
+    });
+  });
+
   group('provenance', () {
     test('resolved fields are marked inferred; unresolved stay open', () {
       final r = resolveRaceIntent('Pushups');
