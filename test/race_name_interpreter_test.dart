@@ -353,6 +353,19 @@ void main() {
       });
     }
 
+    for (final p in [
+      'who can study more',
+      'who can focus longer',
+      'who wins the study battle',
+    ]) {
+      test('"$p" asks how to measure instead of guessing', () {
+        final i = interpretRaceName(p);
+        expect(i.question, isNotNull);
+        expect(i.question, contains('measure'));
+        expect(i.scoreDirection, 'higher');
+      });
+    }
+
     test('"best study time" stays a duration where more wins', () {
       final i = interpretRaceName('best study time');
       expect(i.manualUnit, 'seconds');

@@ -171,6 +171,39 @@ FlexiRaceInterpretation interpretRaceName(
     core = next;
   }
 
+  // "study more" / "focus longer" / "the study battle" name a duration habit
+  // with no measure — total time or one long session. Ask once instead of
+  // defaulting a target.
+  final vagueHabit = RegExp(
+          r'^(study|studying|focus|focusing|work|working)\s+(more|longer)$|^(study|focus|work)\s+(battle|contest|challenge)$')
+      .firstMatch(core);
+  if (vagueHabit != null) {
+    final verb = vagueHabit.group(1) ?? vagueHabit.group(3)!;
+    final habit = verb.startsWith('stud')
+        ? 'study'
+        : verb.startsWith('foc')
+            ? 'focus'
+            : 'work';
+    final goalName = _canonSubjectDomain('$habit time');
+    return FlexiRaceInterpretation(
+      input: input.trim(),
+      goalKind: RaceGoalKind.manual,
+      metric: RaceMetric.reps,
+      format: RaceFormat.bestAttempt,
+      targetValue: 1,
+      proofNeed: ProofNeed.manual,
+      confidence: InterpretationConfidence.assumed,
+      scoreDirection: 'higher',
+      manualGoalName: _titleCase(goalName),
+      manualUnit: _unitFor(goalName) ?? 'minutes',
+      inferredFields: const {
+        RaceField.goalKind, RaceField.manualGoal, RaceField.manualUnit,
+      },
+      assumptions: assumptions,
+      question: 'How should we measure it — total hours or longest session?',
+    );
+  }
+
   // Proof instructions override every inferred default. Mined from the head
   // AND the modifier clauses, then stripped so they never pollute subjects.
   var proofOverride = _proofFromText(core) ?? _proofFromText(tails.join(' '));
