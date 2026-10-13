@@ -366,6 +366,18 @@ void main() {
       });
     }
 
+    test('"lose 10 lbs" counts pounds, not the verb', () {
+      final i = interpretRaceName('lose 10 lbs');
+      expect(i.manualUnit, 'lb');
+      expect(i.targetValue, 10);
+    });
+
+    test('"no sugar for 30 days" counts days', () {
+      final i = interpretRaceName('no sugar for 30 days');
+      expect(i.manualUnit, 'days');
+      expect(i.targetValue, 30);
+    });
+
     test('"best study time" stays a duration where more wins', () {
       final i = interpretRaceName('best study time');
       expect(i.manualUnit, 'seconds');

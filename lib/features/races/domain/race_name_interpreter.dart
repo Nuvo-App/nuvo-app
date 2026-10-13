@@ -860,7 +860,19 @@ FlexiRaceInterpretation interpretRaceName(
   var fbQuestion = _genericSubjectQuestion[stripped] ??
       constraintQuestion ??
       _fallbackQuestion(core, stripped, target);
-  final fbUnit = stripped.isEmpty ? null : _unitFor(stripped);
+  var fbUnit = stripped.isEmpty ? null : _unitFor(stripped);
+  // "lose 10 lbs" counts pounds lost — the verb is not the unit.
+  final loseMatch = RegExp(
+          r'^(?:lose|drop|shed|cut)\s+\d+\s+(lbs?|pounds?|kg|kilos?|kilograms?)$')
+      .firstMatch(core);
+  if (loseMatch != null) {
+    fbUnit = loseMatch.group(1)!.startsWith('k') ? 'kg' : 'lb';
+    stripped = 'weight lost';
+  }
+  // "no sugar for 30 days" counts days held, not the thing avoided.
+  final streakMatch =
+      RegExp(r'^no\s+.+\s+for\s+\d+\s+(day|week)s?$').firstMatch(core);
+  if (streakMatch != null) fbUnit = '${streakMatch.group(1)}s';
   // Score-domain races are one great attempt — "95 percent on test" is
   // not a tally to a finish line.
   final scoreLike =
