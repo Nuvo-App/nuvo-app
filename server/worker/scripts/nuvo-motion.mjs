@@ -20,6 +20,8 @@
 //   upload-asset --release-id R --asset-id A --file F
 //   audit [--activity-id A] [--release-id R] [--action X] [--limit N]
 //   signals [--activity-id A] [--release-id R]
+//   activity-create <file.json>                  create a NEW motion (starts hidden)
+//   activity-update <activityId> <file.json>     edit name/targets/formats/instructions/aliases/camera/order
 //   sessions-failed [--limit N]                 recent failed/incomplete recorded sessions
 //   session-get <sessionId> [--out file.json]   download one recorded pose log for tool/motion-replay.sh
 //   session-latest <activityId> [--out file.json]  newest recorded session for a motion
@@ -104,15 +106,15 @@ switch (command) {
     const releaseId = flag('release-id', null);
     const parent = flag('parent', null);
     const semver = flag('semver', null);
-    if (!file || !releaseId || !parent || !semver) {
-      console.error('usage: draft <specFile> --release-id R --parent P --semver S [--change-class] [--notes]');
+    if (!file || !releaseId || !semver) {
+      console.error('usage: draft <specFile> --release-id R --semver S [--parent P (omit only for a new motion\'s first release)] [--change-class] [--notes]');
       process.exit(2);
     }
     const spec = JSON.parse(fs.readFileSync(file, 'utf8'));
     print(await call('POST', '/motion/releases/drafts', {
       activityId: spec.activityId,
       releaseId,
-      parentReleaseId: parent,
+      parentReleaseId: parent ?? undefined,
       semver,
       changeClass: flag('change-class', 'patch'),
       releaseNotes: flag('notes', ''),
@@ -210,6 +212,19 @@ switch (command) {
       if (v) qs.set(param, v);
     }
     print(await call('GET', `/motion/adaptation/signals?${qs}`));
+    break;
+  }
+  case 'activity-create': {
+    const file = firstPositional();
+    if (!file) { console.error('usage: activity-create <file.json>'); process.exit(2); }
+    print(await call('POST', '/motion/activities', JSON.parse(fs.readFileSync(file, 'utf8'))));
+    break;
+  }
+  case 'activity-update': {
+    const id = firstPositional();
+    const file = args.filter((a) => !a.startsWith('--'))[1];
+    if (!id || !file) { console.error('usage: activity-update <activityId> <file.json>'); process.exit(2); }
+    print(await call('PUT', `/motion/activities/${encodeURIComponent(id)}`, JSON.parse(fs.readFileSync(file, 'utf8'))));
     break;
   }
   case 'sessions-failed': {

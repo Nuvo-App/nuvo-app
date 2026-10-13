@@ -324,8 +324,34 @@ class MotionCatalogSnapshot {
     for (final bundled in motionActivityDefinitions) {
       if (isLive && !publishedIds.contains(bundled.activityId)) continue;
       final published = remoteById.remove(bundled.activityId);
+      if (published == null) {
+        definitions.add(bundled);
+        continue;
+      }
+      final row = activities.firstWhere((a) => a.id == bundled.activityId);
+      final formats = row.supportedFormats
+          .map(MotionCatalogActivity._raceFormatFor)
+          .whereType<RaceFormat>()
+          .toList();
       definitions.add(
-        published == null ? bundled : bundled.withRelease(published),
+        bundled.withRelease(
+          published,
+          title: row.displayName.isEmpty ? null : row.displayName,
+          suggestedTargets: row.suggestedTargets.isEmpty
+              ? null
+              : row.suggestedTargets,
+          supportedFormats: formats.isEmpty ? null : formats,
+          aliases: row.aliases.isEmpty
+              ? null
+              : {
+                  ...bundled.aliases,
+                  ...row.aliases.map((alias) => alias.toLowerCase()),
+                }.toList(),
+          instructions: row.instructions.isEmpty ? null : row.instructions,
+          proofLabel: row.proofLabel.isEmpty ? null : row.proofLabel,
+          featured: row.featured,
+          sortPriority: row.sortPriority,
+        ),
       );
     }
     // Database-published activities that were not present in the app build

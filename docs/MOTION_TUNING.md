@@ -45,3 +45,35 @@ submit: run each motion in the build ~5 times on a phone, pull the sessions,
 replay them, and hide (`activity-visibility <id> --set hidden`) anything that
 does not count reliably. Races pin the release that was stable when created;
 new releases apply to new races.
+
+## Managing motions from Cloudflare
+
+Everything runs through `server/worker/scripts/nuvo-motion.mjs` (needs
+`NUVO_INTERNAL_KEY`). No app update for any of it, as long as the motion uses an
+engine the shipped app has (`state_machine_v1`, `alternating_rep_v1`,
+`hold_v1`, `sequence_match_v1`, `rep_tree_v1`).
+
+**Create a new motion**
+1. `node scripts/nuvo-motion.mjs activity-create new_motion.json` — creates it
+   hidden. File shape: `{ "id": "side_reaches", "displayName": "Side Reaches",
+   "category": "upper_body", "proofLabel": "side reaches",
+   "measurementType": "repetitions" | "duration", "suggestedTargets": [10, 20],
+   "supportedFormats": ["first_to_goal"], "iconKey": "fitness_center",
+   "instructions": ["..."], "aliases": ["..."], "cameraOrientation": "front" }`.
+   `measurementType` is fixed after this (races are stored against it).
+2. `draft spec.json --release-id side_reaches-2026.10.0 --semver 2026.10.0`
+   (no `--parent` for the first release; the spec needs an `activity` block).
+3. `promote ... --channel internal`, then beta, then stable.
+4. `activity-visibility side_reaches --set supported` — now it is in the app.
+
+**Edit a motion's details:** `activity-update <id> changes.json` with any of
+displayName, category, proofLabel, suggestedTargets, supportedFormats, iconKey,
+sortPriority, featured, instructions, aliases, cameraOrientation. Works for
+compiled motions too (name, targets, instructions, order); a compiled motion's
+type, reps-vs-seconds, and preview stay fixed in the app.
+
+**Update logic / roll back / retire:** `draft` + `promote` a new release,
+`rollback`, or `activity-visibility <id> --set hidden`.
+
+**Not possible without an app update:** a motion that needs a body measurement
+or engine the app doesn't have, or changing a motion's measurement type.

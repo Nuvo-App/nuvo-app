@@ -374,37 +374,49 @@ class MotionActivityDefinition {
   final String? engineType;
   final List<String> requiredCapabilities;
 
-  /// This definition with the control plane's release identity attached.
-  /// Everything the user sees or the app routes on (type, title, metric, hold
-  /// vs reps, targets, instructions, preview) stays the compiled motion's — a
-  /// published row may pin which release runs, never redefine the motion.
-  MotionActivityDefinition withRelease(MotionActivityDefinition published) =>
-      MotionActivityDefinition(
-        type: type,
-        title: title,
-        metric: metric,
-        suggestedTargets: suggestedTargets,
-        supportedFormats: supportedFormats,
-        aliases: aliases,
-        proofLabel: proofLabel,
-        cameraInstruction: cameraInstruction,
-        instructions: instructions,
-        icon: icon,
-        framingLabel: framingLabel,
-        preferredCameraView: preferredCameraView,
-        category: category,
-        isHold: isHold,
-        featured: featured,
-        sortPriority: sortPriority,
-        measurementType: measurementType,
-        goalPromptOverride: goalPromptOverride,
-        displayUnitOverride: displayUnitOverride,
-        backendId: backendId,
-        releaseId: published.releaseId,
-        releaseChecksum: published.releaseChecksum,
-        engineType: published.engineType,
-        requiredCapabilities: published.requiredCapabilities,
-      );
+  /// This definition with the control plane's release identity and editable
+  /// display details applied. What the app routes on — type, metric, hold vs
+  /// reps, measurement, preview, icon, camera view — stays the compiled
+  /// motion's, so a published row can never turn plank into a reps motion or
+  /// drop its preview. Name, targets, formats, instructions, aliases, proof
+  /// label, order and featured are editable from Cloudflare (only the
+  /// non-empty values the row actually carries).
+  MotionActivityDefinition withRelease(
+    MotionActivityDefinition published, {
+    String? title,
+    List<int>? suggestedTargets,
+    List<RaceFormat>? supportedFormats,
+    List<String>? aliases,
+    List<String>? instructions,
+    String? proofLabel,
+    bool? featured,
+    int? sortPriority,
+  }) => MotionActivityDefinition(
+    type: type,
+    title: title ?? this.title,
+    metric: metric,
+    suggestedTargets: suggestedTargets ?? this.suggestedTargets,
+    supportedFormats: supportedFormats ?? this.supportedFormats,
+    aliases: aliases ?? this.aliases,
+    proofLabel: proofLabel ?? this.proofLabel,
+    cameraInstruction: cameraInstruction,
+    instructions: instructions ?? this.instructions,
+    icon: icon,
+    framingLabel: framingLabel,
+    preferredCameraView: preferredCameraView,
+    category: category,
+    isHold: isHold,
+    featured: featured ?? this.featured,
+    sortPriority: sortPriority ?? this.sortPriority,
+    measurementType: measurementType,
+    goalPromptOverride: goalPromptOverride,
+    displayUnitOverride: displayUnitOverride,
+    backendId: backendId,
+    releaseId: published.releaseId,
+    releaseChecksum: published.releaseChecksum,
+    engineType: published.engineType,
+    requiredCapabilities: published.requiredCapabilities,
+  );
 
   String get activityId => backendId ?? type.backendValue;
   bool get isRemote => backendId != null;
