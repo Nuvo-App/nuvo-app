@@ -339,4 +339,24 @@ void main() {
           isNot(ProofNeed.gpsActivity));
     });
   });
+
+  group('custom goal reading fixes', () {
+    for (final p in [
+      'best 5k time',
+      'top mile pace',
+      'best 100m sprint time',
+    ]) {
+      test('"$p" is a stopwatch reading, fewer seconds wins', () {
+        final i = interpretRaceName(p);
+        expect(i.manualUnit, 'seconds');
+        expect(i.scoreDirection, 'lower');
+      });
+    }
+
+    test('"best study time" stays a duration where more wins', () {
+      final i = interpretRaceName('best study time');
+      expect(i.manualUnit, 'seconds');
+      expect(i.scoreDirection, 'higher');
+    });
+  });
 }

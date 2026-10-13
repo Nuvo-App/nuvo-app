@@ -605,8 +605,14 @@ FlexiRaceInterpretation interpretRaceName(
     if (activity == null && isTimeWord && (unit == null || unit == 'count')) {
       unit = word == 'longest' ? _durationUnit(subject) : 'seconds';
     }
-    var direction =
-        contradicts ? 'lower' : _directionFor(word, subject, unit);
+    // "best 5k time" / "top mile pace" is a stopwatch reading over a course,
+    // not an amount of distance — fewer seconds wins.
+    final courseTime =
+        activity == null && word != 'improve' && _isCourseTime(subject);
+    if (courseTime) unit = 'seconds';
+    var direction = contradicts || courseTime
+        ? 'lower'
+        : _directionFor(word, subject, unit);
     var question = contradicts ? _contradictionQuestion(input) : null;
     question ??= constraintQuestion;
     // Improvement races measure a delta — every delta needs a baseline,
@@ -1637,6 +1643,14 @@ String _directionFor(String word, String subject, String? unit) {
   if (lowerSubjects.contains(subject)) return 'lower';
   return 'higher';
 }
+
+/// A course-time subject: a course/distance token plus a clock word
+/// ("5k time", "mile pace", "100m sprint time"). Study/screen/focus "time" is
+/// a duration where more can win, so it never matches.
+bool _isCourseTime(String subject) =>
+    RegExp(r'\b(time|pace|split)\b').hasMatch(subject) &&
+    RegExp(r'(\b\d+\s*(k|km|m|mi|mile|miles|meter|meters)\b|\b(mile|marathon|sprint|dash|lap)\b)')
+        .hasMatch(subject);
 
 /// Score-valued subjects produce a value per attempt, not a running tally —
 /// "first to a 100 on a quiz" is best-attempt even under first-to grammar.
