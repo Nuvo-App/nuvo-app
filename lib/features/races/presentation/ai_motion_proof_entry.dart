@@ -14,9 +14,11 @@ import 'motion_catalog_provider.dart';
 ///
 /// Every proof launch — Verify queue, Ready Next, Race Detail, the proof
 /// screen's Begin — funnels here so the destination is decided BEFORE
-/// navigation: camera-verifiable races go straight to the fullscreen verifier
-/// (`/race/:id/proof/ai-motion`), everything else goes to the proof chooser
-/// (`/race/:id/proof`). No route pushes an intermediate page and forwards.
+/// navigation. A camera-verifiable race first lands on the proof screen's
+/// pre-verify setup (`/race/:id/proof`: the motion character preview and
+/// Begin); its Begin calls back with [fromPreview] and goes on to the
+/// fullscreen verifier (`/race/:id/proof/ai-motion`). Manual races keep the
+/// proof chooser. No route pushes an intermediate page and forwards.
 ///
 /// The first camera launch per install shows the "why the camera" primer —
 /// the OS prompt itself is raised by the camera plugin inside the verifier.
@@ -25,6 +27,7 @@ Future<void> openAiMotionProof(
   WidgetRef ref,
   Race race, {
   required String routeAction,
+  bool fromPreview = false,
 }) async {
   final eligibility = resolveCameraVerification(
     race,
@@ -35,7 +38,11 @@ Future<void> openAiMotionProof(
   );
   debugLogCameraVerificationDecision(race, eligibility, routeAction: routeAction);
 
-  if (!eligibility.isCameraVerifiable) {
+  // Not camera-verifiable → the chooser. Camera-verifiable but not yet seen
+  // the pre-verify setup → show the motion preview first; its Begin returns
+  // here with fromPreview so the user is never dropped into the camera cold.
+  if (!eligibility.isCameraVerifiable ||
+      (!fromPreview && eligibility.movementType != null)) {
     if (context.mounted) {
       await context.push('/race/${race.id}/proof');
     }

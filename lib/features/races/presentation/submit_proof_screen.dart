@@ -416,6 +416,7 @@ class _SubmitProofScreenState extends ConsumerState<SubmitProofScreen> {
         ref,
         race,
         routeAction: 'submit_proof_to_camera',
+        fromPreview: true,
       );
     } finally {
       if (mounted) setState(() => _navigating = false);
