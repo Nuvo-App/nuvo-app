@@ -90,3 +90,13 @@ proof screen), and ship model/matcher changes through System B (model swap, OTA)
 2. Teach captures: same opt-in consent as sessions, or require it for Teach (it is the
    user's own movement, landmarks only)?
 3. Screenshots of every screen that looked broken (P2 depends on them).
+
+## 4. Status (updated)
+- **P0 done** (ORT link + V1 fallback) — device check pending.
+- **P1 done** — `teachableMovement` intent path (`teachable_movements.dart`), 17 positive and
+  25 negative regression phrases, benchmark 350/350. The composer asks ONE centred question
+  ("Count Pull Ups with the camera?" → Teach Nuvo / Count it by hand / Pick a different movement).
+- **P2 started** — shared `NuvoFocusedStage` (centred, scroll-safe); used by the composer's teach
+  question, custom-movement form and training page, and by Teach Nuvo's intro, name, learning,
+  failed and learned screens. The raw native error is gone. Still open: the live-test camera
+  overlays and the capture screen chrome (need device screenshots); P3 (data to Cloudflare) and P4.

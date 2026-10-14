@@ -16,6 +16,7 @@ import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_edge_back_swipe.dart';
+import '../../../core/widgets/nuvo_focused_stage.dart';
 import '../../../core/widgets/nuvo_motion.dart';
 import '../../../core/widgets/nuvo_fade_scroll.dart';
 import '../../../core/widgets/nuvo_number_flow.dart';
@@ -28,6 +29,7 @@ import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
 import '../domain/race_mode_semantics.dart';
 import '../domain/race_intent.dart';
+import '../domain/teachable_movements.dart';
 import '../domain/race_name_interpreter.dart';
 import '../domain/race_safety.dart';
 import 'motion_catalog_provider.dart';
@@ -292,6 +294,17 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       !draft.userEditedFields.contains(RaceField.activity) &&
       !draft.userEditedFields.contains(RaceField.goalKind) &&
       _nameResolution(draft).resolvesSubject;
+
+  /// A camera-countable movement the typed name resolved to, offered as ONE
+  /// centred question — unless the user already made their own choice.
+  TeachableMovement? _teachSuggestionFor(RaceDraft draft) {
+    if (draft.isCustom ||
+        draft.userEditedFields.contains(RaceField.activity) ||
+        draft.userEditedFields.contains(RaceField.goalKind)) {
+      return null;
+    }
+    return _nameResolution(draft).teachable;
+  }
 
   /// Advance to the next visible stage in response to a step's CTA.
   ///
@@ -721,6 +734,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
                         _ActivityPage(
                           draft: draft,
                           preferManual: _preferManualSubject,
+                          teachSuggestion: _teachSuggestionFor(draft),
                           onDraftChanged: (d) =>
                               ref.read(_composerDraftProvider.notifier).state =
                                   d,
@@ -1297,10 +1311,16 @@ class _ActivityPage extends ConsumerStatefulWidget {
     required this.onNext,
     this.onInput,
     this.preferManual = false,
+    this.teachSuggestion,
   });
   final RaceDraft draft;
   final ValueChanged<RaceDraft> onDraftChanged;
   final VoidCallback onNext;
+
+  /// The camera-countable movement the typed name resolved to ("pull ups"),
+  /// when there is positive evidence for one. Replaces the busy picker with a
+  /// single centred question: teach it, or count it by hand.
+  final TeachableMovement? teachSuggestion;
 
   /// The goal step's subject chip routed here to edit a resolved custom
   /// goal — the manual form leads instead of the movement picker.
@@ -1326,6 +1346,10 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
   /// The user chose "Teach Nuvo a new movement" — collect its name + unit here,
   /// then Continue advances to the required training stage.
   bool _teachMode = false;
+
+  /// The user declined the one-question teach suggestion ("Pick a different
+  /// movement") — show the normal picker.
+  bool _suggestionDismissed = false;
 
   /// Progressive disclosure — the primary view is just four movements. The
   /// full browser (search, categories, catalog) opens behind
@@ -1533,24 +1557,54 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
         ? widget.draft.activity.activityId
         : '';
 
+    final suggestion = widget.teachSuggestion;
+    if (suggestion != null &&
+        !_suggestionDismissed &&
+        !_teachMode &&
+        !showManual) {
+      return NuvoFocusedStage(
+        icon: Icons.videocam_rounded,
+        title: 'Count ${suggestion.name} with the camera?',
+        body:
+            'Nuvo can learn it. You show it 3 times, then it counts every '
+            '${suggestion.isHold ? 'second you hold it' : 'rep'}.',
+        primaryLabel: 'Teach Nuvo',
+        primaryKey: FirstRaceGuideKeys.composerActivityCta,
+        onPrimary: () {
+          _moveNameController.text = suggestion.name;
+          _moveUnitController.text = suggestion.unit;
+          _syncCustomMovement();
+          widget.onNext();
+        },
+        secondaryLabel: 'Count it by hand',
+        onSecondary: () {
+          // An explicit choice: remember it so the suggestion never returns.
+          widget.onDraftChanged(
+            widget.draft.copyWith(
+              goalKind: RaceGoalKind.manual,
+              markEdited: {RaceField.goalKind},
+            ),
+          );
+          setState(() => _manualMode = true);
+        },
+        links: [
+          (
+            'Pick a different movement',
+            () => setState(() => _suggestionDismissed = true),
+          ),
+        ],
+      );
+    }
+
     // Entering Teach Nuvo is an explicit path choice — a manual-goalKind
     // draft must not dead-end the card's tap on this guard.
     if (_teachMode) {
       final canContinue = _moveNameController.text.trim().isNotEmpty;
-      return _PageShell(
-        question: 'Your custom movement',
-        support:
-            'Name it and pick how it is counted. Next you\'ll teach it to '
-            'Nuvo.',
-        ctaLabel: 'Continue to training',
-        ctaEnabled: canContinue,
-        ctaKey: FirstRaceGuideKeys.composerActivityCta,
-        onCta: () {
-          _syncCustomMovement();
-          widget.onNext();
-        },
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      return NuvoFocusedStage(
+        icon: Icons.videocam_rounded,
+        title: 'Your custom movement',
+        body: 'Name it and pick how it is counted. Next you\'ll teach it to Nuvo.',
+        content: Column(
           children: [
             _ComposerField(
               controller: _moveNameController,
@@ -1568,28 +1622,23 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
               hint: 'reps',
               onChanged: (_) => _syncCustomMovement(),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Nuvo watches you do it 3 times, learns the shape of the motion, '
-              'then counts every rep live.',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: context.themeColors.inkMuted,
-              ),
-            ),
-            const SizedBox(height: 16),
-            NuvoTertiaryButton(
-              label: 'Pick a preset movement instead',
-              small: true,
-              onPressed: () => setState(() => _teachMode = false),
-            ),
-            const SizedBox(height: 8),
-            NuvoTertiaryButton(
-              label: 'Use a custom goal instead',
-              small: true,
-              onPressed: () => _setKind(RaceGoalKind.manual),
-            ),
           ],
         ),
+        primaryLabel: 'Continue to training',
+        primaryKey: FirstRaceGuideKeys.composerActivityCta,
+        onPrimary: canContinue
+            ? () {
+                _syncCustomMovement();
+                widget.onNext();
+              }
+            : null,
+        links: [
+          (
+            'Pick a preset movement instead',
+            () => setState(() => _teachMode = false),
+          ),
+          ('Use a custom goal instead', () => _setKind(RaceGoalKind.manual)),
+        ],
       );
     }
 
@@ -2238,61 +2287,16 @@ class _TrainPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final trained = draft.verifierSpec != null;
     final name = (draft.customActivityName ?? 'your movement').trim();
-    return _PageShell(
-      question: trained ? '"$name" is ready' : 'Teach Nuvo "$name"',
-      support: trained
-          ? 'Nuvo learned the motion. Continue to set the target.'
-          : 'Record it 3 times so Nuvo can recognise every rep. This step '
-                'is required before you can race on it.',
-      ctaLabel: trained ? 'Continue' : 'Start training',
-      onCta: trained ? onContinue : onTrain,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: trained
-                  ? NuvoColors.success.withValues(alpha: 0.08)
-                  : context.semanticColors.neutral.surface,
-              borderRadius: BorderRadius.circular(NuvoRadii.card),
-              border: Border.all(
-                color: trained
-                    ? NuvoColors.success
-                    : context.semanticColors.neutral.border,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  trained ? Icons.check_circle_rounded : Icons.videocam_rounded,
-                  color: trained ? NuvoColors.success : NuvoColors.blue,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    trained
-                        ? 'Movement trained — Nuvo learned "$name".'
-                        : 'Not trained yet. Tap Start training to record your '
-                              '3 examples, then test it.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: context.themeColors.ink,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (trained) ...[
-            const SizedBox(height: 12),
-            NuvoTertiaryButton(
-              label: 'Retrain this movement',
-              small: true,
-              onPressed: onTrain,
-            ),
-          ],
-        ],
-      ),
+    return NuvoFocusedStage(
+      icon: trained ? Icons.check_circle_rounded : Icons.videocam_rounded,
+      accent: trained ? NuvoColors.success : NuvoColors.blue,
+      title: trained ? 'Nuvo can count $name' : 'Teach Nuvo $name',
+      body: trained
+          ? 'It learned the motion. Next, set the finish line.'
+          : 'Show it 3 times so Nuvo can count every rep.',
+      primaryLabel: trained ? 'Continue' : 'Start',
+      onPrimary: trained ? onContinue : onTrain,
+      links: [if (trained) ('Teach it again', onTrain)],
     );
   }
 }
