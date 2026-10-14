@@ -163,13 +163,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('Nuvo can count'), findsOneWidget);
-      // The two edit actions are text links, not buttons.
-      expect(find.widgetWithText(TextButton, 'Retry teaching'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Change name'), findsOneWidget);
-      expect(
-        find.widgetWithText(ElevatedButton, 'Retry teaching'),
-        findsNothing,
-      );
+      // The two edit actions are plain tappable text — no button widget
+      // around them at all (they must never read as a second CTA).
+      for (final label in ['Retry teaching', 'Change name']) {
+        expect(find.text(label), findsOneWidget);
+        for (final kind in [
+          TextButton,
+          ElevatedButton,
+          OutlinedButton,
+          FilledButton,
+        ]) {
+          expect(find.widgetWithText(kind, label), findsNothing);
+        }
+      }
 
       await tester.tap(find.text('Use this movement'));
       await tester.pumpAndSettle();

@@ -1157,6 +1157,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _framesReceived = 0;
     _framesProcessed = 0;
     _sessionStart = null;
+    // A retried teach is a NEW session — without this, a 'used'/'failed'
+    // finalize earlier in the screen's life would swallow it.
+    _teachSessionFinalized = false;
   }
 
   void _restart() {

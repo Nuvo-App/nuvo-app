@@ -164,19 +164,22 @@ class NuvoFocusedStage extends StatelessWidget {
                         color: colors.inkMuted,
                       ),
                     ),
-                  TextButton(
-                    onPressed: links[i].$2,
-                    style: TextButton.styleFrom(
-                      foregroundColor: colors.inkMuted,
-                      minimumSize: const Size(44, 44),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      tapTargetSize: MaterialTapTargetSize.padded,
-                    ),
-                    child: Text(
-                      links[i].$1,
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: colors.inkMuted,
-                        decoration: TextDecoration.underline,
+                  // Just the text — no button chrome around small edit
+                  // actions; they should never read as a second CTA.
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: links[i].$2,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        links[i].$1,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: colors.inkMuted,
+                          decoration: TextDecoration.underline,
+                        ),
                       ),
                     ),
                   ),
