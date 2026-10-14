@@ -201,6 +201,33 @@ void main() {
     expect(m['modelVersion'], 'mb-encoder-2026.10.0');
   });
 
+  test('artifact contains pose landmarks + diagnostics only — no identity or media', () {
+    final s = build();
+    const banned = {
+      'email', 'fullName', 'full_name', 'username', 'userId', 'user_id',
+      'avatar', 'profilePhoto', 'photo', 'image', 'jpeg', 'jpg', 'png',
+      'video', 'audio', 'mp4', 'token', 'accessToken', 'refreshToken',
+      'password', 'authToken', 'dateOfBirth', 'dob',
+    };
+    void scan(Object? node, String path) {
+      if (node is Map) {
+        for (final e in node.entries) {
+          expect(banned.contains(e.key), isFalse,
+              reason: 'artifact contains banned key $path.${e.key}');
+          scan(e.value, '$path.${e.key}');
+        }
+      } else if (node is List) {
+        for (final v in node) {
+          scan(v, path);
+        }
+      }
+    }
+    final j = s.toJson();
+    scan(j, '\$');
+    // The metadata header is what the Worker indexes — same constraint.
+    scan(s.metadata(), 'metadata');
+  });
+
   test('metadata() marks v1 fallback + failed learn honestly', () {
     final s = NuvoMotionDiagnosticSession(
       sessionId: 'MV2-20261014-FAILED',

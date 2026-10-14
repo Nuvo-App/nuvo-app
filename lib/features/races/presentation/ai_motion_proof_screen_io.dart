@@ -240,6 +240,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     WidgetsBinding.instance.addObserver(this);
     // Retry any motion sessions that failed to upload on a previous run.
     unawaited(ref.read(motionSessionUploadQueueProvider).flush());
+    unawaited(ref.read(teachSessionUploadQueueProvider).flush());
     _loadRace();
   }
 
