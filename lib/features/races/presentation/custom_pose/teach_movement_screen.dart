@@ -1497,6 +1497,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       building = _flow.stage == TeachMovementStage.building;
     }
     final failed = !learned && !building;
+    // Seal + upload the moment the failure is shown — a failed teach is a
+    // terminal session and the most diagnostic-rich one. Waiting for the V2
+    // learn to settle first so its error/self-validation lands in the record.
+    if (failed && !_v2Learning) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _finalizeTeachSession(outcome: 'failed');
+      });
+    }
     final testResult = _customTestResult;
     final matched =
         testResult != null && testResult.verificationStatus == 'custom_verified';
