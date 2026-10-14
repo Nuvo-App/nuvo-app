@@ -16,7 +16,16 @@ class CustomPoseSequenceBuilder {
 
   final int sequenceFrameCount;
 
-  CustomPoseBuildResult build(CustomPoseCalibration calibration) {
+  /// [allowInconsistentDemos] demotes the pairwise-consistency heuristic to
+  /// diagnostics — used when an independent matcher (V2's encoder
+  /// self-validation) has already proven the demos are one movement. The spec
+  /// still has to pass `_selfValidate`: every demo must match the built
+  /// template. Without independent evidence the strict gate stays — the race
+  /// verifies with this spec alone.
+  CustomPoseBuildResult build(
+    CustomPoseCalibration calibration, {
+    bool allowInconsistentDemos = false,
+  }) {
     try {
       _validateCalibration(calibration);
       // Cross-demo region selection on raw frames to identify the shared
@@ -66,7 +75,18 @@ class CustomPoseSequenceBuilder {
         resampled,
         activeSelection.activeFeatureIds,
       );
-      if (!consistency.accepted) {
+      // Pairwise consistency is a heuristic — real demos vary in tempo and
+      // framing even when they are the same movement (production teach
+      // MV2-20261014-12B8FB: the V2 encoder self-validated demos this metric
+      // called inconsistent). With independent matcher evidence the caller
+      // can set allowInconsistentDemos and let _selfValidate arbitrate: the
+      // spec must still recognize every demo it was built from. The real
+      // scores stay in the result either way so telemetry sees the softened
+      // gate. `too_few_active_features` always hard-fails — no spec can be
+      // built from it.
+      if (!consistency.accepted &&
+          (consistency.failureReason == 'too_few_active_features' ||
+              !allowInconsistentDemos)) {
         return CustomPoseBuildResult.failure(
           consistency.failureReason ?? 'inconsistent_demonstrations',
           diagnostics: activeSelection.diagnostics,

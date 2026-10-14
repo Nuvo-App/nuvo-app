@@ -620,6 +620,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _v2 = runtime;
       _selfValidation = runtime.lastSelfValidation;
       if (!mounted) return;
+      // V2's encoder just proved the demos are one learnable movement. If V1's
+      // pairwise-consistency heuristic rejected them anyway, rebuild V1 under
+      // independent evidence — its own spec self-validation still arbitrates.
+      // Without this, "Let's try that again" fires on a teach V2 got right.
+      final v1ConsistencyRejected =
+          _flow.verifierSpec == null && _flow.lastFailureWasConsistency;
+      if (v1ConsistencyRejected && (_selfValidation?.passed ?? false)) {
+        _flow.retryBuildLenient();
+      }
       setState(() {
         _v2Spec = spec;
         _v2Learning = false;

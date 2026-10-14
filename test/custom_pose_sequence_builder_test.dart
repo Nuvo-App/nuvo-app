@@ -324,6 +324,54 @@ void main() {
       expect(noisy.spec, isNull);
     });
 
+    test('consistency rejection lifts only with independent matcher evidence', () {
+      // 2 matching + 1 different demo: strict build rejects on consistency…
+      final strict = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _terminalPoses()),
+            _demo(2, poses: _terminalPoses()),
+            _demo(3, poses: _oppositeTerminalPoses()),
+          ],
+        ),
+      );
+      expect(strict.succeeded, isFalse);
+      expect(strict.failureReason, 'inconsistent_demonstrations');
+
+      // …but with V2-style independent proof the demos are one movement, the
+      // builder proceeds and self-validation decides — this case self-
+      // validates, so a spec comes out. The softened gate stays visible in
+      // the result's consistency report for telemetry.
+      final lenient = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _terminalPoses()),
+            _demo(2, poses: _terminalPoses()),
+            _demo(3, poses: _oppositeTerminalPoses()),
+          ],
+        ),
+        allowInconsistentDemos: true,
+      );
+      expect(lenient.succeeded, isTrue, reason: lenient.failureReason);
+      expect(lenient.consistency?.accepted, isFalse);
+      expect(lenient.consistency?.lowestPairScore, lessThan(0.55));
+
+      // Independent evidence does not rescue a build whose OWN self-
+      // validation fails — wildly divergent demos still produce no spec.
+      final wild = builder.build(
+        _calibration(
+          demos: [
+            _demo(1, poses: _terminalPoses()),
+            _demo(2, poses: _oppositeTerminalPoses()),
+            _demo(3),
+          ],
+        ),
+        allowInconsistentDemos: true,
+      );
+      expect(wild.succeeded, isFalse);
+      expect(wild.failureReason, 'source_demonstration_below_threshold');
+    });
+
     test('low shared feature coverage is rejected', () {
       final result = builder.build(
         _calibration(
