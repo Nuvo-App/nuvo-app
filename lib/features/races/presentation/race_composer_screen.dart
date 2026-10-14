@@ -1576,18 +1576,20 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
           _syncCustomMovement();
           widget.onNext();
         },
-        secondaryLabel: 'Count it by hand',
-        onSecondary: () {
-          // An explicit choice: remember it so the suggestion never returns.
-          widget.onDraftChanged(
-            widget.draft.copyWith(
-              goalKind: RaceGoalKind.manual,
-              markEdited: {RaceField.goalKind},
-            ),
-          );
-          setState(() => _manualMode = true);
-        },
         links: [
+          (
+            'Count it by hand',
+            () {
+              // An explicit choice: remember it so the suggestion never returns.
+              widget.onDraftChanged(
+                widget.draft.copyWith(
+                  goalKind: RaceGoalKind.manual,
+                  markEdited: {RaceField.goalKind},
+                ),
+              );
+              setState(() => _manualMode = true);
+            },
+          ),
           (
             'Pick a different movement',
             () => setState(() => _suggestionDismissed = true),

@@ -17,7 +17,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_geometry.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/nuvo_button.dart';
-import '../../../../core/widgets/nuvo_confirm_dialog.dart';
 import '../../../../core/widgets/nuvo_focused_stage.dart';
 import '../../../../core/widgets/nuvo_loading_indicator.dart';
 import '../../../../core/widgets/nuvo_rep_pulse.dart';
@@ -1349,10 +1348,16 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final bool learned;
     final bool building;
     if (v2) {
-      learned = _v2Spec != null;
+      // "Learned" means there is something to USE: the race verifies with the
+      // spec the teaching flow built, so a V2 result without it is not done
+      // (it used to show a Use button that silently did nothing).
+      learned = _v2Spec != null && spec != null;
       building =
           _flow.stage == TeachMovementStage.building ||
           _v2Learning ||
+          (_v2Spec != null &&
+              spec == null &&
+              _flow.stage != TeachMovementStage.failed) ||
           (_learnRequested &&
               !learned &&
               _v2Error == null &&
@@ -1363,7 +1368,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     final failed = !learned && !building;
     final testResult = _customTestResult;
-    final matched = testResult != null && testResult.verificationStatus == 'custom_verified';
+    final matched =
+        testResult != null && testResult.verificationStatus == 'custom_verified';
+    final failedTest = testResult != null && !matched;
     final extras = <Widget>[
       if (learned && !v2 && spec != null) LearnedMovementPreview(spec: spec),
       if (learned && testResult != null) _testResultStatus(testResult),
@@ -1407,21 +1414,21 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       accent: NuvoColors.success,
       title: 'Nuvo can count $name',
       body: testResult == null
-          ? 'Test it once to make sure it recognises you.'
+          ? 'Use it now, or test it once first to make sure it recognises you.'
           : null,
       content: child,
-      primaryLabel: matched ? 'Use this movement' : 'Test it',
-      onPrimary: matched
-          ? (_navigating ? null : _confirmUseMovement)
-          : _startVerifierTest,
-      secondaryLabel: matched
-          ? 'Test again'
-          : (testResult == null ? 'Use this movement' : 'Test again'),
-      onSecondary: matched
+      // Using the movement is the point; testing is optional. Only a test
+      // that did NOT match makes "Test again" the lead action.
+      primaryLabel: failedTest ? 'Test again' : 'Use this movement',
+      onPrimary: failedTest
           ? _startVerifierTest
-          : (testResult == null
-              ? (_navigating ? null : _confirmUseMovement)
-              : _startVerifierTest),
+          : (_navigating ? null : _goToRaceCreation),
+      secondaryLabel: failedTest
+          ? 'Use this movement'
+          : (testResult == null ? 'Test it' : 'Test again'),
+      onSecondary: failedTest
+          ? (_navigating ? null : _goToRaceCreation)
+          : _startVerifierTest,
       links: [
         ('Retry teaching', _restart),
         ('Change name', _changeName),
@@ -2342,20 +2349,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     } finally {
       if (mounted) setState(() => _navigating = false);
     }
-  }
-
-  Future<void> _confirmUseMovement() async {
-    if (_effectiveSpec == null || _navigating) return;
-    final confirmed = await showNuvoConfirmDialog(
-      context,
-      title: 'Use this movement?',
-      message:
-          'Nuvo will use the movement you taught to verify this race on your device.',
-      cancelLabel: 'Keep teaching',
-      confirmLabel: 'Use movement',
-      destructive: false,
-    );
-    if (confirmed == true && mounted) await _goToRaceCreation();
   }
 
   String _nuvoTestStatus({

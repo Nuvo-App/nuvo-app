@@ -53,7 +53,7 @@ class NuvoFocusedStage extends StatelessWidget {
   final String? secondaryLabel;
   final VoidCallback? onSecondary;
 
-  /// Quiet text actions under the buttons: ("Change name", onTap).
+  /// Quiet text actions pinned to the bottom: ("Change name", onTap).
   final List<(String, VoidCallback?)> links;
 
   @override
@@ -106,40 +106,86 @@ class NuvoFocusedStage extends StatelessWidget {
           ),
         ],
         if (content != null) ...[const SizedBox(height: 22), content!],
-        if (primaryLabel != null) ...[
-          const SizedBox(height: 28),
-          KeyedSubtree(
-            key: primaryKey,
-            child: NuvoPrimaryButton(
-              label: primaryLabel!,
-              expand: true,
-              loading: primaryLoading,
-              onPressed: onPrimary,
-            ),
-          ),
-        ],
-        if (secondaryLabel != null) ...[
-          const SizedBox(height: 10),
-          NuvoOutlineButton(
-            label: secondaryLabel!,
-            expand: true,
-            onPressed: onSecondary,
-          ),
-        ],
-        if (links.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            alignment: WrapAlignment.center,
-            children: [
-              for (final (label, tap) in links)
-                NuvoTertiaryButton(label: label, small: true, onPressed: tap),
-            ],
-          ),
-        ],
       ],
     );
 
-    return LayoutBuilder(
+    // The actions are pinned below the scrolling content, never inside it:
+    // however tall the content gets (a preview, a long message, big text), the
+    // main button stays on screen and tappable.
+    final actions = (primaryLabel == null && secondaryLabel == null)
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(28, 8, 28, 6),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (primaryLabel != null)
+                      KeyedSubtree(
+                        key: primaryKey,
+                        child: NuvoPrimaryButton(
+                          label: primaryLabel!,
+                          expand: true,
+                          loading: primaryLoading,
+                          onPressed: onPrimary,
+                        ),
+                      ),
+                    if (secondaryLabel != null) ...[
+                      const SizedBox(height: 10),
+                      NuvoOutlineButton(
+                        label: secondaryLabel!,
+                        expand: true,
+                        onPressed: onSecondary,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+
+    // Small edit actions ("Change name", "Retry teaching") are plain text at
+    // the bottom of the screen, not buttons competing with the main action.
+    final linkRow = links.isEmpty
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(28, 4, 28, 14),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (var i = 0; i < links.length; i++) ...[
+                  if (i > 0)
+                    Text(
+                      '·',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: colors.inkMuted,
+                      ),
+                    ),
+                  TextButton(
+                    onPressed: links[i].$2,
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.inkMuted,
+                      minimumSize: const Size(44, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                    child: Text(
+                      links[i].$1,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: colors.inkMuted,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+
+    final centred = LayoutBuilder(
       builder: (context, box) => SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
         child: ConstrainedBox(
@@ -154,6 +200,13 @@ class NuvoFocusedStage extends StatelessWidget {
           ),
         ),
       ),
+    );
+    return Column(
+      children: [
+        Expanded(child: centred),
+        if (actions != null) actions,
+        if (linkRow != null) linkRow else const SizedBox(height: 14),
+      ],
     );
   }
 }

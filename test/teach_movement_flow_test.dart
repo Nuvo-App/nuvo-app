@@ -47,6 +47,14 @@ CustomPoseVerifierSpec _realSpec(PoseNormalizer n) {
   return c.verifierSpec!;
 }
 
+/// A real phone-sized window: the default 800x600 test surface is shorter than
+/// the intro, which would scroll the primary button out of reach.
+void _phone(WidgetTester tester) {
+  tester.view.physicalSize = const Size(390, 844);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   const normalizer = PoseNormalizer();
 
@@ -80,6 +88,7 @@ void main() {
     testWidgets(
       'with a name arg, shows a centred intro first, then "Example 1 of 3"',
       (tester) async {
+        _phone(tester);
         final router = GoRouter(
           routes: [
             GoRoute(
@@ -118,6 +127,56 @@ void main() {
     );
   });
 
+  group('Teach Nuvo result screen', () {
+    testWidgets('Use this movement hands the spec back (never a silent no-op); '
+        'edit actions are quiet text, not buttons', (tester) async {
+      _phone(tester);
+      CustomPoseVerifierSpec? result;
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (c, s) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await c.push<CustomPoseVerifierSpec>('/teach');
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/teach',
+            builder: (c, s) => const TeachMovementScreen(
+              seedReadyFixture: true,
+              args: TeachMovementArgs(movementName: 'Side reach', unit: 'reps'),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(child: MaterialApp.router(routerConfig: router)),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Nuvo can count'), findsOneWidget);
+      // The two edit actions are text links, not buttons.
+      expect(find.widgetWithText(TextButton, 'Retry teaching'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Change name'), findsOneWidget);
+      expect(
+        find.widgetWithText(ElevatedButton, 'Retry teaching'),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('Use this movement'));
+      await tester.pumpAndSettle();
+      expect(result, isNotNull, reason: 'tapping Use must return the spec');
+    });
+  });
+
   group('race composer — custom movement state machine', () {
     Widget host({required CustomPoseVerifierSpec teachResult}) {
       final router = GoRouter(
@@ -142,6 +201,7 @@ void main() {
 
     testWidgets('custom flow reaches training BEFORE amount / solo / review, '
         'then advances only after a spec is returned', (tester) async {
+      _phone(tester);
       final spec = _realSpec(normalizer);
       await tester.pumpWidget(host(teachResult: spec));
       await tester.pumpAndSettle();
@@ -182,6 +242,7 @@ void main() {
       '"pull ups" asks ONE centred question; Teach Nuvo goes straight to '
       'training with the name filled in',
       (tester) async {
+        _phone(tester);
         final spec = _realSpec(normalizer);
         await tester.pumpWidget(host(teachResult: spec));
         await tester.pumpAndSettle();
@@ -208,6 +269,7 @@ void main() {
     );
 
     testWidgets('"Count it by hand" keeps it a normal goal', (tester) async {
+      _phone(tester);
       final spec = _realSpec(normalizer);
       await tester.pumpWidget(host(teachResult: spec));
       await tester.pumpAndSettle();

@@ -25,11 +25,14 @@ void main() {
     );
     final title = tester.getCenter(find.text('Teach Nuvo Pull Ups'));
     expect(title.dx, closeTo(195, 1));
-    // Group (icon .. button) is centred, so the title sits above the middle
-    // but the whole block's midpoint is the screen's midpoint.
+    // The message block is centred in the space above the pinned buttons.
     final top = tester.getTopLeft(find.byIcon(Icons.videocam_rounded)).dy;
-    final bottom = tester.getBottomLeft(find.text('Start')).dy;
-    expect((top + bottom) / 2, closeTo(844 / 2, 60));
+    final textBottom = tester.getBottomLeft(find.text('Do it 3 times.')).dy;
+    final buttonTop = tester.getTopLeft(find.text('Start')).dy;
+    expect(textBottom, lessThan(buttonTop));
+    expect((top + textBottom) / 2, closeTo(buttonTop / 2, 80));
+    // And the main button is on screen, near the bottom.
+    expect(buttonTop, greaterThan(600));
   });
 
   testWidgets('primary, secondary and links all fire', (tester) async {
