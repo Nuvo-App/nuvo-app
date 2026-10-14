@@ -16,6 +16,7 @@ import { readMotionCatalog, readMotionRelease } from './domain/motionRegistry';
 import { declaredPackageAssets, packageAssetContentType, packageAssetKey } from './domain/motionAssets';
 import { arenaRouter } from './routes/arena';
 import { motionRouter, motionSessionsRouter } from './routes/motion';
+import { teachSessionsRouter } from './routes/teachSessions';
 import { verificationSessionsRouter } from './routes/verificationSessions';
 import { internalRouter } from './routes/internal';
 import { usersRouter } from './routes/users';
@@ -327,6 +328,9 @@ app.route('/motion', motionRouter);
 
 // ── Motion Session telemetry ingest (authed) + internal lookup (X-Internal-Key)
 app.route('/motion-sessions', motionSessionsRouter);
+
+// ── Teach Nuvo session telemetry ingest (authed, consent-gated)
+app.route('/teach-sessions', teachSessionsRouter);
 app.route('/', verificationSessionsRouter);
 app.route('/internal', internalRouter);
 

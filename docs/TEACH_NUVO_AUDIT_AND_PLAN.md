@@ -99,4 +99,14 @@ proof screen), and ship model/matcher changes through System B (model swap, OTA)
 - **P2 started** — shared `NuvoFocusedStage` (centred, scroll-safe); used by the composer's teach
   question, custom-movement form and training page, and by Teach Nuvo's intro, name, learning,
   failed and learned screens. The raw native error is gone. Still open: the live-test camera
-  overlays and the capture screen chrome (need device screenshots); P3 (data to Cloudflare) and P4.
+  overlays and the capture screen chrome (need device screenshots); P4.
+- **P3 done (code path; needs migration + device data)** — teach sessions upload like motion
+  sessions. `motion_teach_sessions` (0045) + `POST /teach-sessions` (consent-gated, encrypted
+  artifact in R2) + internal `GET /internal/teach-sessions[/:id|/users/:id]` + CLI
+  `teach-list`/`teach-get`. The app records the full diagnostic session on every teach attempt
+  (no longer behind `NUVO_DIAGNOSTICS`), and schema 2 adds the V1 half: the
+  `CustomPoseVerifierSpec` the race actually verifies with, the builder diagnostics, the test
+  result, the engine that ran (`v2|v1|v1_fallback`), the outcome
+  (`used|learned|failed|abandoned`) and the failure stage. `teach-get` writes a `.json.gz`
+  `tools/motion_v2/replay_session.py` opens directly. Before data flows: run migration 0045
+  on prod D1 and redeploy the Worker.

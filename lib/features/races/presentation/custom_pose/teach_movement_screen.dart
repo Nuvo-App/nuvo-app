@@ -34,6 +34,8 @@ import '../../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../../ai/custom_pose/normalized_pose.dart';
 import '../../ai/custom_pose/pose_calibration_flow.dart';
 import '../../ai/custom_pose/pose_stream_controller.dart';
+import '../../../auth/presentation/auth_controller.dart';
+import '../../ai/motion_session/motion_session_providers.dart';
 import '../race_controller.dart';
 import 'learned_custom_movement_provider.dart';
 import 'learned_movement_preview.dart';
@@ -194,6 +196,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     super.initState();
     _flow = SingleSessionTeachingCapture(onChanged: _onFlowChanged);
     WidgetsBinding.instance.addObserver(this);
+    // Retry teach sessions that failed to upload on a previous run.
+    unawaited(ref.read(teachSessionUploadQueueProvider).flush());
     if (kDebugMode && widget.seedReadyFixture) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _seedDebugReadyFixture();
@@ -219,6 +223,19 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   @override
   void dispose() {
     _disposed = true;
+    // Seal the teach session — the abandoned/failed ones are often the most
+    // useful diagnostic. 'used' already finalized on the Use tap, so this is
+    // a no-op on the happy path.
+    _finalizeTeachSession(
+      outcome:
+          _v2Error != null ||
+              _flow.lastBuildFailure != null ||
+              (_selfValidation != null && !_selfValidation!.passed)
+          ? 'failed'
+          : (_effectiveSpec != null || _v2Spec != null)
+          ? 'learned'
+          : 'abandoned',
+    );
     WidgetsBinding.instance.removeObserver(this);
     _nameController.dispose();
     _raceTitleController.dispose();
@@ -664,7 +681,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           r.state == MotionV2RuntimeState.neutral) {
         _v2AttemptWindow.clear();
       }
-      if (kNuvoDiagnosticsEnabled) _recordMatchWindow(r);
+      _recordMatchWindow(r);
       _latencyMs
           .putIfAbsent('encoder+matcher', () => [])
           .add(r.inferenceLatency.inMilliseconds);
@@ -697,7 +714,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     };
   }
 
-  // ── Diagnostic session recording (behind NUVO_DIAGNOSTICS) ─────────────────
+  // ── Teach session recording ───────────────────────────────────────────────
+  // Always on (bounded): the artifact carries the data the offline evaluator
+  // replays — demos, both matcher specs, self-validation, the live-test trace.
+  // Upload is consent-gated at finalize; the NUVO_DIAGNOSTICS flag only gates
+  // the debug UI and the manual share actions now.
 
   int _sessionMs(DateTime t) => t.difference(_sessionStart ?? t).inMilliseconds;
 
@@ -706,7 +727,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     NuvoPoseFrame raw,
     NuvoPoseFrame smoothed,
   ) {
-    if (!kNuvoDiagnosticsEnabled) return;
     if (_testingVerifier) {
       if (_liveTestFrames.length > 900) return;
       _liveTestFrames.add({
@@ -754,7 +774,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _snapshotDemoDiag(List<NuvoPoseFrame> trimmed) {
-    if (!kNuvoDiagnosticsEnabled || _diagCaptureRaw.isEmpty) return;
+    if (_diagCaptureRaw.isEmpty) return;
     final raw = List<NuvoPoseFrame>.of(_diagCaptureRaw);
     final sm = List<NuvoPoseFrame>.of(_diagCaptureSmoothed);
     final start = raw.first.createdAt, end = raw.last.createdAt;
@@ -795,7 +815,17 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     };
   }
 
-  NuvoMotionDiagnosticSession _buildDiagnosticSession() {
+  /// Which matcher ran this teach's learn/test — `v1_fallback` means the V2
+  /// engine could not run on this device at all (native load failure), so the
+  /// cloud triage can split "user examples were bad" from "the engine broke".
+  String get _teachEngine =>
+      _v2Unavailable ? 'v1_fallback' : (_useMotionV2 ? 'v2' : 'v1');
+
+  NuvoMotionDiagnosticSession _buildDiagnosticSession({
+    String? outcome,
+    String? failureStage,
+    String failureReason = '',
+  }) {
     final now = DateTime.now();
     final id = NuvoMotionDiagnosticSession.newId(
       now,
@@ -897,6 +927,26 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       );
     }
 
+    // The V1 half — the spec a created race actually verifies with, the
+    // builder's feature/threshold diagnostics, and the V1 live-test verdict.
+    // Without this the replay can only ever judge V2, never the shipped path.
+    final v1Spec = _effectiveSpec;
+    final v1Test = _customTestResult;
+    final v2LiveTest = _useMotionV2 && _v2Spec != null;
+    final liveTestMatched = _liveTestStart == null
+        ? null
+        : v2LiveTest
+        ? _v2Result.matched
+        : v1Test?.isVerified;
+    final v1 = {
+      if (v1Spec != null) 'spec': v1Spec.toJson(),
+      'build': _flow.debugReport(),
+      if (v1Test != null) 'testResult': v1Test.toJson(),
+      if (_runtimeDiagnostics.isNotEmpty)
+        'runtimeDiagnostics': _runtimeDiagnostics,
+      'buildFailure': ?_flow.lastBuildFailure,
+    };
+
     return NuvoMotionDiagnosticSession(
       sessionId: id,
       timestamp: now,
@@ -925,10 +975,15 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         'matcher': 'multi_reference/schema4',
         'normalization': 'root_scale_normalize',
         'diagSchema': kMotionDiagSchema,
+        if (_v2Unavailable) 'v2Unavailable': true,
+        'liveTestMatched': ?liveTestMatched,
+        'poseFrameCount': _poseFrameCount,
+        'poseFrameValid': _poseFrameValid,
       },
       teaching: demos,
       selfValidation: _selfValidation?.toJson(),
       spec: _v2Spec?.toJson(),
+      v1: v1,
       liveTest: live,
       performance: {
         'framesReceived': _framesReceived,
@@ -938,6 +993,72 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
           for (final e in _latencyMs.entries) e.key: _latencyStats(e.value),
         },
       },
+      movementName: _flow.movementName,
+      outcome:
+          outcome ?? (_effectiveSpec != null ? 'learned' : 'abandoned'),
+      engine: _teachEngine,
+      failureStage: failureStage,
+      failureReason: failureReason,
+      durationMs: _sessionStart == null
+          ? 0
+          : now.difference(_sessionStart!).inMilliseconds,
+    );
+  }
+
+  /// Seal the teach session and hand it to the upload queue — consent-gated
+  /// exactly like verification sessions. Idempotent: [outcome] is only sent
+  /// the first time, so a "used" finalize wins over the dispose-path one.
+  bool _teachSessionFinalized = false;
+
+  void _finalizeTeachSession({required String outcome}) {
+    if (_teachSessionFinalized) return;
+    _teachSessionFinalized = true;
+
+    // Where did it stop being happy? The stage tells the triage whether the
+    // user gave up recording, the V1 builder failed, V2 learning failed, or
+    // the live test couldn't match.
+    final String? failureStage;
+    final String failureReason;
+    if (outcome == 'used' || outcome == 'learned') {
+      failureStage = null;
+      failureReason = '';
+    } else if (_v2Error != null ||
+        _selfValidation != null && _selfValidation!.passed == false) {
+      failureStage = 'v2_learn';
+      failureReason = _selfValidation != null && !_selfValidation!.passed
+          ? 'self_validation_failed'
+          : 'v2_learn_error';
+    } else if (_flow.lastBuildFailure != null) {
+      failureStage = 'v1_build';
+      failureReason = _flow.lastBuildFailure!;
+    } else if (_customTestResult != null && !_customTestResult!.isVerified) {
+      failureStage = 'live_test';
+      failureReason = 'test_not_matched';
+    } else if (outcome == 'abandoned' && _demoDiag.isEmpty) {
+      return; // never recorded anything — nothing worth uploading
+    } else {
+      failureStage = 'recording';
+      failureReason = '';
+    }
+
+    final session = _buildDiagnosticSession(
+      outcome: outcome,
+      failureStage: failureStage,
+      failureReason: failureReason,
+    );
+    final consented =
+        ref.read(authControllerProvider).user?.motionTrainingConsent == true;
+    if (!consented) return;
+    // Fire-and-forget: staging + upload happen off the UI path, identical to
+    // verification sessions (a failure just retries on the next flush).
+    unawaited(
+      ref
+          .read(teachSessionUploadQueueProvider)
+          .enqueueRaw(
+            sessionId: session.sessionId,
+            metadata: session.metadata(),
+            gzipBytes: session.toGzipBytes(),
+          ),
     );
   }
 
@@ -2336,6 +2457,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final spec = _effectiveSpec;
     if (spec == null || _navigating) return;
     setState(() => _navigating = true);
+    _finalizeTeachSession(outcome: 'used');
 
     // Launched from the composer as its training stage → hand the spec back and
     // let the composer resume. Never push a second composer.

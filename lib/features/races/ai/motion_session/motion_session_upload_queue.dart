@@ -17,8 +17,11 @@ import 'motion_session_artifact.dart';
 /// uploads are deleted; artifacts older than [_maxAge] or past [_maxAttempts]
 /// are dropped so the directory can't grow forever.
 class MotionSessionUploadQueue {
-  MotionSessionUploadQueue({required this.upload, Directory? stagingDir})
-    : _stagingOverride = stagingDir;
+  MotionSessionUploadQueue({
+    required this.upload,
+    Directory? stagingDir,
+    this.dirName = 'motion_sessions',
+  }) : _stagingOverride = stagingDir;
 
   /// Sends one artifact. Should throw on any failure (transport, auth, 5xx).
   final Future<void> Function({
@@ -31,7 +34,11 @@ class MotionSessionUploadQueue {
   /// `getApplicationDocumentsDirectory()`.
   final Directory? _stagingOverride;
 
-  static const _dirName = 'motion_sessions';
+  /// Staging sub-directory. One queue per artifact family — a second queue
+  /// pointed at another endpoint (Teach Nuvo sessions) must stage under its
+  /// own name or the two queues would upload each other's files to the wrong
+  /// route.
+  final String dirName;
   static const _maxAttempts = 6;
   static const _maxAge = Duration(days: 7);
 
@@ -41,22 +48,35 @@ class MotionSessionUploadQueue {
   Future<Directory> _stagingDir() async {
     if (_dir != null) return _dir!;
     final base = _stagingOverride ?? await getApplicationDocumentsDirectory();
-    final d = Directory('${base.path}/$_dirName');
+    final d = Directory('${base.path}/$dirName');
     if (!await d.exists()) await d.create(recursive: true);
     return _dir = d;
   }
 
   /// Stage the artifact and try to send it now. Never throws — a failed
   /// upload just means it's retried later by [flush].
-  Future<void> enqueue(MotionSessionArtifact artifact) async {
+  Future<void> enqueue(MotionSessionArtifact artifact) => enqueueRaw(
+    sessionId: artifact.sessionId,
+    metadata: artifact.metadata(),
+    gzipBytes: artifact.toGzipBytes(),
+  );
+
+  /// Same staging for artifact shapes other than [MotionSessionArtifact]
+  /// (e.g. the Teach Nuvo diagnostic session). The session id must be safe
+  /// as a file name — the server validates the same shape.
+  Future<void> enqueueRaw({
+    required String sessionId,
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) async {
     try {
       final dir = await _stagingDir();
-      final blob = File('${dir.path}/${artifact.sessionId}.json.gz');
-      final meta = File('${dir.path}/${artifact.sessionId}.meta.json');
-      await blob.writeAsBytes(artifact.toGzipBytes(), flush: true);
+      final blob = File('${dir.path}/$sessionId.json.gz');
+      final meta = File('${dir.path}/$sessionId.meta.json');
+      await blob.writeAsBytes(gzipBytes, flush: true);
       await meta.writeAsString(
         jsonEncode({
-          'metadata': artifact.metadata(),
+          'metadata': metadata,
           'attempts': 0,
           'stagedAt': DateTime.now().toUtc().toIso8601String(),
         }),

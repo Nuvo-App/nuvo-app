@@ -99,6 +99,26 @@ Treat the sweep as a way to spot which motions are weak and which signal is the
 problem; publish a tune only when recordings pulled from the app (see "The
 loop") agree with it.
 
+## Teach Nuvo session telemetry
+
+Every Teach Nuvo attempt (consenting users) uploads a replayable artifact —
+the same `NuvoMotionDiagnosticSession` the `NUVO_DIAGNOSTICS` export writes —
+to `POST /teach-sessions`, indexed in `motion_teach_sessions` with the outcome
+(`used | learned | failed | abandoned`), the engine that ran
+(`v2 | v1 | v1_fallback`), the failure stage, and both spec halves (the V1
+spec the race verifies with AND the V2 learned spec). Triage and pull:
+
+```bash
+node scripts/nuvo-motion.mjs teach-list --outcome failed
+node scripts/nuvo-motion.mjs teach-list --movement "pull ups"
+node scripts/nuvo-motion.mjs teach-get MV2-20261014-ABCDEF --out s.json.gz
+tools/motion_v2/replay_session.py s.json.gz
+```
+
+`teach-list` marks `v2-unavailable` (engine couldn't run on the device → V1
+fallback), `no-v1-spec`, `v1-learned`/`v2-learned`, `test:match`/`test:no-match`,
+and `failed@<stage>` so the failure lands in the right bucket before replay.
+
 ## Teach Nuvo (Motion V2) on iOS — ONNX Runtime must be kept in the binary
 
 Teach Nuvo runs the MotionBERT encoder through the `onnxruntime` Dart package.

@@ -317,6 +317,28 @@ class RaceApi {
     _decode(res);
   }
 
+  /// Uploads one gzip'd Teach Nuvo diagnostic session plus its searchable
+  /// metadata — same transport as [uploadMotionSession], indexed in
+  /// `motion_teach_sessions` instead.
+  Future<void> uploadTeachSession(
+    String token, {
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) async {
+    final res = await _guard(
+      () => _client.post(
+        Uri.parse('$kNuvoApiBase/teach-sessions'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/gzip',
+          'X-Teach-Session': base64Encode(utf8.encode(jsonEncode(metadata))),
+        },
+        body: gzipBytes,
+      ),
+    );
+    _decode(res);
+  }
+
   Future<void> submitMotionTrainingExample(
     String token, {
     required MotionAnalysisRequest request,

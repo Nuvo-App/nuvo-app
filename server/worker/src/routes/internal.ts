@@ -969,8 +969,13 @@ async function decompressGzip(buf: ArrayBuffer): Promise<ArrayBuffer> {
   return new Response(stream).arrayBuffer();
 }
 
-/** DB row + its full R2 artifact, decompressed — the self-contained payload. */
-async function fullSession(c: Context<AppEnv>, row: SessionRow) {
+/** Fetches + decrypts + gunzips a stored artifact and its metadata sidecar.
+ *  Shared by motion_sessions and motion_teach_sessions rows — both encrypt
+ *  with the same per-account key looked up by the row's user_id/account ref. */
+async function decodeStoredArtifact(
+  c: Context<AppEnv>,
+  row: SessionRow,
+): Promise<{ artifact: unknown; metadata: unknown }> {
   const obj = await c.env.PROFILE_PHOTOS.get(String(row.object_key));
   let artifact: unknown = null;
   let metadata: unknown = null;
@@ -1007,6 +1012,12 @@ async function fullSession(c: Context<AppEnv>, row: SessionRow) {
       artifact = { error: `Could not decode artifact: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
+  return { artifact, metadata };
+}
+
+/** DB row + its full R2 artifact, decompressed — the self-contained payload. */
+async function fullSession(c: Context<AppEnv>, row: SessionRow) {
+  const { artifact, metadata } = await decodeStoredArtifact(c, row);
   return {
     ok: true as const,
     session: sessionSummary(row),
@@ -1112,6 +1123,103 @@ internalRouter.get('/activities/:activityId/motion-sessions/latest', async (c) =
   ).bind(c.req.param('activityId')).first<SessionRow>();
   if (!row) return c.json({ ok: false, error: 'No sessions for this activity.' }, 404);
   return c.json(await fullSession(c, row));
+});
+
+// ── Teach Nuvo sessions ──────────────────────────────────────────────────────
+// The learned-motion observability loop: each row indexes one encrypted teach
+// artifact (3 demos, V1 spec the race verifies with, V2 spec + self-validation,
+// live-test match trace, outcome/failure stage). `teach-list` triages;
+// `teach-get` pulls the full artifact for tools/motion_v2/replay_session.py.
+
+const TEACH_SUMMARY_COLS = `session_id, user_id, movement_name, outcome, engine,
+  failure_stage, failure_reason, demo_count, frame_count, duration_ms,
+  learned, v2_available, v2_learned, self_validation_passed, live_test_matched,
+  used_for_race, schema_version, app_version, git_commit, model_version,
+  matcher_version, object_key, created_at`;
+
+function teachSessionSummary(row: SessionRow) {
+  return {
+    sessionId: row.session_id,
+    userId: row.user_id,
+    movementName: row.movement_name,
+    outcome: row.outcome,
+    engine: row.engine,
+    failureStage: row.failure_stage,
+    failureReason: row.failure_reason,
+    demoCount: row.demo_count,
+    frameCount: row.frame_count,
+    durationMs: row.duration_ms,
+    learned: row.learned === 1,
+    v2Available: row.v2_available === 1,
+    v2Learned: row.v2_learned === 1,
+    selfValidationPassed: row.self_validation_passed == null ? null : row.self_validation_passed === 1,
+    liveTestMatched: row.live_test_matched == null ? null : row.live_test_matched === 1,
+    usedForRace: row.used_for_race === 1,
+    schemaVersion: row.schema_version,
+    appVersion: row.app_version,
+    gitCommit: row.git_commit,
+    modelVersion: row.model_version,
+    matcherVersion: row.matcher_version,
+    objectKey: row.object_key,
+    createdAt: row.created_at,
+  };
+}
+
+async function fullTeachSession(c: Context<AppEnv>, row: SessionRow) {
+  const { artifact, metadata } = await decodeStoredArtifact(c, row);
+  return {
+    ok: true as const,
+    session: teachSessionSummary(row),
+    metadata,
+    artifact,
+  };
+}
+
+// Recent teach sessions across all users — the triage queue. Filters:
+// ?outcome=failed (or learned/abandoned/used), ?movement=<name>, ?userId=<id>,
+// ?limit=N (default 30, max 200).
+internalRouter.get('/teach-sessions', async (c) => {
+  const clauses = ['1 = 1'];
+  const binds: unknown[] = [];
+  const outcome = c.req.query('outcome')?.trim();
+  const movement = c.req.query('movement')?.trim();
+  const userId = c.req.query('userId')?.trim();
+  if (outcome) { clauses.push('outcome = ?'); binds.push(outcome); }
+  if (movement) { clauses.push('movement_name = ?'); binds.push(movement); }
+  if (userId) {
+    const accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+    clauses.push('user_id IN (?, ?)');
+    binds.push(userId, accountRef);
+  }
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 30), 1), 200);
+  binds.push(limit);
+  const rs = await c.env.DB.prepare(
+    `SELECT ${TEACH_SUMMARY_COLS} FROM motion_teach_sessions
+      WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT ?`,
+  ).bind(...binds).all<SessionRow>();
+  return c.json({ ok: true, count: rs.results.length, sessions: rs.results.map(teachSessionSummary) });
+});
+
+// One teach session by id — metadata + the full decrypted artifact.
+internalRouter.get('/teach-sessions/:sessionId', async (c) => {
+  const row = await c.env.DB.prepare(
+    `SELECT ${TEACH_SUMMARY_COLS}, metadata_json FROM motion_teach_sessions
+      WHERE session_id = ? LIMIT 1`,
+  ).bind(c.req.param('sessionId')).first<SessionRow>();
+  if (!row) return c.json({ ok: false, error: 'Teach session not found.' }, 404);
+  return c.json(await fullTeachSession(c, row));
+});
+
+// A user's teach sessions, newest first.
+internalRouter.get('/users/:userId/teach-sessions', async (c) => {
+  const userId = c.req.param('userId');
+  const accountRef = await motionAccountRef(c.env.MOTION_DATA_MASTER_KEY!, userId);
+  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 30), 1), 200);
+  const rs = await c.env.DB.prepare(
+    `SELECT ${TEACH_SUMMARY_COLS} FROM motion_teach_sessions
+      WHERE user_id IN (?, ?) ORDER BY created_at DESC LIMIT ?`,
+  ).bind(userId, accountRef, limit).all<SessionRow>();
+  return c.json({ ok: true, count: rs.results.length, sessions: rs.results.map(teachSessionSummary) });
 });
 
 // QA blank-slate reset — founder-only tooling for repeatable first-user

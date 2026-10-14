@@ -154,4 +154,74 @@ void main() {
     expect(loaded['meta'], contains('encoder'));
     await tmp.delete(recursive: true);
   });
+
+  test('schema 2 carries the V1 race spec + outcome, and metadata() feeds the index', () {
+    final s = NuvoMotionDiagnosticSession(
+      sessionId: 'MV2-20261014-ABCDEF',
+      timestamp: DateTime.utc(2026, 10, 14),
+      meta: const {
+        'appVersion': '1.4.0',
+        'gitCommit': 'abc123',
+        'modelRelease': 'mb-encoder-2026.10.0',
+        'matcher': 'multi_reference/schema4',
+        'liveTestMatched': true,
+      },
+      teaching: const [],
+      spec: const {'schema': 4, 'references': []},
+      v1: const {
+        'spec': {'kind': 'custom_pose_sequence', 'canonicalSequence': []},
+        'build': {'movementName': 'pull ups', 'stage': 'learned'},
+        'testResult': {'isVerified': true},
+      },
+      movementName: 'pull ups',
+      outcome: 'used',
+      engine: 'v2',
+      durationMs: 31000,
+    );
+
+    final j = s.toJson();
+    expect(j['schema'], 2);
+    expect(j['outcome'], 'used');
+    expect(j['engine'], 'v2');
+    expect(j['movementName'], 'pull ups');
+    expect(j['v1']['spec']['kind'], 'custom_pose_sequence');
+
+    // The header metadata mirrors the motion_teach_sessions columns the
+    // Worker indexes on.
+    final m = s.metadata();
+    expect(m['sessionId'], 'MV2-20261014-ABCDEF');
+    expect(m['movementName'], 'pull ups');
+    expect(m['outcome'], 'used');
+    expect(m['engine'], 'v2');
+    expect(m['learned'], isTrue, reason: 'a V1 spec is what "learned" means');
+    expect(m['v2Learned'], isTrue);
+    expect(m['v2Available'], isTrue);
+    expect(m['liveTestMatched'], isTrue);
+    expect(m['usedForRace'], isTrue);
+    expect(m['modelVersion'], 'mb-encoder-2026.10.0');
+  });
+
+  test('metadata() marks v1 fallback + failed learn honestly', () {
+    final s = NuvoMotionDiagnosticSession(
+      sessionId: 'MV2-20261014-FAILED',
+      timestamp: DateTime.utc(2026, 10, 14),
+      meta: const {'v2Unavailable': true},
+      teaching: const [],
+      selfValidation: const {'passed': false},
+      movementName: 'dips',
+      outcome: 'failed',
+      engine: 'v1_fallback',
+      failureStage: 'v2_learn',
+      failureReason: 'self_validation_failed',
+    );
+    final m = s.metadata();
+    expect(m['v2Available'], isFalse);
+    expect(m['v2Learned'], isFalse);
+    expect(m['learned'], isFalse, reason: 'no V1 spec was produced');
+    expect(m['selfValidationPassed'], isFalse);
+    expect(m['liveTestMatched'], isNull);
+    expect(m['usedForRace'], isFalse);
+    expect(m['failureStage'], 'v2_learn');
+    expect(m['failureReason'], 'self_validation_failed');
+  });
 }

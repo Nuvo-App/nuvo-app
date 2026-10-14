@@ -85,6 +85,17 @@ class RaceRepository {
     ),
   );
 
+  Future<void> uploadTeachSession({
+    required Map<String, dynamic> metadata,
+    required Uint8List gzipBytes,
+  }) => _withRefresh(
+    (token) => _api.uploadTeachSession(
+      token,
+      metadata: metadata,
+      gzipBytes: gzipBytes,
+    ),
+  );
+
   Future<void> submitMotionTrainingExample({
     required MotionAnalysisRequest request,
     required String consentVersion,
