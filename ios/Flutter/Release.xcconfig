@@ -1,14 +1,14 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
 
-# ── ONNX Runtime (Teach Nuvo / Motion V2) on iOS ────────────────────────────
-# The `onnxruntime` Dart package finds `OrtGetApiBase` with
-# DynamicLibrary.process() (dlsym over the finished app). Nothing in native code
-# references that symbol, so a release build linked the engine out or stripped
-# it ("Failed to lookup symbol 'OrtGetApiBase'"). Keep it:
-#   -u            forces the linker to pull in and root the symbol
-#   STRIP_STYLE   non-global keeps exported symbols in the binary (Flutter's C
-#                 interop guidance for DynamicLibrary.process())
+// ── ONNX Runtime (Teach Nuvo / Motion V2) on iOS ────────────────────────────
+// The `onnxruntime` Dart package finds `OrtGetApiBase` with
+// DynamicLibrary.process() (dlsym over the finished app). Nothing in native code
+// references that symbol, so a release build linked the engine out or stripped
+// it ("Failed to lookup symbol 'OrtGetApiBase'"). Keep it:
+//   -u            forces the linker to pull in and root the symbol
+//   STRIP_STYLE   non-global keeps exported symbols in the binary (Flutter's C
+//                 interop guidance for DynamicLibrary.process())
 OTHER_LDFLAGS = $(inherited) -Wl,-u,_OrtGetApiBase
 STRIP_STYLE = non-global
 DEAD_CODE_STRIPPING = NO
