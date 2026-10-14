@@ -135,6 +135,62 @@ void main() {
     expect(runtime.targetValue, 8);
   });
 
+  test('remote_release carrying a motion_v2 spec resolves to the V2 runtime', () {
+    const releaseSpec = {
+      'specSchemaVersion': 1,
+      'releaseId': 'rel-v2-1',
+      'activityId': 'pull_ups',
+      'engineType': 'motion_v2',
+      'requiredCapabilities': ['motion_v2'],
+      'activity': {
+        'displayName': 'Pull Ups',
+        'measurementType': 'repetitions',
+        'defaultTarget': 10,
+        'preferredCameraView': 'front_or_angle',
+        'instructions': ['Keep your whole body in frame.'],
+      },
+      'motionV2Spec': {
+        'schema': 2,
+        'verifier': 'motion_v2',
+        'version': 1,
+        'name': 'Pull Ups',
+        'references': [
+          {'proto': [0.1], 'traj': [[0.1]], 'length': 90},
+        ],
+      },
+    };
+    final race = Race.fromJson({
+      'id': 'r1',
+      'title': 'Pull Ups',
+      'goalType': 'first_to_goal',
+      'targetValue': 8,
+      'metric': 'reps',
+      'proofRequirement': 'ai_check',
+      'verificationMethod': 'ai',
+      'activityId': 'pull_ups',
+      'aiActivityType': 'pull_ups',
+      'verifierType': 'remote_release',
+      'verifierReleaseId': 'rel-v2-1',
+      'verifierSpec': releaseSpec,
+      'status': 'active',
+      'createdAt': '2026-01-01T00:00:00Z',
+      'updatedAt': '2026-01-01T00:00:00Z',
+    });
+
+    final eligibility = resolveCameraVerification(race);
+    expect(eligibility.isCameraVerifiable, isTrue);
+    expect(eligibility.isRemoteVerifier, isTrue);
+    expect(eligibility.customMotionV2Spec, isNotNull);
+    expect(eligibility.remoteVerifierSpec, isNull);
+    expect(eligibility.movementDefinition?.title, 'Pull Ups');
+
+    const resolver = VerifierRuntimeResolver();
+    final resolution = resolver.resolve(eligibility: eligibility);
+    expect(resolution.type, VerifierType.motionV2);
+    expect(resolution.canCreateRuntime, isTrue);
+    expect(resolution.createRuntime(target: 8).type, VerifierType.motionV2);
+  });
+
   test('engine load failure surfaces as failedRuleReason, not a crash', () async {
     final engine = _FakeV2Engine()..throwOnLoad = true;
     final runtime = MotionV2VerifierRuntime(

@@ -160,6 +160,7 @@ class TaughtMotionV2 {
     required this.demoActiveVel,
     required this.demoLengths,
     this.demoRegionActivity = const {},
+    this.tuning = const {},
     this.schema = kSchema,
   });
 
@@ -176,6 +177,12 @@ class TaughtMotionV2 {
 
   /// Per-body-region motion magnitude of the demonstrations. Diagnostics only.
   final Map<String, double> demoRegionActivity;
+
+  /// Server-patchable verifier knobs carried inside the spec (matchScore,
+  /// neutralDrop, repMinProgress...). StreamingMotionV2 falls back to its
+  /// compiled defaults when a key is absent, so an operator can retune a
+  /// live race's strictness with a spec patch — no app update.
+  final Map<String, double> tuning;
 
   final int schema;
 
@@ -470,6 +477,7 @@ class TaughtMotionV2 {
     'demo_active_vel': demoActiveVel,
     'demo_lengths': demoLengths,
     'region_activity': demoRegionActivity,
+    if (tuning.isNotEmpty) 'tuning': tuning,
   };
 
   factory TaughtMotionV2.fromJson(Map<String, dynamic> d) {
@@ -497,6 +505,10 @@ class TaughtMotionV2 {
       ],
       demoRegionActivity: {
         for (final e in ((d['region_activity'] as Map?) ?? const {}).entries)
+          e.key as String: (e.value as num).toDouble(),
+      },
+      tuning: {
+        for (final e in ((d['tuning'] as Map?) ?? const {}).entries)
           e.key as String: (e.value as num).toDouble(),
       },
       schema: (d['schema'] as num?)?.toInt() ?? kSchema,

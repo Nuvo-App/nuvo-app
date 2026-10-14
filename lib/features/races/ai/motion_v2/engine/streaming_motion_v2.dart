@@ -36,16 +36,25 @@ class StreamingMotionV2 {
 
   static const int _minFrames = 8;
   static const int _reevalEvery = 3;
-  static const double _neutralDrop = 0.55;
-  static const double _matchScore = 0.5;
+  // Defaults — overridable per-spec via spec.tuning (server-patchable, no app
+  // update). Keys: matchScore, neutralDrop, repMinProgress.
+  static const double _defaultNeutralDrop = 0.55;
+  static const double _defaultMatchScore = 0.5;
   // A rep requires an attempt that actually traversed the movement — a
   // transient same-family window (e.g. walking back to the start position,
   // which can share the demos' approach shape) must not count. The attempt
   // must have covered most of the canonical trajectory AND lasted at least
   // half the shortest demo.
-  static const double _repMinProgress = 0.55;
+  static const double _defaultRepMinProgress = 0.55;
 
   final List<NuvoPoseFrame> _buf = [];
+
+  double get _matchScore =>
+      motion.tuning['matchScore'] ?? _defaultMatchScore;
+  double get _neutralDrop =>
+      motion.tuning['neutralDrop'] ?? _defaultNeutralDrop;
+  double get _repMinProgress =>
+      motion.tuning['repMinProgress'] ?? _defaultRepMinProgress;
   int _count = 0;
   bool _armed = true;
   bool _inMatch = false;

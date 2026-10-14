@@ -7,7 +7,14 @@ const ALLOWED_ENGINES = new Set([
   'sequence_match_v1',
   'rep_tree_v1',
   'native_tuned_v1',
+  // Learned MotionBERT spec — opaque to the Worker; the on-device encoder
+  // owns the math. Lets a consensus spec learned from real teach sessions
+  // ship to everyone through the normal release/promote/channel machinery.
+  'motion_v2',
 ]);
+
+const MOTION_V2_ENGINE = 'motion_v2';
+const MOTION_V2_SPEC_MAX_BYTES = 1536 * 1024;
 
 const ALLOWED_LANDMARKS = new Set([
   'leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
@@ -471,7 +478,7 @@ const PACKAGE_ASSET_TYPES = new Set([
 
 const PACKAGE_ASSET_MAX_BYTES: Record<string, number> = {
   preview_v1: 256 * 1024,
-  motion_v2_spec_v1: 512 * 1024,
+  motion_v2_spec_v1: 1536 * 1024,
   onnx_model: 50 * 1024 * 1024,
   test_vectors_v1: 2 * 1024 * 1024,
 };
@@ -537,7 +544,16 @@ export function validateMotionVerifierSpec(
     throw new MotionSpecValidationError('spec_invalid');
   }
   const value = spec as Record<string, unknown>;
-  if (JSON.stringify(value).length > 64 * 1024) throw new MotionSpecValidationError('spec_too_large');
+  const engineType = stringValue(value.engineType, 'engine_type');
+  // Learned-spec releases embed the full MotionBERT reference payload —
+  // ~1MB vs the rules-spec 64KB. Engine-aware cap, before any field work.
+  const sizeCap = engineType === MOTION_V2_ENGINE
+    ? MOTION_V2_SPEC_MAX_BYTES
+    : 64 * 1024;
+  if (JSON.stringify(value).length > sizeCap) throw new MotionSpecValidationError('spec_too_large');
+  if (engineType === MOTION_V2_ENGINE) {
+    return motionV2ReleaseSpec(value, expected);
+  }
   const unknown = Object.keys(value).filter((key) => !ALLOWED_SPEC_KEYS.has(key));
   if (unknown.length) throw new MotionSpecValidationError('unknown_spec_key');
   if (value.specSchemaVersion !== 1) throw new MotionSpecValidationError('schema_unsupported');
@@ -547,7 +563,6 @@ export function validateMotionVerifierSpec(
   const activityId = stringValue(value.activityId, 'activity_id');
   if (expected?.releaseId && releaseId !== expected.releaseId) throw new MotionSpecValidationError('release_id_mismatch');
   if (expected?.activityId && activityId !== expected.activityId) throw new MotionSpecValidationError('activity_id_mismatch');
-  const engineType = stringValue(value.engineType, 'engine_type');
   if (!ALLOWED_ENGINES.has(engineType)) throw new MotionSpecValidationError('engine_unsupported');
 
   if (engineType === 'native_v1') {
@@ -610,5 +625,55 @@ export function validateMotionVerifierSpec(
     boundedInt(value.lostPoseMs, 'lost_pose_ms', 100, 10 * 1000, 1500);
   }
   void stableFrames;
+  return value;
+}
+
+function allFinite(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(allFinite);
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).every(allFinite);
+  }
+  return true;
+}
+
+/// A learned-spec release: the envelope carries normal release identity
+/// (releaseId, activityId, activity, package, requiredCapabilities); the
+/// MotionBERT payload sits in `motionV2Spec` and is opaque to the Worker —
+/// it is validated structurally only (marker, name, reference demos,
+/// finite numbers). The on-device encoder owns the math.
+function motionV2ReleaseSpec(
+  value: Record<string, unknown>,
+  expected?: { releaseId?: string; activityId?: string },
+): Record<string, unknown> {
+  if (value.specSchemaVersion !== 1) throw new MotionSpecValidationError('schema_unsupported');
+  activityBlock(value.activity);
+  packageManifest(value.package);
+  const releaseId = stringValue(value.releaseId, 'release_id');
+  const activityId = stringValue(value.activityId, 'activity_id');
+  if (expected?.releaseId && releaseId !== expected.releaseId) throw new MotionSpecValidationError('release_id_mismatch');
+  if (expected?.activityId && activityId !== expected.activityId) throw new MotionSpecValidationError('activity_id_mismatch');
+  const caps = value.requiredCapabilities;
+  if (!Array.isArray(caps) || !caps.includes(MOTION_V2_ENGINE)) {
+    throw new MotionSpecValidationError('motion_v2_capability_missing');
+  }
+  const inner = value.motionV2Spec;
+  if (!inner || typeof inner !== 'object' || Array.isArray(inner)) {
+    throw new MotionSpecValidationError('motion_v2_spec_invalid');
+  }
+  const innerSpec = inner as Record<string, unknown>;
+  if (innerSpec.verifier !== MOTION_V2_ENGINE) throw new MotionSpecValidationError('motion_v2_spec_invalid');
+  if (!allFinite(innerSpec)) throw new MotionSpecValidationError('motion_v2_spec_invalid');
+  const refs = innerSpec.references;
+  if (!Array.isArray(refs) || refs.length === 0 || refs.length > 4) {
+    throw new MotionSpecValidationError('motion_v2_spec_invalid');
+  }
+  for (const rawRef of refs) {
+    const ref = rawRef as Record<string, unknown> | null;
+    if (!Array.isArray(ref?.proto) || ref.proto.length === 0 ||
+        !Array.isArray(ref?.traj) || ref.traj.length === 0) {
+      throw new MotionSpecValidationError('motion_v2_spec_invalid');
+    }
+  }
   return value;
 }

@@ -6,6 +6,7 @@ import '../ai/motion_v2/motion_v2_models.dart';
 import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../ai/object_composition_spec.dart';
 import '../ai/remote_verifier_spec.dart';
+import '../data/motion_package.dart';
 import '../data/race_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
@@ -165,6 +166,84 @@ CameraVerificationEligibility? _resolveRemoteRelease(
   final raw = race.verifierSpec;
   final engine = raw?['engineType'];
   if (raw == null || engine == null || engine == 'native_v1') return null;
+  if (engine == 'motion_v2') {
+    // A learned-spec release — the MotionBERT reference payload ships inside
+    // the release envelope as `motionV2Spec`; the release identity fields
+    // (activityId, releaseId, activity metadata) still carry the race's
+    // binding and display metadata.
+    final inner = raw['motionV2Spec'];
+    if (inner is! Map) {
+      return _remoteIneligible(race, 'invalid_motion_v2_spec');
+    }
+    final activityId = raw['activityId'] as String?;
+    if (activityId != null &&
+        activityId != race.effectiveAiActivityType) {
+      return _remoteIneligible(race, 'remote_release_identity_mismatch');
+    }
+    final releaseId = raw['releaseId'] as String?;
+    if (race.verifierReleaseId != null &&
+        releaseId != null &&
+        releaseId != race.verifierReleaseId) {
+      return _remoteIneligible(race, 'remote_release_identity_mismatch');
+    }
+    final TaughtMotionV2Spec v2Spec;
+    try {
+      v2Spec = TaughtMotionV2Spec.fromJson(
+        Map<String, dynamic>.from(inner),
+      );
+    } catch (_) {
+      return _remoteIneligible(race, 'invalid_motion_v2_spec');
+    }
+    final activityInfo = RemoteActivityInfo.tryParse(raw['activity']);
+    if (activityInfo == null) {
+      return _remoteIneligible(race, 'remote_activity_metadata_missing');
+    }
+    final camView = switch (activityInfo.preferredCameraView) {
+      'side' => PreferredCameraView.sideOrDiagonalRequired,
+      'front_or_angle' => PreferredCameraView.frontOrSlightAngle,
+      'front' => PreferredCameraView.frontPreferred,
+      _ => PreferredCameraView.frontOrSlightAngle,
+    };
+    final remoteDefinition = MotionActivityDefinition(
+      type: MotionActivityType.remote,
+      backendId: activityId ?? v2Spec.movementName,
+      title: activityInfo.displayName,
+      metric: RaceMetric.reps,
+      suggestedTargets: [activityInfo.defaultTarget],
+      supportedFormats: const [RaceFormat.firstToGoal],
+      aliases: [activityInfo.displayName.toLowerCase()],
+      proofLabel: activityInfo.displayName,
+      cameraInstruction: switch (camView) {
+        PreferredCameraView.sideOrDiagonalRequired =>
+          'Stand sideways. Keep your full body in frame.',
+        PreferredCameraView.frontOrSlightAngle =>
+          'Angle your body to the camera. Keep your full body in frame.',
+        _ => 'Stand facing the camera. Keep your full body in frame.',
+      },
+      instructions: activityInfo.instructions.isNotEmpty
+          ? activityInfo.instructions
+          : const ['Keep the required body regions visible.'],
+      icon: Icons.fitness_center_rounded,
+      framingLabel: 'Follow the release framing guide',
+      preferredCameraView: camView,
+      category: MovementCategory.fullBody,
+      releaseId: race.verifierReleaseId,
+      engineType: 'motion_v2',
+    );
+    return CameraVerificationEligibility(
+      raceId: race.id,
+      raceTitle: race.title,
+      isCameraVerifiable: true,
+      movementType: MotionActivityType.remote,
+      source: CameraVerificationSource.remoteRelease,
+      preferredCameraView: camView,
+      instructions: remoteDefinition.instructions,
+      reason: 'remote_motion_v2_resolved',
+      customMotionV2Spec: v2Spec,
+      verifierReleaseId: race.verifierReleaseId,
+      remoteActivityDefinition: remoteDefinition,
+    );
+  }
   if (engine == 'object_composition_v1') {
     try {
       final spec = ObjectCompositionSpec.fromJson(raw);

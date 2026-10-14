@@ -370,6 +370,19 @@ class VerifierRuntimeResolver {
       );
     }
 
+    // A remote release carrying a learned-spec payload runs the V2 matcher —
+    // the release ships OTA through the normal promote/channel machinery.
+    if (eligibility.source == CameraVerificationSource.remoteRelease &&
+        eligibility.customMotionV2Spec != null) {
+      return VerifierRuntimeResolution(
+        type: VerifierType.motionV2,
+        eligibility: eligibility,
+        presetMovement: null,
+        motionV2Spec: eligibility.customMotionV2Spec,
+        reason: 'remote_motion_v2_resolved',
+      );
+    }
+
     if (eligibility.remoteVerifierSpec != null) {
       final movement = _movementDefinitionForEligibility(eligibility);
       return VerifierRuntimeResolution(

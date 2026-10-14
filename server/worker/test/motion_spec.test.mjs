@@ -150,3 +150,60 @@ test('Worker rejects an object composition with an unknown transition event', ()
     (error) => error instanceof MotionSpecValidationError && error.message === 'composition_transition_reference_invalid',
   );
 });
+
+test('Worker accepts a motion_v2 learned-spec release envelope', () => {
+  const v2 = {
+    specSchemaVersion: 1,
+    releaseId: 'pull_ups-mv2-2026.10.1',
+    activityId: 'pull_ups',
+    engineType: 'motion_v2',
+    requiredCapabilities: ['pose_landmarks_v1', 'motion_v2'],
+    activity: {
+      displayName: 'Pull Ups',
+      measurementType: 'repetitions',
+      defaultTarget: 10,
+      preferredCameraView: 'front_or_angle',
+      instructions: ['Keep your whole body in frame.'],
+    },
+    motionV2Spec: {
+      schema: 2,
+      verifier: 'motion_v2',
+      version: 1,
+      name: 'Pull Ups',
+      references: [
+        { proto: [0.1, 0.2], traj: [[0.1, 0.2]], length: 90 },
+      ],
+    },
+  };
+  const result = validateMotionVerifierSpec(v2, {
+    releaseId: v2.releaseId,
+    activityId: v2.activityId,
+  });
+  assert.equal(result.engineType, 'motion_v2');
+});
+
+test('Worker rejects a motion_v2 release missing capability or refs', () => {
+  const base = {
+    specSchemaVersion: 1,
+    releaseId: 'r1',
+    activityId: 'pull_ups',
+    engineType: 'motion_v2',
+    requiredCapabilities: ['motion_v2'],
+    motionV2Spec: {
+      verifier: 'motion_v2',
+      references: [{ proto: [0.1], traj: [[0.1]], length: 90 }],
+    },
+  };
+  assert.throws(
+    () => validateMotionVerifierSpec({ ...base, requiredCapabilities: [] }),
+    (error) => error instanceof MotionSpecValidationError && error.message === 'motion_v2_capability_missing',
+  );
+  assert.throws(
+    () => validateMotionVerifierSpec({ ...base, motionV2Spec: { verifier: 'motion_v2', references: [] } }),
+    (error) => error instanceof MotionSpecValidationError && error.message === 'motion_v2_spec_invalid',
+  );
+  assert.throws(
+    () => validateMotionVerifierSpec({ ...base, motionV2Spec: { verifier: 'custom_pose_sequence', references: [{ proto: [0.1], traj: [[0.1]] }] } }),
+    (error) => error instanceof MotionSpecValidationError && error.message === 'motion_v2_spec_invalid',
+  );
+});

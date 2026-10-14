@@ -23,6 +23,9 @@ class MotionCapabilities {
     'sequence_features_v2',
     'rep_tree_v1',
     'native_tuned_v1',
+    // Learned-spec (MotionBERT) runtime — lets a motion_v2 release resolve
+    // through the remote release machinery on this build.
+    'motion_v2',
     if (objectDotProducer != null) ...objectDotProducer.capabilities,
     for (final activity in motionActivityDefinitions)
       'native_${activity.activityId}_v1',

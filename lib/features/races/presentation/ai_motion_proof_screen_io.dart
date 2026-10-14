@@ -106,6 +106,13 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   String _measurementType = 'repetitions';
   CustomPoseRuntimeResult? _customResult;
   bool _isCustom = false;
+
+  /// True when the runtime emits custom-shape output — a custom-pose race OR
+  /// a remote release carrying a learned motion_v2 spec. Drives which update/
+  /// result fields the screen consumes; session kind + identity stay on
+  /// [_isCustom] since a remote release isn't a user-taught custom movement.
+  bool get _usesCustomRuntimeOutput =>
+      _isCustom || _runtime.type == VerifierType.motionV2;
   String? _customMovementName;
   CustomPoseRuntimeUpdate? _customUpdate;
   String? _message;
@@ -191,7 +198,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// never for a hold or a mile-scale run.
   bool get _usesRepFlash {
     if (_isDistanceRace) return _distancePolicy.usesMilestoneBursts;
-    return _isCustom ||
+    return _usesCustomRuntimeOutput ||
         (motionActivityForBackendValue(_activityId)?.isHold ??
                 _measure == MotionMeasurementType.duration) !=
             true;
@@ -392,7 +399,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         _objectDotProducer = null;
         _runtime = runtime;
         _isCustom = isCustom;
-        _customMovementName = isCustom ? race.customActivityName : null;
+        _customMovementName = isCustom
+            ? race.customActivityName
+            : resolution.motionV2Spec?.movementName;
         _customUpdate = null;
         _result = null;
         _customResult = null;
@@ -854,7 +863,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         failedRuleReason: output.failedRuleReason,
         debugValues: output.debugValues,
       );
-      if (_isCustom) {
+      if (_usesCustomRuntimeOutput) {
         _customUpdate = output.customPoseUpdate;
       }
       _skeletonHold.show(frame, DateTime.now());
@@ -976,7 +985,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
 
     final verifierResult = _runtime.finish();
-    if (_isCustom) {
+    if (_usesCustomRuntimeOutput) {
       final result = verifierResult.customPoseResult;
       if (result == null) {
         if (!mounted) return;
@@ -1173,12 +1182,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     }
     final detected = _isObjectComposition
         ? _objectCount
-        : _isCustom
+        : _usesCustomRuntimeOutput
         ? (_customResult?.count ?? 0)
         : (_result?.detectedReps ?? 0);
     final confidence = _isObjectComposition
         ? _objectConfidence
-        : _isCustom
+        : _usesCustomRuntimeOutput
         ? _customResult?.confidence
         : _result?.confidence;
 
@@ -1330,7 +1339,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       }
       return;
     }
-    if (_isCustom) {
+    if (_usesCustomRuntimeOutput) {
       final result = _customResult;
       if (result == null || !result.isVerified) return;
       setState(() {
@@ -1612,7 +1621,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       : motionActivityForBackendValue(_activityId)?.unit ?? _metric;
 
   /// "12 / 25 reps" · "0:45 / 2:00" · "0.12 / 0.25 mi".
-  String _progressText(int current, int target) => _isCustom
+  String _progressText(int current, int target) => _usesCustomRuntimeOutput
       ? '$current / $target'
       : formatMotionProgress(_measure, current, target, _displayUnit);
 
@@ -1646,7 +1655,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   /// The full race goal (not the session's remaining amount).
   String get _targetLabel {
     if (_isObjectComposition) return '$_raceTarget made shots';
-    if (_isCustom) return '$_raceTarget reps';
+    if (_usesCustomRuntimeOutput) return '$_raceTarget reps';
     final definition = motionActivityForBackendValue(_activityId);
     return definition?.targetLabel(_raceTarget) ??
         '$_raceTarget $_activityLabel';
@@ -1660,22 +1669,24 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     final ctx = _raceContext;
     if (ctx != null &&
         !_hasFinishTarget &&
-        !_isCustom &&
+        !_usesCustomRuntimeOutput &&
         !_isObjectComposition) {
       final shown = ctx.isAttemptBased
           ? _sessionContribution
           : _raceTotalBefore + _sessionContribution;
-      return _isCustom
+      return _usesCustomRuntimeOutput
           ? '$shown'
           : formatMotionTarget(_measure, shown, _displayUnit);
     }
-    if (_isCustom) return '$_displayedRaceProgress / $_raceTarget $_metric';
+    if (_usesCustomRuntimeOutput) {
+      return '$_displayedRaceProgress / $_raceTarget $_metric';
+    }
     return _progressText(_displayedRaceProgress, _raceTarget);
   }
 
   String get _movementTitle => _isObjectComposition
       ? 'Basketball shot'
-      : _isCustom
+      : _usesCustomRuntimeOutput
       ? (_customMovementName ?? 'Custom movement')
       : motionActivityForBackendValue(_activityId)?.title ??
             _activityLabel;
@@ -1873,7 +1884,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
             ),
           ),
 
-          if (kDebugMode && _isCustom && recording)
+          if (kDebugMode && _usesCustomRuntimeOutput && recording)
             Positioned(
               left: 14,
               right: 14,
@@ -2142,7 +2153,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
               Text(
                     _isObjectComposition
                         ? '+$_objectCount ${_objectCount == 1 ? 'shot' : 'shots'}'
-                        : _isCustom
+                        : _usesCustomRuntimeOutput
                         ? '+${_customCountedLabel(customResult)}'
                         : '+${_countedLabel(result)}',
                     style: AppTextStyles.displayLarge.copyWith(
@@ -2189,7 +2200,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     // Failed / coaching state.
     final detected = _isObjectComposition
         ? _objectCount
-        : _isCustom
+        : _usesCustomRuntimeOutput
         ? (customResult?.count ?? 0)
         : (result?.detectedReps ?? 0);
     return Center(
