@@ -171,8 +171,14 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   List<NuvoPoseFrame> _lastFailedAttemptFrames = const [];
   final List<NuvoPoseFrame> _v2AttemptWindow = [];
 
-  /// Motion V2 is the default; V1 only when explicitly forced for troubleshooting.
-  bool get _useMotionV2 => !kMotionV1Forced;
+  /// Set when the V2 engine itself could not run on this device (its native
+  /// runtime or model failed to load) — not a problem with the user's examples.
+  /// Teaching then continues on the V1 matcher instead of dead-ending.
+  bool _v2Unavailable = false;
+
+  /// Motion V2 is the default; V1 when forced for troubleshooting, or when V2
+  /// proved unavailable on this device.
+  bool get _useMotionV2 => !kMotionV1Forced && !_v2Unavailable;
 
   CustomPoseVerifierSpec? get _effectiveSpec =>
       _debugReadyFixture ? _debugSpec : _flow.verifierSpec;
@@ -615,10 +621,18 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _v2Learning = false;
       });
     } catch (e) {
-      await runtime.dispose();
+      // Not a MotionV2Exception: the engine could not run at all (e.g. the
+      // ONNX Runtime library failed to load). Don't show the user a raw
+      // native error or ask them to re-record — fall back to the V1 matcher,
+      // which the teaching flow has already been building in parallel.
+      debugPrint('Motion V2 unavailable, falling back to V1: $e');
+      try {
+        await runtime.dispose();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
-        _v2Error = 'Learning failed: $e';
+        _v2Unavailable = true;
+        _v2Error = null;
         _v2Learning = false;
       });
     }

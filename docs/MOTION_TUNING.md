@@ -98,3 +98,19 @@ not the phone camera + ML Kit the app uses, and a couple are unusable (e.g.
 Treat the sweep as a way to spot which motions are weak and which signal is the
 problem; publish a tune only when recordings pulled from the app (see "The
 loop") agree with it.
+
+## Teach Nuvo (Motion V2) on iOS — ONNX Runtime must be kept in the binary
+
+Teach Nuvo runs the MotionBERT encoder through the `onnxruntime` Dart package.
+On iOS the package finds `OrtGetApiBase` with `DynamicLibrary.process()`; a
+release build used to link the engine out or strip the symbol, so Teach failed
+with `Failed to lookup symbol 'OrtGetApiBase'`. `ios/Flutter/{Debug,Release,
+Profile}.xcconfig` now force-link it (`-Wl,-u,_OrtGetApiBase`, `STRIP_STYLE =
+non-global`, `DEAD_CODE_STRIPPING = NO`). If Teach ever fails again on a real
+build, check those three settings first. If the V2 engine can't run for any
+other reason, Teach falls back to the V1 matcher instead of showing an error.
+
+Check on a Mac after `git pull`: `flutter clean && cd ios && pod install`, build
+a **release** build to a phone, Teach a movement 3 times, confirm it learns.
+Offline proof of the rest of the pipeline (real encoder, learn, match):
+`LD_LIBRARY_PATH=<onnxruntime-1.15.1>/lib flutter test test/motion_v2_real_encoder_test.dart`.

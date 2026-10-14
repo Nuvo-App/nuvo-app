@@ -163,8 +163,9 @@ void main() {
     for (final f in Directory(
       'test/motion_qa/fixtures/real',
     ).listSync().whereType<File>()) {
-      if (!f.path.endsWith('.json') || f.path.endsWith('import_log.json'))
+      if (!f.path.endsWith('.json') || f.path.endsWith('import_log.json')) {
         continue;
+      }
       final fx = ReplayFixture.fromJson(
         jsonDecode(f.readAsStringSync()) as Map<String, dynamic>,
       );
