@@ -1,4 +1,5 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
 import 'motion_activity.dart';
 import 'motion_activity_catalog.dart';
 import 'race_mode_semantics.dart';
@@ -47,6 +48,7 @@ class RaceDraft {
     this.customActivityName,
     this.customUnit,
     this.verifierSpec,
+    this.motionV2Spec,
     this.goalKind = RaceGoalKind.movement,
     this.manualGoalName,
     this.manualUnit,
@@ -91,6 +93,14 @@ class RaceDraft {
   final String? customUnit;
 
   final CustomPoseVerifierSpec? verifierSpec;
+
+  /// Motion-V2 learned spec — the verifier of record for the race when
+  /// present (the ONNX matcher that learned the movement). [verifierSpec]
+  /// may be absent when V1 couldn't build one but V2 validated the demos.
+  final TaughtMotionV2Spec? motionV2Spec;
+
+  /// Some verifier spec exists — V2 or V1. What custom creation requires.
+  bool get hasVerifierSpec => verifierSpec != null || motionV2Spec != null;
 
   /// Absolute finish line (ISO-8601). Required for [RaceFormat.mostInWindow]
   /// and any attempt race that should close on a deadline; the server is the
@@ -147,7 +157,7 @@ class RaceDraft {
           (manualUnit ?? '').trim().isNotEmpty;
     }
     if (isCustom) {
-      return verifierSpec != null && customActivityName!.isNotEmpty;
+      return hasVerifierSpec && customActivityName!.isNotEmpty;
     }
     return activity.activityId.isNotEmpty;
   }
@@ -213,6 +223,7 @@ class RaceDraft {
     String? customActivityName,
     String? customUnit,
     CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
     RaceGoalKind? goalKind,
     String? manualGoalName,
     String? manualUnit,
@@ -245,6 +256,7 @@ class RaceDraft {
           : customActivityName ?? this.customActivityName,
       customUnit: clearCustom ? null : customUnit ?? this.customUnit,
       verifierSpec: clearCustom ? null : verifierSpec ?? this.verifierSpec,
+      motionV2Spec: clearCustom ? null : motionV2Spec ?? this.motionV2Spec,
       goalKind: goalKind ?? this.goalKind,
       manualGoalName: manualGoalName ?? this.manualGoalName,
       manualUnit: manualUnit ?? this.manualUnit,

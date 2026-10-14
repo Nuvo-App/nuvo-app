@@ -4,13 +4,16 @@ import '../domain/motion_activity.dart';
 import 'custom_pose/custom_pose_sequence_runtime.dart';
 import 'custom_pose/custom_pose_verifier_spec.dart';
 import 'custom_pose/normalized_pose.dart';
+import 'motion_v2/motion_v2_models.dart';
+import 'motion_v2/motion_v2_verifier_runtime.dart';
 import 'motion_validators.dart';
 import 'remote_verifier_runtime.dart';
 import 'remote_verifier_spec.dart';
 
 enum VerifierType {
   presetPose('preset_pose'),
-  customPoseSequence('custom_pose_sequence');
+  customPoseSequence('custom_pose_sequence'),
+  motionV2('motion_v2');
 
   const VerifierType(this.id);
 
@@ -20,6 +23,7 @@ enum VerifierType {
     return switch (id) {
       'preset_pose' => VerifierType.presetPose,
       'custom_pose_sequence' => VerifierType.customPoseSequence,
+      'motion_v2' => VerifierType.motionV2,
       _ => null,
     };
   }
@@ -259,6 +263,7 @@ class VerifierRuntimeResolution {
     required this.eligibility,
     required this.presetMovement,
     this.remoteVerifierSpec,
+    this.motionV2Spec,
     required this.reason,
   });
 
@@ -266,20 +271,33 @@ class VerifierRuntimeResolution {
   final CameraVerificationEligibility? eligibility;
   final MovementDefinition? presetMovement;
   final RemoteVerifierSpec? remoteVerifierSpec;
+  final TaughtMotionV2Spec? motionV2Spec;
   final String reason;
 
   bool get canCreateRuntime =>
       (type == VerifierType.presetPose &&
           (presetMovement != null || remoteVerifierSpec != null)) ||
       (type == VerifierType.customPoseSequence &&
-          eligibility?.customVerifierSpec != null);
+          eligibility?.customVerifierSpec != null) ||
+      (type == VerifierType.motionV2 &&
+          (eligibility?.customMotionV2Spec ?? motionV2Spec) != null);
 
   VerifierRuntime createRuntime({
     required int target,
     CustomPoseVerifierSpec? customSpec,
     RemoteVerifierSpec? remoteSpecOverride,
+    TaughtMotionV2Spec? motionV2SpecOverride,
   }) {
     final movement = presetMovement;
+    if (type == VerifierType.motionV2) {
+      final v2Spec = motionV2SpecOverride ?? motionV2Spec;
+      if (v2Spec == null) {
+        throw const VerifierRuntimeException(
+          'motion_v2 runtime requires a verifier spec.',
+        );
+      }
+      return MotionV2VerifierRuntime(spec: v2Spec, target: target);
+    }
     if (type == VerifierType.customPoseSequence) {
       if (customSpec == null) {
         throw const VerifierRuntimeException(
@@ -326,11 +344,13 @@ class VerifierRuntimeResolver {
     String? explicitVerifierType,
   }) {
     final explicitType = _explicitType(explicitVerifierType);
-    if (explicitType == VerifierType.customPoseSequence) {
+    if (explicitType == VerifierType.customPoseSequence ||
+        explicitType == VerifierType.motionV2) {
       return VerifierRuntimeResolution(
         type: explicitType,
         eligibility: eligibility,
         presetMovement: null,
+        motionV2Spec: eligibility.customMotionV2Spec,
         reason: 'custom_runtime_requires_spec',
       );
     }

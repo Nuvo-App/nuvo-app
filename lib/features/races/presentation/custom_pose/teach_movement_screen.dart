@@ -633,6 +633,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _v2Spec = spec;
         _v2Learning = false;
       });
+      _syncLearnedProvider();
     } on MotionV2LearnException catch (e) {
       // Self-validation failed — the spec is junk. Keep the report for the
       // debug bundle, show the user something actionable.
@@ -1128,13 +1129,24 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   }
 
   void _onFlowChanged() {
-    final spec = _effectiveSpec;
-    if (spec != null && !_learnedWrittenToProvider) {
-      _learnedWrittenToProvider = true;
-      ref.read(learnedCustomMovementProvider.notifier).state =
-          LearnedCustomMovement(verifierSpec: spec, learnedAt: DateTime.now());
-    }
+    _syncLearnedProvider();
     _requestSetState();
+  }
+
+  void _syncLearnedProvider() {
+    final spec = _effectiveSpec;
+    final v2 = _v2Spec;
+    if (spec == null && v2 == null) return;
+    // Don't rewrite an already-learned movement until the V2 spec lands — the
+    // race prefers V2 and the provider is what carries it into race creation.
+    if (_learnedWrittenToProvider && v2 == null) return;
+    _learnedWrittenToProvider = true;
+    ref.read(learnedCustomMovementProvider.notifier).state =
+        LearnedCustomMovement(
+          verifierSpec: spec,
+          motionV2Spec: v2,
+          learnedAt: DateTime.now(),
+        );
   }
 
   void _resetTeachFlags() {
@@ -1487,10 +1499,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     final bool learned;
     final bool building;
     if (v2) {
-      // "Learned" means there is something to USE: the race verifies with the
-      // spec the teaching flow built, so a V2 result without it is not done
-      // (it used to show a Use button that silently did nothing).
-      learned = _v2Spec != null && spec != null;
+      // "Learned" means there is something to USE. The race verifies with the
+      // V2 spec — the matcher that learned and live-tested the demos — so a
+      // learned V2 spec is sufficient on its own; a V1 spec may also exist
+      // (consistency-lenient rebuild) and rides along for diagnostics only.
+      learned = _v2Spec != null;
       building =
           _flow.stage == TeachMovementStage.building ||
           _v2Learning ||
@@ -2481,16 +2494,25 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   Future<void> _goToRaceCreation() async {
     final spec = _effectiveSpec;
-    if (spec == null || _navigating) return;
+    final v2Spec = _v2Spec;
+    if ((spec == null && v2Spec == null) || _navigating) return;
     setState(() => _navigating = true);
     _finalizeTeachSession(outcome: 'used');
 
-    // Launched from the composer as its training stage → hand the spec back and
-    // let the composer resume. Never push a second composer.
+    // Launched from the composer as its training stage → hand the specs back
+    // and let the composer resume. Never push a second composer.
     if (widget.returnsSpec) {
-      context.pop(spec);
+      context.pop(
+        LearnedCustomMovement(
+          verifierSpec: spec,
+          motionV2Spec: v2Spec,
+          learnedAt: DateTime.now(),
+        ),
+      );
       return;
     }
+
+    _syncLearnedProvider();
 
     try {
       await context.push('/races/new');

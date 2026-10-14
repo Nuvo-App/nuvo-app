@@ -61,7 +61,9 @@ String raceDisplayUnit(Race race) {
 String raceActivityTitle(Race race) {
   if (race.isCustomVerifierRace) {
     final name =
-        race.customActivityName ?? race.customVerifierSpec?.movementName;
+        race.customActivityName ??
+        race.customMotionV2Spec?.movementName ??
+        race.customVerifierSpec?.movementName;
     if (name != null && name.trim().isNotEmpty) return name.trim();
   }
   final activity = raceActivityDefinition(race);

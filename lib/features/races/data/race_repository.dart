@@ -4,6 +4,7 @@ import '../../auth/data/auth_api.dart';
 import '../../auth/data/secure_token_store.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
 import 'ai_motion_models.dart';
 import 'motion_analysis_contract.dart';
 import 'race_api.dart';
@@ -189,7 +190,8 @@ class RaceRepository {
     required String title,
     required int targetValue,
     required String customActivityName,
-    required CustomPoseVerifierSpec verifierSpec,
+    CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
   }) => _withRefresh(
     (token) => _api.createCustomRace(
       token,
@@ -197,6 +199,7 @@ class RaceRepository {
       targetValue: targetValue,
       customActivityName: customActivityName,
       verifierSpec: verifierSpec,
+      motionV2Spec: motionV2Spec,
     ),
   );
 

@@ -9,7 +9,7 @@ import {
   stableReleaseForActivity,
 } from '../domain/motionAssignments';
 import type { RegistryRelease } from '../domain/motionRegistry';
-import { CUSTOM_VERIFIER_TYPE } from '../domain/raceValidation';
+import { isCustomVerifierType } from '../domain/raceValidation';
 import { recordReleaseMetric } from '../domain/motionTelemetry';
 
 export const verificationSessionsRouter = new Hono<AppEnv>();
@@ -124,7 +124,7 @@ verificationSessionsRouter.post('/races/:raceId/verification-sessions', requireA
   // Custom-verifier (Teach Nuvo) races carry no registry activity — their
   // sessions bind to the seeded custom_pose_sequence stable release so AI
   // proof provenance is identical to preset motions.
-  const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustomVerifier = isCustomVerifierType(race.verifier_type);
   if (!race.activity_id && !isCustomVerifier) {
     return c.json({ ok: false, error: 'This race does not have a supported verifier.' }, 409);
   }

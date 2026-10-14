@@ -23,6 +23,7 @@ import '../../profile/application/progression_controller.dart';
 import '../../../core/demo/presentation_demo.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
 import '../data/ai_motion_models.dart';
 import '../data/motion_analysis_contract.dart';
 import '../data/race_api.dart';
@@ -332,7 +333,8 @@ class RaceController extends StateNotifier<RaceState> {
     required String title,
     required int targetValue,
     required String customActivityName,
-    required CustomPoseVerifierSpec verifierSpec,
+    CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
   }) async {
     if (isPresentationDemo()) {
       final id =
@@ -352,6 +354,7 @@ class RaceController extends StateNotifier<RaceState> {
       targetValue: targetValue,
       customActivityName: customActivityName,
       verifierSpec: verifierSpec,
+      motionV2Spec: motionV2Spec,
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);
@@ -738,6 +741,7 @@ class RaceController extends StateNotifier<RaceState> {
       verifierType: existing.verifierType,
       verifierVersion: existing.verifierVersion,
       customVerifierSpec: existing.customVerifierSpec,
+      customMotionV2Spec: existing.customMotionV2Spec,
       customActivityName: existing.customActivityName,
       verifierInvalidReason: existing.verifierInvalidReason,
       timezone: existing.timezone,
@@ -982,6 +986,7 @@ class RaceController extends StateNotifier<RaceState> {
       verifierType: existing.verifierType,
       verifierVersion: existing.verifierVersion,
       customVerifierSpec: existing.customVerifierSpec,
+      customMotionV2Spec: existing.customMotionV2Spec,
       customActivityName: existing.customActivityName,
       verifierInvalidReason: existing.verifierInvalidReason,
       timezone: existing.timezone,

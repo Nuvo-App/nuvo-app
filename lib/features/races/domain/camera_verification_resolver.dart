@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Icons;
 
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../ai/object_composition_spec.dart';
 import '../ai/remote_verifier_spec.dart';
 import '../data/race_models.dart';
@@ -30,6 +32,7 @@ class CameraVerificationEligibility {
     required this.reason,
     this.unsupportedMessage = 'This movement cannot be camera verified yet.',
     this.customVerifierSpec,
+    this.customMotionV2Spec,
     this.remoteVerifierSpec,
     this.objectCompositionSpec,
     this.verifierReleaseId,
@@ -46,6 +49,7 @@ class CameraVerificationEligibility {
   final String reason;
   final String unsupportedMessage;
   final CustomPoseVerifierSpec? customVerifierSpec;
+  final TaughtMotionV2Spec? customMotionV2Spec;
   final RemoteVerifierSpec? remoteVerifierSpec;
   final ObjectCompositionSpec? objectCompositionSpec;
   final String? verifierReleaseId;
@@ -279,12 +283,31 @@ CameraVerificationEligibility _resolveCustomVerification(Race race) {
       'This race is not active.',
     );
   }
-  if (race.verifierType != customPoseVerifierType) {
+  final isV2 = race.verifierType == motionV2VerifierType;
+  if (!isV2 && race.verifierType != customPoseVerifierType) {
     return _customIneligible(
       race,
       'unsupported_custom_verifier_type',
       'This custom verifier type is not supported.',
     );
+  }
+  if (isV2) {
+    if (race.customMotionV2Spec == null) {
+      return _customIneligible(
+        race,
+        'missing_custom_verifier_spec',
+        'This race is missing its verifier spec.',
+      );
+    }
+    final metric = race.metric ?? race.targetUnit ?? race.unit;
+    if (metric != 'reps' && metric != 'count') {
+      return _customIneligible(
+        race,
+        'unsupported_custom_measurement_type',
+        'This custom race uses an unsupported measurement type.',
+      );
+    }
+    return _customV2Eligible(race, race.customMotionV2Spec!);
   }
   if (race.verifierVersion != customPoseVerifierSpecSchemaVersion) {
     return _customIneligible(
@@ -342,6 +365,23 @@ CameraVerificationEligibility _customEligible(
     instructions: const ['Place your whole body in frame.'],
     reason: 'custom_verifier_resolved',
     customVerifierSpec: spec,
+  );
+}
+
+CameraVerificationEligibility _customV2Eligible(
+  Race race,
+  TaughtMotionV2Spec spec,
+) {
+  return CameraVerificationEligibility(
+    raceId: race.id,
+    raceTitle: race.title,
+    isCameraVerifiable: true,
+    movementType: null,
+    source: CameraVerificationSource.customVerifier,
+    preferredCameraView: PreferredCameraView.frontPreferred,
+    instructions: const ['Place your whole body in frame.'],
+    reason: 'custom_verifier_resolved',
+    customMotionV2Spec: spec,
   );
 }
 

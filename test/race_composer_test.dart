@@ -558,7 +558,8 @@ void main() {
               required title,
               required targetValue,
               required customActivityName,
-              required verifierSpec,
+              verifierSpec,
+              motionV2Spec,
             }) async {
               customCalled = true;
               expect(title, 'First to 12 Overhead Wave');
@@ -608,7 +609,8 @@ void main() {
               required title,
               required targetValue,
               required customActivityName,
-              required verifierSpec,
+              verifierSpec,
+              motionV2Spec,
             }) async {
               customCalled = true;
               return _race(title: title);
@@ -673,7 +675,8 @@ void main() {
                   required title,
                   required targetValue,
                   required customActivityName,
-                  required verifierSpec,
+                  verifierSpec,
+                  motionV2Spec,
                 }) async {
                   throw Exception('HTTP 500: Internal server error');
                 },

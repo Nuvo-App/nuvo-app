@@ -307,9 +307,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       }
       final resolution = _runtimeResolver.resolve(
         eligibility: eligibility,
-        explicitVerifierType: isCustom
-            ? VerifierType.customPoseSequence.id
-            : null,
+        explicitVerifierType: isCustom ? race.verifierType : null,
       );
       if (!resolution.canCreateRuntime) {
         setState(() {
@@ -377,7 +375,8 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       if (isCustom) {
         runtime = resolution.createRuntime(
           target: target,
-          customSpec: race.customVerifierSpec!,
+          customSpec: race.customVerifierSpec,
+          motionV2SpecOverride: race.customMotionV2Spec,
         );
       } else {
         runtime = resolution.createRuntime(

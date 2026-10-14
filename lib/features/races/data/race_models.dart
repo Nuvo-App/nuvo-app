@@ -1,4 +1,6 @@
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
 import '../domain/race_draft.dart';
@@ -28,6 +30,7 @@ class Race {
     this.verifierSpec,
     this.verifierReleaseId,
     this.customVerifierSpec,
+    this.customMotionV2Spec,
     this.customActivityName,
     this.verifierInvalidReason,
     this.timezone = 'America/New_York',
@@ -81,6 +84,10 @@ class Race {
   final Map<String, dynamic>? verifierSpec;
   final String? verifierReleaseId;
   final CustomPoseVerifierSpec? customVerifierSpec;
+
+  /// Custom races taught through Motion V2 carry the learned spec instead of
+  /// the V1 sequence template — the ONNX matcher verifies proof frames.
+  final TaughtMotionV2Spec? customMotionV2Spec;
   final String? customActivityName;
   final String? verifierInvalidReason;
   final String timezone;
@@ -148,6 +155,7 @@ class Race {
           : null,
       verifierReleaseId: json['verifierReleaseId'] as String?,
       customVerifierSpec: parsedCustomSpec.spec,
+      customMotionV2Spec: parsedCustomSpec.motionV2Spec,
       customActivityName: json['customActivityName'] as String?,
       verifierInvalidReason:
           json['verifierInvalidReason'] as String? ?? parsedCustomSpec.error,
@@ -206,7 +214,9 @@ class Race {
       verificationMethod == 'camera_pose' ||
       verificationMethod == 'ai';
 
-  bool get isCustomVerifierRace => verifierType == customPoseVerifierType;
+  bool get isCustomVerifierRace =>
+      verifierType == customPoseVerifierType ||
+      verifierType == motionV2VerifierType;
 
   bool get isSupportedAiMotionRace {
     if (isCustomVerifierRace) return false;
@@ -257,9 +267,10 @@ class Race {
 }
 
 class _DecodedCustomVerifierSpec {
-  const _DecodedCustomVerifierSpec({this.spec, this.error});
+  const _DecodedCustomVerifierSpec({this.spec, this.motionV2Spec, this.error});
 
   final CustomPoseVerifierSpec? spec;
+  final TaughtMotionV2Spec? motionV2Spec;
   final String? error;
 }
 
@@ -267,6 +278,23 @@ _DecodedCustomVerifierSpec _decodeCustomVerifierSpec(
   Map<String, dynamic> json,
   String verifierType,
 ) {
+  if (verifierType == motionV2VerifierType) {
+    final rawSpec = json['verifierSpec'];
+    if (rawSpec is Map<String, dynamic>) {
+      try {
+        return _DecodedCustomVerifierSpec(
+          motionV2Spec: TaughtMotionV2Spec.fromJson(rawSpec),
+        );
+      } catch (_) {
+        return const _DecodedCustomVerifierSpec(
+          error: 'Custom verifier spec is invalid.',
+        );
+      }
+    }
+    return const _DecodedCustomVerifierSpec(
+      error: 'Custom verifier spec is missing.',
+    );
+  }
   if (verifierType != customPoseVerifierType) {
     return const _DecodedCustomVerifierSpec();
   }

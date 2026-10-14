@@ -14,7 +14,7 @@ import { generateId } from '../lib/crypto';
 import { hasAcceptedTerms } from '../lib/terms';
 import { activityForId, normalizeActivityIdLoose, normalizeMetric, type RaceFormat, type RaceMetric, type RaceScoringRule } from '../domain/raceActivities';
 import {
-  CUSTOM_VERIFIER_TYPE,
+  isCustomVerifierType,
   MANUAL_VERIFIER_TYPE,
   PRESET_VERIFIER_TYPE,
   assertSubmissionCompatible,
@@ -154,7 +154,7 @@ function isSubmissionValueInRange(value: unknown): boolean {
 function raceSupportsAiMotion(race: RaceRow): boolean {
   if (race.verifier_type === MANUAL_VERIFIER_TYPE) return false;
   if (
-    race.verifier_type === CUSTOM_VERIFIER_TYPE ||
+    isCustomVerifierType(race.verifier_type) ||
     race.verifier_type === PRESET_VERIFIER_TYPE ||
     race.verifier_type === 'remote_release'
   ) return true;
@@ -210,7 +210,7 @@ function parsedVerifierSpec(
   releasedSpec?: Record<string, unknown> | null,
 ): { spec: Record<string, unknown> | null; invalidReason: string | null } {
   if (releasedSpec) return { spec: releasedSpec, invalidReason: null };
-  if (race.verifier_type !== CUSTOM_VERIFIER_TYPE) {
+  if (!isCustomVerifierType(race.verifier_type)) {
     return { spec: null, invalidReason: null };
   }
   if (!race.verifier_spec_json) {
@@ -408,7 +408,7 @@ function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
       targetValue: presetConfig.targetValue,
     };
   }
-  const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustom = isCustomVerifierType(race.verifier_type);
   const isManual = race.verifier_type === MANUAL_VERIFIER_TYPE;
   if (!isCustom && !isManual) return null;
   const targetValue = positiveIntOrNull(race.target_value) ?? null;
@@ -801,7 +801,7 @@ function shapeRaceResponse(
   const config = raceConfigFromRow(race);
   const scoring = raceScoringConfigFromRow(race);
   const verifier = parsedVerifierSpec(race, releasedSpec);
-  const isCustomVerifier = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustomVerifier = isCustomVerifierType(race.verifier_type);
   const effectiveStatus = effectiveRaceStatus(race.status, race.start_at, race.end_at);
   const scoreDirection = scoreDirectionFor(race);
   const now = new Date();
@@ -1883,7 +1883,7 @@ racesRouter.post('/:id/proof', async (c) => {
   const isManualRace = race.verifier_type === MANUAL_VERIFIER_TYPE;
   if (
     !scoring ||
-    (!config && race.verifier_type !== CUSTOM_VERIFIER_TYPE && !isManualRace)
+    (!config && !isCustomVerifierType(race.verifier_type) && !isManualRace)
   ) {
     return c.json(badRequest('Race is missing activity configuration'), 400);
   }
@@ -1897,7 +1897,7 @@ racesRouter.post('/:id/proof', async (c) => {
 
   const proofType = typeof body.proofType === 'string' ? body.proofType : 'manual';
   const isAiMotion = proofType === 'ai_motion';
-  const isCustom = race.verifier_type === CUSTOM_VERIFIER_TYPE;
+  const isCustom = isCustomVerifierType(race.verifier_type);
   if (isCustom && !isAiMotion) return c.json(badRequest('Custom races require AI Motion Proof'), 400);
   // The race's persisted contract decides the proof mode — a payload can
   // never upgrade a photo-proof race to AI Motion Proof.

@@ -372,6 +372,79 @@ test('custom verifier validation rejects inactive sequence features', () => {
   assert.equal(config.error, 'Custom verifier sequence uses inactive features.');
 });
 
+test('custom verifier validation accepts a motion_v2 learned spec', () => {
+  const v2Spec = {
+    schema: 2,
+    verifier: 'motion_v2',
+    version: 1,
+    name: 'Pull Ups',
+    encoder_id: 'test-encoder',
+    references: [
+      { proto: [0.1, 0.2, 0.3], traj: [[0.1, 0.2]], length: 90 },
+      { proto: [0.1, 0.3, 0.2], traj: [[0.2, 0.1]], length: 88 },
+      { proto: [0.2, 0.1, 0.3], traj: [[0.1, 0.1]], length: 92 },
+    ],
+  };
+  const config = customConfigFromBody({
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'Pull Ups',
+    verifierSpec: v2Spec,
+  });
+  assert.equal('error' in config, false, JSON.stringify(config));
+  assert.equal(config.verifierType, 'motion_v2');
+  assert.equal(config.verifierVersion, 1);
+  assert.equal(JSON.parse(config.verifierSpecJson).verifier, 'motion_v2');
+});
+
+test('motion_v2 spec rejects wrong verifier marker and missing refs', () => {
+  const base = {
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'Pull Ups',
+  };
+  const wrongMarker = customConfigFromBody({
+    ...base,
+    verifierSpec: { schema: 2, verifier: 'custom_pose_sequence', name: 'Pull Ups', references: [{ proto: [1], traj: [[1]], length: 1 }] },
+  });
+  assert.equal(wrongMarker.error, 'Custom verifier type is not supported.');
+  const noRefs = customConfigFromBody({
+    ...base,
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Pull Ups', references: [] },
+  });
+  assert.equal(noRefs.error, 'Custom verifier spec has no reference demos.');
+  const nameMismatch = customConfigFromBody({
+    ...base,
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Squats', references: [{ proto: [1], traj: [[1]], length: 1 }] },
+  });
+  assert.equal(nameMismatch.error, 'Custom movement name does not match the verifier spec.');
+});
+
+test('motion_v2 spec name match is case-insensitive, oversized rejected', () => {
+  const ok = customConfigFromBody({
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'pull ups',
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Pull Ups', references: [{ proto: [1], traj: [[1]], length: 1 }] },
+  });
+  assert.equal('error' in ok, false);
+  const huge = customConfigFromBody({
+    title: 'Pull Ups',
+    targetValue: 8,
+    verifierType: 'motion_v2',
+    verifierVersion: 1,
+    customActivityName: 'Pull Ups',
+    verifierSpec: { schema: 2, verifier: 'motion_v2', name: 'Pull Ups', references: [{ proto: [1], traj: [[1]], length: 1 }], pad: 'x'.repeat(1600 * 1024) },
+  });
+  assert.equal(huge.error, 'Custom verifier spec is too large.');
+});
+
 test('custom verifier validation rejects preset activity impersonation', () => {
   const config = customConfigFromBody({
     title: 'Office ladder',

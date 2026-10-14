@@ -31,12 +31,22 @@ export interface RaceConfig {
 }
 
 export const CUSTOM_VERIFIER_TYPE = 'custom_pose_sequence';
+export const MOTION_V2_VERIFIER_TYPE = 'motion_v2';
 export const PRESET_VERIFIER_TYPE = 'preset_pose';
 export const CUSTOM_VERIFIER_VERSION = 1;
+export const MOTION_V2_VERIFIER_VERSION = 1;
 export const CUSTOM_VERIFIER_SPEC_MAX_BYTES = 128 * 1024;
+// V2 learned specs carry per-demo encoder embeddings (3 refs × proto+trajectory,
+// ~1MB as JSON) — an order of magnitude larger than V1 pose templates.
+export const MOTION_V2_SPEC_MAX_BYTES = 1536 * 1024;
+
+/** Custom taught-movement races: V1 pose templates AND V2 learned specs. */
+export function isCustomVerifierType(t: string | null | undefined): boolean {
+  return t === CUSTOM_VERIFIER_TYPE || t === MOTION_V2_VERIFIER_TYPE;
+}
 
 export interface CustomRaceConfig {
-  verifierType: typeof CUSTOM_VERIFIER_TYPE;
+  verifierType: string;
   verifierVersion: typeof CUSTOM_VERIFIER_VERSION;
   verifierSpecJson: string;
   customActivityName: string;
@@ -305,13 +315,44 @@ function validateCustomVerifierSpec(spec: Record<string, unknown>, customActivit
   return null;
 }
 
+/**
+ * Motion-V2 learned specs are opaque to the worker — the trained encoder owns
+ * their semantics. Structural check only: the spec's own verifier marker, the
+ * movement name, and the reference demos it was learned from.
+ */
+function validateMotionV2Spec(spec: Record<string, unknown>, customActivityName: string): string | null {
+  if (!hasOnlyFiniteNumbers(spec)) return 'Custom verifier spec contains invalid numeric values.';
+  if (spec.verifier !== MOTION_V2_VERIFIER_TYPE) return 'Custom verifier type is not supported.';
+  if (typeof spec.schema !== 'number' || !Number.isFinite(spec.schema)) {
+    return 'Custom verifier spec is invalid.';
+  }
+  const name = typeof spec.name === 'string' ? spec.name.trim() : '';
+  if (name.toLowerCase() !== customActivityName.trim().toLowerCase()) {
+    return 'Custom movement name does not match the verifier spec.';
+  }
+  const refs = spec.references;
+  if (!Array.isArray(refs) || refs.length === 0 || refs.length > 4) {
+    return 'Custom verifier spec has no reference demos.';
+  }
+  for (const rawRef of refs) {
+    const ref = recordValue(rawRef);
+    if (!Array.isArray(ref?.proto) || ref.proto.length === 0 ||
+        !Array.isArray(ref?.traj) || ref.traj.length === 0) {
+      return 'Custom verifier spec references are invalid.';
+    }
+  }
+  return null;
+}
+
 export function customConfigFromBody(body: Record<string, unknown>): CustomRaceConfig | null | { error: string } {
   const verifierType = stringValue(body, 'verifierType', 'verifier_type');
   if (!verifierType) return null;
-  if (verifierType !== CUSTOM_VERIFIER_TYPE) return { error: 'Verifier type is not supported.' };
+  if (!isCustomVerifierType(verifierType)) return { error: 'Verifier type is not supported.' };
+  const isV2 = verifierType === MOTION_V2_VERIFIER_TYPE;
 
   const verifierVersion = intValue(body, 'verifierVersion', 'verifier_version');
-  if (verifierVersion !== CUSTOM_VERIFIER_VERSION) return { error: 'Verifier version is not supported.' };
+  const expectedVersion = isV2 ? MOTION_V2_VERIFIER_VERSION : CUSTOM_VERIFIER_VERSION;
+  if (verifierVersion !== expectedVersion) return { error: 'Verifier version is not supported.' };
 
   const customActivityName = stringValue(body, 'customActivityName', 'custom_activity_name');
   if (!customActivityName || customActivityName.length > 40) {
@@ -325,10 +366,13 @@ export function customConfigFromBody(body: Record<string, unknown>): CustomRaceC
 
   const spec = recordValue(body.verifierSpec ?? body.verifier_spec);
   if (!spec) return { error: 'Custom verifier spec is required.' };
-  const specError = validateCustomVerifierSpec(spec, customActivityName);
+  const specError = isV2
+    ? validateMotionV2Spec(spec, customActivityName)
+    : validateCustomVerifierSpec(spec, customActivityName);
   if (specError) return { error: specError };
   const verifierSpecJson = JSON.stringify(spec);
-  if (new TextEncoder().encode(verifierSpecJson).length > CUSTOM_VERIFIER_SPEC_MAX_BYTES) {
+  const maxSpecBytes = isV2 ? MOTION_V2_SPEC_MAX_BYTES : CUSTOM_VERIFIER_SPEC_MAX_BYTES;
+  if (new TextEncoder().encode(verifierSpecJson).length > maxSpecBytes) {
     return { error: 'Custom verifier spec is too large.' };
   }
 
@@ -338,8 +382,8 @@ export function customConfigFromBody(body: Record<string, unknown>): CustomRaceC
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
 
   return {
-    verifierType: CUSTOM_VERIFIER_TYPE,
-    verifierVersion: CUSTOM_VERIFIER_VERSION,
+    verifierType,
+    verifierVersion: expectedVersion,
     verifierSpecJson,
     customActivityName,
     metric: 'reps',

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nuvo/features/races/ai/custom_pose/custom_pose_verifier_spec.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_calibration_flow.dart';
 import 'package:nuvo/features/races/ai/custom_pose/pose_normalizer.dart';
+import 'package:nuvo/features/races/presentation/custom_pose/learned_custom_movement_provider.dart';
 import 'package:nuvo/features/races/presentation/custom_pose/teach_movement_screen.dart';
 import 'package:nuvo/features/races/presentation/race_composer_screen.dart';
 
@@ -131,7 +132,7 @@ void main() {
     testWidgets('Use this movement hands the spec back (never a silent no-op); '
         'edit actions are quiet text, not buttons', (tester) async {
       _phone(tester);
-      CustomPoseVerifierSpec? result;
+      LearnedCustomMovement? result;
       final router = GoRouter(
         routes: [
           GoRoute(
@@ -140,7 +141,7 @@ void main() {
               body: Center(
                 child: ElevatedButton(
                   onPressed: () async {
-                    result = await c.push<CustomPoseVerifierSpec>('/teach');
+                    result = await c.push<LearnedCustomMovement>('/teach');
                   },
                   child: const Text('open'),
                 ),
@@ -184,7 +185,7 @@ void main() {
   });
 
   group('race composer — custom movement state machine', () {
-    Widget host({required CustomPoseVerifierSpec teachResult}) {
+    Widget host({required LearnedCustomMovement teachResult}) {
       final router = GoRouter(
         initialLocation: '/',
         routes: [
@@ -209,7 +210,9 @@ void main() {
         'then advances only after a spec is returned', (tester) async {
       _phone(tester);
       final spec = _realSpec(normalizer);
-      await tester.pumpWidget(host(teachResult: spec));
+      await tester.pumpWidget(
+        host(teachResult: LearnedCustomMovement(verifierSpec: spec)),
+      );
       await tester.pumpAndSettle();
 
       // nameRace → chooseActivity
@@ -250,7 +253,9 @@ void main() {
       (tester) async {
         _phone(tester);
         final spec = _realSpec(normalizer);
-        await tester.pumpWidget(host(teachResult: spec));
+        await tester.pumpWidget(
+          host(teachResult: LearnedCustomMovement(verifierSpec: spec)),
+        );
         await tester.pumpAndSettle();
 
         await tester.enterText(find.byType(TextField).first, 'pull ups');
@@ -277,7 +282,9 @@ void main() {
     testWidgets('"Count it by hand" keeps it a normal goal', (tester) async {
       _phone(tester);
       final spec = _realSpec(normalizer);
-      await tester.pumpWidget(host(teachResult: spec));
+      await tester.pumpWidget(
+        host(teachResult: LearnedCustomMovement(verifierSpec: spec)),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField).first, 'pull ups');
@@ -295,7 +302,9 @@ void main() {
       tester,
     ) async {
       final spec = _realSpec(normalizer);
-      await tester.pumpWidget(host(teachResult: spec));
+      await tester.pumpWidget(
+        host(teachResult: LearnedCustomMovement(verifierSpec: spec)),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(

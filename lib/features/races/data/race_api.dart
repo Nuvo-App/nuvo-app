@@ -16,6 +16,8 @@ import 'package:http/http.dart' as http;
 import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_sequence_runtime.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import 'ai_motion_models.dart';
 import 'motion_analysis_contract.dart';
 import 'race_models.dart';
@@ -537,8 +539,12 @@ class RaceApi {
     required String title,
     required int targetValue,
     required String customActivityName,
-    required CustomPoseVerifierSpec verifierSpec,
+    CustomPoseVerifierSpec? verifierSpec,
+    TaughtMotionV2Spec? motionV2Spec,
   }) async {
+    // The race verifies with the Motion V2 spec when one was learned — the
+    // encoder matcher that self-validated the demos — falling back to the V1
+    // sequence template only when V2 never produced a spec.
     final json = await _post('/races', token, {
       'title': title,
       'goalType': 'first_to_goal',
@@ -550,10 +556,16 @@ class RaceApi {
       'proofReviewMode': 'auto_accept',
       'proofMode': 'ai_check',
       'verificationMethod': 'ai',
-      'verifierType': customPoseVerifierType,
-      'verifierVersion': customPoseVerifierSpecSchemaVersion,
+      'verifierType': motionV2Spec != null
+          ? motionV2VerifierType
+          : customPoseVerifierType,
+      'verifierVersion': motionV2Spec != null
+          ? motionV2VerifierSpecVersion
+          : customPoseVerifierSpecSchemaVersion,
       'customActivityName': customActivityName,
-      'verifierSpec': verifierSpec.toJson(),
+      'verifierSpec': motionV2Spec != null
+          ? motionV2Spec.toJson()
+          : verifierSpec!.toJson(),
     });
     return Race.fromJson(json['race'] as Map<String, dynamic>);
   }

@@ -23,6 +23,8 @@ import '../../../core/widgets/nuvo_number_flow.dart';
 import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
+import '../ai/motion_v2/motion_v2_models.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
@@ -33,6 +35,7 @@ import '../domain/teachable_movements.dart';
 import '../domain/race_name_interpreter.dart';
 import '../domain/race_safety.dart';
 import 'motion_catalog_provider.dart';
+import 'custom_pose/learned_custom_movement_provider.dart';
 import 'custom_pose/recent_movements_provider.dart';
 import 'custom_pose/teach_movement_screen.dart';
 import 'race_controller.dart';
@@ -56,7 +59,8 @@ typedef ComposerCustomRaceCreator =
       required String title,
       required int targetValue,
       required String customActivityName,
-      required CustomPoseVerifierSpec verifierSpec,
+      CustomPoseVerifierSpec? verifierSpec,
+      TaughtMotionV2Spec? motionV2Spec,
     });
 
 typedef ComposerPresetRaceCreator =
@@ -90,7 +94,8 @@ Future<Race> createRaceForComposerDraft({
       title: draft.resolvedTitle,
       targetValue: draft.targetValue,
       customActivityName: draft.customActivityName!,
-      verifierSpec: draft.verifierSpec!,
+      verifierSpec: draft.verifierSpec,
+      motionV2Spec: draft.motionV2Spec,
     );
   }
   final payload = draft.toCreatePayload();
@@ -338,7 +343,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       _syncGuide(_Step.activity);
       next = v[i + 2];
     }
-    if (next == _Step.train && draft.verifierSpec == null) {
+    if (next == _Step.train && !draft.hasVerifierSpec) {
       _openTraining(reason: r);
       return;
     }
@@ -353,18 +358,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final name = (draft.customActivityName ?? '').trim();
     if (name.isEmpty) return;
     _goToStep(_Step.train, reason: reason);
-    final spec = await context.push<CustomPoseVerifierSpec>(
+    final learned = await context.push<LearnedCustomMovement>(
       '/races/teach',
       extra: TeachMovementArgs(movementName: name, unit: draft.customUnit),
     );
     if (!mounted) return;
-    if (spec != null) {
+    if (learned != null) {
       ref.read(_composerDraftProvider.notifier).state = ref
           .read(_composerDraftProvider)
-          .copyWith(verifierSpec: spec);
+          .copyWith(
+            verifierSpec: learned.verifierSpec,
+            motionV2Spec: learned.motionV2Spec,
+          );
       _goToStep(_Step.goal, reason: 'teach nuvo returned verifier spec');
     }
-    // spec == null → user backed out; stay on `train` (retry button visible).
+    // null → user backed out; stay on `train` (retry button visible).
   }
 
   /// Backing all the way out to Compete re-arms the guide's first step so
@@ -447,7 +455,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     final draft = ref.read(_composerDraftProvider);
     _lastCreatePathUsed = draft.isCustom ? 'custom' : 'preset';
     if (draft.isCustom) {
-      if (draft.verifierSpec == null || draft.customActivityName == null) {
+      if (!draft.hasVerifierSpec || draft.customActivityName == null) {
         // Invariant broken before we ever hit the backend — send the user back
         // to the training stage instead of showing a server "couldn't create".
         assert(() {
@@ -611,7 +619,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
           draft.customActivityName!.isEmpty) {
         return 'missing_custom_activity_name';
       }
-      if (draft.verifierSpec == null) return 'missing_verifier_spec';
+      if (!draft.hasVerifierSpec) return 'missing_verifier_spec';
       return null;
     }
     if (!draft.isValidToCreate) return 'unsupported_activity';
@@ -637,8 +645,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
       'draft': {
         'isCustom': draft.isCustom,
         'customActivityName': draft.customActivityName,
-        'verifierSpecPresent': draft.verifierSpec != null,
-        'verifierType': spec?.verifierType,
+        'verifierSpecPresent': draft.hasVerifierSpec,
+        'verifierType': draft.motionV2Spec != null
+            ? motionV2VerifierType
+            : spec?.verifierType,
         'verifierVersion': spec?.schemaVersion,
         'verifierSpecJsonBytes': specJsonBytes,
         'isValidToCreate': draft.isValidToCreate,
@@ -2287,7 +2297,7 @@ class _TrainPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trained = draft.verifierSpec != null;
+    final trained = draft.hasVerifierSpec;
     final name = (draft.customActivityName ?? 'your movement').trim();
     return NuvoFocusedStage(
       icon: trained ? Icons.check_circle_rounded : Icons.videocam_rounded,
