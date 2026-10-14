@@ -641,9 +641,11 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       await runtime.dispose();
       if (!mounted) return;
       setState(() {
-        _v2Error =
-            "Let's record that again — the three examples were too "
-            'different for Nuvo to learn from.';
+        _v2Error = e.message.startsWith('NOT_ENOUGH_MOTION')
+            ? 'Nuvo could not see the movement — try a fuller rep with your '
+                  'whole body in frame.'
+            : "Let's record that again — the three examples were too "
+                  'different for Nuvo to learn from.';
         _v2Learning = false;
       });
     } on MotionV2Exception catch (e) {

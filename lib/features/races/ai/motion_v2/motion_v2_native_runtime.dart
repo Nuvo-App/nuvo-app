@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -106,6 +107,10 @@ class LearnProfile {
 class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   MotionV2NativeRuntime({MotionEncoderV2? encoder}) : _injected = encoder;
 
+  /// Demos whose most-active body region moved less than this are treated as
+  /// "no motion captured" — see the floor comment in [learn].
+  static const double _minRegionActivity = 0.08;
+
   final MotionEncoderV2? _injected;
   MotionEncoderV2? _encoder;
   StreamingMotionV2? _session;
@@ -154,8 +159,6 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
     }
 
     final sw = Stopwatch()..start();
-    // Provenance: the spec records which model release produced its reference
-    // embeddings so a later incompatible model can't silently mix spaces.
     final encoderId = enc is MotionV2OnnxEncoder
         ? MotionV2OnnxEncoder.activeEncoderId
         : 'release_action';
@@ -165,6 +168,24 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       encoded: encoded,
     );
     p.buildRefsMs = sw.elapsedMilliseconds;
+
+    // Motion floor — demos that captured almost no pose-region motion produce
+    // a spec whose learned "movement" is standing still: it then counts the
+    // approach as a rep and rejects the real movement. (Real session
+    // MV2-20261014-84A985: max region activity 0.036 vs ~0.15 for a genuine
+    // motion.) Refuse before self-validation spins that spec into "learned".
+    final maxRegionActivity = motion.demoRegionActivity.values.fold<double>(
+      0,
+      math.max,
+    );
+    if (maxRegionActivity < _minRegionActivity) {
+      throw MotionV2LearnException(
+        'NOT_ENOUGH_MOTION: the demos captured almost no movement '
+        '(max region activity ${maxRegionActivity.toStringAsFixed(3)} < '
+        '$_minRegionActivity) — the camera could not see the motion.',
+        report: null,
+      );
+    }
 
     // Self-validation + leave-one-out — pure matcher math on the cached
     // embeddings. ZERO extra encoder passes.

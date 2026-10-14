@@ -155,7 +155,9 @@ class StreamingMotionV2 {
     if (!_attemptActive && movementNow && pq.trackable) {
       _resetAttempt();
       _attemptActive = true;
-      _attemptStart = DateTime.now();
+      // Frame time, not wall clock — a fast encoder must not let a
+      // short motion pass the duration gate by feeding frames quickly.
+      _attemptStart = _buf.last.createdAt;
     }
     if (_attemptActive) {
       _maxProgress = math.max(_maxProgress, prog);
@@ -233,7 +235,7 @@ class StreamingMotionV2 {
         motion.demoLengths.reduce(math.min) * _framePeriodMs() * 0.5;
     final durMs = _attemptStart == null
         ? 0
-        : DateTime.now().difference(_attemptStart!).inMilliseconds;
+        : _buf.last.createdAt.difference(_attemptStart!).inMilliseconds;
     return durMs >= expMinMs;
   }
 
@@ -246,7 +248,7 @@ class StreamingMotionV2 {
   ) {
     final durMs = _attemptStart == null
         ? 0
-        : DateTime.now().difference(_attemptStart!).inMilliseconds;
+        : _buf.last.createdAt.difference(_attemptStart!).inMilliseconds;
     return MotionAttemptResult(
       outcome: MotionAttemptOutcome.success,
       poseReadiness: PoseReadiness.ready.name,
@@ -267,7 +269,7 @@ class StreamingMotionV2 {
     final period = _framePeriodMs();
     final durMs = _attemptStart == null
         ? 0
-        : DateTime.now().difference(_attemptStart!).inMilliseconds;
+        : _buf.last.createdAt.difference(_attemptStart!).inMilliseconds;
     final expMin = motion.demoLengths.isEmpty
         ? 0
         : (motion.demoLengths.reduce(math.min) * period * 0.5).round();
