@@ -1,6 +1,7 @@
 import 'motion_activity.dart';
 import 'race_draft.dart';
 import 'race_name_interpreter.dart';
+import 'teachable_movements.dart';
 
 /// Which composer path the typed race name resolves to.
 enum RaceIntentPath {
@@ -11,6 +12,12 @@ enum RaceIntentPath {
   /// A non-movement goal Nuvo understood well enough to configure — the
   /// composer goes straight to the goal step as a custom (honor-logged) race.
   customGoal,
+
+  /// A body movement a camera can count that isn't in the catalog ("pull
+  /// ups"). Only ever chosen on positive evidence (see
+  /// [teachableMovementIn]); the composer offers to teach it to Nuvo, with
+  /// "count it by hand" as the alternative.
+  teachableMovement,
 
   /// The name doesn't safely say what the race is about. Show the normal
   /// activity / custom-goal decision — never invent an answer.
@@ -32,6 +39,7 @@ class RaceIntentResolution {
     required this.resolvedFields,
     required this.unresolvedFields,
     required this.reason,
+    this.teachable,
   });
 
   /// A name that resolves to nothing — empty input, or a phrase the
@@ -78,6 +86,9 @@ class RaceIntentResolution {
   /// Why the resolver decided this path — diagnostics only, never user copy.
   final String reason;
 
+  /// The movement to teach, when [path] is [RaceIntentPath.teachableMovement].
+  final TeachableMovement? teachable;
+
   /// The resolved movement, when [path] is [RaceIntentPath.movement].
   MotionActivityDefinition? get activity => interpretation.activity;
 
@@ -90,7 +101,11 @@ class RaceIntentResolution {
   /// The activity step may be skipped iff the name resolved the subject —
   /// a movement path or a custom-goal path — and nothing asked for the
   /// subject itself.
-  bool get resolvesSubject => path != RaceIntentPath.ambiguous;
+  ///
+  /// A teachable movement is deliberately NOT resolved: the user still decides
+  /// between teaching it and counting it by hand, so the subject step shows.
+  bool get resolvesSubject =>
+      path == RaceIntentPath.movement || path == RaceIntentPath.customGoal;
 }
 
 /// Phrases that name something to measure but not how — the question is the
@@ -160,6 +175,34 @@ RaceIntentResolution resolveRaceIntent(
       },
       reason: 'movement: ${i.activity!.activityId}',
     );
+  }
+
+  // Teachable movement: no catalog match, but the phrase names a body
+  // movement a camera can count. Needs the exercise list AND a unit that is
+  // a count or a hold — "hours of pull ups" or "lb" stay normal goals.
+  if (i.activity == null && i.goalKind == RaceGoalKind.manual) {
+    final teachable = teachableMovementIn(input);
+    const countUnits = {
+      'reps', 'repetitions', 'count', 'times', 'sets', 'seconds', 'jumps',
+      'swings', 'rope', 'in', 'done',
+      // The domain lexicon files curls/swings under weight, but the exercise
+      // matcher already rejected any phrase that actually states a weight.
+      'lb', 'lbs', 'kg',
+    };
+    if (teachable != null && countUnits.contains(i.manualUnit ?? 'reps')) {
+      return RaceIntentResolution(
+        sourceText: sourceText,
+        path: RaceIntentPath.teachableMovement,
+        confidence: InterpretationConfidence.high,
+        interpretation: i,
+        resolvedFields: resolved,
+        unresolvedFields: {
+          if (!resolved.contains(RaceField.target)) RaceField.target,
+        },
+        reason: 'teachable movement: ${teachable.name}',
+        teachable: teachable,
+      );
+    }
   }
 
   // Custom goal: the interpreter committed to a manual kind AND something

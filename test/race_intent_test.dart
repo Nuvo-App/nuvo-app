@@ -191,7 +191,10 @@ void main() {
     test('filler framing still justifies', () {
       final pushups = motionActivityFromName('pushups')!;
       expect(activityJustifiedByName('first to 100 push ups', pushups), isTrue);
-      expect(activityJustifiedByName('most pushups in a game', pushups), isTrue);
+      expect(
+        activityJustifiedByName('most pushups in a game', pushups),
+        isTrue,
+      );
       expect(activityJustifiedByName('pushups by friday', pushups), isTrue);
     });
 
@@ -211,21 +214,21 @@ void main() {
 
   group('remote catalog', () {
     MotionActivityDefinition starJump() => const MotionActivityDefinition(
-          type: MotionActivityType.remote,
-          backendId: 'star_jump',
-          title: 'Star Jump',
-          metric: RaceMetric.reps,
-          suggestedTargets: [10, 20, 50],
-          supportedFormats: [RaceFormat.firstToGoal],
-          aliases: ['star jump', 'star jumps', 'starjumps'],
-          proofLabel: 'star jumps',
-          cameraInstruction: 'Full body in frame',
-          instructions: ['Jump and spread your arms and legs.'],
-          icon: Icons.star_rounded,
-          framingLabel: 'Full body visible',
-          preferredCameraView: PreferredCameraView.frontPreferred,
-          category: MovementCategory.fullBody,
-        );
+      type: MotionActivityType.remote,
+      backendId: 'star_jump',
+      title: 'Star Jump',
+      metric: RaceMetric.reps,
+      suggestedTargets: [10, 20, 50],
+      supportedFormats: [RaceFormat.firstToGoal],
+      aliases: ['star jump', 'star jumps', 'starjumps'],
+      proofLabel: 'star jumps',
+      cameraInstruction: 'Full body in frame',
+      instructions: ['Jump and spread your arms and legs.'],
+      icon: Icons.star_rounded,
+      framingLabel: 'Full body visible',
+      preferredCameraView: PreferredCameraView.frontPreferred,
+      category: MovementCategory.fullBody,
+    );
 
     test('a remote alias resolves through the merged catalog', () {
       final catalog = [...motionActivityDefinitions, starJump()];
@@ -255,6 +258,81 @@ void main() {
         expect(r.interpretation.manualUnit, unit);
         expect(r.interpretation.scoreDirection, 'higher');
       });
+    });
+  });
+
+  group('teachable movements (camera-countable, not in the catalog)', () {
+    const teach = <String, ({String name, String unit})>{
+      'pull ups': (name: 'Pull Ups', unit: 'reps'),
+      'pullups': (name: 'Pull Ups', unit: 'reps'),
+      'most pull ups': (name: 'Pull Ups', unit: 'reps'),
+      'first to 50 pull ups': (name: 'Pull Ups', unit: 'reps'),
+      'most pull ups in 60 seconds': (name: 'Pull Ups', unit: 'reps'),
+      'who can do the most dips': (name: 'Dips', unit: 'reps'),
+      'first to 30 dips': (name: 'Dips', unit: 'reps'),
+      'sit ups': (name: 'Sit Ups', unit: 'reps'),
+      'most situps': (name: 'Sit Ups', unit: 'reps'),
+      'box jumps': (name: 'Box Jumps', unit: 'reps'),
+      'first to 100 box jumps': (name: 'Box Jumps', unit: 'reps'),
+      'pistol squats': (name: 'Pistol Squats', unit: 'reps'),
+      'kettlebell swings': (name: 'Kettlebell Swings', unit: 'reps'),
+      'bicep curls': (name: 'Bicep Curls', unit: 'reps'),
+      'wall sit': (name: 'Wall Sit', unit: 'seconds'),
+      'longest wall sit': (name: 'Wall Sit', unit: 'seconds'),
+      'handstand hold': (name: 'Handstand Hold', unit: 'seconds'),
+    };
+    teach.forEach((name, want) {
+      test('"$name" -> teach "${want.name}" (${want.unit})', () {
+        final r = resolveRaceIntent(name);
+        expect(r.path, RaceIntentPath.teachableMovement, reason: r.reason);
+        expect(r.teachable?.name, want.name);
+        expect(r.teachable?.unit, want.unit);
+        // The user still chooses teach vs hand-count, so the subject step stays.
+        expect(r.resolvesSubject, isFalse);
+      });
+    });
+
+    // Positive evidence is required: these must NEVER be offered Teach Nuvo.
+    const notMovements = [
+      'who can sleep the most',
+      'who sleeps the most',
+      'most hours studied',
+      'who can study more',
+      'read 5 books',
+      'most pages read',
+      'who drinks the most water',
+      'best GPA',
+      'best grade in math',
+      'no sugar for 30 days',
+      'who meditates the most',
+      'least screen time',
+      'save \$500',
+      'who cooks the most meals',
+      'most steps by friday',
+      'fastest mile',
+      'best 5k time',
+      'lose 10 lbs',
+      'heaviest bench press',
+      'max pull ups',
+      'highest score on duolingo',
+      'who is more productive',
+      'best dip recipe',
+      'watch pull up tutorials',
+      'most hours of pull ups',
+    ];
+    for (final name in notMovements) {
+      test('"$name" is never a teachable movement', () {
+        expect(
+          resolveRaceIntent(name).path,
+          isNot(RaceIntentPath.teachableMovement),
+        );
+      });
+    }
+
+    test('catalog movements stay catalog movements', () {
+      for (final name in ['push ups', 'most pushups', 'mountain climbers']) {
+        expect(resolveRaceIntent(name).path, RaceIntentPath.movement);
+      }
     });
   });
 
