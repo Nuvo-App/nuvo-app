@@ -1046,20 +1046,26 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       failureStage: failureStage,
       failureReason: failureReason,
     );
-    final consented =
-        ref.read(authControllerProvider).user?.motionTrainingConsent == true;
-    if (!consented) return;
-    // Fire-and-forget: staging + upload happen off the UI path, identical to
-    // verification sessions (a failure just retries on the next flush).
-    unawaited(
-      ref
-          .read(teachSessionUploadQueueProvider)
-          .enqueueRaw(
-            sessionId: session.sessionId,
-            metadata: session.metadata(),
-            gzipBytes: session.toGzipBytes(),
-          ),
-    );
+    // Telemetry must never break the app — this also runs inside dispose(),
+    // where a provider edge should degrade to "not uploaded", not a crash.
+    try {
+      final consented =
+          ref.read(authControllerProvider).user?.motionTrainingConsent == true;
+      if (!consented) return;
+      // Fire-and-forget: staging + upload happen off the UI path, identical
+      // to verification sessions (a failure just retries on the next flush).
+      unawaited(
+        ref
+            .read(teachSessionUploadQueueProvider)
+            .enqueueRaw(
+              sessionId: session.sessionId,
+              metadata: session.metadata(),
+              gzipBytes: session.toGzipBytes(),
+            ),
+      );
+    } catch (e) {
+      debugPrint('teach session upload skipped: $e');
+    }
   }
 
   Future<void> _copyMotionV2Log() async {
