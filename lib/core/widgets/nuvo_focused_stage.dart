@@ -204,7 +204,7 @@ class NuvoFocusedStage extends StatelessWidget {
     return Column(
       children: [
         Expanded(child: centred),
-        if (actions != null) actions,
+        ?actions,
         if (linkRow != null) linkRow else const SizedBox(height: 14),
       ],
     );
