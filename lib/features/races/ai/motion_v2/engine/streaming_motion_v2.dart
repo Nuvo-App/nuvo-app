@@ -38,6 +38,12 @@ class StreamingMotionV2 {
   static const int _reevalEvery = 3;
   static const double _neutralDrop = 0.55;
   static const double _matchScore = 0.5;
+  // A rep requires an attempt that actually traversed the movement — a
+  // transient same-family window (e.g. walking back to the start position,
+  // which can share the demos' approach shape) must not count. The attempt
+  // must have covered most of the canonical trajectory AND lasted at least
+  // half the shortest demo.
+  static const double _repMinProgress = 0.55;
 
   final List<NuvoPoseFrame> _buf = [];
   int _count = 0;
@@ -166,13 +172,14 @@ class StreamingMotionV2 {
 
     var newRep = false;
     if (m.isSameFamily && m.score >= _matchScore) {
-      if (_armed && !_inMatch) {
+      _inMatch = true;
+      // Count when the match comes with a real attempt behind it — progress
+      // through the canonical path + plausible duration — not merely a single
+      // high-scoring window.
+      if (_armed && _repEligible()) {
         _count++;
         newRep = true;
         _armed = false;
-      }
-      _inMatch = true;
-      if (_attemptActive) {
         _lastAttempt = _successAttempt(h, hDiag.diag, t0);
         _resetAttempt();
       }
@@ -211,6 +218,23 @@ class StreamingMotionV2 {
     );
     _last = r;
     return r;
+  }
+
+  /// A match counts as a rep only inside an attempt that has traversed most
+  /// of the taught canonical path and lasted at least half the shortest demo.
+  /// Without this, the very first same-family window — e.g. the user still
+  /// walking back into position, whose pose stream can resemble the demos'
+  /// approach shape — registers as a rep before the movement even starts.
+  bool _repEligible() {
+    if (!_attemptActive) return false;
+    if (_maxProgress < _repMinProgress) return false;
+    if (motion.demoLengths.isEmpty) return true;
+    final expMinMs =
+        motion.demoLengths.reduce(math.min) * _framePeriodMs() * 0.5;
+    final durMs = _attemptStart == null
+        ? 0
+        : DateTime.now().difference(_attemptStart!).inMilliseconds;
+    return durMs >= expMinMs;
   }
 
   // ── Attempt result builders ──────────────────────────────────────────────

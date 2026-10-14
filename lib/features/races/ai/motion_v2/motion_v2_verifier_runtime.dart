@@ -223,7 +223,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
       verifierType: motionV2VerifierType,
       verifierVersion: _spec.version,
       movementName: _spec.movementName,
-      measurementType: 'repetitions',
+      measurementType: 'count',
       count: _last.count,
       target: _target,
       verificationStatus: complete ? 'custom_verified' : 'custom_failed',
