@@ -111,6 +111,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   // Raw pose-stream capture — one list of NuvoPoseFrames per accepted demo.
   // Feeds Motion V2 (learn) + the fixture export in the debug report.
   final List<List<NuvoPoseFrame>> _rawDemos = [];
+  // Untrimmed copies for the V2 learner — segmentAction finds the active
+  // region itself, and a slow lead-in (walk to the bar) must not be cut.
+  final List<List<NuvoPoseFrame>> _v2Demos = [];
   List<NuvoPoseFrame> _rawCurrent = [];
   int _rawAcceptedSnapshot = 0;
 
@@ -550,6 +553,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     if ((_showDiagnostics || _useMotionV2) && accepted) {
       final trimmed = _autoTrimSetup(_rawCurrent);
       if (trimmed.length >= 4) _rawDemos.add(trimmed);
+      if (_rawCurrent.length >= 4) {
+        _v2Demos.add(List<NuvoPoseFrame>.of(_rawCurrent));
+      }
       _snapshotDemoDiag(trimmed);
     }
     _rawCurrent = [];
@@ -580,6 +586,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   void _redoExample() {
     _flow.removeLastAccepted();
     if (_rawDemos.length > _confirmedExamples) _rawDemos.removeLast();
+    if (_v2Demos.length > _confirmedExamples) _v2Demos.removeLast();
     _rawAcceptedSnapshot = _flow.acceptedCount;
     setState(() => _awaitingExampleSave = false);
   }
@@ -614,7 +621,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         movementName: _flow.movementName.isEmpty
             ? 'Custom movement'
             : _flow.movementName,
-        demos: _rawDemos.map((d) => List<NuvoPoseFrame>.of(d)).toList(),
+        demos: (_v2Demos.isNotEmpty ? _v2Demos : _rawDemos)
+            .map((d) => List<NuvoPoseFrame>.of(d))
+            .toList(),
       );
       await _v2?.dispose();
       _v2 = runtime;
@@ -1196,6 +1205,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customTestResult = null;
     _runtimeDiagnostics.clear();
     _rawDemos.clear();
+    _v2Demos.clear();
     _rawCurrent = [];
 
     _testingVerifier = false;
@@ -1227,6 +1237,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customTestResult = null;
     _runtimeDiagnostics.clear();
     _rawDemos.clear();
+    _v2Demos.clear();
     _rawCurrent = [];
 
     _testingVerifier = false;
@@ -1264,6 +1275,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     _customTestResult = null;
     _runtimeDiagnostics.clear();
     _rawDemos.clear();
+    _v2Demos.clear();
     _rawCurrent = [];
     _ensureCameraStream();
     setState(() {});
