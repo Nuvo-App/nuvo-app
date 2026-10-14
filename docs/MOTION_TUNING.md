@@ -77,3 +77,24 @@ type, reps-vs-seconds, and preview stay fixed in the app.
 
 **Not possible without an app update:** a motion that needs a body measurement
 or engine the app doesn't have, or changing a motion's measurement type.
+
+## Benchmarking before you publish a tune
+
+Two offline tools score the verifiers against the real-video pose fixtures in
+`test/motion_qa/fixtures/real` (30 clips, 8 motions; expected rep counts are in
+each file):
+
+- `flutter test test/motion_real_scorecard_test.dart` — the production
+  validator's count vs expected for every clip, plus per-motion rep recall.
+- `flutter test test/motion_tuning_sweep_test.dart` — sweeps each over-the-air
+  motion's key thresholds and prints baseline vs best score. With
+  `WRITE_CANDIDATES=1` it writes the winning spec to
+  `server/worker/motion_specs/candidates/` (kept out of the shipped folder so the
+  parity tests still pin the shipped specs).
+
+Read the numbers with care: the clips are YouTube demos run through MediaPipe,
+not the phone camera + ML Kit the app uses, and a couple are unusable (e.g.
+`yt_squat_005` has degenerate landmarks; `yt_squat_002` shows no squat depth).
+Treat the sweep as a way to spot which motions are weak and which signal is the
+problem; publish a tune only when recordings pulled from the app (see "The
+loop") agree with it.
