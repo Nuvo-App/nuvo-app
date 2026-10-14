@@ -46,6 +46,9 @@ class StreamingMotionV2 {
   // must have covered most of the canonical trajectory AND lasted at least
   // half the shortest demo.
   static const double _defaultRepMinProgress = 0.55;
+  // Progress position at which the next rep re-arms — "back at the start of
+  // the movement". Tunable via spec.tuning['repRearmProgress'].
+  static const double _defaultRepRearmProgress = 0.30;
 
   final List<NuvoPoseFrame> _buf = [];
 
@@ -55,6 +58,8 @@ class StreamingMotionV2 {
       motion.tuning['neutralDrop'] ?? _defaultNeutralDrop;
   double get _repMinProgress =>
       motion.tuning['repMinProgress'] ?? _defaultRepMinProgress;
+  double get _repRearmProgress =>
+      motion.tuning['repRearmProgress'] ?? _defaultRepRearmProgress;
   int _count = 0;
   bool _armed = true;
   bool _inMatch = false;
@@ -194,6 +199,12 @@ class StreamingMotionV2 {
         _lastAttempt = _successAttempt(h, hDiag.diag, t0);
         _resetAttempt();
       }
+      // Re-arm on return-to-start, not only on match-break: for movements
+      // whose rest pose is INSIDE the family (hanging on the bar between
+      // pull-ups), the score never drops below the match line, so without
+      // this the count freezes at 1 forever — exactly what session
+      // ms_c39db497 showed (one rep across 17s of continuous matching).
+      if (!_armed && prog <= _repRearmProgress) _armed = true;
     } else {
       _inMatch = false;
       if (m.score < _neutralDrop) _armed = true;
