@@ -280,6 +280,13 @@ void main() {
       'wall sit': (name: 'Wall Sit', unit: 'seconds'),
       'longest wall sit': (name: 'Wall Sit', unit: 'seconds'),
       'handstand hold': (name: 'Handstand Hold', unit: 'seconds'),
+      'plank jacks': (name: 'Plank Jacks', unit: 'reps'),
+      'donkey kicks': (name: 'Donkey Kicks', unit: 'reps'),
+      'fire hydrants': (name: 'Fire Hydrants', unit: 'reps'),
+      'clamshells': (name: 'Clamshells', unit: 'reps'),
+      'dead bugs': (name: 'Dead Bugs', unit: 'reps'),
+      'scissor kicks': (name: 'Scissor Kicks', unit: 'reps'),
+      'arm circles': (name: 'Arm Circles', unit: 'reps'),
     };
     teach.forEach((name, want) {
       test('"$name" -> teach "${want.name}" (${want.unit})', () {
@@ -319,6 +326,9 @@ void main() {
       'best dip recipe',
       'watch pull up tutorials',
       'most hours of pull ups',
+      'watch arm circle videos',
+      'most miles of donkey kicks',
+      'read 5 books about dead bugs',
     ];
     for (final name in notMovements) {
       test('"$name" is never a teachable movement', () {

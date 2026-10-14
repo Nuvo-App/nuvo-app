@@ -75,6 +75,13 @@ const _entries = <_Entry>[
   _Entry('Thrusters', _reps, ['thruster']),
   _Entry('Bear Crawls', _reps, ['bear crawl']),
   _Entry('Inchworms', _reps, ['inchworm']),
+  _Entry('Plank Jacks', _reps, ['plank jack']),
+  _Entry('Donkey Kicks', _reps, ['donkey kick']),
+  _Entry('Fire Hydrants', _reps, ['fire hydrant']),
+  _Entry('Clamshells', _reps, ['clamshell', 'clam shell']),
+  _Entry('Dead Bugs', _reps, ['dead bug']),
+  _Entry('Scissor Kicks', _reps, ['scissor kick']),
+  _Entry('Arm Circles', _reps, ['arm circle']),
   // Holds (timed)
   _Entry('Wall Sit', _secs, ['wall sit']),
   _Entry('Side Plank', _secs, ['side plank']),

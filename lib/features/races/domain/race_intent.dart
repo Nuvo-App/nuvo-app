@@ -189,7 +189,16 @@ RaceIntentResolution resolveRaceIntent(
       // matcher already rejected any phrase that actually states a weight.
       'lb', 'lbs', 'kg',
     };
-    if (teachable != null && countUnits.contains(i.manualUnit ?? 'reps')) {
+    // The unit is a veto only when it is a RECOGNIZED everyday measure that
+    // isn't a count/hold — "hours of pull ups" stays a normal goal. A bare
+    // noun echo ("donkey kicks" → unit "kicks") is not a measure at all, so
+    // it can't veto either; the closed exercise list is the positive proof.
+    final manualUnit = i.manualUnit;
+    final unitOk =
+        manualUnit == null ||
+        countUnits.contains(manualUnit) ||
+        !_trustedGoalUnits.contains(manualUnit);
+    if (teachable != null && unitOk) {
       return RaceIntentResolution(
         sourceText: sourceText,
         path: RaceIntentPath.teachableMovement,
