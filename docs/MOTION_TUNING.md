@@ -112,8 +112,24 @@ spec the race verifies with AND the V2 learned spec). Triage and pull:
 node scripts/nuvo-motion.mjs teach-list --outcome failed
 node scripts/nuvo-motion.mjs teach-list --movement "pull ups"
 node scripts/nuvo-motion.mjs teach-get MV2-20261014-ABCDEF --out s.json.gz
-tools/motion_v2/replay_session.py s.json.gz
+tools/motion_v2/replay_session.py s.json.gz          # V2 deep-dive (Python)
+tool/teach-replay.sh s.json.gz                       # V1-vs-V2 scorecard (Dart)
 ```
+
+`tool/teach-replay.sh` replays the recorded live-test frames through BOTH
+matchers — the V1 `CustomPoseSequenceRuntime` (the spec a created race actually
+verifies with) and the V2 `MotionV2NativeRuntime` — and prints what each
+decided next to what the phone recorded. `--demos` also replays the 3 teaching
+demos for same-motion recall; a directory of sessions prints the aggregate
+scorecard + disagreements + per-movement breakdown. V2 needs the ONNX shared
+lib on Linux:
+
+```bash
+LD_LIBRARY_PATH=$HOME/.pub-cache/hosted/pub.dev/onnxruntime-1.4.1/linux \
+  tool/teach-replay.sh sessions_dir/
+```
+
+(`replay_session.py` is unchanged — use it for the per-window V2 trace.)
 
 `teach-list` marks `v2-unavailable` (engine couldn't run on the device → V1
 fallback), `no-v1-spec`, `v1-learned`/`v2-learned`, `test:match`/`test:no-match`,

@@ -108,5 +108,7 @@ proof screen), and ship model/matcher changes through System B (model swap, OTA)
   `CustomPoseVerifierSpec` the race actually verifies with, the builder diagnostics, the test
   result, the engine that ran (`v2|v1|v1_fallback`), the outcome
   (`used|learned|failed|abandoned`) and the failure stage. `teach-get` writes a `.json.gz`
-  `tools/motion_v2/replay_session.py` opens directly. Before data flows: run migration 0045
-  on prod D1 and redeploy the Worker.
+  `tools/motion_v2/replay_session.py` opens directly. `tool/teach-replay.sh` replays the
+  live-test frames through BOTH matchers (V1 race spec + V2 learned spec) and prints the
+  scorecard/disagreements. Before data flows: run migration 0045 on prod D1 and redeploy
+  the Worker.
