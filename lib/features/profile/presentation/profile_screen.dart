@@ -1,3 +1,4 @@
+import 'widgets/activity_heatmap.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -950,6 +951,7 @@ class _LevelTrack extends ConsumerWidget {
         // The record — three equal centered columns directly beneath the
         // progression block.
         _StatsStrip(activeCount: activeCount, wins: wins, winRate: winRate),
+        const ActivityHeatmapSection(),
       ],
     );
   }
