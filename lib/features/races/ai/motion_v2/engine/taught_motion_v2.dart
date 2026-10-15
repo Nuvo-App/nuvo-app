@@ -329,9 +329,10 @@ class TaughtMotionV2 {
   ({double pd, double td, Float32List desc}) _distOneOrientation(
     MotionReference ref,
     List<List<Float32List>> rep,
-    List<Float32List> emb,
-  ) {
-    var seg = segmentAction(emb);
+    List<Float32List> emb, {
+    ({int start, int end})? window,
+  }) {
+    var seg = window ?? segmentAction(emb);
     var s = seg.start, e = seg.end;
     if (e - s < 4) {
       s = 0;
@@ -349,6 +350,9 @@ class TaughtMotionV2 {
     List<List<Float32List>>? repM,
     List<Float32List>? embM,
     List<Float32List>? background,
+    // Score exactly this slice of the window instead of segmenting it — used
+    // to search for a rep INSIDE a longer window (several reps, mount, walk-off).
+    ({int start, int end})? window,
   }) {
     final oris = <({List<List<Float32List>> rep, List<Float32List> emb})>[
       (rep: rep, emb: emb),
@@ -364,7 +368,7 @@ class TaughtMotionV2 {
       var bpd = double.infinity, btd = double.infinity;
       Float32List? bdesc;
       for (final o in oris) {
-        final d = _distOneOrientation(ref, o.rep, o.emb);
+        final d = _distOneOrientation(ref, o.rep, o.emb, window: window);
         if (d.pd / ps + d.td / ts < bpd / ps + btd / ts) {
           bpd = d.pd;
           btd = d.td;

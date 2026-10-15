@@ -52,14 +52,18 @@ class StreamingMotionV2 {
 
   final List<NuvoPoseFrame> _buf = [];
 
-  double get _matchScore =>
-      motion.tuning['matchScore'] ?? _defaultMatchScore;
+  double get _matchScore => motion.tuning['matchScore'] ?? _defaultMatchScore;
   double get _neutralDrop =>
       motion.tuning['neutralDrop'] ?? _defaultNeutralDrop;
   double get _repMinProgress =>
       motion.tuning['repMinProgress'] ?? _defaultRepMinProgress;
   double get _repRearmProgress =>
       motion.tuning['repRearmProgress'] ?? _defaultRepRearmProgress;
+  // Rep search inside the window (spec.tuning['subwindow'] = 0 turns it off and
+  // restores whole-window matching — server-patchable, no app update).
+  bool get _subwindow => (motion.tuning['subwindow'] ?? 1.0) >= 0.5;
+  // Absolute frame index where the last counted rep ended (-1 = none yet).
+  int _lastCountedEnd = -1;
   int _count = 0;
   bool _armed = true;
   bool _inMatch = false;
@@ -81,6 +85,7 @@ class StreamingMotionV2 {
 
   void reset() {
     _buf.clear();
+    _lastCountedEnd = -1;
     _count = 0;
     _armed = true;
     _inMatch = false;
@@ -141,14 +146,23 @@ class StreamingMotionV2 {
     final rep = await encoder.encode(h);
     final emb = perFrameEmbedding(rep);
     var m = motion.matchEncoded(rep, emb, background: background);
+    List<List<Float32List>>? repM;
+    List<Float32List>? embM;
+    // Reps found INSIDE the window (several per eval); empty in whole-window mode.
+    var found = _subwindow
+        ? _findReps(rep, emb, null, null)
+        : const <_RepHit>[];
     // The mirrored encoder pass (left/right-handed invariance) doubles the
     // cost of every eval, and on a phone each pass is ~1s — enough to lag the
-    // camera and miss reps. Run it only when the direct pass did not already
-    // match: during a rep (the evals that count) one pass is enough.
-    if (!(m.isSameFamily && m.score >= _matchScore)) {
+    // camera and miss reps. Run it only when nothing matched on the direct
+    // pass: during a rep (the evals that count) one pass is enough.
+    final directMatched = _subwindow
+        ? found.isNotEmpty || (m.isSameFamily && m.score >= _matchScore)
+        : (m.isSameFamily && m.score >= _matchScore);
+    if (!directMatched) {
       final hm = framesToH36m(_buf, mirror: true);
-      final repM = await encoder.encode(hm);
-      final embM = perFrameEmbedding(repM);
+      repM = await encoder.encode(hm);
+      embM = perFrameEmbedding(repM);
       m = motion.matchEncoded(
         rep,
         emb,
@@ -156,6 +170,11 @@ class StreamingMotionV2 {
         embM: embM,
         background: background,
       );
+      if (_subwindow) found = _findReps(rep, emb, repM, embM);
+    }
+    if (_subwindow && found.isNotEmpty) {
+      final best = found.reduce((a, b) => a.m.score >= b.m.score ? a : b);
+      if (best.m.score > m.score) m = best.m;
     }
 
     final seg = segmentAction(emb);
@@ -199,7 +218,7 @@ class StreamingMotionV2 {
       // Count when the match comes with a real attempt behind it — progress
       // through the canonical path + plausible duration — not merely a single
       // high-scoring window.
-      if (_armed && _repEligible()) {
+      if (!_subwindow && _armed && _repEligible()) {
         _count++;
         newRep = true;
         _armed = false;
@@ -220,9 +239,27 @@ class StreamingMotionV2 {
         _lastAttempt = _failAttempt(h, hDiag.diag, m, embSeg, t0);
         _resetAttempt();
       }
-      if (_armed && _count > 0 && _buf.length > _minFrames) {
+      if (!_subwindow && _armed && _count > 0 && _buf.length > _minFrames) {
         _buf.removeRange(0, _buf.length - _minFrames);
       }
+    }
+
+    if (_subwindow) {
+      for (final hit in found) {
+        // A rep counts once: it must not overlap the previous counted rep.
+        final len = hit.end - hit.start;
+        if (_lastCountedEnd >= 0 &&
+            hit.start < _lastCountedEnd - (0.3 * len).round()) {
+          continue;
+        }
+        _count++;
+        newRep = true;
+        _lastCountedEnd = hit.end;
+        _inMatch = true;
+        _lastAttempt = _successAttempt(h, hDiag.diag, t0);
+        _resetAttempt();
+      }
+      if (found.isNotEmpty) _inMatch = true;
     }
 
     final state = _inMatch
@@ -247,6 +284,67 @@ class StreamingMotionV2 {
     );
     _last = r;
     return r;
+  }
+
+  /// Look for the taught rep INSIDE the current window: slide candidate
+  /// lengths around the taught rep length over the embeddings, score each
+  /// slice with the same matcher, and keep the best non-overlapping matches.
+  /// This is what lets several reps count per eval, and keeps the mount /
+  /// walk-up / walk-off around a rep out of the match.
+  List<_RepHit> _findReps(
+    List<List<Float32List>> rep,
+    List<Float32List> emb,
+    List<List<Float32List>>? repM,
+    List<Float32List>? embM,
+  ) {
+    final w = emb.length;
+    final lens = [...motion.demoLengths]..sort();
+    if (w < 8 || lens.isEmpty) return const [];
+    final refLen = lens[lens.length ~/ 2];
+    final v = embeddingVelocity(emb);
+    final minVel = motion.demoActiveVel > 0 ? motion.demoActiveVel * 0.35 : 0.0;
+    final base = _framesSeen - w;
+    final cands = <_RepHit>[];
+    final seen = <int>{};
+    for (final f in const [0.8, 1.0, 1.25]) {
+      // A slice much shorter than the taught rep would be time-stretched to
+      // fit it (a mount or a few warm-up frames then "matches") — a candidate
+      // must cover at least 70% of the taught rep, and the window must be
+      // able to hold it.
+      var len = (refLen * f).round();
+      if (len > w) len = w;
+      if (len < (refLen * 0.7).round()) continue;
+      if (!seen.add(len)) continue;
+      final stride = math.max(2, len ~/ 8);
+      for (var e = w; e - len >= 0; e -= stride) {
+        final s = e - len;
+        // A rep needs real movement inside it — stillness never counts.
+        if (minVel > 0 && median(v.sublist(s, e)) <= minVel) continue;
+        final mm = motion.matchEncoded(
+          rep,
+          emb,
+          repM: repM,
+          embM: embM,
+          background: background,
+          window: (start: s, end: e),
+        );
+        if (mm.isSameFamily && mm.score >= _matchScore) {
+          cands.add(_RepHit(base + s, base + e, mm));
+        }
+      }
+    }
+    cands.sort((a, b) => b.m.score.compareTo(a.m.score));
+    final picked = <_RepHit>[];
+    for (final c in cands) {
+      final free = picked.every((p) {
+        final overlap = math.min(p.end, c.end) - math.max(p.start, c.start);
+        final shorter = math.min(p.end - p.start, c.end - c.start);
+        return overlap <= 0.3 * shorter;
+      });
+      if (free) picked.add(c);
+    }
+    picked.sort((a, b) => a.start.compareTo(b.start));
+    return picked;
   }
 
   /// A match counts as a rep only inside an attempt that has traversed most
@@ -451,4 +549,12 @@ class StreamingMotionV2 {
       attempt: attempt,
     );
   }
+}
+
+/// A rep found inside the live window, in absolute frame indices.
+class _RepHit {
+  _RepHit(this.start, this.end, this.m);
+  final int start;
+  final int end;
+  final MatchResultV2 m;
 }
