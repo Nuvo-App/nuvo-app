@@ -67,6 +67,20 @@ app.use(
   }),
 );
 
+// ── App config (public; flip in the Cloudflare dashboard, no deploy) ──────────
+// custom_motion: Teach Nuvo / custom camera movements visible in the app.
+// clip_settle_factor: optional walk-in/out clip tuning (1.0-2.0).
+app.get('/config', (c) => {
+  const env = c.env as unknown as Record<string, string | undefined>;
+  const settle = Number(env.CLIP_SETTLE_FACTOR);
+  return c.json({
+    custom_motion: env.CUSTOM_MOTION_ENABLED === 'true',
+    ...(Number.isFinite(settle) && settle >= 1 && settle <= 2
+      ? { clip_settle_factor: settle }
+      : {}),
+  });
+});
+
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (c) => c.json({ ok: true, service: 'nuvo-api', ts: Date.now() }));
 

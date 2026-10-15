@@ -12,7 +12,9 @@ import '../../../data/ai_motion_models.dart';
 /// size difference (the person never came from/went to the phone), when the
 /// pose is too sparse to judge, or when the clip would be too short.
 const double kClipMinSizeRatio = 1.6;
-const double kClipSettleFactor = 1.35;
+/// How close to the working-spot size still counts as settled. Server-tunable
+/// (`clip_settle_factor` in `/config`).
+double clipSettleFactor = 1.15;
 const int kClipMinFrames = 24;
 const int kClipGapFrames = 5;
 
@@ -62,7 +64,7 @@ DemoClip clipDemoToWorkingSpot(List<NuvoPoseFrame> frames) {
     ]..sort();
     if (w.length >= 3) size[i] = w[w.length ~/ 2];
   }
-  final limit = far * kClipSettleFactor;
+  final limit = far * clipSettleFactor;
 
   // Longest run of settled-at-working-distance frames, bridging short gaps.
   var bestS = -1, bestE = -1, runS = -1, lastIn = -1;
@@ -85,8 +87,10 @@ DemoClip clipDemoToWorkingSpot(List<NuvoPoseFrame> frames) {
   }
   close();
   if (bestS < 0) return whole();
-  final s = (bestS - 3).clamp(0, frames.length);
-  final e = (bestE + 4).clamp(0, frames.length);
+  // No padding: the frames beside the run are the walk, and a rep that
+  // includes the start of the walk only completes when the person walks.
+  final s = bestS.clamp(0, frames.length);
+  final e = (bestE + 1).clamp(0, frames.length);
   if (e - s < kClipMinFrames) return whole();
   return DemoClip(frames.sublist(s, e), s, e, far);
 }

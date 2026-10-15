@@ -26,8 +26,8 @@ void main() {
     ];
     final c = clipDemoToWorkingSpot(_demo(sizes));
     expect(c.clipped, isTrue);
-    expect(c.start, inInclusiveRange(29, 36));
-    expect(c.end, inInclusiveRange(98, 108));
+    expect(c.start, inInclusiveRange(32, 40));
+    expect(c.end, inInclusiveRange(94, 100));
     expect(c.workingSize, closeTo(0.17, 0.01));
   });
 

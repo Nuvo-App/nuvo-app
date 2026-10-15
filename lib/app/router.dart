@@ -38,6 +38,7 @@ import '../features/races/presentation/join_race_screen.dart';
 import '../features/races/presentation/proof_review_screen.dart';
 import '../features/races/presentation/race_settings_screen.dart';
 import '../features/races/presentation/board_moved_screen.dart';
+import '../core/config/nuvo_flags.dart';
 import '../features/races/presentation/custom_pose/teach_movement_screen.dart';
 import '../features/races/presentation/movement_preview/rive_calibration_screen.dart';
 import '../features/races/presentation/submit_proof_screen.dart';
@@ -235,9 +236,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       StatefulShellRoute(
         navigatorContainerBuilder: (context, navigationShell, children) =>
             NuvoTabStack(
-          index: navigationShell.currentIndex,
-          children: children,
-        ),
+              index: navigationShell.currentIndex,
+              children: children,
+            ),
         builder: (context, _, navigationShell) =>
             MainShell(child: navigationShell),
         branches: [
@@ -274,6 +275,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // /races/teach (reached from the race composer's activity step).
       GoRoute(
         path: '/races/teach',
+        // Custom AI movements are switched on from the server.
+        redirect: (_, _) => NuvoFlags.customMotionOn ? null : '/splash',
         pageBuilder: (_, state) => _cameraPage(
           state,
           TeachMovementScreen(

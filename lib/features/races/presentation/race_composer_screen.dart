@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/nuvo_flags.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -106,7 +107,9 @@ Future<Race> createRaceForComposerDraft({
       motionV2Spec: draft.motionV2Spec,
       format: draft.format.backendValue,
       finishLineAt: racesToTarget ? null : draft.finishLineAt,
-      attemptDurationSeconds: racesToTarget ? null : draft.attemptDurationSeconds,
+      attemptDurationSeconds: racesToTarget
+          ? null
+          : draft.attemptDurationSeconds,
       attemptLimit: racesToTarget ? null : draft.attemptLimit,
       scoreDirection: draft.scoreDirection,
     );
@@ -316,6 +319,7 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   /// A camera-countable movement the typed name resolved to, offered as ONE
   /// centred question — unless the user already made their own choice.
   TeachableMovement? _teachSuggestionFor(RaceDraft draft) {
+    if (!NuvoFlags.customMotionOn) return null;
     if (draft.isCustom ||
         draft.userEditedFields.contains(RaceField.activity) ||
         draft.userEditedFields.contains(RaceField.goalKind)) {
@@ -1628,7 +1632,8 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
       return NuvoFocusedStage(
         icon: Icons.videocam_rounded,
         title: 'Your custom movement',
-        body: 'Name it and pick how it is counted. Next you\'ll teach it to Nuvo.',
+        body:
+            'Name it and pick how it is counted. Next you\'ll teach it to Nuvo.',
         content: Column(
           children: [
             _ComposerField(
@@ -2196,6 +2201,7 @@ class _TeachNuvoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!NuvoFlags.customMotionOn) return const SizedBox.shrink();
     final c = context.themeColors;
     const accent = NuvoColors.avatarPlum;
     return PressableScale(
@@ -2919,22 +2925,23 @@ class _SearchResults extends StatelessWidget {
                 'No movement found.',
                 style: AppTextStyles.bodyMedium.copyWith(color: c.inkMuted),
               ),
-              const SizedBox(height: 8),
-              NuvoPressable(
-                onTap: onTeachNuvo,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    'Create it with Teach Nuvo →',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.avatarPlum,
+              if (NuvoFlags.customMotionOn) const SizedBox(height: 8),
+              if (NuvoFlags.customMotionOn)
+                NuvoPressable(
+                  onTap: onTeachNuvo,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      'Create it with Teach Nuvo →',
+                      style: AppTextStyles.labelMedium.copyWith(
+                        color: NuvoColors.avatarPlum,
+                      ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
+import 'core/config/nuvo_flags.dart';
 import 'core/demo/presentation_demo.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/nuvo_theme_mode.dart';
@@ -21,5 +24,7 @@ Future<void> main() async {
   await ensurePresentationModeLoaded();
   // Resolve the persisted light/dark choice before the first frame.
   await ensureNuvoThemeModeLoaded();
+  // Server switches load in the background; defaults are the safe ones.
+  unawaited(NuvoFlags.load());
   runApp(const ProviderScope(child: NuvoApp()));
 }
