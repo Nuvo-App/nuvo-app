@@ -17,11 +17,19 @@ class NuvoFlags {
 
   static bool get customMotionOn => customMotion.value;
 
-  static Future<void> load({http.Client? client}) async {
+  /// [token] (optional access token) lets the server turn the feature on for
+  /// specific accounts only.
+  static Future<void> load({http.Client? client, String? token}) async {
     final c = client ?? http.Client();
     try {
       final res = await c
-          .get(Uri.parse('$kNuvoApiBase/config'))
+          .get(
+            Uri.parse('$kNuvoApiBase/config'),
+            headers: {
+              if (token != null && token.isNotEmpty)
+                'Authorization': 'Bearer $token',
+            },
+          )
           .timeout(const Duration(seconds: 5));
       if (res.statusCode != 200) return;
       final body = jsonDecode(res.body);

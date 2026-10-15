@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/nuvo_flags.dart';
+import '../../auth/presentation/auth_controller.dart'
+    show secureTokenStoreProvider;
 import 'package:go_router/go_router.dart';
 
 import '../../../core/navigation/nuvo_navigation.dart';
@@ -182,6 +184,10 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    // Re-ask the server (with this login) whether custom AI movements are on
+    // for this account; rebuild when the answer changes.
+    NuvoFlags.customMotion.addListener(_onFlagChanged);
+    unawaited(_refreshFlags());
     // A learned movement in session state is DATA, not a navigation trigger.
     // Never let it jump the composer to a later step.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -206,8 +212,21 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
 
   @override
   void dispose() {
+    NuvoFlags.customMotion.removeListener(_onFlagChanged);
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _onFlagChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _refreshFlags() async {
+    String? token;
+    try {
+      token = await ref.read(secureTokenStoreProvider).getAccessToken();
+    } catch (_) {}
+    await NuvoFlags.load(token: token);
   }
 
   /// The stages this race actually visits. `train` only exists once the draft

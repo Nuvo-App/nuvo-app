@@ -47,4 +47,20 @@ void main() {
     );
     expect(clip.clipSettleFactor, 1.15);
   });
+
+  test(
+    'sends the login token so the server can allowlist an account',
+    () async {
+      String? seen;
+      await NuvoFlags.load(
+        token: 'abc',
+        client: MockClient((req) async {
+          seen = req.headers['Authorization'];
+          return http.Response('{"custom_motion":true}', 200);
+        }),
+      );
+      expect(seen, 'Bearer abc');
+      expect(NuvoFlags.customMotionOn, isTrue);
+    },
+  );
 }

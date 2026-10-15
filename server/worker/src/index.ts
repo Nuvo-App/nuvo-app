@@ -27,7 +27,7 @@ import { invitesRouter } from './routes/invites';
 import { notificationsRouter } from './routes/notifications';
 import { reactionsRouter } from './routes/reactions';
 import { devicesRouter } from './routes/devices';
-import { requireAuth } from './lib/jwt';
+import { requireAuth, verifyJwt } from './lib/jwt';
 import { ALLOWED_WEB_ORIGINS } from './lib/response';
 import {
   androidAssetLinks,
@@ -70,11 +70,32 @@ app.use(
 // ── App config (public; flip in the Cloudflare dashboard, no deploy) ──────────
 // custom_motion: Teach Nuvo / custom camera movements visible in the app.
 // clip_settle_factor: optional walk-in/out clip tuning (1.0-2.0).
-app.get('/config', (c) => {
+app.get('/config', async (c) => {
   const env = c.env as unknown as Record<string, string | undefined>;
   const settle = Number(env.CLIP_SETTLE_FACTOR);
+  let customMotion = env.CUSTOM_MOTION_ENABLED === 'true';
+  // Optional login: lets a short allowlist (CUSTOM_MOTION_USERS) see the
+  // feature while it is off for everyone else. Bad/expired token = anonymous.
+  const allow = (env.CUSTOM_MOTION_USERS ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  const auth = c.req.header('Authorization');
+  if (!customMotion && allow.length > 0 && auth?.startsWith('Bearer ')) {
+    try {
+      const { sub } = await verifyJwt(auth.slice(7), c.env.JWT_SECRET);
+      const row = await c.env.DB
+        .prepare('SELECT primary_email FROM users WHERE id = ?')
+        .bind(sub)
+        .first<{ primary_email: string | null }>();
+      const email = (row?.primary_email ?? '').toLowerCase();
+      customMotion = allow.includes(sub.toLowerCase()) || (email !== '' && allow.includes(email));
+    } catch {
+      // anonymous
+    }
+  }
   return c.json({
-    custom_motion: env.CUSTOM_MOTION_ENABLED === 'true',
+    custom_motion: customMotion,
     ...(Number.isFinite(settle) && settle >= 1 && settle <= 2
       ? { clip_settle_factor: settle }
       : {}),
