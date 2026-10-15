@@ -55,6 +55,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   int _validFrames = 0;
   int _failedAttempts = 0;
   int _completions = 0;
+  int _countSeen = 0;
   DateTime? _startedAt;
   DateTime? _lastFrameAt;
 
@@ -121,16 +122,24 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   /// Capped so eval cadence stays ≥~1/sec at 15fps.
   static const int _pumpMax = 75;
 
-  void _pump() {
-    if (!_ready || _busy || _batch.length < batchSize) return;
+  /// [force] lets a tail shorter than [batchSize] through — used only when
+  /// the session is ending so the last 1–3 frames (a rep finishing right at
+  /// the end) are not left unprocessed in the queue.
+  void _pump({bool force = false}) {
+    final minFrames = force ? 1 : batchSize;
+    if (!_ready || _busy || _batch.length < minFrames) return;
     _busy = true;
-    final n = _batch.length.clamp(batchSize, _pumpMax);
+    final n = _batch.length.clamp(minFrames, _pumpMax);
     final frames = _batch.sublist(0, n);
     _batch.removeRange(0, n);
     _engine
         .update(frames)
         .then((r) {
-          if (r.newRep) _completions++;
+          // One eval can count several reps (in-window search), so completion
+          // events follow the count, not the number of evals that flagged
+          // newRep — the server rejects a proof whose events don't cover it.
+          if (r.count > _countSeen) _completions += r.count - _countSeen;
+          _countSeen = r.count;
           if (r.attempt.outcome == MotionAttemptOutcome.failed) {
             _failedAttempts++;
             if (r.attempt.userFeedback.isNotEmpty) {
@@ -215,7 +224,12 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   Future<void> drain() async {
     var guard = 0;
     while (guard++ < 250) {
-      if (!_busy && _batch.length < batchSize) return;
+      if (!_busy) {
+        if (_batch.isEmpty) return;
+        // Idle with a queued tail (fewer than a full batch): push it through.
+        _pump(force: true);
+        if (!_busy) return; // engine not ready / nothing to push
+      }
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
   }
