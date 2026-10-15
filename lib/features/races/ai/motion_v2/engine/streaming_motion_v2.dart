@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../../../data/ai_motion_models.dart';
 import '../motion_v2_models.dart';
 import '../pose_quality.dart';
+import 'demo_clip.dart' show shoulderWidth;
 import 'motion_v2_math.dart';
 import 'nuvo_to_h36m.dart';
 import 'taught_motion_v2.dart';
@@ -64,6 +65,8 @@ class StreamingMotionV2 {
   bool get _subwindow => (motion.tuning['subwindow'] ?? 1.0) >= 0.5;
   // Absolute frame index where the last counted rep ended (-1 = none yet).
   int _lastCountedEnd = -1;
+  // How much bigger than the working-spot size means "at the phone".
+  double get _phoneFactor => motion.tuning['phoneFactor'] ?? 1.8;
   int _count = 0;
   bool _armed = true;
   bool _inMatch = false;
@@ -320,6 +323,10 @@ class StreamingMotionV2 {
         final s = e - len;
         // A rep needs real movement inside it — stillness never counts.
         if (minVel > 0 && median(v.sublist(s, e)) <= minVel) continue;
+        // Standing at the phone (walking up to stop, or just arrived) is not
+        // a rep: the taught reps were done at the working spot, far smaller
+        // in frame.
+        if (_atPhone(s, e)) continue;
         final mm = motion.matchEncoded(
           rep,
           emb,
@@ -345,6 +352,19 @@ class StreamingMotionV2 {
     }
     picked.sort((a, b) => a.start.compareTo(b.start));
     return picked;
+  }
+
+  /// True when the person fills the frame far more than they did while
+  /// teaching (spec.tuning['workingSize'] = shoulder width at the working
+  /// spot): they are at the phone, not at the working spot.
+  bool _atPhone(int s, int e) {
+    final ws = motion.tuning['workingSize'];
+    if (ws == null || ws <= 0 || e > _buf.length) return false;
+    final sizes = <double>[
+      for (var i = s; i < e; i++) ?shoulderWidth(_buf[i]),
+    ]..sort();
+    if (sizes.length < 3) return false;
+    return sizes[sizes.length ~/ 2] > ws * _phoneFactor;
   }
 
   /// A match counts as a rep only inside an attempt that has traversed most

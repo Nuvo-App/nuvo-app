@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/ai_motion_models.dart';
 import '../motion_model_release.dart';
+import 'engine/demo_clip.dart';
 import 'engine/motion_v2_background.dart';
 import 'engine/motion_v2_math.dart';
 import 'engine/motion_v2_onnx_encoder.dart';
@@ -130,6 +131,12 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   bool get encoderLoaded => _encoder != null;
   String get encoderId => _motion?.encoderId ?? 'release_action';
 
+  /// Test hook: set false to learn from the demos exactly as recorded.
+  static bool clipWalkInOut = true;
+
+  /// [start, end, total] per demo from the last [learn] (walk-in/out clip).
+  List<List<int>> lastClipRanges = const [];
+
   LearnProfile? _lastLearnProfile;
   LearnProfile? get lastLearnProfile => _lastLearnProfile;
 
@@ -151,8 +158,17 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
 
     // ── ONE MotionBERT pass per demo. Everything after runs on these. ──
     final encoded = <MotionEncodedDemo>[];
-    for (final frames in demos) {
+    final clipRanges = <List<int>>[];
+    final workingSizes = <double>[];
+    for (final raw in demos) {
       final sw = Stopwatch()..start();
+      // Drop the walk-in / walk-out (person at the phone) from each demo.
+      final clip = clipWalkInOut
+          ? clipDemoToWorkingSpot(raw)
+          : DemoClip(raw, 0, raw.length, null);
+      clipRanges.add([clip.start, clip.end, raw.length]);
+      if (clip.workingSize != null) workingSizes.add(clip.workingSize!);
+      final frames = clip.frames;
       final h36m = framesToH36m(frames);
       p.preprocessMs += sw.elapsedMilliseconds;
       sw.reset();
@@ -161,6 +177,7 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       encoded.add((rep: rep, emb: perFrameEmbedding(rep), h36m: h36m));
     }
 
+    lastClipRanges = clipRanges;
     final sw = Stopwatch()..start();
     final encoderId = enc is MotionV2OnnxEncoder
         ? MotionV2OnnxEncoder.activeEncoderId
@@ -207,18 +224,27 @@ class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
       );
     }
 
-    final json = motion.toJson()
-      ..['metadata'] = {
-        'movementName': movementName,
-        'selfValidation': report.toJson(),
-        'learnProfile': p.toJson(),
-        'model': {
-          'release': MotionV2OnnxEncoder.activeModelVersion,
-          'checksum': MotionV2OnnxEncoder.activeModelChecksum,
-          'source': MotionV2OnnxEncoder.activeModelSource,
-          'embeddingSchema': kMotionV2EncoderEmbeddingSchema,
-        },
+    final json = motion.toJson();
+    // Shoulder width at the working spot, so the live counter can ignore the
+    // person walking up to the phone to stop the recording.
+    if (clipWalkInOut && workingSizes.length == encoded.length) {
+      final sorted = [...workingSizes]..sort();
+      json['tuning'] = {
+        ...?(json['tuning'] as Map?)?.cast<String, double>(),
+        'workingSize': sorted[sorted.length ~/ 2],
       };
+    }
+    json['metadata'] = {
+      'movementName': movementName,
+      'selfValidation': report.toJson(),
+      'learnProfile': p.toJson(),
+      'model': {
+        'release': MotionV2OnnxEncoder.activeModelVersion,
+        'checksum': MotionV2OnnxEncoder.activeModelChecksum,
+        'source': MotionV2OnnxEncoder.activeModelSource,
+        'embeddingSchema': kMotionV2EncoderEmbeddingSchema,
+      },
+    };
     return TaughtMotionV2Spec.fromJson(json);
   }
 
