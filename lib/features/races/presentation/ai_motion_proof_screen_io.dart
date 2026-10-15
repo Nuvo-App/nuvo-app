@@ -103,6 +103,12 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   MotionSessionRecorder? _session;
   MotionSessionArtifact? _lastArtifact;
   bool _sessionFinalized = false;
+  // Mid-session snapshots: the same session id is re-uploaded (server upserts)
+  // on every rep / state change, so a run that never reaches finish still
+  // leaves its frames and events on the server.
+  DateTime? _lastSnapshotAt;
+  int _snapshotCount = 0;
+  String _snapshotState = '';
   String _raceTitle = '';
   String _measurementType = 'repetitions';
   CustomPoseRuntimeResult? _customResult;
@@ -709,6 +715,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
     _lastObjectInferenceAt = null;
     _serverAnalysis = null;
     _sessionFinalized = false;
+    _lastSnapshotAt = null;
+    _snapshotCount = 0;
+    _snapshotState = '';
     _session = MotionSessionRecorder(
       kind: _isCustom ? MotionSessionKind.custom : MotionSessionKind.preset,
       activityId: _isCustom
@@ -864,6 +873,7 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
         failedRuleReason: output.failedRuleReason,
         debugValues: output.debugValues,
       );
+      _maybeSnapshotSession(output.count, output.validatorState);
       if (_usesCustomRuntimeOutput) {
         _customUpdate = output.customPoseUpdate;
       }
@@ -1166,6 +1176,32 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       _debugLog('serverMotionAnalysisUnavailable error=$error');
     } finally {
       _finalizeSession();
+    }
+  }
+
+  /// Upload an in-progress copy of the session when the count or validator
+  /// state changes (throttled to one per 3s). Never after the final seal —
+  /// a late snapshot must not overwrite the finished artifact.
+  void _maybeSnapshotSession(int count, String validatorState) {
+    final session = _session;
+    if (session == null || _sessionFinalized || _disposed) return;
+    final changed = count != _snapshotCount || validatorState != _snapshotState;
+    final now = DateTime.now();
+    final last = _lastSnapshotAt;
+    final due = last == null || now.difference(last).inSeconds >= 3;
+    if (!(changed && due)) return;
+    _snapshotCount = count;
+    _snapshotState = validatorState;
+    _lastSnapshotAt = now;
+    try {
+      final consented =
+          ref.read(authControllerProvider).user?.motionTrainingConsent == true;
+      if (!consented) return;
+      unawaited(
+        ref.read(motionSessionUploadQueueProvider).enqueue(session.build()),
+      );
+    } catch (e) {
+      _debugLog('motionSessionSnapshotSkipped $e');
     }
   }
 

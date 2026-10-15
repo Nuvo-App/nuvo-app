@@ -557,6 +557,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _v2Demos.add(List<NuvoPoseFrame>.of(_rawCurrent));
       }
       _snapshotDemoDiag(trimmed);
+      _snapshotTeachSession();
     }
     _rawCurrent = [];
     _preRoll.clear();
@@ -643,6 +644,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         _v2Learning = false;
       });
       _syncLearnedProvider();
+      _snapshotTeachSession();
     } on MotionV2LearnException catch (e) {
       // Self-validation failed — the spec is junk. Keep the report for the
       // debug bundle, show the user something actionable.
@@ -657,6 +659,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
                   'different for Nuvo to learn from.';
         _v2Learning = false;
       });
+      _snapshotTeachSession();
     } on MotionV2Exception catch (e) {
       await runtime.dispose();
       if (!mounted) return;
@@ -1026,14 +1029,23 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  /// Upload the teach session as it stands after a step (demo recorded, V2
+  /// learned, live test done).
+  void _snapshotTeachSession() => _finalizeTeachSession(
+    outcome: _effectiveSpec != null ? 'learned' : 'abandoned',
+    snapshot: true,
+  );
+
   /// Seal the teach session and hand it to the upload queue — consent-gated
   /// exactly like verification sessions. Idempotent: [outcome] is only sent
   /// the first time, so a "used" finalize wins over the dispose-path one.
   bool _teachSessionFinalized = false;
 
-  void _finalizeTeachSession({required String outcome}) {
+  void _finalizeTeachSession({required String outcome, bool snapshot = false}) {
     if (_teachSessionFinalized) return;
-    _teachSessionFinalized = true;
+    // A snapshot uploads the session as it stands (same id, server upserts) so
+    // each teach step is visible even if the screen never reaches its end.
+    if (!snapshot) _teachSessionFinalized = true;
 
     // Where did it stop being happy? The stage tells the triage whether the
     // user gave up recording, the V1 builder failed, V2 learning failed, or
@@ -1343,6 +1355,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _customTestResult = result;
       _testingVerifier = false;
     });
+    _snapshotTeachSession();
   }
 
   void _completeVerifierTest() {
@@ -1361,6 +1374,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       _customTestResult = result;
       _testingVerifier = false;
     });
+    _snapshotTeachSession();
   }
 
   void _seedDebugReadyFixture() {

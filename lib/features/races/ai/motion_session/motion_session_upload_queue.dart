@@ -44,6 +44,9 @@ class MotionSessionUploadQueue {
 
   Directory? _dir;
   bool _flushing = false;
+  // Set when something is staged mid-flush so the running flush goes round again
+  // instead of dropping the newer artifact (snapshots re-stage the same id).
+  bool _rerun = false;
 
   Future<Directory> _stagingDir() async {
     if (_dir != null) return _dir!;
@@ -87,6 +90,7 @@ class MotionSessionUploadQueue {
       return;
     }
     // Fire-and-forget — the caller (a camera-frame callback) must not await.
+    if (_flushing) _rerun = true;
     unawaited(flush());
   }
 
@@ -96,14 +100,17 @@ class MotionSessionUploadQueue {
     if (_flushing) return;
     _flushing = true;
     try {
-      final dir = await _stagingDir();
-      final metas = (await dir.list().toList())
-          .whereType<File>()
-          .where((f) => f.path.endsWith('.meta.json'))
-          .toList();
-      for (final metaFile in metas) {
-        await _tryOne(metaFile);
-      }
+      do {
+        _rerun = false;
+        final dir = await _stagingDir();
+        final metas = (await dir.list().toList())
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.meta.json'))
+            .toList();
+        for (final metaFile in metas) {
+          await _tryOne(metaFile);
+        }
+      } while (_rerun);
     } catch (e) {
       _log('flush failed: $e');
     } finally {
@@ -144,6 +151,11 @@ class MotionSessionUploadQueue {
         metadata: (meta['metadata'] as Map).cast<String, dynamic>(),
         gzipBytes: await blobFile.readAsBytes(),
       );
+      // A newer snapshot may have re-staged this id while we uploaded — keep it.
+      if (await _restaged(metaFile, stagedAt)) {
+        _log('uploaded $sessionId (newer snapshot staged, kept)');
+        return;
+      }
       await _discard(metaFile, blobFile, null); // success
       _log('uploaded $sessionId');
     } catch (e) {
@@ -152,6 +164,16 @@ class MotionSessionUploadQueue {
         await metaFile.writeAsString(jsonEncode(meta), flush: true);
       } catch (_) {}
       _log('upload $sessionId failed (attempt ${attempts + 1}): $e');
+    }
+  }
+
+  Future<bool> _restaged(File metaFile, DateTime stagedAt) async {
+    try {
+      final now = jsonDecode(await metaFile.readAsString()) as Map;
+      final at = DateTime.tryParse(now['stagedAt'] as String? ?? '');
+      return at != null && at.isAfter(stagedAt);
+    } catch (_) {
+      return false;
     }
   }
 
