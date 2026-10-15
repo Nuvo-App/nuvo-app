@@ -20,6 +20,7 @@ import {
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  customRepRateImplausible,
   manualConfigFromBody,
   registryConfigFromBody,
   type RaceConfig,
@@ -2042,6 +2043,9 @@ racesRouter.post('/:id/proof', async (c) => {
   }
   if (isCustom && completionEvents !== null && completionEvents < increment) {
     return c.json(badRequest('Custom proof completion events must cover value.'), 400);
+  }
+  if (isCustom && aiStatus === 'custom_verified' && customRepRateImplausible(increment, durationMs)) {
+    return c.json(badRequest('Custom proof count is not possible in the recorded time.'), 400);
   }
   if (isCustom && framesAnalyzed !== null && validPoseFrames !== null && validPoseFrames > framesAnalyzed) {
     return c.json(badRequest('Custom proof valid frames cannot exceed analyzed frames.'), 400);

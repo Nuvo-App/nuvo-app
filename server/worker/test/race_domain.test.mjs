@@ -17,6 +17,7 @@ const {
   assertSubmissionCompatible,
   configFromBody,
   customConfigFromBody,
+  customRepRateImplausible,
 } = require('../.tmp-test-dist/domain/raceValidation.js');
 
 function feature(value = 0.5) {
@@ -913,4 +914,13 @@ test('GET /races/activities exposes every catalog id (deployment-verifiable)', (
     assert.ok(supported.includes(id), `${id} not in supported activities`);
   }
   assert.equal(supported.length, 23);
+});
+
+test('rep-rate plausibility: only absurd counts are caught', () => {
+  assert.equal(customRepRateImplausible(50, null), false);
+  assert.equal(customRepRateImplausible(60, 3 * 3600 * 1000), false);
+  assert.equal(customRepRateImplausible(9, 30_000), false); // real set
+  assert.equal(customRepRateImplausible(150, 30_000), false); // 5/s edge ok
+  assert.equal(customRepRateImplausible(400, 30_000), true);
+  assert.equal(customRepRateImplausible(100, 0), true);
 });

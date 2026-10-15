@@ -512,3 +512,13 @@ export function assertSubmissionCompatible(config: RaceConfig, activityId: strin
   if (normalizeMetric(metric, activityForId(config.activityId)) !== config.metric) return 'Verified metric does not match this race.';
   return null;
 }
+
+/**
+ * A camera-counted proof can't hold more reps than a body can do in the time
+ * recorded. Generous on purpose (5 reps/second + 5 spare): it only catches
+ * absurd counts, never a fast but real set. Unknown duration is not judged.
+ */
+export function customRepRateImplausible(value: number, durationMs: number | null): boolean {
+  if (durationMs === null) return false;
+  return value > 5 + (durationMs / 1000) * 5;
+}
