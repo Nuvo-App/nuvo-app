@@ -851,7 +851,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     String failureReason = '',
   }) {
     final now = DateTime.now();
-    final id = NuvoMotionDiagnosticSession.newId(
+    // One id per teach run — snapshots and the final upload share it so the
+    // server upserts a single row instead of one per step.
+    final id = _teachDiagId ??= NuvoMotionDiagnosticSession.newId(
       now,
       const Uuid().v4().replaceAll('-', '').substring(0, 6),
     );
@@ -1040,6 +1042,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
   /// exactly like verification sessions. Idempotent: [outcome] is only sent
   /// the first time, so a "used" finalize wins over the dispose-path one.
   bool _teachSessionFinalized = false;
+  String? _teachDiagId;
 
   void _finalizeTeachSession({required String outcome, bool snapshot = false}) {
     if (_teachSessionFinalized) return;
@@ -1204,6 +1207,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     // A retried teach is a NEW session — without this, a 'used'/'failed'
     // finalize earlier in the screen's life would swallow it.
     _teachSessionFinalized = false;
+    _teachDiagId = null;
   }
 
   void _restart() {
