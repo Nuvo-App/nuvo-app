@@ -142,6 +142,19 @@ class StreamingMotionV2 {
     if (_sinceEval < _reevalEvery && _last != MotionV2RuntimeResult.empty) {
       return _last;
     }
+    // Nothing is moving (waiting, standing at the phone): the last verdict
+    // stands, so don't spend a model pass (~2-6s on a phone) on it. One eval
+    // still runs after the movement stops, so a rep finishing right as the
+    // person freezes is counted.
+    if (_isStill()) {
+      if (_stillEvaled) {
+        _sinceEval = 0;
+        return _last;
+      }
+      _stillEvaled = true;
+    } else {
+      _stillEvaled = false;
+    }
     _sinceEval = 0;
 
     final hDiag = framesToH36mDiag(_buf);
@@ -354,15 +367,52 @@ class StreamingMotionV2 {
     return picked;
   }
 
+  bool _stillEvaled = false;
+  static const int _stillFrames = 15;
+  static const double _stillSpread = 0.025;
+  static const List<String> _stillJoints = [
+    'nose',
+    'leftWrist',
+    'rightWrist',
+    'leftElbow',
+    'rightElbow',
+    'leftAnkle',
+    'rightAnkle',
+    'leftHip',
+    'rightHip',
+  ];
+
+  /// True when the key joints stayed within ~2.5% of the frame over the last
+  /// half-second. Missing joints never count as still (stay safe: evaluate).
+  bool _isStill() {
+    if ((motion.tuning['idleSkip'] ?? 1.0) < 0.5) return false;
+    if (_buf.length < _stillFrames) return false;
+    final recent = _buf.sublist(_buf.length - _stillFrames);
+    for (final j in _stillJoints) {
+      var minX = 2.0, maxX = -1.0, minY = 2.0, maxY = -1.0;
+      for (final f in recent) {
+        final p = f.points[j];
+        if (p == null || p.likelihood < 0.3) return false;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      if (maxX - minX > _stillSpread || maxY - minY > _stillSpread) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// True when the person fills the frame far more than they did while
   /// teaching (spec.tuning['workingSize'] = shoulder width at the working
   /// spot): they are at the phone, not at the working spot.
   bool _atPhone(int s, int e) {
     final ws = motion.tuning['workingSize'];
     if (ws == null || ws <= 0 || e > _buf.length) return false;
-    final sizes = <double>[
-      for (var i = s; i < e; i++) ?shoulderWidth(_buf[i]),
-    ]..sort();
+    final sizes = <double>[for (var i = s; i < e; i++) ?shoulderWidth(_buf[i])]
+      ..sort();
     if (sizes.length < 3) return false;
     return sizes[sizes.length ~/ 2] > ws * _phoneFactor;
   }

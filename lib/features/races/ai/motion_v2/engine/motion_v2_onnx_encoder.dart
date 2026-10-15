@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:onnxruntime/onnxruntime.dart';
@@ -188,6 +189,13 @@ class MotionV2OnnxEncoder implements MotionEncoderV2 {
       final opts = OrtSessionOptions()
         ..setIntraOpNumThreads(2)
         ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
+      // iOS: run on the Neural Engine/GPU when CoreML can take the graph;
+      // anything it can't take stays on the CPU. Failure to attach is fine.
+      if (Platform.isIOS) {
+        try {
+          opts.appendCoreMLProvider(CoreMLFlags.useNone);
+        } catch (_) {}
+      }
       session = OrtSession.fromBuffer(resolved.bytes, opts);
     } catch (_) {
       // A byte-verified artifact can still fail ORT load (corrupt disk read,

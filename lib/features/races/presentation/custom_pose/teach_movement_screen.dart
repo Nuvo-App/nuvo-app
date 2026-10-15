@@ -1020,8 +1020,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         },
       },
       movementName: _flow.movementName,
-      outcome:
-          outcome ?? (_effectiveSpec != null ? 'learned' : 'abandoned'),
+      outcome: outcome ?? (_effectiveSpec != null ? 'learned' : 'abandoned'),
       engine: _teachEngine,
       failureStage: failureStage,
       failureReason: failureReason,
@@ -1167,12 +1166,13 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     // race prefers V2 and the provider is what carries it into race creation.
     if (_learnedWrittenToProvider && v2 == null) return;
     _learnedWrittenToProvider = true;
-    ref.read(learnedCustomMovementProvider.notifier).state =
-        LearnedCustomMovement(
-          verifierSpec: spec,
-          motionV2Spec: v2,
-          learnedAt: DateTime.now(),
-        );
+    ref
+        .read(learnedCustomMovementProvider.notifier)
+        .state = LearnedCustomMovement(
+      verifierSpec: spec,
+      motionV2Spec: v2,
+      learnedAt: DateTime.now(),
+    );
   }
 
   void _resetTeachFlags() {
@@ -1508,7 +1508,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         maxLength: 40,
         textAlign: TextAlign.center,
         textCapitalization: TextCapitalization.words,
-        decoration: InputDecoration(hintText: 'Overhead knee touch', errorText: _nameError),
+        decoration: InputDecoration(
+          hintText: 'Overhead knee touch',
+          errorText: _nameError,
+        ),
         onSubmitted: (_) => _submitName(),
       ),
       primaryLabel: 'Continue',
@@ -1518,7 +1521,9 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
 
   /// Building / failed / learned — one centred message and one clear action.
   Widget _summaryStage() {
-    final v2 = _useMotionV2 && !_debugReadyFixture &&
+    final v2 =
+        _useMotionV2 &&
+        !_debugReadyFixture &&
         (_v2Spec != null ||
             _v2Learning ||
             _learnRequested ||
@@ -1561,7 +1566,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     final testResult = _customTestResult;
     final matched =
-        testResult != null && testResult.verificationStatus == 'custom_verified';
+        testResult != null &&
+        testResult.verificationStatus == 'custom_verified';
     final failedTest = testResult != null && !matched;
     final extras = <Widget>[
       if (learned && !v2 && spec != null) LearnedMovementPreview(spec: spec),
@@ -1591,7 +1597,8 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         icon: Icons.refresh_rounded,
         accent: NuvoColors.warning,
         title: "Let's try that again",
-        body: _v2Error ??
+        body:
+            _v2Error ??
             (_flow.message.isNotEmpty
                 ? _flow.message
                 : 'That was hard to read. Record it again.'),
@@ -1621,10 +1628,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       onSecondary: failedTest
           ? (_navigating ? null : _goToRaceCreation)
           : _startVerifierTest,
-      links: [
-        ('Retry teaching', _restart),
-        ('Change name', _changeName),
-      ],
+      links: [('Retry teaching', _restart), ('Change name', _changeName)],
     );
   }
 
@@ -1789,11 +1793,7 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
         ),
       ),
       const SizedBox(height: 14),
-      NuvoPrimaryButton(
-        label: 'Stop test',
-        expand: true,
-        onPressed: _stopVerifierTest,
-      ),
+      _colorActionButton('Stop test', NuvoColors.danger, _stopVerifierTest),
       if (_showDiagnostics) ...[
         const SizedBox(height: 12),
         v2 ? _motionV2DebugPanel() : _debugPanel(),
@@ -1830,7 +1830,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       ),
     );
   }
-
 
   String _v2StatusLabel() {
     if (_v2Error != null) return 'Couldn\'t read that movement';
@@ -2264,14 +2263,34 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     );
   }
 
+  /// Record = green, Stop = red, so the state is readable at a glance.
+  Widget _colorActionButton(String label, Color color, VoidCallback? onTap) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: NuvoColors.white,
+          disabledBackgroundColor: color.withValues(alpha: 0.4),
+          disabledForegroundColor: NuvoColors.white.withValues(alpha: 0.7),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.titleMedium.copyWith(color: NuvoColors.white),
+        ),
+      ),
+    );
+  }
+
   Widget _cameraActionButton() {
     final stage = _flow.stage;
     if (_preparing || stage == TeachMovementStage.recording) {
-      return NuvoPrimaryButton(
-        label: 'Stop',
-        expand: true,
-        onPressed: _finishRecording,
-      );
+      return _colorActionButton('Stop', NuvoColors.danger, _finishRecording);
     }
     if (stage == TeachMovementStage.building || _learnRequested) {
       return const Center(child: NuvoLoadingIndicator());
@@ -2292,10 +2311,10 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
     }
     if (stage == TeachMovementStage.readyToRecord) {
       // Always pressable — the user gets into position AFTER tapping Record.
-      return NuvoPrimaryButton(
-        label: 'Record example ${_confirmedExamples + 1}',
-        expand: true,
-        onPressed: _cameraReady ? _startRecording : null,
+      return _colorActionButton(
+        'Record example ${_confirmedExamples + 1}',
+        NuvoColors.success,
+        _cameraReady ? _startRecording : null,
       );
     }
     return NuvoOutlineButton(
@@ -2499,8 +2518,6 @@ class _TeachMovementScreenState extends ConsumerState<TeachMovementScreen>
       ),
     );
   }
-
-
 
   Widget _testResultStatus(CustomPoseRuntimeResult result) {
     final matched = result.isVerified;
@@ -2710,7 +2727,6 @@ NormalizedPose _debugPose(PoseFeatureValue feature) => NormalizedPose(
   validLandmarkCount: 5,
   validFeatureCount: 1,
 );
-
 
 /// The three things to know before recording — shown on the Teach intro.
 class _TeachSteps extends StatelessWidget {
