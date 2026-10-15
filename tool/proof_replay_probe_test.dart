@@ -42,14 +42,14 @@ void main() {
 
   test('proof replay through the real learned spec', () async {
     final sess = jsonDecode(
-      File('/home/server1/.nuvo-sessions/ms_c39db49784a8427a98a73fc8709ca50f.json')
+      File('/home/server1/.nuvo-sessions/ms_3cdb701fe9be4fff96ce671ddb58c81e.json')
           .readAsStringSync(),
     ) as Map<String, dynamic>;
     final teach = jsonDecode(
       utf8.decode(
         gzip.decode(
           File(
-            '/home/server1/.nuvo-sessions/MV2-20261014-84A985.json.gz',
+            '/home/server1/.nuvo-sessions/MV2-20261015-92AFAC.json.gz',
           ).readAsBytesSync(),
         ),
       ),

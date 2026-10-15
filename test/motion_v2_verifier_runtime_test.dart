@@ -10,6 +10,7 @@ import 'package:nuvo/features/races/data/ai_motion_models.dart';
 class _FakeV2Engine implements MotionVerifierV2 {
   int loads = 0;
   int batches = 0;
+  final List<int> batchLengths = [];
   int _count = 0;
   bool throwOnLoad = false;
 
@@ -22,7 +23,8 @@ class _FakeV2Engine implements MotionVerifierV2 {
   @override
   Future<MotionV2RuntimeResult> update(List<NuvoPoseFrame> frames) async {
     batches++;
-    _count++; // one rep per batch, deterministic
+    batchLengths.add(frames.length);
+    _count++; // one rep per call, deterministic
     return MotionV2RuntimeResult(
       matched: true,
       newRep: true,
@@ -65,7 +67,7 @@ void main() {
     final engine = _FakeV2Engine();
     final runtime = MotionV2VerifierRuntime(
       spec: _spec(),
-      target: 2,
+      target: 1,
       engine: engine,
     );
     runtime.start();
@@ -74,11 +76,13 @@ void main() {
     }
     await pumpEventQueue();
     expect(engine.loads, 1);
-    expect(engine.batches, 2);
-    expect(runtime.currentValue, 2);
+    // Frames buffered during engine load drain coalesced — one call of 8,
+    // not two of 4 — so a lagging engine stays near real-time.
+    expect(engine.batchLengths, [8]);
+    expect(runtime.currentValue, 1);
     final result = runtime.customResult();
     expect(result.verifierType, motionV2VerifierType);
-    expect(result.count, 2);
+    expect(result.count, 1);
     expect(result.verificationStatus, 'custom_verified');
     expect(result.movementName, 'Pull Ups');
     final finish = runtime.finish();

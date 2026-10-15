@@ -32,6 +32,7 @@ import '../ai/motion_session/motion_session_providers.dart';
 import '../ai/motion_session/motion_session_recorder.dart';
 import '../ai/motion_model_artifact_integrity.dart';
 import '../ai/object_composition_runtime.dart';
+import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
 import '../ai/object_composition_spec.dart';
 import '../ai/pose_detector_service.dart';
 import '../ai/rep_event_diagnostics.dart';
@@ -984,6 +985,11 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
       return;
     }
 
+    // Drain in-flight V2 matcher evals so a rep that lands in the last
+    // moment isn't dropped when the session ends.
+    if (_runtime is MotionV2VerifierRuntime) {
+      await (_runtime as MotionV2VerifierRuntime).drain();
+    }
     final verifierResult = _runtime.finish();
     if (_usesCustomRuntimeOutput) {
       final result = verifierResult.customPoseResult;

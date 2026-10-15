@@ -114,11 +114,19 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
     return _snapshot();
   }
 
+  /// Max frames per matcher call when the engine has fallen behind — the
+  /// internal 75-frame sliding window means bigger pushes cost the same one
+  /// eval but keep the matcher near real-time; otherwise a slow device lags
+  /// the stream and the counting eval never lands before the session ends.
+  /// Capped so eval cadence stays ≥~1/sec at 15fps.
+  static const int _pumpMax = 12;
+
   void _pump() {
     if (!_ready || _busy || _batch.length < batchSize) return;
     _busy = true;
-    final frames = _batch.sublist(0, batchSize);
-    _batch.removeRange(0, batchSize);
+    final n = _batch.length.clamp(batchSize, _pumpMax);
+    final frames = _batch.sublist(0, n);
+    _batch.removeRange(0, n);
     _engine
         .update(frames)
         .then((r) {
@@ -199,6 +207,18 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
     failedRuleReason: _failureReason,
     customPoseUpdate: _customUpdate(),
   );
+
+  /// Waits for in-flight matcher evals + queued frames so a session-end
+  /// result doesn't lose the last eval(s). The proof screen awaits this
+  /// before [finish]; [finish] itself stays synchronous for the shared
+  /// [VerifierRuntime] contract.
+  Future<void> drain() async {
+    var guard = 0;
+    while (guard++ < 100) {
+      if (!_busy && _batch.length < batchSize) return;
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+    }
+  }
 
   @override
   VerifierResult finish() => VerifierResult(
