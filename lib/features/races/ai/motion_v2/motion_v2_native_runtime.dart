@@ -107,9 +107,12 @@ class LearnProfile {
 class MotionV2NativeRuntime implements MotionVerifierV2, MotionLearnerV2 {
   MotionV2NativeRuntime({MotionEncoderV2? encoder}) : _injected = encoder;
 
-  /// Demos whose most-active body region moved less than this are treated as
-  /// "no motion captured" — see the floor comment in [learn].
-  static const double _minRegionActivity = 0.08;
+  /// Catches only dead captures — real tracked demos measure ≥0.025 even for
+  /// slow/subtle motions; a pull-up hang and a wave overlap around ~0.035 so
+  /// the floor cannot gate "is this the right movement" — it gates "did the
+  /// tracker see anything at all". Real session data: stillness ~0.036 vs
+  /// wave ~0.05 (too close to separate); fixture motion 0.15.
+  static const double _minRegionActivity = 0.015;
 
   final MotionEncoderV2? _injected;
   MotionEncoderV2? _encoder;
