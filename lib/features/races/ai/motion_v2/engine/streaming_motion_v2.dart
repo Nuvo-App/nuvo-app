@@ -138,18 +138,25 @@ class StreamingMotionV2 {
 
     final hDiag = framesToH36mDiag(_buf);
     final h = hDiag.seq;
-    final hm = framesToH36m(_buf, mirror: true);
     final rep = await encoder.encode(h);
-    final repM = await encoder.encode(hm);
     final emb = perFrameEmbedding(rep);
-    final embM = perFrameEmbedding(repM);
-    final m = motion.matchEncoded(
-      rep,
-      emb,
-      repM: repM,
-      embM: embM,
-      background: background,
-    );
+    var m = motion.matchEncoded(rep, emb, background: background);
+    // The mirrored encoder pass (left/right-handed invariance) doubles the
+    // cost of every eval, and on a phone each pass is ~1s — enough to lag the
+    // camera and miss reps. Run it only when the direct pass did not already
+    // match: during a rep (the evals that count) one pass is enough.
+    if (!(m.isSameFamily && m.score >= _matchScore)) {
+      final hm = framesToH36m(_buf, mirror: true);
+      final repM = await encoder.encode(hm);
+      final embM = perFrameEmbedding(repM);
+      m = motion.matchEncoded(
+        rep,
+        emb,
+        repM: repM,
+        embM: embM,
+        background: background,
+      );
+    }
 
     final seg = segmentAction(emb);
     final activeLen = seg.end - seg.start;

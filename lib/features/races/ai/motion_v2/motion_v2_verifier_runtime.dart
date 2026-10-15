@@ -119,7 +119,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   /// eval but keep the matcher near real-time; otherwise a slow device lags
   /// the stream and the counting eval never lands before the session ends.
   /// Capped so eval cadence stays ≥~1/sec at 15fps.
-  static const int _pumpMax = 12;
+  static const int _pumpMax = 75;
 
   void _pump() {
     if (!_ready || _busy || _batch.length < batchSize) return;
@@ -214,7 +214,7 @@ class MotionV2VerifierRuntime implements VerifierRuntime {
   /// [VerifierRuntime] contract.
   Future<void> drain() async {
     var guard = 0;
-    while (guard++ < 100) {
+    while (guard++ < 250) {
       if (!_busy && _batch.length < batchSize) return;
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
