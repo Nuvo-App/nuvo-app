@@ -1709,10 +1709,9 @@ class _AiMotionProofScreenState extends ConsumerState<AiMotionProofScreen>
   ///   attempt races  → the attempt itself ("14") — there is no /target
   String get _raceProgressReadout {
     final ctx = _raceContext;
-    if (ctx != null &&
-        !_hasFinishTarget &&
-        !_usesCustomRuntimeOutput &&
-        !_isObjectComposition) {
+    // Custom (taught) movements included: a window / attempt race has no
+    // finish line, so it shows the running count — never "N / 60 reps".
+    if (ctx != null && !_hasFinishTarget && !_isObjectComposition) {
       final shown = ctx.isAttemptBased
           ? _sessionContribution
           : _raceTotalBefore + _sessionContribution;
