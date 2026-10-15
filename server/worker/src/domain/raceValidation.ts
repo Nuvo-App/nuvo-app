@@ -51,11 +51,12 @@ export interface CustomRaceConfig {
   verifierSpecJson: string;
   customActivityName: string;
   metric: 'reps';
-  format: 'first_to_goal';
-  scoringRule: 'cumulative_sum';
-  targetValue: number;
-  attemptDurationSeconds: null;
-  attemptLimit: null;
+  format: RaceFormat;
+  scoringRule: RaceScoringRule;
+  /** Required for first_to_goal only; null for window / attempt formats. */
+  targetValue: number | null;
+  attemptDurationSeconds: number | null;
+  attemptLimit: number | null;
   verificationMethod: 'ai';
   timezone: string;
   startsAt: string | null;
@@ -376,8 +377,25 @@ export function customConfigFromBody(body: Record<string, unknown>): CustomRaceC
     return { error: 'Custom verifier spec is too large.' };
   }
 
+  // Win condition. Absent / unknown keeps the original contract: a race to a
+  // target (older clients never sent a format for custom races).
+  const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
+  if (!FORMATS.has(rawFormat as RaceFormat)) return { error: 'Race format is not supported.' };
+  const format = rawFormat as RaceFormat;
+
   const targetValue = intValue(body, 'targetValue', 'target_value');
-  if (!targetValue) return { error: 'Target is required.' };
+  if (format === 'first_to_goal' && !targetValue) return { error: 'Target is required.' };
+
+  const endsAt = stringValue(body, 'endsAt', 'finishLineAt') ?? null;
+  const attemptDurationSeconds =
+    format === 'first_to_goal' ? null : intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds');
+  const attemptLimit =
+    format === 'first_to_goal' ? null : intValue(body, 'attemptLimit', 'attempt_limit');
+  if (format === 'most_in_window' && !endsAt) return { error: 'A finish line is required.' };
+  if (format === 'timed_attempt' && !attemptDurationSeconds) {
+    return { error: 'Attempt duration is required.' };
+  }
+
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence) ? recurrenceRaw as RaceRecurrence : 'none';
 
@@ -387,15 +405,16 @@ export function customConfigFromBody(body: Record<string, unknown>): CustomRaceC
     verifierSpecJson,
     customActivityName,
     metric: 'reps',
-    format: 'first_to_goal',
-    scoringRule: 'cumulative_sum',
-    targetValue,
-    attemptDurationSeconds: null,
-    attemptLimit: null,
+    format,
+    scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
+    // A window / attempt race has nothing to reach — never store a made-up target.
+    targetValue: format === 'first_to_goal' ? targetValue : null,
+    attemptDurationSeconds,
+    attemptLimit,
     verificationMethod: 'ai',
     timezone: stringValue(body, 'timezone') ?? 'America/New_York',
     startsAt: stringValue(body, 'startsAt', 'startLineAt') ?? null,
-    endsAt: stringValue(body, 'endsAt', 'finishLineAt') ?? null,
+    endsAt,
     recurrence,
   };
 }

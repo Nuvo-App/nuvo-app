@@ -328,6 +328,74 @@ test('custom verifier validation accepts bounded custom race config', () => {
   assert.equal(config.targetValue, 10);
 });
 
+function customBody(extra = {}) {
+  return {
+    title: 'Office ladder',
+    verifierType: 'custom_pose_sequence',
+    verifierVersion: 1,
+    customActivityName: 'Overhead knee touch',
+    verifierSpec: customVerifierSpec(),
+    ...extra,
+  };
+}
+
+test('custom race without a format is still first-to-goal with its target (old clients)', () => {
+  const config = customConfigFromBody(customBody({ targetValue: 10 }));
+  assert.equal('error' in config, false);
+  assert.equal(config.format, 'first_to_goal');
+  assert.equal(config.scoringRule, 'cumulative_sum');
+  assert.equal(config.targetValue, 10);
+  assert.equal(config.attemptDurationSeconds, null);
+});
+
+test('custom first-to-goal still requires a target', () => {
+  const config = customConfigFromBody(customBody({ format: 'first_to_goal' }));
+  assert.equal(config.error, 'Target is required.');
+});
+
+test('custom most-in-window race needs a finish line, not a target', () => {
+  const ok = customConfigFromBody(customBody({
+    format: 'most_in_window',
+    finishLineAt: '2026-10-16T05:00:00Z',
+    // A stray client target must never become a finish line.
+    targetValue: 60,
+  }));
+  assert.equal('error' in ok, false);
+  assert.equal(ok.format, 'most_in_window');
+  assert.equal(ok.scoringRule, 'cumulative_sum');
+  assert.equal(ok.targetValue, null);
+  assert.equal(ok.endsAt, '2026-10-16T05:00:00Z');
+
+  const missing = customConfigFromBody(customBody({ format: 'most_in_window' }));
+  assert.equal(missing.error, 'A finish line is required.');
+});
+
+test('custom timed attempt needs a duration and stores no target', () => {
+  const ok = customConfigFromBody(customBody({
+    format: 'timed_attempt',
+    attemptDurationSeconds: 3600,
+    attemptLimit: 3,
+  }));
+  assert.equal('error' in ok, false);
+  assert.equal(ok.format, 'timed_attempt');
+  assert.equal(ok.targetValue, null);
+  assert.equal(ok.attemptDurationSeconds, 3600);
+  assert.equal(ok.attemptLimit, 3);
+
+  const missing = customConfigFromBody(customBody({ format: 'timed_attempt' }));
+  assert.equal(missing.error, 'Attempt duration is required.');
+});
+
+test('custom best attempt honors score direction and rejects unknown formats', () => {
+  const ok = customConfigFromBody(customBody({ format: 'best_attempt', scoreDirection: 'lower' }));
+  assert.equal('error' in ok, false);
+  assert.equal(ok.format, 'best_attempt');
+  assert.equal(ok.scoringRule, scoringRuleForFormat('best_attempt', 'lower'));
+
+  const bad = customConfigFromBody(customBody({ format: 'sprint', targetValue: 5 }));
+  assert.equal(bad.error, 'Race format is not supported.');
+});
+
 test('custom verifier validation accepts feature-only learned completion pose', () => {
   const config = customConfigFromBody({
     title: 'Office ladder',

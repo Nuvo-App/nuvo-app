@@ -412,7 +412,9 @@ function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
   const isManual = race.verifier_type === MANUAL_VERIFIER_TYPE;
   if (!isCustom && !isManual) return null;
   const targetValue = positiveIntOrNull(race.target_value) ?? null;
-  if (targetValue == null) return null;
+  const rowFormat = (((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as unknown) as RaceFormat;
+  // Only a race to a target needs one; window / attempt custom races have none.
+  if (targetValue == null && !(isCustom && rowFormat !== 'first_to_goal')) return null;
   // Manual races store a free-text unit in target_unit; the wire metric is
   // always 'reps' (an opaque cumulative integer).
   const metric = isManual ? 'reps' : normalizeMetric(race.metric ?? race.target_unit ?? 'reps', undefined);
@@ -1336,7 +1338,11 @@ racesRouter.post('/', async (c) => {
   const config = structuredConfig && !('error' in structuredConfig) ? structuredConfig : null;
   const custom = customConfig && !('error' in customConfig) ? customConfig : null;
   const raceType = manual?.format ?? config?.format ?? mapGoalTypeToRaceType(raceTypeRaw);
-  const targetValue = custom?.targetValue ?? manual?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
+  // A custom race decides its own target (null for window / attempt formats) —
+  // a stray body.targetValue must never become a made-up finish line.
+  const targetValue = custom
+    ? custom.targetValue
+    : manual?.targetValue ?? config?.targetValue ?? positiveIntOrNull(body.targetValue) ?? null;
   // Manual races keep the human unit ("pages") in target_unit; the wire metric
   // is always 'reps'.
   const targetUnit = custom?.metric ?? manual?.unit ?? config?.metric ?? stringOrNull(body.targetUnit) ?? stringOrNull(body.unit) ?? null;
