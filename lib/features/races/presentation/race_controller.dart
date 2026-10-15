@@ -331,10 +331,15 @@ class RaceController extends StateNotifier<RaceState> {
 
   Future<Race> createCustomRace({
     required String title,
-    required int targetValue,
+    int? targetValue,
     required String customActivityName,
     CustomPoseVerifierSpec? verifierSpec,
     TaughtMotionV2Spec? motionV2Spec,
+    String format = 'first_to_goal',
+    String? finishLineAt,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
+    String? scoreDirection,
   }) async {
     if (isPresentationDemo()) {
       final id =
@@ -343,7 +348,7 @@ class RaceController extends StateNotifier<RaceState> {
         id: id,
         userId: presentationUserId(),
         title: customActivityName,
-        targetValue: targetValue,
+        targetValue: targetValue ?? 1,
         customActivityName: customActivityName,
       );
       _addPresentationRace(race);
@@ -355,6 +360,11 @@ class RaceController extends StateNotifier<RaceState> {
       customActivityName: customActivityName,
       verifierSpec: verifierSpec,
       motionV2Spec: motionV2Spec,
+      format: format,
+      finishLineAt: finishLineAt,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
+      scoreDirection: scoreDirection,
     );
     if (mounted) {
       state = state.copyWith(races: [race, ...state.races]);

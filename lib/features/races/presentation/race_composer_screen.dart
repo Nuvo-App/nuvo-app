@@ -57,10 +57,15 @@ String _secondsDisplay(int s) {
 typedef ComposerCustomRaceCreator =
     Future<Race> Function({
       required String title,
-      required int targetValue,
+      int? targetValue,
       required String customActivityName,
       CustomPoseVerifierSpec? verifierSpec,
       TaughtMotionV2Spec? motionV2Spec,
+      String format,
+      String? finishLineAt,
+      int? attemptDurationSeconds,
+      int? attemptLimit,
+      String? scoreDirection,
     });
 
 typedef ComposerPresetRaceCreator =
@@ -90,12 +95,20 @@ Future<Race> createRaceForComposerDraft({
   required ComposerPresetRaceCreator createRace,
 }) {
   if (draft.isCustom) {
+    // Only a race to a target carries one; a window / attempt race is sent its
+    // own win condition and timing instead (never "X / 60 reps").
+    final racesToTarget = draft.format.usesScoreTarget;
     return createCustomRace(
       title: draft.resolvedTitle,
-      targetValue: draft.targetValue,
+      targetValue: racesToTarget ? draft.targetValue : null,
       customActivityName: draft.customActivityName!,
       verifierSpec: draft.verifierSpec,
       motionV2Spec: draft.motionV2Spec,
+      format: draft.format.backendValue,
+      finishLineAt: racesToTarget ? null : draft.finishLineAt,
+      attemptDurationSeconds: racesToTarget ? null : draft.attemptDurationSeconds,
+      attemptLimit: racesToTarget ? null : draft.attemptLimit,
+      scoreDirection: draft.scoreDirection,
     );
   }
   final payload = draft.toCreatePayload();

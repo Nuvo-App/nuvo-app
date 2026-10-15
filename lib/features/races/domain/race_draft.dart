@@ -141,11 +141,11 @@ class RaceDraft {
   /// deadline modes need a finish line; timed battles need a duration.
   bool get isValidToCreate {
     if (resolvedTitle.trim().isEmpty) return false;
-    final needsTarget =
-        format.usesScoreTarget || isManual || isCustom;
+    // A custom movement needs a target only when the race is to a target —
+    // a window / attempt race has nothing to reach.
+    final needsTarget = format.usesScoreTarget || isManual;
     if (needsTarget && targetValue <= 0) return false;
-    if (format == RaceFormat.mostInWindow &&
-        (finishLineAt ?? '').isEmpty) {
+    if (format == RaceFormat.mostInWindow && (finishLineAt ?? '').isEmpty) {
       return false;
     }
     if (format == RaceFormat.timedAttempt &&
@@ -173,10 +173,17 @@ class RaceDraft {
   /// title never claims a finish line the format doesn't have.
   String get generatedTitleText => isManual
       ? (format.usesScoreTarget
-          ? 'First to $targetValue ${manualUnit ?? 'done'}'
-          : (manualGoalName ?? 'Custom goal'))
+            ? 'First to $targetValue ${manualUnit ?? 'done'}'
+            : (manualGoalName ?? 'Custom goal'))
       : isCustom
-      ? 'First to $targetValue $customActivityName'
+      ? switch (format) {
+          RaceFormat.mostInWindow => 'Most $customActivityName',
+          RaceFormat.bestAttempt => 'Best $customActivityName attempt',
+          RaceFormat.timedAttempt =>
+            '${formatDurationShort(attemptDurationSeconds ?? 60)} '
+                '$customActivityName battle',
+          _ => 'First to $targetValue $customActivityName',
+        }
       : switch (format) {
           RaceFormat.mostInWindow => 'Most ${activity.title}',
           RaceFormat.bestAttempt => 'Best ${activity.title} attempt',
@@ -193,9 +200,10 @@ class RaceDraft {
     return switch (format) {
       RaceFormat.mostInWindow =>
         'Most verified $name before the finish line wins.',
-      RaceFormat.bestAttempt => lowerWins
-          ? 'Lowest score wins — every verified attempt counts.'
-          : 'Best single attempt wins — every verified score counts.',
+      RaceFormat.bestAttempt =>
+        lowerWins
+            ? 'Lowest score wins — every verified attempt counts.'
+            : 'Best single attempt wins — every verified score counts.',
       RaceFormat.timedAttempt =>
         'Most $name in ${formatDurationShort(attemptDurationSeconds ?? 60)} wins.',
       // "First to 20 verified jumping jacks wins." — the bare figure for
@@ -350,7 +358,8 @@ class RaceDraft {
     final unit = (manualUnit ?? 'done').trim();
     return {
       'title': resolvedTitle,
-      'description': '${manualGoalName ?? 'Custom goal'} — progress logged manually.',
+      'description':
+          '${manualGoalName ?? 'Custom goal'} — progress logged manually.',
       'category': 'goal',
       'goalType': format.backendValue,
       'targetValue': targetValue,

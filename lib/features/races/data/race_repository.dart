@@ -31,7 +31,8 @@ class RaceRepository {
     required String family,
     String channel = 'stable',
   }) => _withRefresh(
-    (token) => _api.getCurrentMotionModel(token, family: family, channel: channel),
+    (token) =>
+        _api.getCurrentMotionModel(token, family: family, channel: channel),
   );
 
   Future<VerificationSessionHandshake> createVerificationSession(
@@ -188,10 +189,15 @@ class RaceRepository {
 
   Future<Race> createCustomRace({
     required String title,
-    required int targetValue,
+    int? targetValue,
     required String customActivityName,
     CustomPoseVerifierSpec? verifierSpec,
     TaughtMotionV2Spec? motionV2Spec,
+    String format = 'first_to_goal',
+    String? finishLineAt,
+    int? attemptDurationSeconds,
+    int? attemptLimit,
+    String? scoreDirection,
   }) => _withRefresh(
     (token) => _api.createCustomRace(
       token,
@@ -200,6 +206,11 @@ class RaceRepository {
       customActivityName: customActivityName,
       verifierSpec: verifierSpec,
       motionV2Spec: motionV2Spec,
+      format: format,
+      finishLineAt: finishLineAt,
+      attemptDurationSeconds: attemptDurationSeconds,
+      attemptLimit: attemptLimit,
+      scoreDirection: scoreDirection,
     ),
   );
 
