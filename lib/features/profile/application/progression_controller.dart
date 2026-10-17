@@ -31,8 +31,15 @@ class ProgressionController
   final bool Function() _isPresentationDemo;
   List<NuvoBadge>? _demoBadges;
 
+  static const _cacheLifetime = Duration(minutes: 5);
   static const _staleWindow = Duration(seconds: 45);
   DateTime? _loadedAt;
+  Future<void>? _loadInFlight;
+
+  /// Bumped by [clear] (sign-out) — same guard as ArenaController/
+  /// RaceController. Stops a fetch started before sign-out from landing in
+  /// the next session and resurrecting the previous account's XP.
+  int _generation = 0;
 
   Future<String> _token() async {
     final token = await _store.getAccessToken();
@@ -40,16 +47,48 @@ class ProgressionController
     return token;
   }
 
+  /// SWR entry point — Profile tab tap / app resume. No-op while the cached
+  /// payload is inside the stale window; otherwise a background refresh with
+  /// the current payload staying on screen.
+  void revalidate() {
+    final at = _loadedAt;
+    if (state.hasValue &&
+        at != null &&
+        DateTime.now().difference(at) < _staleWindow) {
+      return;
+    }
+    load(force: true);
+  }
+
   /// Fetch (or refetch) the authoritative progression payload. The server
   /// reconciles XP from canonical race events on read, so this is always
   /// current after race actions — no separate invalidation pipeline needed.
-  Future<void> load({bool force = true}) async {
+  /// Single-flight: concurrent callers share one request.
+  Future<void> load({bool force = true}) {
+    final at = _loadedAt;
     if (!force &&
         state.hasValue &&
-        _loadedAt != null &&
-        DateTime.now().difference(_loadedAt!) < _staleWindow) {
-      return;
+        at != null &&
+        DateTime.now().difference(at) < _cacheLifetime) {
+      return Future.value();
     }
+    final inFlight = _loadInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetch();
+    _loadInFlight = request;
+    request.then<void>(
+      (_) => _clearInFlight(request),
+      onError: (Object _, StackTrace _) => _clearInFlight(request),
+    );
+    return request;
+  }
+
+  void _clearInFlight(Future<void> request) {
+    if (identical(_loadInFlight, request)) _loadInFlight = null;
+  }
+
+  Future<void> _fetch() async {
+    final generation = _generation;
     if (_isPresentationDemo()) {
       _loadedAt = DateTime.now();
       state = AsyncValue.data(_demoProgression());
@@ -57,11 +96,11 @@ class ProgressionController
     }
     try {
       final progression = await _api.getProgression(await _token());
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       _loadedAt = DateTime.now();
       state = AsyncValue.data(progression);
     } catch (e, st) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       // Keep the last good payload visible on refresh failure — progression
       // is a read-through cache, not a gate.
       if (!state.hasValue) state = AsyncValue.error(e, st);
@@ -195,6 +234,8 @@ class ProgressionController
 
   void clear() {
     _loadedAt = null;
+    _loadInFlight = null;
+    _generation++;
     _demoBadges = null;
     state = const AsyncValue.loading();
   }

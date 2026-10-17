@@ -31,6 +31,7 @@ import '../../races/domain/chase_context.dart';
 import '../../races/domain/camera_verification_resolver.dart';
 import '../../races/domain/motion_activity.dart';
 import '../../races/domain/race_display.dart';
+import '../domain/race_poll_backoff.dart';
 import '../../races/presentation/ai_motion_proof_entry.dart';
 import '../../races/presentation/race_controller.dart';
 import '../../onboarding/presentation/first_use_guide.dart';
@@ -46,46 +47,109 @@ class RaceDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<RaceDetailScreen> createState() => _RaceDetailScreenState();
 }
 
-class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen> {
+class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
+    with WidgetsBindingObserver {
   Race? _race;
   bool _loading = true;
   bool _busy = false;
   bool _navigating = false;
   String? _error;
   Timer? _refreshTimer;
+  final RacePollBackoff _backoff = RacePollBackoff();
+  bool _inFlight = false;
+  bool _resumed = true;
+  bool _wasGated = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _resumed =
+        (WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed) ==
+        AppLifecycleState.resumed;
     _load();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _silentRefresh(),
-    );
+    _scheduleNext();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_resumed) return;
+      _resumed = true;
+      _wasGated = false;
+      _backoff.reset();
+      _silentRefresh();
+      _scheduleNext();
+    } else {
+      _resumed = false;
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+    }
+  }
+
+  /// Poll only while the app is resumed, this page is the visible route and
+  /// the race is still active.
+  bool get _shouldPoll {
+    if (!_resumed || !mounted || _loading) return false;
+    if (ModalRoute.of(context)?.isCurrent == false) return false;
+    final race = _race;
+    return race != null && !raceIsCompleted(race);
+  }
+
+  void _scheduleNext() {
+    _refreshTimer?.cancel();
+    if (!_resumed || !mounted) return;
+    _refreshTimer = Timer(_backoff.current, _pollTick);
+  }
+
+  Future<void> _pollTick() async {
+    if (!mounted || !_resumed) return;
+    if (!_shouldPoll) {
+      _wasGated = true;
+      _scheduleNext();
+      return;
+    }
+    if (_wasGated) {
+      // Became visible/active again: start from the fast interval.
+      _wasGated = false;
+      _backoff.reset();
+    }
+    await _silentRefresh();
+    _scheduleNext();
+  }
+
   Future<void> _silentRefresh({bool syncArena = false}) async {
-    if (_loading) return;
+    if (_loading || _inFlight) return;
+    _inFlight = true;
     try {
+      final before = _race == null ? null : raceSignature(_race!);
       final race = await ref
           .read(raceControllerProvider.notifier)
           .getRaceDetail(widget.id, syncArena: syncArena);
+      _backoff.recordResult(
+        changed: before == null || before != raceSignature(race),
+      );
       if (mounted) setState(() => _race = race);
     } catch (e) {
       // Background refresh failed — preserve the already-loaded race on
       // screen and log diagnostics. We intentionally do NOT clear _race or
-      // surface a disruptive error here; the periodic timer keeps running.
+      // surface a disruptive error here; the poll schedule keeps running.
       debugPrint('RACE_DETAIL_REFRESH_ERROR: ${e.runtimeType}: $e');
+      _backoff.recordResult(changed: false);
+    } finally {
+      _inFlight = false;
     }
   }
 
   Future<void> _load() async {
+    _backoff.reset();
     // Use cached race from controller first to prevent stale 0% flash
     final cachedRaces = ref.read(raceControllerProvider).races;
     final cached = cachedRaces.where((r) => r.id == widget.id).firstOrNull;

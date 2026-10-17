@@ -12,6 +12,7 @@ import '../../auth/presentation/auth_controller.dart';
 import '../../crew/application/crew_controller.dart';
 import '../../notifications/application/notification_controller.dart';
 import '../../races/presentation/race_controller.dart';
+import '../../social/data/crew_activity.dart';
 import '../../races/presentation/motion_catalog_provider.dart';
 import '../../profile/application/progression_controller.dart';
 import '../../profile/presentation/widgets/level_up_dialog.dart';
@@ -116,6 +117,16 @@ class _MainShellState extends ConsumerState<MainShell>
         !notifState.loading) {
       ref.read(notificationControllerProvider.notifier).load(force: false);
     }
+    final progressionState = ref.read(progressionControllerProvider);
+    if (progressionState.isLoading && !progressionState.hasValue) {
+      ref.read(progressionControllerProvider.notifier).load(force: false);
+    }
+    final activityState = ref.read(crewActivityProvider);
+    if (!activityState.hasData &&
+        activityState.error == null &&
+        !activityState.loading) {
+      ref.read(crewActivityProvider.notifier).load(force: false);
+    }
   }
 
   @override
@@ -133,6 +144,7 @@ class _MainShellState extends ConsumerState<MainShell>
       ref.read(arenaControllerProvider.notifier).revalidate();
       ref.read(crewControllerProvider.notifier).revalidate();
       ref.read(notificationControllerProvider.notifier).revalidate();
+      ref.read(progressionControllerProvider.notifier).revalidate();
     }
   }
 
@@ -169,6 +181,9 @@ class _MainShellState extends ConsumerState<MainShell>
       case 3:
         ref.read(crewControllerProvider.notifier).revalidate();
         ref.read(notificationControllerProvider.notifier).revalidate();
+        break;
+      case 4:
+        ref.read(progressionControllerProvider.notifier).revalidate();
         break;
     }
     // Each branch keeps its own Navigator and its last location — goBranch

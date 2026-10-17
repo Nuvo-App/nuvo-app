@@ -43,6 +43,8 @@ import 'package:nuvo/features/notifications/data/notification_models.dart';
 import 'package:nuvo/features/notifications/data/notification_repository.dart';
 import 'package:nuvo/features/onboarding/presentation/first_use_guide.dart';
 import 'package:nuvo/features/pass/presentation/pass_screen.dart';
+import 'package:nuvo/features/profile/application/progression_controller.dart';
+import 'package:nuvo/features/profile/data/progression_api.dart';
 import 'package:nuvo/features/profile/presentation/profile_screen.dart';
 import 'package:nuvo/features/races/data/motion_catalog.dart';
 import 'package:nuvo/features/races/data/motion_catalog_cache.dart';
@@ -145,6 +147,13 @@ class _CatalogRepo extends MotionCatalogRepository {
       MotionCatalogSnapshot.bundled();
 }
 
+class _CountingProgression extends ProgressionController {
+  _CountingProgression() : super(ProgressionApi(), SecureTokenStore());
+  int revalidations = 0;
+  @override
+  void revalidate() => revalidations++;
+}
+
 // ── Harness ───────────────────────────────────────────────────────────────────
 
 class _App {
@@ -155,7 +164,10 @@ class _App {
 
 /// Pumps the REAL router from lib/app/router.dart — same StatefulShellRoute,
 /// same branch order, same _tabScreenFor — behind MaterialApp.router.
-Future<_App> _pumpRealApp(WidgetTester tester) async {
+Future<_App> _pumpRealApp(
+  WidgetTester tester, {
+  List<Override> extraOverrides = const [],
+}) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
@@ -180,6 +192,7 @@ Future<_App> _pumpRealApp(WidgetTester tester) async {
       firstRaceGuideProvider.overrideWith(
         (ref) => FirstRaceGuideStep.complete,
       ),
+      ...extraOverrides,
     ],
   );
   addTearDown(container.dispose);
@@ -257,6 +270,20 @@ void _expectDestination(_App app, WidgetTester tester, String label) {
 }
 
 void main() {
+  testWidgets('Profile tab tap revalidates progression', (tester) async {
+    final counting = _CountingProgression();
+    final app = await _pumpRealApp(
+      tester,
+      extraOverrides: [
+        progressionControllerProvider.overrideWith((ref) => counting),
+      ],
+    );
+    expect(app.router, isNotNull);
+    final before = counting.revalidations;
+    await _tapNav(tester, 'Profile');
+    expect(counting.revalidations, before + 1);
+  });
+
   testWidgets('production router: every nav tap renders its own screen', (
     tester,
   ) async {

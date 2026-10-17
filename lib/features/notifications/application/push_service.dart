@@ -7,10 +7,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../arena/presentation/arena_controller.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../../crew/application/crew_controller.dart';
+import '../../profile/application/activity_controller.dart';
+import '../../profile/application/progression_controller.dart';
+import '../../races/presentation/race_controller.dart';
 import '../../social/application/deep_link_controller.dart';
 import '../../social/domain/nuvo_destination.dart';
 import '../data/device_api.dart';
+import '../domain/push_invalidation.dart';
 import 'notification_controller.dart';
 
 /// Push transport (docs/agents/19 §10). Push is DELIVERY; the notification
@@ -56,9 +62,7 @@ class PushService {
 
     // Foreground receipt — the OS won't show a banner, but the inbox should
     // reflect it immediately.
-    FirebaseMessaging.onMessage.listen((_) {
-      _ref.read(notificationControllerProvider.notifier).markStale();
-    });
+    FirebaseMessaging.onMessage.listen((m) => _invalidateFor(m.data));
 
     messaging.onTokenRefresh.listen(_syncToken);
   }
@@ -146,10 +150,47 @@ class PushService {
     });
   }
 
+  /// A push is a signal, not state: mark the affected domains stale so the
+  /// owning controllers refetch (docs/agents/22 §5.5).
+  void _invalidateFor(Map<String, dynamic> data) {
+    final cat = data['category'];
+    final dt = data['destType'];
+    final domains = pushDomainsFor(
+      cat is String ? cat : null,
+      destType: dt is String ? dt : null,
+    );
+    void safe(void Function() f) {
+      try {
+        f();
+      } catch (e) {
+        debugPrint('[Push] invalidate failed ($e)');
+      }
+    }
+
+    for (final d in domains) {
+      switch (d) {
+        case PushDomain.notifications:
+          safe(() => _ref.read(notificationControllerProvider.notifier).markStale());
+        case PushDomain.races:
+          safe(() => unawaited(
+              _ref.read(raceControllerProvider.notifier).loadRaces(force: true)));
+        case PushDomain.arena:
+          safe(() => _ref.read(arenaControllerProvider.notifier).markStale());
+        case PushDomain.crew:
+          safe(() => _ref.read(crewControllerProvider.notifier).markStale());
+        case PushDomain.activity:
+          safe(() => _ref.invalidate(profileActivityProvider));
+        case PushDomain.progression:
+          safe(() => unawaited(
+              _ref.read(progressionControllerProvider.notifier).load(force: true)));
+      }
+    }
+  }
+
   void _routeFromMessage(RemoteMessage message) {
+    _invalidateFor(message.data);
     final dest = destinationFromPushData(message.data);
     if (dest == null) return;
-    _ref.read(notificationControllerProvider.notifier).markStale();
     // Push taps take the same canonical path as every other inbound link:
     // auth-aware, pending-destination stashed when logged out — never a raw
     // router.go (which skipped requiresAuth and could leak a stale account's
