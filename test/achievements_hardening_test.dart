@@ -99,13 +99,13 @@ final _few = [
 ];
 
 class _SeededProgression extends ProgressionController {
-  _SeededProgression(this._b)
+  _SeededProgression(this._b, {NuvoProgression progression = _progression})
     : super(
         ProgressionApi(),
         SecureTokenStore(),
         isPresentationDemo: () => false,
       ) {
-    state = const AsyncValue.data(_progression);
+    state = AsyncValue.data(progression);
   }
   final List<NuvoBadge> _b;
   @override
@@ -139,11 +139,12 @@ Widget _wrap(
   required List<NuvoBadge> badges,
   bool dark = false,
   double textScale = 1.0,
+  NuvoProgression progression = _progression,
 }) {
   return ProviderScope(
     overrides: [
       progressionControllerProvider.overrideWith(
-        (ref) => _SeededProgression(badges),
+        (ref) => _SeededProgression(badges, progression: progression),
       ),
     ],
     child: MaterialApp(
@@ -503,6 +504,79 @@ void main() {
       await _settle(tester);
       expect(find.text('Unfeature'), findsOneWidget);
       await tester.tap(find.text('Unfeature'));
+      await _settle(tester);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('what is next leads the Achievements page', () {
+    final withNext = NuvoProgression(
+      level: 8,
+      totalXp: 1410,
+      currentLevelXp: 30,
+      nextLevelXp: 120,
+      progress: 0.25,
+      xpToNext: 90,
+      lastSeenLevel: 8,
+      featuredSlots: 3,
+      achievementsEarned: 30,
+      achievementsTotal: 43,
+      nextAchievement: _badge(50, unlocked: false, category: 'winning'),
+      nextUnlock: const NuvoUnlockRef(
+        unlockId: 'lvl-9',
+        level: 9,
+        type: 'badge',
+        key: 'clap',
+        name: 'Clap reaction',
+        description: 'A new reaction for your crew.',
+      ),
+    );
+
+    testWidgets('next goal and next unlock sit above the full list',
+        (tester) async {
+      _useViewport(tester, 390, 844);
+      await tester.pumpWidget(
+        _wrap(const BadgesScreen(), badges: _all43, progression: withNext),
+      );
+      await _settle(tester);
+
+      expect(find.text('NEXT UP'), findsOneWidget);
+      expect(find.text('Achievement Number 50'), findsOneWidget);
+      expect(find.text('NEXT LEVEL UNLOCK'), findsOneWidget);
+      expect(find.text('Clap reaction'), findsOneWidget);
+      expect(find.text('Unlocks at Level 9'), findsOneWidget);
+      expect(find.text('All achievements'), findsOneWidget);
+
+      double y(Finder f) => tester.getTopLeft(f).dy;
+      expect(y(find.text('NEXT UP')), lessThan(y(find.text('NEXT LEVEL UNLOCK'))));
+      expect(
+        y(find.text('NEXT LEVEL UNLOCK')),
+        lessThan(y(find.text('All achievements'))),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('no next goal or unlock — the page just opens on the list',
+        (tester) async {
+      _useViewport(tester, 390, 844);
+      await tester.pumpWidget(_wrap(const BadgesScreen(), badges: _all43));
+      await _settle(tester);
+
+      expect(find.text('NEXT UP'), findsNothing);
+      expect(find.text('NEXT LEVEL UNLOCK'), findsNothing);
+      expect(find.text('All achievements'), findsOneWidget);
+    });
+
+    testWidgets('survives 320px at text scale 1.4', (tester) async {
+      _useViewport(tester, 320, 568);
+      await tester.pumpWidget(
+        _wrap(
+          const BadgesScreen(),
+          badges: _all43,
+          progression: withNext,
+          textScale: 1.4,
+        ),
+      );
       await _settle(tester);
       expect(tester.takeException(), isNull);
     });

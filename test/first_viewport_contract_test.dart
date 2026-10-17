@@ -221,8 +221,15 @@ void main() {
   final quickStartTiles = find.byWidgetPredicate(
     (w) => w.runtimeType.toString() == '_QuickStartTile',
   );
-  final raceSections = find.byWidgetPredicate(
-    (w) => w.runtimeType.toString() == '_RaceSection',
+  // Profile's content blocks: the achievements row, the record strip and the
+  // Your Nuvo group. Each must clear the dock or sit below the fold.
+  const profileSectionTypes = {
+    '_AchievementsRow',
+    '_StatsStrip',
+    '_ProfileActionGroup',
+  };
+  final profileSections = find.byWidgetPredicate(
+    (w) => profileSectionTypes.contains(w.runtimeType.toString()),
   );
 
   for (final (name, width, height) in _sizes) {
@@ -308,7 +315,7 @@ void main() {
         );
       });
 
-      testWidgets('Profile: every race section is whole above the dock or '
+      testWidgets('Profile: every section is whole above the dock or '
           'below the fold', (tester) async {
         await pumpInShell(
           tester,
@@ -326,14 +333,14 @@ void main() {
         // clear above the dock.
         final scrollable = find.byType(Scrollable).first;
         // Sections below the first viewport build lazily — the identity
-        // block can fill a small screen entirely, so scroll until the race
+        // block can fill a small screen entirely, so scroll until the
         // sections exist before checking each one clears the dock.
         var buildGuard = 0;
-        while (raceSections.evaluate().length < 2 && buildGuard++ < 12) {
+        while (profileSections.evaluate().length < 2 && buildGuard++ < 12) {
           await tester.drag(scrollable, const Offset(0, -300));
           await tester.pumpAndSettle();
         }
-        for (final element in raceSections.evaluate().toList()) {
+        for (final element in profileSections.evaluate().toList()) {
           var rect = tester.getRect(find.byWidget(element.widget));
           var guard = 0;
           while (rect.bottom > foldY + 0.5 &&
@@ -353,43 +360,8 @@ void main() {
         }
 
         // All sections still exist — scrollable, not lost.
-        expect(find.textContaining('Recent results'), findsWidgets);
-        expect(find.textContaining('Account'), findsWidgets);
-      });
-
-      testWidgets('Profile: a result row is never the half-visible edge',
-          (tester) async {
-        await pumpInShell(
-          tester,
-          Size(width, height),
-          '/profile',
-          const ProfileScreen(),
-        );
-        final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        // Race-row titles are leaf Texts inside _ProfileRaceGroup. A row
-        // resting fully inside the dock's opaque occlusion band is masked
-        // like below-fold content and scrolls clear (§17) — the failure
-        // case is a title BISECTED by the band's top edge: its top half
-        // visible, its bottom half painted over. That is the half-visible
-        // edge this contract forbids.
-        for (final title in [
-          'Pushup Race',
-          'Squat Race',
-          'Lunge Race',
-          'Plank Race',
-          'Burpee Race',
-          'Jack Race',
-        ]) {
-          for (final element in find.text(title).evaluate()) {
-            final rect = tester.getRect(find.byWidget(element.widget));
-            final bisected = rect.top < foldY - 0.5 && rect.bottom > foldY + 0.5;
-            expect(
-              bisected,
-              isFalse,
-              reason: '$name: "$title" text is bisected by the dock edge',
-            );
-          }
-        }
+        expect(find.text('Your Nuvo'), findsWidgets);
+        expect(find.text('Settings'), findsWidgets);
       });
     });
   }

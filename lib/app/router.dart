@@ -178,6 +178,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             _detailPage(state, const NotificationsScreen()),
       ),
       GoRoute(
+        path: '/settings',
+        pageBuilder: (_, state) => _authPage(state, const SettingsScreen()),
+      ),
+      GoRoute(
         path: '/settings/notifications',
         pageBuilder: (_, state) =>
             _authPage(state, const NotificationPrefsScreen()),

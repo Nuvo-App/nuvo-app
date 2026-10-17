@@ -57,7 +57,7 @@ class _DemoAuthRepo extends AuthRepository {
   @override
   Future<RestoreResult> restoreSession() async => const RestoreOk(AuthUser(
         id: 'demo-viewer-1',
-        email: 'testing@getnuvo.net',
+        email: 'demo-viewer@example.com',
         isDemo: true,
         fullName: 'Maya Chen',
         username: 'maya',
@@ -264,6 +264,7 @@ Future<void> _openSearch(WidgetTester tester) async {
 }
 
 void main() {
+
   group('PassScreen tab stability', () {
     /// The selector is a fixed region: switching lenses may only change
     /// what's below it. Any tab-conditional widget above the tabs (a live
@@ -273,33 +274,29 @@ void main() {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(demo: true));
       await _settleDemo(tester);
-      // Populated demo — the live card is inside the For-you body.
-      expect(find.text('Pushup Battle'), findsWidgets);
 
       double tabY(String label) =>
           tester.getTopLeft(find.text(label)).dy;
-      final baseY = tabY('Activity');
-      final forYouY = tabY('For you');
+      final peopleY = tabY('People');
+      final activityY = tabY('Activity');
       final racesY = tabY('Races');
 
-      await tester.tap(find.text('Activity'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(tabY('Activity'), baseY);
-      expect(tabY('For you'), forYouY);
-      expect(tabY('Races'), racesY);
+      for (final label in ['Activity', 'Races', 'People']) {
+        await tester.tap(find.text(label));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(tabY('People'), peopleY);
+        expect(tabY('Activity'), activityY);
+        expect(tabY('Races'), racesY);
+      }
+    });
 
-      await tester.tap(find.text('Races'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(tabY('Activity'), baseY);
-      expect(tabY('For you'), forYouY);
-      expect(tabY('Races'), racesY);
-
-      await tester.tap(find.text('For you'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(tabY('Activity'), baseY);
+    testWidgets('For you is gone — People is the first lens', (tester) async {
+      _tallViewport(tester);
+      await tester.pumpWidget(_buildApp(demo: true));
+      await _settleDemo(tester);
+      expect(find.text('For you'), findsNothing);
+      expect(find.text('People'), findsOneWidget);
     });
   });
 
@@ -310,9 +307,9 @@ void main() {
       await tester.pumpWidget(_buildApp(demo: true));
       await _settleDemo(tester);
 
-      // For you — live first, then direct moments.
+      // People — the races running with the crew right now.
+      expect(find.text('Racing with your crew'), findsOneWidget);
       expect(find.text('Pushup Battle'), findsWidgets);
-      expect(find.text('just passed you in Pushup Battle'), findsOneWidget);
 
       // Activity — a real stream, not an empty note.
       await tester.tap(find.text('Activity'));
@@ -322,6 +319,7 @@ void main() {
         find.text('Jules Carter joined your crew'),
         findsOneWidget,
       );
+      expect(find.text('just passed you in Pushup Battle'), findsOneWidget);
 
       // Races — the full lifecycle shows.
       await tester.tap(find.text('Races'));
@@ -334,11 +332,16 @@ void main() {
     });
   });
 
-  /// The key regression: For you is composed of independent modules —
-  /// relationship and race data are content even when the event stream
-  /// has nothing new to say.
-  group('PassScreen For-you composition', () {
-    testWidgets('shared races populate For You with zero feed events',
+  /// The Crew lenses: People (who I race with + what we are racing now),
+  /// Activity (what happened) and Races (the crew's races across time).
+  group('PassScreen lenses', () {
+    Future<void> openLens(WidgetTester tester, String label) async {
+      await tester.tap(find.text(label));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('People lists the races running with the crew',
         (tester) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(
@@ -349,13 +352,13 @@ void main() {
 
       expect(find.text('Racing with your crew'), findsOneWidget);
       expect(find.text('Pushup Battle'), findsWidgets);
-      expect(find.text('60 Second Squat Battle'), findsOneWidget);
-      expect(find.text('Start a race'), findsOneWidget);
+      // History and scheduling belong to the Races lens, not People.
+      expect(find.text('Recent'), findsNothing);
+      expect(find.text('Up next'), findsNothing);
     });
 
-    testWidgets(
-        'quiet crew with race history gets action + recent + run it back',
-        (tester) async {
+    testWidgets('a crew with only finished races says so on People and '
+        'shows the history on Races', (tester) async {
       _tallViewport(tester);
       final finished = PresentationDemoData.races('user-1')
           .where((r) => r.status == 'completed')
@@ -366,99 +369,18 @@ void main() {
       ));
       await _settleDemo(tester);
 
-      expect(find.text('Start a race'), findsOneWidget);
-      expect(find.text('Recently with your crew'), findsOneWidget);
-      expect(find.textContaining('First To 30 Lunges'), findsWidgets);
-      expect(find.text('Run it back'), findsOneWidget);
-      expect(find.text('Rematch'), findsOneWidget);
-    });
-
-    testWidgets('feed events render without any active races',
-        (tester) async {
-      _tallViewport(tester);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        feed: PresentationDemoData.crewActivity('user-1'),
-      ));
-      await _settleDemo(tester);
-
-      // Live item heads the surface even with no races loaded.
-      expect(find.text('Pushup Battle'), findsWidgets);
-      expect(find.text('From your crew'), findsOneWidget);
-      expect(find.text('Start a race'), findsOneWidget);
-    });
-
-    testWidgets('social hero centers on the closest shared race',
-        (tester) async {
-      _tallViewport(tester);
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: PresentationDemoData.races('user-1'),
-      ));
-      await _settleDemo(tester);
-
-      // Pushup Battle (me 39, leader 50) is the tightest chase —
-      // it heads the surface as the matchup card, once.
-      expect(find.text('50'), findsOneWidget);
-      expect(find.text('39'), findsWidgets);
-      expect(find.text('Sam leads by 11 reps'), findsOneWidget);
-      expect(find.text('You'), findsWidgets);
-      expect(find.text('Sam'), findsWidgets);
-      expect(find.text('See race'), findsOneWidget);
-      // The hero's race doesn't repeat in "Racing with your crew".
-      expect(find.text('Pushup Battle'), findsOneWidget);
-    });
-
-    testWidgets('finished races stay at result weight — no forced hero',
-        (tester) async {
-      _tallViewport(tester);
-      final finished = PresentationDemoData.races('user-1')
-          .where((r) => r.status == 'completed')
-          .toList();
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: finished,
-      ));
-      await _settleDemo(tester);
-
-      // A completed race is history, not a hero — no centerpiece chrome.
-      expect(find.text('FINISHED'), findsNothing);
-      expect(find.text('You took it'), findsNothing);
-      expect(find.text('See result'), findsNothing);
-
-      // The newest result is the rematch candidate — its own module, and
-      // it does not repeat as the first row of recent history.
-      expect(find.text('Run it back'), findsOneWidget);
-      expect(find.text('Rematch'), findsOneWidget);
-      expect(find.text('Recently with your crew'), findsOneWidget);
       expect(
-        find.textContaining('First To 50 Running In Place'),
+        find.text('No races running with your crew right now. Start one '
+            'from Compete.'),
         findsOneWidget,
       );
+
+      await openLens(tester, 'Races');
+      expect(find.text('Recent'), findsOneWidget);
       expect(find.textContaining('First To 30 Lunges'), findsWidgets);
     });
 
-    testWidgets('recent rows and rematch survive a 320px viewport',
-        (tester) async {
-      tester.view.physicalSize = const Size(320, 700);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-      final finished = PresentationDemoData.races('user-1')
-          .where((r) => r.status == 'completed')
-          .toList();
-      await tester.pumpWidget(_buildApp(
-        members: PresentationDemoData.crewMembers(),
-        races: finished,
-      ));
-      await _settleDemo(tester);
-      expect(tester.takeException(), isNull);
-      expect(find.text('Run it back'), findsOneWidget);
-      expect(find.text('Rematch'), findsOneWidget);
-      expect(find.text('Recently with your crew'), findsOneWidget);
-    });
-
-    testWidgets('hero matchup row survives a 320px viewport',
-        (tester) async {
+    testWidgets('the Races lens survives a 320px viewport', (tester) async {
       tester.view.physicalSize = const Size(320, 700);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -468,12 +390,16 @@ void main() {
       ));
       await _settleDemo(tester);
       expect(tester.takeException(), isNull);
-      expect(find.text('50'), findsOneWidget);
-      expect(find.text('39'), findsWidgets);
+
+      await openLens(tester, 'Races');
+      expect(tester.takeException(), isNull);
+      await openLens(tester, 'Activity');
+      expect(tester.takeException(), isNull);
+      await openLens(tester, 'People');
+      expect(tester.takeException(), isNull);
     });
 
-    testWidgets('live item still heads the surface over the hero',
-        (tester) async {
+    testWidgets('a live race heads People', (tester) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(
         members: PresentationDemoData.crewMembers(),
@@ -482,12 +408,10 @@ void main() {
       ));
       await _settleDemo(tester);
 
-      // Live beats hero — the navy live card renders, not the matchup.
       expect(find.text('LIVE'), findsWidgets);
-      expect(find.text('See race'), findsNothing);
     });
 
-    testWidgets('reaction chips render on reactionable social items',
+    testWidgets('reaction chips render on reactionable items in Activity',
         (tester) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp(
@@ -495,7 +419,7 @@ void main() {
         feed: PresentationDemoData.crewActivity('user-1'),
       ));
       await _settleDemo(tester);
-      expect(find.text('From your crew'), findsOneWidget);
+      await openLens(tester, 'Activity');
       for (final g in ['🔥', '👏', '💪']) {
         expect(find.text(g), findsWidgets);
       }
@@ -512,6 +436,7 @@ void main() {
         feedRepo: repo,
       ));
       await _settleDemo(tester);
+      await openLens(tester, 'Activity');
 
       // Tap the first visible 🔥 chip — the optimistic toggle lands before
       // the repo summary; a second tap removes it. Match the pressable
@@ -548,7 +473,7 @@ void main() {
       // Presentation mode must be network-independent — the feed repo is
       // never called and fixtures render with visible reaction controls.
       expect(feedRepo.feedCalls, 0);
-      expect(find.text('From your crew'), findsOneWidget);
+      await openLens(tester, 'Activity');
       for (final g in ['🔥', '👏', '💪']) {
         expect(find.text(g), findsWidgets);
       }
@@ -579,6 +504,7 @@ void main() {
         feed: PresentationDemoData.crewActivity('user-1'),
       ));
       await _settleDemo(tester);
+      await openLens(tester, 'Activity');
 
       // Open the person sheet from a feed actor.
       await tester.tap(find.text('Noah Williams').first);
@@ -606,14 +532,24 @@ void main() {
       expect(find.text('VS'), findsNothing);
     });
 
-    testWidgets('brand-new user gets the true empty note', (tester) async {
+    testWidgets('brand-new user gets true empty states on every lens',
+        (tester) async {
       _tallViewport(tester);
       await tester.pumpWidget(_buildApp());
       await _settleDemo(tester);
 
+      // People — find someone, and nothing is racing yet.
+      expect(find.text('Find people'), findsOneWidget);
       expect(
-        find.text('Race friends, classmates, teammates — whoever '
-            'makes you want to win. Find someone above.'),
+        find.text('No races running with your crew right now. Start one '
+            'from Compete.'),
+        findsOneWidget,
+      );
+
+      await openLens(tester, 'Activity');
+      expect(
+        find.text("Race, finish, set a personal best — your crew's moves "
+            'land here.'),
         findsOneWidget,
       );
     });

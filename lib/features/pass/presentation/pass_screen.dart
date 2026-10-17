@@ -34,7 +34,6 @@ import '../../crew/data/crew_api.dart'
     show ConnectOutcome, CrewConnectionStatus, CrewSearchResult;
 import '../../crew/domain/crew_presence.dart';
 import '../../notifications/application/notification_controller.dart';
-import '../../notifications/data/notification_models.dart';
 import '../../notifications/domain/notification_display.dart';
 import '../../notifications/presentation/notification_bell.dart';
 
@@ -60,7 +59,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
   String? _error;
   String? _searchError;
 
-  /// Feed tabs: 0 For you · 1 Activity · 2 Races.
+  /// Crew lenses: 0 People · 1 Activity · 2 Races.
   int _feedTab = 0;
 
   /// Post CTAs in flight (join/rematch) — freezes the chip so a second tap
@@ -263,61 +262,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     }
   }
 
-  /// Inbox categories that are inherently 'For you' — a reaction lands on
-  /// something of mine, an invite asks me to join. They merge into the
-  /// For-you tab from the notification inbox (canonical race_events never
-  /// produce them, so there's no event/item duplication).
-  static const _meCategories = {
-    'crew_request',
-    'crew_request_accepted',
-    'crew_connected',
-    'reaction',
-    'race_invite',
-  };
-
-  /// Inbox rows that merge into For you — the two social asks that have no
-  /// race_event counterpart.
-  static const _forYouNoteCategories = {'reaction', 'race_invite'};
-
-  CrewActivityItem _itemFromNotification(NuvoNotification n) {
-    return CrewActivityItem(
-      id: 'ntf:${n.id}',
-      type: n.category,
-      occurredAt: n.createdAt,
-      actor: n.actorName == null
-          ? null
-          : CrewActivityActor(
-              id: '',
-              displayName: n.actorName!,
-              profilePhotoUrl: n.actorPhotoUrl,
-            ),
-      raceId: n.destination is RaceDestination
-          ? (n.destination as RaceDestination).raceId
-          : null,
-      title: n.title,
-      summary: n.body,
-      destination: n.destination,
-      read: n.read,
-    );
-  }
-
-  bool _isForYou(CrewActivityItem item, String myId, Map<String, Race> byId) {
-    if (_meCategories.contains(item.type)) return true;
-    if (item.involvesUser(myId)) return true;
-    // A live race I'm in belongs in For you — the spectator payload names
-    // the viewer explicitly.
-    if (item.type == 'race_live') {
-      return item.live?.participants.any((p) => p.isMe) ?? false;
-    }
-    // "Your race started/finished" — membership check via the race cache:
-    // feed events also cover crew-only races I'm not in, and those aren't
-    // mine.
-    if (item.type == 'race_started' || item.type == 'race_finished') {
-      return byId[item.raceId]?.isParticipant(myId) ?? false;
-    }
-    return false;
-  }
-
   /// Resolve a feed actor to a PublicUser — the crew roster when they're
   /// connected (full presence/handle), else a minimal card from the actor
   /// fields the feed carries.
@@ -389,15 +333,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 context.push('/race/${racingIn.id}');
               },
       ),
-    );
-  }
-
-  /// "Race {person}" — the social suggestion: straight into the composer
-  /// with that member attached, same as the person sheet's RACE action.
-  void _raceMember(PublicUser member) {
-    context.push(
-      '/races/new',
-      extra: RaceCreatePrefill.pushups.copyWith(withUser: member),
     );
   }
 
@@ -536,48 +471,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     }
   }
 
-  /// Run it back — one tap on a finished shared race. Real sessions use
-  /// the server's one-step rematch (clones settings + roster). Demo mode
-  /// can't call the network, so it opens the composer prefilled with the
-  /// top crew opponent instead — same product result.
-  Future<void> _runItBack(Race race) async {
-    const key = 'run-it-back';
-    if (!_ctaBusy.add(key)) return;
-    try {
-      final user = ref.read(authControllerProvider).user;
-      if (isPresentationDemoUser(user)) {
-        final crew = ref.read(crewControllerProvider).members;
-        final opponent = race.participants
-            .where((p) => p.userId != user?.id)
-            .toList()
-          ..sort((a, b) => b.progressValue.compareTo(a.progressValue));
-        PublicUser? member;
-        for (final p in opponent) {
-          member = crew.where((m) => m.id == p.userId).firstOrNull;
-          if (member != null) break;
-        }
-        if (mounted) {
-          context.push(
-            '/races/new',
-            extra: prefillFromRace(race, withUser: member),
-          );
-        }
-        return;
-      }
-      final next =
-          await ref.read(raceControllerProvider.notifier).rematchRace(race.id);
-      if (mounted) context.push('/race/${next.id}');
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't start the rematch.")),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _ctaBusy.remove(key));
-    }
-  }
-
   Future<void> _rematch(CrewActivityItem item) async {
     final id = item.raceId;
     if (id == null || !_ctaBusy.add(item.id)) return;
@@ -679,26 +572,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
             }.contains(i.type))
           i.actor!.id,
     };
-    // For you — direct events landing on me (passed me, my race, my
-    // result) plus the two inbox asks that never produce a race_event
-    // (reactions to mine, race invites). Live races are always For you —
-    // a crew member racing right now is inherently relevant.
-    final notifItems = ref.watch(notificationControllerProvider).items;
-    final forYouItems = [
-      ...feedItems.where(
-        (i) => i.live == null && _isForYou(i, myId, racesById),
-      ),
-      for (final n in notifItems)
-        if (_forYouNoteCategories.contains(n.category))
-          _itemFromNotification(n),
-    ]..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    // Everything else in the stream — the relevance surface shows it at
-    // micro/standard weight under the direct events, so For you never
-    // collapses to a blank canvas while the crew is doing anything.
-    final forYouIds = {for (final i in forYouItems) i.id};
-    final restOfFeed = feedItems
-        .where((i) => i.live == null && !forYouIds.contains(i.id))
-        .toList();
     // Who's around right now — real presence only (server-touched
     // lastActiveAt), ordered most-recent first. The strip fronts the people
     // who are here.
@@ -723,26 +596,6 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       ...liveCrew,
       ...crew.where((m) => liveCrew.every((l) => l.id != m.id)),
     ];
-    // The featured matchup — computed here so the social field can size
-    // its bridge shelf before the tab body ever renders. Live races own
-    // the top slot when present, so no matchup is featured over them.
-    final crewHero = _feedTab == 0 && liveItems.isEmpty
-        ? _heroRaceFor(activeRaces, myId)
-        : null;
-    // The featured social object — the first live race, else the matchup —
-    // straddles the field's bottom edge: its top rides the ice, its body
-    // lands on white. The field grows an apron exactly as deep as the
-    // rise, so the object is the only thing crossing the boundary.
-    final featured =
-        _feedTab == 0 && (crewHero != null || liveItems.isNotEmpty);
-    // No featured object — the field still breathes past the tabs, and on
-    // For you the tab body rises a touch so the Start-a-race rail straddles
-    // the boundary instead of the field ending in dead air.
-    final featuredBridge = featured
-        ? _kFeaturedBridge
-        : (_feedTab == 0 ? _kRailBridge : 0.0);
-    final fieldTail = featured ? _kFeaturedBridge : _kFieldRest;
-
     return Scaffold(
       backgroundColor: context.themeColors.page,
       body: SafeArea(
@@ -847,112 +700,26 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                 )
               // ── Content ──────────────────────────────────────────────────
               else ...[
-                // ── The social field — one ice plane grouping the people,
-                // their asks, and the lens switch. A layer groups
-                // information; this is the field the matchup rises out of.
-                _SocialField(
-                  tail: fieldTail,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // ── The people — flattened, no container card: You,
-                      // the faces ordered by who's around, Add. Status
-                      // pills carry the one thing worth knowing under each
-                      // person — Racing beats Active, absence says nothing.
-                      _PeopleStrip(
-                        me: profile,
-                        members: crewOrdered,
-                        racingIds: racingIds,
-                        hotIds: hotIds,
-                        onYou: () => context.push('/my-nuvo'),
-                        onPerson: _openPerson,
-                        onAdd: () => context.push('/crew/add'),
-                      ),
-
-                      // ── Empty crew — the void below the strip becomes
-                      // the two things that actually fill it: find people,
-                      // share your code.
-                      if (crew.isEmpty) ...[
-                        const SizedBox(height: 18),
-                        _PeopleSurface(
-                          children: [
-                            _ActionRow(
-                              icon: Icons.person_search_rounded,
-                              title: 'Find people',
-                              subtitle: 'Name, @username or member code',
-                              onTap: () => context.push('/crew/add'),
-                            ),
-                            _ActionRow(
-                              icon: Icons.qr_code_rounded,
-                              title: 'Your member code',
-                              subtitle: profile.memberId,
-                              actionLabel: 'My Nuvo',
-                              onTap: () => context.push('/my-nuvo'),
-                              isLast: true,
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      // ── Crews — the group race entry: start or join a
-                      // crew and race on one shared leaderboard.
-                      ValueListenableBuilder<bool>(
-                        valueListenable: NuvoFlags.crews,
-                        builder: (context, crewsOn, _) => crewsOn
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 16),
-                                child: _PeopleSurface(
-                                  children: [
-                                    _ActionRow(
-                                      icon: Icons.groups_rounded,
-                                      title: 'Crews',
-                                      subtitle: 'Race together on one leaderboard',
-                                      onTap: () => context.push('/crews'),
-                                      isLast: true,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-
-                      // ── Requests — people knocking, compressed to
-                      // utility weight: one surface, single-line rows,
-                      // inline actions. Incoming first — an ask aimed at
-                      // me outranks one I sent.
-                      if (requests.isNotEmpty || outgoing.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        _RequestSurface(
-                          incoming: requests,
-                          outgoing: outgoing,
-                          pending: pending,
-                          onAccept: _acceptRequest,
-                          onDecline: _declineRequest,
-                          onCancel: _cancelRequest,
-                        ),
-                      ],
-
-                      // ── A quiet lens switch — text under a hairline,
-                      // not a segmented control claiming the page.
-                      // Everything above this row is geometrically
-                      // identical across all three tabs: switching only
-                      // ever changes what's below.
-                      const SizedBox(height: 16),
-                      _CrewTabs(
-                        selected: _feedTab,
-                        onSelect: (i) => setState(() => _feedTab = i),
-                        counts: [
-                          forYouItems.length + liveItems.length,
-                          null,
-                          liveItems.length +
-                              activeRaces.length +
-                              upcomingRaces.length,
-                        ],
-                      ),
+                // The lens switch leads the page: People (who I race with and
+                // what we are racing right now), Activity (what happened) and
+                // Races (the crew's races across time).
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NuvoSpacing.pageHorizontal,
+                  ),
+                  child: _CrewTabs(
+                    selected: _feedTab,
+                    onSelect: (i) => setState(() => _feedTab = i),
+                    counts: [
+                      requests.length,
+                      null,
+                      liveItems.length +
+                          activeRaces.length +
+                          upcomingRaces.length,
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
                 if (crewState.error != null && crew.isEmpty)
                   Padding(
@@ -975,42 +742,120 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     ),
                   ),
 
-                // The featured object rises over the field's edge — its
-                // top sits on the ice apron, its body lands on white.
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: NuvoSpacing.pageHorizontal),
-                  child: Transform.translate(
-                  offset: Offset(0, -featuredBridge),
-                  child: switch (_feedTab) {
-                  0 => _ForYouTab(
-                      featuredHero: crewHero,
-                      liveItems: liveItems,
-                      directItems: forYouItems,
-                      restOfFeed: restOfFeed,
-                      activeRaces: activeRaces,
-                      upcomingRaces: upcomingRaces,
-                      finishedRaces: finishedRaces,
-                      crew: crew,
-                      myId: myId,
-                      racesById: racesById,
-                      reactingIds: activityState.reactingItemIds,
-                      busyIds: _ctaBusy,
-                      emptyNote: crew.isEmpty
-                          ? 'Race friends, classmates, teammates — whoever '
-                              'makes you want to win. Find someone above.'
-                          : 'Races, finishes and personal bests from your '
-                              'people land here.',
-                      onTap: _openCrewActivity,
-                      onPerson: (i) => _tapFeedPerson(i, crew),
-                      onReact: _react,
-                      actionFor: (i) => _actionFor(i, myId, racesById),
-                      onOpenRace: (r) => context.push('/race/${r.id}'),
-                      onRaceMember: _raceMember,
-                      onNewRace: () => context.push('/races/new'),
-                      onRunItBack: _runItBack,
-                      runItBackBusy: _ctaBusy.contains('run-it-back'),
+                // ── People — the crews entry, the people, their asks, and
+                // the races running with them right now.
+                if (_feedTab == 0) ...[
+                  _SocialField(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Race together on one leaderboard — start or join a
+                        // crew. Only when the server has crews switched on.
+                        ValueListenableBuilder<bool>(
+                          valueListenable: NuvoFlags.crews,
+                          builder: (context, crewsOn, _) => crewsOn
+                              ? Padding(
+                                  padding: const EdgeInsets.only(bottom: 16),
+                                  child: _PeopleSurface(
+                                    children: [
+                                      _ActionRow(
+                                        icon: Icons.groups_rounded,
+                                        title: 'Crews',
+                                        subtitle:
+                                            'Race together on one leaderboard',
+                                        onTap: () => context.push('/crews'),
+                                        isLast: true,
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+
+                        // The people — You, the faces ordered by who's
+                        // around, Add. Status pills carry the one thing
+                        // worth knowing under each person.
+                        _PeopleStrip(
+                          me: profile,
+                          members: crewOrdered,
+                          racingIds: racingIds,
+                          hotIds: hotIds,
+                          onYou: () => context.push('/my-nuvo'),
+                          onPerson: _openPerson,
+                          onAdd: () => context.push('/crew/add'),
+                        ),
+
+                        // Empty crew — the two things that fill it: find
+                        // people, share your code.
+                        if (crew.isEmpty) ...[
+                          const SizedBox(height: 18),
+                          _PeopleSurface(
+                            children: [
+                              _ActionRow(
+                                icon: Icons.person_search_rounded,
+                                title: 'Find people',
+                                subtitle: 'Name, @username or member code',
+                                onTap: () => context.push('/crew/add'),
+                              ),
+                              _ActionRow(
+                                icon: Icons.qr_code_rounded,
+                                title: 'Your member code',
+                                subtitle: profile.memberId,
+                                actionLabel: 'My Nuvo',
+                                onTap: () => context.push('/my-nuvo'),
+                                isLast: true,
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        // Requests — people knocking, at utility weight.
+                        // Incoming first: an ask aimed at me outranks one I
+                        // sent.
+                        if (requests.isNotEmpty || outgoing.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          _RequestSurface(
+                            incoming: requests,
+                            outgoing: outgoing,
+                            pending: pending,
+                            onAccept: _acceptRequest,
+                            onDecline: _declineRequest,
+                            onCancel: _cancelRequest,
+                          ),
+                        ],
+                      ],
                     ),
-                  1 => _FeedColumn(
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
+                    child: _RacesTab(
+                      liveItems: liveItems,
+                      ongoing: activeRaces,
+                      upcoming: const [],
+                      finished: const [],
+                      happeningLabel: 'Racing with your crew',
+                      emptyNote:
+                          'No races running with your crew right now. Start '
+                          'one from Compete.',
+                      myId: myId,
+                      crewIds: crewIds,
+                      reactingIds: activityState.reactingItemIds,
+                      onOpen: (r) => context.push('/race/${r.id}'),
+                      onOpenLive: _openCrewActivity,
+                      onReact: _react,
+                    ),
+                  ),
+                ]
+                // ── Activity — what the crew has done.
+                else if (_feedTab == 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
+                    child: _FeedColumn(
                       items: feedItems,
                       reactingIds: activityState.reactingItemIds,
                       crew: crew,
@@ -1024,7 +869,14 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                       onReact: _react,
                       actionFor: (i) => _actionFor(i, myId, racesById),
                     ),
-                  _ => _RacesTab(
+                  )
+                // ── Races — the crew's races across time.
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NuvoSpacing.pageHorizontal,
+                    ),
+                    child: _RacesTab(
                       liveItems: liveItems,
                       ongoing: activeRaces,
                       upcoming: upcomingRaces,
@@ -1036,9 +888,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                       onOpenLive: _openCrewActivity,
                       onReact: _react,
                     ),
-                  },
                   ),
-                ),
               ],
             ],
           ),
@@ -1295,349 +1145,6 @@ Widget _feedTile(
     onPerson: () => onPerson(item),
     onReact: (emoji) => onReact(item, emoji),
   );
-}
-
-/// For you — a relevance surface, not a filtered inbox. Ordered by what
-/// matters in my crew right now: live races, events aimed at me, the races
-/// we're inside, then the crew's recent activity. It only says "nothing"
-/// when the user genuinely has no crew content; a crew member with no
-/// races and no activity still gets a real next step (race someone).
-/// For you — a composed surface, not a filtered inbox. Independent
-/// modules, each collapsing on its own: the live moment, the races we
-/// share, the crew's social stream, and the standing invitation to race
-/// someone. Nothing renders an empty canvas just because the feed is
-/// quiet — relationships and races are content too.
-class _ForYouTab extends StatelessWidget {
-  const _ForYouTab({
-    required this.featuredHero,
-    required this.liveItems,
-    required this.directItems,
-    required this.restOfFeed,
-    required this.activeRaces,
-    required this.upcomingRaces,
-    required this.finishedRaces,
-    required this.crew,
-    required this.myId,
-    required this.racesById,
-    required this.reactingIds,
-    required this.busyIds,
-    required this.emptyNote,
-    required this.onTap,
-    required this.onPerson,
-    required this.onReact,
-    required this.actionFor,
-    required this.onOpenRace,
-    required this.onRaceMember,
-    required this.onNewRace,
-    required this.onRunItBack,
-    required this.runItBackBusy,
-  });
-
-  /// The featured matchup, resolved by the screen so the social field can
-  /// bridge it — null when live items own the top slot or no shared chase
-  /// is active.
-  final Race? featuredHero;
-
-  /// Live `race_live` items — they head this surface (the room's pulse)
-  /// and stay below the tab bar so switching tabs never moves the bar.
-  final List<CrewActivityItem> liveItems;
-  final List<CrewActivityItem> directItems;
-
-  /// Feed items not already surfaced as direct/live — the crew's general
-  /// activity, shown at micro/standard weight under the direct events.
-  final List<CrewActivityItem> restOfFeed;
-  final List<Race> activeRaces;
-  final List<Race> upcomingRaces;
-
-  /// Recently finished shared races — the quiet state still shows real
-  /// history when nothing is happening right now.
-  final List<Race> finishedRaces;
-  final List<PublicUser> crew;
-  final String myId;
-  final Map<String, Race> racesById;
-  final Set<String> reactingIds;
-  final Set<String> busyIds;
-  final String emptyNote;
-  final ValueChanged<CrewActivityItem> onTap;
-  final ValueChanged<CrewActivityItem> onPerson;
-  final void Function(CrewActivityItem item, String emoji) onReact;
-  final _PostAction? Function(CrewActivityItem item) actionFor;
-  final ValueChanged<Race> onOpenRace;
-
-  /// "Race {person}" — opens the composer with that member attached
-  /// (same path as the person sheet's RACE action).
-  final ValueChanged<PublicUser> onRaceMember;
-
-  /// The bare composer — the secondary "start a race" doorway.
-  final VoidCallback onNewRace;
-
-  /// One-tap rematch on the most recent shared race.
-  final ValueChanged<Race> onRunItBack;
-  final bool runItBackBusy;
-
-  @override
-  Widget build(BuildContext context) {
-    final direct = [...directItems]
-      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    final rest = [...restOfFeed]
-      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    final social = [...direct, ...rest];
-    final crewIds = {for (final m in crew) m.id};
-
-    Widget tile(
-      CrewActivityItem item, {
-      NuvoLiveRaceCardVariant liveVariant =
-          NuvoLiveRaceCardVariant.primary,
-    }) =>
-        _feedTile(
-          item,
-          level: _feedLevelOf(item, myId, racesById),
-          race: racesById[item.raceId],
-          myId: myId,
-          busy: reactingIds.contains(item.id),
-          action: actionFor(item),
-          actionBusy: busyIds.contains(item.id),
-          onTap: onTap,
-          onPerson: onPerson,
-          onReact: onReact,
-          liveVariant: liveVariant,
-        );
-
-    // Modules compose independently — a quiet tab is a populated page
-    // with fewer modules, never a different product.
-    final hasLive = liveItems.isNotEmpty;
-    final hasRacing = activeRaces.isNotEmpty || upcomingRaces.isNotEmpty;
-    final hasSocial = social.isNotEmpty;
-    final hasRecent = finishedRaces.isNotEmpty;
-    if (!hasLive &&
-        !hasRacing &&
-        !hasSocial &&
-        !hasRecent &&
-        crew.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: _EmptyNote(text: emptyNote),
-      );
-    }
-
-    // The centerpiece has to EARN its size. Live `race_live` items already
-    // own the top slot; beneath them the only warranted hero is an active
-    // head-to-head I'm inside — a chase happening now. A finished race is
-    // history, not a hero: it renders at result weight in the lists below.
-    // Empty space is better than manufactured importance.
-    final hero = featuredHero;
-    final racingBelow = hero == null
-        ? activeRaces
-        : activeRaces.where((r) => r.id != hero.id).toList();
-    // The newest finished race is the rematch candidate — its own module.
-    // Showing it again as the first row of recent history would be the
-    // same race twice in adjacent sections, so recent history is the rest.
-    final rematch = hasRecent ? finishedRaces.first : null;
-    final recentBelow = rematch == null
-        ? finishedRaces
-        : finishedRaces.where((r) => r.id != rematch.id).toList();
-
-    var stagger = 0;
-    // Feed rhythm: weight decides the gap after each item — micro rows
-    // cluster, posts breathe, and a hairline only lands between posts.
-    final socialWeights = [
-      for (final it in social.take(9))
-        _feedWeightOf(it, _feedLevelOf(it, myId, racesById)),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // A — the room's pulse: live crew races head the surface. Keyed on
-        // the canonical item id: a newly-arrived live card enters (rise +
-        // fade) and displaced cards travel — every real insertion is seen.
-        if (liveItems.isNotEmpty)
-          NuvoReorderColumn(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < liveItems.length && i < 2; i++)
-                NuvoStaggerIn(
-                  key: ValueKey(liveItems[i].id),
-                  index: stagger++,
-                  // One live moment leads full-size; the second compacts —
-                  // two full live cards read as a wall, not a pulse.
-                  child: tile(
-                    liveItems[i],
-                    liveVariant: i == 0
-                        ? NuvoLiveRaceCardVariant.primary
-                        : NuvoLiveRaceCardVariant.compact,
-                  ),
-                ),
-            ],
-          ),
-
-        // A2 — the social centerpiece when nothing is live: the race
-        // I'm chasing, or the last result's consequence.
-        if (hero != null)
-          NuvoStaggerIn(
-            index: stagger++,
-            child: _CrewHeroCard(
-              race: hero,
-              myId: myId,
-              onTap: () => onOpenRace(hero),
-            ),
-          ),
-
-        // B — the action rail, tied to the people above: label and the
-        // bare-composer doorway share one baseline, then a single rail of
-        // person chips (the same faces as the strip, now as actions).
-        if (crew.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Expanded(child: _SectionLabel(label: 'Start a race')),
-              NuvoPressable(
-                onTap: onNewRace,
-                haptic: false,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    'New race →',
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: NuvoColors.blue,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _RaceCrewChips(
-            members: crew.take(5).toList(),
-            onRaceMember: onRaceMember,
-          ),
-        ],
-
-        // C — the social layer: direct moments first, then the stream.
-        // Same keyed insertion contract as section A — keys follow the
-        // canonical item id, so a provider refresh reorders/inserts
-        // physically instead of the bottom slot popping in.
-        if (hasSocial) ...[
-          const SizedBox(height: 6),
-          const _SectionLabel(label: 'From your crew'),
-          const SizedBox(height: 8),
-          NuvoReorderColumn(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < social.length && i < 9; i++)
-                NuvoStaggerIn(
-                  key: ValueKey(social[i].id),
-                  index: stagger++,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      tile(social[i]),
-                      if (i + 1 < socialWeights.length)
-                        _feedSpacer(
-                          context,
-                          socialWeights[i],
-                          socialWeights[i + 1],
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ],
-
-        // D — the competition layer: shared races are content even when
-        // the feed has nothing new to say. The hero's race is already
-        // above — it doesn't repeat here.
-        if (racingBelow.isNotEmpty || upcomingRaces.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          const _SectionLabel(label: 'Racing with your crew'),
-          const SizedBox(height: 8),
-          for (final race in racingBelow.take(2))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _ActiveRaceCard(
-                race: race,
-                myId: myId,
-                crewIds: crewIds,
-                onTap: () => onOpenRace(race),
-              ),
-            ),
-          if (upcomingRaces.isNotEmpty)
-            _PeopleSurface(
-              children: [
-                for (var i = 0; i < upcomingRaces.length && i < 2; i++)
-                  _UpNextRaceRow(
-                    race: upcomingRaces[i],
-                    crewIds: crewIds,
-                    isLast: i == upcomingRaces.length - 1 || i == 1,
-                    onTap: () => onOpenRace(upcomingRaces[i]),
-                  ),
-              ],
-            ),
-        ],
-
-        // E — shared history, people-first: who beat whom, my placement.
-        // Social feed weight — avatar + outcome rows directly on the page,
-        // no enclosing sheet pretending results are settings.
-        if (recentBelow.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          const _SectionLabel(label: 'Recently with your crew'),
-          const SizedBox(height: 4),
-          for (var i = 0; i < recentBelow.length && i < 3; i++)
-            _FinishedRaceRow(
-              race: recentBelow[i],
-              myId: myId,
-              isLast: i == recentBelow.length - 1 || i == 2,
-              onTap: () => onOpenRace(recentBelow[i]),
-            ),
-        ],
-
-        // F — the continuation: run the latest shared race back.
-        if (rematch != null) ...[
-          const SizedBox(height: 6),
-          const _SectionLabel(label: 'Run it back'),
-          const SizedBox(height: 6),
-          _RunItBackRow(
-            race: rematch,
-            myId: myId,
-            busy: runItBackBusy,
-            onTap: () => onRunItBack(rematch),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// Picks For-you's centerpiece race — but only a genuinely current one:
-/// an active race I'm inside with someone else in it. A race my crew runs
-/// without me is their moment, not my hero (it lists below); a race I'm
-/// running alone is progress, not a head-to-head. Returns null when no
-/// shared chase is live — the page does not manufacture one.
-Race? _heroRaceFor(List<Race> active, String myId) {
-  if (active.isEmpty) return null;
-  final mine = active
-      .where(
-        (r) => r.participantFor(myId) != null && r.participants.length > 1,
-      )
-      .toList();
-  if (mine.isEmpty) return null;
-  // Stakes order: chasing a lead (tightest gap first) > dead even >
-  // defending a lead > racing alone. Consequence reads best when
-  // there's someone ahead to catch.
-  double stakes(Race r) {
-    final ranked = serverRankedParticipants(r);
-    final me = r.participantFor(myId);
-    if (ranked.isEmpty || me == null) return double.infinity;
-    final leader = ranked.first;
-    if (leader.userId == myId) return ranked.length > 1 ? 2.0 : 3.0;
-    final target = (r.targetValue ?? 0) > 0 ? r.targetValue!.toDouble() : 1;
-    final gap = (leader.progressValue - me.progressValue).abs() / target;
-    return leader.progressValue == me.progressValue ? 1.0 : gap;
-  }
-
-  mine.sort((a, b) => stakes(a).compareTo(stakes(b)));
-  return mine.first;
 }
 
 /// The For-you centerpiece — one moment of consequence, not another row.
@@ -1966,197 +1473,6 @@ class _HeroDuel extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// Compact person chips — avatar + first name + bolt — the shared
-/// "race this person" affordance used by For you's Race-someone module
-/// and the quiet-crew composition.
-class _RaceCrewChips extends StatelessWidget {
-  const _RaceCrewChips({
-    required this.members,
-    required this.onRaceMember,
-  });
-
-  final List<PublicUser> members;
-  final ValueChanged<PublicUser> onRaceMember;
-
-  @override
-  Widget build(BuildContext context) {
-    // A rail, not a wrap — the people you can race scroll in one line,
-    // matching the strip above them.
-    return SizedBox(
-      height: 38,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        children: [
-        for (final m in members)
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: PressableScale(
-            onTap: () => onRaceMember(m),
-            child: Container(
-              padding: const EdgeInsets.only(
-                left: 4,
-                right: 10,
-                top: 4,
-                bottom: 4,
-              ),
-              decoration: BoxDecoration(
-                color: context.themeColors.surface,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: context.themeColors.divider,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  NuvoAvatar(
-                    initials: m.initials,
-                    photoUrl: m.profilePhotoUrl,
-                    size: 28,
-                    bgColor: nuvoAvatarColorFor(m.id),
-                    textColor: NuvoColors.white,
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    m.displayName.split(' ').first,
-                    style: AppTextStyles.labelMedium.copyWith(
-                      color: context.themeColors.ink,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  const Icon(
-                    Icons.bolt_rounded,
-                    color: NuvoColors.blue,
-                    size: 14,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Run it back — the competitive continuation: the latest shared race's
-/// top opponent, what it was, and a one-tap Rematch. Uses the server's
-/// rematch path in real sessions, composer prefill in demo.
-class _RunItBackRow extends StatelessWidget {
-  const _RunItBackRow({
-    required this.race,
-    required this.myId,
-    required this.busy,
-    required this.onTap,
-  });
-
-  final Race race;
-  final String myId;
-  final bool busy;
-  final VoidCallback onTap;
-
-  static String _initialsFor(String name) {
-    final parts =
-        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
-    if (parts.isEmpty) return 'N';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final opponents = race.participants
-        .where((p) => p.userId != myId)
-        .toList()
-      ..sort((a, b) => b.progressValue.compareTo(a.progressValue));
-    final top = opponents.firstOrNull;
-    final ago = notificationRelativeTime(
-      DateTime.tryParse(race.updatedAt)?.toUtc() ?? DateTime.now().toUtc(),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          if (top != null)
-            NuvoAvatar(
-              initials: _initialsFor(top.displayName),
-              photoUrl: top.profilePhotoUrl,
-              size: 32,
-              bgColor: nuvoAvatarColorFor(top.userId),
-              textColor: NuvoColors.white,
-            )
-          else
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: context.themeColors.panel,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.replay_rounded,
-                color: context.themeColors.ink,
-                size: 16,
-              ),
-            ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  top != null
-                      ? 'You vs ${top.displayName.split(' ').first}'
-                      : race.displayTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: context.themeColors.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  '${race.displayTitle} · $ago',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: context.themeColors.inkMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          PressableScale(
-            onTap: busy ? null : onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: NuvoColors.blue,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                busy ? '…' : 'Rematch',
-                style: AppTextStyles.labelMedium.copyWith(
-                  color: NuvoColors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -2804,10 +2120,10 @@ class _CrewTabs extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   /// Optional per-tab content counts — wired to the live derivations, so
-  /// "For you 3" means there are three things actually inside.
+  /// "People 2" means there are two requests waiting.
   final List<int?> counts;
 
-  static const _labels = ['For you', 'Activity', 'Races'];
+  static const _labels = ['People', 'Activity', 'Races'];
 
   @override
   Widget build(BuildContext context) {
@@ -2907,10 +2223,19 @@ class _RacesTab extends StatelessWidget {
     required this.onOpen,
     required this.onOpenLive,
     required this.onReact,
+    this.happeningLabel = 'Happening now',
+    this.emptyNote =
+        'No shared races yet — start one with your crew from Compete.',
   });
 
-  /// Feed items carrying a `race_live` spectator payload — the same items
-  /// For-you surfaces; the tab just projects live state first.
+  /// Heading over the active-races group.
+  final String happeningLabel;
+
+  /// Shown when there is nothing to list.
+  final String emptyNote;
+
+  /// Feed items carrying a `race_live` spectator payload — the live state
+  /// is projected first.
   final List<CrewActivityItem> liveItems;
   final List<Race> ongoing;
   final List<Race> upcoming;
@@ -2928,12 +2253,9 @@ class _RacesTab extends StatelessWidget {
         ongoing.isEmpty &&
         upcoming.isEmpty &&
         finished.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
-        child: _EmptyNote(
-          text:
-              'No shared races yet — start one with your crew from Compete.',
-        ),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: _EmptyNote(text: emptyNote),
       );
     }
     return Column(
@@ -2961,7 +2283,7 @@ class _RacesTab extends StatelessWidget {
         // cards: standings slice, progress, who's in. Not title/date rows.
         if (ongoing.isNotEmpty) ...[
           if (liveItems.isNotEmpty) const SizedBox(height: 6),
-          const _SectionLabel(label: 'Happening now'),
+          _SectionLabel(label: happeningLabel),
           const SizedBox(height: 8),
           for (final race in ongoing.take(3)) ...[
             _ActiveRaceCard(
@@ -4492,35 +3814,13 @@ class _SearchResultList extends StatelessWidget {
   }
 }
 
-/// The social field — one ice plane behind the people, their asks, and
-/// the lens switch. Full-bleed (it cancels the page's horizontal padding)
-/// so it reads as territory, not a card; the rounded foot is the edge the
-/// featured matchup bridges when one is featured below it.
-/// How far the featured social object rises onto the field — its top
-/// ~40% sits on the ice apron, the rest lands on white below.
-const _kFeaturedBridge = 84.0;
-
-/// The field always extends this far past the tab row — it breathes
-/// instead of ending dead at the tabs.
-const _kFieldRest = 30.0;
-
-/// With no featured object, the tab body's modest rise — the first module
-/// (the Start-a-race rail) straddles the field's edge as the bridge.
-const _kRailBridge = 30.0;
-
-/// The social stage — one ice region under the people, their asks, and
-/// the lens switch. No edge, no shadow: a layer, not a card. [tail]
-/// extends the field below the tab row so the featured object rising out
-/// of it still lands on ice — the boundary it crosses is the field's own
-/// bottom edge.
+/// The social stage — one ice region under the lens switch holding the
+/// crews entry, the people, and their asks. No edge, no shadow: a layer, not
+/// a card.
 class _SocialField extends StatelessWidget {
-  const _SocialField({required this.child, this.tail = 0});
+  const _SocialField({required this.child});
 
   final Widget child;
-
-  /// Extra field depth below the tabs — sized to the featured object's
-  /// rise so its top straddles the ice instead of dead air.
-  final double tail;
 
   @override
   Widget build(BuildContext context) {
@@ -4528,7 +3828,7 @@ class _SocialField extends StatelessWidget {
     // full width, so the ice bleeds edge-to-edge and the page inset lives
     // inside.
     return Container(
-      padding: EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 16, NuvoSpacing.pageHorizontal, 12 + tail),
+      padding: const EdgeInsets.fromLTRB(NuvoSpacing.pageHorizontal, 16, NuvoSpacing.pageHorizontal, 40),
       decoration: BoxDecoration(
         color: context.themeColors.panelLight,
         // A designed edge, not a symmetric cookie-cut: the left corner

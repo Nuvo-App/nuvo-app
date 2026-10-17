@@ -11,12 +11,15 @@ import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/data/auth_api.dart';
 import '../application/progression_controller.dart';
 import '../data/progression_models.dart';
+import 'widgets/next_up_card.dart';
 import 'widgets/nuvo_badges.dart';
 
-/// Achievement collection — everything earned plus everything still asking.
-/// Locked achievements carry live canonical progress, so every tile answers
-/// "what do I do next." Tap a tile for the detail sheet; earned tiles can be
-/// featured on Profile within the unlocked slot count.
+/// Achievement collection — what's next first, then everything earned plus
+/// everything still asking. The achievement closest to done and the next
+/// level unlock lead the page; the full set sits below. Locked achievements
+/// carry live canonical progress, so every tile answers "what do I do next."
+/// Tap a tile for the detail sheet; earned tiles can be featured on Profile
+/// within the unlocked slot count.
 class BadgesScreen extends ConsumerStatefulWidget {
   const BadgesScreen({super.key});
 
@@ -112,6 +115,9 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.themeColors;
+    final progression = ref.watch(progressionControllerProvider).valueOrNull;
+    final nextAchievement = progression?.nextAchievement;
+    final nextUnlock = progression?.nextUnlock;
     final all = _badges ?? const <NuvoBadge>[];
     final badges = all.where(_inTab).toList()
       ..sort((a, b) {
@@ -153,7 +159,28 @@ class _BadgesScreenState extends ConsumerState<BadgesScreen> {
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: NuvoSpacing.lg),
+            // What's next leads the page: the achievement closest to done,
+            // then the unlock the next level brings.
+            if (nextAchievement != null || nextUnlock != null) ...[
+              const SizedBox(height: NuvoSpacing.xl),
+              if (nextAchievement != null) NextUpCard(next: nextAchievement),
+              if (nextAchievement != null && nextUnlock != null)
+                const SizedBox(height: NuvoSpacing.lg),
+              if (nextUnlock != null)
+                _NextLevelUnlock(
+                  unlock: nextUnlock,
+                  currentLevel: progression?.level ?? 1,
+                ),
+            ],
+            const SizedBox(height: NuvoSpacing.xl),
+            Text(
+              'All achievements',
+              style: AppTextStyles.sectionTitle.copyWith(
+                color: c.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: NuvoSpacing.md),
             SizedBox(
               height: 34 * MediaQuery.textScalerOf(context).scale(1),
               child: ListView(
@@ -243,3 +270,81 @@ class _TabChip extends StatelessWidget {
   }
 }
 
+/// The collectible the next level brings — what reaching it gets you, so the
+/// XP bar on Profile has a visible payoff.
+class _NextLevelUnlock extends StatelessWidget {
+  const _NextLevelUnlock({required this.unlock, required this.currentLevel});
+
+  final NuvoUnlockRef unlock;
+  final int currentLevel;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.themeColors;
+    final iconKey = unlock.metadata?['iconKey'] as String?;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'NEXT LEVEL UNLOCK',
+          style: AppTextStyles.labelUppercase(
+            10,
+            color: c.inkSubtle,
+          ).copyWith(color: c.inkSubtle),
+        ),
+        const SizedBox(height: NuvoSpacing.sm),
+        Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.border, width: 2),
+              ),
+              child: Icon(
+                iconKey != null
+                    ? nuvoBadgeIconFor(iconKey)
+                    : Icons.lock_outline_rounded,
+                size: 20,
+                color: c.ink,
+              ),
+            ),
+            const SizedBox(width: NuvoSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    unlock.name,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: c.ink,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    unlock.level > currentLevel
+                        ? 'Unlocks at Level ${unlock.level}'
+                        : 'Unlocked',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: NuvoColors.blue,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if ((unlock.description ?? '').isNotEmpty)
+                    Text(
+                      unlock.description!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: c.inkMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

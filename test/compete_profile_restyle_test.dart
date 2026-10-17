@@ -747,14 +747,9 @@ void main() {
         // Level is the hero — big number beside the LEVEL label.
         expect(find.textContaining('LEVEL', findRichText: true), findsWidgets);
         expect(find.textContaining('LEVEL 8', findRichText: true), findsWidgets);
-        // The remaining climb is the lane's caption; the next collectible
-        // docks under the track with its name fused beneath it.
+        // The remaining climb is the plate's caption.
         expect(
           find.textContaining('140 XP to Level 9', findRichText: true),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining('Clap reaction', findRichText: true),
           findsOneWidget,
         );
         // Edit anchored to the identity row.
@@ -762,10 +757,28 @@ void main() {
           find.bySemanticsLabel('Edit profile'),
           findsOneWidget,
         );
+        // Achievements are one row; the next goal and the next unlock live
+        // behind it, not on Profile.
         expect(find.text('Achievements'), findsOneWidget);
-        expect(find.text('NEXT UP'), findsOneWidget);
-        expect(find.text('Hat Trick'), findsOneWidget);
-        expect(find.text('ONE MORE WIN'), findsOneWidget);
+        expect(find.text('NEXT UP'), findsNothing);
+        expect(find.text('Hat Trick'), findsNothing);
+        expect(
+          find.textContaining('Clap reaction', findRichText: true),
+          findsNothing,
+        );
+
+        // Tapping the level plate explains what the level means and what
+        // the next one unlocks.
+        await tester.tap(
+          find.textContaining('140 XP to Level 9', findRichText: true),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('XP comes from racing'), findsOneWidget);
+        expect(
+          find.textContaining('Clap reaction', findRichText: true),
+          findsOneWidget,
+        );
+        expect(find.text('See achievements'), findsOneWidget);
       });
     }
 
