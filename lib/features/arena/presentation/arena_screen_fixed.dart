@@ -378,11 +378,15 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     switch (board.primaryActionType) {
       case 'start_race':
         context.push('/races/new');
-      // Both "submit proof" and "open board" land on the race page — the
-      // leaderboard. Verifying is the pinned action there, so every race tap
-      // in the app opens the same screen.
+      // A live race I can prove in right now opens Verify with that race
+      // already chosen; anything else (finished, not loaded) opens the
+      // race page — the leaderboard room.
       default:
-        context.push('/race/${board.id}');
+        if (race != null && race.status == 'active' && !board.isResult) {
+          context.go('/move?race=${Uri.encodeQueryComponent(board.id)}');
+        } else {
+          context.push('/race/${board.id}');
+        }
     }
   }
 

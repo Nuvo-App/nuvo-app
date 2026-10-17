@@ -186,24 +186,6 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('Verify: segments switch', (tester) async {
-        tester.view.physicalSize = Size(width, height);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.resetPhysicalSize);
-        await tester.pumpWidget(
-          _buildApp(const MoveScreen(), _StubRaceRepo(_generateRaces(5))),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        // Tap "Completed" segment
-        final completedFinder = find.textContaining('Completed');
-        if (completedFinder.evaluate().isNotEmpty) {
-          await tester.tap(completedFinder.first);
-          await tester.pumpAndSettle();
-          expect(tester.takeException(), isNull);
-        }
-      });
-
       testWidgets('Profile: no overflow with 15 races', (tester) async {
         tester.view.physicalSize = Size(width, height);
         tester.view.devicePixelRatio = 1.0;

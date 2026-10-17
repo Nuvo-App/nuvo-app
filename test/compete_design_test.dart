@@ -124,52 +124,19 @@ Widget _buildApp(RaceRepository repo) {
 
 void main() {
   group('Compete design language (Phase 1)', () {
-    testWidgets('uses NuvoFeaturedRaceCard for the loud surface', (
+    testWidgets('no featured hero card — Arena owns the next move', (
       tester,
     ) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
       await tester.pumpAndSettle();
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
-    });
-
-    testWidgets('featured race card flips between action and status faces', (
-      tester,
-    ) async {
-      await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
-      await tester.pumpAndSettle();
-
-      // Both faces stay mounted (the inactive one is the invisible sizing
-      // twin under IgnorePointer/Opacity(0)) — "visible" means not hidden
-      // by the sizer, not merely present in the tree.
-      bool visible(String text) {
-        for (final e in find.text(text).evaluate()) {
-          final ignore = e.findAncestorWidgetOfExactType<IgnorePointer>();
-          final opacity = e.findAncestorWidgetOfExactType<Opacity>();
-          final hidden = (ignore?.ignoring ?? false) ||
-              (opacity != null && opacity.opacity == 0);
-          if (!hidden) return true;
-        }
-        return false;
-      }
-
-      expect(visible('RACE STATUS'), isFalse);
-      expect(find.text('Updates ↻'), findsOneWidget);
-
-      await tester.tap(find.text('Updates ↻'));
-      await tester.pumpAndSettle();
-      expect(visible('RACE STATUS'), isTrue);
-      expect(find.text('Race ↻'), findsOneWidget);
-
-      await tester.tap(find.text('Race ↻'));
-      await tester.pumpAndSettle();
-      expect(visible('RACE STATUS'), isFalse);
-      expect(find.text('Updates ↻'), findsOneWidget);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
+      expect(find.text('Continue competing'), findsNothing);
     });
 
     testWidgets('uses NuvoRaceRow for active race rows', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
-      // Featured card takes race 1, 3 capped rows use NuvoRaceRow.
+      // 3 capped rows use NuvoRaceRow.
       expect(find.byType(NuvoRaceRow), findsNWidgets(3));
     });
 
@@ -363,35 +330,36 @@ void main() {
       expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
     });
 
-    testWidgets('1 race: featured card, no capped list', (tester) async {
+    testWidgets('1 race: one row, no See all', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
       await tester.pumpAndSettle();
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
-      expect(find.byType(NuvoRaceRow), findsNothing);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
+      expect(find.byType(NuvoRaceRow), findsOneWidget);
+      expect(find.text('See all'), findsNothing);
     });
 
-    testWidgets('5 races: featured + 3 capped rows + See all', (tester) async {
+    testWidgets('5 races: 3 capped rows + See all', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
       expect(find.byType(NuvoRaceRow), findsNWidgets(3));
       expect(find.text('See all'), findsOneWidget);
     });
 
-    testWidgets('40 races: featured + 3 capped rows + See all', (tester) async {
+    testWidgets('40 races: 3 capped rows + See all', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(40))));
       await tester.pumpAndSettle();
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
       expect(find.byType(NuvoRaceRow), findsNWidgets(3));
       expect(find.text('See all'), findsOneWidget);
     });
 
-    testWidgets('100 races: featured + 3 capped rows + See all', (
+    testWidgets('100 races: 3 capped rows + See all', (
       tester,
     ) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(100))));
       await tester.pumpAndSettle();
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
       expect(find.byType(NuvoRaceRow), findsNWidgets(3));
       expect(find.text('See all'), findsOneWidget);
     });
@@ -404,8 +372,8 @@ void main() {
       // Tap See all.
       await tester.tap(find.text('See all'));
       await tester.pumpAndSettle();
-      // Now 4 rows (5 - 1 featured).
-      expect(find.byType(NuvoRaceRow), findsNWidgets(4));
+      // Now all 5 rows.
+      expect(find.byType(NuvoRaceRow), findsNWidgets(5));
       expect(find.text('Show less'), findsOneWidget);
     });
 
@@ -542,14 +510,14 @@ void main() {
       expect(find.text('Join'), findsOneWidget);
     });
 
-    testWidgets('featured race remains visible at 375x667', (tester) async {
+    testWidgets('race list renders at 375x667', (tester) async {
       tester.view.physicalSize = const Size(375, 667);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       await tester.pumpWidget(_buildApp(_StubRaceRepo(_generateRaces(5))));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byType(NuvoFeaturedRaceCard), findsOneWidget);
+      expect(find.byType(NuvoFeaturedRaceCard), findsNothing);
     });
 
     testWidgets('See all still works after header fix', (tester) async {

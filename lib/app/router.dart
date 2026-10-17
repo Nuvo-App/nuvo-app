@@ -79,10 +79,10 @@ Page<void> _tabPage(GoRouterState state, Widget child) =>
 
 /// The screen behind each shell destination — keyed by the canonical
 /// destination path so route → screen is declared exactly once.
-Widget _tabScreenFor(String path) {
+Widget _tabScreenFor(String path, {String? raceId}) {
   final screen = switch (path) {
     '/compete' => const CompeteScreen(),
-    '/move' => const MoveScreen(),
+    '/move' => MoveScreen(preselectedRaceId: raceId),
     '/pass' => const PassScreen(),
     '/profile' => const ProfileScreen(),
     _ => const ArenaScreen(),
@@ -266,7 +266,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                 GoRoute(
                   path: d.path,
                   pageBuilder: (_, state) =>
-                      _tabPage(state, _tabScreenFor(d.path)),
+                      _tabPage(
+                        state,
+                        _tabScreenFor(
+                          d.path,
+                          raceId: state.uri.queryParameters['race'],
+                        ),
+                      ),
                 ),
               ],
             ),

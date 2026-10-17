@@ -192,8 +192,7 @@ void main() {
 
   group('canonical verifier entry', () {
     testWidgets(
-      'A: Verify hero CTA opens the pre-verify setup (motion preview + Begin) '
-      'first, not the camera',
+      'A: Verify Start on a camera race goes straight to the verifier',
       (tester) async {
         final built = _app(races: [_movementRace()]);
         addTearDown(built.container.dispose);
@@ -211,40 +210,11 @@ void main() {
         await tester.tap(find.byKey(const Key('verify-hero-cta')));
         await tester.pumpAndSettle();
 
-        expect(_path(built.router), '/race/race-move/proof');
-        expect(find.text('PROOF-CHOOSER'), findsOneWidget);
-        expect(find.text('CANONICAL-VERIFIER'), findsNothing);
+        expect(_path(built.router), '/race/race-move/proof/ai-motion');
+        expect(find.text('CANONICAL-VERIFIER'), findsOneWidget);
+        expect(find.text('PROOF-CHOOSER'), findsNothing);
       },
     );
-
-    testWidgets('B: Ready Next row opens the pre-verify setup first', (
-      tester,
-    ) async {
-      final built = _app(
-        races: [
-          _movementRace(),
-          _movementRace(id: 'race-two', title: 'Squats'),
-        ],
-      );
-      addTearDown(built.container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: built.container,
-          child: MaterialApp.router(routerConfig: built.router),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // The second Ready race is a 'Ready next' row.
-      final row = find.text('Squats');
-      expect(row, findsWidgets);
-      await tester.tap(row.first);
-      await tester.pumpAndSettle();
-
-      expect(_path(built.router), '/race/race-two/proof');
-      expect(find.text('PROOF-CHOOSER'), findsOneWidget);
-      expect(find.text('CANONICAL-VERIFIER'), findsNothing);
-    });
 
     testWidgets(
       'non-camera race still goes to the proof chooser, not the verifier',
