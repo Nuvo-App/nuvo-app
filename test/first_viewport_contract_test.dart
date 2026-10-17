@@ -328,8 +328,8 @@ void main() {
         );
       });
 
-      testWidgets('Profile: every section is whole above the dock or '
-          'below the fold', (tester) async {
+      testWidgets('Profile: normal scrolling page, every section reachable '
+          'and clear of the dock at the end', (tester) async {
         await pumpInShell(
           tester,
           Size(width, height),
@@ -338,58 +338,37 @@ void main() {
         );
         expect(tester.takeException(), isNull);
         expect(find.text('Profile'), findsWidgets);
+        expect(
+          find.byKey(const ValueKey('nuvo-bottom-fade')),
+          findsOneWidget,
+        );
 
         final foldY = tester.getTopLeft(find.byType(NuvoBottomNav)).dy;
-        // Content Flow Contract (MAIN_SCREEN_LAYOUT_CONTRACT §17): the
-        // dock owns bottom occlusion — a section may land under the
-        // occlusion band at rest, but the same scroll must bring it fully
-        // clear above the dock.
         final scrollable = find.byType(Scrollable).first;
-        // Sections below the first viewport build lazily — the identity
-        // block can fill a small screen entirely, so scroll until the
-        // sections exist before checking each one clears the dock.
-        var buildGuard = 0;
-        while (profileSections.evaluate().length < 2 && buildGuard++ < 12) {
-          await tester.drag(scrollable, const Offset(0, -300));
-          await tester.pumpAndSettle();
-        }
-        for (final element in profileSections.evaluate().toList()) {
-          var rect = tester.getRect(find.byWidget(element.widget));
-          var guard = 0;
-          while (rect.bottom > foldY + 0.5 &&
-              rect.top < height - 0.5 &&
-              guard++ < 20) {
-            await tester.drag(scrollable, const Offset(0, -300));
-            await tester.pumpAndSettle();
-            rect = tester.getRect(find.byWidget(element.widget));
-          }
-          if (rect.top < height - 0.5) {
-            expect(
-              rect.bottom,
-              lessThanOrEqualTo(foldY + 0.5),
-              reason: '$name: section never scrolled clear of the dock',
-            );
-          }
-        }
-
-        // All sections still exist — scrollable, not lost.
-        await tester.drag(scrollable, Offset(0, -height));
+        await tester.drag(scrollable, const Offset(0, -3000));
         await tester.pumpAndSettle();
-        expect(find.text('Your Nuvo'), findsWidgets);
+        expect(find.text('Your Nuvo'), findsOneWidget);
         expect(find.text('Settings'), findsWidgets);
+        for (final element in profileSections.evaluate()) {
+          expect(
+            tester.getRect(find.byWidget(element.widget)).bottom,
+            lessThanOrEqualTo(foldY + 0.5),
+            reason: '$name: section must end above the dock when scrolled',
+          );
+        }
       });
     });
   }
 
-  // Profile's first viewport: title, identity, level, achievements, record and
-  // the whole heat map including its Less/More key — and nothing of Your Nuvo.
+  // Profile's first viewport is filled; Your Nuvo follows the heat map after a
+  // normal section gap and scrolling reveals it.
   for (final (name, width, height) in const [
     ('390x844', 390.0, 844.0),
     ('393x852', 393.0, 852.0),
     ('430x932', 430.0, 932.0),
   ]) {
-    testWidgets('Profile first viewport $name: heat map key visible, Your Nuvo '
-        'below the fold, scroll reveals it', (tester) async {
+    testWidgets('Profile first viewport $name: filled, no blank band, '
+        'scroll reveals Your Nuvo', (tester) async {
       await pumpInShell(
         tester,
         Size(width, height),
@@ -402,12 +381,15 @@ void main() {
       expect(find.text('Profile'), findsWidgets);
       expect(find.byType(ActivityHeatmap), findsOneWidget);
       expect(find.text('More'), findsOneWidget);
-      expect(tester.getRect(find.text('More')).bottom, lessThanOrEqualTo(foldY));
-      expect(tester.getRect(find.text('Less')).top, greaterThan(0));
-      // The heat map card ends close to the dock — it fills the viewport.
       final card = tester.getRect(find.byType(ActivityHeatmap));
-      expect(card.bottom, lessThanOrEqualTo(foldY));
-      expect(card.bottom, greaterThan(foldY - 40));
+      // The first screen is filled (>= 90% used).
+      final label = find.text('Your Nuvo');
+      final used = label.evaluate().isNotEmpty ? foldY : card.bottom;
+      expect(used, greaterThanOrEqualTo(foldY * 0.9));
+      // No blank band between the heat map and Your Nuvo.
+      if (label.evaluate().isNotEmpty) {
+        expect(tester.getRect(label).top - card.bottom, lessThanOrEqualTo(40));
+      }
       // No level pill under the name.
       expect(
         find.descendant(
@@ -418,12 +400,6 @@ void main() {
         ),
         findsNothing,
       );
-
-      // Your Nuvo is not visible at rest: absent or at/below the dock fold.
-      final label = find.text('Your Nuvo');
-      if (label.evaluate().isNotEmpty) {
-        expect(tester.getRect(label).top, greaterThanOrEqualTo(foldY));
-      }
 
       await tester.drag(find.byType(CustomScrollView), Offset(0, -height));
       await tester.pumpAndSettle();

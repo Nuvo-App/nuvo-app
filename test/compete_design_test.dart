@@ -193,26 +193,17 @@ void main() {
       expect(find.byType(NuvoFinishedSummary), findsOneWidget);
     });
 
-    testWidgets('quick starts section renders its tiles', (tester) async {
+    testWidgets('Compete does not show quick starts', (tester) async {
       await tester.pumpWidget(_buildApp(_StubRaceRepo([_cameraRace()])));
       await tester.pumpAndSettle();
-      // Quick starts sit below the fold until the page is scrolled.
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
       await tester.pumpAndSettle();
-      expect(find.text('Quick starts'), findsOneWidget);
-      // 5 quick start tiles.
-      expect(find.text('Pushups'), findsOneWidget);
-      expect(find.text('Squats'), findsOneWidget);
-      expect(find.text('Jumping Jacks'), findsOneWidget);
-      expect(find.text('Lunges'), findsOneWidget);
-      expect(find.text('Plank'), findsOneWidget);
-      // Each tile reads as a game preset — "First to N", not "N reps".
-      expect(find.text('First to 100'), findsOneWidget);
-      expect(find.text('First to 500'), findsOneWidget);
-      expect(find.text('300-sec hold'), findsOneWidget);
+      expect(find.text('Quick starts'), findsNothing);
+      expect(find.text('First to 100'), findsNothing);
+      expect(find.text('300-sec hold'), findsNothing);
     });
 
-    testWidgets('quick start tiles do not overflow at 320px', (tester) async {
+    testWidgets('Compete does not overflow at 320px', (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -225,8 +216,6 @@ void main() {
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // The narrowest tile still shows its full preset line.
-      expect(find.text('First to 100'), findsOneWidget);
     });
 
     testWidgets('active race row shows progress, not placement', (

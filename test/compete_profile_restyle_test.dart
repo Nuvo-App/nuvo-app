@@ -618,7 +618,7 @@ void main() {
         // stay unlaid-out until scrolled to — assert presence with
         // skipOffstage off, then drag to the bottom to exercise the whole
         // scroll path (throws if content overflows the list).
-        for (final label in ['Waiting for friends', 'Finished', 'Quick starts']) {
+        for (final label in ['Waiting for friends', 'Finished']) {
           expect(
             find.text(label, skipOffstage: false),
             findsOneWidget,
@@ -633,7 +633,7 @@ void main() {
           await tester.drag(pageScroll, const Offset(0, -300));
           await tester.pump(const Duration(milliseconds: 80));
         }
-        expect(find.text('Quick starts'), findsOneWidget);
+        expect(find.text('Quick starts'), findsNothing);
         expect(tester.takeException(), isNull);
       });
     }

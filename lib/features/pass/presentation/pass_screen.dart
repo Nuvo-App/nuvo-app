@@ -567,10 +567,9 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                     // field bleeds edge-to-edge while content keeps the 20 inset.
                     SliverFoldFit(
                       foldInset: NuvoBottomNav.bottomPadding(context) - 10,
-                      enabled:
-                          !passLoading &&
-                          passError == null &&
-                          !_searchOpen,
+                      // Natural flow: one scroll view, fixed spacing between
+                      // sections. No fold fitting on this page.
+                      enabled: false,
                       children: [
                         const FoldGap(20),
                         // ── Header ───────────────────────────────────────────────────
@@ -815,8 +814,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                                 ],
                               ),
                             ),
-                            // Flexible, so the fold fit can tighten or grow it.
-                            const FoldGap(32),
+                            const FoldGap(20),
                             // Races running with the crew, one section each,
                             // so the first screen can fit whole cards.
                             ..._CrewRacesNow(

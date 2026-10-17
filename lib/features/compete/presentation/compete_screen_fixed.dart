@@ -10,13 +10,11 @@ import '../../../core/theme/app_geometry.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/theme/nuvo_responsive.dart';
 import '../../../core/widgets/bottom_nav.dart';
-import '../../../core/widgets/sliver_fold_guard.dart';
 import '../../../core/widgets/nuvo_button.dart';
 import '../../../core/widgets/nuvo_empty_state.dart';
 import '../../../core/widgets/nuvo_error_state.dart';
 import '../../../core/widgets/nuvo_race_components.dart';
 import '../../../core/widgets/nuvo_motion.dart';
-import '../../../core/widgets/pressable_scale.dart';
 import '../../auth/presentation/auth_controller.dart';
 import '../../races/data/race_models.dart';
 import '../../races/domain/motion_activity.dart';
@@ -32,7 +30,6 @@ import '../../onboarding/presentation/first_use_guide.dart';
 /// 2. "Your races" compact list (capped at 3, inline See all)
 /// 3. Waiting-for-crew summary (NuvoWaitingCrewSummary)
 /// 4. Finished summary (NuvoFinishedSummary)
-/// 5. Quick Starts in a compact 2-column wrap (NuvoQuickStart)
 ///
 /// Visual presentation rebuilt with race product components that encode
 /// competition, placement, crew completeness, and results — not generic cards.
@@ -48,48 +45,8 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
   bool _waitingExpanded = false;
   bool _finishedExpanded = false;
 
-  /// How many races the field lists before "show more", and how much extra
-  /// breathing room each row gets: as many rows as the first screen has room
-  /// for (so it fills without cutting a row), at least one. Row, header and
-  /// summary heights grow with the text scale; the fold sits above the nav.
-  ({int cap, double rowGap}) _racesFit(
-    BuildContext context,
-    bool hasWaiting,
-    bool hasFinished,
-    int raceCount,
-  ) {
-    // Wider surfaces (tablets) keep the classic three.
-    if (MediaQuery.sizeOf(context).width > 500) return (cap: 3, rowGap: 0);
-    final s = MediaQuery.textScalerOf(context).scale(1);
-    final line =
-        MediaQuery.sizeOf(context).height -
-        NuvoBottomNav.bottomPadding(context) +
-        10;
-    // Where the first row starts: status bar, header, gap, field title.
-    final top =
-        MediaQuery.paddingOf(context).top + 192 + 66.7 * (s - 1);
-    final rowH = 72 + 40 * s;
-    const stride = 9.0; // divider + its spacing
-    const fieldFoot = 8.0;
-    final summaryH = 49 + 30 * (s - 1);
-    final below =
-        (hasWaiting ? 24 + summaryH : 0) + (hasFinished ? 24 + summaryH : 0);
-    double used(int n) =>
-        top + n * rowH + (n - 1) * stride + fieldFoot + below;
-    var n = 1;
-    while (n < 6 && used(n + 1) <= line) {
-      n++;
-    }
-    // Spare room after the rows shows up as air between them (bounded),
-    // after the gaps between sections have taken their share.
-    final shown = raceCount < n ? raceCount : n;
-    var gap = 0.0;
-    if (shown > 1) {
-      final spare = line - used(shown) - 48;
-      gap = (spare / (2 * (shown - 1))).clamp(0.0, 10.0);
-    }
-    return (cap: n, rowGap: gap);
-  }
+  /// How many races the field lists before "See all".
+  static const _racesCap = 3;
 
   /// The field body bleeds 10px past the page gutter — a region, not a card
   /// in a row of cards.
@@ -125,16 +82,9 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                   parent: AlwaysScrollableScrollPhysics(),
                 ),
                 slivers: [
-                  // The first screen is fitted as a whole: sections above the
-                  // fold are never cut, the gaps flex to fill the screen, and
-                  // Quick starts begin below the fold (see SliverFoldFit).
-                  SliverFoldFit(
-                    foldInset: NuvoBottomNav.bottomPadding(context) - 10,
-                    enabled:
-                        !_racesExpanded &&
-                        !_waitingExpanded &&
-                        !_finishedExpanded,
-                    children: [
+                  // Natural flow: sections stack at fixed spacing and scroll.
+                  SliverList(
+                    delegate: SliverChildListDelegate([
                       _CompactHeader(
                         activeCount: active.length,
                         finishedCount: finished.length,
@@ -148,7 +98,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                         },
                         onJoin: () => context.push('/races/join'),
                       ),
-                      const FoldGap(NuvoSpacing.xl),
+                      const SizedBox(height: NuvoSpacing.xl),
                       for (final w in <Widget>[
                         if (raceState.loading && raceState.races.isEmpty)
                           const _CompeteSkeleton(
@@ -173,21 +123,14 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                               races: inMotion,
                               userId: uid,
                               expanded: _racesExpanded,
-                              fit: _racesFit(
-                                context,
-                                waiting.isNotEmpty,
-                                finished.isNotEmpty,
-                                inMotion.length,
-                              ),
+                              cap: _racesCap,
                               onToggleExpand: () => setState(
                                 () => _racesExpanded = !_racesExpanded,
                               ),
                               onOpen: (race) =>
                                   context.push('/race/${race.id}'),
                             ),
-                            // Back to canvas — a real section beat separates the
-                            // field from the secondary destinations below it.
-                            const FoldGap(NuvoSpacing.xl),
+                            const SizedBox(height: NuvoSpacing.lg),
                           ],
                           if (waiting.isNotEmpty) ...[
                             NuvoWaitingCrewSummary(
@@ -199,7 +142,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 () => _waitingExpanded = !_waitingExpanded,
                               ),
                               children: [
-                                const FoldGap(NuvoSpacing.sm),
+                                const SizedBox(height: NuvoSpacing.sm),
                                 _SummaryExpansionList(
                                   races: waiting,
                                   userId: uid,
@@ -208,7 +151,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 ),
                               ],
                             ),
-                            const FoldGap(NuvoSpacing.sm),
+                            const SizedBox(height: NuvoSpacing.lg),
                           ],
                           if (finished.isNotEmpty) ...[
                             NuvoFinishedSummary(
@@ -219,7 +162,7 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 () => _finishedExpanded = !_finishedExpanded,
                               ),
                               children: [
-                                const FoldGap(NuvoSpacing.sm),
+                                const SizedBox(height: NuvoSpacing.sm),
                                 _FinishedExpansionList(
                                   races: finished,
                                   userId: uid,
@@ -228,36 +171,22 @@ class _CompeteScreenState extends ConsumerState<CompeteScreen> {
                                 ),
                               ],
                             ),
-                            const FoldGap(NuvoSpacing.sm),
+                            const SizedBox(height: NuvoSpacing.lg),
                           ],
                         ],
                       ])
-                        w is FoldGap
-                            ? w
-                            : Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: NuvoSpacing.pageHorizontal,
-                                ),
-                                child: w,
-                              ),
-                      if (raceState.races.isNotEmpty && cameraRaces.isNotEmpty)
-                        FoldBelow(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: NuvoSpacing.pageHorizontal,
-                            ),
-                            child: _QuickStarts(
-                              onStart: (prefill) =>
-                                  context.push('/races/new', extra: prefill),
-                            ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NuvoSpacing.pageHorizontal,
                           ),
+                          child: w,
                         ),
                       SizedBox(
                         height:
                             NuvoBottomNav.bottomPadding(context) +
                             NuvoSpacing.sm,
                       ),
-                    ],
+                    ]),
                   ),
                 ],
               ),
@@ -461,7 +390,7 @@ class _CappedRaceList extends StatelessWidget {
     required this.races,
     required this.userId,
     required this.expanded,
-    required this.fit,
+    required this.cap,
     required this.onToggleExpand,
     required this.onOpen,
   });
@@ -469,13 +398,12 @@ class _CappedRaceList extends StatelessWidget {
   final List<Race> races;
   final String? userId;
   final bool expanded;
-  final ({int cap, double rowGap}) fit;
+  final int cap;
   final VoidCallback onToggleExpand;
   final ValueChanged<Race> onOpen;
 
   @override
   Widget build(BuildContext context) {
-    final cap = fit.cap;
     final visible = expanded ? races : races.take(cap).toList();
     final hasMore = races.length > cap;
     // The active-races field — a middle plane between the hero and the
@@ -553,9 +481,9 @@ class _CappedRaceList extends StatelessWidget {
           // says why (see [competeRowStatus]). A hairline separates strips.
           for (var i = 0; i < visible.length; i++) ...[
             if (i > 0) ...[
-              SizedBox(height: NuvoSpacing.xs + (expanded ? 0 : fit.rowGap)),
+              const SizedBox(height: NuvoSpacing.xs),
               Divider(height: 1, thickness: 1, color: c.divider),
-              SizedBox(height: NuvoSpacing.xs + (expanded ? 0 : fit.rowGap)),
+              const SizedBox(height: NuvoSpacing.xs),
             ],
             _buildRow(context, visible[i], i + 1),
           ],
@@ -822,175 +750,6 @@ class _FinishedExpansionList extends StatelessWidget {
       participantCount: race.participantCount,
       avatars: avatars,
       onTap: () => onOpen(race),
-    );
-  }
-}
-
-// ── Quick Starts (playable race presets) ──────────────────────────────────────
-
-class _QuickStarts extends StatelessWidget {
-  const _QuickStarts({required this.onStart});
-  final ValueChanged<RaceCreatePrefill> onStart;
-
-  static const double _tileHeight = 96;
-
-  static final _items = [
-    (
-      icon: Icons.fitness_center_rounded,
-      movementName: 'Pushups',
-      format: 'First to 100',
-      prefill: RaceCreatePrefill.pushups,
-    ),
-    (
-      icon: Icons.sports_kabaddi_rounded,
-      movementName: 'Squats',
-      format: 'First to 15',
-      prefill: RaceCreatePrefill.squats,
-    ),
-    (
-      icon: Icons.accessibility_new_rounded,
-      movementName: 'Jumping Jacks',
-      format: 'First to 500',
-      prefill: RaceCreatePrefill.jumpingJacks,
-    ),
-    (
-      icon: Icons.directions_walk_rounded,
-      movementName: 'Lunges',
-      format: 'First to 40',
-      prefill: RaceCreatePrefill.lunges,
-    ),
-    (
-      icon: Icons.timer_outlined,
-      movementName: 'Plank',
-      format: '300-sec hold',
-      prefill: RaceCreatePrefill.plank,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    // One continuous grid — the dock's occlusion mask hides whatever
-    // crosses the fold, and scroll reveals it. Rows flow at the wrap's
-    // run spacing; a lone last item spans the row instead of sitting as
-    // a broken half-tile.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final itemWidth = (constraints.maxWidth - NuvoSpacing.sm) / 2;
-        // Tiles grow with the text scale so the name + format never overflow.
-        final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
-        final tileHeight =
-            _tileHeight + (textScale > 1 ? (textScale - 1) * 44 : 0);
-        Widget tile(int i) {
-          final item = _items[i];
-          return SizedBox(
-            width: i == _items.length - 1 && _items.length.isOdd
-                ? constraints.maxWidth
-                : itemWidth,
-            height: tileHeight,
-            child: _QuickStartTile(
-              icon: item.icon,
-              movementName: item.movementName,
-              format: item.format,
-              onTap: () => onStart(item.prefill),
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: NuvoSpacing.lg),
-            Text('Quick starts', style: AppTextStyles.sectionTitle),
-            const SizedBox(height: NuvoSpacing.sm),
-            Wrap(
-              spacing: NuvoSpacing.sm,
-              runSpacing: NuvoSpacing.sm,
-              children: [for (var i = 0; i < _items.length; i++) tile(i)],
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// A playable race preset. One visual contract for every tile: quiet
-/// navy border on white, movement icon in an ice well, movement name,
-/// then the game format in blue — pick a game, not a configuration.
-/// No alternating fills: a tile is tappable or it doesn't exist.
-class _QuickStartTile extends StatelessWidget {
-  const _QuickStartTile({
-    required this.icon,
-    required this.movementName,
-    required this.format,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String movementName;
-  final String format;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      scale: 0.96,
-      child: Container(
-        padding: const EdgeInsets.all(NuvoSpacing.md),
-        decoration: BoxDecoration(
-          color: context.themeColors.surface,
-          borderRadius: BorderRadius.circular(NuvoRadii.md),
-          border: Border.all(color: context.themeColors.border, width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: context.themeColors.surface,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Icon(icon, color: context.themeColors.ink, size: 17),
-                ),
-                const Spacer(),
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  color: context.themeColors.inkDim,
-                  size: 15,
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              movementName,
-              style: AppTextStyles.titleMedium.copyWith(
-                fontSize: 14,
-                height: 1.1,
-                color: context.themeColors.ink,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              format,
-              style: AppTextStyles.raceRowMeta.copyWith(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: context.themeColors.accent,
-                letterSpacing: 0.2,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
