@@ -7,6 +7,7 @@
 // Nuvo-language headlines are composed here, in the app — the server stays
 // copy-free for event rows (§14: copy lives client-side).
 import '../domain/nuvo_destination.dart';
+import 'package:nuvo/core/utils/json_safe.dart';
 
 /// The shipped reaction set. Wire codes, not emoji — the UI owns the glyphs.
 const kReactionEmojis = ['fire', 'clap', 'muscle'];
@@ -39,11 +40,9 @@ class CrewLiveRace {
   final DateTime? endsAt;
 
   factory CrewLiveRace.fromJson(Map<String, dynamic> j) => CrewLiveRace(
-        title: j['title'] as String? ?? 'Live race',
-        endsAt: DateTime.tryParse(j['endsAt'] as String? ?? ''),
-        participants: (j['participants'] as List<dynamic>? ?? [])
-            .map((e) =>
-                CrewLiveParticipant.fromJson(e as Map<String, dynamic>))
+        title: jStr(j['title']) ?? 'Live race',
+        endsAt: DateTime.tryParse(jStr(j['endsAt']) ?? ''),
+        participants: jMapList(j['participants']).map(CrewLiveParticipant.fromJson)
             .toList(),
       );
 }
@@ -65,11 +64,11 @@ class CrewLiveParticipant {
 
   factory CrewLiveParticipant.fromJson(Map<String, dynamic> j) =>
       CrewLiveParticipant(
-        name: j['name'] as String? ?? 'Racer',
-        score: (j['score'] as num?)?.toInt() ?? 0,
-        rank: (j['rank'] as num?)?.toInt(),
-        isMe: j['isMe'] as bool? ?? false,
-        isCrew: j['isCrew'] as bool? ?? false,
+        name: jStr(j['name']) ?? 'Racer',
+        score: jInt(j['score']) ?? 0,
+        rank: jInt(j['rank']),
+        isMe: jBool(j['isMe']) ?? false,
+        isCrew: jBool(j['isCrew']) ?? false,
       );
 }
 
@@ -161,7 +160,7 @@ class CrewActivityItem {
       case 'progress_accepted':
         return '$who submitted proof in $race';
       case 'rank_changed':
-        final rank = (payload['newRank'] as num?)?.toInt();
+        final rank = jInt(payload['newRank']);
         return rank != null
             ? '$who moved to #$rank in $race'
             : '$who moved up in $race';
@@ -170,7 +169,7 @@ class CrewActivityItem {
       case 'attempt_started':
         return '$who started an attempt in $race';
       case 'attempt_completed':
-        final score = (payload['score'] as num?)?.toInt();
+        final score = jInt(payload['score']);
         return score != null
             ? '$who locked in $score in $race'
             : '$who finished an attempt in $race';
@@ -222,33 +221,33 @@ class CrewActivityItem {
       }
     }
     return CrewActivityItem(
-      id: j['id'] as String? ?? '',
-      type: j['type'] as String? ?? 'unknown',
+      id: jStr(j['id']) ?? '',
+      type: jStr(j['type']) ?? 'unknown',
       occurredAt:
-          DateTime.tryParse(j['occurredAt'] as String? ?? '')?.toUtc() ??
+          DateTime.tryParse(jStr(j['occurredAt']) ?? '')?.toUtc() ??
               DateTime.now().toUtc(),
       actor: actor == null
           ? null
           : CrewActivityActor(
-              id: actor['id'] as String? ?? '',
-              displayName: actor['displayName'] as String? ?? 'Nuvo member',
-              profilePhotoUrl: actor['profilePhotoUrl'] as String?,
+              id: jStr(actor['id']) ?? '',
+              displayName: jStr(actor['displayName']) ?? 'Nuvo member',
+              profilePhotoUrl: jStr(actor['profilePhotoUrl']),
             ),
-      raceId: j['raceId'] as String?,
-      raceTitle: j['raceTitle'] as String?,
-      title: j['title'] as String?,
-      summary: j['summary'] as String?,
+      raceId: jStr(j['raceId']),
+      raceTitle: jStr(j['raceTitle']),
+      title: jStr(j['title']),
+      summary: jStr(j['summary']),
       payload: j['payload'] is Map
           ? Map<String, dynamic>.from(j['payload'] as Map)
           : const {},
-      entityType: j['entityType'] as String?,
-      entityId: j['entityId'] as String?,
+      entityType: jStr(j['entityType']),
+      entityId: jStr(j['entityId']),
       destination: NuvoDestination.fromDescriptor(
         j['destination'] as Map<String, dynamic>?,
       ),
-      read: j['read'] as bool? ?? true,
+      read: jBool(j['read']) ?? true,
       reactions: reactions,
-      myReaction: j['myReaction'] as String?,
+      myReaction: jStr(j['myReaction']),
     );
   }
 }

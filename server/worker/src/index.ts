@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { cors } from 'hono/cors';
 import type { AppEnv, ProfileRow } from './types';
 import { purgeExpiredMotionData } from './lib/motion_privacy';
@@ -39,6 +41,13 @@ import { inviteAvailability, looksLikeInviteToken } from './lib/invites';
 
 const app = new Hono<AppEnv>();
 
+/** Reported by GET /health; bump with package.json. */
+const WORKER_VERSION = '0.1.0';
+
+function errorMessage(err: unknown): string {
+  return (err instanceof Error ? err.message : String(err)).slice(0, 300);
+}
+
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // Native apps (Flutter) do not send an Origin header, so they bypass CORS
 // entirely. This only applies to browser callers (web dashboard, local dev).
@@ -74,7 +83,18 @@ app.use(
 // crews: crew groups (/squads) exist on this worker. Older workers omit it, so
 // the app keeps the Crews entry hidden until the backend actually has them.
 app.get('/config', async (c) => {
-  const env = c.env as unknown as Record<string, string | undefined>;
+  try {
+    return await buildConfigResponse(c);
+  } catch (err) {
+    // Fail-safe: /config is read on every app start; it must never 500.
+    console.error(JSON.stringify({ evt: 'config_fallback', message: errorMessage(err) }));
+    c.header('Cache-Control', 'no-store');
+    return c.json({ custom_motion: false, crews: true });
+  }
+});
+
+async function buildConfigResponse(c: Context<AppEnv>) {
+  const env = (c.env ?? {}) as unknown as Record<string, string | undefined>;
   const settle = Number(env.CLIP_SETTLE_FACTOR);
   let customMotion = env.CUSTOM_MOTION_ENABLED === 'true';
   // Optional login: lets a short allowlist (CUSTOM_MOTION_USERS) see the
@@ -106,10 +126,30 @@ app.get('/config', async (c) => {
       ? { clip_settle_factor: settle }
       : {}),
   });
-});
+}
 
 // ── Health ────────────────────────────────────────────────────────────────────
-app.get('/health', (c) => c.json({ ok: true, service: 'nuvo-api', ts: Date.now() }));
+// Always 200 so an uptime probe can tell "Worker is serving" (ok) from "D1 is
+// unreachable" (db:false) without the probe itself looking like an outage.
+// Unauthenticated and free of secrets: it only runs `SELECT 1`.
+app.get('/health', async (c) => {
+  let db = true;
+  try {
+    await c.env.DB.prepare('SELECT 1').first();
+  } catch (err) {
+    db = false;
+    console.error(JSON.stringify({ evt: 'health_db_failed', message: errorMessage(err) }));
+  }
+  c.header('Cache-Control', 'no-store');
+  return c.json({
+    ok: true,
+    service: 'nuvo-api',
+    version: WORKER_VERSION,
+    time: new Date().toISOString(),
+    ts: Date.now(),
+    db,
+  });
+});
 
 // ── Universal-link / App-Link association + invite web fallback ────────────────
 // Public, unauthenticated, cacheable. The invite link host is this Worker's
@@ -397,13 +437,45 @@ app.post('/onboarding/complete', requireAuth, async (c) => {
 });
 
 // ── Error handlers ────────────────────────────────────────────────────────────
+// Every uncaught throw ends here: one structured log line (never the stack to
+// the client), one JSON body the app can show. Never HTML, never internals.
 app.onError((err, c) => {
-  // Never expose internal error details in production
-  console.error('[worker] unhandled error:', err.message);
-  return c.json({ ok: false, error: 'Internal server error' }, 500);
+  if (err instanceof HTTPException) {
+    // Deliberate HTTP errors (malformed body from the framework, etc.) keep
+    // their status but still answer in the standard JSON envelope.
+    const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+    if (status < 500) {
+      return c.json({ ok: false, error: 'That request could not be processed.', code: 'bad_request' }, status as 400);
+    }
+  }
+  let userId: string | undefined;
+  try {
+    userId = c.get('userId') as string | undefined;
+  } catch {
+    userId = undefined;
+  }
+  let route = '';
+  try {
+    route = c.req.routePath || new URL(c.req.url).pathname;
+  } catch {
+    route = '';
+  }
+  console.error(
+    JSON.stringify({
+      evt: 'server_error',
+      route,
+      method: c.req.method,
+      ...(userId ? { userId } : {}),
+      message: errorMessage(err),
+    }),
+  );
+  return c.json(
+    { ok: false, error: 'Something went wrong on our side. Try again.', code: 'server_error' },
+    500,
+  );
 });
 
-app.notFound((c) => c.json({ ok: false, error: 'Not found' }, 404));
+app.notFound((c) => c.json({ ok: false, error: 'Not found', code: 'not_found' }, 404));
 
 // Keep the Hono request surface intact for local tests while exposing the
 // Cloudflare scheduled handler used for the 90-day motion-data purge and the

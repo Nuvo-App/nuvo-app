@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:nuvo/core/utils/json_safe.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -31,7 +32,7 @@ class ProfileActivityApi {
     if (body is Map && body['days'] is List) {
       for (final d in body['days'] as List) {
         if (d is Map && d['date'] is String && d['proofs'] is num) {
-          out[d['date'] as String] = (d['proofs'] as num).toInt();
+          out[(jStr(d['date']) ?? '')] = (d['proofs'] as num).toInt();
         }
       }
     }

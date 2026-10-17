@@ -3,6 +3,7 @@
 // forever), transport errors map to ApiException, JSON decode tolerates
 // non-JSON error bodies. See docs/agents/10-pitfalls-and-fixes.md §A1.
 import 'dart:async';
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -69,7 +70,7 @@ class ArenaApi {
     if (res.statusCode >= 400) {
       throw ApiException(
         res.statusCode,
-        json['error'] as String? ?? 'Request failed',
+        jStr(json['error']) ?? 'Request failed',
       );
     }
     final snapshot = json['snapshot'];

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { requireAuth } from '../lib/jwt';
+import { clampedInt, readJsonObject } from '../lib/safe';
 import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import {
   CATEGORY_DEFAULTS,
@@ -50,7 +51,7 @@ function serialize(row: NotificationRow) {
 // GET /notifications?cursor=<iso>&limit=<n>
 notificationsRouter.get('/', async (c) => {
   const userId = c.get('userId');
-  const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 30), 1), 50);
+  const limit = clampedInt(c.req.query('limit'), 30, 1, 50);
   const cursor = c.req.query('cursor');
 
   const rows = await c.env.DB.prepare(
@@ -158,12 +159,8 @@ notificationsRouter.get('/preferences', async (c) => {
 // PATCH /notification-preferences  { category, inApp?, push? }
 notificationsRouter.patch('/preferences', async (c) => {
   const userId = c.get('userId');
-  let body: { category?: unknown; inApp?: unknown; push?: unknown };
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
-  }
+  const body = (await readJsonObject(c)) as { category?: unknown; inApp?: unknown; push?: unknown } | null;
+  if (!body) return c.json({ ok: false, error: 'Invalid JSON body' }, 400);
   const category = body.category as NotificationCategory;
   if (!NOTIFICATION_CATEGORIES.includes(category)) {
     return c.json({ ok: false, error: 'Unknown category' }, 400);

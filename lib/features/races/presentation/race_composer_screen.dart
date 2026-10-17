@@ -28,6 +28,7 @@ import '../../auth/data/auth_api.dart';
 import '../ai/custom_pose/custom_pose_verifier_spec.dart';
 import '../ai/motion_v2/motion_v2_models.dart';
 import '../ai/motion_v2/motion_v2_verifier_runtime.dart';
+import '../data/race_api.dart' show RaceApiException;
 import '../data/race_models.dart';
 import '../domain/motion_activity.dart';
 import '../domain/motion_activity_catalog.dart';
@@ -600,7 +601,9 @@ class _RaceComposerScreenState extends ConsumerState<RaceComposerScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _lastApiError = e.message;
+          _lastApiError = e is RaceApiException
+              ? '${e.message} [code=${e.code}, field=${e.field}]'
+              : e.message;
           _lastApiStatusCode = e.statusCode;
           _error = e.statusCode >= 500
               ? "Couldn't create the race. Try again."

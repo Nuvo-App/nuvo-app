@@ -7,6 +7,7 @@
 // TimeoutException/SocketException/ClientException) and _decode() (tolerates
 // non-JSON / empty error bodies). A raw `_client.get(...)` with no timeout will
 // hang a stalled socket forever and wedge the races tab — do not add one.
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -132,6 +133,26 @@ class VerificationSessionHandshake {
 
   final VerificationSession session;
   final Map<String, dynamic> verifier;
+}
+
+/// [ApiException] that also carries the Worker's machine-readable `code` and
+/// the offending `field`, when the error body includes them. The message is
+/// always the server's friendly `error` text.
+class RaceApiException extends ApiException {
+  const RaceApiException(
+    super.statusCode,
+    super.message, {
+    this.code,
+    this.field,
+  });
+
+  final String? code;
+  final String? field;
+
+  @override
+  String toString() =>
+      'ApiException $statusCode: $message${code == null ? '' : ' [$code]'}'
+      '${field == null ? '' : ' (field: $field)'}';
 }
 
 class RaceApi {
@@ -444,9 +465,14 @@ class RaceApi {
       }
     }
     if (res.statusCode >= 400) {
-      throw ApiException(
+      final friendly = jStr(parsed?['error']);
+      throw RaceApiException(
         res.statusCode,
-        parsed?['error'] as String? ?? 'Request failed',
+        (friendly == null || friendly.trim().isEmpty)
+            ? 'Request failed'
+            : friendly,
+        code: jStr(parsed?['code']),
+        field: jStr(parsed?['field']),
       );
     }
     return parsed ?? <String, dynamic>{};
@@ -508,9 +534,9 @@ class RaceApi {
       return Conditional.notModified(etag: res.headers['etag'] ?? etag);
     }
     final json = _decode(res);
-    final raw = json['races'] as List<dynamic>;
+    final raw = jMapList(json['races']);
     return Conditional(
-      data: raw.map((r) => Race.fromJson(r as Map<String, dynamic>)).toList(),
+      data: raw.map(Race.fromJson).toList(),
       etag: res.headers['etag'],
       raw: raw,
     );
@@ -534,16 +560,12 @@ class RaceApi {
     ).replace(queryParameters: {'q': query});
     final res = await _guard(() => _client.get(uri, headers: _headers(token)));
     final json = _decode(res);
-    return (json['users'] as List<dynamic>)
-        .map((u) => PublicUser.fromJson(u as Map<String, dynamic>))
-        .toList();
+    return jMapList(json['users']).map(PublicUser.fromJson).toList();
   }
 
   Future<List<PublicUser>> getCrew(String token) async {
     final json = await _get('/crew', token);
-    return (json['crew'] as List<dynamic>)
-        .map((u) => PublicUser.fromJson(u as Map<String, dynamic>))
-        .toList();
+    return jMapList(json['crew']).map(PublicUser.fromJson).toList();
   }
 
   Future<PublicUser?> addCrewUser(String token, String userId) async {
@@ -597,7 +619,7 @@ class RaceApi {
     if (proofMode != null) body['proofMode'] = proofMode;
     if (scoreDirection != null) body['scoreDirection'] = scoreDirection;
     final json = await _post('/races', token, body);
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> createCustomRace(
@@ -651,7 +673,7 @@ class RaceApi {
           ? motionV2Spec.toJson()
           : verifierSpec!.toJson(),
     });
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> updateRace(
@@ -690,7 +712,7 @@ class RaceApi {
     if (targetUnit != null) body['targetUnit'] = targetUnit;
     if (proofMode != null) body['proofMode'] = proofMode;
     final json = await _patch('/races/$id', token, body);
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Conditional<Race>> getRaceDetail(
@@ -703,7 +725,7 @@ class RaceApi {
       return Conditional.notModified(etag: res.headers['etag'] ?? etag);
     }
     final json = _decode(res);
-    final raw = json['race'] as Map<String, dynamic>;
+    final raw = jMap(json['race']) ?? const <String, dynamic>{};
     return Conditional(
       data: Race.fromJson(raw),
       etag: res.headers['etag'],
@@ -723,7 +745,7 @@ class RaceApi {
     if (note != null) body['note'] = note;
     if (mediaObjectKey != null) body['mediaObjectKey'] = mediaObjectKey;
     final json = await _post('/races/$raceId/proof', token, body);
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   /// Step 1 of proof evidence upload: a signed PUT URL + object key scoped to
@@ -758,7 +780,7 @@ class RaceApi {
       ),
       if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
     });
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> submitObjectCompositionProof(
@@ -796,7 +818,7 @@ class RaceApi {
       'validatorVersion': validatorVersion,
       if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
     });
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> submitCustomPoseProof(
@@ -814,17 +836,17 @@ class RaceApi {
       ),
       if (sessionResult != null) 'sessionResult': sessionResult.toJson(),
     });
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> archiveRace(String token, String id) async {
     final json = await _post('/races/$id/archive', token, {});
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> cancelRace(String token, String id) async {
     final json = await _post('/races/$id/cancel', token, {});
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<void> deleteRace(String token, String id) async {
@@ -837,7 +859,7 @@ class RaceApi {
 
   Future<Race> joinRace(String token, String id) async {
     final json = await _post('/races/$id/join', token, {});
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> addRaceParticipant(
@@ -848,17 +870,17 @@ class RaceApi {
     final json = await _post('/races/$raceId/participants', token, {
       'userId': userId,
     });
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<String> createInviteCode(String token, String id) async {
     final json = await _post('/races/$id/invite-code', token, {});
-    return json['inviteCode'] as String;
+    return jStr(json['inviteCode']) ?? '';
   }
 
   Future<Race> joinRaceByCode(String token, String code) async {
     final json = await _post('/races/join-code', token, {'code': code});
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   Future<Race> reviewProof(
@@ -871,7 +893,7 @@ class RaceApi {
     final body = <String, dynamic>{'verificationStatus': status};
     if (summary != null) body['verificationSummary'] = summary;
     final json = await _patch('/races/$raceId/proofs/$proofId', token, body);
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   /// Community veto — dispute whether this proof should count in this race.
@@ -906,7 +928,7 @@ class RaceApi {
   /// race and returns it ready to race.
   Future<Race> rematchRace(String token, String raceId) async {
     final json = await _post('/races/$raceId/rematch', token, {});
-    return Race.fromJson(json['race'] as Map<String, dynamic>);
+    return Race.fromJson(jMap(json['race']) ?? const {});
   }
 
   /// Compact live-state payload for polling screens — no proof history.

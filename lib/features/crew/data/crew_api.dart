@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -104,18 +105,18 @@ class PublicProfileCard {
   final PublicRacesWithYou? racesWithYou;
 
   factory PublicProfileCard.fromJson(Map<String, dynamic> j) => PublicProfileCard(
-        id: j['id'] as String,
-        displayName: j['displayName'] as String? ?? 'Nuvo member',
-        initials: j['initials'] as String? ?? 'N',
-        connectionStatus: crewConnectionStatusFrom(j['connectionStatus'] as String?),
-        username: j['username'] as String?,
-        memberId: j['memberId'] as String?,
-        profilePhotoUrl: j['profilePhotoUrl'] as String?,
-        lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
-        level: j['level'] as int?,
-        levelProgress: (j['levelProgress'] as num?)?.toDouble(),
-        achievementsEarned: j['achievementsEarned'] as int?,
-        achievementsTotal: j['achievementsTotal'] as int?,
+        id: (jStr(j['id']) ?? ''),
+        displayName: jStr(j['displayName']) ?? 'Nuvo member',
+        initials: jStr(j['initials']) ?? 'N',
+        connectionStatus: crewConnectionStatusFrom(jStr(j['connectionStatus'])),
+        username: jStr(j['username']),
+        memberId: jStr(j['memberId']),
+        profilePhotoUrl: jStr(j['profilePhotoUrl']),
+        lastActiveAt: DateTime.tryParse(jStr(j['lastActiveAt']) ?? ''),
+        level: jInt(j['level']),
+        levelProgress: jDouble(j['levelProgress']),
+        achievementsEarned: jInt(j['achievementsEarned']),
+        achievementsTotal: jInt(j['achievementsTotal']),
         featured: (j['featuredAchievements'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(PublicFeaturedBadge.fromJson)
@@ -151,9 +152,9 @@ class PublicRacesWithYou {
 
   factory PublicRacesWithYou.fromJson(Map<String, dynamic> j) =>
       PublicRacesWithYou(
-        total: j['total'] as int? ?? 0,
-        viewerWins: j['viewerWins'] as int? ?? 0,
-        targetWins: j['targetWins'] as int? ?? 0,
+        total: jInt(j['total']) ?? 0,
+        viewerWins: jInt(j['viewerWins']) ?? 0,
+        targetWins: jInt(j['targetWins']) ?? 0,
         recent: (j['recent'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
             .map(PublicSharedRace.fromJson)
@@ -174,9 +175,9 @@ class PublicSharedRace {
 
   factory PublicSharedRace.fromJson(Map<String, dynamic> j) =>
       PublicSharedRace(
-        raceId: j['raceId'] as String? ?? '',
-        title: j['title'] as String? ?? 'Race',
-        winnerUserId: j['winnerUserId'] as String?,
+        raceId: jStr(j['raceId']) ?? '',
+        title: jStr(j['title']) ?? 'Race',
+        winnerUserId: jStr(j['winnerUserId']),
       );
 }
 
@@ -196,10 +197,10 @@ class PublicFeaturedBadge {
 
   factory PublicFeaturedBadge.fromJson(Map<String, dynamic> j) =>
       PublicFeaturedBadge(
-        unlockId: j['unlockId'] as String,
-        key: j['key'] as String? ?? '',
-        name: j['name'] as String? ?? '',
-        iconKey: j['iconKey'] as String?,
+        unlockId: (jStr(j['unlockId']) ?? ''),
+        key: jStr(j['key']) ?? '',
+        name: jStr(j['name']) ?? '',
+        iconKey: jStr(j['iconKey']),
       );
 }
 
@@ -228,7 +229,7 @@ class CrewApi {
     final body = res.body.isEmpty ? const <String, dynamic>{} : jsonDecode(res.body);
     final map = body is Map<String, dynamic> ? body : const <String, dynamic>{};
     if (res.statusCode >= 400) {
-      throw ApiException(res.statusCode, map['error'] as String? ?? 'Request failed');
+      throw ApiException(res.statusCode, jStr(map['error']) ?? 'Request failed');
     }
     return map;
   }
@@ -247,8 +248,7 @@ class CrewApi {
     );
     if (res.statusCode == 304) return Conditional.notModified(etag: etag);
     final json = _decode(res);
-    final members = (json['crew'] as List<dynamic>? ?? [])
-        .map((e) => PublicUser.fromJson(e as Map<String, dynamic>))
+    final members = jMapList(json['crew']).map(PublicUser.fromJson)
         .toList();
     return Conditional(data: members, etag: res.headers['etag'], raw: json);
   }
@@ -271,8 +271,8 @@ class CrewApi {
       final user = value as Map<String, dynamic>;
       return CrewSearchResult(
         user: PublicUser.fromJson(user),
-        connectionStatus: crewConnectionStatusFrom(user['connectionStatus'] as String?),
-        mutualCount: (user['mutualCount'] as num?)?.toInt() ?? 0,
+        connectionStatus: crewConnectionStatusFrom(jStr(user['connectionStatus'])),
+        mutualCount: jInt(user['mutualCount']) ?? 0,
       );
     }).toList();
   }

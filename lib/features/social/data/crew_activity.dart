@@ -7,6 +7,7 @@
 // projected server-side by GET /crew/feed. Models live in
 // crew_activity_models.dart.
 import 'dart:async';
+import 'package:nuvo/core/utils/json_safe.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -54,7 +55,7 @@ class CrewActivityApi {
     final map = body is Map<String, dynamic> ? body : const <String, dynamic>{};
     if (res.statusCode >= 400) {
       throw ApiException(
-          res.statusCode, map['error'] as String? ?? 'Request failed');
+          res.statusCode, jStr(map['error']) ?? 'Request failed');
     }
     return map;
   }
@@ -129,15 +130,14 @@ class CrewActivityApi {
     }
     return ReactionSummary(
       counts: counts,
-      myReaction: json['myReaction'] as String?,
+      myReaction: jStr(json['myReaction']),
     );
   }
 }
 
 /// Parses a decoded GET /crew/feed body (also used to rehydrate the snapshot).
 List<CrewActivityItem> parseFeedItems(Map<String, dynamic> json) =>
-    (json['items'] as List<dynamic>? ?? [])
-        .map((e) => CrewActivityItem.fromJson(e as Map<String, dynamic>))
+    jMapList(json['items']).map(CrewActivityItem.fromJson)
         .toList();
 
 /// Optional capability: validator-aware feed reads (see CrewConditionalSource).
