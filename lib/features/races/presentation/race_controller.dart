@@ -313,7 +313,12 @@ class RaceController extends StateNotifier<RaceState> {
       return Future.value();
     }
     final inFlight = _loadInFlight;
-    if (inFlight != null) return inFlight;
+    if (inFlight != null) {
+      if (!force) return inFlight;
+      // A forced caller needs data newer than the request already in flight
+      // (e.g. just after a join). Queue exactly one follow-up fetch.
+      return _followUpLoad ??= _queueFollowUpLoad(inFlight);
+    }
 
     final request = _fetchRaces();
     _loadInFlight = request;
@@ -335,6 +340,20 @@ class RaceController extends StateNotifier<RaceState> {
       return;
     }
     loadRaces(force: true);
+  }
+
+  Future<void>? _followUpLoad;
+
+  Future<void> _queueFollowUpLoad(Future<void> inFlight) async {
+    final generation = _generation;
+    try {
+      await inFlight;
+    } catch (_) {
+      /* the follow-up fetch below is the retry */
+    }
+    if (!mounted || generation != _generation) return;
+    _followUpLoad = null;
+    await loadRaces(force: true);
   }
 
   void _clearInFlight(Future<void> request) {
@@ -643,6 +662,7 @@ class RaceController extends StateNotifier<RaceState> {
     // instead of awaiting a future tied to the previous session (which could
     // be hung on a stalled socket and wedge the races tab until an app kill).
     _loadInFlight = null;
+    _followUpLoad = null;
     for (final timer in _presentationDeletionTimers.values) {
       timer.cancel();
     }

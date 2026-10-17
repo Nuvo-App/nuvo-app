@@ -11,6 +11,7 @@ import {
   type VerificationMethod,
 } from './raceActivities';
 import type { RegistryActivity } from './motionRegistry';
+import { effectiveTargetValue } from './raceTarget';
 
 export interface RaceConfig {
   /// The server-owned activity identity — a static-catalog ID for compiled
@@ -101,7 +102,8 @@ export interface ManualRaceConfig {
   unit: string; // free-text display unit ("pages", "minutes", "days")
   format: RaceFormat;
   scoringRule: RaceScoringRule;
-  targetValue: number;
+  /** null for window / attempt formats — they have no finish line. */
+  targetValue: number | null;
   recurrence: RaceRecurrence;
   timezone: string;
   startsAt: string | null;
@@ -128,14 +130,17 @@ export function manualConfigFromBody(
   ).toLowerCase();
   if (!MANUAL_PROOF_REQUIREMENTS.has(proof)) return null;
 
-  const targetValue = intValue(body, 'targetValue', 'target_value');
-  if (!targetValue) return { error: 'A goal amount is required.' };
-
   const unitRaw = stringValue(body, 'unit', 'targetUnit', 'target_unit') ?? 'done';
   const unit = unitRaw.slice(0, 24);
 
   const rawFormat = stringValue(body, 'format') ?? 'first_to_goal';
   const format = FORMATS.has(rawFormat as RaceFormat) ? (rawFormat as RaceFormat) : 'first_to_goal';
+
+  // A goal amount is only required for a race to a goal; window / attempt
+  // formats are decided by score, so any client-sent target is a placeholder.
+  const rawTarget = intValue(body, 'targetValue', 'target_value');
+  if (format === 'first_to_goal' && !rawTarget) return { error: 'A goal amount is required.' };
+  const targetValue = effectiveTargetValue(format, rawTarget);
 
   const recurrenceRaw = stringValue(body, 'recurrence') ?? 'none';
   const recurrence = RECURRENCES.has(recurrenceRaw as RaceRecurrence)
@@ -449,7 +454,8 @@ export function configFromBody(body: Record<string, unknown>): RaceConfig | { er
     metric,
     format,
     scoringRule,
-    targetValue,
+    // A window / attempt race has nothing to reach — never store a placeholder.
+    targetValue: effectiveTargetValue(format, targetValue),
     attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',
@@ -496,7 +502,8 @@ export function registryConfigFromBody(
     metric: expectedMetric,
     format,
     scoringRule: scoringRuleForFormat(format, scoreDirectionFromBody(body)),
-    targetValue,
+    // A window / attempt race has nothing to reach — never store a placeholder.
+    targetValue: effectiveTargetValue(format, targetValue),
     attemptDurationSeconds: intValue(body, 'attemptDurationSeconds', 'attempt_duration_seconds'),
     attemptLimit: intValue(body, 'attemptLimit', 'attempt_limit'),
     verificationMethod: 'camera_pose',

@@ -166,3 +166,88 @@ test('GET /squads/:id returns roles, myRole, and ETag changes with a role change
   assert.notEqual(b.res.headers.get('etag'), etag);
   assert.equal(b.json.squad.myRole, 'admin');
 });
+
+const rowOf = (db, u, squad = 's1') =>
+  ({ ...db.sql.prepare('SELECT status, role FROM squad_members WHERE squad_id = ? AND user_id = ?').get(squad, u) });
+
+test('leave resets role to member; rejoin does not restore owner/admin', async () => {
+  const db = seed();
+  assert.equal((await call(db, 'admin', 'POST', '/squads/s1/leave')).status, 200);
+  assert.deepEqual(rowOf(db, 'admin'), { status: 'left', role: 'member' });
+  assert.equal((await call(db, 'admin', 'POST', '/squads/join', { code: 'JOINME' })).status, 200);
+  assert.deepEqual(rowOf(db, 'admin'), { status: 'active', role: 'member' });
+  assert.equal((await call(db, 'admin', 'POST', '/squads/s1/races', { raceId: 'r9' })).status, 403);
+
+  // Former owner leaves (handoff), then rejoins as a plain member.
+  assert.equal((await call(db, 'owner', 'POST', '/squads/s1/leave')).status, 200);
+  assert.equal((await call(db, 'owner', 'POST', '/squads/join', { code: 'JOINME' })).status, 200);
+  assert.deepEqual(rowOf(db, 'owner'), { status: 'active', role: 'member' });
+  const detail = await call(db, 'owner', 'GET', '/squads/s1');
+  assert.equal(detail.json.squad.myRole, 'member');
+  assert.equal(detail.json.squad.isOwner, false);
+  assert.equal((await call(db, 'owner', 'POST', '/squads/s1/members/mem/role', { role: 'admin' })).status, 403);
+});
+
+test('stored owner role on a non-owner does not grant ownership', async () => {
+  const db = seed();
+  db.sql.prepare("UPDATE squad_members SET role = 'owner' WHERE user_id = 'mem'").run();
+  assert.equal((await call(db, 'mem', 'POST', '/squads/s1/members/mem2/role', { role: 'admin' })).status, 403);
+  assert.equal((await call(db, 'mem', 'DELETE', '/squads/s1/members/mem2')).status, 403);
+  const detail = await call(db, 'mem', 'GET', '/squads/s1');
+  assert.equal(detail.json.squad.myRole, 'member');
+  assert.equal(detail.json.members.find((m) => m.userId === 'mem').role, 'member');
+});
+
+test('owner leave: prefers admin, hands over atomically', async () => {
+  const db = seed();
+  assert.equal((await call(db, 'owner', 'POST', '/squads/s1/leave')).status, 200);
+  assert.equal(db.sql.prepare("SELECT owner_id FROM squads WHERE id = 's1'").get().owner_id, 'admin');
+  assert.deepEqual(rowOf(db, 'admin'), { status: 'active', role: 'owner' });
+  assert.deepEqual(rowOf(db, 'owner'), { status: 'left', role: 'member' });
+  assert.equal(db.sql.prepare("SELECT deleted_at FROM squads WHERE id = 's1'").get().deleted_at, null);
+  assert.equal((await call(db, 'admin', 'GET', '/squads/s1')).json.squad.myRole, 'owner');
+});
+
+test('owner leave: falls back to longest-standing member, then retires an empty crew', async () => {
+  const db = seed();
+  db.sql.prepare("DELETE FROM squad_members WHERE user_id = 'admin'").run();
+  db.sql.prepare("UPDATE squad_members SET joined_at = '2024-02-01 00:00:00' WHERE user_id = 'mem2'").run();
+  assert.equal((await call(db, 'owner', 'POST', '/squads/s1/leave')).status, 200);
+  assert.equal(db.sql.prepare("SELECT owner_id FROM squads WHERE id = 's1'").get().owner_id, 'mem');
+  assert.equal(rowOf(db, 'mem').role, 'owner');
+  assert.equal(rowOf(db, 'mem2').role, 'member');
+
+  assert.equal((await call(db, 'mem2', 'POST', '/squads/s1/leave')).status, 200);
+  assert.equal(db.sql.prepare("SELECT deleted_at FROM squads WHERE id = 's1'").get().deleted_at, null);
+  assert.equal(db.sql.prepare("SELECT owner_id FROM squads WHERE id = 's1'").get().owner_id, 'mem');
+  assert.equal((await call(db, 'mem', 'POST', '/squads/s1/leave')).status, 200);
+  assert.notEqual(db.sql.prepare("SELECT deleted_at FROM squads WHERE id = 's1'").get().deleted_at, null);
+  assert.equal((await call(db, 'mem', 'GET', '/squads/s1')).status, 404);
+});
+
+test('join enforces the per-user crew cap; reactivation counts, already-active does not', async () => {
+  const db = seed();
+  const sql = db.sql;
+  for (let i = 0; i < 10; i++) {
+    sql.prepare('INSERT INTO squads VALUES (?,?,?,?,?,NULL)').run(`x${i}`, `X${i}`, `CODE${i}`, 'owner', '2024-01-01');
+    sql.prepare('INSERT INTO squad_members VALUES (?,?,?,?,?,?)').run(`mx${i}`, `x${i}`, 'outsider', 'member', 'active', '2024-01-01');
+  }
+  const capped = await call(db, 'outsider', 'POST', '/squads/join', { code: 'JOINME' });
+  assert.equal(capped.status, 409);
+  assert.equal(capped.json.error, 'You are in the maximum number of crews');
+  assert.equal(sql.prepare("SELECT COUNT(*) AS n FROM squad_members WHERE user_id = 'outsider' AND squad_id = 's1'").get().n, 0);
+
+  // Already an active member of a crew at the cap: not blocked, no change.
+  const again = await call(db, 'outsider', 'POST', '/squads/join', { code: 'CODE3' });
+  assert.equal(again.status, 200);
+  assert.equal(again.json.alreadyJoined, true);
+
+  // Leaving one frees a slot.
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/x0/leave')).status, 200);
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/join', { code: 'JOINME' })).status, 200);
+
+  // A user who left s1 earlier cannot reactivate while at the cap.
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/s1/leave')).status, 200);
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/join', { code: 'CODE0' })).status, 200);
+  assert.equal((await call(db, 'outsider', 'POST', '/squads/join', { code: 'JOINME' })).status, 409);
+});

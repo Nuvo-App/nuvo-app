@@ -333,6 +333,33 @@ class SquadController extends StateNotifier<SquadState> {
       if (!mounted || generation != _generation || rev != (_detailRev[id] ?? 0)) {
         return;
       }
+      // 404 / 403 are definitive: the crew was deleted or I was removed from
+      // it. Drop every cached trace of it instead of showing stale members.
+      if (e is ApiException && (e.statusCode == 404 || e.statusCode == 403)) {
+        _detailEtag.remove(id);
+        _detailLoadedAt.remove(id);
+        _listEtag = null; // local list now differs from the cached 200
+        final current = state.groups;
+        state = settle().copyWith(
+          details: {...state.details}..remove(id),
+          groups: current == null
+              ? null
+              : [
+                  for (final g in current)
+                    if (g.id != id) g,
+                ],
+          detailErrors: {...state.detailErrors, id: _messageFor(e)},
+        );
+        if (account != null && isValidCacheId(id)) {
+          unawaited(_store.write(account, _detailDomain(id), null));
+          final next = state.groups;
+          if (next != null) {
+            unawaited(_store.write(account, _listDomain, _listJson(next)));
+          }
+        }
+        return;
+      }
+      // Other errors are non-destructive: keep whatever is cached.
       final kept = state.details.containsKey(id);
       state = settle().copyWith(
         detailErrors: kept

@@ -32,6 +32,7 @@ interface LightRaceRow {
   metric: string | null;
   activity_id: string | null;
   format: string | null;
+  race_type: string | null;
   verification_type: string;
   verification_method: string | null;
   movement_type: string | null;
@@ -70,7 +71,7 @@ function metricLabel(race: LightRaceRow): string {
 }
 
 function targetOf(race: LightRaceRow): number | null {
-  return effectiveTargetValue(race.format, race.target_value);
+  return effectiveTargetValue(race.format ?? race.race_type, race.target_value);
 }
 
 function progressPercent(race: LightRaceRow, participant: LightParticipantRow | undefined): number {
@@ -171,7 +172,7 @@ async function buildRealSnapshot(
   const raceRows = await db
     .prepare(
       `SELECT DISTINCT r.id, r.title, r.status, r.target_value, r.target_unit,
-              r.metric, r.activity_id, r.format, r.verification_type,
+              r.metric, r.activity_id, r.format, r.race_type, r.verification_type,
               r.verification_method, r.movement_type, r.creator_id,
               r.start_at, r.end_at, r.score_direction
        FROM races r

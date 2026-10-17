@@ -85,21 +85,26 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
       _accepting = true;
       _acceptError = null;
     });
+    String? error;
     try {
       final result = await ref.read(inviteRepositoryProvider).accept(widget.token);
       if (!result.ok) {
-        setState(() {
-          _acceptError = _messageForStatus(result.status);
-          _accepting = false;
-        });
-        return;
+        error = _messageForStatus(result.status);
+      } else {
+        // Navigates away; the screen is gone once this completes.
+        await _afterAccept(result);
       }
-      await _afterAccept(result);
     } on ApiException catch (e) {
+      error = e.message;
+    } catch (_) {
+      // Non-JSON bodies (429 / HTML error pages) surface as FormatException
+      // or TypeError — never leave the button spinning.
+      error = "Couldn't accept this invite. Try again.";
+    } finally {
       if (mounted) {
         setState(() {
-          _acceptError = e.message;
           _accepting = false;
+          if (error != null) _acceptError = error;
         });
       }
     }
@@ -115,7 +120,9 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
             .read(raceControllerProvider.notifier)
             .refreshJoinedRace(dest.raceId);
       } catch (_) {
-        /* navigation still proceeds; the detail screen will refetch */
+        // Navigation still proceeds; mark the list stale so the next
+        // revalidate refetches instead of trusting a pre-join cache.
+        if (mounted) ref.read(raceControllerProvider.notifier).markStale();
       }
     } else if (result.kind == 'crew_connect') {
       // The connection is canonical in CrewController — mark both it and the
@@ -144,6 +151,7 @@ class _InviteScreenState extends ConsumerState<InviteScreen> {
         InviteStatus.used => 'This invite has already been used.',
         InviteStatus.notFound => 'This invite is no longer available.',
         InviteStatus.blocked => 'This invite is no longer available.',
+        InviteStatus.closed => 'This race has ended.',
         _ => 'This invite could not be used.',
       };
 

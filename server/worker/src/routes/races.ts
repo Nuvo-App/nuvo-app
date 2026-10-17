@@ -27,7 +27,16 @@ import {
   type RaceConfig,
 } from '../domain/raceValidation';
 import { applyVerifiedSubmission } from '../domain/raceScoring';
-import { computeCompetitionRanks, type RankedScore } from '../domain/raceRanking';
+import {
+  ensureMember,
+  ensurePersonId,
+  ensureProgress,
+  isRaceMember,
+  rankedScores,
+  raceIsOpenToJoin,
+  recomputeRanks,
+  REMOVED_FROM_RACE_ERROR,
+} from '../domain/raceMembership';
 import { effectiveRaceStatus } from '../domain/raceLifecycle';
 import {
   deadlineEligibility,
@@ -268,40 +277,6 @@ function raceConfigFromRow(race: RaceRow): RaceConfig | null {
   };
 }
 
-// The live race_members table keeps a legacy person_id column that is NOT NULL and
-// references people(id). Every member row must therefore resolve to a people row.
-async function ensurePersonId(db: D1Database, userId: string): Promise<string> {
-  const existing = await db.prepare('SELECT id FROM people WHERE user_id = ?').bind(userId).first<{ id: string }>();
-  if (existing) return existing.id;
-  const personId = generateId();
-  const displayName = await getProfileName(db, userId);
-  await db.prepare(
-    `INSERT INTO people (id, person_key, user_id, display_name, created_at, updated_at)
-     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-  ).bind(personId, `user-${userId}`, userId, displayName ?? 'Racer').run();
-  return personId;
-}
-
-async function ensureMember(db: D1Database, raceId: string, userId: string, role = 'racer'): Promise<void> {
-  const existing = await db.prepare('SELECT id, status FROM race_members WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string; status: string }>();
-  if (existing) {
-    // A stale 'left'/'removed' row must not lock the user out — rejoining
-    // reactivates the same membership rather than inserting a duplicate.
-    if (existing.status !== 'active') {
-      await db.prepare(
-        "UPDATE race_members SET status = 'active', role = ?, joined_at = CURRENT_TIMESTAMP WHERE id = ?"
-      ).bind(role, existing.id).run();
-    }
-    return;
-  }
-  const displayName = await getProfileName(db, userId);
-  const personId = await ensurePersonId(db, userId);
-  await db.prepare(
-    `INSERT INTO race_members (id, race_id, user_id, person_id, role, status, joined_at, cached_display_name)
-     VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, ?)`
-  ).bind(generateId(), raceId, userId, personId, role, displayName).run();
-}
-
 /** Emit `race_joined` to the creator iff `userId` was not already a member. */
 async function notifyRaceJoined(
   c: Context<AppEnv>,
@@ -324,47 +299,6 @@ async function notifyRaceJoined(
     raceId: race.id,
     raceTitle: race.title,
   });
-}
-
-async function isRaceMember(db: D1Database, raceId: string, userId: string): Promise<boolean> {
-  const row = await db
-    .prepare("SELECT id FROM race_members WHERE race_id = ? AND user_id = ? AND status = 'active'")
-    .bind(raceId, userId)
-    .first<{ id: string }>();
-  return Boolean(row);
-}
-
-async function ensureProgress(db: D1Database, raceId: string, userId: string): Promise<void> {
-  const existing = await db.prepare('SELECT id FROM race_progress WHERE race_id = ? AND user_id = ?').bind(raceId, userId).first<{ id: string }>();
-  if (existing) return;
-  await db.prepare(
-    `INSERT INTO race_progress (id, race_id, user_id, progress_value, progress_percent, updated_at)
-     VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP)`
-  ).bind(generateId(), raceId, userId).run();
-}
-
-async function rankedScores(db: D1Database, raceId: string, direction: 'higher' | 'lower' = 'higher'): Promise<RankedScore[]> {
-  const rows = await db.prepare(
-    `SELECT rm.user_id, rm.joined_at, rp.progress_value, rp.completed_at
-     FROM race_members rm
-     LEFT JOIN race_progress rp ON rp.race_id = rm.race_id AND rp.user_id = rm.user_id
-     WHERE rm.race_id = ? AND rm.status = 'active'`
-  ).bind(raceId).all<{ user_id: string; joined_at: string; progress_value: number | null; completed_at: string | null }>();
-  return computeCompetitionRanks(rows.results.map((row) => ({
-    user_id: row.user_id,
-    joined_at: row.joined_at,
-    progress_value: row.progress_value ?? 0,
-    completed_at: row.completed_at,
-  })), { direction: direction === 'lower' ? 'asc' : 'desc' });
-}
-
-async function recomputeRanks(db: D1Database, raceId: string, direction: 'higher' | 'lower' = 'higher'): Promise<RankedScore[]> {
-  const ranked = await rankedScores(db, raceId, direction);
-  const stmts = ranked.map((r) => db.prepare(
-    'UPDATE race_progress SET rank_cache = ? WHERE race_id = ? AND user_id = ?'
-  ).bind(r.rank, raceId, r.user_id));
-  if (stmts.length) await db.batch(stmts);
-  return ranked;
 }
 
 async function snapshotFinalStandings(
@@ -418,8 +352,9 @@ function raceScoringConfigFromRow(race: RaceRow): RaceScoringConfig | null {
   if (!isCustom && !isManual) return null;
   const targetValue = positiveIntOrNull(race.target_value) ?? null;
   const rowFormat = (((race.format ?? race.race_type) === 'first_to_target' ? 'first_to_goal' : (race.format ?? 'first_to_goal')) as unknown) as RaceFormat;
-  // Only a race to a target needs one; window / attempt custom races have none.
-  if (targetValue == null && !(isCustom && rowFormat !== 'first_to_goal')) return null;
+  // Only a race to a target needs one; window / attempt races (custom or
+  // manual) are decided by score and carry none.
+  if (targetValue == null && rowFormat === 'first_to_goal') return null;
   // Manual races store a free-text unit in target_unit; the wire metric is
   // always 'reps' (an opaque cumulative integer).
   const metric = isManual ? 'reps' : normalizeMetric(race.metric ?? race.target_unit ?? 'reps', undefined);
@@ -471,7 +406,7 @@ async function recomputeRaceProgressForUser(
       score = score > 0 ? Math.min(score, v) : v;
     } else score += v;
   }
-  const target = scoring.targetValue && scoring.targetValue > 0 ? scoring.targetValue : null;
+  const target = effectiveTargetValue(scoring.format, scoring.targetValue);
   const progressPercent = target ? Math.min(100, Math.round((score / target) * 100)) : 0;
   const completed = scoring.format === 'first_to_goal' && Boolean(target && score >= target);
 
@@ -1233,15 +1168,16 @@ racesRouter.post('/join-code', async (c) => {
 
   const race = await getRace(c.env.DB, invite.race_id);
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
   if (await isBlockedEitherWay(c.env.DB, userId, race.creator_id)) {
     return c.json(badRequest('You cannot join this race'), 403);
   }
 
-  const wasMember = await isRaceMember(c.env.DB, race.id, userId);
-  await ensureMember(c.env.DB, race.id, userId);
+  const joined = await ensureMember(c.env.DB, race.id, userId);
+  if (joined.blocked) return c.json(badRequest(REMOVED_FROM_RACE_ERROR), 403);
   await ensureProgress(c.env.DB, race.id, userId);
-  await notifyRaceJoined(c, race, userId, wasMember);
+  if (joined.created || joined.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  await notifyRaceJoined(c, race, userId, !(joined.created || joined.reactivated));
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
@@ -1703,7 +1639,11 @@ racesRouter.patch('/:id', async (c) => {
   }
 
   const targetValue = positiveIntOrNull(body.targetValue);
-  if (targetValue !== undefined) { updates.push('target_value = ?'); values.push(targetValue); }
+  if (targetValue !== undefined) {
+    // A window / attempt race has no finish line: never persist a placeholder.
+    updates.push('target_value = ?');
+    values.push(effectiveTargetValue(race.format ?? race.race_type, targetValue));
+  }
   // Lifecycle (active → completed, winner) is server-derived. The creator may
   // only withdraw a race (cancel/archive); reopening or completing is never
   // a client write.
@@ -1759,9 +1699,12 @@ racesRouter.post('/:id/leave', async (c) => {
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
   if (race.creator_id === userId) return c.json(badRequest('Race creator cannot leave their own race'), 400);
-  await c.env.DB.prepare(
-    "UPDATE race_members SET status = 'left' WHERE race_id = ? AND user_id = ?"
+  // Only an active member can leave: a creator-removed row must stay
+  // 'removed' (turning it into 'left' would let them rejoin by link).
+  const left = await c.env.DB.prepare(
+    "UPDATE race_members SET status = 'left' WHERE race_id = ? AND user_id = ? AND status = 'active'"
   ).bind(race.id, userId).run();
+  if ((left.meta?.changes ?? 1) > 0) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
   return c.json({ ok: true });
 });
 
@@ -1770,16 +1713,17 @@ racesRouter.post('/:id/join', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
   if (!(await hasAcceptedTerms(c.env.DB, userId))) {
     return c.json({ ok: false, error: 'You must accept the Terms of Service before joining a race' }, 403);
   }
   const eligibility = await checkRaceJoinEligibility(c.env.DB, race, userId);
   if (!eligibility.ok) return c.json(badRequest(eligibility.error), eligibility.status as 400 | 403);
-  const wasMember = await isRaceMember(c.env.DB, race.id, userId);
-  await ensureMember(c.env.DB, race.id, userId);
+  const joined = await ensureMember(c.env.DB, race.id, userId);
+  if (joined.blocked) return c.json(badRequest(REMOVED_FROM_RACE_ERROR), 403);
   await ensureProgress(c.env.DB, race.id, userId);
-  await notifyRaceJoined(c, race, userId, wasMember);
+  if (joined.created || joined.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  await notifyRaceJoined(c, race, userId, !(joined.created || joined.reactivated));
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 
@@ -1793,7 +1737,7 @@ racesRouter.post('/:id/participants', async (c) => {
 
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
 
   // Organizer flow only — an ordinary participant must not silently insert
   // arbitrary users into a race.
@@ -1810,10 +1754,12 @@ racesRouter.post('/:id/participants', async (c) => {
     return c.json(badRequest('You cannot add this user'), 403);
   }
 
-  const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
-  await ensureMember(c.env.DB, race.id, targetUserId);
+  // An explicit creator add is the one path that may bring back a member the
+  // creator removed earlier.
+  const added = await ensureMember(c.env.DB, race.id, targetUserId, 'racer', { allowRemoved: true });
   await ensureProgress(c.env.DB, race.id, targetUserId);
-  if (!targetWasMember && targetUserId !== userId) {
+  if (added.created || added.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  if ((added.created || added.reactivated) && targetUserId !== userId) {
     const actorName = await getProfileName(c.env.DB, userId);
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
       type: 'race_invited',
@@ -1837,7 +1783,7 @@ racesRouter.post('/:id/members', async (c) => {
 
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.status !== 'active') return c.json(badRequest('Race is not active'), 400);
+  if (!raceIsOpenToJoin(race)) return c.json(badRequest('Race is not active'), 400);
 
   // Organizer flow only — an ordinary participant must not silently insert
   // arbitrary users into a race.
@@ -1854,10 +1800,12 @@ racesRouter.post('/:id/members', async (c) => {
     return c.json(badRequest('You cannot add this user'), 403);
   }
 
-  const targetWasMember = await isRaceMember(c.env.DB, race.id, targetUserId);
-  await ensureMember(c.env.DB, race.id, targetUserId);
+  // An explicit creator add is the one path that may bring back a member the
+  // creator removed earlier.
+  const added = await ensureMember(c.env.DB, race.id, targetUserId, 'racer', { allowRemoved: true });
   await ensureProgress(c.env.DB, race.id, targetUserId);
-  if (!targetWasMember && targetUserId !== userId) {
+  if (added.created || added.reactivated) await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
+  if ((added.created || added.reactivated) && targetUserId !== userId) {
     const actorName = await getProfileName(c.env.DB, userId);
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
       type: 'race_invited',
@@ -1884,6 +1832,7 @@ racesRouter.delete('/:id/members/:userId', async (c) => {
   await c.env.DB.prepare(
     "UPDATE race_members SET status = 'removed' WHERE race_id = ? AND user_id = ?"
   ).bind(race.id, targetUserId).run();
+  await recomputeRanks(c.env.DB, race.id, scoreDirectionFor(race));
   return c.json({ ok: true, race: await buildRaceResponse(c.env, c.get('userId'), race) });
 });
 

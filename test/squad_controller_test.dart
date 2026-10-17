@@ -32,6 +32,7 @@ class _FakeRepo implements SquadRepository {
   String? listEtagOut = 'L1';
   String? detailEtagOut = 'D1';
   bool listFails = false;
+  int? detailFailStatus;
   final List<String?> listEtagsSeen = [];
   final List<String?> detailEtagsSeen = [];
   int detailCalls = 0;
@@ -56,6 +57,9 @@ class _FakeRepo implements SquadRepository {
   Future<Conditional<CrewGroupDetail>> detail(String id, {String? etag}) async {
     detailCalls++;
     detailEtagsSeen.add(etag);
+    if (detailFailStatus != null) {
+      throw ApiException(detailFailStatus!, 'detail failed');
+    }
     if (etag != null && etag == detailEtagOut) {
       return Conditional.notModified(etag: etag);
     }
@@ -157,6 +161,43 @@ void main() {
     expect(c.state.groups, isEmpty);
     expect(c.state.details, isEmpty);
     expect((await store.read('u1', 'squad_a'))!.data, isNull);
+  });
+
+  for (final status in [404, 403]) {
+    test('detail $status drops the cached crew and surfaces an error', () async {
+      final store = CacheStore.memory();
+      final repo = _FakeRepo();
+      final c = _make(repo, store);
+      await c.load();
+      await c.loadDetail('a');
+      await Future<void>.delayed(Duration.zero);
+      expect(c.state.details.containsKey('a'), isTrue);
+      expect((await store.read('u1', 'squad_a'))!.data, isNotNull);
+
+      repo.detailFailStatus = status;
+      await c.refreshDetail('a');
+      await Future<void>.delayed(Duration.zero);
+      expect(c.state.details.containsKey('a'), isFalse);
+      expect(c.state.detailErrors['a'], isNotNull);
+      expect(c.state.groups, isEmpty);
+      expect((await store.read('u1', 'squad_a'))?.data, isNull);
+      expect(
+        ((await store.read('u1', 'squads'))!.data as Map)['squads'],
+        isEmpty,
+      );
+    });
+  }
+
+  test('other detail errors keep the cached crew', () async {
+    final repo = _FakeRepo();
+    final c = _make(repo, CacheStore.memory());
+    await c.load();
+    await c.loadDetail('a');
+    repo.detailFailStatus = 500;
+    await c.refreshDetail('a');
+    expect(c.state.details.containsKey('a'), isTrue);
+    expect(c.state.detailErrors['a'], isNull);
+    expect(c.state.groups, hasLength(1));
   });
 
   test('detail cached per id; second call within window is a no-op', () async {

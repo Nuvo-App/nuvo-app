@@ -6,7 +6,7 @@ import { requireAuth } from '../lib/jwt';
 import { conditional, stalenessBucket, weakEtag } from '../lib/etag';
 import { hasAcceptedTerms } from '../lib/terms';
 import { isBlocked } from '../lib/privacy';
-import { ensureMember, ensureProgress, getProfileName, getRace } from '../domain/raceMembership';
+import { ensureMember, ensureProgress, getProfileName, getRace, recomputeRanks } from '../domain/raceMembership';
 import { effectiveTargetValue } from '../domain/raceTarget';
 import { notifyEvent } from '../domain/notificationPolicy';
 import { computeSquadStandings, type SquadRaceInput } from '../domain/squadStandings';
@@ -65,13 +65,35 @@ function hashString(value: string): string {
   return (h >>> 0).toString(36);
 }
 
+/**
+ * Ownership is authoritative on squads.owner_id: a stored 'owner' role on
+ * anyone else (for example a stale row) counts as a plain member.
+ */
+function effectiveRole(ownerId: string, userId: string, storedRole: string): CrewRole {
+  if (ownerId === userId) return 'owner';
+  return storedRole === 'admin' ? 'admin' : 'member';
+}
+
 async function roleOf(db: D1Database, squadId: string, userId: string): Promise<CrewRole | null> {
   const row = await db
-    .prepare("SELECT role FROM squad_members WHERE squad_id = ? AND user_id = ? AND status = 'active'")
+    .prepare(
+      `SELECT sm.role, s.owner_id
+       FROM squad_members sm JOIN squads s ON s.id = sm.squad_id
+       WHERE sm.squad_id = ? AND sm.user_id = ? AND sm.status = 'active'`,
+    )
     .bind(squadId, userId)
-    .first<{ role: string }>();
+    .first<{ role: string; owner_id: string }>();
   if (!row) return null;
-  return row.role === 'owner' || row.role === 'admin' ? row.role : 'member';
+  return effectiveRole(row.owner_id, userId, row.role);
+}
+
+/** Crews the user is currently an active member of, optionally excluding one. */
+async function activeMembershipCount(db: D1Database, userId: string, excludeSquadId?: string): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) as count FROM squad_members WHERE user_id = ? AND status = 'active' AND squad_id != ?")
+    .bind(userId, excludeSquadId ?? '')
+    .first<{ count: number }>();
+  return row?.count ?? 0;
 }
 
 async function isActiveMember(db: D1Database, squadId: string, userId: string): Promise<boolean> {
@@ -112,8 +134,14 @@ async function addToRace(
       return false;
     }
   }
-  const { created } = await ensureMember(db, race.id, userId);
+  const { created, reactivated, blocked } = await ensureMember(db, race.id, userId);
+  // Someone the race creator removed stays out; adding the crew never overrides that.
+  if (blocked) return false;
   await ensureProgress(db, race.id, userId);
+  if (created || reactivated) {
+    const full = await getRace(db, race.id);
+    if (full) await recomputeRanks(db, race.id, full.score_direction === 'lower' ? 'lower' : 'higher');
+  }
   if (created && userId !== race.creator_id) {
     await notifyEvent(c.env, (p) => c.executionCtx.waitUntil(p), {
       type: 'race_invited',
@@ -140,12 +168,7 @@ squadsRouter.post('/', async (c) => {
     return c.json(badRequest('Crew name must be 2-40 characters'), 400);
   }
 
-  const owned = await c.env.DB.prepare(
-    `SELECT COUNT(*) as count FROM squad_members WHERE user_id = ? AND status = 'active'`,
-  )
-    .bind(userId)
-    .first<{ count: number }>();
-  if ((owned?.count ?? 0) >= MAX_SQUADS_PER_USER) {
+  if ((await activeMembershipCount(c.env.DB, userId)) >= MAX_SQUADS_PER_USER) {
     return c.json(badRequest('You are in the maximum number of crews'), 409);
   }
 
@@ -273,8 +296,13 @@ squadsRouter.post('/join', async (c) => {
     if ((await memberCount(c.env.DB, squad.id)) >= MAX_MEMBERS) {
       return c.json(badRequest('This crew is full'), 409);
     }
+    if ((await activeMembershipCount(c.env.DB, userId, squad.id)) >= MAX_SQUADS_PER_USER) {
+      return c.json(badRequest('You are in the maximum number of crews'), 409);
+    }
     if (existing) {
-      await c.env.DB.prepare("UPDATE squad_members SET status = 'active', joined_at = CURRENT_TIMESTAMP WHERE id = ?")
+      await c.env.DB.prepare(
+        "UPDATE squad_members SET status = 'active', role = 'member', joined_at = CURRENT_TIMESTAMP WHERE id = ?",
+      )
         .bind(existing.id)
         .run();
     } else {
@@ -458,7 +486,7 @@ squadsRouter.get('/:id', async (c) => {
       name: squad.name,
       joinCode: squad.join_code,
       isOwner: squad.owner_id === userId,
-      myRole: members.results.find((m) => m.user_id === userId)?.role ?? 'member',
+      myRole: effectiveRole(squad.owner_id, userId, members.results.find((m) => m.user_id === userId)?.role ?? 'member'),
       memberCount: members.results.length,
       raceCount: races.results.length,
     },
@@ -467,7 +495,7 @@ squadsRouter.get('/:id', async (c) => {
       displayName: m.full_name ?? (m.username ? `@${m.username}` : 'Nuvo member'),
       username: m.username,
       profilePhotoUrl: m.avatar_url,
-      role: m.role,
+      role: effectiveRole(squad.owner_id, m.user_id, m.role),
     })),
     races: races.results.map((r) => ({
       id: r.id,
@@ -615,31 +643,34 @@ squadsRouter.post('/:id/leave', async (c) => {
   if (!squad || !(await isActiveMember(c.env.DB, squad.id, userId))) {
     return c.json(badRequest('Crew not found'), 404);
   }
-  await c.env.DB.prepare("UPDATE squad_members SET status = 'left' WHERE squad_id = ? AND user_id = ?")
-    .bind(squad.id, userId)
-    .run();
-
-  // The owner leaving hands the crew to an admin first, else the longest-standing member, or
-  // retires it when nobody is left.
+  // One atomic batch. The owner leaving hands the crew to an admin first, else
+  // the longest-standing member, or retires it when nobody is left. The leaver
+  // always drops back to a plain member role so it cannot survive a re-join.
+  const statements = [
+    c.env.DB.prepare(
+      "UPDATE squad_members SET status = 'left', role = 'member' WHERE squad_id = ? AND user_id = ?",
+    ).bind(squad.id, userId),
+  ];
   if (squad.owner_id === userId) {
-    const next = await c.env.DB.prepare(
-      `SELECT user_id FROM squad_members WHERE squad_id = ? AND status = 'active' ORDER BY (role = 'admin') DESC, joined_at ASC LIMIT 1`,
-    )
-      .bind(squad.id)
-      .first<{ user_id: string }>();
-    if (next) {
-      await c.env.DB.batch([
-        c.env.DB.prepare('UPDATE squads SET owner_id = ? WHERE id = ?').bind(next.user_id, squad.id),
-        c.env.DB.prepare("UPDATE squad_members SET role = 'owner' WHERE squad_id = ? AND user_id = ?").bind(
-          squad.id,
-          next.user_id,
-        ),
-      ]);
-    } else {
-      await c.env.DB.prepare('UPDATE squads SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .bind(squad.id)
-        .run();
-    }
+    statements.push(
+      c.env.DB.prepare(
+        `UPDATE squads SET owner_id = COALESCE(
+           (SELECT user_id FROM squad_members WHERE squad_id = ?1 AND status = 'active'
+            ORDER BY (role = 'admin') DESC, joined_at ASC LIMIT 1), owner_id)
+         WHERE id = ?1 AND owner_id = ?2`,
+      ).bind(squad.id, userId),
+      c.env.DB.prepare(
+        `UPDATE squad_members SET role = 'owner'
+         WHERE squad_id = ?1 AND status = 'active' AND user_id != ?2
+           AND user_id = (SELECT owner_id FROM squads WHERE id = ?1)`,
+      ).bind(squad.id, userId),
+      c.env.DB.prepare(
+        `UPDATE squads SET deleted_at = CURRENT_TIMESTAMP
+         WHERE id = ?1 AND deleted_at IS NULL
+           AND NOT EXISTS (SELECT 1 FROM squad_members WHERE squad_id = ?1 AND status = 'active')`,
+      ).bind(squad.id),
+    );
   }
+  await c.env.DB.batch(statements);
   return c.json({ ok: true });
 });
