@@ -10,7 +10,7 @@ import '../theme/app_text_styles.dart';
 /// order of [nuvoDestinations] IS the index contract — nav highlight,
 /// `MainShell`'s route mapping, the `StatefulShellRoute` branch order, and
 /// `NuvoTabStack`'s transition direction all derive from this single list.
-/// 0 Arena · 1 Compete · 2 Crew · 3 Profile.
+/// 0 Arena · 1 Compete · 2 Friends · 3 Profile.
 ///
 /// There is no Verify tab: starting a proof lives on Race Detail
 /// (`/race/:id`), `/race/:id/proof` and `/race/:id/proof/ai-motion`.
@@ -43,7 +43,7 @@ const nuvoDestinations = <NuvoDestination>[
   ),
   NuvoDestination(
     path: '/pass',
-    label: 'Crew',
+    label: 'Friends',
     icon: Icons.group_outlined,
     selectedIcon: Icons.group,
   ),

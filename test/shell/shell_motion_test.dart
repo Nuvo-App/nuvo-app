@@ -245,13 +245,13 @@ double _scrollOffset(WidgetTester tester, String tag) {
 const _tabMap = <String, (String marker, IconData icon)>{
   'Arena': ('arena-tab', Icons.stadium_outlined),
   'Compete': ('compete-tab', Icons.emoji_events_outlined),
-  'Crew': ('pass-tab', Icons.group_outlined),
+  'Friends': ('pass-tab', Icons.group_outlined),
   'Profile': ('profile-tab', Icons.person_outline),
 };
 
 Finder _slot(String label) => find.byKey(
   ValueKey(
-    'nuvo-nav-slot-${['Arena', 'Compete', 'Crew', 'Profile'].indexOf(label)}',
+    'nuvo-nav-slot-${['Arena', 'Compete', 'Friends', 'Profile'].indexOf(label)}',
   ),
 );
 
@@ -285,7 +285,7 @@ void main() {
 
   testWidgets('body and nav agree across a full tab tour', (tester) async {
     await _pumpShell(tester);
-    for (final label in ['Crew', 'Compete', 'Profile', 'Arena']) {
+    for (final label in ['Friends', 'Compete', 'Profile', 'Arena']) {
       await tester.tap(_slot(label));
       await tester.pumpAndSettle();
       _expectSelected(tester, label);
@@ -297,7 +297,7 @@ void main() {
     _expectSelected(tester, 'Profile');
 
     await _pumpShell(tester, initialLocation: '/pass');
-    _expectSelected(tester, 'Crew');
+    _expectSelected(tester, 'Friends');
   });
 
   testWidgets('tab switch preserves scroll offset and widget state', (
@@ -319,7 +319,7 @@ void main() {
     expect(find.text('taps-arena:1'), findsOneWidget);
 
     // Arena → Crew → Arena.
-    await tester.tap(_slot('Crew'));
+    await tester.tap(_slot('Friends'));
     await tester.pumpAndSettle();
     await tester.tap(_slot('Arena'));
     await tester.pumpAndSettle();
@@ -340,7 +340,7 @@ void main() {
     tester,
   ) async {
     await _pumpShell(tester);
-    await tester.tap(_slot('Crew'));
+    await tester.tap(_slot('Friends'));
     await tester.pumpAndSettle();
 
     // The Crew tab is live; Arena is still mounted but offstage.
@@ -387,7 +387,7 @@ void main() {
     await _pumpShell(tester);
 
     // Arena (index 0) → Crew (index 2): Crew arrives from the right.
-    await tester.tap(_slot('Crew'));
+    await tester.tap(_slot('Friends'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -447,7 +447,7 @@ void main() {
   ) async {
     await _pumpShell(tester);
 
-    await tester.tap(_slot('Crew'));
+    await tester.tap(_slot('Friends'));
     await tester.pump(const Duration(milliseconds: 60));
     await tester.tap(_slot('Compete'));
     await tester.pump(const Duration(milliseconds: 60));
@@ -463,7 +463,7 @@ void main() {
     tester,
   ) async {
     await _pumpShell(tester);
-    await tester.tap(_slot('Crew'));
+    await tester.tap(_slot('Friends'));
     await tester.pumpAndSettle();
 
     final icon = tester.widget<Icon>(find.byIcon(Icons.group));

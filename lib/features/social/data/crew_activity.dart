@@ -409,7 +409,7 @@ class CrewActivityController extends StateNotifier<CrewActivityState> {
       state = state.copyWith(
         loading: false,
         refreshing: false,
-        error: "Couldn't refresh crew activity.",
+        error: "Couldn't refresh your friends' activity.",
       );
       if (error is ApiException && error.statusCode == 401) {
         onSessionExpired?.call();

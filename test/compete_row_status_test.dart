@@ -95,7 +95,7 @@ void main() {
       expect(chase.tone, RaceRowTone.chasing);
 
       final wait = competeRowStatus(_race('c', mine: 0, others: []), 'user-1')!;
-      expect(wait.label, 'Waiting for crew');
+      expect(wait.label, 'Waiting for friends');
       expect(wait.tone, RaceRowTone.waiting);
 
       final done = competeRowStatus(

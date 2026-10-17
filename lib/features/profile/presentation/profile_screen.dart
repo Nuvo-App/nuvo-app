@@ -254,7 +254,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   _AccountRow(
                                     icon: Icons.notifications_outlined,
                                     label: 'Notifications',
-                                    subtitle: 'Race and crew updates',
+                                    subtitle: 'Race and friend updates',
                                     onTap: () =>
                                         context.push('/settings/notifications'),
                                   ),
@@ -1599,7 +1599,7 @@ class _AccountRow extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  /// Quiet context under the label ("Race and crew updates").
+  /// Quiet context under the label ("Race and friend updates").
   final String? subtitle;
 
   /// The one destructive treatment — red, reserved for Delete account.

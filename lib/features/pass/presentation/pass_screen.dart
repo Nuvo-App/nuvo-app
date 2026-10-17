@@ -162,7 +162,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add this crew member.')),
+          const SnackBar(content: Text('Could not add this friend.')),
         );
       }
     }
@@ -460,7 +460,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
       });
     }
     final passError = pass.failed && pass.info == null
-        ? 'Could not load your crew.'
+        ? 'Could not load your friends.'
         : null;
     final profile = _buildProfile(user);
     final crewState = ref.watch(crewControllerProvider);
@@ -843,7 +843,7 @@ class _PassScreenState extends ConsumerState<PassScreen> {
                                 racesById: racesById,
                                 busyIds: _ctaBusy,
                                 emptyNote:
-                                    'Race, finish, set a personal best — your crew\'s moves land here.',
+                                    'Race, finish, set a personal best — your friends\' moves land here.',
                                 onTap: _openCrewActivity,
                                 onPerson: (i) => _tapFeedPerson(i, crew),
                                 onReact: _react,
@@ -2287,7 +2287,7 @@ class _CrewRacesNow extends StatelessWidget {
       ],
       if (ongoing.isNotEmpty) ...[
         FoldGap(liveItems.isNotEmpty ? 6 : 0),
-        section(const _SectionLabel(label: 'Racing with your crew')),
+        section(const _SectionLabel(label: 'Racing with your friends')),
         const FoldGap(8),
         for (final race in ongoing.take(3)) ...[
           section(
@@ -2308,7 +2308,7 @@ class _CrewRacesNow extends StatelessWidget {
     padding: EdgeInsets.symmetric(vertical: 20),
     child: _EmptyNote(
       text:
-          'No races running with your crew right now. Start one from '
+          'No races running with your friends right now. Start one from '
           'Compete.',
     ),
   );
@@ -2320,7 +2320,7 @@ class _CrewRacesNow extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 20),
         child: _EmptyNote(
           text:
-              'No races running with your crew right now. Start one from '
+              'No races running with your friends right now. Start one from '
               'Compete.',
         ),
       );
@@ -2350,7 +2350,7 @@ class _CrewRacesNow extends StatelessWidget {
         // cards: standings slice, progress, who's in. Not title/date rows.
         if (ongoing.isNotEmpty) ...[
           if (liveItems.isNotEmpty) const SizedBox(height: 6),
-          const _SectionLabel(label: 'Racing with your crew'),
+          const _SectionLabel(label: 'Racing with your friends'),
           const SizedBox(height: 8),
           for (final race in ongoing.take(3)) ...[
             _ActiveRaceCard(
@@ -2555,7 +2555,7 @@ class _ActiveRaceCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     {
-                      '$crewCount from your crew',
+                      '$crewCount from your friends',
                       '${race.participants.length} racing',
                     }.join(' · '),
                     maxLines: 1,
@@ -2774,11 +2774,16 @@ class _CrewHeader extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(
-                'Crew',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.screenTitle,
+              // Scales down on the narrowest phones instead of ellipsizing
+              // the tab title.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Friends',
+                  maxLines: 1,
+                  style: AppTextStyles.screenTitle,
+                ),
               ),
             ),
             Semantics(
@@ -3322,7 +3327,7 @@ class _RequestSurface extends StatelessWidget {
             children: [
               if (incoming.isNotEmpty) ...[
                 _RequestGroupLabel(
-                  label: 'Crew requests',
+                  label: 'Friend requests',
                   count: incoming.length,
                 ),
                 for (final user in incoming)
@@ -3589,7 +3594,7 @@ class _SearchResultList extends StatelessWidget {
     final busy = crewState.pendingUserIds.contains(user.id);
     // BeReal-style context — a recommendation should say why you know them.
     final subtitle = result.mutualCount > 0
-        ? '${user.handleLine} · ${result.mutualCount} mutual crew'
+        ? '${user.handleLine} · ${result.mutualCount} mutual ${result.mutualCount == 1 ? 'friend' : 'friends'}'
         : null;
     return _UserRow(
       user: user,
@@ -3599,7 +3604,7 @@ class _SearchResultList extends StatelessWidget {
           status == CrewConnectionStatus.pendingOutgoing,
       loading: busy,
       actionLabel: switch (status) {
-        CrewConnectionStatus.connected => 'In crew',
+        CrewConnectionStatus.connected => 'Friends',
         CrewConnectionStatus.pendingOutgoing => 'Requested',
         CrewConnectionStatus.pendingIncoming => 'Accept',
         CrewConnectionStatus.none => 'Add',

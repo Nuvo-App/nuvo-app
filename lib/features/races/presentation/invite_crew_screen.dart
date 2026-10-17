@@ -159,7 +159,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
       if (mounted) {
         setState(() => _adding = _adding.where((id) => id != user.id).toSet());
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add this crew member.')),
+          const SnackBar(content: Text('Could not add this friend.')),
         );
       }
     }
@@ -225,7 +225,7 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'Pull in your crew',
+                      'Invite your friends',
                       style: AppTextStyles.headlineLarge.copyWith(
                         fontSize: 32,
                         letterSpacing: -0.9,
@@ -270,12 +270,12 @@ class _InviteCrewScreenState extends ConsumerState<InviteCrewScreen> {
                         text: 'No matching Nuvo members found.',
                       ),
                     const SizedBox(height: 24),
-                    const _SectionLabel(label: 'Your crew'),
+                    const _SectionLabel(label: 'Your friends'),
                     const SizedBox(height: 10),
                     if (_crew.isEmpty)
                       const _SmallPanel(
                         text:
-                            'Add people in Crew, or use the invite code below.',
+                            'Add friends in Friends, or use the invite code below.',
                       )
                     else
                       for (final user in _crew)

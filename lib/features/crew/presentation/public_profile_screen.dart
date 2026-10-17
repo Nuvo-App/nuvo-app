@@ -104,7 +104,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
         );
       });
       _snack(outcome == ConnectOutcome.active
-          ? 'Added to your crew.'
+          ? 'Added to your friends.'
           : 'Request sent.');
     } on ApiException catch (e) {
       if (mounted) {
@@ -125,7 +125,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
           _busy = false;
           _card = _withStatus(card, CrewConnectionStatus.connected);
         });
-        _snack('Added to your crew.');
+        _snack('Added to your friends.');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -140,9 +140,9 @@ class _State extends ConsumerState<PublicProfileScreen> {
     if (card == null) return;
     final confirmed = await showNuvoConfirmDialog(
       context,
-      title: 'Remove from crew?',
+      title: 'Remove friend?',
       message:
-          '${card.displayName} will no longer be in your crew. You can add '
+          '${card.displayName} will no longer be in your friends. You can add '
           'them again later.',
       confirmLabel: 'Remove',
     );
@@ -155,7 +155,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
           _busy = false;
           _card = _withStatus(card, CrewConnectionStatus.none);
         });
-        _snack('Removed from your crew.');
+        _snack('Removed from your friends.');
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -174,7 +174,6 @@ class _State extends ConsumerState<PublicProfileScreen> {
         username: c.username,
         memberId: c.memberId,
         profilePhotoUrl: c.profilePhotoUrl,
-        isPrivate: c.isPrivate,
         level: c.level,
         levelProgress: c.levelProgress,
         achievementsEarned: c.achievementsEarned,
@@ -636,7 +635,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
             children: [
               const _Badge(
                 icon: Icons.check_circle_rounded,
-                label: 'In your crew',
+                label: 'Friends',
                 color: NuvoColors.success,
               ),
               const SizedBox(height: 14),
@@ -653,7 +652,7 @@ class _State extends ConsumerState<PublicProfileScreen> {
               ),
               const SizedBox(height: 10),
               NuvoTertiaryButton(
-                label: 'Remove from crew',
+                label: 'Remove friend',
                 expand: true,
                 onPressed: _busy ? null : _remove,
               ),
@@ -665,13 +664,13 @@ class _State extends ConsumerState<PublicProfileScreen> {
             color: NuvoColors.warning,
           ),
         CrewConnectionStatus.pendingIncoming => NuvoPrimaryButton(
-            label: 'Accept crew request',
+            label: 'Accept friend request',
             expand: true,
             loading: _busy,
             onPressed: _busy ? null : _accept,
           ),
         CrewConnectionStatus.none => NuvoPrimaryButton(
-            label: card.isPrivate ? 'Send crew request' : 'Add to crew',
+            label: 'Add friend',
             expand: true,
             loading: _busy,
             onPressed: _busy ? null : _connect,

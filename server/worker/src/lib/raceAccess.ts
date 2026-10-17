@@ -158,7 +158,7 @@ export async function checkRaceJoinEligibility(
     case 'crew_only':
       return (await isCrewOf(db, userId, race.creator_id))
         ? { ok: true }
-        : { ok: false, error: 'This race is only open to the crew', status: 403 };
+        : { ok: false, error: 'This race is only open to the creator\'s friends', status: 403 };
     case 'public_demo':
       return race.public_join_enabled
         ? { ok: true }

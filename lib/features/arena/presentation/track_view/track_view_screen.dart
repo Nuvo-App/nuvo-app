@@ -78,7 +78,7 @@ class _TrackViewScreenState extends State<TrackViewScreen> {
       (a, b) => a.completedAmount >= b.completedAmount ? a : b,
     );
     final contextLabel = leader.id == _currentUser.id
-        ? '#$rank · You lead the crew'
+        ? '#$rank · You lead the board'
         : '#$rank · ${leader.completedAmount - _currentUser.completedAmount} ${_race.unit} behind ${leader.displayName}';
     final toFinish = (_race.goal - currentProgress).clamp(0, _race.goal);
 
@@ -603,7 +603,7 @@ class _StandingsPanel extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'CREW STANDINGS',
+                      'STANDINGS',
                       style: TextStyle(
                         color: _panelMuted(context),
                         fontSize: 11,

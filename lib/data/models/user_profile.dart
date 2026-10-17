@@ -7,7 +7,6 @@ class UserProfile {
     this.email,
     this.passSlug,
     this.avatarUrl,
-    this.privateProfile = false,
     this.onboardingComplete = false,
   });
 
@@ -18,6 +17,5 @@ class UserProfile {
   final String? email;
   final String? passSlug;
   final String? avatarUrl;
-  final bool privateProfile;
   final bool onboardingComplete;
 }

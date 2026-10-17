@@ -1779,7 +1779,7 @@ class RaceWaitingSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.themeColors;
     final subtitle =
-        '$raceCount ${raceCount == 1 ? 'race' : 'races'} need crew';
+        '$raceCount ${raceCount == 1 ? 'race' : 'races'} need friends';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1795,7 +1795,7 @@ class RaceWaitingSummary extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Waiting for crew',
+                        'Waiting for friends',
                         style: AppTextStyles.sectionTitle,
                       ),
                       Text(subtitle, style: AppTextStyles.raceRowMeta),

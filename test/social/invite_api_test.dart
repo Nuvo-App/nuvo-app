@@ -83,7 +83,7 @@ void main() {
       expect((r.destination! as RaceDestination).raceId, 'r9');
     });
 
-    test('crew connect to a private profile → pending', () async {
+    test('crew connect → pending', () async {
       final api = InviteApi(
         client: MockClient((req) async => _json({
               'ok': true,

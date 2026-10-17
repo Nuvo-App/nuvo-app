@@ -112,7 +112,6 @@ class _JourneyRepo extends _AuthRepo {
   Future<void> saveProfile({
     String? fullName,
     String? username,
-    bool? privateProfile,
     String? profilePhotoUrl,
     bool removePhoto = false,
   }) async {

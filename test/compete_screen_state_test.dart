@@ -123,7 +123,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       // Loading should be done; a lone race sits in the waiting summary.
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.text('Waiting for crew'), findsOneWidget);
+      expect(find.text('Waiting for friends'), findsOneWidget);
     });
 
     testWidgets('shows empty state when loaded with no races', (tester) async {
@@ -164,7 +164,7 @@ void main() {
 
       // Manual retry succeeded → content visible.
       expect(find.byType(NuvoErrorState), findsNothing);
-      expect(find.text('Waiting for crew'), findsOneWidget);
+      expect(find.text('Waiting for friends'), findsOneWidget);
     });
   });
 }

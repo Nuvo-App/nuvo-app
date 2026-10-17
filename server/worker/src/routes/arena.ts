@@ -114,7 +114,7 @@ function buildRowSubtitle(
     return `${myParticipant.progress_value} ${metricLabel(race)} · ${racerLabel}`;
   }
   if (myParticipant && participantCount === 1) {
-    return 'Solo · add crew from the race room';
+    return 'Solo · add friends from the race room';
   }
   if (myParticipant) {
     return `Submit your first proof · ${racerLabel}`;
@@ -189,7 +189,7 @@ async function buildRealSnapshot(
     if (emptyHit) return emptyHit;
     return {
       mode: 'real',
-      headerPulse: 'Start a race with your crew',
+      headerPulse: 'Start a race with your friends',
       focusBoard: null,
       liveBoards: [],
       activity: [],
@@ -317,7 +317,7 @@ async function buildRealSnapshot(
   } else if (resultRaces.length > 0) {
     headerPulse = 'Results are in';
   } else {
-    headerPulse = 'Start a race with your crew';
+    headerPulse = 'Start a race with your friends';
   }
 
   return {
@@ -378,7 +378,7 @@ function buildRealBoard(
   if (isResult) {
     boardContext = `${count} ${count === 1 ? 'racer' : 'racers'} finished`;
   } else if (isSolo) {
-    boardContext = 'Solo · add crew from the race room';
+    boardContext = 'Solo · add friends from the race room';
   } else {
     boardContext = `${count} ${count === 1 ? 'racer' : 'racers'} on the board`;
   }

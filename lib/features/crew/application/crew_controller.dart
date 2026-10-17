@@ -333,7 +333,7 @@ class CrewController extends StateNotifier<CrewState> {
       state = state.copyWith(
         loading: false,
         refreshing: false,
-        error: "Couldn't refresh your crew. Try again.",
+        error: "Couldn't refresh your friends. Try again.",
       );
       if (error is ApiException && error.statusCode == 401) onSessionExpired?.call();
     }
@@ -370,7 +370,7 @@ class CrewController extends StateNotifier<CrewState> {
     final existing = _mutations[id];
     if (existing != null) {
       if (existing.action == action) return existing.future.then((value) => value as T);
-      return Future.error(const ApiException(409, 'A crew update is still in progress.'));
+      return Future.error(const ApiException(409, 'A friend update is still in progress.'));
     }
     final generation = _generation;
     state = state.copyWith(pendingUserIds: {...state.pendingUserIds, id});

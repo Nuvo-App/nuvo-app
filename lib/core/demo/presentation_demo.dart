@@ -692,7 +692,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-accepted',
       category: 'crew_request_accepted',
-      title: 'Priya Shah accepted your crew request',
+      title: 'Priya Shah accepted your friend request',
       actorName: 'Priya Shah',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=32',
       createdAt: DateTime.now().toUtc().subtract(const Duration(minutes: 15)),
@@ -702,7 +702,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-joined',
       category: 'crew_connected',
-      title: 'Theo Martin joined your crew',
+      title: 'Theo Martin is now your friend',
       actorName: 'Theo Martin',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=53',
       createdAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
@@ -746,7 +746,7 @@ abstract final class PresentationDemoData {
     NuvoNotification(
       id: 'presentation-demo-notif-jules',
       category: 'crew_connected',
-      title: 'Jules Carter joined your crew',
+      title: 'Jules Carter is now your friend',
       actorName: 'Jules Carter',
       actorPhotoUrl: 'https://i.pravatar.cc/160?img=15',
       createdAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
@@ -945,7 +945,7 @@ abstract final class PresentationDemoData {
         displayName: 'Priya Shah',
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=32',
       ),
-      title: 'Priya Shah accepted your crew request',
+      title: 'Priya Shah accepted your friend request',
       entityType: 'crew',
       entityId: 'demo-conn-priya',
       destination: const ProfileDestination('presentation-demo-crew-priya'),
@@ -978,7 +978,7 @@ abstract final class PresentationDemoData {
         displayName: 'Jules Carter',
         profilePhotoUrl: 'https://i.pravatar.cc/160?img=15',
       ),
-      title: 'Jules Carter joined your crew',
+      title: 'Jules Carter is now your friend',
       entityType: 'crew',
       entityId: 'demo-conn-jules',
       destination: const ProfileDestination('presentation-demo-crew-jules'),
@@ -1126,7 +1126,7 @@ abstract final class PresentationDemoData {
     final focus = active.first;
     return ArenaSnapshot(
       mode: 'real',
-      headerPulse: 'Your crew is moving',
+      headerPulse: 'Your friends are moving',
       focusBoard: _boardFor(focus, userId),
       liveBoards: [for (final race in active.skip(1)) _boardFor(race, userId)],
       activity: const [
@@ -1178,7 +1178,7 @@ abstract final class PresentationDemoData {
       title: race.title,
       proofLabel: 'AI Motion Proof',
       progressLabel: '$progress / $target reps',
-      boardContext: 'Your crew is moving toward the finish line.',
+      boardContext: 'Your friends are moving toward the finish line.',
       primaryActionLabel: 'Open race',
       primaryActionType: 'open_board',
       progressPercent: percent.clamp(0, 100),

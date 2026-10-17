@@ -341,7 +341,7 @@ void main() {
       await _settleDemo(tester);
 
       // People — the races running with the crew right now.
-      expect(find.text('Racing with your crew'), findsOneWidget);
+      expect(find.text('Racing with your friends'), findsOneWidget);
       expect(find.text('Pushup Battle'), findsWidgets);
 
       // Activity — a real stream, not an empty note.
@@ -349,7 +349,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       expect(
-        find.text('Jules Carter joined your crew'),
+        find.text('Jules Carter is now your friend'),
         findsOneWidget,
       );
       expect(find.text('just passed you in Pushup Battle'), findsOneWidget);
@@ -375,7 +375,7 @@ void main() {
       ));
       await _settleDemo(tester);
 
-      expect(find.text('Racing with your crew'), findsOneWidget);
+      expect(find.text('Racing with your friends'), findsOneWidget);
       expect(find.text('Pushup Battle'), findsWidgets);
       // History and scheduling are not on the Crew page at all.
       expect(find.text('Recent'), findsNothing);
@@ -396,7 +396,7 @@ void main() {
       await _settleDemo(tester);
 
       expect(
-        find.text('No races running with your crew right now. Start one '
+        find.text('No races running with your friends right now. Start one '
             'from Compete.'),
         findsOneWidget,
       );
@@ -565,14 +565,14 @@ void main() {
       // People — find someone, and nothing is racing yet.
       expect(find.text('Find people'), findsOneWidget);
       expect(
-        find.text('No races running with your crew right now. Start one '
+        find.text('No races running with your friends right now. Start one '
             'from Compete.'),
         findsOneWidget,
       );
 
       await openLens(tester, 'Activity');
       expect(
-        find.text("Race, finish, set a personal best — your crew's moves "
+        find.text("Race, finish, set a personal best — your friends' moves "
             'land here.'),
         findsOneWidget,
       );

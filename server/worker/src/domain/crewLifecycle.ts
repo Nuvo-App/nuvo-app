@@ -58,9 +58,7 @@ export async function transitionCrew(
   const status = action === 'connect'
     ? `CASE WHEN previous.status = 'active' THEN 'active'
             WHEN previous.status = 'pending' AND previous.requested_by = ? THEN 'active'
-            WHEN previous.status = 'pending' THEN 'pending'
-            WHEN COALESCE((SELECT private_profile FROM profiles WHERE user_id = ?), 0) = 1 THEN 'pending'
-            ELSE 'active' END`
+            ELSE 'pending' END`
     : `'${action === 'accept' ? 'active' : action === 'decline' ? 'declined' : 'removed'}'`;
   const canonical = db.prepare(`
     WITH previous AS (
@@ -88,7 +86,7 @@ export async function transitionCrew(
       created_at = excluded.created_at, updated_at = excluded.updated_at
   `).bind(
     a, b, b, a, a, generateId(), a, b,
-    ...(action === 'connect' ? [targetId, targetId] : []),
+    ...(action === 'connect' ? [targetId] : []),
     actorId, actorId,
     ...(action === 'accept' || action === 'decline' ? [targetId] : []),
     actorId, targetId,
@@ -139,18 +137,16 @@ function crewNotificationStatement(
         CASE WHEN c.status = 'pending' THEN 'crew_request'
              WHEN ? = 'accept' AND c.requested_by = ? THEN 'crew_request_accepted'
              ELSE 'crew_connected' END AS category,
-        CASE WHEN c.status = 'pending' AND COALESCE(p.private_profile, 0) = 1
-          THEN COALESCE('@' || NULLIF(TRIM(p.username), ''), 'Someone')
-          ELSE COALESCE(NULLIF(TRIM(p.full_name), ''), '@' || NULLIF(TRIM(p.username), ''), 'Someone') END AS name
+        COALESCE(NULLIF(TRIM(p.full_name), ''), '@' || NULLIF(TRIM(p.username), ''), 'Someone') AS name
       FROM connection c LEFT JOIN profiles p ON p.user_id = ?
       WHERE (c.status = 'pending' AND c.requested_by = ?) OR c.status = 'active'
     )
     INSERT OR IGNORE INTO notifications
       (id, user_id, category, actor_user_id, title, dest_type, dest_id, entity_type, entity_id, dedupe_key, created_at)
     SELECT ?, ?, category, ?, name || CASE category
-      WHEN 'crew_request' THEN ' wants to connect'
-      WHEN 'crew_request_accepted' THEN ' accepted your crew request'
-      ELSE ' joined your crew' END,
+      WHEN 'crew_request' THEN ' sent you a friend request'
+      WHEN 'crew_request_accepted' THEN ' accepted your friend request'
+      ELSE ' is now your friend' END,
       'profile', ?, 'crew', ?, 'crew:' || id || ':' || status, CURRENT_TIMESTAMP
     FROM content
     WHERE ? IN ('connect', 'accept')
@@ -159,28 +155,29 @@ function crewNotificationStatement(
   `).bind(a, b, action, recipient, other, other, generateId(), recipient, other, other, other, action, recipient);
 }
 
-/** Whether the viewer may see the target's real name + photo. */
+/**
+ * Whether the viewer may see the target's real name + photo. There is no
+ * private profile, so everyone is visible; the legacy flag argument is
+ * ignored (blocked users are handled before this is reached).
+ */
 export function canSeeIdentity(
-  viewerId: string,
-  targetId: string,
-  targetPrivate: boolean,
-  status: CrewConnectionStatus,
+  _viewerId: string,
+  _targetId: string,
+  _legacyPrivateFlag: boolean,
+  _status: CrewConnectionStatus,
 ): boolean {
-  if (viewerId === targetId) return true;
-  if (status === 'connected') return true;
-  return !targetPrivate;
+  return true;
 }
 
 /**
- * The connection status to write when someone connects. Public target → an
- * immediate mutual 'active'; private target → a 'pending' request they accept.
+ * The connection status to write when someone connects. Every add is a
+ * request: a 'pending' state on both rows that the target accepts or declines.
+ * (The legacy flag argument is ignored.)
  */
-export function connectResult(targetPrivate: boolean): {
+export function connectResult(_legacyPrivateFlag?: boolean): {
   mine: 'active' | 'pending';
   theirs: 'active' | 'pending';
   outcome: 'active' | 'pending';
 } {
-  return targetPrivate
-    ? { mine: 'pending', theirs: 'pending', outcome: 'pending' }
-    : { mine: 'active', theirs: 'active', outcome: 'active' };
+  return { mine: 'pending', theirs: 'pending', outcome: 'pending' };
 }

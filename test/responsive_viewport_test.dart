@@ -179,7 +179,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 300));
           expect(tester.takeException(), isNull);
 
-          expect(find.text('Crew'), findsOneWidget);
+          expect(find.text('Friends'), findsOneWidget);
           // Header actions are icon affordances with semantics labels —
           // search opens Add to Crew, the QR icon opens My Nuvo.
           expect(find.bySemanticsLabel('Find people'), findsOneWidget);

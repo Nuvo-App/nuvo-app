@@ -1022,7 +1022,7 @@ class _RaceAnythingPageState extends State<_RaceAnythingPage>
           ),
           SizedBox(height: widget.compact ? 10 : 16),
           NuvoFlipText(
-            'Set the finish line. Bring your crew.',
+            'Set the finish line. Bring your friends.',
             style: AppTextStyles.bodyLarge.copyWith(
               color: NuvoColors.muted,
               height: 1.3,

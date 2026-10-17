@@ -217,7 +217,7 @@ Future<_App> _pumpRealApp(
 final _matrix = <String, (Type screen, String path)>{
   'Arena': (ArenaScreen, '/arena'),
   'Compete': (CompeteScreen, '/compete'),
-  'Crew': (PassScreen, '/pass'),
+  'Friends': (PassScreen, '/pass'),
   'Profile': (ProfileScreen, '/profile'),
 };
 
@@ -230,7 +230,7 @@ Future<void> _tapNav(WidgetTester tester, String label) async {
   await tester.tap(
     find.byKey(
       ValueKey(
-        'nuvo-nav-slot-${['Arena', 'Compete', 'Crew', 'Profile'].indexOf(label)}',
+        'nuvo-nav-slot-${['Arena', 'Compete', 'Friends', 'Profile'].indexOf(label)}',
       ),
     ),
   );
@@ -305,7 +305,7 @@ void main() {
     tester,
   ) async {
     final app = await _pumpRealApp(tester);
-    for (final label in ['Crew', 'Compete', 'Profile', 'Arena']) {
+    for (final label in ['Friends', 'Compete', 'Profile', 'Arena']) {
       await _tapNav(tester, label);
       _expectDestination(app, tester, label);
     }
@@ -332,7 +332,7 @@ void main() {
     // goBranch(navIndex) land on the wrong screen while every label-level
     // test stays green. Assert the observable contract, not the structure.
     final app = await _pumpRealApp(tester);
-    const taps = ['Compete', 'Crew', 'Arena', 'Profile'];
+    const taps = ['Compete', 'Friends', 'Arena', 'Profile'];
     for (final label in taps) {
       await _tapNav(tester, label);
       _expectDestination(app, tester, label);

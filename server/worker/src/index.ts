@@ -165,7 +165,7 @@ app.get('/j/:token', async (c) => {
           .bind(row.target_id)
           .first<{ full_name: string | null; username: string | null }>();
         const name = p?.full_name || (p?.username ? `@${p.username}` : 'a Nuvo member');
-        preview = { headline: `Connect with ${name} on Nuvo`, sub: 'Open the link on your phone to add them to your crew.' };
+        preview = { headline: `Connect with ${name} on Nuvo`, sub: 'Open the link on your phone to add them as a friend.' };
       }
     }
   }

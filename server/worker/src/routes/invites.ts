@@ -74,7 +74,7 @@ async function personCard(
 ): Promise<PublicPerson | null> {
   const row = await db
     .prepare(
-      `SELECT u.id, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
+      `SELECT u.id, p.full_name, p.username, p.avatar_url, mp.member_id
        FROM users u
        LEFT JOIN profiles p ON p.user_id = u.id
        LEFT JOIN member_passes mp ON mp.user_id = u.id
@@ -86,7 +86,6 @@ async function personCard(
       full_name: string | null;
       username: string | null;
       avatar_url: string | null;
-      private_profile: number | null;
       member_id: string | null;
     }>();
   if (!row) return null;
@@ -98,7 +97,6 @@ async function personCard(
       displayName: row.full_name,
       username: row.username,
       profilePhotoUrl: row.avatar_url,
-      privateProfile: Boolean(row.private_profile),
     },
     { crewIds: new Set(), blockedEitherWay: new Set(), coRacerIds: new Set() },
   );
@@ -107,7 +105,7 @@ async function personCard(
     displayName: vis.anonymized ? (row.username ? `@${row.username}` : 'Nuvo member') : vis.displayName,
     username: row.username,
     profilePhotoUrl: vis.profilePhotoUrl,
-    isPrivate: Boolean(row.private_profile),
+    isPrivate: false, // legacy key for older app builds; there are no private profiles
   };
 }
 
@@ -423,7 +421,7 @@ invitesRouter.post('/:token/accept', requireAuth, async (c) => {
   if (!target) return c.json({ ok: false, status: 'not_found' }, 404);
 
   // Same lifecycle as /crew/add: resolves the previous pair, writes both
-  // directional rows, honours the target's private profile, heals a mutual
+  // directional rows (every add is a request), heals a mutual
   // request into 'active', resolves stale request notifications and emits
   // the connect notification — all inside one D1 batch.
   const transition = await transitionCrew(c.env.DB, userId, targetUserId, 'connect');

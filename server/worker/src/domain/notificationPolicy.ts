@@ -95,7 +95,7 @@ function firstName(name: string | null | undefined): string {
 /** "Riley, Maya and Jules" / "Riley, Maya +3" — capped display lists. */
 function nameList(names: string[], cap = 3): string {
   const first = names.map(firstName).filter((n) => n !== 'Someone');
-  if (first.length === 0) return 'Your crew';
+  if (first.length === 0) return 'Your friends';
   if (first.length <= cap) {
     if (first.length === 1) return first[0];
     return `${first.slice(0, -1).join(', ')} and ${first[first.length - 1]}`;

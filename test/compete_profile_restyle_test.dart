@@ -618,7 +618,7 @@ void main() {
         // stay unlaid-out until scrolled to — assert presence with
         // skipOffstage off, then drag to the bottom to exercise the whole
         // scroll path (throws if content overflows the list).
-        for (final label in ['Waiting for crew', 'Finished', 'Quick starts']) {
+        for (final label in ['Waiting for friends', 'Finished', 'Quick starts']) {
           expect(
             find.text(label, skipOffstage: false),
             findsOneWidget,

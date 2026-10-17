@@ -55,7 +55,6 @@ export interface ProfileRow {
   username: string | null;
   avatar_url: string | null;
   avatar_object_key: string | null;
-  private_profile: number;
   onboarding_complete: number;
   is_demo: number;
   created_at: string;

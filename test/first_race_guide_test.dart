@@ -1073,7 +1073,7 @@ void main() {
       await settle(tester);
       await tester.tap(find.byIcon(Icons.add_rounded));
       await settle(tester);
-      expect(find.text('Bring in your crew.'), findsOneWidget);
+      expect(find.text('Bring in your friends.'), findsOneWidget);
       expect(find.text('Tap Invite racers.'), findsOneWidget);
 
       await tester.tap(find.text('Invite racers'));
@@ -1082,7 +1082,7 @@ void main() {
         container.read(firstRaceGuideProvider),
         FirstRaceGuideStep.composerRacers,
       );
-      expect(find.text('BRING YOUR CREW'), findsOneWidget);
+      expect(find.text('BRING YOUR FRIENDS'), findsOneWidget);
 
       // Choose solo — coach retargets Review race.
       await tester.tap(find.text('Start solo'));

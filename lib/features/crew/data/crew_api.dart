@@ -52,7 +52,6 @@ class PublicProfileCard {
     this.username,
     this.memberId,
     this.profilePhotoUrl,
-    this.isPrivate = false,
     this.lastActiveAt,
     this.level,
     this.levelProgress,
@@ -72,7 +71,6 @@ class PublicProfileCard {
   final String? username;
   final String? memberId;
   final String? profilePhotoUrl;
-  final bool isPrivate;
 
   /// Real presence timestamp — only populated for connected people.
   final DateTime? lastActiveAt;
@@ -113,7 +111,6 @@ class PublicProfileCard {
         username: j['username'] as String?,
         memberId: j['memberId'] as String?,
         profilePhotoUrl: j['profilePhotoUrl'] as String?,
-        isPrivate: j['isPrivate'] as bool? ?? false,
         lastActiveAt: DateTime.tryParse(j['lastActiveAt'] as String? ?? ''),
         level: j['level'] as int?,
         levelProgress: (j['levelProgress'] as num?)?.toDouble(),

@@ -99,7 +99,7 @@ class _MyQrSheetState extends ConsumerState<_MyQrSheet> {
               Text('My code', style: AppTextStyles.titleLarge),
               const SizedBox(height: 4),
               Text(
-                'Let someone scan this to add you to their crew.',
+                'Let someone scan this to add you as a friend.',
                 style: AppTextStyles.bodySmall.copyWith(
                   color: context.themeColors.inkSubtle,
                 ),

@@ -122,7 +122,7 @@ profileRouter.get('/me', async (c) => {
     username: profile.username,
     profilePhotoUrl: profile.avatar_url,
     avatarUrl: profile.avatar_url,
-    privateProfile: Boolean(profile.private_profile),
+    privateProfile: false, // legacy key for older app builds; there are no private profiles
     onboardingComplete: Boolean(profile.onboarding_complete),
   });
 });
@@ -214,7 +214,7 @@ profileRouter.post('/', async (c) => {
   let body: {
     fullName?: unknown;
     username?: unknown;
-    privateProfile?: unknown;
+    privateProfile?: unknown; // legacy field from older builds; ignored
     profilePhotoUrl?: unknown;
     avatarUrl?: unknown;
   };
@@ -227,7 +227,6 @@ profileRouter.post('/', async (c) => {
   const isPersonalUpdate =
     typeof body.fullName === 'string' ||
     typeof body.username === 'string' ||
-    typeof body.privateProfile === 'boolean' ||
     body.profilePhotoUrl !== undefined ||
     body.avatarUrl !== undefined;
 
@@ -268,11 +267,6 @@ profileRouter.post('/', async (c) => {
     bindings.push(username);
   }
 
-  if (typeof body.privateProfile === 'boolean') {
-    fields.push('private_profile = ?');
-    bindings.push(body.privateProfile ? 1 : 0);
-  }
-
   if (
     body.profilePhotoUrl === null ||
     body.avatarUrl === null ||
@@ -304,16 +298,20 @@ profileRouter.post('/', async (c) => {
     bindings.push(newKey);
   }
 
-  if (fields.length === 1) {
+  if (fields.length === 1 && body.privateProfile === undefined) {
     // Only the timestamp update — nothing else to change
     return c.json({ ok: false, error: 'No updatable fields provided' }, 400);
   }
 
-  await c.env.DB.prepare(
-    `UPDATE profiles SET ${fields.join(', ')} WHERE user_id = ?`,
-  )
-    .bind(...bindings, userId)
-    .run();
+  // A legacy `privateProfile`-only body (older app builds) is accepted and
+  // ignored: succeed without touching the row.
+  if (fields.length > 1) {
+    await c.env.DB.prepare(
+      `UPDATE profiles SET ${fields.join(', ')} WHERE user_id = ?`,
+    )
+      .bind(...bindings, userId)
+      .run();
+  }
 
   const profile = await c.env.DB.prepare('SELECT * FROM profiles WHERE user_id = ?')
     .bind(userId)
@@ -324,7 +322,7 @@ profileRouter.post('/', async (c) => {
     username: profile?.username ?? null,
     profilePhotoUrl: profile?.avatar_url ?? null,
     avatarUrl: profile?.avatar_url ?? null,
-    privateProfile: Boolean(profile?.private_profile),
+    privateProfile: false,
     onboardingComplete: Boolean(profile?.onboarding_complete),
   });
 });

@@ -90,7 +90,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add this crew member.')),
+          const SnackBar(content: Text('Could not add this friend.')),
         );
       }
     }
@@ -147,7 +147,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
             ListView(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
               children: [
-                Text('Add to crew', style: AppTextStyles.displaySmall),
+                Text('Add friend', style: AppTextStyles.displaySmall),
                 const SizedBox(height: 4),
                 Text(
                   'Name, @username or member code.',
@@ -215,7 +215,7 @@ class _AddCrewScreenState extends ConsumerState<AddCrewScreen> {
                   // ── Requests — people already knocking ────────────────────
                   if (crewState.requests.isNotEmpty) ...[
                     const SizedBox(height: 22),
-                    const _HubLabel(label: 'Wants in your crew'),
+                    const _HubLabel(label: 'Wants to be friends'),
                     const SizedBox(height: 10),
                     _HubSurface(
                       children: [
@@ -371,7 +371,7 @@ class _PersonRow extends StatelessWidget {
     final mutual = result.mutualCount;
     final subtitle = [
       if (_handleLine(user).isNotEmpty) _handleLine(user),
-      if (mutual > 0) '$mutual mutual ${mutual == 1 ? 'crew' : 'crew'}',
+      if (mutual > 0) '$mutual mutual ${mutual == 1 ? 'friend' : 'friends'}',
     ].join(' · ');
     return Column(
       children: [
@@ -429,7 +429,7 @@ class _PersonRow extends StatelessWidget {
       stateKey: result.connectionStatus,
       child: switch (result.connectionStatus) {
         CrewConnectionStatus.connected => const _StatusChip(
-          label: 'In crew',
+          label: 'Friends',
           color: NuvoColors.success,
         ),
         CrewConnectionStatus.pendingOutgoing => const _StatusChip(

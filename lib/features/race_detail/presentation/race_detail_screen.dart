@@ -633,9 +633,9 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
                     icon: Icons.group_add_rounded,
                     title: 'No one on the board yet',
                     body:
-                        'Invite your crew — the leaderboard fills in as '
+                        'Invite your friends — the leaderboard fills in as '
                         'people join and log their first move.',
-                    ctaLabel: isOwner ? 'Invite crew' : null,
+                    ctaLabel: isOwner ? 'Invite friends' : null,
                     onCta: isOwner ? () => _goToInviteCrew(race.id) : null,
                     compact: true,
                   )
@@ -747,7 +747,7 @@ class _RaceDetailScreenState extends ConsumerState<RaceDetailScreen>
                     if (!myRaceComplete)
                       _ManageRow(
                         icon: Icons.person_add_alt_1_rounded,
-                        label: 'Invite crew',
+                        label: 'Invite friends',
                         onTap: (_busy || _navigating)
                             ? null
                             : () => _goToInviteCrew(race.id),
@@ -1951,7 +1951,7 @@ class _CompleteCallout extends StatelessWidget {
                 Text('$scoreText$rankText', style: AppTextStyles.titleMedium),
                 const SizedBox(height: 2),
                 Text(
-                  'Start another race with your crew.',
+                  'Start another race with your friends.',
                   style: AppTextStyles.bodySmall.copyWith(
                     color: context.themeColors.inkMuted,
                   ),
@@ -1997,7 +1997,7 @@ String _heroSubcopy({
   final leader = sorted.isEmpty ? null : sorted.first;
   final me = userId == null ? null : race.participantFor(userId);
   if (me != null && raceIsCompleted(race)) {
-    return 'You hit the finish line. Pull in your crew and move the board again.';
+    return 'You hit the finish line. Invite your friends and move the board again.';
   }
   final parts = <String>[];
 

@@ -668,9 +668,9 @@ async function applyMoveProgress(db: D1Database, race: RaceRow, userId: string, 
   };
 }
 
-type ParticipantRow = { id: string; user_id: string; joined_at: string; finished_at?: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
-type MoveRow = MoveLogRow & { display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
-type StandingRow = { user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username: string | null };
+type ParticipantRow = { id: string; user_id: string; joined_at: string; finished_at?: string | null; display_name: string; profile_photo_url: string | null; username: string | null; progress_value: number; progress_percent: number; rank_cache: number | null };
+type MoveRow = MoveLogRow & { display_name: string; profile_photo_url: string | null; username: string | null };
+type StandingRow = { user_id: string; rank_position: number; score_value: number; completed_at: string | null; display_name: string; profile_photo_url: string | null; username: string | null };
 
 /// Viewer-level visibility inputs (crew allowlist + block set) — the same for
 /// every race in one request, computed once instead of once per race.
@@ -710,10 +710,9 @@ function shapeRaceResponse(
   const levels = collections.levels ?? new Map<string, number>();
   const { allowedIds, blockedEitherWay } = visibilityCtx;
 
-  // Being in the same race is itself an opt-in relationship: fellow racers see
-  // each other's race identity (name + photo) even with a private profile —
-  // a leaderboard / "someone passed you" is unreadable otherwise. Only when
-  // the viewer is themselves in this race; blocking still wins.
+  // Everyone's race identity (name + photo) is visible; there is no private
+  // profile. Only blocking anonymizes someone, and it always wins. The
+  // co-racer set is still passed along for the visibility context shape.
   const coRacerIds = new Set<string>();
   const viewerIsParticipant = Boolean(
     viewerUserId && participants.some((p) => p.user_id === viewerUserId),
@@ -724,7 +723,7 @@ function shapeRaceResponse(
     }
   }
 
-  function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; private_profile: number | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null; anonymized: boolean } {
+  function visibleFor(row: { user_id: string | null; display_name: string; profile_photo_url: string | null; username?: string | null }): { displayName: string; profilePhotoUrl: string | null; anonymized: boolean } {
     const v = resolveRaceMemberVisibility(
       viewerUserId,
       {
@@ -732,7 +731,6 @@ function shapeRaceResponse(
         displayName: row.display_name,
         username: row.username ?? null,
         profilePhotoUrl: row.profile_photo_url,
-        privateProfile: Boolean(row.private_profile),
       },
       { crewIds: allowedIds, blockedEitherWay, coRacerIds },
     );
@@ -966,7 +964,6 @@ async function buildRaceResponse(
       `SELECT rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              p.private_profile,
               p.username,
               rp.progress_value, rp.progress_percent, rp.rank_cache
        FROM race_members rm
@@ -976,7 +973,7 @@ async function buildRaceResponse(
        ORDER BY COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
     ).bind(race.id).all<ParticipantRow>(),
     db.prepare(
-      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM move_logs ml
        LEFT JOIN profiles p ON p.user_id = ml.user_id
        WHERE ml.race_id = ? AND ml.status != 'removed'
@@ -986,7 +983,7 @@ async function buildRaceResponse(
       `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`
     ).bind(race.id).first<InviteRow>(),
     db.prepare(
-      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM race_final_standings fs
        LEFT JOIN profiles p ON p.user_id = fs.user_id
        WHERE fs.race_id = ?
@@ -1086,7 +1083,7 @@ async function buildRaceResponsesBatch(
       `SELECT rm.race_id, rm.id, rm.user_id, rm.joined_at, rm.finished_at,
               COALESCE(rm.cached_display_name, p.full_name, 'Unknown') as display_name,
               COALESCE(rm.cached_avatar_url, p.avatar_url) as profile_photo_url,
-              p.private_profile, p.username,
+              p.username,
               rp.progress_value, rp.progress_percent, rp.rank_cache
        FROM race_members rm
        LEFT JOIN profiles p ON p.user_id = rm.user_id
@@ -1095,7 +1092,7 @@ async function buildRaceResponsesBatch(
        ORDER BY rm.race_id, COALESCE(rp.rank_cache, 9999) ASC, rp.progress_value DESC, rm.joined_at ASC`
     ).bind(...ids).all<ParticipantRow & { race_id: string }>(),
     db.prepare(
-      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT ml.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM move_logs ml
        LEFT JOIN profiles p ON p.user_id = ml.user_id
        WHERE ml.race_id IN (${placeholders}) AND ml.status != 'removed'
@@ -1106,7 +1103,7 @@ async function buildRaceResponsesBatch(
        ORDER BY race_id, created_at DESC`
     ).bind(...ids).all<InviteRow>(),
     db.prepare(
-      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.private_profile, p.username
+      `SELECT fs.*, COALESCE(p.full_name, 'Unknown') as display_name, p.avatar_url as profile_photo_url, p.username
        FROM race_final_standings fs
        LEFT JOIN profiles p ON p.user_id = fs.user_id
        WHERE fs.race_id IN (${placeholders})
@@ -1841,7 +1838,7 @@ racesRouter.post('/:id/invite-code', async (c) => {
   const userId = c.get('userId');
   const race = await getRace(c.env.DB, c.req.param('id'));
   if (!race) return c.json(badRequest('Race not found'), 404);
-  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can invite crew'), 403);
+  if (race.creator_id !== userId) return c.json(badRequest('Only the race creator can invite friends'), 403);
 
   const existing = await c.env.DB.prepare(
     `SELECT * FROM race_invites WHERE race_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`

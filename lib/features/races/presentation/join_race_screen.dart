@@ -93,7 +93,7 @@ class _JoinRaceScreenState extends ConsumerState<JoinRaceScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Have a crew invite code? Enter it below to join the race.',
+                      'Have an invite code? Enter it below to join the race.',
                       style: AppTextStyles.bodyLarge.copyWith(
                         color: context.themeColors.inkMuted,
                       ),

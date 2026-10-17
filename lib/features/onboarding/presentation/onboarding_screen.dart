@@ -424,7 +424,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'This is how your crew will see you in races.',
+                                'This is how your friends will see you in races.',
                                 style: AppTextStyles.bodyLarge.copyWith(
                                   color: NuvoColors.muted,
                                 ),

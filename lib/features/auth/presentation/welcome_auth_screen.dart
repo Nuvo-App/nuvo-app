@@ -246,8 +246,8 @@ class _WelcomeAuthScreenState extends ConsumerState<WelcomeAuthScreen> {
                   const SizedBox(height: 12),
                   Text(
                     isSignup
-                        ? 'Create an account to save your races, invite your crew, and keep your progress.'
-                        : 'Log in to keep your races, progress, and crew synced.',
+                        ? 'Create an account to save your races, invite your friends, and keep your progress.'
+                        : 'Log in to keep your races, progress, and friends synced.',
                     style: AppTextStyles.bodyMedium.copyWith(
                       color: context.themeColors.inkMuted,
                     ),

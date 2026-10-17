@@ -24,7 +24,7 @@ usersRouter.get('/search', async (c) => {
 
   const like = `%${q}%`;
   const rows = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id,
+    `SELECT u.id, u.primary_email, p.full_name, p.username, p.avatar_url, mp.member_id,
             cc.status AS conn_status, cc.requested_by AS conn_requested_by
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
@@ -59,7 +59,6 @@ usersRouter.get('/search', async (c) => {
       full_name: string | null;
       username: string | null;
       avatar_url: string | null;
-      private_profile: number;
       member_id: string | null;
       conn_status: string | null;
       conn_requested_by: string | null;
@@ -97,14 +96,13 @@ usersRouter.get('/search', async (c) => {
           memberId: row.member_id,
           initials: initialsFor(row.full_name, row.username, row.primary_email),
           profilePhotoUrl: row.avatar_url,
-          isPrivate: Boolean(row.private_profile),
+          isPrivate: false, // legacy key for older app builds
           connectionStatus,
           mutualCount,
         };
       }
-      // Minimal card for a private profile with no shared context: their
-      // handle (how you found them) but no real name / photo. Never a dead
-      // "Private User" string when there's a username to show.
+      // Minimal card for a blocked-relationship row: their handle but no
+      // real name / photo.
       return {
         id: row.id,
         displayName: row.username ? `@${row.username}` : 'Private profile',
@@ -112,7 +110,7 @@ usersRouter.get('/search', async (c) => {
         memberId: row.member_id,
         initials: initialsFor(row.username, row.username, null),
         profilePhotoUrl: null,
-        isPrivate: true,
+        isPrivate: false,
         connectionStatus,
         mutualCount,
       };
@@ -128,7 +126,7 @@ usersRouter.get('/:id', async (c) => {
   const targetId = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    `SELECT u.id, u.primary_email, u.last_active_at, p.full_name, p.username, p.avatar_url, p.private_profile, mp.member_id
+    `SELECT u.id, u.primary_email, u.last_active_at, p.full_name, p.username, p.avatar_url, mp.member_id
      FROM users u
      LEFT JOIN profiles p ON p.user_id = u.id
      LEFT JOIN member_passes mp ON mp.user_id = u.id
@@ -142,7 +140,6 @@ usersRouter.get('/:id', async (c) => {
       full_name: string | null;
       username: string | null;
       avatar_url: string | null;
-      private_profile: number;
       member_id: string | null;
     }>();
   if (!row) return c.json({ ok: false, error: 'User not found' }, 404);
@@ -161,12 +158,7 @@ usersRouter.get('/:id', async (c) => {
     .bind(viewerId, targetId)
     .first<{ status: string; requested_by: string | null }>();
   const connectionStatus = crewConnectionStatus(viewerId, targetId, conn);
-  const canSee = canSeeIdentity(
-    viewerId,
-    targetId,
-    Boolean(row.private_profile),
-    connectionStatus,
-  );
+  const canSee = canSeeIdentity(viewerId, targetId, false, connectionStatus);
 
   // Nuvo Level + achievements + racing context are part of a member's
   // competitive identity — they follow the same visibility rule as the
@@ -193,7 +185,7 @@ usersRouter.get('/:id', async (c) => {
         row.primary_email,
       ),
       profilePhotoUrl: canSee ? row.avatar_url : null,
-      isPrivate: Boolean(row.private_profile),
+      isPrivate: false, // legacy key for older app builds
       connectionStatus,
       level: identity?.level ?? null,
       levelProgress: identity?.levelProgress ?? null,

@@ -185,7 +185,7 @@ CoachSpec? composerCoachSpec(
               targetKey: FirstRaceGuideKeys.composerGoalCta,
               eyebrow: 'NEXT',
               dim: false,
-              title: 'Bring in your crew.',
+              title: 'Bring in your friends.',
               body: 'Tap Invite racers.',
             )
           : CoachSpec(
@@ -204,7 +204,7 @@ CoachSpec? composerCoachSpec(
             )
           : CoachSpec(
               targetKey: FirstRaceGuideKeys.composerRacers,
-              eyebrow: 'BRING YOUR CREW',
+              eyebrow: 'BRING YOUR FRIENDS',
               title: 'Choose who you’re racing.',
             ),
     ComposerGuidePage.review => CoachSpec(

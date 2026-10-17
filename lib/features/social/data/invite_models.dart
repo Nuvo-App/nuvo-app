@@ -157,21 +157,18 @@ class PersonInviteCard {
     required this.displayName,
     this.username,
     this.profilePhotoUrl,
-    this.isPrivate = false,
   });
 
   final String userId;
   final String displayName;
   final String? username;
   final String? profilePhotoUrl;
-  final bool isPrivate;
 
   factory PersonInviteCard.fromJson(Map<String, dynamic> j) => PersonInviteCard(
         userId: j['userId'] as String? ?? '',
         displayName: j['displayName'] as String? ?? 'Nuvo member',
         username: j['username'] as String?,
         profilePhotoUrl: j['profilePhotoUrl'] as String?,
-        isPrivate: j['isPrivate'] as bool? ?? false,
       );
 }
 

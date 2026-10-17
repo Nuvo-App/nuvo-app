@@ -1191,7 +1191,7 @@ class _NamePageState extends State<_NamePage> {
   Widget build(BuildContext context) {
     return _PageShell(
       question: 'Name your race.',
-      support: 'Your crew will see this name.',
+      support: 'Your friends will see this name.',
       ctaLabel: 'Choose activity',
       onCta: _commit,
       ctaEnabled: _ctrl.text.trim().isNotEmpty,
@@ -1793,7 +1793,7 @@ class _ActivityPageState extends ConsumerState<_ActivityPage> {
                     const SizedBox(height: 12),
                     Text(
                       'Racers log their own progress. Nuvo keeps the leaderboard; '
-                      'your crew keeps each other honest.',
+                      'your friends keep each other honest.',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: context.themeColors.inkMuted,
                       ),
@@ -3896,7 +3896,7 @@ class _RacersPageState extends State<_RacersPage> {
   Widget build(BuildContext context) {
     return _PageShell(
       question: 'Who are you racing with?',
-      support: 'Race solo or with crew.',
+      support: 'Race solo or with friends.',
       ctaLabel: 'Review race',
       onCta: widget.onNext,
       ctaKey: FirstRaceGuideKeys.composerRacersCta,
@@ -3913,7 +3913,7 @@ class _RacersPageState extends State<_RacersPage> {
             : Column(
                 children: [
                   _RacerOption(
-                    title: 'Pull in your crew',
+                    title: 'Invite your friends',
                     subtitle: 'Invite link opens right after race starts.',
                     icon: Icons.group_add_rounded,
                     selected: _inviteCrew,
@@ -4164,7 +4164,7 @@ class _ReviewPage extends StatelessWidget {
                       : 'Camera verified',
                   finishLineLabel: _finishLineLabel,
                   finishLineSub: _finishLineSub,
-                  raceModeLabel: isInvite ? 'Invite crew' : 'Start solo',
+                  raceModeLabel: isInvite ? 'Invite friends' : 'Start solo',
                   raceModeSub: isInvite
                       ? 'Invite link opens after race starts'
                       : 'Race yourself first',

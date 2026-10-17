@@ -1096,7 +1096,7 @@ CompeteRowStatus? competeRowStatus(Race race, String? userId) {
     return CompeteRowStatus(_startsInLabel(startsIn), RaceRowTone.waiting);
   }
   if (race.participantCount <= 1) {
-    return const CompeteRowStatus('Waiting for crew', RaceRowTone.waiting);
+    return const CompeteRowStatus('Waiting for friends', RaceRowTone.waiting);
   }
   final pct = raceProgressPercent(race, myPart);
   final anyoneMoving = race.participants.any((p) => p.progressValue > 0);
@@ -1142,5 +1142,5 @@ String? _raceRowContext(Race race, String? uid) {
 
 String _firstName(String displayName) {
   final first = displayName.trim().split(RegExp(r'\s+')).firstOrNull ?? '';
-  return first.isEmpty ? 'Crew' : first;
+  return first.isEmpty ? 'Friend' : first;
 }

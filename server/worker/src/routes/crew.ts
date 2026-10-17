@@ -388,7 +388,7 @@ crewRouter.get('/feed', async (c) => {
 async function connectByUserId(c: Context<AppEnv>, crewUserId: string) {
   const userId = c.get('userId');
   if (!crewUserId) return c.json({ ok: false, error: 'userId is required' }, 400);
-  if (crewUserId === userId) return c.json({ ok: false, error: 'You cannot add yourself to crew' }, 400);
+  if (crewUserId === userId) return c.json({ ok: false, error: 'You cannot add yourself as a friend' }, 400);
 
   const target = await c.env.DB.prepare("SELECT id FROM users WHERE id = ? AND status = 'active'")
     .bind(crewUserId)

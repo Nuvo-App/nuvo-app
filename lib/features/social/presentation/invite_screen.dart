@@ -385,9 +385,7 @@ class _PersonPreview extends StatelessWidget {
                       ],
                       const SizedBox(height: 10),
                       Text(
-                        c.isPrivate
-                            ? 'Send a connect request to add them to your crew.'
-                            : 'Add them to your crew to race together.',
+                        'Add them as a friend to race together.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodyMedium.copyWith(color: context.themeColors.ink),
                       ),
@@ -403,9 +401,7 @@ class _PersonPreview extends StatelessWidget {
                   NuvoPrimaryButton(
                     label: !authed
                         ? 'Sign in to connect'
-                        : c.isPrivate
-                            ? 'Send request'
-                            : 'Add to crew',
+                        : 'Add friend',
                     loading: accepting,
                     expand: true,
                     onPressed: accepting ? null : onAccept,

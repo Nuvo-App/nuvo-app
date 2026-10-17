@@ -222,7 +222,6 @@ class AuthRepository {
   Future<void> saveProfile({
     String? fullName,
     String? username,
-    bool? privateProfile,
     String? profilePhotoUrl,
     bool removePhoto = false,
   }) => _withRefresh(
@@ -230,7 +229,6 @@ class AuthRepository {
       token,
       fullName: fullName,
       username: username,
-      privateProfile: privateProfile,
       profilePhotoUrl: profilePhotoUrl,
       removePhoto: removePhoto,
     ),

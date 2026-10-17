@@ -595,7 +595,7 @@ class _EmptyPodium extends StatelessWidget {
       border: Border.all(color: context.themeColors.border, width: 1.25),
     ),
     child: Text(
-      'Your crew will appear here as they join the start line.',
+      'Your friends will appear here as they join the start line.',
       style: AppTextStyles.bodySmall.copyWith(
         color: context.themeColors.inkSubtle,
       ),

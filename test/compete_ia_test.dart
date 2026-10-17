@@ -265,7 +265,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Waiting for crew summary row shows count', (tester) async {
+    testWidgets('Waiting for friends summary row shows count', (tester) async {
       // Races with 1 participant (waiting for crew).
       final waiting = [
         _cameraRace(id: 'w1', title: 'Pushup Waiting 1', participantCount: 1),
@@ -279,8 +279,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Waiting for crew'), findsOneWidget);
-      expect(find.textContaining('2 races need crew'), findsOneWidget);
+      expect(find.text('Waiting for friends'), findsOneWidget);
+      expect(find.textContaining('2 races need friends'), findsOneWidget);
     });
 
     testWidgets('Finished summary row shows count', (tester) async {

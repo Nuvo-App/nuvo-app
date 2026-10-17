@@ -73,7 +73,7 @@ class ChaseContext {
 
     String? chaseCopy;
     if (total <= 1) {
-      chaseCopy = 'Set the pace. Invite your crew to chase you.';
+      chaseCopy = 'Set the pace. Invite your friends to chase you.';
     } else if (myRank != null) {
       if (isLeading) {
         final second = sorted.length > 1 ? sorted[1] : null;

@@ -1,4 +1,4 @@
-// The nav is four equal destinations — Arena, Compete, Crew, Profile — and
+// The nav is four equal destinations — Arena, Compete, Friends, Profile — and
 // the retired Verify tab's old /move links redirect.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,11 +41,11 @@ Future<List<int>> _pumpDock(
 }
 
 void main() {
-  test('canonical table is Arena, Compete, Crew, Profile', () {
+  test('canonical table is Arena, Compete, Friends, Profile', () {
     expect(nuvoDestinations.map((d) => d.label), [
       'Arena',
       'Compete',
-      'Crew',
+      'Friends',
       'Profile',
     ]);
     expect(nuvoDestinations.map((d) => d.path), [

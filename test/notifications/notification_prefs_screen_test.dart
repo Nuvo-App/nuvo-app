@@ -134,7 +134,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.bySemanticsLabel('Crew requests, push notifications'),
+      find.bySemanticsLabel('Friend requests, push notifications'),
       findsOneWidget,
     );
   });
