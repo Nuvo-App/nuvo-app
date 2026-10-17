@@ -95,6 +95,9 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
       showDragHandle: true,
       builder: (_) => const _CrewInputSheet(mode: _SheetMode.create),
     );
+    // A swipe-down dismiss leaves the text field's focus (and the keyboard)
+    // behind — drop it whichever way the sheet closed.
+    FocusManager.instance.primaryFocus?.unfocus();
     if (group == null || !mounted) return;
     if (mounted) context.push('/crews/${group.id}');
   }
@@ -106,6 +109,7 @@ class _CrewGroupsScreenState extends ConsumerState<CrewGroupsScreen> {
       showDragHandle: true,
       builder: (_) => const _CrewInputSheet(mode: _SheetMode.join),
     );
+    FocusManager.instance.primaryFocus?.unfocus();
     if (joined != true || !mounted) return;
     // Joining pulls me into the crew's running races — refresh race lists too.
     ref.read(raceControllerProvider.notifier).loadRaces(force: true);
@@ -423,6 +427,7 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
 
   @override
   void dispose() {
+    FocusManager.instance.primaryFocus?.unfocus();
     _controller.dispose();
     super.dispose();
   }
@@ -519,6 +524,7 @@ class _CrewInputSheetState extends ConsumerState<_CrewInputSheet> {
             TextField(
               key: const ValueKey('crew-input'),
               controller: _controller,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               autofocus: true,
               maxLength: _isCreate ? 40 : 12,
               textAlign: _isCreate ? TextAlign.start : TextAlign.center,
